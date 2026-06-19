@@ -149,6 +149,7 @@ class _FieldControl extends StatelessWidget {
       case InstructionFieldType.binning:
         return _labelled(_binningEditor());
       case InstructionFieldType.coordinates:
+        return _labelled(_coordinatesEditor());
       case InstructionFieldType.filter:
         return _labelled(
           Text(
@@ -158,6 +159,69 @@ class _FieldControl extends StatelessWidget {
         );
     }
   }
+
+  /// RA (H : M : S) / Dec (± D : M : S) editor over the nested `InputCoordinates`
+  /// object. Each change rebuilds the whole map (preserving `$type`) and writes
+  /// it back via [onChanged]. Components are range-clamped (RA h 0–23, d/m 0–59,
+  /// Dec deg 0–90); the int/double split matches the C# field types.
+  Widget _coordinatesEditor() {
+    final c = value is Map ? value as Map : const {};
+    final type = c[r'$type'] is String ? c[r'$type'] as String : defaultCoordinates[r'$type'];
+    int ri(String k) => c[k] is num ? (c[k] as num).toInt() : 0;
+    double rd(String k) => c[k] is num ? (c[k] as num).toDouble() : 0.0;
+    final neg = c['NegativeDec'] == true;
+    Map<String, dynamic> coord({
+      int? raH, int? raM, double? raS, bool? negDec, int? decD, int? decM, double? decS,
+    }) => <String, dynamic>{
+          r'$type': type,
+          'RAHours': raH ?? ri('RAHours'),
+          'RAMinutes': raM ?? ri('RAMinutes'),
+          'RASeconds': raS ?? rd('RASeconds'),
+          'NegativeDec': negDec ?? neg,
+          'DecDegrees': decD ?? ri('DecDegrees'),
+          'DecMinutes': decM ?? ri('DecMinutes'),
+          'DecSeconds': decS ?? rd('DecSeconds'),
+        };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _axisRow('RA', [
+          _NumField(key: const Key('ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
+              onChanged: (v) => onChanged(coord(raH: v.toInt()))),
+          _NumField(key: const Key('ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
+              onChanged: (v) => onChanged(coord(raM: v.toInt()))),
+          _NumField(key: const Key('ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
+              onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
+        ]),
+        const SizedBox(height: 6),
+        _axisRow('Dec', [
+          _SignToggle(
+            negative: neg,
+            onChanged: (n) => onChanged(coord(negDec: n)),
+          ),
+          _NumField(key: const Key('dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
+              onChanged: (v) => onChanged(coord(decD: v.toInt()))),
+          _NumField(key: const Key('dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
+              onChanged: (v) => onChanged(coord(decM: v.toInt()))),
+          _NumField(key: const Key('dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
+              onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
+        ]),
+      ],
+    );
+  }
+
+  Widget _axisRow(String label, List<Widget> fields) => Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text(label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+          ),
+          for (var i = 0; i < fields.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            SizedBox(width: 44, child: fields[i]),
+          ],
+        ],
+      );
 
   /// `X × Y` integer editor over the nested `BinningMode` object. Each change
   /// rebuilds the whole map (preserving its `$type` and the other axis) and
@@ -176,11 +240,13 @@ class _FieldControl extends StatelessWidget {
       children: [
         SizedBox(
           width: 56,
-          child: _BinAxisField(
+          child: _NumField(
             // Scoped to the field so two binning fields couldn't collide.
             key: Key('${field.key}_x'),
             value: x,
-            onChanged: (v) => onChanged(withAxis(newX: v)),
+            isInt: true,
+            min: 1,
+            onChanged: (v) => onChanged(withAxis(newX: v.toInt())),
           ),
         ),
         const Padding(
@@ -189,10 +255,12 @@ class _FieldControl extends StatelessWidget {
         ),
         SizedBox(
           width: 56,
-          child: _BinAxisField(
+          child: _NumField(
             key: Key('${field.key}_y'),
             value: y,
-            onChanged: (v) => onChanged(withAxis(newY: v)),
+            isInt: true,
+            min: 1,
+            onChanged: (v) => onChanged(withAxis(newY: v.toInt())),
           ),
         ),
       ],
@@ -237,30 +305,44 @@ class _Placeholder extends StatelessWidget {
       );
 }
 
-/// One binning-axis integer field (a controlled `TextField`, digits-only). A
-/// committed value is always ≥ 1: typing `0` snaps to `1` and the displayed
-/// text is corrected, so the field can never diverge from the model. An empty
-/// field is transient (mid-edit) and commits nothing until a digit is typed.
-class _BinAxisField extends StatefulWidget {
-  const _BinAxisField({super.key, required this.value, required this.onChanged});
-  final int value;
-  final ValueChanged<int> onChanged;
+/// A controlled non-negative numeric field (int or double) clamped to an
+/// optional `[min, max]`. A committed value is always in range: an out-of-range
+/// entry snaps to the bound AND the displayed text is corrected, so the field
+/// can never diverge from the model. An empty/partial entry is transient
+/// (mid-edit) and commits nothing until it parses.
+class _NumField extends StatefulWidget {
+  const _NumField({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.isInt,
+    this.min,
+    this.max,
+  });
+  final num value;
+  final ValueChanged<num> onChanged;
+  final bool isInt;
+  final num? min;
+  final num? max;
 
   @override
-  State<_BinAxisField> createState() => _BinAxisFieldState();
+  State<_NumField> createState() => _NumFieldState();
 }
 
-class _BinAxisFieldState extends State<_BinAxisField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: '${widget.value}');
+class _NumFieldState extends State<_NumField> {
+  late final TextEditingController _controller = TextEditingController(text: _fmt(widget.value));
+
+  String _fmt(num v) {
+    if (widget.isInt) return '${v.toInt()}';
+    final d = v.toDouble();
+    return d == d.truncateToDouble() ? '${d.toInt()}' : '$d';
+  }
 
   @override
-  void didUpdateWidget(_BinAxisField old) {
+  void didUpdateWidget(_NumField old) {
     super.didUpdateWidget(old);
-    // Resync if the model value changed from outside (and the user isn't mid-edit
-    // on a different value).
-    if (widget.value != old.value && _controller.text != '${widget.value}') {
-      _controller.text = '${widget.value}';
+    if (widget.value != old.value && _controller.text != _fmt(widget.value)) {
+      _controller.text = _fmt(widget.value);
     }
   }
 
@@ -270,28 +352,54 @@ class _BinAxisFieldState extends State<_BinAxisField> {
     super.dispose();
   }
 
+  num _clamp(num v) {
+    if (widget.min != null && v < widget.min!) return widget.min!;
+    if (widget.max != null && v > widget.max!) return widget.max!;
+    return v;
+  }
+
   void _onChanged(String s) {
-    final v = int.tryParse(s);
-    if (v == null) return; // transient empty — keep the model, allow retyping
-    if (v < 1) {
-      // 0 isn't a valid factor → correct the field to 1 and commit 1.
-      _controller.value = const TextEditingValue(
-        text: '1',
-        selection: TextSelection.collapsed(offset: 1),
+    final v = widget.isInt ? int.tryParse(s) : double.tryParse(s);
+    if (v == null) return; // transient — keep the model, allow retyping
+    final clamped = _clamp(v);
+    if (clamped != v) {
+      final t = _fmt(clamped);
+      _controller.value = TextEditingValue(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
       );
-      widget.onChanged(1);
-    } else {
-      widget.onChanged(v);
     }
+    widget.onChanged(clamped);
   }
 
   @override
   Widget build(BuildContext context) => TextField(
         controller: _controller,
-        keyboardType: const TextInputType.numberWithOptions(signed: false),
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        keyboardType: TextInputType.numberWithOptions(decimal: !widget.isInt),
+        inputFormatters: [
+          widget.isInt
+              ? FilteringTextInputFormatter.digitsOnly
+              : FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+        ],
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
         onChanged: _onChanged,
+      );
+}
+
+/// A compact `+ / −` toggle for the declination sign.
+class _SignToggle extends StatelessWidget {
+  const _SignToggle({required this.negative, required this.onChanged});
+  final bool negative;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+        onPressed: () => onChanged(!negative),
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          foregroundColor: AraColors.textPrimary,
+        ),
+        child: Text(negative ? '−' : '+', style: const TextStyle(fontSize: 16)),
       );
 }

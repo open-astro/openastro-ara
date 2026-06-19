@@ -16,6 +16,21 @@ const _setTracking =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer';
 const _takeExposure =
     'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
+const _slew =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
+
+SequenceDetail _detailWith(String type) => SequenceDetail(
+      id: 's',
+      body: {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [_node(type)],
+        },
+      },
+    );
 
 // root → [WaitForTimeSpan, StartGuiding, SetTracking, TakeExposure]
 SequenceDetail sampleDetail() => SequenceDetail(
@@ -140,6 +155,44 @@ void main() {
     final binning = _nodeAt(c, [3])['Binning'] as Map;
     expect(binning['Y'], 3);
     expect(binning['X'], 1); // X axis untouched
+  });
+
+  group('coordinates editor (Slew RA/Dec)', () {
+    testWidgets('edits RA hours and a Dec seconds (int + double) in place',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      expect(find.text('RA'), findsOneWidget);
+      expect(find.text('Dec'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('ra_h')), '12');
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('dec_s')), '30.5');
+      await tester.pump();
+
+      final coords = _nodeAt(c, [0])['Coordinates'] as Map;
+      expect(coords['RAHours'], 12);
+      expect(coords['DecSeconds'], 30.5);
+      expect(coords['RAMinutes'], 0); // untouched components preserved
+      expect(coords[r'$type'], contains('InputCoordinates'));
+    });
+
+    testWidgets('RA hours clamps to 23 and corrects the field', (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      await tester.enterText(find.byKey(const Key('ra_h')), '99');
+      await tester.pump();
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['RAHours'], 23);
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('ra_h')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '23');
+    });
+
+    testWidgets('the ± toggle flips NegativeDec', (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);
+      await tester.tap(find.text('+')); // currently positive
+      await tester.pump();
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], true);
+    });
   });
 
   testWidgets('binning 0 snaps to 1 in both model and field', (tester) async {
