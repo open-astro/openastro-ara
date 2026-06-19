@@ -215,6 +215,20 @@ void main() {
       expect(coords['DecSeconds'], 0.0);
     });
 
+    testWidgets('a second decimal point is rejected, not blanked', (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final dec = find.byKey(const Key('Coordinates_dec_s'));
+      await tester.enterText(dec, '30.5'); // valid
+      await tester.pump();
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.5);
+      // A would-be second dot is rejected: the field keeps '30.5', not blank.
+      await tester.enterText(dec, '30.5.');
+      await tester.pump();
+      final f = tester.widget<TextField>(
+          find.descendant(of: dec, matching: find.byType(TextField)));
+      expect(f.controller!.text, '30.5');
+    });
+
     testWidgets('the ± toggle flips NegativeDec', (tester) async {
       final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);

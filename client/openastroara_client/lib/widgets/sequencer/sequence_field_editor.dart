@@ -400,13 +400,27 @@ class _NumFieldState extends State<_NumField> {
         inputFormatters: [
           widget.isInt
               ? FilteringTextInputFormatter.digitsOnly
-              // Digits with at most one decimal point (rejects `1..5`).
-              : FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+              // Digits with at most one decimal point — rejects the keystroke
+              // that would add a second `.` (keeping the field, not blanking it).
+              : const _SingleDecimalFormatter(),
         ],
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
         onChanged: _onChanged,
       );
+}
+
+/// Allows a non-negative decimal with at most one `.`. Rejects the edit
+/// (keeping the prior text) when the result wouldn't parse — so a stray second
+/// `.` is ignored rather than blanking the field, which an anchored
+/// `FilteringTextInputFormatter.allow` regex would do.
+class _SingleDecimalFormatter extends TextInputFormatter {
+  const _SingleDecimalFormatter();
+  static final RegExp _ok = RegExp(r'^\d*\.?\d*$');
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
+      _ok.hasMatch(newValue.text) ? newValue : oldValue;
 }
 
 /// A compact `+ / −` toggle for the declination sign.
