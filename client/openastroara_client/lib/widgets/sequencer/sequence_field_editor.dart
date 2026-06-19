@@ -420,6 +420,10 @@ class _SignToggle extends StatelessWidget {
         onPressed: () => onChanged(!negative),
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
+          // Confine the tap target to the box — the default `padded` size adds
+          // ~48px of hidden touch area that would overlap the adjacent field.
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: AraColors.textPrimary,
         ),
         child: Text(negative ? '−' : '+', style: const TextStyle(fontSize: 16)),
