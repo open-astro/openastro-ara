@@ -8,6 +8,7 @@ import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_export.dart';
+import 'sequence_import.dart';
 import 'sequence_load_dialog.dart';
 import 'sequence_new_dialog.dart';
 
@@ -88,6 +89,17 @@ class SequencerToolbar extends ConsumerWidget {
                   // Enabled once a server is connected; opens the picker.
                   onPressed:
                       connected ? () => SequenceLoadDialog.show(context) : null,
+                ),
+                _ToolButton(
+                  icon: Icons.file_download_outlined,
+                  label: 'Import',
+                  // Browse to a NINA-exported .json and import it via the §38
+                  // import path (file pick → read → POST /sequences/import). The
+                  // helper handles errors, lossy-translation warnings, and
+                  // selecting the imported sequence. Disabled while another
+                  // command is in-flight, and brackets the busy fence like Save.
+                  onPressed:
+                      (connected && !busy) ? () => _import(context, ref) : null,
                 ),
                 _ToolButton(
                   icon: Icons.save_outlined,
@@ -238,6 +250,21 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
       content: Text("Couldn't save the sequence. Check the connection and try again."),
       backgroundColor: AraColors.accentError,
     ));
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+/// Browse to a NINA `.json` and import it, bracketing the shared busy fence so
+/// the toolbar's other commands disable while the file picker / import is in
+/// flight (mirrors [_save]). `pickAndImportSequence` owns the file pick, decode,
+/// `POST /sequences/import`, lossy-warning dialog, and selecting the result.
+Future<void> _import(BuildContext context, WidgetRef ref) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    await pickAndImportSequence(context, ref);
   } finally {
     busy.setBusy(false);
   }
