@@ -185,6 +185,37 @@ void main() {
     });
   });
 
+  group('moveNode', () {
+    test('moves a child down and keeps it selected', () {
+      ctrl().load(sampleDetail()); // root: [SwitchFilter, SequentialContainer]
+      ctrl().select(const [0]);
+      ctrl().moveNode(const [0], up: false);
+      final s = read()!;
+      expect(childrenOf(s.body).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
+      expect(s.selectedPath, [1]); // selection followed the node
+      expect(s.isDirty, isTrue);
+    });
+
+    test('moves a child up and keeps it selected', () {
+      ctrl().load(sampleDetail());
+      ctrl().moveNode(const [1], up: true);
+      final s = read()!;
+      expect(childrenOf(s.body).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
+      expect(s.selectedPath, [0]);
+    });
+
+    test('no-op at the boundaries (first up / last down) and for the root', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      ctrl().moveNode(const [0], up: true); // already first
+      ctrl().moveNode(const [1], up: false); // already last
+      ctrl().moveNode(const [], up: true); // root
+      expect(read()!.body, same(before));
+    });
+  });
+
   group('setNodeField', () {
     test('edits a field, keeps selection, goes dirty', () {
       ctrl().load(sampleDetail());
