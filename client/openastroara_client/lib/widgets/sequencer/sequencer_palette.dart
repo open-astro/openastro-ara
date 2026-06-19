@@ -37,22 +37,13 @@ class SequencerPalette extends ConsumerWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final def in entry.value)
-                  _PaletteTile(
-                    def: def,
-                    enabled: loaded,
-                    onAdd: () =>
-                        ref.read(sequenceEditorProvider.notifier).addInstruction(def),
-                  ),
-              ],
+          for (final def in entry.value)
+            _PaletteTile(
+              def: def,
+              enabled: loaded,
+              onAdd: () =>
+                  ref.read(sequenceEditorProvider.notifier).addInstruction(def),
             ),
-          ),
         ],
       ],
     );
@@ -69,22 +60,25 @@ class _PaletteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
-    return Material(
-      color: AraColors.bgInput,
-      borderRadius: BorderRadius.circular(4),
-      child: InkWell(
-        onTap: enabled ? onAdd : null,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(def.icon, size: 15, color: fg),
-              const SizedBox(width: 6),
-              Text(def.label, style: TextStyle(color: fg, fontSize: 12)),
-            ],
-          ),
+    // Full-width row tiles (not a Wrap of chips) so a long label ellipsizes
+    // instead of overflowing in a narrow side pane.
+    return InkWell(
+      onTap: enabled ? onAdd : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(def.icon, size: 15, color: fg),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                def.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fg, fontSize: 12),
+              ),
+            ),
+          ],
         ),
       ),
     );
