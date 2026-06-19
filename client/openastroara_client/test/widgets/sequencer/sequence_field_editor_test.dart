@@ -248,6 +248,34 @@ void main() {
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.5); // model unchanged
     });
 
+    testWidgets('an out-of-range loaded seconds value displays clamped (not 60)',
+        (tester) async {
+      // A server body with 59.9995 must NOT display as a rounded-up "60".
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_slew), 'Coordinates': {
+                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
+                'DecSeconds': 59.9995,
+              }},
+            ],
+          },
+        },
+      );
+      final c = await _pump(tester, detail: detail, select: const [0]);
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_s')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '59.999'); // displayed in range
+      // The model stays verbatim until the user actually edits it.
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 59.9995);
+    });
+
     testWidgets('the ± toggle flips NegativeDec', (tester) async {
       final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);

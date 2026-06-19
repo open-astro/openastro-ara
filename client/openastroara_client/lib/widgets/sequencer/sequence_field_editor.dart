@@ -235,10 +235,21 @@ class _FieldControl extends StatelessWidget {
             width: 32,
             child: Text(label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12)),
           ),
-          for (var i = 0; i < fields.length; i++) ...[
-            if (i > 0) const SizedBox(width: 4),
-            SizedBox(width: 44, child: fields[i]),
-          ],
+          // Scroll the H/M/S group horizontally so the (wider) Dec row with its
+          // sign toggle can't overflow a narrow side pane.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < fields.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 4),
+                    SizedBox(width: 44, child: fields[i]),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       );
 
@@ -354,8 +365,12 @@ class _NumFieldState extends State<_NumField> {
   late final TextEditingController _controller = TextEditingController(text: _fmt(widget.value));
 
   String _fmt(num v) {
-    if (widget.isInt) return '${v.toInt()}';
-    final d = v.toDouble();
+    // Display the in-range value (same clamp as on commit), so an out-of-range
+    // model value — e.g. a server-supplied 59.9995 — shows as 59.999, never a
+    // rounded-up 60. The model stays verbatim until the user actually edits.
+    final c = _clamp(v);
+    if (widget.isInt) return '${c.toInt()}';
+    final d = c.toDouble();
     if (d == d.truncateToDouble()) return '${d.toInt()}';
     // Cap to 3 decimals (sub-arcsec is plenty) and strip trailing zeros, so a
     // float artifact like 30.300000000000004 displays as 30.3.
@@ -368,8 +383,9 @@ class _NumFieldState extends State<_NumField> {
   @override
   void didUpdateWidget(_NumField old) {
     super.didUpdateWidget(old);
-    if (widget.value != old.value && _controller.text != _fmt(widget.value)) {
-      _controller.text = _fmt(widget.value);
+    final formatted = _fmt(widget.value);
+    if (widget.value != old.value && _controller.text != formatted) {
+      _controller.text = formatted;
     }
   }
 
