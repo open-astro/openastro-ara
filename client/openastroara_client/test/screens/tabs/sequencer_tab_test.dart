@@ -3,15 +3,32 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/screens/tabs/sequencer_tab.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
-import 'package:openastroara/state/sequencer/sequence_state.dart';
 
-/// getSequence returns a root tagged with the requested id so the test can prove
-/// the tab loaded the right body into the controller.
+// A body whose single child is a Take Exposure, so the tree renders a row the
+// test can see — and the root Name carries the id to prove the right load.
+Map<String, dynamic> _bodyFor(String id) => {
+      r'$type':
+          'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+      'Name': 'Seq $id',
+      'Items': {
+        r'$type': itemsWrapperType,
+        r'$values': [
+          (instructionForType(
+                      'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer') ??
+                  (throw StateError('TakeExposure missing from the catalog')))
+              .build(),
+        ],
+      },
+    };
+
 class _FakeClient implements SequenceClient {
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f,
@@ -19,17 +36,14 @@ class _FakeClient implements SequenceClient {
       const SequenceImportResult(createdSequenceId: 'new');
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
-      SequenceDetail(id: id, name: id, body: const {});
+      SequenceDetail(id: id, name: id, body: _bodyFor(id));
   @override
   Future<SequenceDetail> updateSequence(String id,
           {String? name, String? description, Map<String, dynamic>? body}) async =>
       SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
   @override
-  Future<SequenceNode> getSequence(String id) async => SequenceNode(
-        id: 'root',
-        kind: SequenceNodeKind.root,
-        displayName: 'Loaded $id',
-      );
+  Future<SequenceNode> getSequence(String id) async =>
+      SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: 'Loaded $id');
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;
   @override
@@ -52,44 +66,39 @@ class _FakeClient implements SequenceClient {
   void close() {}
 }
 
-/// getSequence returns a future the test completes by hand (keyed by id), so a
-/// concurrent-load race can be ordered deterministically.
+/// getSequenceDetail returns a future the test completes by hand (keyed by id),
+/// so a concurrent-load race can be ordered deterministically.
 class _ControllableClient extends _FakeClient {
-  final Map<String, Completer<SequenceNode>> calls = {};
+  final Map<String, Completer<SequenceDetail>> calls = {};
   @override
-  Future<SequenceNode> getSequence(String id) {
-    final c = Completer<SequenceNode>();
+  Future<SequenceDetail> getSequenceDetail(String id) {
+    final c = Completer<SequenceDetail>();
     calls[id] = c;
     return c.future;
   }
 }
 
-/// getSequence always throws, to exercise the load-failure path.
 class _ThrowingClient extends _FakeClient {
   @override
-  Future<SequenceNode> getSequence(String id) async =>
+  Future<SequenceDetail> getSequenceDetail(String id) async =>
       throw Exception('boom');
 }
 
-/// Throws on the first call (transient failure), succeeds afterwards — to verify
-/// a failed load can be retried.
+/// Throws on the first call (transient failure), succeeds afterwards.
 class _FlakyOnceClient extends _FakeClient {
   int calls = 0;
   @override
-  Future<SequenceNode> getSequence(String id) async {
+  Future<SequenceDetail> getSequenceDetail(String id) async {
     calls++;
     if (calls == 1) throw Exception('transient');
-    return SequenceNode(
-        id: 'root', kind: SequenceNodeKind.root, displayName: 'Loaded $id (retry)');
+    return SequenceDetail(id: id, name: id, body: _bodyFor(id));
   }
 }
 
-SequenceNode _root(String name) =>
-    SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: name);
+String? _loadedId(ProviderContainer c) => c.read(sequenceEditorProvider)?.id;
 
 void main() {
-  testWidgets('selecting a sequence loads its body into the editor tree',
-      (tester) async {
+  testWidgets('selecting a sequence loads its body into the editor', (tester) async {
     final container = ProviderContainer(overrides: [
       sequenceApiProvider.overrideWithValue(_FakeClient()),
     ]);
@@ -99,15 +108,18 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: SequencerTab())),
     ));
 
-    // Before selection, the tree shows the demo (an "Untitled sequence" root).
-    expect(container.read(sequenceControllerProvider).displayName,
-        isNot('Loaded seq-42'));
+    // Nothing loaded before selection.
+    expect(_loadedId(container), isNull);
+    expect(find.text('No sequence loaded'), findsOneWidget);
 
     container.read(selectedSequenceIdProvider.notifier).select('seq-42');
     await tester.pumpAndSettle();
 
-    // The tab's listener fetched + parsed the body and loaded it.
-    expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-42');
+    // The tab fetched the body, loaded the editor, and the tree renders it.
+    expect(_loadedId(container), 'seq-42');
+    expect(find.text('Seq seq-42'), findsOneWidget); // root row (tree only)
+    // 'Take Exposure' now appears twice: the palette tile + the loaded tree row.
+    expect(find.text('Take Exposure'), findsNWidgets(2));
   });
 
   testWidgets('a stale load response does not clobber a newer selection',
@@ -122,19 +134,17 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: SequencerTab())),
     ));
 
-    // Pick seq-1 (slow), then seq-2 (fast) — both loads now in flight.
     container.read(selectedSequenceIdProvider.notifier).select('seq-1');
     await tester.pump();
     container.read(selectedSequenceIdProvider.notifier).select('seq-2');
     await tester.pump();
 
-    // The newer (seq-2) response resolves first, then the stale seq-1 one.
-    client.calls['seq-2']!.complete(_root('Loaded seq-2'));
-    client.calls['seq-1']!.complete(_root('Loaded seq-1'));
+    // Newer (seq-2) resolves first, then the stale seq-1.
+    client.calls['seq-2']!.complete(SequenceDetail(id: 'seq-2', body: _bodyFor('seq-2')));
+    client.calls['seq-1']!.complete(SequenceDetail(id: 'seq-1', body: _bodyFor('seq-1')));
     await tester.pumpAndSettle();
 
-    // seq-1 is stale (no longer selected) and must not overwrite seq-2.
-    expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-2');
+    expect(_loadedId(container), 'seq-2'); // seq-1 stale, must not overwrite
   });
 
   testWidgets('a stale load FAILURE shows no SnackBar and keeps the selection',
@@ -154,16 +164,14 @@ void main() {
     container.read(selectedSequenceIdProvider.notifier).select('seq-2');
     await tester.pump();
 
-    // seq-2 loads fine; the superseded seq-1 then *fails*.
-    client.calls['seq-2']!.complete(_root('Loaded seq-2'));
+    client.calls['seq-2']!.complete(SequenceDetail(id: 'seq-2', body: _bodyFor('seq-2')));
     await tester.pumpAndSettle();
     client.calls['seq-1']!.completeError(Exception('late failure'));
     await tester.pumpAndSettle();
 
-    // The stale failure must not nag the user or drop their (valid) selection.
     expect(find.textContaining("Couldn't load the sequence"), findsNothing);
     expect(container.read(selectedSequenceIdProvider), 'seq-2');
-    expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-2');
+    expect(_loadedId(container), 'seq-2');
   });
 
   testWidgets('loads a sequence already selected when the tab mounts',
@@ -172,8 +180,6 @@ void main() {
       sequenceApiProvider.overrideWithValue(_FakeClient()),
     ]);
     addTearDown(container.dispose);
-    // Selection exists BEFORE the tab is built — ref.listen won't fire for it, so
-    // this exercises the initState pickup.
     container.read(selectedSequenceIdProvider.notifier).select('seq-7');
 
     await tester.pumpWidget(UncontrolledProviderScope(
@@ -182,10 +188,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-7');
+    expect(_loadedId(container), 'seq-7');
   });
 
-  testWidgets('a load failure shows a SnackBar and keeps the tree', (tester) async {
+  testWidgets('a load failure shows a SnackBar', (tester) async {
     final container = ProviderContainer(overrides: [
       sequenceApiProvider.overrideWithValue(_ThrowingClient()),
     ]);
@@ -195,7 +201,7 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: SequencerTab())),
     ));
     container.read(selectedSequenceIdProvider.notifier).select('seq-x');
-    await tester.pump(); // run the async load + catch
+    await tester.pump();
     await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
   });
@@ -226,15 +232,12 @@ void main() {
       child: const MaterialApp(home: Scaffold(body: SequencerTab())),
     ));
 
-    // First pick fails → selection is cleared so a re-pick re-emits.
     container.read(selectedSequenceIdProvider.notifier).select('seq-r');
     await tester.pumpAndSettle();
-    expect(container.read(selectedSequenceIdProvider), isNull);
+    expect(container.read(selectedSequenceIdProvider), isNull); // cleared on fail
 
-    // Re-pick the same sequence → reloads, this time succeeding.
     container.read(selectedSequenceIdProvider.notifier).select('seq-r');
     await tester.pumpAndSettle();
-    expect(container.read(sequenceControllerProvider).displayName,
-        'Loaded seq-r (retry)');
+    expect(_loadedId(container), 'seq-r'); // retry succeeded
   });
 }
