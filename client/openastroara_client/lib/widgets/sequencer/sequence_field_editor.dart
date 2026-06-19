@@ -216,9 +216,13 @@ class _FieldControl extends StatelessWidget {
           ),
           _NumField(key: Key('${field.key}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
               onChanged: (v) => onChanged(coord(decD: v.toInt()))),
+          // At the ±90° pole, minutes/seconds must be 0 — disable them so the
+          // constraint is visible (rather than silently snapping back on edit).
           _NumField(key: Key('${field.key}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
+              enabled: ri('DecDegrees') < 90,
               onChanged: (v) => onChanged(coord(decM: v.toInt()))),
           _NumField(key: Key('${field.key}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
+              enabled: ri('DecDegrees') < 90,
               onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
         ]),
       ],
@@ -333,12 +337,14 @@ class _NumField extends StatefulWidget {
     required this.isInt,
     this.min,
     this.max,
+    this.enabled = true,
   });
   final num value;
   final ValueChanged<num> onChanged;
   final bool isInt;
   final num? min;
   final num? max;
+  final bool enabled;
 
   @override
   State<_NumField> createState() => _NumFieldState();
@@ -390,12 +396,16 @@ class _NumFieldState extends State<_NumField> {
         selection: TextSelection.collapsed(offset: t.length),
       );
     }
+    // Skip a no-op write (e.g. retyping the current value) to avoid a redundant
+    // setNodeField + rebuild.
+    if (clamped == widget.value) return;
     widget.onChanged(clamped);
   }
 
   @override
   Widget build(BuildContext context) => TextField(
         controller: _controller,
+        enabled: widget.enabled,
         keyboardType: TextInputType.numberWithOptions(decimal: !widget.isInt),
         inputFormatters: [
           widget.isInt

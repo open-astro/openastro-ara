@@ -213,6 +213,10 @@ void main() {
       expect(coords['DecDegrees'], 90);
       expect(coords['DecMinutes'], 0); // zeroed at the pole
       expect(coords['DecSeconds'], 0.0);
+      // ...and the minutes/seconds fields are now disabled to show the constraint.
+      final decM = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_m')), matching: find.byType(TextField)));
+      expect(decM.enabled, isFalse);
     });
 
     testWidgets('a second decimal point is rejected, not blanked', (tester) async {
