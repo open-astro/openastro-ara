@@ -139,7 +139,8 @@ class SequenceDetail {
   final Map<String, dynamic> body;
   final String? templateOrigin;
 
-  const SequenceDetail({
+  // Not const: hashCode memoizes the deep body hash (see [hashCode]).
+  SequenceDetail({
     required this.id,
     this.name = '',
     this.description,
@@ -182,11 +183,17 @@ class SequenceDetail {
       other.name == name &&
       other.description == description &&
       other.templateOrigin == templateOrigin &&
+      // Cheap scalar fields short-circuit before the deep body compare.
       _bodyEq.equals(other.body, body);
 
+  // Memoize the deep body hash on first access so repeated hashCode reads (Set /
+  // Map-key use) are O(1) instead of re-hashing the whole nested body each time.
+  // Safe because [body] is never mutated in place.
+  int? _bodyHashCache;
+
   @override
-  int get hashCode => Object.hash(
-      id, name, description, templateOrigin, _bodyEq.hash(body));
+  int get hashCode => Object.hash(id, name, description, templateOrigin,
+      _bodyHashCache ??= _bodyEq.hash(body));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —

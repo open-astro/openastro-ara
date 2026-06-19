@@ -388,11 +388,11 @@ void main() {
     });
 
     test('copyWith updates supplied fields, keeps the rest (null = keep)', () {
-      const base = SequenceDetail(
+      final base = SequenceDetail(
           id: 's1',
           name: 'A',
           description: 'desc',
-          body: {'x': 1},
+          body: const {'x': 1},
           templateOrigin: 'T');
       final renamed = base.copyWith(name: 'B');
       expect(renamed.name, 'B');
