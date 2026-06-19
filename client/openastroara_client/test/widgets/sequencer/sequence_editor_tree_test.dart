@@ -105,6 +105,36 @@ void main() {
     expect(find.text('Switch Filter'), findsOneWidget);
   });
 
+  testWidgets('a deeply nested body renders without a stack overflow',
+      (tester) async {
+    // 120 nested containers — past _flatten's depth cap (and a real safety net,
+    // though SequenceDetail also rejects bodies deeper than its own data-layer
+    // limit at construction).
+    Map<String, dynamic> nest(int depth) {
+      var node = <String, dynamic>{
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'leaf',
+        'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+      };
+      for (var i = 0; i < depth; i++) {
+        node = {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'c$i',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [node],
+          },
+        };
+      }
+      return node;
+    }
+
+    await _pump(tester, detail: SequenceDetail(id: 'deep', body: nest(120)));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tapping a row selects that node by path', (tester) async {
     final container = await _pump(tester, detail: sampleDetail());
     await tester.tap(find.text('Take Exposure'));

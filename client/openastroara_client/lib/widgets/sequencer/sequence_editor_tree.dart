@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
+import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -60,6 +61,9 @@ String? _shortType(Object? type) {
 
 void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> out) {
   out.add(_Row(path, node, depth));
+  // Stop recursing past the same adversarial-depth cap the parser uses, so a
+  // malformed/pathologically-nested body can't blow the stack.
+  if (depth >= ninaParseMaxDepth) return;
   final kids = childrenOf(node);
   for (var i = 0; i < kids.length; i++) {
     _flatten(kids[i], <int>[...path, i], depth + 1, out);
