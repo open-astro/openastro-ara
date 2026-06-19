@@ -372,9 +372,12 @@ class _NumFieldState extends State<_NumField> {
     if (widget.isInt) return '${c.toInt()}';
     final d = c.toDouble();
     if (d == d.truncateToDouble()) return '${d.toInt()}';
-    // Cap to 3 decimals (sub-arcsec is plenty) and strip trailing zeros, so a
-    // float artifact like 30.300000000000004 displays as 30.3.
-    return d
+    // TRUNCATE (not round) to ≤3 decimals + strip trailing zeros: a float
+    // artifact like 30.300000000000004 shows 30.3, and an in-range 29.9995 shows
+    // 29.999 (rounding would flip it to '30' while the model still holds 29.9995).
+    final t = (d * 1000).floorToDouble() / 1000;
+    if (t == t.truncateToDouble()) return '${t.toInt()}';
+    return t
         .toStringAsFixed(3)
         .replaceFirst(RegExp(r'0+$'), '')
         .replaceFirst(RegExp(r'\.$'), '');
@@ -463,9 +466,10 @@ class _SignToggle extends StatelessWidget {
         onPressed: () => onChanged(!negative),
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
-          // Confine the tap target to the box — the default `padded` size adds
-          // ~48px of hidden touch area that would overlap the adjacent field.
-          minimumSize: Size.zero,
+          // shrinkWrap drops the default ~48px of hidden touch padding that would
+          // overlap the adjacent field; the explicit 36² minimum keeps it large
+          // enough to tap reliably while staying inside its 44px row slot.
+          minimumSize: const Size(36, 36),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: AraColors.textPrimary,
         ),

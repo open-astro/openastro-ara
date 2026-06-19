@@ -276,6 +276,31 @@ void main() {
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 59.9995);
     });
 
+    testWidgets('an in-range value truncates (not rounds) on display', (tester) async {
+      // 29.9995 must show '29.999', not a rounded-up '30'.
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_slew), 'Coordinates': {
+                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
+                'DecSeconds': 29.9995,
+              }},
+            ],
+          },
+        },
+      );
+      await _pump(tester, detail: detail, select: const [0]);
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_s')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '29.999');
+    });
+
     testWidgets('the ± toggle flips NegativeDec', (tester) async {
       final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);
