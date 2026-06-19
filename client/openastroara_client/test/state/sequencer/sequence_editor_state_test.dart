@@ -266,6 +266,16 @@ void main() {
       expect(s.isDirty, isTrue);
     });
 
+    test('reparents a nested leaf out to the root container', () {
+      ctrl().load(sampleDetail());
+      ctrl().moveNodeTo(const [1, 0], const [], 0); // TakeExposure → root[0]
+      final s = read()!;
+      expect(childrenOf(s.body), hasLength(3));
+      expect(childrenOf(s.body)[0][r'$type'], 'X.TakeExposure');
+      expect(childrenOf(nodeAt(s.body, [2])!), isEmpty); // the emptied container
+      expect(s.isDirty, isTrue);
+    });
+
     test('no-op into a leaf, into self/descendant, or for the root', () {
       ctrl().load(sampleDetail());
       final before = read()!.body;
