@@ -31,8 +31,8 @@ class SequenceFieldEditor extends ConsumerWidget {
 
     final type = node[r'$type'];
     final def = type is String ? instructionForType(type) : null;
-    final fields =
-        def?.fields.where((f) => f.editable).toList() ?? const <InstructionField>[];
+    // Null when the node isn't catalogued; only read in the `def != null` arm.
+    final fields = def?.fields.where((f) => f.editable).toList();
 
     return ListView(
       padding: const EdgeInsets.all(12),
@@ -45,7 +45,7 @@ class SequenceFieldEditor extends ConsumerWidget {
         const SizedBox(height: 12),
         if (def == null)
           const _Placeholder('This instruction has no editable fields here.')
-        else if (fields.isEmpty)
+        else if (fields!.isEmpty)
           const _Placeholder('No settings — this instruction runs as-is.')
         else
           for (final field in fields)
