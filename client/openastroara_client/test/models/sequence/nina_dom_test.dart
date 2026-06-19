@@ -152,6 +152,14 @@ void main() {
       expect(kids.first[r'$type'], contains('SequentialContainer'));
     });
 
+    test('removeAt drops a deeply nested node', () {
+      // sampleBody's [1,0] is the TakeExposure inside the nested container.
+      final out = removeAt(sampleBody(), [1, 0]);
+      expect(childrenOf(nodeAt(out, [1])!), isEmpty); // leaf gone
+      expect(childrenOf(out), hasLength(2)); // siblings intact
+      expect(nodeAt(sampleBody(), [1, 0])!['ExposureTime'], 60.0); // source untouched
+    });
+
     test('removeAt rejects the root', () {
       expect(() => removeAt(sampleBody(), []), throwsArgumentError);
     });
@@ -169,6 +177,12 @@ void main() {
       final out = reorderChild(sampleBody(), [], 0, 2);
       expect(childrenOf(out).map((n) => n[r'$type']),
           ['X.SequentialContainer', 'X.SwitchFilter']);
+    });
+
+    test('reorderChild with oldIndex == newIndex is a no-op', () {
+      final out = reorderChild(sampleBody(), [], 1, 1);
+      expect(childrenOf(out).map((n) => n[r'$type']),
+          ['X.SwitchFilter', 'X.SequentialContainer']);
     });
 
     test('reorderChild absorbs Flutter\'s pre-removal newIndex', () {
