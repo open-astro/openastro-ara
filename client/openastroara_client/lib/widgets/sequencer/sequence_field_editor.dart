@@ -388,6 +388,9 @@ class _NumFieldState extends State<_NumField> {
   void _onChanged(String s) {
     final v = widget.isInt ? int.tryParse(s) : double.tryParse(s);
     if (v == null) return; // transient — keep the model, allow retyping
+    // A trailing '.' parses (30. → 30.0) but the user is mid-typing the
+    // fraction; committing would snap '30.' back to '30' on the next rebuild.
+    if (!widget.isInt && s.endsWith('.')) return;
     final clamped = _clamp(v);
     if (clamped != v) {
       final t = _fmt(clamped);

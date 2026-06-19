@@ -233,6 +233,21 @@ void main() {
       expect(f.controller!.text, '30.5');
     });
 
+    testWidgets('a trailing decimal point does not snap the field mid-edit',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final dec = find.byKey(const Key('Coordinates_dec_s'));
+      await tester.enterText(dec, '30.5');
+      await tester.pump();
+      // Backspace to '30.' (mid-edit) — must NOT commit 30.0 or rewrite to '30'.
+      await tester.enterText(dec, '30.');
+      await tester.pump();
+      final f = tester.widget<TextField>(
+          find.descendant(of: dec, matching: find.byType(TextField)));
+      expect(f.controller!.text, '30.'); // field left as-is
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.5); // model unchanged
+    });
+
     testWidgets('the ± toggle flips NegativeDec', (tester) async {
       final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);
