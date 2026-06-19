@@ -79,15 +79,42 @@ class SequenceFieldEditor extends ConsumerWidget {
   }
 }
 
-/// A container's `Name` editor — a labelled free-text field. Keyed by the
-/// selected path so selecting a different container re-seeds it; commits every
+/// A container's `Name` editor — a labelled free-text field. Commits every
 /// keystroke straight to the raw body's `Name` (an empty name is allowed — the
-/// tree falls back to the catalog label for it).
-class _NameEditor extends StatelessWidget {
+/// tree falls back to the catalog label for it). Like [_NumField], it owns a
+/// controller and re-syncs in [didUpdateWidget] when [name] changes externally
+/// (e.g. a future undo/redo) so the displayed text can't lag the model. The
+/// path-based [Key] in the parent still gives a fresh editor per selection.
+class _NameEditor extends StatefulWidget {
   const _NameEditor({super.key, required this.name, required this.onChanged});
 
   final String name;
   final ValueChanged<String> onChanged;
+
+  @override
+  State<_NameEditor> createState() => _NameEditorState();
+}
+
+class _NameEditorState extends State<_NameEditor> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.name);
+
+  @override
+  void didUpdateWidget(_NameEditor old) {
+    super.didUpdateWidget(old);
+    // Re-seed only on a genuine external change, and never clobber an identical
+    // value mid-edit (would move the caret): the guard on _controller.text keeps
+    // the user's own keystroke-driven updates untouched.
+    if (widget.name != old.name && _controller.text != widget.name) {
+      _controller.text = widget.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -96,12 +123,13 @@ class _NameEditor extends StatelessWidget {
           const Text('Name',
               style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
           const SizedBox(height: 4),
-          TextFormField(
-            initialValue: name,
+          TextField(
+            key: const Key('container_name'),
+            controller: _controller,
             style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
             decoration:
                 const InputDecoration(isDense: true, border: OutlineInputBorder()),
-            onChanged: onChanged,
+            onChanged: widget.onChanged,
           ),
         ],
       );

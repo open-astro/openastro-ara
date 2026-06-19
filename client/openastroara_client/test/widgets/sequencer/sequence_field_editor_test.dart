@@ -341,15 +341,14 @@ void main() {
       // The root SequentialContainer (named "root") is selected.
       await _pump(tester, detail: sampleDetail(), select: const []);
       expect(find.text('Name'), findsOneWidget); // the field label
-      // A container has no other editable fields, so it's the only text field.
-      expect(find.byType(TextFormField), findsOneWidget);
+      expect(find.byKey(const Key('container_name')), findsOneWidget);
       expect(find.text('No settings — this instruction runs as-is.'), findsNothing);
     });
 
     testWidgets('editing the Name writes it back to the container and goes dirty',
         (tester) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      await tester.enterText(find.byType(TextFormField), 'Lights');
+      await tester.enterText(find.byKey(const Key('container_name')), 'Lights');
       await tester.pump();
       expect(_nodeAt(c, const [])['Name'], 'Lights');
       expect(c.read(sequenceEditorProvider)!.isDirty, isTrue);
@@ -359,6 +358,17 @@ void main() {
       // StartGuiding (index 1) is a leaf with a boolean field, not a Name.
       await _pump(tester, detail: sampleDetail(), select: const [1]);
       expect(find.text('Name'), findsNothing);
+    });
+
+    testWidgets('reflects an external Name change for the still-selected container',
+        (tester) async {
+      // The field owns a controller + didUpdateWidget so an external mutation
+      // (e.g. a future undo/redo) of the same node's Name updates the display.
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).setNodeField(const [], 'Name', 'Renamed externally');
+      await tester.pump();
+      final field = tester.widget<TextField>(find.byKey(const Key('container_name')));
+      expect(field.controller!.text, 'Renamed externally');
     });
   });
 }
