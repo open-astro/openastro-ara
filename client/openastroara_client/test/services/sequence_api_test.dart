@@ -359,6 +359,29 @@ void main() {
       expect(d.body, isEmpty);
     });
 
+    test('value equality is deep — two parses of the same nested body are ==',
+        () {
+      Map<String, dynamic> json() => {
+            'id': 's1',
+            'name': 'M42',
+            'body': {
+              r'$type': 'Root',
+              'Items': {
+                r'$values': [
+                  {'Name': 'Start', 'Exposure': 60}
+                ]
+              }
+            },
+          };
+      final a = SequenceDetail.fromJson(json());
+      final b = SequenceDetail.fromJson(json());
+      expect(a, b); // deep — distinct nested-Map instances, equal content
+      expect(a.hashCode, b.hashCode);
+      // A nested change breaks equality.
+      final changed = json()..['body']['Items']['\$values'][0]['Exposure'] = 120;
+      expect(SequenceDetail.fromJson(changed), isNot(a));
+    });
+
     test('rejects an empty id before any request', () async {
       final api = _api((_) => const {});
       expect(() => api.getSequenceDetail(''), throwsA(isA<ArgumentError>()));

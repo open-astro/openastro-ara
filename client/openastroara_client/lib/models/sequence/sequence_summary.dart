@@ -4,7 +4,8 @@
 /// §38.1 JSON DOM) is fetched separately and parsed by the tree layer.
 library;
 
-import 'package:flutter/foundation.dart' show listEquals, mapEquals;
+import 'package:collection/collection.dart' show DeepCollectionEquality;
+import 'package:flutter/foundation.dart' show listEquals;
 
 String? _str(dynamic v) => v is String ? v : null;
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
@@ -168,6 +169,12 @@ class SequenceDetail {
         templateOrigin: templateOrigin,
       );
 
+  // DeepCollectionEquality (not mapEquals): the NINA body is deeply nested JSON,
+  // and mapEquals compares nested-Map values by identity — so two fresh parses
+  // of the same body would never be ==, breaking save-b's "did the body change?"
+  // check. Deep equality is also order-independent, matching the deep hash below.
+  static const _bodyEq = DeepCollectionEquality();
+
   @override
   bool operator ==(Object other) =>
       other is SequenceDetail &&
@@ -175,14 +182,11 @@ class SequenceDetail {
       other.name == name &&
       other.description == description &&
       other.templateOrigin == templateOrigin &&
-      mapEquals(other.body, body);
+      _bodyEq.equals(other.body, body);
 
-  // Shallow body proxy (keys, insertion-order-stable) rather than body.length —
-  // keeps hashCode consistent with the deep `mapEquals` in `==` (equal bodies
-  // share keys) without deep-hashing nested JSON on every call.
   @override
   int get hashCode => Object.hash(
-      id, name, description, templateOrigin, Object.hashAll(body.keys));
+      id, name, description, templateOrigin, _bodyEq.hash(body));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
