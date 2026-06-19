@@ -89,31 +89,37 @@ class SequenceEditorTree extends ConsumerWidget {
       itemBuilder: (context, i) {
         final row = rows[i];
         final isSelected = selected != null && listEquals(row.path, selected);
-        return InkWell(
-          onTap: () => ref.read(sequenceEditorProvider.notifier).select(row.path),
-          child: Container(
-            color: isSelected
-                ? AraColors.selectionBg.withValues(alpha: 0.25)
-                : null,
-            padding: EdgeInsets.only(
-              left: 8 + row.depth * 20.0,
-              right: 8,
-              top: 6,
-              bottom: 6,
-            ),
-            child: Row(
-              children: [
-                Icon(nodeIcon(row.node), size: 16, color: AraColors.textSecondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    nodeLabel(row.node),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+        // Ink (not Container(color:)) so the InkWell splash paints ABOVE the
+        // selection tint instead of being hidden by it.
+        return Ink(
+          color:
+              isSelected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
+          child: InkWell(
+            onTap: () =>
+                ref.read(sequenceEditorProvider.notifier).select(row.path),
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 8 + row.depth * 20.0,
+                right: 8,
+                top: 6,
+                bottom: 6,
+              ),
+              child: Row(
+                children: [
+                  Icon(nodeIcon(row.node),
+                      size: 16, color: AraColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      nodeLabel(row.node),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: AraColors.textPrimary, fontSize: 13),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
