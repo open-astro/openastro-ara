@@ -186,11 +186,11 @@ class _FieldControl extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _axisRow('RA', [
-          _NumField(key: const Key('ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
+          _NumField(key: Key('${field.key}_ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
               onChanged: (v) => onChanged(coord(raH: v.toInt()))),
-          _NumField(key: const Key('ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
+          _NumField(key: Key('${field.key}_ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
               onChanged: (v) => onChanged(coord(raM: v.toInt()))),
-          _NumField(key: const Key('ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
+          _NumField(key: Key('${field.key}_ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
               onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
         ]),
         const SizedBox(height: 6),
@@ -199,11 +199,11 @@ class _FieldControl extends StatelessWidget {
             negative: neg,
             onChanged: (n) => onChanged(coord(negDec: n)),
           ),
-          _NumField(key: const Key('dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
+          _NumField(key: Key('${field.key}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
               onChanged: (v) => onChanged(coord(decD: v.toInt()))),
-          _NumField(key: const Key('dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
+          _NumField(key: Key('${field.key}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
               onChanged: (v) => onChanged(coord(decM: v.toInt()))),
-          _NumField(key: const Key('dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
+          _NumField(key: Key('${field.key}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
               onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
         ]),
       ],
@@ -335,7 +335,13 @@ class _NumFieldState extends State<_NumField> {
   String _fmt(num v) {
     if (widget.isInt) return '${v.toInt()}';
     final d = v.toDouble();
-    return d == d.truncateToDouble() ? '${d.toInt()}' : '$d';
+    if (d == d.truncateToDouble()) return '${d.toInt()}';
+    // Cap to 3 decimals (sub-arcsec is plenty) and strip trailing zeros, so a
+    // float artifact like 30.300000000000004 displays as 30.3.
+    return d
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   @override
@@ -379,7 +385,8 @@ class _NumFieldState extends State<_NumField> {
         inputFormatters: [
           widget.isInt
               ? FilteringTextInputFormatter.digitsOnly
-              : FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              // Digits with at most one decimal point (rejects `1..5`).
+              : FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
         ],
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),

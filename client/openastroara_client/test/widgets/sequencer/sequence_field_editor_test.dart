@@ -164,9 +164,9 @@ void main() {
       expect(find.text('RA'), findsOneWidget);
       expect(find.text('Dec'), findsOneWidget);
 
-      await tester.enterText(find.byKey(const Key('ra_h')), '12');
+      await tester.enterText(find.byKey(const Key('Coordinates_ra_h')), '12');
       await tester.pump();
-      await tester.enterText(find.byKey(const Key('dec_s')), '30.5');
+      await tester.enterText(find.byKey(const Key('Coordinates_dec_s')), '30.5');
       await tester.pump();
 
       final coords = _nodeAt(c, [0])['Coordinates'] as Map;
@@ -178,11 +178,11 @@ void main() {
 
     testWidgets('RA hours clamps to 23 and corrects the field', (tester) async {
       final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
-      await tester.enterText(find.byKey(const Key('ra_h')), '99');
+      await tester.enterText(find.byKey(const Key('Coordinates_ra_h')), '99');
       await tester.pump();
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['RAHours'], 23);
       final f = tester.widget<TextField>(find.descendant(
-          of: find.byKey(const Key('ra_h')), matching: find.byType(TextField)));
+          of: find.byKey(const Key('Coordinates_ra_h')), matching: find.byType(TextField)));
       expect(f.controller!.text, '23');
     });
 
