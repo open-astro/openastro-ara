@@ -148,6 +148,20 @@ void main() {
           isEmpty);
     });
 
+    test('build() throws on duplicate field keys (enforced in release too)', () {
+      const dup = InstructionDef(
+        type: 'X.Dup, X',
+        label: 'dup',
+        category: InstructionCategory.utility,
+        icon: Icons.error,
+        fields: [
+          InstructionField('K', 'a', InstructionFieldType.integer, defaultValue: 1),
+          InstructionField('K', 'b', InstructionFieldType.integer, defaultValue: 2),
+        ],
+      );
+      expect(() => dup.build(), throwsStateError);
+    });
+
     test('build() asserts on a non-String-keyed map default (debug)', () {
       // `flutter test` runs in debug mode, where asserts are live; in a release
       // build the assert is stripped and a TypeError would surface at the cast.

@@ -180,11 +180,14 @@ class InstructionDef {
   /// `ErrorBehavior` + `Attempts`), so adding them would diverge from the
   /// runnable shape. Only containers carry `Name`.
   Map<String, dynamic> build() {
-    assert(
-      fields.map((f) => f.key).toSet().length == fields.length,
-      'InstructionDef($label) has duplicate field keys — one would silently '
-      'overwrite the other in the built node.',
-    );
+    // A real throw (not a debug assert): a duplicate key would silently
+    // overwrite in the node, so reject it in release too — this guards a
+    // dynamically-constructed InstructionDef (e.g. a Phase 2 generator), not
+    // just the const catalog the test already checks.
+    final keys = fields.map((f) => f.key).toSet();
+    if (keys.length != fields.length) {
+      throw StateError('InstructionDef($label) has duplicate field keys');
+    }
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = _deepCloneJson(f.defaultValue);
