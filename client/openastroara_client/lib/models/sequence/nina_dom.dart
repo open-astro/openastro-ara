@@ -152,6 +152,75 @@ Map<String, dynamic> setConditionField(Map<String, dynamic> root,
       return withConditions(container, conditions);
     });
 
+/// The triggers of [node] — a container wraps `Triggers` as
+/// `{ $type: ObservableCollection, $values: [...] }` exactly like `Items` /
+/// `Conditions`. Tolerates a plain array or a missing/!map `Triggers` (a leaf, or
+/// a trigger-less container) → empty list. The returned list is a fresh, growable
+/// copy. Mirrors [conditionsOf] for the parallel collection.
+List<Map<String, dynamic>> triggersOf(Map<String, dynamic> node) {
+  final triggers = node['Triggers'];
+  final List raw;
+  if (triggers is Map && triggers[r'$values'] is List) {
+    raw = triggers[r'$values'] as List;
+  } else if (triggers is List) {
+    raw = triggers;
+  } else {
+    return <Map<String, dynamic>>[];
+  }
+  return raw.whereType<Map<String, dynamic>>().toList();
+}
+
+/// A copy of [node] whose `Triggers` holds [triggers] in the ObservableCollection
+/// wrapper shape (existing wrapper shallow-copied so its `$type`/`$id` survive; a
+/// node with no map wrapper gets a fresh one typed [triggersWrapperType]). Mirrors
+/// [withConditions].
+Map<String, dynamic> withTriggers(
+    Map<String, dynamic> node, List<Map<String, dynamic>> triggers) {
+  final existing = node['Triggers'];
+  final wrapper = existing is Map
+      ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
+      : <String, dynamic>{};
+  wrapper[r'$values'] = triggers;
+  wrapper.putIfAbsent(r'$type', () => triggersWrapperType);
+  return Map<String, dynamic>.of(node)..['Triggers'] = wrapper;
+}
+
+/// Append [trigger] to the `Triggers` of the container at [containerPath];
+/// returns a new root. Parallels [addCondition] for the triggers collection.
+Map<String, dynamic> addTrigger(Map<String, dynamic> root,
+        NodePath containerPath, Map<String, dynamic> trigger) =>
+    _rebuild(root, containerPath, (container) {
+      final triggers = triggersOf(container)..add(trigger);
+      return withTriggers(container, triggers);
+    });
+
+/// Remove the trigger at [index] from the container at [containerPath]; returns a
+/// new root. Throws [RangeError] if [index] is out of range.
+Map<String, dynamic> removeTriggerAt(
+        Map<String, dynamic> root, NodePath containerPath, int index) =>
+    _rebuild(root, containerPath, (container) {
+      final triggers = triggersOf(container);
+      if (index < 0 || index >= triggers.length) {
+        throw RangeError('removeTriggerAt index $index out of range');
+      }
+      triggers.removeAt(index);
+      return withTriggers(container, triggers);
+    });
+
+/// Set scalar field [key] to [value] on the trigger at [index] of the container
+/// at [containerPath]; returns a new root. Throws [RangeError] if [index] is out
+/// of range.
+Map<String, dynamic> setTriggerField(Map<String, dynamic> root,
+        NodePath containerPath, int index, String key, Object? value) =>
+    _rebuild(root, containerPath, (container) {
+      final triggers = triggersOf(container);
+      if (index < 0 || index >= triggers.length) {
+        throw RangeError('setTriggerField index $index out of range');
+      }
+      triggers[index] = Map<String, dynamic>.of(triggers[index])..[key] = value;
+      return withTriggers(container, triggers);
+    });
+
 /// Whether [node] can hold child instructions (a container) rather than being a
 /// leaf instruction. Containers carry an `Items` collection and/or a
 /// `.Container.` `$type` (true for both the native OpenAstroAra and imported

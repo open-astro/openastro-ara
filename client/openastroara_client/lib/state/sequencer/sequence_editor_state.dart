@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
+import '../../models/sequence/trigger_catalog.dart';
 import '../../models/sequence/sequence_summary.dart';
 
 const DeepCollectionEquality _bodyEquality = DeepCollectionEquality();
@@ -250,6 +251,43 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (index < 0 || index >= conditionsOf(container).length) return;
     state =
         s._copyWith(body: setConditionField(s.body, containerPath, index, key, value));
+  }
+
+  /// Append a fresh trigger built from [def] to the container at [containerPath];
+  /// keeps selection. No-op if no sequence is loaded, or [containerPath] doesn't
+  /// resolve to a container (a leaf can't carry triggers — adding would graft a
+  /// spurious `Triggers` wrapper onto it). Mirrors [addConditionTo].
+  void addTriggerTo(NodePath containerPath, TriggerDef def) {
+    final s = state;
+    if (s == null) return;
+    final container = nodeAt(s.body, containerPath);
+    if (container == null || !isContainer(container)) return;
+    state = s._copyWith(body: addTrigger(s.body, containerPath, def.build()));
+  }
+
+  /// Remove the trigger at [index] from the container at [containerPath]; keeps
+  /// selection. No-op for an unresolvable container or an out-of-range [index].
+  void removeTriggerFrom(NodePath containerPath, int index) {
+    final s = state;
+    if (s == null) return;
+    final container = nodeAt(s.body, containerPath);
+    if (container == null) return;
+    if (index < 0 || index >= triggersOf(container).length) return;
+    state = s._copyWith(body: removeTriggerAt(s.body, containerPath, index));
+  }
+
+  /// Set scalar field [key] to [value] on the trigger at [index] of the container
+  /// at [containerPath]; keeps selection. No-op for an unresolvable container or
+  /// an out-of-range [index].
+  void setTriggerFieldOn(
+      NodePath containerPath, int index, String key, Object? value) {
+    final s = state;
+    if (s == null) return;
+    final container = nodeAt(s.body, containerPath);
+    if (container == null) return;
+    if (index < 0 || index >= triggersOf(container).length) return;
+    state =
+        s._copyWith(body: setTriggerField(s.body, containerPath, index, key, value));
   }
 
   /// Rebaseline dirty-tracking to [savedBody] — the exact body that was just
