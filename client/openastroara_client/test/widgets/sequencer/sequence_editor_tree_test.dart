@@ -70,6 +70,11 @@ void main() {
     test('Unknown when there is no \$type', () {
       expect(nodeLabel({'x': 1}), 'Unknown');
     });
+
+    test('Unknown for a degenerate trailing-dot or empty \$type', () {
+      expect(nodeLabel({r'$type': 'A., Asm'}), 'Unknown'); // trailing dot → ''
+      expect(nodeLabel({r'$type': ', Asm'}), 'Unknown'); // empty before comma
+    });
   });
 
   group('nodeIcon', () {

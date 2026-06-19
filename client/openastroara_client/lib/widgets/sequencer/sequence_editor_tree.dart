@@ -5,6 +5,7 @@
 /// drop target land in following slices; this slice is render + select.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -47,12 +48,14 @@ IconData nodeIcon(Map<String, dynamic> node) {
   return isContainer(node) ? Icons.account_tree_outlined : Icons.help_outline;
 }
 
-/// `'A.B.C, Asm'` → `'C'`; null/non-string → null.
+/// `'A.B.C, Asm'` → `'C'`; null/non-string/degenerate (empty or trailing-dot
+/// like `'A., Asm'`) → null, so `nodeLabel` falls through to `'Unknown'`.
 String? _shortType(Object? type) {
   if (type is! String || type.isEmpty) return null;
   final beforeComma = type.split(',').first.trim();
   final lastDot = beforeComma.lastIndexOf('.');
-  return lastDot >= 0 ? beforeComma.substring(lastDot + 1) : beforeComma;
+  final short = lastDot >= 0 ? beforeComma.substring(lastDot + 1) : beforeComma;
+  return short.isEmpty ? null : short;
 }
 
 void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> out) {
@@ -85,7 +88,7 @@ class SequenceEditorTree extends ConsumerWidget {
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final row = rows[i];
-        final isSelected = selected != null && _samePath(row.path, selected);
+        final isSelected = selected != null && listEquals(row.path, selected);
         return InkWell(
           onTap: () => ref.read(sequenceEditorProvider.notifier).select(row.path),
           child: Container(
@@ -117,12 +120,4 @@ class SequenceEditorTree extends ConsumerWidget {
       },
     );
   }
-}
-
-bool _samePath(NodePath a, NodePath b) {
-  if (a.length != b.length) return false;
-  for (var i = 0; i < a.length; i++) {
-    if (a[i] != b[i]) return false;
-  }
-  return true;
 }
