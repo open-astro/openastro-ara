@@ -128,6 +128,23 @@ void main() {
       expect(childrenOf(neg).first[r'$type'], 'X.Start'); // clamped to the front
     });
 
+    test('editing a plain-array Items node promotes it to ObservableCollection',
+        () {
+      // childrenOf tolerates a plain-array Items; once edited, withChildren
+      // emits the canonical wrapper shape the daemon's templates use.
+      final body = {
+        'Items': [
+          {r'$type': 'X.A', 'v': 1},
+        ],
+      };
+      final out = setField(body, [0], 'v', 2);
+      expect(nodeAt(out, [0])!['v'], 2); // edit landed
+      final items = out['Items'];
+      expect(items, isA<Map>()); // promoted from List → wrapper Map
+      expect((items as Map)[r'$type'], itemsWrapperType);
+      expect(items[r'$values'], isA<List>());
+    });
+
     test('removeAt drops the addressed node', () {
       final out = removeAt(sampleBody(), [0]);
       final kids = childrenOf(out);
