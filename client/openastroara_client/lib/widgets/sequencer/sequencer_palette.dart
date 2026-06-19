@@ -61,24 +61,29 @@ class _PaletteTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
     // Full-width row tiles (not a Wrap of chips) so a long label ellipsizes
-    // instead of overflowing in a narrow side pane.
-    return InkWell(
-      onTap: enabled ? onAdd : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Icon(def.icon, size: 15, color: fg),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                def.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: fg, fontSize: 12),
+    // instead of overflowing in a narrow side pane. The transparent Material
+    // gives the InkWell a splash surface confined to the tile (without one the
+    // ripple climbs to the pane's Material and fills the whole column).
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onAdd : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(def.icon, size: 15, color: fg),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  def.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: fg, fontSize: 12),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
