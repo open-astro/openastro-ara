@@ -19,8 +19,14 @@ const String itemsWrapperType =
 
 /// The child nodes of [node] — the daemon wraps `Items` as
 /// `{ $type: ObservableCollection, $values: [...] }`, but tolerate a plain array
-/// or a missing/!map `Items` (a leaf instruction) → empty list. Non-map entries
-/// are dropped. The returned list is a fresh, growable copy.
+/// or a missing/!map `Items` (a leaf instruction) → empty list. The returned
+/// list is a fresh, growable copy.
+///
+/// Non-`Map` `$values` entries (e.g. a bare `$ref` string in a body that still
+/// carries Json.NET reference handles) are silently dropped via [Iterable.whereType] —
+/// the editor only addresses real child nodes, and the daemon's own templates
+/// emit fully-inlined values, so a stray scalar here is malformed input rather
+/// than something to surface. Index addressing stays within the surviving maps.
 List<Map<String, dynamic>> childrenOf(Map<String, dynamic> node) {
   final items = node['Items'];
   final List raw;
@@ -64,16 +70,19 @@ Map<String, dynamic>? nodeAt(Map<String, dynamic> root, NodePath path) {
 
 /// Rebuild the spine from [node] to [path], applying [op] to the addressed node
 /// and re-threading new parent maps back up. Untouched subtrees are shared (not
-/// copied). Throws [RangeError] if [path] addresses a missing child.
+/// copied). Throws [RangeError] if [path] addresses a missing child. [depth] is
+/// the recursion cursor into [path] (an index instead of repeated
+/// `sublist` allocation — O(depth) total, not O(depth²)).
 Map<String, dynamic> _rebuild(Map<String, dynamic> node, NodePath path,
-    Map<String, dynamic> Function(Map<String, dynamic>) op) {
-  if (path.isEmpty) return op(node);
+    Map<String, dynamic> Function(Map<String, dynamic>) op,
+    [int depth = 0]) {
+  if (depth == path.length) return op(node);
   final kids = childrenOf(node);
-  final i = path.first;
+  final i = path[depth];
   if (i < 0 || i >= kids.length) {
     throw RangeError('node path index $i out of range (${kids.length} children)');
   }
-  kids[i] = _rebuild(kids[i], path.sublist(1), op);
+  kids[i] = _rebuild(kids[i], path, op, depth + 1);
   return withChildren(node, kids);
 }
 
@@ -117,9 +126,18 @@ Map<String, dynamic> removeAt(Map<String, dynamic> root, NodePath path) {
 ///
 /// The two indices play different roles, so they're checked differently:
 /// [oldIndex] *selects an existing child* and throws [RangeError] when out of
-/// range, whereas [newIndex] is a *destination* slot clamped to `0..N` where
-/// `N` is the post-removal child count (so dragging to the end lands last) —
-/// matching [insertChild]'s clamp contract.
+/// range, whereas [newIndex] is a *destination* slot in the **post-removal**
+/// list, clamped to `0..N` where `N` is the child count after [oldIndex] is
+/// removed (so dragging to the end lands last) — matching [insertChild]'s
+/// clamp contract.
+///
+/// IMPORTANT for the drag-and-drop UI: Flutter's `ReorderableListView.onReorder`
+/// delivers `newIndex` as a **pre-removal** slot, which is one greater than this
+/// function expects whenever `oldIndex < newIndex`. Callers wiring `onReorder`
+/// straight through MUST decrement first:
+/// `reorderChild(root, path, oldIndex, oldIndex < newIndex ? newIndex - 1 : newIndex)`.
+/// Passing the raw `onReorder` index mis-places the dragged item by one
+/// (and the clamp hides it only at the very end of the list).
 Map<String, dynamic> reorderChild(Map<String, dynamic> root, NodePath parentPath,
         int oldIndex, int newIndex) =>
     _rebuild(root, parentPath, (parent) {

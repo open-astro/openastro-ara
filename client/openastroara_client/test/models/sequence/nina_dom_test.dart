@@ -135,6 +135,37 @@ void main() {
           ['X.SequentialContainer', 'X.SwitchFilter']);
     });
 
+    test('reorderChild newIndex is the post-removal slot', () {
+      // [A, B, C] → drag A to sit between B and C. Flutter onReorder would say
+      // (0, 2) pre-removal; the engine wants the post-removal slot 1 → [B, A, C].
+      final body = {
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {r'$type': 'A'},
+            {r'$type': 'B'},
+            {r'$type': 'C'},
+          ],
+        },
+      };
+      final out = reorderChild(body, [], 0, 1);
+      expect(childrenOf(out).map((n) => n[r'$type']), ['B', 'A', 'C']);
+    });
+
+    test('_rebuild handles deep nesting after the sublist→index refactor', () {
+      // Build a 4-deep chain and edit the leaf to exercise multi-level recursion.
+      Map<String, dynamic> wrap(Map<String, dynamic> child) => {
+            'Items': {
+              r'$type': itemsWrapperType,
+              r'$values': [child],
+            },
+          };
+      final deep = wrap(wrap(wrap({r'$type': 'Leaf', 'v': 1})));
+      final out = setField(deep, [0, 0, 0], 'v', 2);
+      expect(nodeAt(out, [0, 0, 0])!['v'], 2);
+      expect(nodeAt(deep, [0, 0, 0])!['v'], 1); // source untouched
+    });
+
     test('a bad path throws RangeError', () {
       expect(() => setField(sampleBody(), [9], 'x', 1), throwsRangeError);
     });
