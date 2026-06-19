@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
@@ -384,7 +385,8 @@ void main() {
     testWidgets('adding a Loop condition via the menu appends it to the body',
         (tester) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      await tester.tap(find.byIcon(Icons.add)); // open the add-condition menu
+      // Tooltip-scoped: the Triggers section has its own add button too.
+      await tester.tap(find.byTooltip('Add condition'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Loop (iterations)').last);
       await tester.pumpAndSettle();
@@ -421,6 +423,42 @@ void main() {
       await tester.tap(find.byIcon(Icons.delete_outline));
       await tester.pump();
       expect(conditionsOf(_nodeAt(c, const [])), isEmpty);
+    });
+  });
+
+  group('container triggers editor', () {
+    testWidgets('shows the Triggers header and empty state for a bare container',
+        (tester) async {
+      await _pump(tester, detail: sampleDetail(), select: const []);
+      expect(find.text('Triggers'), findsOneWidget);
+      expect(find.text('No triggers.'), findsOneWidget);
+    });
+
+    testWidgets('adding Meridian Flip via the menu appends it to the body',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      await tester.tap(find.byTooltip('Add trigger'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Meridian Flip').last);
+      await tester.pumpAndSettle();
+      final triggers = triggersOf(_nodeAt(c, const []));
+      expect(triggers, hasLength(1));
+      expect(triggers.single[r'$type'], contains('MeridianFlipTrigger'));
+      expect(triggers.single['TriggerRunner'], isA<Map>()); // empty runner built
+      expect(find.text('No triggers.'), findsNothing);
+    });
+
+    testWidgets('removing a trigger deletes it from the body', (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addTriggerTo(
+          const [],
+          triggerForType(
+              'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      expect(triggersOf(_nodeAt(c, const [])), hasLength(1));
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+      expect(triggersOf(_nodeAt(c, const [])), isEmpty);
     });
   });
 }

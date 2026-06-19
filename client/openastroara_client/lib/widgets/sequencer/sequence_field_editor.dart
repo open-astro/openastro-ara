@@ -5,8 +5,9 @@
 /// editor; the remaining complex fields (coordinates/filter) still get a
 /// placeholder row pending their dedicated editors.
 ///
-/// For a selected container, the panel also edits its `Name` and its loop
-/// **Conditions** (add/remove/edit) via the controller's condition ops.
+/// For a selected container, the panel also edits its `Name`, its loop
+/// **Conditions**, and its **Triggers** (add/remove/edit) via the controller's
+/// condition / trigger ops.
 library;
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/node_display.dart' show nodeLabel, shortTypeName;
+import '../../models/sequence/trigger_catalog.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -60,6 +62,11 @@ class SequenceFieldEditor extends ConsumerWidget {
         _ConditionsSection(
           containerPath: selectedPath,
           conditions: conditionsOf(node),
+        ),
+        const SizedBox(height: 16),
+        _TriggersSection(
+          containerPath: selectedPath,
+          triggers: triggersOf(node),
         ),
         const SizedBox(height: 12),
       ],
@@ -260,6 +267,130 @@ class _ConditionCard extends ConsumerWidget {
                 value: condition[field.key],
                 onChanged: (v) =>
                     notifier.setConditionFieldOn(containerPath, index, field.key, v),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A container's **Triggers** editor (mirrors [_ConditionsSection]): a header
+/// with an "add" menu, then a card per trigger. A trigger fires between
+/// instructions while the container runs (e.g. the meridian flip).
+class _TriggersSection extends ConsumerWidget {
+  const _TriggersSection({required this.containerPath, required this.triggers});
+
+  final NodePath containerPath;
+  final List<Map<String, dynamic>> triggers;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(sequenceEditorProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Triggers',
+                style: TextStyle(
+                    color: AraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            const Spacer(),
+            PopupMenuButton<TriggerDef>(
+              tooltip: 'Add trigger',
+              icon: const Icon(Icons.add, size: 20, color: AraColors.textSecondary),
+              onSelected: (def) => notifier.addTriggerTo(containerPath, def),
+              itemBuilder: (_) => [
+                for (final def in triggerCatalog)
+                  PopupMenuItem<TriggerDef>(
+                    value: def,
+                    child: Row(children: [
+                      Icon(def.icon, size: 18),
+                      const SizedBox(width: 8),
+                      Flexible(child: Text(def.label, overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        if (triggers.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text('No triggers.',
+                style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+          )
+        else
+          for (var i = 0; i < triggers.length; i++)
+            _TriggerCard(
+              key: ValueKey('${containerPath.join(".")}/trig/$i'),
+              containerPath: containerPath,
+              index: i,
+              trigger: triggers[i],
+            ),
+      ],
+    );
+  }
+}
+
+/// One trigger row: its label/icon + a remove button, and an editor per
+/// catalogued editable field (writing through `setTriggerFieldOn`). Meridian
+/// Flip has no editable fields, so its card is just the label + remove.
+class _TriggerCard extends ConsumerWidget {
+  const _TriggerCard({
+    super.key,
+    required this.containerPath,
+    required this.index,
+    required this.trigger,
+  });
+
+  final NodePath containerPath;
+  final int index;
+  final Map<String, dynamic> trigger;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(sequenceEditorProvider.notifier);
+    final type = trigger[r'$type'];
+    final def = type is String ? triggerForType(type) : null;
+    final label = def?.label ?? (type is String ? shortTypeName(type) : null) ?? 'Trigger';
+    final fields = def?.fields.where((f) => f.editable).toList() ?? const [];
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(10, 6, 6, 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(def?.icon ?? Icons.bolt_outlined, size: 16, color: AraColors.textSecondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(label,
+                    style: const TextStyle(color: AraColors.textPrimary, fontSize: 12)),
+              ),
+              IconButton(
+                tooltip: 'Remove trigger',
+                icon: const Icon(Icons.delete_outline, size: 18),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => notifier.removeTriggerFrom(containerPath, index),
+              ),
+            ],
+          ),
+          for (final field in fields)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _FieldControl(
+                key: ValueKey('${containerPath.join(".")}/trig/$index/${field.key}'),
+                field: field,
+                value: trigger[field.key],
+                onChanged: (v) =>
+                    notifier.setTriggerFieldOn(containerPath, index, field.key, v),
               ),
             ),
         ],
