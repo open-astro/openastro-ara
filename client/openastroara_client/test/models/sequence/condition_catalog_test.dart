@@ -74,6 +74,18 @@ void main() {
       expect(b['Iterations'], 2); // unaffected
     });
 
+    test('build() throws if a field key collides with a reserved base key', () {
+      const bad = ConditionDef(
+        type: 'X.Bad, X',
+        label: 'bad',
+        icon: Icons.error,
+        fields: [
+          InstructionField('Parent', 'oops', InstructionFieldType.text, defaultValue: ''),
+        ],
+      );
+      expect(() => bad.build(), throwsStateError);
+    });
+
     test('build() throws on duplicate field keys (release too)', () {
       const dup = ConditionDef(
         type: 'X.Dup, X',

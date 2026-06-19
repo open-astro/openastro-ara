@@ -21,7 +21,12 @@ library;
 import 'package:flutter/material.dart';
 
 import 'instruction_catalog.dart'
-    show InstructionField, deepCloneJson, instructionForType, sequentialContainerType;
+    show
+        InstructionField,
+        checkNoReservedFieldKeys,
+        deepCloneJson,
+        instructionForType,
+        sequentialContainerType;
 
 /// One trigger in the container's "add trigger" picker.
 @immutable
@@ -61,12 +66,7 @@ class TriggerDef {
     if (keys.length != fields.length) {
       throw StateError('TriggerDef($label) has duplicate field keys');
     }
-    for (final f in fields) {
-      if (_reservedKeys.contains(f.key)) {
-        throw StateError(
-            'TriggerDef($label) field "${f.key}" collides with a reserved base key');
-      }
-    }
+    checkNoReservedFieldKeys('TriggerDef($label)', fields, _reservedKeys);
     final containerDef = instructionForType(sequentialContainerType) ??
         (throw StateError(
             'TriggerDef: SequentialContainer not found in the instruction catalog'));

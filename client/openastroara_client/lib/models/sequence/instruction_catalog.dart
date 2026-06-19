@@ -227,6 +227,10 @@ class InstructionDef {
           'InstructionDef($label) sets defaultName without strategyType (only containers carry a Name)');
     }
     if (isContainer) return _buildContainer();
+    // A field may not reuse a base key build() writes itself (it would be
+    // silently clobbered). Shared with the condition/trigger catalogs.
+    checkNoReservedFieldKeys('InstructionDef($label)', fields,
+        const {r'$type', 'Parent', 'ErrorBehavior', 'Attempts'});
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
@@ -269,6 +273,19 @@ class InstructionDef {
         'ErrorBehavior': 0,
         'Attempts': 1,
       };
+}
+
+/// Throws a [StateError] if any of [fields] uses a key in [reserved] — a base
+/// key the caller's `build()` writes itself, which a field would silently
+/// clobber. Shared by the instruction / condition / trigger catalogs so all
+/// three guard their reserved base keys identically. [owner] labels the throw.
+void checkNoReservedFieldKeys(
+    String owner, List<InstructionField> fields, Set<String> reserved) {
+  for (final f in fields) {
+    if (reserved.contains(f.key)) {
+      throw StateError('$owner field "${f.key}" collides with a reserved base key');
+    }
+  }
 }
 
 /// Recursively copy a JSON value so a built node shares no mutable sub-object

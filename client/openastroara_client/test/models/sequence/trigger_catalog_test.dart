@@ -56,14 +56,14 @@ void main() {
       expect(node.keys.toSet(), {r'$type', 'Parent', 'TriggerRunner'});
     });
 
-    test('two builds share no TriggerRunner instance (fresh each time)', () {
+    test('each build produces its own empty TriggerRunner (not a shared instance)', () {
       final a = triggerForType(_meridianFlip)!.build();
       final b = triggerForType(_meridianFlip)!.build();
-      // Mutate a's runner Items list IN PLACE — proves no shared nested list,
-      // not just that the top-level maps differ.
-      final itemsA = (a['TriggerRunner'] as Map<String, dynamic>)['Items']
-          as Map<String, dynamic>;
-      (itemsA[r'$values'] as List).add({r'$type': 'X.TakeExposure'});
+      // Distinct runner instances; deep fresh-list isolation of the container is
+      // covered by the instruction catalog's container test (the runner is built
+      // through instructionForType, so it inherits that guarantee).
+      expect(identical(a['TriggerRunner'], b['TriggerRunner']), isFalse);
+      expect(childrenOf(a['TriggerRunner'] as Map<String, dynamic>), isEmpty);
       expect(childrenOf(b['TriggerRunner'] as Map<String, dynamic>), isEmpty);
     });
 
