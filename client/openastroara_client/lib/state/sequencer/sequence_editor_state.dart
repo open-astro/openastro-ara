@@ -12,6 +12,7 @@ library;
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/sequence_summary.dart';
@@ -209,6 +210,46 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final s = state;
     if (s == null || nodeAt(s.body, path) == null) return;
     state = s._copyWith(body: setField(s.body, path, key, value));
+  }
+
+  /// Append a fresh condition built from [def] to the container at
+  /// [containerPath]; keeps selection (the container stays selected — a
+  /// condition isn't a tree node and Item paths don't shift). No-op if no
+  /// sequence is loaded, or [containerPath] doesn't resolve to a container (a
+  /// leaf can't carry conditions — adding would graft a spurious `Conditions`
+  /// wrapper onto it).
+  void addConditionTo(NodePath containerPath, ConditionDef def) {
+    final s = state;
+    if (s == null) return;
+    final container = nodeAt(s.body, containerPath);
+    if (container == null || !isContainer(container)) return;
+    state = s._copyWith(body: addCondition(s.body, containerPath, def.build()));
+  }
+
+  /// Remove the condition at [index] from the container at [containerPath];
+  /// keeps selection. No-op for an unresolvable container or an out-of-range
+  /// [index].
+  void removeConditionFrom(NodePath containerPath, int index) {
+    final s = state;
+    if (s == null) return;
+    final container = nodeAt(s.body, containerPath);
+    if (container == null) return;
+    if (index < 0 || index >= conditionsOf(container).length) return;
+    state = s._copyWith(body: removeConditionAt(s.body, containerPath, index));
+  }
+
+  /// Set scalar field [key] to [value] on the condition at [index] of the
+  /// container at [containerPath]; keeps selection. No-op for an unresolvable
+  /// container or an out-of-range [index].
+  void setConditionFieldOn(
+      NodePath containerPath, int index, String key, Object? value) {
+    final s = state;
+    if (s == null) return;
+    final container = nodeAt(s.body, containerPath);
+    if (container == null) return;
+    if (index < 0 || index >= conditionsOf(container).length) return;
+    state =
+        s._copyWith(body: setConditionField(s.body, containerPath, index, key, value));
   }
 
   /// Rebaseline dirty-tracking to [savedBody] — the exact body that was just

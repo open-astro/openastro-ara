@@ -82,6 +82,76 @@ Map<String, dynamic> withChildren(
   return Map<String, dynamic>.of(node)..['Items'] = wrapper;
 }
 
+/// The loop conditions of [node] — a container wraps `Conditions` as
+/// `{ $type: ObservableCollection, $values: [...] }` exactly like `Items`.
+/// Tolerates a plain array or a missing/!map `Conditions` (a leaf, or a
+/// condition-less container) → empty list. The returned list is a fresh,
+/// growable copy. Mirrors [childrenOf] for the parallel collection.
+List<Map<String, dynamic>> conditionsOf(Map<String, dynamic> node) {
+  final conditions = node['Conditions'];
+  final List raw;
+  if (conditions is Map && conditions[r'$values'] is List) {
+    raw = conditions[r'$values'] as List;
+  } else if (conditions is List) {
+    raw = conditions;
+  } else {
+    return <Map<String, dynamic>>[];
+  }
+  return raw.whereType<Map<String, dynamic>>().toList();
+}
+
+/// A copy of [node] whose `Conditions` holds [conditions] in the
+/// ObservableCollection wrapper shape. The existing wrapper map is shallow-copied
+/// and only its `$values` replaced (so its `$type` / any `$id` survive); a node
+/// with no map wrapper gets a fresh one typed [conditionsWrapperType]. Mirrors
+/// [withChildren].
+Map<String, dynamic> withConditions(
+    Map<String, dynamic> node, List<Map<String, dynamic>> conditions) {
+  final existing = node['Conditions'];
+  final wrapper = existing is Map
+      ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
+      : <String, dynamic>{};
+  wrapper[r'$values'] = conditions;
+  wrapper.putIfAbsent(r'$type', () => conditionsWrapperType);
+  return Map<String, dynamic>.of(node)..['Conditions'] = wrapper;
+}
+
+/// Append [condition] to the `Conditions` of the container at [containerPath];
+/// returns a new root. Parallels [insertChild] for the conditions collection.
+Map<String, dynamic> addCondition(Map<String, dynamic> root,
+        NodePath containerPath, Map<String, dynamic> condition) =>
+    _rebuild(root, containerPath, (container) {
+      final conditions = conditionsOf(container)..add(condition);
+      return withConditions(container, conditions);
+    });
+
+/// Remove the condition at [index] from the container at [containerPath];
+/// returns a new root. Throws [RangeError] if [index] is out of range.
+Map<String, dynamic> removeConditionAt(
+        Map<String, dynamic> root, NodePath containerPath, int index) =>
+    _rebuild(root, containerPath, (container) {
+      final conditions = conditionsOf(container);
+      if (index < 0 || index >= conditions.length) {
+        throw RangeError('removeConditionAt index $index out of range');
+      }
+      conditions.removeAt(index);
+      return withConditions(container, conditions);
+    });
+
+/// Set scalar field [key] to [value] on the condition at [index] of the
+/// container at [containerPath]; returns a new root. Throws [RangeError] if
+/// [index] is out of range.
+Map<String, dynamic> setConditionField(Map<String, dynamic> root,
+        NodePath containerPath, int index, String key, Object? value) =>
+    _rebuild(root, containerPath, (container) {
+      final conditions = conditionsOf(container);
+      if (index < 0 || index >= conditions.length) {
+        throw RangeError('setConditionField index $index out of range');
+      }
+      conditions[index] = Map<String, dynamic>.of(conditions[index])..[key] = value;
+      return withConditions(container, conditions);
+    });
+
 /// Whether [node] can hold child instructions (a container) rather than being a
 /// leaf instruction. Containers carry an `Items` collection and/or a
 /// `.Container.` `$type` (true for both the native OpenAstroAra and imported
