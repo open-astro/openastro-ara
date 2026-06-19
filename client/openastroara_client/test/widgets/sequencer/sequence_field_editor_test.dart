@@ -23,6 +23,8 @@ const _slew =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
 const _switchFilter =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
+const _altitude =
+    'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer';
 
 SequenceDetail _detailWith(String type) => SequenceDetail(
       id: 's',
@@ -450,6 +452,60 @@ void main() {
       await tester.tap(find.byIcon(Icons.delete_outline));
       await tester.pump();
       expect(conditionsOf(_nodeAt(c, const [])), isEmpty);
+    });
+  });
+
+  group('altitude condition WaitLoopData editor', () {
+    Future<ProviderContainer> pumpAltitude(WidgetTester tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(const [], conditionForType(_altitude)!);
+      await tester.pump();
+      return c;
+    }
+
+    Map<String, dynamic> data(ProviderContainer c) =>
+        conditionsOf(_nodeAt(c, const [])).single['Data'] as Map<String, dynamic>;
+
+    testWidgets('renders the comparator/offset/coordinates controls', (tester) async {
+      await pumpAltitude(tester);
+      expect(find.byKey(const Key('Data_comparator')), findsOneWidget);
+      expect(find.byKey(const Key('Data_offset')), findsOneWidget);
+      expect(find.byKey(const Key('Data_coords_ra_h')), findsOneWidget);
+    });
+
+    testWidgets('picking a comparator writes Data.Comparator', (tester) async {
+      final c = await pumpAltitude(tester);
+      expect(data(c)['Comparator'], 1); // AltitudeCondition default = LessThan
+      await tester.tap(find.byKey(const Key('Data_comparator')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Greater than (>)').last);
+      await tester.pumpAndSettle();
+      expect(data(c)['Comparator'], 3);
+    });
+
+    testWidgets('editing the offset writes Data.Offset (signed)', (tester) async {
+      final c = await pumpAltitude(tester);
+      await tester.enterText(find.byKey(const Key('Data_offset')), '-12.5');
+      await tester.pump();
+      expect(data(c)['Offset'], -12.5);
+    });
+
+    testWidgets('editing the target coordinates writes Data.Coordinates', (tester) async {
+      final c = await pumpAltitude(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_coords_ra_h')),
+          matching: find.byType(TextField),
+        ),
+        '12',
+      );
+      await tester.pump();
+      expect((data(c)['Coordinates'] as Map)['RAHours'], 12);
+      // The other Data fields survive a coordinates edit.
+      expect(data(c)['Comparator'], 1);
+      expect(data(c)['Offset'], 30.0);
     });
   });
 
