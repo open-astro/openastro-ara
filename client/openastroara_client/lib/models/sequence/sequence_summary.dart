@@ -132,8 +132,11 @@ class SequenceImportResult {
 /// immutable value rather than a shallow (top-level-only) tripwire.
 Object? _deepUnmodifiable(Object? value) {
   if (value is Map) {
-    return Map<dynamic, dynamic>.unmodifiable(<dynamic, dynamic>{
-      for (final e in value.entries) e.key: _deepUnmodifiable(e.value),
+    // Keep nested maps typed Map<String, dynamic> (JSON keys are always strings)
+    // so save-b's editor can `as Map<String, dynamic>` without a runtime cast
+    // failure on the frozen nested maps.
+    return Map<String, dynamic>.unmodifiable(<String, dynamic>{
+      for (final e in value.entries) '${e.key}': _deepUnmodifiable(e.value),
     });
   }
   if (value is List) {

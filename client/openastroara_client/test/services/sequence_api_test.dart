@@ -424,6 +424,9 @@ void main() {
       expect(() => values.add({}), throwsUnsupportedError); // nested list
       expect(() => (values.first as Map)['Exposure'] = 120,
           throwsUnsupportedError); // map inside list
+      // Nested maps stay Map<String, dynamic> so save-b can cast without throwing.
+      expect(d.body['Items'], isA<Map<String, dynamic>>());
+      expect(values.first, isA<Map<String, dynamic>>());
     });
   });
 
