@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Removed
+- **§38 — the superseded read-only sequence display tree.** Deletes `SequenceTree`, `InstructionEditor`, and the `SequenceController`/`selectedNodeIdProvider` state (`state/sequencer/sequence_state.dart`). The Sequencer tab now renders the editable §38 surface (`SequenceEditorTree`/palette/field editor over `sequenceEditorProvider`), so the old lossy `SequenceNode` display widgets had no remaining users. `SequenceNode`/`parseNinaSequenceBody` stay — they still back `getSequence` and the editor tree's depth cap.
+
 ### Security
 - **CVE-2025-6965 — bundled SQLite updated to a patched build.** `Microsoft.Data.Sqlite` / `Microsoft.EntityFrameworkCore.Sqlite 10.0.x` transitively pull the native `SQLitePCLRaw.lib.e_sqlite3 2.1.11`, which bundles SQLite older than 3.50.2 — affected by CVE-2025-6965 (CWE-197 numeric truncation, possible memory corruption; CVSS 7.2). The daemon now pins `SQLitePCLRaw.lib.e_sqlite3 3.50.3` (SQLite 3.50.3, patched) over the transitive version; the native SQLite C API is backward-compatible with the existing managed provider, so this swaps in fixed SQLite without changing the data layer. The pin can be dropped once `Microsoft.Data.Sqlite` ships a build on the patched lib.
 
