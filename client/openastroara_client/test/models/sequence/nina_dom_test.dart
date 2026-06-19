@@ -94,6 +94,27 @@ void main() {
     });
   });
 
+  group('isContainer', () {
+    test('true for a node with an Items collection', () {
+      expect(isContainer(sampleBody()), isTrue);
+      expect(isContainer(nodeAt(sampleBody(), [1])!), isTrue); // nested container
+    });
+
+    test('true for a .Container. \$type even without Items', () {
+      expect(
+          isContainer({
+            r'$type':
+                'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer'
+          }),
+          isTrue);
+    });
+
+    test('false for a leaf instruction', () {
+      expect(isContainer(nodeAt(sampleBody(), [0])!), isFalse); // SwitchFilter leaf
+      expect(isContainer({r'$type': 'X.TakeExposure', 'ExposureTime': 1.0}), isFalse);
+    });
+  });
+
   group('nodeAt', () {
     test('addresses by child-index path', () {
       final b = sampleBody();
