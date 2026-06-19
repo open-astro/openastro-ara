@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -369,6 +370,57 @@ void main() {
       await tester.pump();
       final field = tester.widget<TextField>(find.byKey(const Key('container_name')));
       expect(field.controller!.text, 'Renamed externally');
+    });
+  });
+
+  group('container conditions editor', () {
+    testWidgets('shows the Conditions header and empty state for a bare container',
+        (tester) async {
+      await _pump(tester, detail: sampleDetail(), select: const []);
+      expect(find.text('Conditions'), findsOneWidget);
+      expect(find.text('No loop conditions — the container runs once.'), findsOneWidget);
+    });
+
+    testWidgets('adding a Loop condition via the menu appends it to the body',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      await tester.tap(find.byIcon(Icons.add)); // open the add-condition menu
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Loop (iterations)').last);
+      await tester.pumpAndSettle();
+      final conditions = conditionsOf(_nodeAt(c, const []));
+      expect(conditions, hasLength(1));
+      expect(conditions.single[r'$type'], contains('LoopCondition'));
+      expect(conditions.single['Iterations'], 2); // catalog default
+      expect(find.text('No loop conditions — the container runs once.'), findsNothing);
+    });
+
+    testWidgets('editing a condition field writes via setConditionFieldOn',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      // The only TextFormField in the panel is the condition's Iterations field
+      // (the container Name is a plain TextField).
+      await tester.enterText(find.byType(TextFormField), '15');
+      await tester.pump();
+      expect(conditionsOf(_nodeAt(c, const [])).single['Iterations'], 15);
+    });
+
+    testWidgets('removing a condition deletes it from the body', (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      expect(conditionsOf(_nodeAt(c, const [])), hasLength(1));
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+      expect(conditionsOf(_nodeAt(c, const [])), isEmpty);
     });
   });
 }

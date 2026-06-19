@@ -4,15 +4,19 @@
 /// via [SequenceEditorController.setNodeField]. Binning has an inline `X × Y`
 /// editor; the remaining complex fields (coordinates/filter) still get a
 /// placeholder row pending their dedicated editors.
+///
+/// For a selected container, the panel also edits its `Name` and its loop
+/// **Conditions** (add/remove/edit) via the controller's condition ops.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
-import '../../models/sequence/node_display.dart' show nodeLabel;
+import '../../models/sequence/node_display.dart' show nodeLabel, shortTypeName;
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -51,6 +55,11 @@ class SequenceFieldEditor extends ConsumerWidget {
           key: ValueKey('${selectedPath.join(".")}/__name'),
           name: node['Name'] is String ? node['Name'] as String : '',
           onChanged: (v) => notifier.setNodeField(selectedPath, 'Name', v),
+        ),
+        const SizedBox(height: 16),
+        _ConditionsSection(
+          containerPath: selectedPath,
+          conditions: conditionsOf(node),
         ),
         const SizedBox(height: 12),
       ],
@@ -133,6 +142,130 @@ class _NameEditorState extends State<_NameEditor> {
           ),
         ],
       );
+}
+
+/// A container's loop-**Conditions** editor: a header with an "add" menu, then a
+/// card per condition (its catalogued fields + a remove button). Edits route to
+/// the controller's condition ops, addressed by `(containerPath, index)`. Shown
+/// only for a selected container (a leaf carries no conditions).
+class _ConditionsSection extends ConsumerWidget {
+  const _ConditionsSection({required this.containerPath, required this.conditions});
+
+  final NodePath containerPath;
+  final List<Map<String, dynamic>> conditions;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(sequenceEditorProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Conditions',
+                style: TextStyle(
+                    color: AraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            const Spacer(),
+            PopupMenuButton<ConditionDef>(
+              tooltip: 'Add condition',
+              icon: const Icon(Icons.add, size: 20, color: AraColors.textSecondary),
+              onSelected: (def) => notifier.addConditionTo(containerPath, def),
+              itemBuilder: (_) => [
+                for (final def in conditionCatalog)
+                  PopupMenuItem<ConditionDef>(
+                    value: def,
+                    child: Row(children: [
+                      Icon(def.icon, size: 18),
+                      const SizedBox(width: 8),
+                      Flexible(child: Text(def.label, overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        if (conditions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text('No loop conditions — the container runs once.',
+                style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+          )
+        else
+          for (var i = 0; i < conditions.length; i++)
+            _ConditionCard(
+              key: ValueKey('${containerPath.join(".")}/cond/$i'),
+              containerPath: containerPath,
+              index: i,
+              condition: conditions[i],
+            ),
+      ],
+    );
+  }
+}
+
+/// One condition row: its label/icon + a remove button, and an editor per
+/// catalogued editable field (writing through `setConditionFieldOn`).
+class _ConditionCard extends ConsumerWidget {
+  const _ConditionCard({
+    super.key,
+    required this.containerPath,
+    required this.index,
+    required this.condition,
+  });
+
+  final NodePath containerPath;
+  final int index;
+  final Map<String, dynamic> condition;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(sequenceEditorProvider.notifier);
+    final type = condition[r'$type'];
+    final def = type is String ? conditionForType(type) : null;
+    final label = def?.label ?? (type is String ? shortTypeName(type) : null) ?? 'Condition';
+    final fields = def?.fields.where((f) => f.editable).toList() ?? const [];
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(10, 6, 6, 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(def?.icon ?? Icons.rule, size: 16, color: AraColors.textSecondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(label,
+                    style: const TextStyle(color: AraColors.textPrimary, fontSize: 12)),
+              ),
+              IconButton(
+                tooltip: 'Remove condition',
+                icon: const Icon(Icons.delete_outline, size: 18),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => notifier.removeConditionFrom(containerPath, index),
+              ),
+            ],
+          ),
+          for (final field in fields)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _FieldControl(
+                key: ValueKey('${containerPath.join(".")}/cond/$index/${field.key}'),
+                field: field,
+                value: condition[field.key],
+                onChanged: (v) =>
+                    notifier.setConditionFieldOn(containerPath, index, field.key, v),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _FieldControl extends StatelessWidget {
