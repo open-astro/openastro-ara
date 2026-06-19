@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -266,6 +267,47 @@ void main() {
       final before = read()!.body;
       ctrl().setNodeField(const [9], 'x', 1);
       expect(read()!.body, same(before));
+    });
+  });
+
+  group('conditions on a container', () {
+    ConditionDef loopCondition() => conditionForType(
+        'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!;
+
+    test('addConditionTo appends to a container, keeps selection, goes dirty', () {
+      ctrl().load(sampleDetail());
+      ctrl().select(const [1]); // the nested container
+      ctrl().addConditionTo(const [1], loopCondition());
+      final s = read()!;
+      final container = nodeAt(s.body, [1])!;
+      expect(conditionsOf(container), hasLength(1));
+      expect(conditionsOf(container).single['Iterations'], 2);
+      expect(s.selectedPath, [1]); // container stays selected
+      expect(s.isDirty, isTrue);
+    });
+
+    test('addConditionTo is a no-op on a leaf (no spurious Conditions wrapper)', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      ctrl().addConditionTo(const [0], loopCondition()); // [0] is a leaf
+      expect(read()!.body, same(before));
+    });
+
+    test('setConditionFieldOn edits a condition in place', () {
+      ctrl().load(sampleDetail());
+      ctrl().addConditionTo(const [1], loopCondition());
+      ctrl().setConditionFieldOn(const [1], 0, 'Iterations', 12);
+      expect(conditionsOf(nodeAt(read()!.body, [1])!).single['Iterations'], 12);
+    });
+
+    test('removeConditionFrom drops one and bounds-checks (no-op out of range)', () {
+      ctrl().load(sampleDetail());
+      ctrl().addConditionTo(const [1], loopCondition());
+      final afterAdd = read()!.body;
+      ctrl().removeConditionFrom(const [1], 9); // out of range → no-op
+      expect(read()!.body, same(afterAdd));
+      ctrl().removeConditionFrom(const [1], 0);
+      expect(conditionsOf(nodeAt(read()!.body, [1])!), isEmpty);
     });
   });
 

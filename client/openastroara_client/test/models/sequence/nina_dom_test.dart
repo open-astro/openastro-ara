@@ -258,4 +258,69 @@ void main() {
       expect(() => setField(sampleBody(), [9], 'x', 1), throwsRangeError);
     });
   });
+
+  group('conditions (conditionsOf / withConditions / add / remove / setField)', () {
+    Map<String, dynamic> loop(int iterations) => {
+          r'$type': 'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
+          'Iterations': iterations,
+          'Parent': null,
+        };
+
+    test('conditionsOf reads the wrapped \$values, empty when absent', () {
+      expect(conditionsOf(sampleBody()), isEmpty); // no Conditions on the sample
+      final withOne = <String, dynamic>{
+        'Conditions': {
+          r'$type': conditionsWrapperType,
+          r'$values': [loop(5)],
+        },
+      };
+      expect(conditionsOf(withOne), hasLength(1));
+      expect(conditionsOf(withOne).single['Iterations'], 5);
+    });
+
+    test('addCondition appends in the wrapper shape without mutating the source', () {
+      final root = sampleBody();
+      final out = addCondition(root, const [], loop(3));
+      expect(conditionsOf(out), hasLength(1));
+      final wrapper = out['Conditions'] as Map<String, dynamic>;
+      expect(wrapper[r'$type'], conditionsWrapperType);
+      expect(conditionsOf(root), isEmpty); // source untouched
+      // Items are untouched by a Conditions edit.
+      expect(childrenOf(out), hasLength(childrenOf(root).length));
+    });
+
+    test('addCondition targets a nested container by path', () {
+      final root = sampleBody();
+      final out = addCondition(root, const [1], loop(7)); // the nested container
+      expect(conditionsOf(nodeAt(out, [1])!).single['Iterations'], 7);
+      expect(conditionsOf(nodeAt(out, [])!), isEmpty); // root unaffected
+    });
+
+    test('removeConditionAt drops one and bounds-checks', () {
+      var root = addCondition(sampleBody(), const [], loop(1));
+      root = addCondition(root, const [], loop(2));
+      final out = removeConditionAt(root, const [], 0);
+      expect(conditionsOf(out).single['Iterations'], 2);
+      expect(() => removeConditionAt(out, const [], 5), throwsRangeError);
+    });
+
+    test('setConditionField edits one condition in place', () {
+      final root = addCondition(sampleBody(), const [], loop(2));
+      final out = setConditionField(root, const [], 0, 'Iterations', 20);
+      expect(conditionsOf(out).single['Iterations'], 20);
+      expect(conditionsOf(root).single['Iterations'], 2); // source untouched
+      expect(() => setConditionField(out, const [], 9, 'Iterations', 1), throwsRangeError);
+    });
+
+    test('withConditions preserves an existing wrapper \$type / \$id', () {
+      final node = <String, dynamic>{
+        'Conditions': {r'$type': 'Custom.Wrapper', r'$id': '5', r'$values': []},
+      };
+      final out = withConditions(node, [loop(1)]);
+      final wrapper = out['Conditions'] as Map<String, dynamic>;
+      expect(wrapper[r'$type'], 'Custom.Wrapper'); // kept, not overwritten
+      expect(wrapper[r'$id'], '5');
+      expect((wrapper[r'$values'] as List), hasLength(1));
+    });
+  });
 }
