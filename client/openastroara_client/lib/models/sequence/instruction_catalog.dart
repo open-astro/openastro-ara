@@ -190,6 +190,9 @@ class InstructionDef {
 /// immutable and returned as-is.
 Object? _deepCloneJson(Object? value) {
   if (value is Map) {
+    // JSON object keys are strings by construction (these defaults are body
+    // fragments), so the cast is total — it would only throw on a malformed
+    // non-JSON default, which the catalog never declares.
     return <String, dynamic>{
       for (final entry in value.entries) entry.key as String: _deepCloneJson(entry.value),
     };
