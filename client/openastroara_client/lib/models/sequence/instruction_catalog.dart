@@ -197,8 +197,13 @@ class InstructionDef {
 Object? _deepCloneJson(Object? value) {
   if (value is Map) {
     // JSON object keys are strings by construction (these defaults are body
-    // fragments), so the cast is total — it would only throw on a malformed
-    // non-JSON default, which the catalog never declares.
+    // fragments). The debug assert makes that invariant self-catching: a future
+    // non-`Map<String, dynamic>` default trips here rather than at the `as
+    // String` cast below.
+    assert(
+      value is Map<String, dynamic>,
+      'instruction default maps must be String-keyed JSON fragments; got ${value.runtimeType}',
+    );
     return <String, dynamic>{
       for (final entry in value.entries) entry.key as String: _deepCloneJson(entry.value),
     };
@@ -356,6 +361,8 @@ const List<InstructionDef> instructionCatalog = [
     label: 'Wait (until time)',
     category: InstructionCategory.utility,
     icon: Icons.schedule_outlined,
+    // All four are `[JsonProperty] public int` in the C# WaitForTime class
+    // (not double/TimeSpan), so `integer` fields match the on-disk shape.
     fields: [
       InstructionField('Hours', 'Hour', InstructionFieldType.integer, defaultValue: 0),
       InstructionField('Minutes', 'Minute', InstructionFieldType.integer, defaultValue: 0),

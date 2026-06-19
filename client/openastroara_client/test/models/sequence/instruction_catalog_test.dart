@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 
@@ -133,6 +134,19 @@ void main() {
       expect(node.keys, containsAll([r'$type', 'Parent', 'ErrorBehavior', 'Attempts']));
       expect(node.keys.where((k) => k != r'$type' && k != 'Parent' && k != 'ErrorBehavior' && k != 'Attempts'),
           isEmpty);
+    });
+
+    test('build() asserts on a non-String-keyed map default (debug)', () {
+      const bad = InstructionDef(
+        type: 'X.Bad, X',
+        label: 'bad',
+        category: InstructionCategory.utility,
+        icon: Icons.error,
+        fields: [
+          InstructionField('K', 'k', InstructionFieldType.binning, defaultValue: {1: 'a'}),
+        ],
+      );
+      expect(() => bad.build(), throwsA(isA<AssertionError>()));
     });
 
     test('built nodes share no mutable sub-object (deep clone)', () {
