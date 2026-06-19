@@ -136,6 +136,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('selected non-root row shows a delete button that removes it',
+      (tester) async {
+    final c = await _pump(tester, detail: sampleDetail());
+    expect(find.byIcon(Icons.delete_outline), findsNothing); // none until selected
+
+    await tester.tap(find.text('Take Exposure'));
+    await tester.pump();
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pump();
+    expect(find.text('Take Exposure'), findsNothing); // removed
+    expect(childrenOf(c.read(sequenceEditorProvider)!.body), hasLength(1));
+    // removeNode clears selection → no delete button lingering.
+    expect(find.byIcon(Icons.delete_outline), findsNothing);
+  });
+
+  testWidgets('the root row has no delete button (can\'t delete the sequence)',
+      (tester) async {
+    await _pump(tester, detail: sampleDetail());
+    await tester.tap(find.text('My Sequence')); // root row
+    await tester.pump();
+    expect(find.byIcon(Icons.delete_outline), findsNothing);
+  });
+
   testWidgets('tapping a row selects that node by path', (tester) async {
     final container = await _pump(tester, detail: sampleDetail());
     await tester.tap(find.text('Take Exposure'));

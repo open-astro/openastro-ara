@@ -86,6 +86,18 @@ class SequenceEditorTree extends ConsumerWidget {
                           color: AraColors.textPrimary, fontSize: 13),
                     ),
                   ),
+                  // Delete affordance on the selected row — never the root, which
+                  // can't be removed (it's the sequence container itself).
+                  if (isSelected && row.path.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      color: AraColors.textSecondary,
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Delete',
+                      onPressed: () => ref
+                          .read(sequenceEditorProvider.notifier)
+                          .removeNode(row.path),
+                    ),
                 ],
               ),
             ),
