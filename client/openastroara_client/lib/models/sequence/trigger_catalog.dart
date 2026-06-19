@@ -53,8 +53,9 @@ class TriggerDef {
   });
 
   /// Base keys `build` writes itself — a field may not reuse one (it would be
-  /// silently clobbered below).
-  static const Set<String> _reservedKeys = {'Parent', 'TriggerRunner'};
+  /// silently clobbered below). Includes `$type`, which is written before the
+  /// field loop, so a field keyed `$type` would overwrite the discriminator.
+  static const Set<String> _reservedKeys = {r'$type', 'Parent', 'TriggerRunner'};
 
   /// A fresh raw-body trigger node: `$type`, each field at its (deep-cloned)
   /// default, the base `Parent: null`, and a fresh empty `TriggerRunner`
