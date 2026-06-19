@@ -276,6 +276,19 @@ void main() {
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 59.9995);
     });
 
+    testWidgets('an ordinary decimal (30.3) is not corrupted by truncation',
+        (tester) async {
+      // 30.3 is stored as 30.2999…; a naive *1000-floor would show '30.299'.
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final dec = find.byKey(const Key('Coordinates_dec_s'));
+      await tester.enterText(dec, '30.3');
+      await tester.pump(); // commit → rebuild → didUpdateWidget reformats
+      final f = tester.widget<TextField>(
+          find.descendant(of: dec, matching: find.byType(TextField)));
+      expect(f.controller!.text, '30.3'); // not '30.299'
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.3);
+    });
+
     testWidgets('an in-range value truncates (not rounds) on display', (tester) async {
       // 29.9995 must show '29.999', not a rounded-up '30'.
       final detail = SequenceDetail(

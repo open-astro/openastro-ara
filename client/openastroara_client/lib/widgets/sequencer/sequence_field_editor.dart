@@ -375,7 +375,10 @@ class _NumFieldState extends State<_NumField> {
     // TRUNCATE (not round) to ≤3 decimals + strip trailing zeros: a float
     // artifact like 30.300000000000004 shows 30.3, and an in-range 29.9995 shows
     // 29.999 (rounding would flip it to '30' while the model still holds 29.9995).
-    final t = (d * 1000).floorToDouble() / 1000;
+    // The 1e-9 nudge absorbs IEEE-754 representation noise (30.3 is stored as
+    // 30.29999…, so a bare floor would truncate to 30.299); it's far below the
+    // 3-decimal resolution, so a genuine 59.9995 still floors to 59.999.
+    final t = (d * 1000 + 1e-9).floorToDouble() / 1000;
     if (t == t.truncateToDouble()) return '${t.toInt()}';
     return t
         .toStringAsFixed(3)
