@@ -406,10 +406,22 @@ void main() {
       expect(base.copyWith(body: const {'y': 2}).body, const {'y': 2});
     });
 
-    test('body is unmodifiable — mutation throws (keeps the hash memo sound)',
-        () {
-      final d = SequenceDetail(id: 's1', body: {'x': 1});
-      expect(() => d.body['x'] = 2, throwsUnsupportedError);
+    test('body is DEEPLY unmodifiable — mutation throws at any depth', () {
+      final d = SequenceDetail(id: 's1', body: {
+        'x': 1,
+        'Items': {
+          r'$values': [
+            {'Exposure': 60}
+          ]
+        }
+      });
+      expect(() => d.body['x'] = 2, throwsUnsupportedError); // top level
+      expect(() => (d.body['Items'] as Map)['k'] = 'v',
+          throwsUnsupportedError); // nested map
+      final values = (d.body['Items'] as Map)[r'$values'] as List;
+      expect(() => values.add({}), throwsUnsupportedError); // nested list
+      expect(() => (values.first as Map)['Exposure'] = 120,
+          throwsUnsupportedError); // map inside list
     });
   });
 

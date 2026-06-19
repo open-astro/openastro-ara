@@ -127,6 +127,26 @@ class SequenceImportResult {
       Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
 }
 
+/// Recursively wrap a JSON value's maps and lists unmodifiable, so a
+/// [SequenceDetail.body] can't be mutated at ANY depth — making it a true
+/// immutable value rather than a shallow (top-level-only) tripwire.
+Object? _deepUnmodifiable(Object? value) {
+  if (value is Map) {
+    return Map<dynamic, dynamic>.unmodifiable(<dynamic, dynamic>{
+      for (final e in value.entries) e.key: _deepUnmodifiable(e.value),
+    });
+  }
+  if (value is List) {
+    return List<dynamic>.unmodifiable(value.map(_deepUnmodifiable));
+  }
+  return value;
+}
+
+Map<String, dynamic> _deepUnmodifiableBody(Map<String, dynamic> body) =>
+    Map<String, dynamic>.unmodifiable(<String, dynamic>{
+      for (final e in body.entries) e.key: _deepUnmodifiable(e.value),
+    });
+
 /// Full detail of one saved sequence (`GET /api/v1/sequences/{id}`) — daemon's
 /// `SequenceDto`. [body] is the raw §38.1 / NINA JSON DOM the daemon stores
 /// VERBATIM; it is the source of truth the client keeps so Save (`PATCH`) and
@@ -139,16 +159,16 @@ class SequenceDetail {
   final Map<String, dynamic> body;
   final String? templateOrigin;
 
-  // Top-level [body] is wrapped unmodifiable as a tripwire against accidental
-  // mutation — it's a value type (edits produce a NEW body via copyWith). Not
-  // const because Map.unmodifiable isn't a const expression.
+  // [body] is wrapped DEEPLY unmodifiable so it can't be mutated at any depth —
+  // it's a true immutable value (edits produce a NEW body via copyWith). Not
+  // const because the wrap isn't a const expression.
   SequenceDetail({
     required this.id,
     this.name = '',
     this.description,
     Map<String, dynamic> body = const <String, dynamic>{},
     this.templateOrigin,
-  }) : body = Map<String, dynamic>.unmodifiable(body);
+  }) : body = _deepUnmodifiableBody(body);
 
   factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
         id: _str(json['id']) ?? '',
@@ -188,13 +208,14 @@ class SequenceDetail {
       // Cheap scalar fields short-circuit before the deep body compare.
       _bodyEq.equals(other.body, body);
 
-  // Recompute the deep body hash each call (NOT memoized): a cache could go
-  // stale if a nested map were ever mutated in place, and SequenceDetail isn't a
-  // hash-hot object — it's held in a provider and compared via `==` (which
-  // short-circuits the scalars), not used as a Set/Map key in a hot path.
+  // Memoize the deep body hash on first access (O(1) on repeat). Sound now that
+  // [body] is DEEPLY unmodifiable — nothing can mutate it at any depth, so the
+  // cached value can never go stale.
+  int? _bodyHashCache;
+
   @override
-  int get hashCode =>
-      Object.hash(id, name, description, templateOrigin, _bodyEq.hash(body));
+  int get hashCode => Object.hash(id, name, description, templateOrigin,
+      _bodyHashCache ??= _bodyEq.hash(body));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
