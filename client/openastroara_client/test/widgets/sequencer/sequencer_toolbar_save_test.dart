@@ -145,4 +145,16 @@ void main() {
     // Still dirty (save failed) so the user can retry.
     expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
   });
+
+  testWidgets('a non-422 failure shows a generic error and keeps edits dirty',
+      (tester) async {
+    final client = _SaveClient(throwStatus: 500);
+    final container = await _pump(tester, client, dirty: true);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining("Couldn't save the sequence"), findsOneWidget);
+    expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
+  });
 }

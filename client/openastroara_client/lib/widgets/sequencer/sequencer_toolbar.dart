@@ -212,10 +212,13 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
   final busy = ref.read(sequenceCommandBusyProvider.notifier);
 
+  // The exact body sent over the wire — rebaseline against THIS, not live state
+  // re-read after the await, so an edit landing mid-flight stays dirty.
+  final sentBody = editor.body;
   busy.setBusy(true);
   try {
-    await api.updateSequence(editor.id, body: editor.body);
-    ref.read(sequenceEditorProvider.notifier).markSaved();
+    await api.updateSequence(editor.id, body: sentBody);
+    ref.read(sequenceEditorProvider.notifier).markSaved(sentBody);
     messenger.showSnackBar(const SnackBar(content: Text('Sequence saved.')));
   } on DioException catch (e) {
     final code = e.response?.statusCode;
@@ -225,7 +228,9 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
           : "Couldn't save the sequence. Check the connection and try again."),
       backgroundColor: AraColors.accentError,
     ));
-  } catch (_) {
+  } catch (e) {
+    // Don't let a programming error masquerade as a network failure in dev.
+    debugPrint('[sequencer] unexpected save error: $e');
     messenger.showSnackBar(const SnackBar(
       content: Text("Couldn't save the sequence. Check the connection and try again."),
       backgroundColor: AraColors.accentError,
@@ -237,16 +242,23 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
 
 /// Best-effort extraction of the validator's message from a 422 body
 /// (`{detail|message|error: "..."}` or a bare string); null if none readable.
+/// Capped so a pathologically long server message can't blow out the SnackBar.
 String? _validationMessage(DioException e) {
   final data = e.response?.data;
-  if (data is String && data.trim().isNotEmpty) return data.trim();
-  if (data is Map) {
+  String? msg;
+  if (data is String && data.trim().isNotEmpty) {
+    msg = data.trim();
+  } else if (data is Map) {
     for (final key in const ['detail', 'message', 'error']) {
       final v = data[key];
-      if (v is String && v.trim().isNotEmpty) return v.trim();
+      if (v is String && v.trim().isNotEmpty) {
+        msg = v.trim();
+        break;
+      }
     }
   }
-  return null;
+  if (msg == null) return null;
+  return msg.length > 200 ? '${msg.substring(0, 200)}…' : msg;
 }
 
 String _statusLine(bool connected, String? selectedId, String? selectedName,
