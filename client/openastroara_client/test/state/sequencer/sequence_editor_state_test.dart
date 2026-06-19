@@ -111,6 +111,40 @@ void main() {
     });
   });
 
+  group('addInstruction (selection-relative target)', () {
+    test('appends to the root when nothing is selected', () {
+      ctrl().load(sampleDetail());
+      ctrl().addInstruction(takeExposure());
+      final s = read()!;
+      expect(childrenOf(s.body), hasLength(3));
+      expect(s.selectedPath, [2]); // appended at root end + selected
+    });
+
+    test('appends inside a selected container', () {
+      ctrl().load(sampleDetail());
+      ctrl().select(const [1]); // the nested container
+      ctrl().addInstruction(takeExposure());
+      final s = read()!;
+      expect(childrenOf(nodeAt(s.body, [1])!), hasLength(2));
+      expect(s.selectedPath, [1, 1]);
+    });
+
+    test('inserts after a selected leaf in its parent', () {
+      ctrl().load(sampleDetail());
+      ctrl().select(const [0]); // the SwitchFilter leaf at root
+      ctrl().addInstruction(takeExposure());
+      final s = read()!;
+      expect(childrenOf(s.body), hasLength(3));
+      expect(s.selectedPath, [1]); // landed right after the leaf
+      expect(nodeAt(s.body, [1])![r'$type'], contains('TakeExposure'));
+    });
+
+    test('no-op when nothing is loaded', () {
+      ctrl().addInstruction(takeExposure());
+      expect(read(), isNull);
+    });
+  });
+
   group('removeNode', () {
     test('removes and clears selection', () {
       ctrl().load(sampleDetail());

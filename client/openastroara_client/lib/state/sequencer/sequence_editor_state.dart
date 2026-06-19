@@ -124,6 +124,30 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     );
   }
 
+  /// Add [def] relative to the current selection — the palette's tap-to-add
+  /// target resolution, so the user doesn't have to think about paths:
+  /// - nothing selected → appended to the root container;
+  /// - a container selected → appended inside it;
+  /// - a leaf instruction selected → inserted right after it in its parent.
+  /// The new node is selected (via [insertInstruction]). No-op if no sequence
+  /// is loaded.
+  void addInstruction(InstructionDef def) {
+    final s = state;
+    if (s == null) return;
+    final sel = s.selectedPath;
+    if (sel == null) {
+      insertInstruction(const [], childrenOf(s.body).length, def);
+      return;
+    }
+    final node = nodeAt(s.body, sel);
+    if (node != null && isContainer(node)) {
+      insertInstruction(sel, childrenOf(node).length, def);
+    } else {
+      // Leaf (or stale selection): drop it after the selected node in its parent.
+      insertInstruction(sel.sublist(0, sel.length - 1), sel.last + 1, def);
+    }
+  }
+
   /// Remove the node at [path] and clear selection (the selected node may have
   /// been removed or had its path shifted). No-op for the root (`[]`) or an
   /// unresolvable path.
