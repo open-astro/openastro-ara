@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart';
+import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_export.dart';
@@ -43,6 +44,9 @@ class SequencerToolbar extends ConsumerWidget {
     // concurrent lifecycle calls.
     final busy = ref.watch(sequenceCommandBusyProvider);
     final hasSelection = connected && selectedId != null && !busy;
+    // Save is enabled only when the open sequence has unsaved edits.
+    final dirty = ref.watch(sequenceEditorProvider.select((s) => s?.isDirty ?? false));
+    final canSave = hasSelection && dirty;
     final isRunning = runState == SequenceRunState.running;
     final isPaused = runState == SequenceRunState.paused;
     final isActive = runState?.isActive ?? false;
@@ -85,8 +89,11 @@ class SequencerToolbar extends ConsumerWidget {
                   onPressed:
                       connected ? () => SequenceLoadDialog.show(context) : null,
                 ),
-                const _ToolButton(
-                    icon: Icons.save_outlined, label: 'Save', onPressed: null),
+                _ToolButton(
+                  icon: Icons.save_outlined,
+                  label: 'Save',
+                  onPressed: canSave ? () => _save(context, ref) : null,
+                ),
                 _ToolButton(
                   icon: Icons.ios_share,
                   label: 'Export',
@@ -191,6 +198,70 @@ Future<void> _lifecycle(
   } finally {
     busy.setBusy(false);
   }
+}
+
+/// PATCH the editor's working body back to the daemon (verbatim, so it
+/// round-trips), then rebaseline dirty-tracking. A 422 surfaces the validator's
+/// rejection; any other failure is a generic transport error.
+Future<void> _save(BuildContext context, WidgetRef ref) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final editor = ref.read(sequenceEditorProvider);
+  final api = ref.read(sequenceApiProvider);
+  // editor == null is reachable (state could clear between tap and read); the
+  // api == null half is the required null-safety check for api.updateSequence
+  // below (canSave already implies a non-null api when Save is tappable).
+  if (editor == null || api == null) return;
+  // Capture before the await — usable even if the widget unmounts.
+  final messenger = ScaffoldMessenger.of(context);
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+
+  // The exact body sent over the wire — rebaseline against THIS, not live state
+  // re-read after the await, so an edit landing mid-flight stays dirty.
+  final sentBody = editor.body;
+  busy.setBusy(true);
+  try {
+    await api.updateSequence(editor.id, body: sentBody);
+    ref.read(sequenceEditorProvider.notifier).markSaved(sentBody);
+    messenger.showSnackBar(const SnackBar(content: Text('Sequence saved.')));
+  } on DioException catch (e) {
+    final code = e.response?.statusCode;
+    messenger.showSnackBar(SnackBar(
+      content: Text(code == 422
+          ? 'Save rejected: ${_validationMessage(e) ?? 'the sequence is invalid.'}'
+          : "Couldn't save the sequence. Check the connection and try again."),
+      backgroundColor: AraColors.accentError,
+    ));
+  } catch (e) {
+    // Don't let a programming error masquerade as a network failure in dev.
+    debugPrint('[sequencer] unexpected save error: $e');
+    messenger.showSnackBar(const SnackBar(
+      content: Text("Couldn't save the sequence. Check the connection and try again."),
+      backgroundColor: AraColors.accentError,
+    ));
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+/// Best-effort extraction of the validator's message from a 422 body
+/// (`{detail|message|error: "..."}` or a bare string); null if none readable.
+/// Capped so a pathologically long server message can't blow out the SnackBar.
+String? _validationMessage(DioException e) {
+  final data = e.response?.data;
+  String? msg;
+  if (data is String && data.trim().isNotEmpty) {
+    msg = data.trim();
+  } else if (data is Map) {
+    for (final key in const ['detail', 'message', 'error']) {
+      final v = data[key];
+      if (v is String && v.trim().isNotEmpty) {
+        msg = v.trim();
+        break;
+      }
+    }
+  }
+  if (msg == null) return null;
+  return msg.length > 200 ? '${msg.substring(0, 200)}…' : msg;
 }
 
 String _statusLine(bool connected, String? selectedId, String? selectedName,

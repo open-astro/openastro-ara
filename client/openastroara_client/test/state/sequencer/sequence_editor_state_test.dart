@@ -218,13 +218,24 @@ void main() {
   });
 
   group('dirty-tracking / markSaved', () {
-    test('markSaved rebaselines so isDirty reads false until the next edit', () {
+    test('markSaved(sentBody) rebaselines so isDirty reads false until the next edit', () {
       ctrl().load(sampleDetail());
       ctrl().setNodeField(const [0], 'Filter', 'R');
       expect(read()!.isDirty, isTrue);
-      ctrl().markSaved();
+      ctrl().markSaved(read()!.body); // baseline = the just-saved body
       expect(read()!.isDirty, isFalse);
       ctrl().setNodeField(const [0], 'Filter', 'B');
+      expect(read()!.isDirty, isTrue);
+    });
+
+    test('markSaved against a stale snapshot keeps a mid-save edit dirty', () {
+      ctrl().load(sampleDetail());
+      ctrl().setNodeField(const [0], 'Filter', 'R');
+      final sent = read()!.body; // snapshot "sent" to the daemon
+      // An edit lands while the (hypothetical) PATCH is in flight.
+      ctrl().setNodeField(const [0], 'Filter', 'B');
+      ctrl().markSaved(sent); // rebaseline to what was actually saved
+      // The mid-flight edit ('B') is NOT the saved body → still dirty.
       expect(read()!.isDirty, isTrue);
     });
 

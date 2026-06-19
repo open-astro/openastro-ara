@@ -187,12 +187,16 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     state = s._copyWith(body: setField(s.body, path, key, value));
   }
 
-  /// Mark the current body as the saved baseline (call after a successful Save),
-  /// so [SequenceEditorState.isDirty] reads false until the next edit.
-  void markSaved() {
+  /// Rebaseline dirty-tracking to [savedBody] — the exact body that was just
+  /// persisted (call after a successful Save). Passing the *sent* snapshot
+  /// (not re-reading live state) is deliberate: if an edit landed while the
+  /// PATCH was in flight, the working body now differs from [savedBody], so
+  /// [SequenceEditorState.isDirty] correctly stays true and that edit isn't
+  /// silently marked clean. No-op if nothing is loaded.
+  void markSaved(Map<String, dynamic> savedBody) {
     final s = state;
     if (s == null) return;
-    state = s._copyWith(originalBody: s.body);
+    state = s._copyWith(originalBody: savedBody);
   }
 }
 
