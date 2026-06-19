@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart' as dom;
+
+const _sequentialContainer =
+    'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer';
+const _parallelContainer =
+    'OpenAstroAra.Sequencer.Container.ParallelContainer, OpenAstroAra.Sequencer';
 
 void main() {
   group('catalog integrity', () {
     test('every entry has an assembly-qualified OpenAstroAra \$type', () {
       for (final def in instructionCatalog) {
-        expect(def.type, contains('OpenAstroAra.Sequencer.SequenceItem.'));
+        // Leaves live under .SequenceItem.; containers under .Container.
+        expect(def.type,
+            contains(def.isContainer ? 'OpenAstroAra.Sequencer.Container.' : 'OpenAstroAra.Sequencer.SequenceItem.'));
         expect(def.type, endsWith(', OpenAstroAra.Sequencer'));
         expect(def.label, isNotEmpty);
       }
@@ -112,10 +120,15 @@ void main() {
       }
     });
 
-    test('no built node emits Name/Description (matches daemon templates)', () {
+    test('leaf nodes emit no Name/Description; containers carry a Name', () {
       for (final def in instructionCatalog) {
         final node = def.build();
-        expect(node.containsKey('Name'), isFalse, reason: def.label);
+        if (def.isContainer) {
+          expect(node['Name'], isNotEmpty, reason: def.label);
+        } else {
+          expect(node.containsKey('Name'), isFalse, reason: def.label);
+        }
+        // Description is never emitted (matches the daemon templates).
         expect(node.containsKey('Description'), isFalse, reason: def.label);
       }
     });
@@ -179,6 +192,22 @@ void main() {
           isEmpty);
     });
 
+    test('a defaultName without strategyType is rejected (assert in debug)', () {
+      // A leaf def can't carry a Name (_buildContainer would drop it silently).
+      // In debug (test) the const-ctor assert fires at construction; build()
+      // re-throws the same invariant in release, where asserts are stripped.
+      expect(
+        () => InstructionDef(
+          type: 'X.Leaf, X',
+          label: 'leaf',
+          category: InstructionCategory.utility,
+          icon: Icons.error,
+          defaultName: 'oops', // no strategyType
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('build() throws on duplicate field keys (enforced in release too)', () {
       const dup = InstructionDef(
         type: 'X.Dup, X',
@@ -225,6 +254,45 @@ void main() {
           .build();
       expect(node.containsKey('Filter'), isTrue);
       expect(node['Filter'], isNull);
+    });
+
+    test('a container builds the daemon template shape (strategy + collections)', () {
+      final def = instructionForType(_sequentialContainer)!;
+      expect(def.isContainer, isTrue);
+      final node = def.build();
+      // typed Strategy
+      expect((node['Strategy'] as Map<String, dynamic>)[r'$type'],
+          contains('SequentialStrategy'));
+      // default NINA container name (so it round-trips into NINA identically)
+      expect(node['Name'], 'Sequential Instruction Set');
+      expect(node['IsExpanded'], true);
+      // three empty, correctly-typed ObservableCollections
+      for (final coll in ['Conditions', 'Items', 'Triggers']) {
+        final wrapper = node[coll] as Map<String, dynamic>;
+        expect(wrapper[r'$type'], contains('ObservableCollection'), reason: coll);
+        expect(wrapper[r'$values'], isEmpty, reason: coll);
+      }
+      // base item fields, as integer enums per the templates
+      expect(node['Parent'], isNull);
+      expect(node['ErrorBehavior'], 0);
+      expect(node['Attempts'], 1);
+      // the DOM engine recognises it as a nestable container
+      expect(dom.isContainer(node), isTrue);
+    });
+
+    test('the parallel container uses the parallel execution strategy', () {
+      final node = instructionForType(_parallelContainer)!.build();
+      expect((node['Strategy'] as Map<String, dynamic>)[r'$type'],
+          contains('ParallelStrategy'));
+      expect(node[r'$type'], contains('.Container.'));
+    });
+
+    test('container Items/Conditions/Triggers are fresh growable lists (not shared)', () {
+      final a = instructionForType(_sequentialContainer)!.build();
+      final b = instructionForType(_sequentialContainer)!.build();
+      (a['Items'] as Map<String, dynamic>)[r'$values'].add(<String, dynamic>{'x': 1});
+      // The second build's collection is unaffected (no shared const list).
+      expect((b['Items'] as Map<String, dynamic>)[r'$values'], isEmpty);
     });
   });
 

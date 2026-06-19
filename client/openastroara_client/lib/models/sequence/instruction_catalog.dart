@@ -18,8 +18,11 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'nina_dom.dart' show conditionsWrapperType, itemsWrapperType, triggersWrapperType;
+
 /// The palette groups instructions by the equipment/concern they drive.
-enum InstructionCategory { camera, filterWheel, focuser, telescope, guider, utility }
+/// `container` holds the nesting building-blocks (sequential/parallel sets).
+enum InstructionCategory { camera, filterWheel, focuser, telescope, guider, utility, container }
 
 /// Display title for a category section header.
 extension InstructionCategoryLabel on InstructionCategory {
@@ -30,6 +33,7 @@ extension InstructionCategoryLabel on InstructionCategory {
         InstructionCategory.telescope => 'Telescope',
         InstructionCategory.guider => 'Guider',
         InstructionCategory.utility => 'Utility',
+        InstructionCategory.container => 'Containers',
       };
 }
 
@@ -168,13 +172,31 @@ class InstructionDef {
   /// The editable + runtime-managed fields, in display order.
   final List<InstructionField> fields;
 
+  /// For a container, the assembly-qualified `$type` of its execution
+  /// `Strategy` (Sequential/Parallel). Non-null marks this def a container:
+  /// [build] emits the full container shape (a typed `Strategy`, a `Name`, and
+  /// empty `Conditions`/`Items`/`Triggers` collections) instead of a leaf node.
+  final String? strategyType;
+
+  /// For a container, the default `Name` a freshly-built node carries — leaf
+  /// instructions never emit `Name`. Defaults to [label] when omitted.
+  final String? defaultName;
+
+  /// Whether this def builds a container (a node that holds child items) rather
+  /// than a leaf instruction. Distinct from `nina_dom`'s `isContainer(node)`,
+  /// which inspects a built node; this inspects the catalog def.
+  bool get isContainer => strategyType != null;
+
   const InstructionDef({
     required this.type,
     required this.label,
     required this.category,
     required this.icon,
     this.fields = const [],
-  });
+    this.strategyType,
+    this.defaultName,
+  }) : assert(strategyType != null || defaultName == null,
+            'defaultName only applies to a container (set strategyType too)');
 
   /// A fresh raw-body node for this instruction: `$type`, each field at its
   /// (deep-cloned) default, plus the base-item fields every `SequenceItem`
@@ -196,6 +218,15 @@ class InstructionDef {
     if (keys.length != fields.length) {
       throw StateError('InstructionDef($label) has duplicate field keys');
     }
+    // The const-ctor assert catches this for the static catalog at construction;
+    // re-check in release too (matching the duplicate-key guard above) so a
+    // dynamically-built def with a defaultName but no strategyType — whose name
+    // _buildContainer would otherwise silently drop on a leaf — fails fast.
+    if (strategyType == null && defaultName != null) {
+      throw StateError(
+          'InstructionDef($label) sets defaultName without strategyType (only containers carry a Name)');
+    }
+    if (isContainer) return _buildContainer();
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = _deepCloneJson(f.defaultValue);
@@ -205,6 +236,35 @@ class InstructionDef {
     node['Attempts'] = 1;
     return node;
   }
+
+  /// A fresh, empty container node in the daemon's template shape: a typed
+  /// `Strategy`, a user-facing `Name`, empty `Conditions`/`Items`/`Triggers`
+  /// ObservableCollections, plus the base-item fields. Field order mirrors the
+  /// daemon's own templates (Strategy → Name → Conditions → IsExpanded → Items
+  /// → Triggers → base). The three collections are fresh growable lists, so the
+  /// editor can nest children into a just-added container immediately via
+  /// `nina_dom` (which appends to `Items.$values`).
+  Map<String, dynamic> _buildContainer() => <String, dynamic>{
+        r'$type': type,
+        'Strategy': <String, dynamic>{r'$type': strategyType},
+        'Name': defaultName ?? label,
+        'Conditions': <String, dynamic>{
+          r'$type': conditionsWrapperType,
+          r'$values': <dynamic>[],
+        },
+        'IsExpanded': true,
+        'Items': <String, dynamic>{
+          r'$type': itemsWrapperType,
+          r'$values': <dynamic>[],
+        },
+        'Triggers': <String, dynamic>{
+          r'$type': triggersWrapperType,
+          r'$values': <dynamic>[],
+        },
+        'Parent': null,
+        'ErrorBehavior': 0,
+        'Attempts': 1,
+      };
 }
 
 /// Recursively copy a JSON value so a built node shares no mutable sub-object
@@ -398,6 +458,27 @@ const List<InstructionDef> instructionCatalog = [
     fields: [
       InstructionField('Text', 'Note', InstructionFieldType.text, defaultValue: ''),
     ],
+  ),
+  // ── Containers ───────────────────────────────────────────────────────────
+  // The nesting building-blocks. A container holds child Items (and, in later
+  // slices, Conditions/Triggers). NINA's default container names are kept so an
+  // ARA-built sequence reads identically when opened in NINA. Appended last so
+  // the palette's existing instruction rows keep their positions.
+  InstructionDef(
+    type: 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+    label: 'Sequential Instruction Set',
+    category: InstructionCategory.container,
+    icon: Icons.account_tree_outlined,
+    strategyType:
+        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
+  ),
+  InstructionDef(
+    type: 'OpenAstroAra.Sequencer.Container.ParallelContainer, OpenAstroAra.Sequencer',
+    label: 'Parallel Instruction Set',
+    category: InstructionCategory.container,
+    icon: Icons.call_split,
+    strategyType:
+        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.ParallelStrategy, OpenAstroAra.Sequencer',
   ),
 ];
 

@@ -52,7 +52,9 @@ void main() {
       expect(nodeLabel({r'$type': _takeExposure}), 'Take Exposure');
     });
 
-    test('uses a container\'s Name when not in the catalog', () {
+    test('a container\'s own Name wins over its catalog label', () {
+      // SequentialContainer is catalogued ("Sequential Instruction Set"), but a
+      // user-named container shows its Name, not the generic catalog label.
       expect(
         nodeLabel({
           r'$type':
@@ -61,6 +63,17 @@ void main() {
           'Items': {r'$type': itemsWrapperType, r'$values': []},
         }),
         'My Sequence',
+      );
+    });
+
+    test('an unnamed catalogued container falls back to its catalog label', () {
+      expect(
+        nodeLabel({
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Items': {r'$type': itemsWrapperType, r'$values': []},
+        }),
+        'Sequential Instruction Set',
       );
     });
 
