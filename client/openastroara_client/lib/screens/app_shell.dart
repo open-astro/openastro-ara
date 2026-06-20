@@ -16,6 +16,7 @@ import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
 import 'tabs/planning_tab.dart';
 import 'tabs/sequencer_tab.dart';
+import 'tabs/support_tab.dart';
 import 'wizard/wizard_shell.dart';
 
 /// Main app shell — replaces the first-run screen once a server is saved
@@ -38,6 +39,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
     _TabSpec(icon: Icons.list_alt, label: 'Sequencer', body: SequencerTab()),
     _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
+    _TabSpec(icon: Icons.support_agent, label: 'Support', body: SupportTab()),
   ];
 
   @override
