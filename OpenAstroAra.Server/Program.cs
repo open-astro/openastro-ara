@@ -725,7 +725,14 @@ public partial class Program {
         _ = app.Services.GetRequiredService<IProfileRepository>();
 
         LogListening(app.Logger, port);
-        app.Run();
+        try {
+            app.Run();
+        } finally {
+            // Flush the §29.9 Serilog file sink even when app.Run() unwinds via an
+            // exception — the daemon's own logs are the first thing reached for
+            // after a crash, so the last lines must not be lost.
+            Log.CloseAndFlush();
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Startup reconciliation: {Outcome} (previous sequence: {SeqId})")]
