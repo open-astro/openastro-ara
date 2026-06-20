@@ -84,7 +84,12 @@ public static class ServerStateEndpoints {
                 async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, ILogService svc, CancellationToken ct) =>
                     Results.Accepted(value: await svc.RotateAsync(idempotencyKey, ct)))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .WithName("RotateLogs");
+            .WithName("RotateLogs")
+            .WithDescription("Records an audit marker into the active log and acknowledges (202). " +
+                "Does NOT force an immediate file roll — the daemon's log sink rolls automatically " +
+                "by day and on a size cap, so the next tail/download is not guaranteed to see a fresh file. " +
+                "Idempotency-Key is echoed for tracing but NOT enforced: each call writes a marker " +
+                "unconditionally, so a retried key appends another line rather than de-duplicating.");
 
         logs.MapGet("/download",
                 async (string? logFileName, ILogService svc, CancellationToken ct) => {

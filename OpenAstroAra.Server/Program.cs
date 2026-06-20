@@ -22,8 +22,14 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using Scalar.AspNetCore;
+using Serilog;
+using Serilog.Formatting.Compact;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+// `using Serilog` pulls in Serilog.ILogger, which collides with the bare
+// `ILogger` parameter on the LoggerMessage partials below. Alias the bare name
+// back to the MS abstraction (the generic ILogger<T> usages are unaffected).
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace OpenAstroAra.Server;
 
@@ -162,10 +168,8 @@ public partial class Program {
         // session-restretch worker. In-memory by design: jobs are
         // ephemeral, state resets on daemon restart.
         builder.Services.AddSingleton<IBatchJobService, InMemoryBatchJobService>();
-        // Phase 13.8 — placeholder ILogService. Tail returns 8 fixture
-        // entries; rotate accepts; download is 404 (no Serilog file sinks
-        // wired yet — Phase 14 §29.9.2).
-        builder.Services.AddSingleton<ILogService, PlaceholderLogService>();
+        // §29.9 ILogService is registered below, after profileDir is resolved (the
+        // real LogService reads the rolling CLEF files under {profileDir}/logs/).
         // Phase 13.9 — placeholder IBugReportService for the §54 "Send me a
         // bug report" UI. Prepare returns a synthetic ready record; download
         // is 404 (real ZIP bundling lands in Phase 14 §54.3).
@@ -284,6 +288,34 @@ public partial class Program {
         //   2. /var/lib/openastroara (matches §13 systemd unit StateDirectory=)
         //   3. ~/.local/share/openastroara as a per-user fallback
         var profileDir = ResolveProfileDir();
+
+        // §29.9.2 — wire the rolling CLEF (Compact-JSON) file sink now that the
+        // profile dir is known. The §29.9 log endpoints (LogService) tail +
+        // download these files under {profileDir}/logs/. RenderedCompactJsonFormatter
+        // writes the final message into `@m`, so the tail reads it straight back
+        // with System.Text.Json (no reader dependency, AOT-clean). The sink rolls
+        // daily and on a 50 MB size cap, retaining 14 files. The default sink opens
+        // the file FileShare.Read, so LogService can read it while the daemon writes.
+        var logsDir = Path.Combine(profileDir, "logs");
+        Directory.CreateDirectory(logsDir);
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .Enrich.FromLogContext()
+            .WriteTo.Console()
+            .WriteTo.File(
+                formatter: new RenderedCompactJsonFormatter(),
+                path: Path.Combine(logsDir, "openastroara-.log"),
+                rollingInterval: RollingInterval.Day,
+                rollOnFileSizeLimit: true,
+                fileSizeLimitBytes: 50L * 1024 * 1024,
+                retainedFileCountLimit: 14)
+            .CreateLogger();
+        builder.Host.UseSerilog();
+        // §29.9 real ILogService over the rolling CLEF files (replaces the
+        // former Phase 13.8 placeholder) — needs logsDir.
+        builder.Services.AddSingleton<ILogService>(sp =>
+            new LogService(logsDir, sp.GetRequiredService<ILogger<LogService>>()));
+
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
         // §37 multi-profile repository — the known-profiles set (§30) layered over the
@@ -693,7 +725,14 @@ public partial class Program {
         _ = app.Services.GetRequiredService<IProfileRepository>();
 
         LogListening(app.Logger, port);
-        app.Run();
+        try {
+            app.Run();
+        } finally {
+            // Flush the §29.9 Serilog file sink even when app.Run() unwinds via an
+            // exception — the daemon's own logs are the first thing reached for
+            // after a crash, so the last lines must not be lost.
+            Log.CloseAndFlush();
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Startup reconciliation: {Outcome} (previous sequence: {SeqId})")]
