@@ -168,12 +168,8 @@ public partial class Program {
         // session-restretch worker. In-memory by design: jobs are
         // ephemeral, state resets on daemon restart.
         builder.Services.AddSingleton<IBatchJobService, InMemoryBatchJobService>();
-        // §29.9 ILogService is registered below, after profileDir is resolved (the
-        // real LogService reads the rolling CLEF files under {profileDir}/logs/).
-        // Phase 13.9 — placeholder IBugReportService for the §54 "Send me a
-        // bug report" UI. Prepare returns a synthetic ready record; download
-        // is 404 (real ZIP bundling lands in Phase 14 §54.3).
-        builder.Services.AddSingleton<IBugReportService, PlaceholderBugReportService>();
+        // §29.9 ILogService and §54 IBugReportService are registered below, after
+        // profileDir is resolved (both are disk-backed under {profileDir}/).
         // Phase 13.10 — three more system-service placeholders so the §36.2
         // Data Manager + §70 Profile Share + §44 Backup Stream surfaces are
         // testable end-to-end without the §28 catalog wired.
@@ -315,6 +311,10 @@ public partial class Program {
         // former Phase 13.8 placeholder) — needs logsDir.
         builder.Services.AddSingleton<ILogService>(sp =>
             new LogService(logsDir, sp.GetRequiredService<ILogger<LogService>>()));
+        // §54 real IBugReportService — bundles logs + profile.json + system info into a
+        // ZIP under {profileDir}/bug-reports/ (replaces the former placeholder).
+        builder.Services.AddSingleton<IBugReportService>(sp =>
+            new BugReportService(profileDir, sp.GetRequiredService<ILogger<BugReportService>>()));
 
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
@@ -718,6 +718,11 @@ public partial class Program {
         // §55.1 settings-sync analogue: reclaim any client-settings.json.tmp-* orphaned by a settings write killed
         // between the temp write and its File.Move rename. Same boot-time, pre-request-acceptance, best-effort sweep.
         ClientSettingsService.SweepOrphans(profileDir, app.Services.GetService<ILogger<ClientSettingsService>>());
+
+        // §54 bug-report analogue: reclaim any bug-reports/.tmp-*.zip orphaned by a prepare hard-killed before its
+        // File.Move reveal. Startup-only (no in-flight prepare can race it), which also avoids the cross-platform
+        // unlink()-of-an-open-file hazard a concurrent sweep would have. Best-effort.
+        BugReportService.SweepStaleTempBundles(profileDir, app.Services.GetService<ILogger<BugReportService>>());
 
         // §37: eagerly construct the multi-profile repository at boot (not on first request) so it
         // migrates the legacy profile.json into the profiles/ set and loads the active profile into

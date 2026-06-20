@@ -1,0 +1,372 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using System.Globalization;
+using System.IO.Compression;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
+using OpenAstroAra.Server.Contracts;
+
+namespace OpenAstroAra.Server.Services;
+
+/// <summary>
+/// §54 real <see cref="IBugReportService"/> — bundles the diagnostic context a
+/// developer needs into a self-contained ZIP under <c>{profileDir}/bug-reports/</c>:
+/// the daemon's rolling log files (<c>logs/</c>), the active <c>profile.json</c>,
+/// and a generated <c>system-info.json</c> (OS / runtime / app version). The user
+/// downloads it from the §54 "Send me a bug report" UI and attaches it to a report.
+///
+/// <para><see cref="PrepareAsync"/> packages the bundle within the request (config +
+/// logs are kilobytes-to-megabytes, not the frame library) and returns a "ready"
+/// record with the real size + a download URL. <see cref="OpenDownloadAsync"/>
+/// resolves the bundle by its server-minted id (embedded in the file name, so the
+/// download survives a daemon restart and carries no caller-controlled path) and
+/// streams it. Packaging writes to a hidden <c>.tmp-</c> file and renames it into
+/// place, so a crash mid-zip never leaves a half-written bundle a reader could
+/// resolve. Replaces the former placeholder (synthetic record, 404 download).</para>
+/// </summary>
+public sealed partial class BugReportService : IBugReportService, IDisposable {
+
+    private const string BugReportsDirName = "bug-reports";
+    private const string LogsDirName = "logs";
+    private const string ProfileFileName = "profile.json";
+    private const string ZipPrefix = "bugreport-";
+    private const string ZipExtension = ".zip";
+    private const string TempPrefix = ".tmp-";
+    private const string LogGlob = "openastroara-*.log";
+    // Keep only the newest N bundles — each prepare stages a fresh ZIP and there's
+    // no other reaper, so without a cap repeated prepares (UI retries, operator
+    // debugging) would grow {profileDir}/bug-reports/ without bound.
+    internal const int MaxRetainedBundles = 10;
+    // Only the newest few §29.9 log files go in a bundle. The sink retains 14 files at
+    // up to 50 MB each, so zipping all of them would be a ~700 MB read + a huge surprise
+    // download; a bug report rarely needs more than the last few.
+    internal const int MaxBundledLogs = 3;
+
+    private readonly string _profileDir;
+    private readonly string _bugReportsDir;
+    private readonly ILogger<BugReportService> _logger;
+    // Serializes prepares: the service is a DI singleton and PrepareAsync is async, so two
+    // concurrent prepares could otherwise have one's PruneOldBundles reap the other's
+    // just-revealed bundle. One bundle at a time — prepares are user-initiated + occasional.
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    public BugReportService(string profileDir, ILogger<BugReportService> logger) {
+        ArgumentException.ThrowIfNullOrEmpty(profileDir);
+        ArgumentNullException.ThrowIfNull(logger);
+        _profileDir = profileDir;
+        _bugReportsDir = Path.Combine(profileDir, BugReportsDirName);
+        _logger = logger;
+    }
+
+    // Registered as a DI singleton, so the container disposes this on host shutdown.
+    public void Dispose() => _gate.Dispose();
+
+    public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct) {
+        // idempotencyKey is accepted for contract symmetry but NOT enforced (no key→bundle
+        // dedup): a retried prepare stages a fresh bundle each time — retention is bounded
+        // separately by PruneOldBundles, not by the key. Log it so an operator retrying a
+        // timed-out POST has a signal that dedup is off.
+        if (!string.IsNullOrEmpty(idempotencyKey)) {
+            LogIdempotencyNotEnforced();
+        }
+
+        // ZipArchive has no async write path; run the synchronous IO off the request
+        // thread so a larger logs/ set doesn't tie up the connection's thread-pool slot.
+        // The gate serializes prepares so a concurrent one can't reap this bundle. The id +
+        // timestamp are stamped INSIDE the gate, so CompletedUtc and the filename reflect
+        // when this bundle actually ran (the filename sort stays chronological-by-completion).
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        Guid id;
+        DateTimeOffset completedUtc;
+        long sizeBytes;
+        try {
+            id = Guid.NewGuid();
+            // createdUtc stamps the filename (stable monotonic ordering for the prune sort);
+            // completedUtc, captured after the build, is the accurate "bundle ready" time
+            // surfaced to the client as CompletedUtc.
+            var createdUtc = DateTimeOffset.UtcNow;
+            sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+            completedUtc = DateTimeOffset.UtcNow;
+        } finally {
+            _gate.Release();
+        }
+
+        LogPrepared(id, _bugReportsDir);
+        return new BugReportPreparationDto(
+            PreparationId: id,
+            Status: "ready",
+            EstimatedSizeBytes: sizeBytes,
+            DownloadUrl: DownloadUrl(id),
+            CompletedUtc: completedUtc);
+    }
+
+    private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
+        ct.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(_bugReportsDir);
+
+        var baseName = ZipPrefix + createdUtc.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)
+            + "-" + id.ToString("N", CultureInfo.InvariantCulture);
+        var tempPath = Path.Combine(_bugReportsDir, TempPrefix + id.ToString("N", CultureInfo.InvariantCulture) + ZipExtension);
+        var zipPath = Path.Combine(_bugReportsDir, baseName + ZipExtension);
+
+        long sizeBytes;
+        try {
+            using (var zipStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
+                // system-info.json is always present, so the bundle is never empty even
+                // before the daemon has written a log or a profile.
+                WriteTextEntry(archive, "system-info.json", BuildSystemInfoJson(id, createdUtc));
+
+                var logsDir = Path.Combine(_profileDir, LogsDirName);
+                if (Directory.Exists(logsDir)) {
+                    // Newest MaxBundledLogs only — ordinal-descending filename sort is
+                    // chronological for the openastroara-<date>[_NNN].log naming (same sort
+                    // PruneOldBundles uses), so this takes the most recent few.
+                    var newestLogs = Directory.EnumerateFiles(logsDir, LogGlob, SearchOption.TopDirectoryOnly)
+                        .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+                        .Take(MaxBundledLogs);
+                    foreach (var logPath in newestLogs) {
+                        ct.ThrowIfCancellationRequested();
+                        // A single log that vanished (the rolling sink can delete a retained
+                        // file mid-bundle) or is unreadable is skipped, not fatal to the bundle.
+                        TryAddFileEntry(archive, logPath, LogsDirName + "/" + Path.GetFileName(logPath));
+                    }
+                }
+
+                var profilePath = Path.Combine(_profileDir, ProfileFileName);
+                if (File.Exists(profilePath)) {
+                    TryAddFileEntry(archive, profilePath, ProfileFileName);
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            sizeBytes = new FileInfo(tempPath).Length;
+            // Reveal the finished bundle atomically — a reader (OpenDownloadAsync) resolves
+            // by the id-suffixed name, so it only ever sees a complete archive. File.Move is
+            // the last statement in the try: if anything above threw, the bundle was never
+            // revealed, so the catch only needs to reclaim the staged temp.
+            File.Move(tempPath, zipPath, overwrite: false);
+        } catch {
+            TryDelete(tempPath);
+            throw;
+        }
+
+        // Retention runs AFTER the try, on the committed bundle — a prune failure (even a
+        // non-IOException its own filter doesn't catch) must never reach the catch above and
+        // reclaim the bundle we just revealed.
+        PruneOldBundles(zipPath);
+        return sizeBytes;
+    }
+
+    /// <summary>
+    /// Reclaim crash-only <c>.tmp-*.zip</c> orphans under <c>{profileDir}/bug-reports/</c>
+    /// left by a prepare that was hard-killed before its <c>File.Move</c> reveal — neither
+    /// <see cref="PruneOldBundles"/> nor <see cref="FindBundlePath"/> sees the temp prefix,
+    /// so without this they'd accumulate. A graceful prepare reclaims its own temp on an
+    /// exception, so these only linger after a hard kill. Static + startup-only (mirrors
+    /// <see cref="BackupService.SweepOrphans"/>): called before the daemon accepts requests,
+    /// so no in-flight prepare can race it — which also sidesteps the cross-platform
+    /// <c>unlink()</c>-of-an-open-file hazard a concurrent sweep would have. Best-effort.
+    /// </summary>
+    internal static void SweepStaleTempBundles(string profileDir, ILogger? logger = null) {
+        ArgumentException.ThrowIfNullOrEmpty(profileDir);
+        var bugReportsDir = Path.Combine(profileDir, BugReportsDirName);
+        try {
+            if (!Directory.Exists(bugReportsDir)) {
+                return;
+            }
+            // GetFiles (materialized), not EnumerateFiles: we delete during the loop, and
+            // removing entries mid lazy-enumeration can skip or repeat names.
+            foreach (var temp in Directory.GetFiles(bugReportsDir, TempPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+                TryDelete(temp);
+            }
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            if (logger is not null) {
+                LogStaticPruneFailed(logger, ex);
+            }
+        }
+    }
+
+    private string BuildSystemInfoJson(Guid id, DateTimeOffset createdUtc) {
+        var asm = typeof(BugReportService).Assembly;
+        var version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? asm.GetName().Version?.ToString()
+            ?? "unknown";
+        var obj = new JsonObject {
+            ["report_id"] = id.ToString("D", CultureInfo.InvariantCulture),
+            ["generated_utc"] = createdUtc.ToString("O", CultureInfo.InvariantCulture),
+            ["app_version"] = version,
+            ["os_description"] = RuntimeInformation.OSDescription,
+            ["os_architecture"] = RuntimeInformation.OSArchitecture.ToString(),
+            ["process_architecture"] = RuntimeInformation.ProcessArchitecture.ToString(),
+            ["framework"] = RuntimeInformation.FrameworkDescription,
+            // PII note: the absolute profile path can carry the OS username
+            // (e.g. /home/alice/.local/share/openastroara). Kept deliberately — it's
+            // useful for "can't find the profile" diagnostics and the user downloads
+            // the bundle themselves before choosing to share it — but don't surface it
+            // anywhere it would be auto-published, and tell users it's in the bundle.
+            ["profile_dir"] = _profileDir,
+        };
+        // Indented: a human opening the bundle reads system-info.json by hand; the payload
+        // is a handful of fields so the whitespace cost is negligible.
+        return obj.ToJsonString(IndentedJson);
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
+    // Add one regular file as a ZIP entry, skipping it (not failing the bundle) if it's
+    // a symlink, vanished, or unreadable. Symlinks are refused for the same reason backups
+    // refuse them — CreateEntryFromFile would follow the link and bundle whatever it points
+    // at, possibly outside the profile root.
+    private bool TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName) {
+        try {
+            if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
+                // Log the skip so an operator who symlinked a log/profile into place isn't
+                // left wondering why the bundle's logs/ or profile.json is missing.
+                LogSymlinkSkipped(sourcePath);
+                return false;
+            }
+            // Open with FileShare.ReadWrite (not CreateEntryFromFile's FileShare.Read) so the
+            // current rolling log the §29.9 Serilog sink is actively writing can still be read
+            // into the bundle — matches how LogService reads the live log. The whole-file copy
+            // can't honour a CancellationToken mid-stream, so cancellation is checked per-file
+            // by the caller.
+            using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+            using var entryStream = entry.Open();
+            source.CopyTo(entryStream);
+            return true;
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // Vanished (rolling sink deleted a retained log) or unreadable between the
+            // directory scan and now — skip it. FileNotFoundException / DirectoryNotFoundException
+            // derive from IOException.
+            LogEntrySkipped(sourcePath, ex);
+            return false;
+        }
+    }
+
+    // Keep only the newest MaxRetainedBundles ZIPs (incl. the one just revealed). Best-effort:
+    // a failure here must never fail an already-staged bundle. Bundles are named
+    // bugreport-{yyyyMMddTHHmmssZ}-{id}.zip, so an ordinal-descending filename sort is
+    // chronological (newest first) without touching mtimes.
+    private void PruneOldBundles(string justCreated) {
+        try {
+            // Keep the just-created bundle plus the newest (cap-1) others, so the total
+            // never exceeds the cap AND the bundle we just revealed is never the one
+            // reaped (guards a same-second tie where an id sort could rank it last).
+            var stale = Directory.EnumerateFiles(_bugReportsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)
+                // OrdinalIgnoreCase so a differently-cased path from EnumerateFiles on a
+                // case-insensitive filesystem (Windows) still excludes the just-created bundle.
+                .Where(p => !string.Equals(p, justCreated, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+                .Skip(MaxRetainedBundles - 1)
+                .ToList();
+            foreach (var path in stale) {
+                TryDelete(path);
+            }
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // best-effort retention; the prepared bundle is already revealed.
+            LogPruneFailed(ex);
+        }
+    }
+
+    private static void WriteTextEntry(ZipArchive archive, string entryName, string content) {
+        var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(content);
+    }
+
+    public async Task<(Stream Stream, string FileName)?> OpenDownloadAsync(Guid preparationId, CancellationToken ct) {
+        var path = await Task.Run(() => FindBundlePath(preparationId, ct), ct).ConfigureAwait(false);
+        if (path is null) {
+            return null;
+        }
+        try {
+            // Owned by the response pipeline (disposed when the response finishes). Holding
+            // the open handle closes the resolve→serve window: a delete after this can't
+            // turn the stream into a 500.
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+            return (stream, Path.GetFileName(path));
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // FileNotFoundException / DirectoryNotFoundException derive from IOException.
+            LogBundleVanished(path, ex);
+            return null;
+        }
+    }
+
+    // Resolve a preparation id to its bundle path by matching the id-suffixed name. The id
+    // is a server-minted guid, so the glob carries no caller-controlled wildcard surface
+    // beyond the 32-hex id itself.
+    private string? FindBundlePath(Guid id, CancellationToken ct) {
+        if (!Directory.Exists(_bugReportsDir)) {
+            return null;
+        }
+        var suffix = "-" + id.ToString("N", CultureInfo.InvariantCulture) + ZipExtension;
+        foreach (var path in Directory.EnumerateFiles(_bugReportsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+            ct.ThrowIfCancellationRequested();
+            if (Path.GetFileName(path).EndsWith(suffix, StringComparison.Ordinal)) {
+                return path;
+            }
+        }
+        return null;
+    }
+
+    // The URL is intentionally incomplete: the download endpoint also requires
+    // ?acknowledge=pii, which the client appends only after showing the user the §54
+    // PII disclosure — so a client can't blindly follow this URL and bypass the warning.
+    private static Uri DownloadUrl(Guid id) =>
+        new("/api/v1/bugreport/download?preparationId=" + id.ToString("D", CultureInfo.InvariantCulture), UriKind.Relative);
+
+    private static void TryDelete(string path) {
+        try {
+            // No File.Exists pre-check: File.Delete is a no-op on a missing file (and throws
+            // DirectoryNotFoundException — an IOException — on a missing dir), so dropping the
+            // check avoids a check-then-act race with another deleter.
+            File.Delete(path);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // Best-effort cleanup; never let a cleanup failure replace the exception we're unwinding.
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Bug-report bundle {ReportId} prepared under {BugReportsDir}")]
+    partial void LogPrepared(Guid reportId, string bugReportsDir);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Bug-report bundle {BundlePath} vanished between resolve and open — serving 404")]
+    partial void LogBundleVanished(string bundlePath, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Bug-report prepare received an Idempotency-Key but dedup is not implemented — a retry stages another bundle")]
+    partial void LogIdempotencyNotEnforced();
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Skipping unreadable/vanished bug-report entry {SourcePath}")]
+    partial void LogEntrySkipped(string sourcePath, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "Skipping symlinked bug-report entry {SourcePath} (not following it out of the profile root)")]
+    partial void LogSymlinkSkipped(string sourcePath);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bug-report bundle retention prune failed (best-effort)")]
+    partial void LogPruneFailed(Exception ex);
+
+    // Static (the sweep runs at startup before the service instance exists), so it takes the logger explicitly.
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bug-report temp-orphan sweep failed at startup (best-effort)")]
+    private static partial void LogStaticPruneFailed(ILogger logger, Exception ex);
+}
