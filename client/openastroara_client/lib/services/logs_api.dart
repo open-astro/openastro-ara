@@ -35,6 +35,9 @@ class LogsApi implements LogsClient {
       : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
+          // Small request bodies, but bound the send so a frozen daemon can't
+          // block the write indefinitely.
+          sendTimeout: const Duration(seconds: 10),
           // A whole-file download can be a few MB; give it room.
           receiveTimeout: const Duration(seconds: 30),
         ));
@@ -90,8 +93,10 @@ class LogsApi implements LogsClient {
   // non-ASCII name), falling back to the plain `filename="..."`.
   static String? _fileNameFromContentDisposition(String? header) {
     if (header == null) return null;
+    // Require the RFC 5987 charset'language' prefix so a malformed prefix-less
+    // `filename*=...` doesn't get matched here (it falls through to plain/default).
     final extended =
-        RegExp("filename\\*=(?:[^']*'[^']*')?([^;]+)", caseSensitive: false)
+        RegExp("filename\\*=[^']*'[^']*'([^;]+)", caseSensitive: false)
             .firstMatch(header);
     if (extended != null) {
       // RFC 5987 ext-values are percent-encoded and never quoted, so just trim +

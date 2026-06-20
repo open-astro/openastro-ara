@@ -273,9 +273,17 @@ class _LogRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
-              entry.message,
-              style: theme.textTheme.bodySmall,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(entry.message, style: theme.textTheme.bodySmall),
+                if (entry.source.isNotEmpty)
+                  Text(
+                    entry.source,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: AraColors.textDisabled, fontSize: 11),
+                  ),
+              ],
             ),
           ),
         ],
