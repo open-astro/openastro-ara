@@ -430,7 +430,11 @@ public class ProfileShareServiceTest {
         public ProfileSnapshotDto? CreatedSettings { get; private set; }
         public bool CreatedMakeActive { get; private set; }
 
-        public ProfileListDto List() => new(null, _existing);
+        // Mirror the real repo: List() returns ALL profiles, including the stored one
+        // (not just the `existingNames` extras) — so a dedup test that collides with
+        // the stored profile's name can't false-pass.
+        public ProfileListDto List() => new(null,
+            _stored is null ? _existing : _existing.Prepend(_stored.Meta).ToList());
         public Guid? ActiveId => null;
         public ProfileMetaDto Create(string name, ProfileSnapshotDto? settings, bool makeActive) {
             CreatedName = name;

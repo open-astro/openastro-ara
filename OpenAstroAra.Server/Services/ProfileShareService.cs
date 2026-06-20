@@ -248,18 +248,20 @@ public sealed class ProfileShareService : IProfileShareService {
 
         var token = Guid.NewGuid();
         var expires = _clock.GetUtcNow().Add(ImportTtl);
+        // Resolve the name BEFORE the gate: MakeUniqueName reads the repo (_repo.List()),
+        // and the name depends only on the repo + manifest, not on _pending — so keeping
+        // it out of the lock stops a repo round-trip from serializing concurrent previews.
+        // Stored on PendingImport so commit reuses it verbatim (see PendingImport).
+        var importedName = ImportedName(parsed);
         // Prune + cap-check + insert under one gate so concurrent previews can't both
         // pass the cap and overfill the store. Pruning first means expired entries
-        // don't count against the cap. The name is resolved here (once) and stored so
-        // commit reuses it verbatim — see PendingImport.
-        string importedName;
+        // don't count against the cap.
         lock (_previewGate) {
             PruneExpired();
             if (_pending.Count >= MaxPendingImports) {
                 return Task.FromException<ProfileShareImportPreviewDto>(new ProfileShareImportThrottledException(
                     "Too many pending profile-share imports — commit or wait for one to expire, then retry."));
             }
-            importedName = ImportedName(parsed);
             _pending[token] = new PendingImport(parsed, importedName, expires);
         }
 
