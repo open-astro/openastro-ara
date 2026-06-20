@@ -225,9 +225,14 @@ class _SupportTabState extends ConsumerState<SupportTab> {
         Expanded(
           child: entries.isEmpty
               ? const Center(child: Text('No log entries match the filter.'))
-              : ListView.builder(
-                  itemCount: entries.length,
-                  itemBuilder: (context, i) => _LogRow(entry: entries[i]),
+              // SelectionArea makes every Text below selectable — drag across rows
+              // and copy (Cmd/Ctrl+C) so a user can paste a log excerpt straight
+              // into a bug report instead of only the whole-file download.
+              : SelectionArea(
+                  child: ListView.builder(
+                    itemCount: entries.length,
+                    itemBuilder: (context, i) => _LogRow(entry: entries[i]),
+                  ),
                 ),
         ),
       ],
