@@ -80,19 +80,16 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
     nodeAt(c.read(sequenceEditorProvider)!.body, p)!;
 
-/// Whether the `/cond/0/Hours` field is wrapped in an *ignoring* `IgnorePointer`
-/// from `_disableableField`. Scoped to the condition card (`/cond/0`) so a future
-/// `IgnorePointer` higher in the tree (e.g. a parent overlay) can't make the
-/// "enabled" assertion a false negative.
-bool _hoursIgnored(WidgetTester tester) {
-  final ignorers = find.descendant(
-    of: find.byKey(const ValueKey('/cond/0')),
-    matching: find.ancestor(
-      of: find.byKey(const ValueKey('/cond/0/Hours')),
-      matching: find.byType(IgnorePointer),
-    ),
-  );
-  return tester.widgetList<IgnorePointer>(ignorers).any((w) => w.ignoring);
+/// Whether the `/cond/0/Hours` field's underlying `TextField` is disabled — the
+/// direct signal that the field is non-interactive (keyboard included), not just
+/// dimmed. `_FieldControl` sets `enabled: false` on the input when its
+/// `enabledWhen` predicate is false.
+bool _hoursDisabled(WidgetTester tester) {
+  final field = tester.widget<TextField>(find.descendant(
+    of: find.byKey(const ValueKey('/cond/0/Hours')),
+    matching: find.byType(TextField),
+  ));
+  return field.enabled == false;
 }
 
 void main() {
@@ -476,15 +473,9 @@ void main() {
       // selection (a FormField.initialValue would have stuck on 'Custom time').
       expect(find.text('Civil Dusk'), findsOneWidget);
       expect(find.text('Custom time'), findsNothing);
-      // …and the now-inert H/M/S fields are disabled (the daemon computes them):
-      // dimmed + pointer-blocked AND the TextField itself is enabled:false, so it
-      // can't be edited via keyboard focus on desktop (IgnorePointer alone wouldn't).
-      expect(_hoursIgnored(tester), isTrue);
-      final hoursField = tester.widget<TextField>(find.descendant(
-        of: find.byKey(const ValueKey('/cond/0/Hours')),
-        matching: find.byType(TextField),
-      ));
-      expect(hoursField.enabled, isFalse);
+      // …and the now-inert H/M/S fields are truly disabled (enabled:false), so a
+      // greyed field can't be edited via keyboard focus on desktop — not just dimmed.
+      expect(_hoursDisabled(tester), isTrue);
     });
 
     testWidgets('TimeCondition H/M/S are enabled in Custom-time mode',
@@ -495,8 +486,8 @@ void main() {
           conditionForType(
               'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
       await tester.pump();
-      // Default is Custom time (null provider) → H/M/S editable: no ignoring wrap.
-      expect(_hoursIgnored(tester), isFalse);
+      // Default is Custom time (null provider) → H/M/S editable (enabled).
+      expect(_hoursDisabled(tester), isFalse);
     });
 
     testWidgets('removing a condition deletes it from the body', (tester) async {
