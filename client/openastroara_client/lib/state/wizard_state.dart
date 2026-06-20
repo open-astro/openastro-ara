@@ -12,12 +12,14 @@ class WizardController extends Notifier<WizardState> {
   void next() {
     if (state.step < ProfileWizard.totalSteps) {
       state = state.copyWith(step: state.step + 1);
+      _resetStepValidity();
     }
   }
 
   void back() {
     if (state.step > 1) {
       state = state.copyWith(step: state.step - 1);
+      _resetStepValidity();
     }
   }
 
@@ -38,7 +40,15 @@ class WizardController extends Notifier<WizardState> {
     // static analysis is happy.
     final clamped = step.clamp(1, ProfileWizard.totalSteps).toInt();
     state = state.copyWith(step: clamped);
+    _resetStepValidity();
   }
+
+  // A freshly-shown screen starts valid; it re-marks itself invalid via
+  // [wizardStepValidProvider] if one of its fields is out of range. Reset on
+  // every navigation so a non-validated screen never inherits the prior
+  // screen's invalid flag and disables Next.
+  void _resetStepValidity() =>
+      ref.read(wizardStepValidProvider.notifier).set(true);
 
   /// Save & Exit per §37 — the caller persists the partial draft to the
   /// profile store. The state stays put; the wizard host pops back to the
@@ -63,6 +73,19 @@ class WizardState {
 final wizardControllerProvider =
     NotifierProvider.autoDispose<WizardController, WizardState>(
         WizardController.new);
+
+/// Whether the current wizard screen's inline field validation currently passes.
+/// Screens with validated fields ([screen_capture_setup]) call [set] false while
+/// an error is showing; [WizardShell] disables Next / Save Profile until it's
+/// true. The [WizardController] resets it to true on every step change.
+class WizardStepValid extends Notifier<bool> {
+  @override
+  bool build() => true;
+  void set(bool valid) => state = valid;
+}
+
+final wizardStepValidProvider =
+    NotifierProvider.autoDispose<WizardStepValid, bool>(WizardStepValid.new);
 
 /// Static wizard catalog so the shell can look up screen metadata + the
 /// stage progress label without per-screen widgets being instantiated.
