@@ -92,12 +92,16 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
         // when this bundle actually ran (the filename sort stays chronological-by-completion).
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         Guid id;
-        DateTimeOffset createdUtc;
+        DateTimeOffset completedUtc;
         long sizeBytes;
         try {
             id = Guid.NewGuid();
-            createdUtc = DateTimeOffset.UtcNow;
+            // createdUtc stamps the filename (stable monotonic ordering for the prune sort);
+            // completedUtc, captured after the build, is the accurate "bundle ready" time
+            // surfaced to the client as CompletedUtc.
+            var createdUtc = DateTimeOffset.UtcNow;
             sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+            completedUtc = DateTimeOffset.UtcNow;
         } finally {
             _gate.Release();
         }
@@ -108,7 +112,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             Status: "ready",
             EstimatedSizeBytes: sizeBytes,
             DownloadUrl: DownloadUrl(id),
-            CompletedUtc: createdUtc);
+            CompletedUtc: completedUtc);
     }
 
     private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
