@@ -80,6 +80,21 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
     nodeAt(c.read(sequenceEditorProvider)!.body, p)!;
 
+/// Whether the `/cond/0/Hours` field is wrapped in an *ignoring* `IgnorePointer`
+/// from `_disableableField`. Scoped to the condition card (`/cond/0`) so a future
+/// `IgnorePointer` higher in the tree (e.g. a parent overlay) can't make the
+/// "enabled" assertion a false negative.
+bool _hoursIgnored(WidgetTester tester) {
+  final ignorers = find.descendant(
+    of: find.byKey(const ValueKey('/cond/0')),
+    matching: find.ancestor(
+      of: find.byKey(const ValueKey('/cond/0/Hours')),
+      matching: find.byType(IgnorePointer),
+    ),
+  );
+  return tester.widgetList<IgnorePointer>(ignorers).any((w) => w.ignoring);
+}
+
 void main() {
   testWidgets('placeholder when nothing is selected', (tester) async {
     await _pump(tester, detail: sampleDetail());
@@ -462,14 +477,7 @@ void main() {
       expect(find.text('Civil Dusk'), findsOneWidget);
       expect(find.text('Custom time'), findsNothing);
       // …and the now-inert H/M/S fields are disabled (the daemon computes them).
-      final hours = find.byKey(const ValueKey('/cond/0/Hours'));
-      expect(
-        tester
-            .widgetList<IgnorePointer>(
-                find.ancestor(of: hours, matching: find.byType(IgnorePointer)))
-            .any((w) => w.ignoring),
-        isTrue,
-      );
+      expect(_hoursIgnored(tester), isTrue);
     });
 
     testWidgets('TimeCondition H/M/S are enabled in Custom-time mode',
@@ -481,14 +489,7 @@ void main() {
               'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
       await tester.pump();
       // Default is Custom time (null provider) → H/M/S editable: no ignoring wrap.
-      final hours = find.byKey(const ValueKey('/cond/0/Hours'));
-      expect(
-        tester
-            .widgetList<IgnorePointer>(
-                find.ancestor(of: hours, matching: find.byType(IgnorePointer)))
-            .any((w) => w.ignoring),
-        isFalse,
-      );
+      expect(_hoursIgnored(tester), isFalse);
     });
 
     testWidgets('removing a condition deletes it from the body', (tester) async {
