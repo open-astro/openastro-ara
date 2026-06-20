@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+- **§38 — the sequencer toolbar no longer offers an inoperative Pause control.** The daemon's sequence `PauseAsync` is an accepted no-op — the headless execution engine has no pause hook yet, so it deliberately never suspends a run or emits a `paused` event. The toolbar nonetheless showed an enabled **Pause** button (and a dead Run→Resume relabel) while a run was active, so clicking it returned `202 Accepted` but did nothing, with the run-state never reporting `Paused` — misleading the user into thinking the run had paused. Pause/Resume are now removed from the toolbar until the engine grows real run suspension; Run / Abort are unchanged. The run-state model (including the `paused`/`Paused` state) is retained so Pause/Resume can be re-surfaced wholesale when the daemon supports it.
+
 ### Removed
 - **§29.9 — `PlaceholderLogService`.** Removed now that the real `LogService` is wired (see Added) — it returned fixture log entries and a 404 download.
 - **§54 — `PlaceholderBugReportService`.** Removed now that the real `BugReportService` is wired (see Added) — it returned a synthetic "ready" record and a 404 download.
