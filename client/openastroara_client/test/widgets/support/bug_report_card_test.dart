@@ -31,7 +31,7 @@ class _FakeBugReportClient implements BugReportClient {
   Future<BugReportDownload> download(String preparationId) async {
     downloadCalls++;
     lastDownloadId = preparationId;
-    return (bytes: Uint8List(0), fileName: 'bugreport-x.zip');
+    return (bytes: Uint8List.fromList(const [0x50, 0x4b, 0x03, 0x04]), fileName: 'bugreport-x.zip');
   }
 
   @override

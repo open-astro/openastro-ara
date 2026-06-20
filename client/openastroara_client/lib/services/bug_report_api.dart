@@ -63,6 +63,12 @@ class BugReportApi implements BugReportClient {
       options: Options(responseType: ResponseType.bytes),
     );
     final bytes = Uint8List.fromList(res.data ?? const <int>[]);
+    // The bundle always carries system-info.json server-side, so a 0-byte body is
+    // a malformed response — fail rather than save an empty ZIP under a "Saved"
+    // toast (mirrors prepare()'s null-data guard).
+    if (bytes.isEmpty) {
+      throw StateError('Bug-report download returned an empty body.');
+    }
     final name =
         fileNameFromContentDisposition(res.headers.value('content-disposition')) ??
             'openastroara-bug-report.zip';
