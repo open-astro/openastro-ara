@@ -74,12 +74,15 @@ class SequenceFieldEditor extends ConsumerWidget {
       for (final field in editable)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _FieldControl(
-            // Fresh control when the selection or field changes.
-            key: ValueKey('${selectedPath.join(".")}/${field.key}'),
-            field: field,
-            value: node[field.key],
-            onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
+          child: _disableableField(
+            enabled: field.enabledWhen?.call(node) ?? true,
+            child: _FieldControl(
+              // Fresh control when the selection or field changes.
+              key: ValueKey('${selectedPath.join(".")}/${field.key}'),
+              field: field,
+              value: node[field.key],
+              onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
+            ),
           ),
         ),
     ];
@@ -262,12 +265,15 @@ class _ConditionCard extends ConsumerWidget {
           for (final field in fields)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: _FieldControl(
-                key: ValueKey('${containerPath.join(".")}/cond/$index/${field.key}'),
-                field: field,
-                value: condition[field.key],
-                onChanged: (v) =>
-                    notifier.setConditionFieldOn(containerPath, index, field.key, v),
+              child: _disableableField(
+                enabled: field.enabledWhen?.call(condition) ?? true,
+                child: _FieldControl(
+                  key: ValueKey('${containerPath.join(".")}/cond/$index/${field.key}'),
+                  field: field,
+                  value: condition[field.key],
+                  onChanged: (v) =>
+                      notifier.setConditionFieldOn(containerPath, index, field.key, v),
+                ),
               ),
             ),
         ],
@@ -386,12 +392,15 @@ class _TriggerCard extends ConsumerWidget {
           for (final field in fields)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: _FieldControl(
-                key: ValueKey('${containerPath.join(".")}/trig/$index/${field.key}'),
-                field: field,
-                value: trigger[field.key],
-                onChanged: (v) =>
-                    notifier.setTriggerFieldOn(containerPath, index, field.key, v),
+              child: _disableableField(
+                enabled: field.enabledWhen?.call(trigger) ?? true,
+                child: _FieldControl(
+                  key: ValueKey('${containerPath.join(".")}/trig/$index/${field.key}'),
+                  field: field,
+                  value: trigger[field.key],
+                  onChanged: (v) =>
+                      notifier.setTriggerFieldOn(containerPath, index, field.key, v),
+                ),
               ),
             ),
         ],
@@ -519,6 +528,25 @@ class _FieldControl extends StatelessWidget {
           fallbackComparator: _comparatorOf(field.defaultValue),
           onChanged: onChanged,
         ));
+      case InstructionFieldType.timeProvider:
+        // null (custom clock time) or a {$type} sky-event provider object. A
+        // controlled `value:` (not FormField.initialValue, which only seeds on
+        // initState) so the selection tracks an external state change — matching
+        // the intEnum/stringEnum pickers above.
+        return _labelled(
+          DropdownButton<String>(
+            value: timeProviderLabel(value),
+            isExpanded: true,
+            dropdownColor: AraColors.bgPanel,
+            items: [
+              for (final label in timeProviders.keys)
+                DropdownMenuItem(value: label, child: Text(label)),
+            ],
+            onChanged: (label) {
+              if (label != null) onChanged(timeProviderValue(label));
+            },
+          ),
+        );
       case InstructionFieldType.filter:
         return _labelled(_FilterEditor(value: value, onChanged: onChanged));
     }
@@ -886,6 +914,20 @@ class _WaitLoopDataEditor extends StatelessWidget {
     );
   }
 }
+
+/// Greys out + disables [child] when [enabled] is false — used when a field is
+/// inert given its siblings' values (e.g. a `TimeCondition`'s H/M/S once a
+/// sky-event provider is selected; the daemon computes the time and ignores
+/// them). The label dims with the control, `IgnorePointer` blocks edits, and
+/// `Semantics(enabled: false)` marks the subtree disabled — so a screen reader
+/// announces the fields as dimmed/disabled (still discoverable) rather than
+/// either editable or invisible.
+Widget _disableableField({required bool enabled, required Widget child}) => enabled
+    ? child
+    : Opacity(
+        opacity: 0.5,
+        child: Semantics(enabled: false, child: IgnorePointer(child: child)),
+      );
 
 class _Placeholder extends StatelessWidget {
   const _Placeholder(this.text);

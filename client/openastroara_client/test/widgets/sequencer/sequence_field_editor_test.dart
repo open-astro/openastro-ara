@@ -441,6 +441,56 @@ void main() {
       expect(tester.widget<TextField>(minutes).controller!.text, '59');
     });
 
+    testWidgets('TimeCondition When dropdown sets a sky-event provider',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      expect(find.text('Custom time'), findsOneWidget); // default provider label
+      await tester.tap(find.text('Custom time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Civil Dusk').last);
+      await tester.pumpAndSettle();
+      final provider = conditionsOf(_nodeAt(c, const [])).single['SelectedProvider'];
+      expect(provider, isA<Map>());
+      expect((provider as Map)[r'$type'], contains('CivilDuskProvider'));
+      // After the write-back rebuild, the controlled dropdown reflects the new
+      // selection (a FormField.initialValue would have stuck on 'Custom time').
+      expect(find.text('Civil Dusk'), findsOneWidget);
+      expect(find.text('Custom time'), findsNothing);
+      // …and the now-inert H/M/S fields are disabled (the daemon computes them).
+      final hours = find.byKey(const ValueKey('/cond/0/Hours'));
+      expect(
+        tester
+            .widgetList<IgnorePointer>(
+                find.ancestor(of: hours, matching: find.byType(IgnorePointer)))
+            .any((w) => w.ignoring),
+        isTrue,
+      );
+    });
+
+    testWidgets('TimeCondition H/M/S are enabled in Custom-time mode',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      // Default is Custom time (null provider) → H/M/S editable: no ignoring wrap.
+      final hours = find.byKey(const ValueKey('/cond/0/Hours'));
+      expect(
+        tester
+            .widgetList<IgnorePointer>(
+                find.ancestor(of: hours, matching: find.byType(IgnorePointer)))
+            .any((w) => w.ignoring),
+        isFalse,
+      );
+    });
+
     testWidgets('removing a condition deletes it from the body', (tester) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
       c.read(sequenceEditorProvider.notifier).addConditionTo(
