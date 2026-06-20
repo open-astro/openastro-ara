@@ -94,7 +94,7 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
             // §68.1 gate — same decision the REST /connect path makes.
             var handshake = await bridge.HandshakeAsync(EquipmentEndpoints.BridgeUri(device), ct).ConfigureAwait(false);
             if (handshake.Status == AlpacaBridgeStatus.OutdatedBlock) {
-                LogBridgeBlocked(type.ToString(), handshake.Version);
+                LogBridgeBlocked(type, handshake.Version);
                 return;
             }
             if (handshake.Status == AlpacaBridgeStatus.OutdatedWarn) {
@@ -106,11 +106,11 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
                 return; // a type with no auto-connectable service (e.g. guider/switch)
             }
             await connect().ConfigureAwait(false);
-            LogReconnecting(type.ToString(), device.Name);
+            LogReconnecting(type, device.Name);
         }
 #pragma warning disable CA1031 // one device's failure must not abort the others or startup
         catch (Exception ex) {
-            LogConnectFailed(ex, type.ToString(), device.Name);
+            LogConnectFailed(ex, type, device.Name);
         }
 #pragma warning restore CA1031
     }
@@ -151,15 +151,15 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Auto-connecting {DeviceType} '{DeviceName}' on boot (§52.1).")]
-    private partial void LogReconnecting(string deviceType, string deviceName);
+    private partial void LogReconnecting(DeviceType deviceType, string deviceName);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Auto-connect skipped {DeviceType}: AlpacaBridge {BridgeVersion} is below the minimum supported version.")]
-    private partial void LogBridgeBlocked(string deviceType, string? bridgeVersion);
+    private partial void LogBridgeBlocked(DeviceType deviceType, string? bridgeVersion);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Auto-connect of {DeviceType} '{DeviceName}' failed; it can be connected manually.")]
-    private partial void LogConnectFailed(Exception ex, string deviceType, string deviceName);
+    private partial void LogConnectFailed(Exception ex, DeviceType deviceType, string deviceName);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Auto-connect-on-boot could not read its inputs; skipping (devices can be connected manually).")]

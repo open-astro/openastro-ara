@@ -76,7 +76,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         }
 #pragma warning disable CA1031 // best-effort persistence must not fail the connect that triggered it
         catch (Exception ex) {
-            LogWriteFailed(ex, device.Type.ToString());
+            LogWriteFailed(ex, device.Type);
         }
 #pragma warning restore CA1031
         finally {
@@ -123,7 +123,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Failed to persist the connected {DeviceType} device for auto-connect-on-boot.")]
-    private partial void LogWriteFailed(Exception ex, string deviceType);
+    private partial void LogWriteFailed(Exception ex, DeviceType deviceType);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "equipment-selection.json was unreadable JSON; ignoring it (auto-connect starts fresh).")]
