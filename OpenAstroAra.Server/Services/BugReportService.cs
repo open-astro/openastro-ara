@@ -77,9 +77,9 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     public void Dispose() => _gate.Dispose();
 
     public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct) {
-        // idempotencyKey is accepted for contract symmetry but NOT enforced: a retried
-        // prepare stages a fresh bundle each time (there's no retention pruning yet —
-        // these are user-initiated + occasional). Log it so an operator retrying a
+        // idempotencyKey is accepted for contract symmetry but NOT enforced (no key→bundle
+        // dedup): a retried prepare stages a fresh bundle each time — retention is bounded
+        // separately by PruneOldBundles, not by the key. Log it so an operator retrying a
         // timed-out POST has a signal that dedup is off.
         if (!string.IsNullOrEmpty(idempotencyKey)) {
             LogIdempotencyNotEnforced();
@@ -117,6 +117,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
         var tempPath = Path.Combine(_bugReportsDir, TempPrefix + id.ToString("N", CultureInfo.InvariantCulture) + ZipExtension);
         var zipPath = Path.Combine(_bugReportsDir, baseName + ZipExtension);
 
+        long sizeBytes;
         try {
             using (var zipStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
@@ -147,21 +148,22 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             }
 
             ct.ThrowIfCancellationRequested();
-            var sizeBytes = new FileInfo(tempPath).Length;
+            sizeBytes = new FileInfo(tempPath).Length;
             // Reveal the finished bundle atomically — a reader (OpenDownloadAsync) resolves
-            // by the id-suffixed name, so it only ever sees a complete archive.
+            // by the id-suffixed name, so it only ever sees a complete archive. File.Move is
+            // the last statement in the try: if anything above threw, the bundle was never
+            // revealed, so the catch only needs to reclaim the staged temp.
             File.Move(tempPath, zipPath, overwrite: false);
-            PruneOldBundles(zipPath);
-            return sizeBytes;
         } catch {
-            // tempPath: the staged archive if the rename hadn't happened. zipPath: only
-            // exists if File.Move succeeded and a later step (the prune) threw — in which
-            // case the caller never got a download URL, so reclaiming it is correct, not a
-            // lost bundle. TryDelete is File.Exists-guarded, so it's a no-op otherwise.
             TryDelete(tempPath);
-            TryDelete(zipPath);
             throw;
         }
+
+        // Retention runs AFTER the try, on the committed bundle — a prune failure (even a
+        // non-IOException its own filter doesn't catch) must never reach the catch above and
+        // reclaim the bundle we just revealed.
+        PruneOldBundles(zipPath);
+        return sizeBytes;
     }
 
     /// <summary>
