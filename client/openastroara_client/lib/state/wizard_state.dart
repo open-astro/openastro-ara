@@ -75,10 +75,11 @@ final wizardControllerProvider =
         WizardController.new);
 
 /// Whether the current wizard screen's inline field validation currently passes.
-/// Screens with validated fields ([screen_capture_setup]) call [WizardStepValid.setValid]
-/// false while
-/// an error is showing; [WizardShell] disables Next / Save Profile until it's
-/// true. The [WizardController] resets it to true on every step change.
+/// A validated screen (the capture-setup screens — plate-solve, autofocus,
+/// imaging defaults, safety, site) calls [WizardStepValid.setValid] false while
+/// one of its fields shows an inline error; [WizardShell] disables Next / Save
+/// Profile until it's true. The [WizardController] resets it to true on every
+/// step change. Any new screen that adds field validation should publish here.
 class WizardStepValid extends Notifier<bool> {
   @override
   bool build() => true;
