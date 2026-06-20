@@ -212,7 +212,7 @@ public sealed partial class BugReportService : IBugReportService {
     }
 
     public async Task<(Stream Stream, string FileName)?> OpenDownloadAsync(Guid preparationId, CancellationToken ct) {
-        var path = await Task.Run(() => FindBundlePath(preparationId), ct).ConfigureAwait(false);
+        var path = await Task.Run(() => FindBundlePath(preparationId, ct), ct).ConfigureAwait(false);
         if (path is null) {
             return null;
         }
@@ -231,12 +231,13 @@ public sealed partial class BugReportService : IBugReportService {
     // Resolve a preparation id to its bundle path by matching the id-suffixed name. The id
     // is a server-minted guid, so the glob carries no caller-controlled wildcard surface
     // beyond the 32-hex id itself.
-    private string? FindBundlePath(Guid id) {
+    private string? FindBundlePath(Guid id, CancellationToken ct) {
         if (!Directory.Exists(_bugReportsDir)) {
             return null;
         }
         var suffix = "-" + id.ToString("N", CultureInfo.InvariantCulture) + ZipExtension;
         foreach (var path in Directory.EnumerateFiles(_bugReportsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+            ct.ThrowIfCancellationRequested();
             if (Path.GetFileName(path).EndsWith(suffix, StringComparison.Ordinal)) {
                 return path;
             }
