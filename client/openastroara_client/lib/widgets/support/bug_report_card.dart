@@ -102,6 +102,10 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Watch (not just read-in-_run) so the autoDispose provider — and its Dio —
+    // stays alive for the card's lifetime and can't be torn down mid prepare/
+    // download. Also gates the button when no server is connected.
+    final api = ref.watch(bugReportApiProvider);
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -127,7 +131,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             ),
             const SizedBox(width: 12),
             FilledButton.icon(
-              onPressed: _busy ? null : _run,
+              onPressed: (_busy || api == null) ? null : _run,
               icon: _busy
                   ? const SizedBox(
                       width: 16,
