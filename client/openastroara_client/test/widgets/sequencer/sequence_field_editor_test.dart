@@ -476,8 +476,15 @@ void main() {
       // selection (a FormField.initialValue would have stuck on 'Custom time').
       expect(find.text('Civil Dusk'), findsOneWidget);
       expect(find.text('Custom time'), findsNothing);
-      // …and the now-inert H/M/S fields are disabled (the daemon computes them).
+      // …and the now-inert H/M/S fields are disabled (the daemon computes them):
+      // dimmed + pointer-blocked AND the TextField itself is enabled:false, so it
+      // can't be edited via keyboard focus on desktop (IgnorePointer alone wouldn't).
       expect(_hoursIgnored(tester), isTrue);
+      final hoursField = tester.widget<TextField>(find.descendant(
+        of: find.byKey(const ValueKey('/cond/0/Hours')),
+        matching: find.byType(TextField),
+      ));
+      expect(hoursField.enabled, isFalse);
     });
 
     testWidgets('TimeCondition H/M/S are enabled in Custom-time mode',

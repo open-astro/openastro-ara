@@ -81,6 +81,7 @@ class SequenceFieldEditor extends ConsumerWidget {
               key: ValueKey('${selectedPath.join(".")}/${field.key}'),
               field: field,
               value: node[field.key],
+              enabled: field.enabledWhen?.call(node) ?? true,
               onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
             ),
           ),
@@ -271,6 +272,7 @@ class _ConditionCard extends ConsumerWidget {
                   key: ValueKey('${containerPath.join(".")}/cond/$index/${field.key}'),
                   field: field,
                   value: condition[field.key],
+                  enabled: field.enabledWhen?.call(condition) ?? true,
                   onChanged: (v) =>
                       notifier.setConditionFieldOn(containerPath, index, field.key, v),
                 ),
@@ -398,6 +400,7 @@ class _TriggerCard extends ConsumerWidget {
                   key: ValueKey('${containerPath.join(".")}/trig/$index/${field.key}'),
                   field: field,
                   value: trigger[field.key],
+                  enabled: field.enabledWhen?.call(trigger) ?? true,
                   onChanged: (v) =>
                       notifier.setTriggerFieldOn(containerPath, index, field.key, v),
                 ),
@@ -415,11 +418,17 @@ class _FieldControl extends StatelessWidget {
     required this.field,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final InstructionField field;
   final Object? value;
   final ValueChanged<Object?> onChanged;
+
+  /// When false the input widgets are truly disabled (`enabled: false` /
+  /// `onChanged: null`), not just dimmed — so a greyed field can't be edited via
+  /// keyboard focus on desktop/web (where `IgnorePointer` only blocks the mouse).
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -430,7 +439,7 @@ class _FieldControl extends StatelessWidget {
             Expanded(child: _label()),
             Switch(
               value: value == true,
-              onChanged: onChanged,
+              onChanged: enabled ? onChanged : null,
             ),
           ],
         );
@@ -448,9 +457,11 @@ class _FieldControl extends StatelessWidget {
               for (final e in labels.entries)
                 DropdownMenuItem(value: e.key, child: Text(e.value)),
             ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+            onChanged: enabled
+                ? (v) {
+                    if (v != null) onChanged(v);
+                  }
+                : null,
           ),
         );
       case InstructionFieldType.stringEnum:
@@ -465,9 +476,11 @@ class _FieldControl extends StatelessWidget {
               for (final v in values)
                 DropdownMenuItem(value: v, child: Text(v)),
             ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+            onChanged: enabled
+                ? (v) {
+                    if (v != null) onChanged(v);
+                  }
+                : null,
           ),
         );
       case InstructionFieldType.number:
@@ -480,6 +493,7 @@ class _FieldControl extends StatelessWidget {
             isInt: false,
             min: field.min,
             max: field.max,
+            enabled: enabled,
             onChanged: (v) => onChanged(v.toDouble()),
           ));
         }
@@ -496,6 +510,7 @@ class _FieldControl extends StatelessWidget {
             isInt: true,
             min: field.min,
             max: field.max,
+            enabled: enabled,
             onChanged: (v) => onChanged(v.toInt()),
           ));
         }
@@ -542,9 +557,11 @@ class _FieldControl extends StatelessWidget {
               for (final label in timeProviders.keys)
                 DropdownMenuItem(value: label, child: Text(label)),
             ],
-            onChanged: (label) {
-              if (label != null) onChanged(timeProviderValue(label));
-            },
+            onChanged: enabled
+                ? (label) {
+                    if (label != null) onChanged(timeProviderValue(label));
+                  }
+                : null,
           ),
         );
       case InstructionFieldType.filter:
@@ -611,6 +628,7 @@ class _FieldControl extends StatelessWidget {
   }) =>
       TextFormField(
         initialValue: initial,
+        enabled: enabled,
         keyboardType: keyboard,
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
