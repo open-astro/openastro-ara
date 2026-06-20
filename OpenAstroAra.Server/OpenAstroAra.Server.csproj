@@ -69,6 +69,12 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageReference Include="Zeroconf" Version="3.6.11" />
+    <!-- §32.4 server self-advertisement over mDNS so WILMA's first-run scan finds
+         the daemon (_openastroara._tcp). Zeroconf above is browse-only (used for
+         Alpaca probes); it cannot publish a service, so the responder comes from
+         Makaretu.Dns.Multicast (MIT, pure-managed). Co-exists with the OS
+         mDNSResponder/Avahi on :5353 via the library's socket-reuse handling. -->
+    <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <!-- Phase 6: ASCOM Alpaca for cross-platform equipment discovery + typed proxies per §6.2 / §52 -->
     <PackageReference Include="ASCOM.Alpaca.Components" Version="2.1.0" />
     <PackageReference Include="ASCOM.Alpaca.Device" Version="2.1.0" />

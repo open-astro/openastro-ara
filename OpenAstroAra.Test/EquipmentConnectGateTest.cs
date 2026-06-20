@@ -44,10 +44,11 @@ namespace OpenAstroAra.Test {
         public async Task Blocks_with_503_alpaca_bridge_outdated_when_the_bridge_is_too_old() {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.OutdatedBlock, "1.1.0"));
             var notifier = new FakeNotifier();
+            var store = new FakeSelectionStore();
             var connectCalled = false;
 
             var result = await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), bridge, notifier,
+                Request(), bridge, notifier, store,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
@@ -59,6 +60,7 @@ namespace OpenAstroAra.Test {
                     Is.EqualTo("alpaca_bridge_outdated"));
                 Assert.That(connectCalled, Is.False, "the device must NOT be connected through a too-old bridge");
                 Assert.That(notifier.WarnCount, Is.Zero, "a block is not a warn-band event");
+                Assert.That(store.Remembered, Is.Empty, "a refused device must NOT be remembered for auto-connect");
             });
         }
 
@@ -68,10 +70,11 @@ namespace OpenAstroAra.Test {
         public async Task Connects_when_the_bridge_is_acceptable_warn_or_missing(AlpacaBridgeStatus status, string? version) {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(status, version));
             var notifier = new FakeNotifier();
+            var store = new FakeSelectionStore();
             var connectCalled = false;
 
             var result = await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), bridge, notifier,
+                Request(), bridge, notifier, store,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
@@ -80,6 +83,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(accepted, Is.Not.Null, $"status {status} should proceed to connect");
                 Assert.That(accepted!.Value, Is.SameAs(Accepted));
                 Assert.That(connectCalled, Is.True);
+                Assert.That(store.Remembered, Has.Count.EqualTo(1), "an accepted connect must remember the device");
+                Assert.That(store.Remembered[0].UniqueId, Is.EqualTo("cam-1"));
             });
         }
 
@@ -89,17 +94,17 @@ namespace OpenAstroAra.Test {
             var warnBridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.OutdatedWarn, "1.3.0"));
             var warnNotifier = new FakeNotifier();
             await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), warnBridge, warnNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
+                Request(), warnBridge, warnNotifier, new FakeSelectionStore(), () => Task.FromResult(Accepted), CancellationToken.None);
 
             var okBridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0"));
             var okNotifier = new FakeNotifier();
             await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), okBridge, okNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
+                Request(), okBridge, okNotifier, new FakeSelectionStore(), () => Task.FromResult(Accepted), CancellationToken.None);
 
             var missingBridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Missing, null));
             var missingNotifier = new FakeNotifier();
             await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), missingBridge, missingNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
+                Request(), missingBridge, missingNotifier, new FakeSelectionStore(), () => Task.FromResult(Accepted), CancellationToken.None);
 
             Assert.Multiple(() => {
                 Assert.That(warnNotifier.WarnCount, Is.EqualTo(1));
@@ -114,7 +119,7 @@ namespace OpenAstroAra.Test {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0"));
 
             await EquipmentEndpoints.ConnectGatedAsync(
-                Request(ip: "192.168.1.50", port: 11111), bridge, new FakeNotifier(),
+                Request(ip: "192.168.1.50", port: 11111), bridge, new FakeNotifier(), new FakeSelectionStore(),
                 () => Task.FromResult(Accepted), CancellationToken.None);
 
             Assert.That(bridge.LastUri, Is.EqualTo(new Uri("http://192.168.1.50:11111")));
@@ -133,6 +138,19 @@ namespace OpenAstroAra.Test {
                 Assert.That(v6.Host, Is.EqualTo("[::1]"), "a bare IPv6 literal must be bracketed so the Uri parses");
                 Assert.That(v6Bracketed.Host, Is.EqualTo("[::1]"), "an already-bracketed IPv6 literal must not be double-bracketed");
             });
+        }
+
+        private sealed class FakeSelectionStore : IEquipmentSelectionStore {
+            public System.Collections.Generic.List<DiscoveredDeviceDto> Remembered { get; } = new();
+
+            public Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct) {
+                Remembered.Add(device);
+                return Task.CompletedTask;
+            }
+
+            public Task<System.Collections.Generic.IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) =>
+                Task.FromResult<System.Collections.Generic.IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto>>(
+                    new System.Collections.Generic.Dictionary<DeviceType, DiscoveredDeviceDto>());
         }
 
         private sealed class FakeNotifier : IAlpacaBridgeGateNotifier {
