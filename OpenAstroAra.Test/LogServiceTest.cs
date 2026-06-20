@@ -147,6 +147,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task TailAsync_clamps_max_lines_to_the_server_cap() {
+            var lines = Enumerable.Range(0, LogService.MaxAllowedLines + 25)
+                .Select(i => Clef($"2026-06-19T10:00:00.{i:0000000}Z", $"line{i}"))
+                .ToArray();
+            WriteLog("openastroara-20260619.log", lines);
+
+            var entries = await _svc.TailAsync(
+                new LogTailRequestDto(int.MaxValue, null, null), CancellationToken.None);
+
+            Assert.That(entries.Count, Is.EqualTo(LogService.MaxAllowedLines));
+        }
+
+        [Test]
         public async Task TailAsync_skips_torn_and_non_clef_lines() {
             WriteLog("openastroara-20260619.log",
                 Clef("2026-06-19T10:00:00.0000000Z", "valid"),

@@ -40,6 +40,9 @@ public sealed partial class LogService : ILogService {
     // the date, e.g. "openastroara-20260620.log".
     private const string LogGlob = "openastroara-*.log";
     private const int DefaultMaxLines = 200;
+    // Upper bound on a caller-requested tail size so a huge MaxLines can't force
+    // an unbounded ring buffer on this internal diagnostic endpoint.
+    internal const int MaxAllowedLines = 5000;
 
     private readonly string _logsDir;
     private readonly ILogger<LogService> _logger;
@@ -76,7 +79,7 @@ public sealed partial class LogService : ILogService {
     }
 
     public async Task<IReadOnlyList<LogEntryDto>> TailAsync(LogTailRequestDto request, CancellationToken ct) {
-        var max = request.MaxLines is int n && n > 0 ? n : DefaultMaxLines;
+        var max = request.MaxLines is int n && n > 0 ? Math.Min(n, MaxAllowedLines) : DefaultMaxLines;
         var minRank = string.IsNullOrEmpty(request.MinLevel) ? int.MinValue : LevelRank(request.MinLevel);
         var contains = request.ContainsSubstring;
 
@@ -87,6 +90,7 @@ public sealed partial class LogService : ILogService {
         // file is scanned through a ring sized to the entries still needed.
         var result = new List<LogEntryDto>(Math.Min(max, 1024));
         foreach (var path in LogFilesNewestFirst()) {
+            ct.ThrowIfCancellationRequested();
             if (result.Count >= max) {
                 break;
             }
