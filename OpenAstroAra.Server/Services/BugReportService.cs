@@ -39,7 +39,7 @@ namespace OpenAstroAra.Server.Services;
 /// place, so a crash mid-zip never leaves a half-written bundle a reader could
 /// resolve. Replaces the former placeholder (synthetic record, 404 download).</para>
 /// </summary>
-public sealed partial class BugReportService : IBugReportService {
+public sealed partial class BugReportService : IBugReportService, IDisposable {
 
     private const string BugReportsDirName = "bug-reports";
     private const string LogsDirName = "logs";
@@ -52,10 +52,18 @@ public sealed partial class BugReportService : IBugReportService {
     // no other reaper, so without a cap repeated prepares (UI retries, operator
     // debugging) would grow {profileDir}/bug-reports/ without bound.
     internal const int MaxRetainedBundles = 10;
+    // Only the newest few §29.9 log files go in a bundle. The sink retains 14 files at
+    // up to 50 MB each, so zipping all of them would be a ~700 MB read + a huge surprise
+    // download; a bug report rarely needs more than the last few.
+    internal const int MaxBundledLogs = 3;
 
     private readonly string _profileDir;
     private readonly string _bugReportsDir;
     private readonly ILogger<BugReportService> _logger;
+    // Serializes prepares: the service is a DI singleton and PrepareAsync is async, so two
+    // concurrent prepares could otherwise have one's PruneOldBundles reap the other's
+    // just-revealed bundle. One bundle at a time — prepares are user-initiated + occasional.
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public BugReportService(string profileDir, ILogger<BugReportService> logger) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
@@ -64,6 +72,9 @@ public sealed partial class BugReportService : IBugReportService {
         _bugReportsDir = Path.Combine(profileDir, BugReportsDirName);
         _logger = logger;
     }
+
+    // Registered as a DI singleton, so the container disposes this on host shutdown.
+    public void Dispose() => _gate.Dispose();
 
     public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct) {
         // idempotencyKey is accepted for contract symmetry but NOT enforced: a retried
@@ -79,7 +90,14 @@ public sealed partial class BugReportService : IBugReportService {
 
         // ZipArchive has no async write path; run the synchronous IO off the request
         // thread so a larger logs/ set doesn't tie up the connection's thread-pool slot.
-        var sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+        // The gate serializes prepares so a concurrent one can't reap this bundle.
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        long sizeBytes;
+        try {
+            sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+        } finally {
+            _gate.Release();
+        }
 
         LogPrepared(id, _bugReportsDir);
         return new BugReportPreparationDto(
@@ -108,7 +126,13 @@ public sealed partial class BugReportService : IBugReportService {
 
                 var logsDir = Path.Combine(_profileDir, LogsDirName);
                 if (Directory.Exists(logsDir)) {
-                    foreach (var logPath in Directory.EnumerateFiles(logsDir, LogGlob, SearchOption.TopDirectoryOnly)) {
+                    // Newest MaxBundledLogs only — ordinal-descending filename sort is
+                    // chronological for the openastroara-<date>[_NNN].log naming (same sort
+                    // PruneOldBundles uses), so this takes the most recent few.
+                    var newestLogs = Directory.EnumerateFiles(logsDir, LogGlob, SearchOption.TopDirectoryOnly)
+                        .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+                        .Take(MaxBundledLogs);
+                    foreach (var logPath in newestLogs) {
                         ct.ThrowIfCancellationRequested();
                         // A single log that vanished (the rolling sink can delete a retained
                         // file mid-bundle) or is unreadable is skipped, not fatal to the bundle.

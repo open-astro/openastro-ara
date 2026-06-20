@@ -46,6 +46,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
+            _svc.Dispose();
             if (Directory.Exists(_profileDir)) {
                 Directory.Delete(_profileDir, recursive: true);
             }
@@ -90,6 +91,23 @@ namespace OpenAstroAra.Test {
             Assert.That(names, Does.Contain("system-info.json"));
             Assert.That(names, Does.Contain("logs/openastroara-20260619.log"));
             Assert.That(names, Does.Contain("profile.json"));
+        }
+
+        [Test]
+        public async Task PrepareAsync_bundles_only_the_newest_logs() {
+            // More log files than the cap; only the newest MaxBundledLogs are included.
+            for (var d = 1; d <= BugReportService.MaxBundledLogs + 3; d++) {
+                WriteLog($"openastroara-202606{d:00}.log", $"day {d}");
+            }
+
+            var prep = await _svc.PrepareAsync(null, CancellationToken.None);
+
+            using var zip = await OpenBundleAsync(prep.PreparationId);
+            var logEntries = zip.Entries.Select(e => e.FullName).Where(n => n.StartsWith("logs/", StringComparison.Ordinal)).ToList();
+            Assert.That(logEntries.Count, Is.EqualTo(BugReportService.MaxBundledLogs));
+            // The newest day must be present; the oldest (day 01) must not.
+            Assert.That(logEntries, Does.Contain($"logs/openastroara-202606{BugReportService.MaxBundledLogs + 3:00}.log"));
+            Assert.That(logEntries, Does.Not.Contain("logs/openastroara-20260601.log"));
         }
 
         [Test]
