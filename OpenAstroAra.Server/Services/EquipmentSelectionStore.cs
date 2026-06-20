@@ -64,23 +64,41 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     public async Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(device);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
+        // Atomic replace: write a temp sibling then move over the target so a
+        // crash mid-write can never leave a half-written selection file.
+        var tmp = _path + ".tmp";
         try {
             var map = await ReadLocked(ct).ConfigureAwait(false);
             map[device.Type.ToString()] = device;
             var json = JsonSerializer.Serialize(map, JsonOptions);
-            // Atomic replace: write a temp sibling then move over the target so a
-            // crash mid-write can never leave a half-written selection file.
-            var tmp = _path + ".tmp";
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
             File.Move(tmp, _path, overwrite: true);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            SafeDeleteTmp(tmp);
+            throw;
+        }
 #pragma warning disable CA1031 // best-effort persistence must not fail the connect that triggered it
         catch (Exception ex) {
+            SafeDeleteTmp(tmp); // don't leave an orphaned .tmp if the write/move failed mid-way
             LogWriteFailed(ex, device.Type);
         }
 #pragma warning restore CA1031
         finally {
             _gate.Release();
+        }
+    }
+
+    // Best-effort removal of the temp file after a failed atomic write.
+    private static void SafeDeleteTmp(string tmp) {
+        try {
+            if (File.Exists(tmp)) {
+                File.Delete(tmp);
+            }
+        } catch (IOException) {
+            // leave it — the next successful write's overwrite move reclaims it
+        } catch (UnauthorizedAccessException) {
+            // same — best-effort cleanup only
         }
     }
 

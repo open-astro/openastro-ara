@@ -110,6 +110,9 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
             LogReconnecting(type, device.Name);
             await connect().ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw; // daemon shutting down — unwind cleanly, don't log it as a device failure
+        }
 #pragma warning disable CA1031 // one device's failure must not abort the others or startup
         catch (Exception ex) {
             LogConnectFailed(ex, type, device.Name);

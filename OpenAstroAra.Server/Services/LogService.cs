@@ -283,6 +283,11 @@ public sealed partial class LogService : ILogService {
             return _inner.Read(buffer, offset, (int)Math.Min(count, remaining));
         }
 
+        public override int ReadByte() {
+            // Respect the cap and skip the base implementation's 1-byte array allocation.
+            return _inner.Position >= _cap ? -1 : _inner.ReadByte();
+        }
+
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) {
             var remaining = _cap - _inner.Position;
             if (remaining <= 0) {
