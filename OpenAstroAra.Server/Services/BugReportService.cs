@@ -222,8 +222,12 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             // anywhere it would be auto-published, and tell users it's in the bundle.
             ["profile_dir"] = _profileDir,
         };
-        return obj.ToJsonString();
+        // Indented: a human opening the bundle reads system-info.json by hand; the payload
+        // is a handful of fields so the whitespace cost is negligible.
+        return obj.ToJsonString(IndentedJson);
     }
+
+    private static readonly System.Text.Json.JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
 
     // Add one regular file as a ZIP entry, skipping it (not failing the bundle) if it's
     // a symlink, vanished, or unreadable. Symlinks are refused for the same reason backups
@@ -266,7 +270,9 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             // never exceeds the cap AND the bundle we just revealed is never the one
             // reaped (guards a same-second tie where an id sort could rank it last).
             var stale = Directory.EnumerateFiles(_bugReportsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)
-                .Where(p => !string.Equals(p, justCreated, StringComparison.Ordinal))
+                // OrdinalIgnoreCase so a differently-cased path from EnumerateFiles on a
+                // case-insensitive filesystem (Windows) still excludes the just-created bundle.
+                .Where(p => !string.Equals(p, justCreated, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
                 .Skip(MaxRetainedBundles - 1)
                 .ToList();
