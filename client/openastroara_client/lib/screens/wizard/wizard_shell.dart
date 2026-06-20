@@ -239,6 +239,11 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final nextButton = FilledButton.icon(
+      onPressed: canAdvance ? onNext : null,
+      icon: Icon(isLast ? Icons.check : Icons.chevron_right),
+      label: Text(isLast ? 'Save Profile' : 'Next'),
+    );
     return Container(
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
@@ -263,15 +268,15 @@ class _BottomNavBar extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(width: 16),
-          Tooltip(
-            message:
-                canAdvance ? '' : 'Fix the highlighted field to continue.',
-            child: FilledButton.icon(
-              onPressed: canAdvance ? onNext : null,
-              icon: Icon(isLast ? Icons.check : Icons.chevron_right),
-              label: Text(isLast ? 'Save Profile' : 'Next'),
+          // Only wrap in a Tooltip when disabled — an empty-message Tooltip on the
+          // enabled button can flash a blank popup on hover on some platforms.
+          if (canAdvance)
+            nextButton
+          else
+            Tooltip(
+              message: 'Fix the highlighted field to continue.',
+              child: nextButton,
             ),
-          ),
         ],
       ),
     );
