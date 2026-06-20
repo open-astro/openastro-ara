@@ -155,6 +155,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task PrepareAsync_prunes_to_the_retention_cap() {
+            // Stage more bundles than the cap; the oldest are reaped, newest kept.
+            for (var i = 0; i < 13; i++) {
+                await _svc.PrepareAsync(null, CancellationToken.None);
+            }
+
+            var dir = Path.Combine(_profileDir, "bug-reports");
+            var count = Directory.EnumerateFiles(dir, "bugreport-*.zip").Count();
+            Assert.That(count, Is.EqualTo(BugReportService.MaxRetainedBundles));
+        }
+
+        [Test]
         public async Task PrepareAsync_each_call_stages_a_distinct_bundle() {
             var first = await _svc.PrepareAsync("same-key", CancellationToken.None);
             var second = await _svc.PrepareAsync("same-key", CancellationToken.None);

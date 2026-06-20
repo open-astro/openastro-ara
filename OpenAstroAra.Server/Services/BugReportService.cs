@@ -48,6 +48,10 @@ public sealed partial class BugReportService : IBugReportService {
     private const string ZipExtension = ".zip";
     private const string TempPrefix = ".tmp-";
     private const string LogGlob = "openastroara-*.log";
+    // Keep only the newest N bundles — each prepare stages a fresh ZIP and there's
+    // no other reaper, so without a cap repeated prepares (UI retries, operator
+    // debugging) would grow {profileDir}/bug-reports/ without bound.
+    internal const int MaxRetainedBundles = 10;
 
     private readonly string _profileDir;
     private readonly string _bugReportsDir;
@@ -106,18 +110,15 @@ public sealed partial class BugReportService : IBugReportService {
                 if (Directory.Exists(logsDir)) {
                     foreach (var logPath in Directory.EnumerateFiles(logsDir, LogGlob, SearchOption.TopDirectoryOnly)) {
                         ct.ThrowIfCancellationRequested();
-                        // Skip a symlinked log for the same reason backups skip links — don't
-                        // follow it out of the profile root. A real log file is a plain file.
-                        if (IsReparsePoint(logPath)) {
-                            continue;
-                        }
-                        archive.CreateEntryFromFile(logPath, LogsDirName + "/" + Path.GetFileName(logPath), CompressionLevel.Optimal);
+                        // A single log that vanished (the rolling sink can delete a retained
+                        // file mid-bundle) or is unreadable is skipped, not fatal to the bundle.
+                        TryAddFileEntry(archive, logPath, LogsDirName + "/" + Path.GetFileName(logPath));
                     }
                 }
 
                 var profilePath = Path.Combine(_profileDir, ProfileFileName);
-                if (File.Exists(profilePath) && !IsReparsePoint(profilePath)) {
-                    archive.CreateEntryFromFile(profilePath, ProfileFileName, CompressionLevel.Optimal);
+                if (File.Exists(profilePath)) {
+                    TryAddFileEntry(archive, profilePath, ProfileFileName);
                 }
             }
 
@@ -126,6 +127,7 @@ public sealed partial class BugReportService : IBugReportService {
             // Reveal the finished bundle atomically — a reader (OpenDownloadAsync) resolves
             // by the id-suffixed name, so it only ever sees a complete archive.
             File.Move(tempPath, zipPath, overwrite: false);
+            PruneOldBundles(zipPath);
             return sizeBytes;
         } catch {
             TryDelete(tempPath);
@@ -147,9 +149,59 @@ public sealed partial class BugReportService : IBugReportService {
             ["os_architecture"] = RuntimeInformation.OSArchitecture.ToString(),
             ["process_architecture"] = RuntimeInformation.ProcessArchitecture.ToString(),
             ["framework"] = RuntimeInformation.FrameworkDescription,
+            // PII note: the absolute profile path can carry the OS username
+            // (e.g. /home/alice/.local/share/openastroara). Kept deliberately — it's
+            // useful for "can't find the profile" diagnostics and the user downloads
+            // the bundle themselves before choosing to share it — but don't surface it
+            // anywhere it would be auto-published, and tell users it's in the bundle.
             ["profile_dir"] = _profileDir,
         };
         return obj.ToJsonString();
+    }
+
+    // Add one regular file as a ZIP entry, skipping it (not failing the bundle) if it's
+    // a symlink, vanished, or unreadable. Symlinks are refused for the same reason backups
+    // refuse them — CreateEntryFromFile would follow the link and bundle whatever it points
+    // at, possibly outside the profile root.
+    private bool TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName) {
+        try {
+            if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
+                return false;
+            }
+            // CreateEntryFromFile reads the whole file; a CancellationToken can't abort it
+            // mid-copy (a .NET limitation), so cancellation is checked per-file by the caller.
+            archive.CreateEntryFromFile(sourcePath, entryName, CompressionLevel.Optimal);
+            return true;
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // Vanished (rolling sink deleted a retained log) or unreadable between the
+            // directory scan and now — skip it. FileNotFoundException / DirectoryNotFoundException
+            // derive from IOException.
+            LogEntrySkipped(sourcePath, ex);
+            return false;
+        }
+    }
+
+    // Keep only the newest MaxRetainedBundles ZIPs (incl. the one just revealed). Best-effort:
+    // a failure here must never fail an already-staged bundle. Bundles are named
+    // bugreport-{yyyyMMddTHHmmssZ}-{id}.zip, so an ordinal-descending filename sort is
+    // chronological (newest first) without touching mtimes.
+    private void PruneOldBundles(string justCreated) {
+        try {
+            // Keep the just-created bundle plus the newest (cap-1) others, so the total
+            // never exceeds the cap AND the bundle we just revealed is never the one
+            // reaped (guards a same-second tie where an id sort could rank it last).
+            var stale = Directory.EnumerateFiles(_bugReportsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)
+                .Where(p => !string.Equals(p, justCreated, StringComparison.Ordinal))
+                .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+                .Skip(MaxRetainedBundles - 1)
+                .ToList();
+            foreach (var path in stale) {
+                TryDelete(path);
+            }
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // best-effort retention; the prepared bundle is already revealed.
+            LogPruneFailed(ex);
+        }
     }
 
     private static void WriteTextEntry(ZipArchive archive, string entryName, string content) {
@@ -195,9 +247,6 @@ public sealed partial class BugReportService : IBugReportService {
     private static Uri DownloadUrl(Guid id) =>
         new("/api/v1/bugreport/download?preparationId=" + id.ToString("D", CultureInfo.InvariantCulture), UriKind.Relative);
 
-    private static bool IsReparsePoint(string path) =>
-        (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-
     private static void TryDelete(string path) {
         try {
             if (File.Exists(path)) {
@@ -218,4 +267,11 @@ public sealed partial class BugReportService : IBugReportService {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Bug-report prepare received an Idempotency-Key but dedup is not implemented — a retry stages another bundle")]
     partial void LogIdempotencyNotEnforced();
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Skipping unreadable/vanished bug-report entry {SourcePath}")]
+    partial void LogEntrySkipped(string sourcePath, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bug-report bundle retention prune failed (best-effort)")]
+    partial void LogPruneFailed(Exception ex);
 }
