@@ -11,7 +11,9 @@ final logsApiFactoryProvider = Provider<LogsClient Function(AraServer)>(
 );
 
 /// A [LogsClient] bound to the active server, or null when none is connected.
-final logsApiProvider = Provider<LogsClient?>((ref) {
+/// autoDispose so the Dio is released when no widget is watching (i.e. while the
+/// user is off the Support tab), recreated on next view.
+final logsApiProvider = Provider.autoDispose<LogsClient?>((ref) {
   final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(logsApiFactoryProvider)(server);

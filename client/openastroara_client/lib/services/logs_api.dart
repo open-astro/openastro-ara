@@ -102,14 +102,25 @@ class LogsApi implements LogsClient {
       // RFC 5987 ext-values are percent-encoded and never quoted, so just trim +
       // decode — no quote-stripping (which the plain branch also doesn't do).
       final raw = extended.group(1)!.trim();
+      String decoded;
       try {
-        return Uri.decodeComponent(raw);
+        decoded = Uri.decodeComponent(raw);
       } catch (_) {
-        return raw;
+        decoded = raw;
       }
+      return _basename(decoded);
     }
     final plain = RegExp('filename="?([^";]+)"?', caseSensitive: false)
         .firstMatch(header);
-    return plain?.group(1)?.trim();
+    final name = plain?.group(1)?.trim();
+    return name == null ? null : _basename(name);
+  }
+
+  // Defence-in-depth: never let a server-supplied name carry a path component
+  // into the Save dialog (e.g. filename=../../evil.log). Returns null if nothing
+  // usable remains so the caller falls back to a safe default.
+  static String? _basename(String name) {
+    final last = name.split(RegExp(r'[/\\]')).last.trim();
+    return last.isEmpty ? null : last;
   }
 }
