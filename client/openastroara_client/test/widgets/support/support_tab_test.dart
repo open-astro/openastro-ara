@@ -98,6 +98,23 @@ void main() {
     expect(api.tailCalls, 2);
   });
 
+  testWidgets('a failed refresh keeps the loaded entries with an error banner',
+      (tester) async {
+    final api = _FakeLogsClient(entries: [_entry('Information', 'kept line')]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+    expect(find.text('kept line'), findsOneWidget);
+
+    // Next tail fails (e.g. transient transport error) — the prior entries must
+    // stay visible, with an inline error rather than a full-screen takeover.
+    api.throwOnTail = true;
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('kept line'), findsOneWidget);
+    expect(find.textContaining('Could not load logs'), findsOneWidget);
+  });
+
   testWidgets('download button is present', (tester) async {
     await tester.pumpWidget(_host(_FakeLogsClient(entries: const [])));
     await tester.pumpAndSettle();

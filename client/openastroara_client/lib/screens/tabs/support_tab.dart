@@ -27,6 +27,10 @@ class _SupportTabState extends ConsumerState<SupportTab> {
   bool _loading = false;
   bool _downloading = false;
   String? _error;
+  // Monotonic refresh id: only the latest call applies its result/error, so a
+  // superseded tail (e.g. the old server's request aborted by a mid-flight
+  // switch) can't flash a stale error or overwrite newer entries.
+  int _refreshGen = 0;
 
   @override
   void initState() {
@@ -43,23 +47,26 @@ class _SupportTabState extends ConsumerState<SupportTab> {
   Future<void> _refresh() async {
     final api = ref.read(logsApiProvider);
     if (api == null) return;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    final gen = ++_refreshGen;
+    // Don't clear _error here — keep the last outcome until this call resolves,
+    // so a failed refresh leaves the prior entries (and only updates the banner).
+    setState(() => _loading = true);
     try {
       final entries = await api.tail(
         maxLines: _maxLines,
         minLevel: _minLevel == 'All' ? null : _minLevel,
         containsSubstring: _substringCtl.text,
       );
-      if (!mounted) return;
-      setState(() => _entries = entries);
+      if (!mounted || gen != _refreshGen) return;
+      setState(() {
+        _entries = entries;
+        _error = null;
+      });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _refreshGen) return;
       setState(() => _error = 'Could not load logs: $e');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && gen == _refreshGen) setState(() => _loading = false);
     }
   }
 
@@ -173,28 +180,63 @@ class _SupportTabState extends ConsumerState<SupportTab> {
   }
 
   Widget _body(BuildContext context) {
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            OutlinedButton(onPressed: _refresh, child: const Text('Retry')),
-          ],
-        ),
-      );
-    }
     final entries = _entries;
+    // Nothing loaded yet: a first-load error gets the full retry screen, else the
+    // initial spinner.
     if (entries == null) {
+      if (_error != null) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              OutlinedButton(onPressed: _refresh, child: const Text('Retry')),
+            ],
+          ),
+        );
+      }
       return const Center(child: CircularProgressIndicator());
     }
-    if (entries.isEmpty) {
-      return const Center(child: Text('No log entries match the filter.'));
-    }
-    return ListView.builder(
-      itemCount: entries.length,
-      itemBuilder: (context, i) => _LogRow(entry: entries[i]),
+    // Entries already loaded: keep them visible. A failed refresh shows an inline
+    // banner above the (last good) list rather than hiding the logs.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_error != null) _errorBanner(context),
+        Expanded(
+          child: entries.isEmpty
+              ? const Center(child: Text('No log entries match the filter.'))
+              : ListView.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (context, i) => _LogRow(entry: entries[i]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _errorBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline,
+                size: 18, color: theme.colorScheme.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _error!,
+                style: TextStyle(color: theme.colorScheme.onErrorContainer),
+              ),
+            ),
+            TextButton(onPressed: _refresh, child: const Text('Retry')),
+          ],
+        ),
+      ),
     );
   }
 }
