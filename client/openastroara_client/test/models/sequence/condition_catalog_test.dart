@@ -7,6 +7,10 @@ const _loop =
     'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer';
 const _timeSpan =
     'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer';
+const _altitude =
+    'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer';
+const _aboveHorizon =
+    'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer';
 
 void main() {
   group('catalog integrity', () {
@@ -91,6 +95,39 @@ void main() {
       final b = conditionForType(_loop)!.build();
       a['Iterations'] = 99;
       expect(b['Iterations'], 2); // unaffected
+    });
+
+    test('AltitudeCondition builds Data (WaitLoopData) + hidden HasDsoParent', () {
+      final def = conditionForType(_altitude)!;
+      final node = def.build();
+      expect(node['HasDsoParent'], false);
+      final data = node['Data'] as Map;
+      expect(data[r'$type'], waitLoopDataType);
+      expect(data['Offset'], 30.0);
+      expect(data['Comparator'], 1); // LessThan
+      expect((data['Coordinates'] as Map)[r'$type'], contains('InputCoordinates'));
+      // HasDsoParent is a runtime-recomputed field — present but not user-editable.
+      expect(def.fields.firstWhere((f) => f.key == 'HasDsoParent').editable, isFalse);
+    });
+
+    test('AboveHorizonCondition builds Data with offset 0 / GreaterThan', () {
+      final node = conditionForType(_aboveHorizon)!.build();
+      final data = node['Data'] as Map;
+      expect(data['Offset'], 0.0);
+      expect(data['Comparator'], 3); // GreaterThan
+    });
+
+    test('altitude comparator allow-list is exactly LessThan/GreaterThan', () {
+      expect(altitudeComparators.keys, [1, 3]);
+    });
+
+    test('an altitude build deep-clones the nested WaitLoopData / Coordinates', () {
+      final a = conditionForType(_altitude)!.build();
+      final b = conditionForType(_altitude)!.build();
+      (a['Data'] as Map)['Offset'] = 99.0;
+      ((a['Data'] as Map)['Coordinates'] as Map)['RAHours'] = 12;
+      expect((b['Data'] as Map)['Offset'], 30.0); // unaffected
+      expect(((b['Data'] as Map)['Coordinates'] as Map)['RAHours'], 0);
     });
 
     test('build() throws if a field key collides with a reserved base key', () {

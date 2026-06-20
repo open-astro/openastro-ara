@@ -67,6 +67,11 @@ enum InstructionFieldType {
   /// A `FilterInfo` object, resolved from the connected filter wheel (nullable
   /// until the user picks one in the editor).
   filter,
+
+  /// A nested `WaitLoopData` object (the altitude conditions' `Data`): an
+  /// `InputCoordinates` target, a degrees `Offset`, and a `Comparator`. Rendered
+  /// as a composite sub-editor that rebuilds the whole object on any change.
+  waitLoopData,
 }
 
 /// The `BinningMode` default (1×1) the daemon's templates use.

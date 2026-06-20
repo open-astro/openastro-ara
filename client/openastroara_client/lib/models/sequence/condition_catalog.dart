@@ -11,16 +11,57 @@
 /// OptIn), so a built condition is `$type` + its own fields + `Parent: null` —
 /// no `ErrorBehavior`/`Attempts` (those are `SequenceItem` fields).
 ///
-/// Only the pure-scalar conditions are listed. `TimeCondition` (needs a
-/// `SelectedProvider` object) and the altitude conditions `AltitudeCondition`/
-/// `AboveHorizonCondition` (need a nested `WaitLoopData` object) are intentionally
-/// deferred to their own slices rather than faked (tracked in design/PORT_TODO.md).
+/// The pure-scalar conditions plus the altitude conditions `AltitudeCondition`/
+/// `AboveHorizonCondition`, whose `Data` is a nested `WaitLoopData` object
+/// (coordinates target + degrees offset + comparator). `TimeCondition` (needs a
+/// `SelectedProvider` object) is added in its own slice.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'instruction_catalog.dart'
-    show InstructionField, InstructionFieldType, checkNoReservedFieldKeys, deepCloneJson;
+    show
+        InstructionField,
+        InstructionFieldType,
+        checkNoReservedFieldKeys,
+        deepCloneJson,
+        defaultCoordinates;
+
+/// The assembly-qualified `$type` of the altitude conditions' nested `Data`
+/// object (`LoopForAltitudeBase.Data`). Grounded against
+/// `OpenAstroAra.Sequencer/SequenceItem/Utility/WaitLoopData.cs`.
+const String waitLoopDataType =
+    'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitLoopData, OpenAstroAra.Sequencer';
+
+/// The user-selectable `ComparisonOperator` values for an altitude condition →
+/// display label. NINA only offers `LessThan` (1) and `GreaterThan` (3) here
+/// (`WaitLoopData.ComparisonOperators` drops the `*OrEqual` / `EQUALS` /
+/// `NotEqual` variants); the integer values match
+/// `OpenAstroAra.Core/Enum/ComparisonOperatorEnum.cs`.
+const Map<int, String> altitudeComparators = {
+  1: 'Less than (<)',
+  3: 'Greater than (>)',
+};
+
+/// `AltitudeCondition.Data` default: target altitude 30°, `LessThan` (loop until
+/// the target drops below 30°), against a zeroed `InputCoordinates`. The nested
+/// [defaultCoordinates] is const; [ConditionDef.build] deep-clones the whole
+/// `Data` so built nodes never share it.
+const Map<String, dynamic> altitudeConditionData = {
+  r'$type': waitLoopDataType,
+  'Coordinates': defaultCoordinates,
+  'Offset': 30.0,
+  'Comparator': 1,
+};
+
+/// `AboveHorizonCondition.Data` default: offset 0° above the (custom) horizon,
+/// `GreaterThan`, against a zeroed `InputCoordinates`.
+const Map<String, dynamic> aboveHorizonConditionData = {
+  r'$type': waitLoopDataType,
+  'Coordinates': defaultCoordinates,
+  'Offset': 0.0,
+  'Comparator': 3,
+};
 
 /// One loop condition in the container's "add condition" picker.
 @immutable
@@ -99,6 +140,34 @@ const List<ConditionDef> conditionCatalog = [
           defaultValue: 1, min: 0, max: 59),
       InstructionField('Seconds', 'Seconds', InstructionFieldType.integer,
           defaultValue: 0, min: 0, max: 59),
+    ],
+  ),
+  // Loop a container until the target's altitude crosses a threshold. Data is a
+  // nested WaitLoopData (target coordinates + degrees offset + comparator);
+  // HasDsoParent is a [JsonProperty] the daemon recomputes from the parent DSO
+  // context on load, so it's emitted at its default but hidden from the editor.
+  ConditionDef(
+    type: 'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer',
+    label: 'Until altitude',
+    icon: Icons.height,
+    fields: [
+      InstructionField('Data', 'Target', InstructionFieldType.waitLoopData,
+          defaultValue: altitudeConditionData),
+      InstructionField('HasDsoParent', 'Has DSO parent', InstructionFieldType.boolean,
+          defaultValue: false, editable: false),
+    ],
+  ),
+  // Loop a container until the target is above the (custom) horizon. Same shape
+  // as AltitudeCondition; the offset is added to the horizon altitude.
+  ConditionDef(
+    type: 'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
+    label: 'Until above horizon',
+    icon: Icons.terrain_outlined,
+    fields: [
+      InstructionField('Data', 'Target', InstructionFieldType.waitLoopData,
+          defaultValue: aboveHorizonConditionData),
+      InstructionField('HasDsoParent', 'Has DSO parent', InstructionFieldType.boolean,
+          defaultValue: false, editable: false),
     ],
   ),
 ];

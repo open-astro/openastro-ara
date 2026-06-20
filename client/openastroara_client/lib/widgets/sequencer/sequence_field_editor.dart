@@ -504,104 +504,33 @@ class _FieldControl extends StatelessWidget {
       case InstructionFieldType.binning:
         return _labelled(_binningEditor());
       case InstructionFieldType.coordinates:
-        return _labelled(_coordinatesEditor());
+        return _labelled(_CoordinatesEditor(
+          fieldKey: field.key,
+          value: value,
+          onChanged: onChanged,
+        ));
+      case InstructionFieldType.waitLoopData:
+        return _labelled(_WaitLoopDataEditor(
+          fieldKey: field.key,
+          value: value,
+          // Fall back to THIS condition's own catalogued Comparator default
+          // (AltitudeCondition → LessThan, AboveHorizon → GreaterThan) for a body
+          // that arrives without one, rather than a fixed GreaterThan bias.
+          fallbackComparator: _comparatorOf(field.defaultValue),
+          onChanged: onChanged,
+        ));
       case InstructionFieldType.filter:
         return _labelled(_FilterEditor(value: value, onChanged: onChanged));
     }
   }
 
-  /// RA (H : M : S) / Dec (± D : M : S) editor over the nested `InputCoordinates`
-  /// object. Each change rebuilds the whole map (preserving `$type`) and writes
-  /// it back via [onChanged]. Components are range-clamped (RA h 0–23, d/m 0–59,
-  /// Dec deg 0–90, seconds capped at 59.999 — the 3-decimal display precision,
-  /// sub-arcsec); the int/double split matches the C# field types. ±90° forces
-  /// the Dec minutes/seconds to 0.
-  Widget _coordinatesEditor() {
-    final c = value is Map ? value as Map : const {};
-    final type = c[r'$type'] is String ? c[r'$type'] as String : defaultCoordinates[r'$type'];
-    int ri(String k) => c[k] is num ? (c[k] as num).toInt() : 0;
-    double rd(String k) => c[k] is num ? (c[k] as num).toDouble() : 0.0;
-    final neg = c['NegativeDec'] == true;
-    Map<String, dynamic> coord({
-      int? raH, int? raM, double? raS, bool? negDec, int? decD, int? decM, double? decS,
-    }) {
-      var dd = decD ?? ri('DecDegrees');
-      var dm = decM ?? ri('DecMinutes');
-      var ds = decS ?? rd('DecSeconds');
-      // ±90° is the declination pole — minutes/seconds must be 0 there
-      // (90:30:00 is invalid). Enforce the cross-field boundary that the
-      // per-component clamps can't.
-      if (dd >= 90) {
-        dd = 90;
-        dm = 0;
-        ds = 0.0;
-      }
-      return <String, dynamic>{
-        r'$type': type,
-        'RAHours': raH ?? ri('RAHours'),
-        'RAMinutes': raM ?? ri('RAMinutes'),
-        'RASeconds': raS ?? rd('RASeconds'),
-        'NegativeDec': negDec ?? neg,
-        'DecDegrees': dd,
-        'DecMinutes': dm,
-        'DecSeconds': ds,
-      };
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _axisRow('RA', [
-          _NumField(key: Key('${field.key}_ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
-              onChanged: (v) => onChanged(coord(raH: v.toInt()))),
-          _NumField(key: Key('${field.key}_ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
-              onChanged: (v) => onChanged(coord(raM: v.toInt()))),
-          _NumField(key: Key('${field.key}_ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
-              onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
-        ]),
-        const SizedBox(height: 6),
-        _axisRow('Dec', [
-          _SignToggle(
-            negative: neg,
-            onChanged: (n) => onChanged(coord(negDec: n)),
-          ),
-          _NumField(key: Key('${field.key}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
-              onChanged: (v) => onChanged(coord(decD: v.toInt()))),
-          // At the ±90° pole, minutes/seconds must be 0 — disable them so the
-          // constraint is visible (rather than silently snapping back on edit).
-          _NumField(key: Key('${field.key}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
-              enabled: ri('DecDegrees') < 90,
-              onChanged: (v) => onChanged(coord(decM: v.toInt()))),
-          _NumField(key: Key('${field.key}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
-              enabled: ri('DecDegrees') < 90,
-              onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
-        ]),
-      ],
-    );
+  /// The `Comparator` from a `waitLoopData` field's catalogued default `Data`
+  /// map, or 3 (GreaterThan, the daemon-coerced safe value) if absent. Used as
+  /// the per-condition fallback when a stored node has no Comparator.
+  static int _comparatorOf(Object? dataDefault) {
+    final c = dataDefault is Map ? dataDefault['Comparator'] : null;
+    return c is num ? c.toInt() : 3;
   }
-
-  Widget _axisRow(String label, List<Widget> fields) => Row(
-        children: [
-          SizedBox(
-            width: 32,
-            child: Text(label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12)),
-          ),
-          // Scroll the H/M/S group horizontally so the (wider) Dec row with its
-          // sign toggle can't overflow a narrow side pane.
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < fields.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    SizedBox(width: 44, child: fields[i]),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
 
   /// `X × Y` integer editor over the nested `BinningMode` object. Each change
   /// rebuilds the whole map (preserving its `$type` and the other axis) and
@@ -744,6 +673,220 @@ class _FilterEditor extends ConsumerWidget {
   }
 }
 
+/// RA (H : M : S) / Dec (± D : M : S) editor over a nested `InputCoordinates`
+/// object. Each change rebuilds the whole map (preserving `$type`) and writes it
+/// back via [onChanged]. Components are range-clamped (RA h 0–23, d/m 0–59, Dec
+/// deg 0–90, seconds capped at 59.999 — the 3-decimal display precision,
+/// sub-arcsec); the int/double split matches the C# field types. ±90° forces the
+/// Dec minutes/seconds to 0. Field [Key]s are scoped by [fieldKey] so two
+/// coordinate editors on one panel (e.g. a slew and an altitude target) can't
+/// collide.
+class _CoordinatesEditor extends StatelessWidget {
+  const _CoordinatesEditor({
+    required this.fieldKey,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String fieldKey;
+  final Object? value;
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = value is Map ? value as Map : const {};
+    final type = c[r'$type'] is String ? c[r'$type'] as String : defaultCoordinates[r'$type'];
+    int ri(String k) => c[k] is num ? (c[k] as num).toInt() : 0;
+    double rd(String k) => c[k] is num ? (c[k] as num).toDouble() : 0.0;
+    final neg = c['NegativeDec'] == true;
+    Map<String, dynamic> coord({
+      int? raH, int? raM, double? raS, bool? negDec, int? decD, int? decM, double? decS,
+    }) {
+      var dd = decD ?? ri('DecDegrees');
+      var dm = decM ?? ri('DecMinutes');
+      var ds = decS ?? rd('DecSeconds');
+      // ±90° is the declination pole — minutes/seconds must be 0 there
+      // (90:30:00 is invalid). Enforce the cross-field boundary that the
+      // per-component clamps can't.
+      if (dd >= 90) {
+        dd = 90;
+        dm = 0;
+        ds = 0.0;
+      }
+      return <String, dynamic>{
+        r'$type': type,
+        'RAHours': raH ?? ri('RAHours'),
+        'RAMinutes': raM ?? ri('RAMinutes'),
+        'RASeconds': raS ?? rd('RASeconds'),
+        'NegativeDec': negDec ?? neg,
+        'DecDegrees': dd,
+        'DecMinutes': dm,
+        'DecSeconds': ds,
+      };
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _axisRow('RA', [
+          _NumField(key: Key('${fieldKey}_ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
+              onChanged: (v) => onChanged(coord(raH: v.toInt()))),
+          _NumField(key: Key('${fieldKey}_ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
+              onChanged: (v) => onChanged(coord(raM: v.toInt()))),
+          _NumField(key: Key('${fieldKey}_ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
+              onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
+        ]),
+        const SizedBox(height: 6),
+        _axisRow('Dec', [
+          _SignToggle(
+            negative: neg,
+            onChanged: (n) => onChanged(coord(negDec: n)),
+          ),
+          _NumField(key: Key('${fieldKey}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
+              onChanged: (v) => onChanged(coord(decD: v.toInt()))),
+          // At the ±90° pole, minutes/seconds must be 0 — disable them so the
+          // constraint is visible (rather than silently snapping back on edit).
+          _NumField(key: Key('${fieldKey}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
+              enabled: ri('DecDegrees') < 90,
+              onChanged: (v) => onChanged(coord(decM: v.toInt()))),
+          _NumField(key: Key('${fieldKey}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
+              enabled: ri('DecDegrees') < 90,
+              onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
+        ]),
+      ],
+    );
+  }
+
+  static Widget _axisRow(String label, List<Widget> fields) => Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text(label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+          ),
+          // Scroll the H/M/S group horizontally so the (wider) Dec row with its
+          // sign toggle can't overflow a narrow side pane.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < fields.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 4),
+                    SizedBox(width: 44, child: fields[i]),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+}
+
+/// Composite editor over a nested `WaitLoopData` object (the altitude
+/// conditions' `Data`): a `Comparator` dropdown ([altitudeComparators]), a
+/// degrees `Offset` (signed — a horizon offset may be negative), and the target
+/// `Coordinates` (reusing [_CoordinatesEditor]). Any change rebuilds the whole
+/// `Data` map (preserving `$type` and the untouched fields) and writes it back
+/// via [onChanged]. Field [Key]s are scoped by [fieldKey].
+class _WaitLoopDataEditor extends StatelessWidget {
+  const _WaitLoopDataEditor({
+    required this.fieldKey,
+    required this.value,
+    required this.fallbackComparator,
+    required this.onChanged,
+  });
+
+  final String fieldKey;
+  final Object? value;
+
+  /// The Comparator to assume when a stored `Data` has none — this condition's
+  /// own catalogued default (AltitudeCondition → LessThan/1, AboveHorizon →
+  /// GreaterThan/3), so a body missing the key keeps the right loop direction.
+  final int fallbackComparator;
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    // Eager copy (not a lazy .cast view) so an off-spec stored value throws at
+    // the copy, not at some later element access with an opaque stack trace.
+    final data = value is Map
+        ? Map<String, dynamic>.from(value as Map)
+        : const <String, dynamic>{};
+    final type = data[r'$type'] is String ? data[r'$type'] as String : waitLoopDataType;
+    // `is num` (not `is int`), matching the Offset/coordinate reads — a JSON
+    // serializer may emit the enum as `1.0`, which `is int` would miss. Falls
+    // back to this condition's own default comparator (not a fixed GreaterThan).
+    final rawComparator = data['Comparator'] is num
+        ? (data['Comparator'] as num).toInt()
+        : fallbackComparator;
+    // For DISPLAY only: coerce an out-of-allow-list comparator (a stale persisted
+    // *OrEqual) to this condition's default selectable value so DropdownButton
+    // can't assert "no matching item". The RAW value is preserved on write-back
+    // below, so touching an unrelated field never silently flips the comparator —
+    // only an explicit pick changes it. (fallbackComparator is always 1 or 3.)
+    final comparator =
+        altitudeComparators.containsKey(rawComparator) ? rawComparator : fallbackComparator;
+    final offset = data['Offset'] is num ? (data['Offset'] as num).toDouble() : 0.0;
+    final coords = data['Coordinates'];
+
+    Map<String, dynamic> withData({int? newComparator, double? newOffset, Object? newCoords}) =>
+        <String, dynamic>{
+          r'$type': type,
+          'Coordinates': newCoords ?? coords ?? defaultCoordinates,
+          'Offset': newOffset ?? offset,
+          // Preserve the stored comparator unless the user explicitly picks one.
+          'Comparator': newComparator ?? rawComparator,
+        };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Comparison',
+            style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        DropdownButton<int>(
+          key: Key('${fieldKey}_comparator'),
+          value: comparator,
+          isExpanded: true,
+          dropdownColor: AraColors.bgPanel,
+          items: [
+            for (final e in altitudeComparators.entries)
+              DropdownMenuItem(value: e.key, child: Text(e.value)),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(withData(newComparator: v));
+          },
+        ),
+        const SizedBox(height: 8),
+        const Text('Offset (°)',
+            style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        // Controlled (like the coordinates fields) so the display tracks an
+        // external state change; signed + clamped to the altitude domain (±90°:
+        // a target altitude / horizon offset can't meaningfully exceed the
+        // celestial pole), matching the bounds the other numeric fields set.
+        _NumField(
+          key: Key('${fieldKey}_offset'),
+          value: offset,
+          isInt: false,
+          signed: true,
+          min: -90,
+          max: 90,
+          onChanged: (v) => onChanged(withData(newOffset: v.toDouble())),
+        ),
+        const SizedBox(height: 8),
+        const Text('Coordinates',
+            style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        _CoordinatesEditor(
+          fieldKey: '${fieldKey}_coords',
+          value: coords,
+          onChanged: (c) => onChanged(withData(newCoords: c)),
+        ),
+      ],
+    );
+  }
+}
+
 class _Placeholder extends StatelessWidget {
   const _Placeholder(this.text);
   final String text;
@@ -770,6 +913,7 @@ class _NumField extends StatefulWidget {
     this.min,
     this.max,
     this.enabled = true,
+    this.signed = false,
   });
   final num value;
   final ValueChanged<num> onChanged;
@@ -777,6 +921,10 @@ class _NumField extends StatefulWidget {
   final num? min;
   final num? max;
   final bool enabled;
+
+  /// Allow a leading minus (e.g. an altitude/horizon offset that may be
+  /// negative). Off by default — most fields are non-negative.
+  final bool signed;
 
   @override
   State<_NumField> createState() => _NumFieldState();
@@ -852,13 +1000,15 @@ class _NumFieldState extends State<_NumField> {
   Widget build(BuildContext context) => TextField(
         controller: _controller,
         enabled: widget.enabled,
-        keyboardType: TextInputType.numberWithOptions(decimal: !widget.isInt),
+        keyboardType:
+            TextInputType.numberWithOptions(decimal: !widget.isInt, signed: widget.signed),
         inputFormatters: [
-          widget.isInt
+          widget.isInt && !widget.signed
               ? FilteringTextInputFormatter.digitsOnly
-              // Digits with at most one decimal point — rejects the keystroke
-              // that would add a second `.` (keeping the field, not blanking it).
-              : const _SingleDecimalFormatter(),
+              // Digits with at most one decimal point (and an optional leading
+              // minus when signed) — rejects the keystroke that would add a
+              // second `.`/`-` (keeping the field, not blanking it).
+              : _SingleDecimalFormatter(isInt: widget.isInt, signed: widget.signed),
         ],
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
@@ -866,17 +1016,29 @@ class _NumFieldState extends State<_NumField> {
       );
 }
 
-/// Allows a non-negative decimal with at most one `.`. Rejects the edit
-/// (keeping the prior text) when the result wouldn't parse — so a stray second
-/// `.` is ignored rather than blanking the field, which an anchored
-/// `FilteringTextInputFormatter.allow` regex would do.
+/// Allows a number with at most one `.` (omitted when [isInt]) and an optional
+/// leading `-` (only when [signed]). Rejects the edit (keeping the prior text)
+/// when the result wouldn't match — so a stray second `.`/`-` is ignored rather
+/// than blanking the field, which an anchored `FilteringTextInputFormatter.allow`
+/// regex would do.
 class _SingleDecimalFormatter extends TextInputFormatter {
-  const _SingleDecimalFormatter();
-  static final RegExp _ok = RegExp(r'^\d*\.?\d*$');
+  const _SingleDecimalFormatter({this.isInt = false, this.signed = false});
+  final bool isInt;
+  final bool signed;
+
+  // Compiled once each (not per keystroke); one per (isInt, signed) combination.
+  static final RegExp _intUnsigned = RegExp(r'^\d*$');
+  static final RegExp _intSigned = RegExp(r'^-?\d*$');
+  static final RegExp _decUnsigned = RegExp(r'^\d*\.?\d*$');
+  static final RegExp _decSigned = RegExp(r'^-?\d*\.?\d*$');
+
+  RegExp get _pattern => isInt
+      ? (signed ? _intSigned : _intUnsigned)
+      : (signed ? _decSigned : _decUnsigned);
 
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
-      _ok.hasMatch(newValue.text) ? newValue : oldValue;
+      _pattern.hasMatch(newValue.text) ? newValue : oldValue;
 }
 
 /// A compact `+ / −` toggle for the declination sign.

@@ -23,6 +23,8 @@ const _slew =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
 const _switchFilter =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
+const _altitude =
+    'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer';
 
 SequenceDetail _detailWith(String type) => SequenceDetail(
       id: 's',
@@ -450,6 +452,198 @@ void main() {
       await tester.tap(find.byIcon(Icons.delete_outline));
       await tester.pump();
       expect(conditionsOf(_nodeAt(c, const [])), isEmpty);
+    });
+  });
+
+  group('altitude condition WaitLoopData editor', () {
+    Future<ProviderContainer> pumpAltitude(WidgetTester tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(const [], conditionForType(_altitude)!);
+      await tester.pump();
+      return c;
+    }
+
+    Map<String, dynamic> data(ProviderContainer c) =>
+        conditionsOf(_nodeAt(c, const [])).single['Data'] as Map<String, dynamic>;
+
+    testWidgets('renders the comparator/offset/coordinates controls', (tester) async {
+      await pumpAltitude(tester);
+      expect(find.byKey(const Key('Data_comparator')), findsOneWidget);
+      expect(find.byKey(const Key('Data_offset')), findsOneWidget);
+      expect(find.byKey(const Key('Data_coords_ra_h')), findsOneWidget);
+    });
+
+    testWidgets('picking a comparator writes Data.Comparator', (tester) async {
+      final c = await pumpAltitude(tester);
+      expect(data(c)['Comparator'], 1); // AltitudeCondition default = LessThan
+      await tester.tap(find.byKey(const Key('Data_comparator')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Greater than (>)').last);
+      await tester.pumpAndSettle();
+      expect(data(c)['Comparator'], 3);
+    });
+
+    testWidgets('a double-typed comparator (1.0) is read, not defaulted to 3',
+        (tester) async {
+      // A serializer that emits the enum as 1.0 must still read as LessThan (1),
+      // not silently coerce to GreaterThan (an `is int` check would miss it).
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+          'Conditions': {
+            r'$type': conditionsWrapperType,
+            r'$values': [
+              {
+                ...conditionForType(_altitude)!.build(),
+                'Data': {
+                  ...conditionForType(_altitude)!.build()['Data'] as Map<String, dynamic>,
+                  'Comparator': 1.0,
+                },
+              },
+            ],
+          },
+        },
+      );
+      await _pump(tester, detail: detail, select: const []);
+      expect(find.text('Less than (<)'), findsOneWidget); // read as 1, not 3
+    });
+
+    testWidgets('editing the offset writes Data.Offset (signed)', (tester) async {
+      final c = await pumpAltitude(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_offset')),
+          matching: find.byType(TextField),
+        ),
+        '-12.5',
+      );
+      await tester.pump();
+      expect(data(c)['Offset'], -12.5);
+    });
+
+    testWidgets('the offset clamps to the ±90° altitude domain', (tester) async {
+      final c = await pumpAltitude(tester);
+      final field = find.descendant(
+        of: find.byKey(const Key('Data_offset')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, '-200');
+      await tester.pump();
+      expect(data(c)['Offset'], -90.0); // clamped to the lower bound
+      expect(tester.widget<TextField>(field).controller!.text, '-90');
+    });
+
+    testWidgets('a partial "-" offset entry commits nothing (model unchanged)',
+        (tester) async {
+      final c = await pumpAltitude(tester);
+      expect(data(c)['Offset'], 30.0); // AltitudeCondition default
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_offset')),
+          matching: find.byType(TextField),
+        ),
+        '-',
+      );
+      await tester.pump();
+      // '-' doesn't parse → no write; the model keeps its prior value (not 0).
+      expect(data(c)['Offset'], 30.0);
+    });
+
+    testWidgets('a Data missing Comparator falls back to the condition default',
+        (tester) async {
+      // AltitudeCondition → LessThan(1); AboveHorizonCondition → GreaterThan(3).
+      for (final (type, label) in [
+        (_altitude, 'Less than (<)'),
+        ('OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
+            'Greater than (>)'),
+      ]) {
+        final data = conditionForType(type)!.build()['Data'] as Map<String, dynamic>;
+        data.remove('Comparator'); // a body that arrived without the key
+        final detail = SequenceDetail(
+          id: 's',
+          body: {
+            r'$type':
+                'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+            'Name': 'root',
+            'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+            'Conditions': {
+              r'$type': conditionsWrapperType,
+              r'$values': [
+                {...conditionForType(type)!.build(), 'Data': data},
+              ],
+            },
+          },
+        );
+        await _pump(tester, detail: detail, select: const []);
+        expect(find.text(label), findsOneWidget, reason: type);
+      }
+    });
+
+    testWidgets('a stored comparator outside the allow-list coerces (no assert)',
+        (tester) async {
+      // A body persisted with GreaterThanOrEqual (4) — not user-selectable.
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+          'Conditions': {
+            r'$type': conditionsWrapperType,
+            r'$values': [
+              {
+                ...conditionForType(_altitude)!.build(),
+                'Data': {
+                  ...conditionForType(_altitude)!.build()['Data'] as Map<String, dynamic>,
+                  'Comparator': 4,
+                },
+              },
+            ],
+          },
+        },
+      );
+      final c = await _pump(tester, detail: detail, select: const []);
+      expect(tester.takeException(), isNull); // no DropdownButton assert
+      // The dropdown coerces to THIS condition's default (AltitudeCondition →
+      // Less than), not a fixed GreaterThan bias, and never a blank.
+      expect(find.text('Less than (<)'), findsOneWidget);
+      // Editing an UNRELATED field preserves the raw stored comparator (4) —
+      // coercion is display-only and never silently flips the loop direction.
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_offset')),
+          matching: find.byType(TextField),
+        ),
+        '15',
+      );
+      await tester.pump();
+      expect(
+        (conditionsOf(_nodeAt(c, const [])).single['Data'] as Map)['Comparator'],
+        4,
+      );
+    });
+
+    testWidgets('editing the target coordinates writes Data.Coordinates', (tester) async {
+      final c = await pumpAltitude(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_coords_ra_h')),
+          matching: find.byType(TextField),
+        ),
+        '12',
+      );
+      await tester.pump();
+      expect((data(c)['Coordinates'] as Map)['RAHours'], 12);
+      // The other Data fields survive a coordinates edit.
+      expect(data(c)['Comparator'], 1);
+      expect(data(c)['Offset'], 30.0);
     });
   });
 
