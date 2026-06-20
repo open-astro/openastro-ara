@@ -92,6 +92,12 @@ class _SupportTabState extends ConsumerState<SupportTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Re-tail when the active server connects or switches while the tab is open
+    // (initState only covers the already-connected-on-open case). The callback
+    // fires on change, never during this build, so the setState in _refresh is safe.
+    ref.listen(logsApiProvider, (previous, next) {
+      if (next != null) _refresh();
+    });
     final hasServer = ref.watch(logsApiProvider) != null;
     if (!hasServer) {
       return const Center(
