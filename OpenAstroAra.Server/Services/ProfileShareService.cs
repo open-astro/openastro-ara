@@ -15,6 +15,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using OpenAstroAra.Server.Contracts;
@@ -52,7 +53,12 @@ public sealed class ProfileShareService : IProfileShareService {
     /// (e.g. if the daemon is ever exposed to the LAN without auth).
     internal const int MaxPendingImports = 32;
 
-    private sealed record PendingImport(ProfileShareManifest Manifest, DateTimeOffset ExpiresUtc);
+    // Name is resolved once at preview (against the repo state then) and reused at
+    // commit, so the profile is created under the exact name the user confirmed in
+    // the preview dialog — not a freshly re-derived one that a concurrent import
+    // could have shifted (the preview→commit TOCTOU). Names aren't a unique key
+    // (the id is), so reusing the preview name is preferred over re-deduping.
+    private sealed record PendingImport(ProfileShareManifest Manifest, string Name, DateTimeOffset ExpiresUtc);
 
     public ProfileShareService(IProfileRepository repo, TimeProvider? clock = null) {
         _repo = repo;
@@ -242,6 +248,11 @@ public sealed class ProfileShareService : IProfileShareService {
 
         var token = Guid.NewGuid();
         var expires = _clock.GetUtcNow().Add(ImportTtl);
+        // Resolve the name BEFORE the gate: MakeUniqueName reads the repo (_repo.List()),
+        // and the name depends only on the repo + manifest, not on _pending — so keeping
+        // it out of the lock stops a repo round-trip from serializing concurrent previews.
+        // Stored on PendingImport so commit reuses it verbatim (see PendingImport).
+        var importedName = ImportedName(parsed);
         // Prune + cap-check + insert under one gate so concurrent previews can't both
         // pass the cap and overfill the store. Pruning first means expired entries
         // don't count against the cap.
@@ -251,7 +262,7 @@ public sealed class ProfileShareService : IProfileShareService {
                 return Task.FromException<ProfileShareImportPreviewDto>(new ProfileShareImportThrottledException(
                     "Too many pending profile-share imports — commit or wait for one to expire, then retry."));
             }
-            _pending[token] = new PendingImport(parsed, expires);
+            _pending[token] = new PendingImport(parsed, importedName, expires);
         }
 
         var rig = parsed.RigDescription;
@@ -263,7 +274,7 @@ public sealed class ProfileShareService : IProfileShareService {
 
         return Task.FromResult(new ProfileShareImportPreviewDto(
             ImportToken: token,
-            ProfileName: ImportedName(parsed),
+            ProfileName: importedName,
             Warnings: warnings,
             DroppedFields: DroppedFields,
             ExpiresUtc: expires));
@@ -283,18 +294,57 @@ public sealed class ProfileShareService : IProfileShareService {
                 "Import token is unknown or expired — preview the share file again."));
         }
         // Create as a NON-active profile from the template's (already-stripped)
-        // settings; the recipient selects it and wizards their own equipment in.
-        var meta = _repo.Create(ImportedName(pending.Manifest), pending.Manifest.Settings, makeActive: false);
+        // settings, under the name resolved at preview time (PendingImport.Name);
+        // the recipient selects it and wizards their own equipment in.
+        var meta = _repo.Create(pending.Name, pending.Manifest.Settings, makeActive: false);
         return Task.FromResult(meta.Id);
     }
 
-    // Donor attribution (§70.3) is opt-in, and the current export always omits the
-    // donor block (Donor: null), so today this falls through to the neutral default.
-    // The DisplayName branch is reserved for a future opt-in export mode (or a
-    // hand-authored manifest) that carries the donor's chosen label — it is not yet
-    // reachable via the shipped export path.
-    private static string ImportedName(ProfileShareManifest m) =>
-        m.Donor?.DisplayName is { Length: > 0 } name ? name : "Imported profile";
+    // The display name a freshly-imported template gets, de-duplicated against the
+    // names already in the repo so a second import of the same rig doesn't collide
+    // with the first ("Imported — 2032 mm rig" → "Imported — 2032 mm rig (2)").
+    // Called at both preview (so the user sees the real name up front) and commit
+    // (authoritative against the repo state at create time).
+    private string ImportedName(ProfileShareManifest m) => MakeUniqueName(ImportedBaseName(m));
+
+    // The base label before de-duplication. Prefers the donor's opt-in display name
+    // (§70.3 — reserved for a future opt-in export mode / hand-authored manifest, not
+    // yet reachable via the shipped export path); otherwise derives a non-identifying
+    // label from the rig's effective focal length so repeated imports are
+    // distinguishable at a glance; falls back to a neutral label when neither is known.
+    private static string ImportedBaseName(ProfileShareManifest m) {
+        if (m.Donor?.DisplayName is { Length: > 0 } name) {
+            return name;
+        }
+        // Upper bound rejects a crafted/garbage manifest (∞, NaN — which fails both
+        // comparisons — or an absurd value); 1,000,000 mm is ~1 km, far beyond any
+        // real instrument. Formatting with "0" (not an int cast, which would overflow
+        // to int.MinValue for huge values) matches the rounding used for the preview
+        // warning text below, so the name and the warning never diverge.
+        var efl = m.RigDescription?.EffectiveFocalLengthMm ?? 0;
+        if (efl > 0 && efl < 1_000_000) {
+            return $"Imported — {efl:0} mm rig";
+        }
+        return "Imported profile";
+    }
+
+    // Appends " (2)", " (3)", … until the name is free. Match is case-insensitive to
+    // mirror how a user perceives duplicates; the loop is bounded by the number of
+    // existing profiles, so it always terminates.
+    private string MakeUniqueName(string baseName) {
+        var existing = new HashSet<string>(
+            _repo.List().Profiles.Select(p => p.Name),
+            StringComparer.OrdinalIgnoreCase);
+        if (!existing.Contains(baseName)) {
+            return baseName;
+        }
+        for (var n = 2; ; n++) {
+            var candidate = $"{baseName} ({n})";
+            if (!existing.Contains(candidate)) {
+                return candidate;
+            }
+        }
+    }
 
     private void PruneExpired() {
         var now = _clock.GetUtcNow();

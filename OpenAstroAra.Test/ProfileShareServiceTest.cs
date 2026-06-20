@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -215,12 +217,65 @@ public class ProfileShareServiceTest {
         var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
         preview.ImportToken.Should().NotBe(Guid.Empty);
         preview.DroppedFields.Should().NotBeEmpty();
-        preview.ProfileName.Should().Be("Imported profile"); // donor block was omitted on export
+        // Donor block was omitted on export, so the name is derived from the rig's
+        // effective focal length (2032 mm × 0.8 reducer = 1625.6 → 1626 mm).
+        preview.ProfileName.Should().Be("Imported — 1626 mm rig");
 
         var newId = await svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None);
         newId.Should().Be(repo.CreatedId);
         repo.CreatedSettings.Should().NotBeNull(); // built from the template's (stripped) settings
         repo.CreatedMakeActive.Should().BeFalse(); // imported as non-active; user wizards + selects it
+    }
+
+    [Test]
+    public async Task Import_name_falls_back_to_neutral_label_when_no_rig_geometry() {
+        // A donor whose optics are unset (focal length 0) yields an effective focal
+        // length of 0, so there's nothing to derive a rig label from — the import
+        // name falls back to the neutral "Imported profile".
+        var noOptics = DonorSnapshot() with {
+            Optics = DonorSnapshot().Optics with { FocalLengthMm = 0 },
+        };
+        using var repo = new FakeRepo(noOptics);
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        preview.ProfileName.Should().Be("Imported profile");
+    }
+
+    [Test]
+    public async Task Import_name_falls_back_when_rig_focal_length_is_absurd() {
+        // A crafted/garbage manifest with an absurd focal length (here 2,000,000 mm ×
+        // 0.8 = 1.6e6 mm effective, beyond the ~1 km sanity bound) must not produce a
+        // garbage label (or, with a naive int cast, a negative overflow) — it falls
+        // back to the neutral "Imported profile".
+        var absurd = DonorSnapshot() with {
+            Optics = DonorSnapshot().Optics with { FocalLengthMm = 2_000_000 },
+        };
+        using var repo = new FakeRepo(absurd);
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        preview.ProfileName.Should().Be("Imported profile");
+    }
+
+    [Test]
+    public async Task Import_name_is_de_duplicated_against_existing_profiles() {
+        // The repo already holds a profile with the rig-derived name (and its first
+        // numbered sibling), so the import must suffix to the next free slot rather
+        // than colliding. Match is case-insensitive.
+        using var repo = new FakeRepo(DonorSnapshot(), "Test profile",
+            "imported — 1626 mm rig", "Imported — 1626 mm rig (2)");
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        preview.ProfileName.Should().Be("Imported — 1626 mm rig (3)");
+
+        // The commit creates the profile under that same de-duplicated name.
+        await svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None);
+        repo.CreatedName.Should().Be("Imported — 1626 mm rig (3)");
     }
 
     [Test]
@@ -353,13 +408,19 @@ public class ProfileShareServiceTest {
     /// its arguments so the import tests can assert what the commit handed back.
     private sealed class FakeRepo : IProfileRepository {
         private readonly StoredProfileDto? _stored;
+        private readonly IReadOnlyList<ProfileMetaDto> _existing;
 
-        public FakeRepo(ProfileSnapshotDto? settings, string name = "Test profile") =>
+        public FakeRepo(ProfileSnapshotDto? settings, string name = "Test profile",
+            params string[] existingNames) {
             _stored = settings is null
                 ? null
                 : new StoredProfileDto(
                     new ProfileMetaDto(ProfileId, name, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch),
                     settings);
+            _existing = existingNames
+                .Select(n => new ProfileMetaDto(Guid.NewGuid(), n, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch))
+                .ToList();
+        }
 
         public StoredProfileDto? GetProfile(Guid id) => id == ProfileId ? _stored : null;
 
@@ -369,7 +430,11 @@ public class ProfileShareServiceTest {
         public ProfileSnapshotDto? CreatedSettings { get; private set; }
         public bool CreatedMakeActive { get; private set; }
 
-        public ProfileListDto List() => new(null, Array.Empty<ProfileMetaDto>());
+        // Mirror the real repo: List() returns ALL profiles, including the stored one
+        // (not just the `existingNames` extras) — so a dedup test that collides with
+        // the stored profile's name can't false-pass.
+        public ProfileListDto List() => new(null,
+            _stored is null ? _existing : _existing.Prepend(_stored.Meta).ToList());
         public Guid? ActiveId => null;
         public ProfileMetaDto Create(string name, ProfileSnapshotDto? settings, bool makeActive) {
             CreatedName = name;
