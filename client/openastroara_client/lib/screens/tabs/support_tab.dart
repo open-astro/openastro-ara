@@ -77,6 +77,8 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     setState(() => _downloading = true);
     try {
       final dl = await api.downloadLog();
+      // Don't pop the OS save dialog if the tab was torn down mid-download.
+      if (!mounted) return;
       final saved = await FilePicker.saveFile(
         dialogTitle: 'Save daemon log',
         fileName: dl.fileName,
@@ -151,10 +153,12 @@ class _SupportTabState extends ConsumerState<SupportTab> {
                 hintText: 'Filter by text…',
                 border: OutlineInputBorder(),
               ),
-              // Guard against the in-flight load like the level dropdown — pressing
-              // Enter mid-request would otherwise race a second tail whose later
-              // completion could show stale results.
-              onSubmitted: _loading ? null : (_) => _refresh(),
+              // Re-check _loading at call time (not just the build-time gate) so a
+              // submit in the frame before _loading flips can't fire a redundant
+              // tail. _refreshGen would absorb it anyway, but this avoids the work.
+              onSubmitted: (_) {
+                if (!_loading) _refresh();
+              },
             ),
           ),
           const SizedBox(width: 8),
