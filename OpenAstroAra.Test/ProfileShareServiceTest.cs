@@ -244,6 +244,23 @@ public class ProfileShareServiceTest {
     }
 
     [Test]
+    public async Task Import_name_falls_back_when_rig_focal_length_is_absurd() {
+        // A crafted/garbage manifest with an absurd focal length (here 2,000,000 mm ×
+        // 0.8 = 1.6e6 mm effective, beyond the ~1 km sanity bound) must not produce a
+        // garbage label (or, with a naive int cast, a negative overflow) — it falls
+        // back to the neutral "Imported profile".
+        var absurd = DonorSnapshot() with {
+            Optics = DonorSnapshot().Optics with { FocalLengthMm = 2_000_000 },
+        };
+        using var repo = new FakeRepo(absurd);
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        preview.ProfileName.Should().Be("Imported profile");
+    }
+
+    [Test]
     public async Task Import_name_is_de_duplicated_against_existing_profiles() {
         // The repo already holds a profile with the rig-derived name (and its first
         // numbered sibling), so the import must suffix to the next free slot rather

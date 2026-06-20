@@ -53,7 +53,12 @@ public sealed class ProfileShareService : IProfileShareService {
     /// (e.g. if the daemon is ever exposed to the LAN without auth).
     internal const int MaxPendingImports = 32;
 
-    private sealed record PendingImport(ProfileShareManifest Manifest, DateTimeOffset ExpiresUtc);
+    // Name is resolved once at preview (against the repo state then) and reused at
+    // commit, so the profile is created under the exact name the user confirmed in
+    // the preview dialog — not a freshly re-derived one that a concurrent import
+    // could have shifted (the preview→commit TOCTOU). Names aren't a unique key
+    // (the id is), so reusing the preview name is preferred over re-deduping.
+    private sealed record PendingImport(ProfileShareManifest Manifest, string Name, DateTimeOffset ExpiresUtc);
 
     public ProfileShareService(IProfileRepository repo, TimeProvider? clock = null) {
         _repo = repo;
@@ -245,14 +250,17 @@ public sealed class ProfileShareService : IProfileShareService {
         var expires = _clock.GetUtcNow().Add(ImportTtl);
         // Prune + cap-check + insert under one gate so concurrent previews can't both
         // pass the cap and overfill the store. Pruning first means expired entries
-        // don't count against the cap.
+        // don't count against the cap. The name is resolved here (once) and stored so
+        // commit reuses it verbatim — see PendingImport.
+        string importedName;
         lock (_previewGate) {
             PruneExpired();
             if (_pending.Count >= MaxPendingImports) {
                 return Task.FromException<ProfileShareImportPreviewDto>(new ProfileShareImportThrottledException(
                     "Too many pending profile-share imports — commit or wait for one to expire, then retry."));
             }
-            _pending[token] = new PendingImport(parsed, expires);
+            importedName = ImportedName(parsed);
+            _pending[token] = new PendingImport(parsed, importedName, expires);
         }
 
         var rig = parsed.RigDescription;
@@ -264,7 +272,7 @@ public sealed class ProfileShareService : IProfileShareService {
 
         return Task.FromResult(new ProfileShareImportPreviewDto(
             ImportToken: token,
-            ProfileName: ImportedName(parsed),
+            ProfileName: importedName,
             Warnings: warnings,
             DroppedFields: DroppedFields,
             ExpiresUtc: expires));
@@ -284,8 +292,9 @@ public sealed class ProfileShareService : IProfileShareService {
                 "Import token is unknown or expired — preview the share file again."));
         }
         // Create as a NON-active profile from the template's (already-stripped)
-        // settings; the recipient selects it and wizards their own equipment in.
-        var meta = _repo.Create(ImportedName(pending.Manifest), pending.Manifest.Settings, makeActive: false);
+        // settings, under the name resolved at preview time (PendingImport.Name);
+        // the recipient selects it and wizards their own equipment in.
+        var meta = _repo.Create(pending.Name, pending.Manifest.Settings, makeActive: false);
         return Task.FromResult(meta.Id);
     }
 
@@ -305,10 +314,14 @@ public sealed class ProfileShareService : IProfileShareService {
         if (m.Donor?.DisplayName is { Length: > 0 } name) {
             return name;
         }
+        // Upper bound rejects a crafted/garbage manifest (∞, NaN — which fails both
+        // comparisons — or an absurd value); 1,000,000 mm is ~1 km, far beyond any
+        // real instrument. Formatting with "0" (not an int cast, which would overflow
+        // to int.MinValue for huge values) matches the rounding used for the preview
+        // warning text below, so the name and the warning never diverge.
         var efl = m.RigDescription?.EffectiveFocalLengthMm ?? 0;
-        if (efl > 0) {
-            var mm = (int)Math.Round(efl, MidpointRounding.AwayFromZero);
-            return $"Imported — {mm} mm rig";
+        if (efl > 0 && efl < 1_000_000) {
+            return $"Imported — {efl:0} mm rig";
         }
         return "Imported profile";
     }
