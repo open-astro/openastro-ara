@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../models/log_entry.dart';
 import '../models/server.dart';
+import 'content_disposition.dart';
 
 /// Result of a daemon-log download: the raw bytes plus the server-supplied
 /// file name (from `Content-Disposition`), used as the default Save-As name.
@@ -79,48 +80,12 @@ class LogsApi implements LogsClient {
       options: Options(responseType: ResponseType.bytes),
     );
     final bytes = Uint8List.fromList(res.data ?? const <int>[]);
-    final name = _fileNameFromContentDisposition(
-            res.headers.value('content-disposition')) ??
-        'openastroara-daemon.log';
+    final name =
+        fileNameFromContentDisposition(res.headers.value('content-disposition')) ??
+            'openastroara-daemon.log';
     return (bytes: bytes, fileName: name);
   }
 
   @override
   void close() => _dio.close(force: true);
-
-  // Pull the file name out of a Content-Disposition header, if present. Prefers
-  // the RFC 5987 `filename*=UTF-8''<pct-encoded>` form (what ASP.NET emits for a
-  // non-ASCII name), falling back to the plain `filename="..."`.
-  static String? _fileNameFromContentDisposition(String? header) {
-    if (header == null) return null;
-    // Require the RFC 5987 charset'language' prefix so a malformed prefix-less
-    // `filename*=...` doesn't get matched here (it falls through to plain/default).
-    final extended =
-        RegExp("filename\\*=[^']*'[^']*'([^;]+)", caseSensitive: false)
-            .firstMatch(header);
-    if (extended != null) {
-      // RFC 5987 ext-values are percent-encoded and never quoted, so just trim +
-      // decode — no quote-stripping (which the plain branch also doesn't do).
-      final raw = extended.group(1)!.trim();
-      String decoded;
-      try {
-        decoded = Uri.decodeComponent(raw);
-      } catch (_) {
-        decoded = raw;
-      }
-      return _basename(decoded);
-    }
-    final plain = RegExp('filename="?([^";]+)"?', caseSensitive: false)
-        .firstMatch(header);
-    final name = plain?.group(1)?.trim();
-    return name == null ? null : _basename(name);
-  }
-
-  // Defence-in-depth: never let a server-supplied name carry a path component
-  // into the Save dialog (e.g. filename=../../evil.log). Returns null if nothing
-  // usable remains so the caller falls back to a safe default.
-  static String? _basename(String name) {
-    final last = name.split(RegExp(r'[/\\]')).last.trim();
-    return last.isEmpty ? null : last;
-  }
 }
