@@ -137,7 +137,10 @@ class _SupportTabState extends ConsumerState<SupportTab> {
                 hintText: 'Filter by text…',
                 border: OutlineInputBorder(),
               ),
-              onSubmitted: (_) => _refresh(),
+              // Guard against the in-flight load like the level dropdown — pressing
+              // Enter mid-request would otherwise race a second tail whose later
+              // completion could show stale results.
+              onSubmitted: _loading ? null : (_) => _refresh(),
             ),
           ),
           const SizedBox(width: 8),

@@ -64,6 +64,9 @@ class LogsApi implements LogsClient {
 
   @override
   Future<LogDownload> downloadLog({String? logFileName}) async {
+    // The whole file is buffered into a single Uint8List. The §29.9 sink rolls at
+    // 50 MB/file, so that's the hard upper bound — fine for a desktop client;
+    // streaming straight to the chosen path is tracked as a follow-up in PORT_TODO.
     final res = await _dio.get<List<int>>(
       '/api/v1/server/logs/download',
       queryParameters: <String, dynamic>{
@@ -82,10 +85,24 @@ class LogsApi implements LogsClient {
   @override
   void close() => _dio.close(force: true);
 
-  // Pull filename="..." out of a Content-Disposition header, if present.
+  // Pull the file name out of a Content-Disposition header, if present. Prefers
+  // the RFC 5987 `filename*=UTF-8''<pct-encoded>` form (what ASP.NET emits for a
+  // non-ASCII name), falling back to the plain `filename="..."`.
   static String? _fileNameFromContentDisposition(String? header) {
     if (header == null) return null;
-    final match = RegExp('filename="?([^";]+)"?').firstMatch(header);
-    return match?.group(1)?.trim();
+    final extended =
+        RegExp("filename\\*=(?:[^']*'[^']*')?([^;]+)", caseSensitive: false)
+            .firstMatch(header);
+    if (extended != null) {
+      final raw = extended.group(1)!.trim().replaceAll('"', '');
+      try {
+        return Uri.decodeComponent(raw);
+      } catch (_) {
+        return raw;
+      }
+    }
+    final plain = RegExp('filename="?([^";]+)"?', caseSensitive: false)
+        .firstMatch(header);
+    return plain?.group(1)?.trim();
   }
 }
