@@ -265,7 +265,7 @@ public sealed partial class LogService : ILogService {
             _cap = cap;
         }
 
-        public override bool CanRead => true;
+        public override bool CanRead => _inner.CanRead;
         public override bool CanSeek => _inner.CanSeek;
         public override bool CanWrite => false;
         public override long Length => _cap;

@@ -94,7 +94,10 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
     private async Task TryConnectAsync(DeviceType type, DiscoveredDeviceDto device,
             IAlpacaBridgeHandshakeService bridge, IAlpacaBridgeGateNotifier notifier, CancellationToken ct) {
         try {
-            // §68.1 gate — same decision the REST /connect path makes.
+            // §68.1 gate — same decision the REST /connect path makes. Kept in sync
+            // with EquipmentEndpoints.ConnectGatedAsync (the boot path can't reuse it
+            // verbatim because that overload also persists to the selection store);
+            // if the gate's block/warn handling changes there, mirror it here.
             var handshake = await bridge.HandshakeAsync(EquipmentEndpoints.BridgeUri(device), ct).ConfigureAwait(false);
             if (handshake.Status == AlpacaBridgeStatus.OutdatedBlock) {
                 LogBridgeBlocked(type, handshake.Version);
