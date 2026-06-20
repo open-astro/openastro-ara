@@ -36,6 +36,8 @@ namespace OpenAstroAra.Test {
         private static readonly string[] WarningThenError = { "an error", "a warning" };
         private static readonly string[] CameraMatches = { "CAMERA exposing", "Camera connected" };
         private static readonly string[] NewestThree = { "line9", "line8", "line7" };
+        private static readonly string[] RollBoundaryOrder = { "today", "yesterday" };
+        private static readonly string[] NewestFileFilled = { "today-b", "today-a" };
         private static readonly string[] TraversalNames = {
             "../secret.log",
             "sub/openastroara-20260619.log",
@@ -61,22 +63,25 @@ namespace OpenAstroAra.Test {
         }
 
         // Build a CLEF line as RenderedCompactJsonFormatter writes it: @t timestamp,
-        // @m rendered message, @l level (omitted for Information), optional SourceContext.
+        // @m rendered message, @l level (omitted for Information), optional
+        // SourceContext / @x. Serialized through System.Text.Json so values with
+        // quotes/backslashes are escaped exactly as the real formatter would.
         private static string Clef(string timestamp, string message, string? level = null,
             string? source = null, string? exception = null) {
-            var sb = new System.Text.StringBuilder();
-            sb.Append("{\"@t\":\"").Append(timestamp).Append("\",\"@m\":\"").Append(message).Append('"');
+            var obj = new System.Collections.Generic.Dictionary<string, string> {
+                ["@t"] = timestamp,
+                ["@m"] = message,
+            };
             if (level is not null) {
-                sb.Append(",\"@l\":\"").Append(level).Append('"');
+                obj["@l"] = level;
             }
             if (exception is not null) {
-                sb.Append(",\"@x\":\"").Append(exception).Append('"');
+                obj["@x"] = exception;
             }
             if (source is not null) {
-                sb.Append(",\"SourceContext\":\"").Append(source).Append('"');
+                obj["SourceContext"] = source;
             }
-            sb.Append('}');
-            return sb.ToString();
+            return System.Text.Json.JsonSerializer.Serialize(obj);
         }
 
         private string WriteLog(string name, params string[] lines) {
@@ -167,17 +172,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task TailAsync_reads_the_newest_file_only() {
-            var older = WriteLog("openastroara-20260618.log",
+        public async Task TailAsync_spans_roll_boundary_newest_first() {
+            // Ordering is by filename (chronological), not mtime: the newest file's
+            // entries come first, then the tail falls back into the prior file to
+            // fill the window.
+            WriteLog("openastroara-20260618.log",
                 Clef("2026-06-18T10:00:00.0000000Z", "yesterday"));
-            File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddDays(-1));
             WriteLog("openastroara-20260619.log",
                 Clef("2026-06-19T10:00:00.0000000Z", "today"));
 
             var entries = await _svc.TailAsync(new LogTailRequestDto(null, null, null), CancellationToken.None);
 
-            Assert.That(entries.Count, Is.EqualTo(1));
-            Assert.That(entries[0].Message, Is.EqualTo("today"));
+            Assert.That(entries.Select(e => e.Message), Is.EqualTo(RollBoundaryOrder));
+        }
+
+        [Test]
+        public async Task TailAsync_max_lines_does_not_cross_into_older_file_when_filled() {
+            WriteLog("openastroara-20260618.log",
+                Clef("2026-06-18T10:00:00.0000000Z", "yesterday"));
+            WriteLog("openastroara-20260619.log",
+                Clef("2026-06-19T10:00:00.0000000Z", "today-a"),
+                Clef("2026-06-19T10:00:01.0000000Z", "today-b"));
+
+            var entries = await _svc.TailAsync(new LogTailRequestDto(2, null, null), CancellationToken.None);
+
+            // The newest file already supplies 2 = max entries, so the older file
+            // is never read.
+            Assert.That(entries.Select(e => e.Message), Is.EqualTo(NewestFileFilled));
         }
 
         [Test]

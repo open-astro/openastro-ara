@@ -76,45 +76,57 @@ public sealed partial class LogService : ILogService {
     }
 
     public async Task<IReadOnlyList<LogEntryDto>> TailAsync(LogTailRequestDto request, CancellationToken ct) {
-        var path = ResolveLogFile(null); // tail always reads the newest file
-        if (path is null) {
-            return Array.Empty<LogEntryDto>();
-        }
-
         var max = request.MaxLines is int n && n > 0 ? n : DefaultMaxLines;
         var minRank = string.IsNullOrEmpty(request.MinLevel) ? int.MinValue : LevelRank(request.MinLevel);
         var contains = request.ContainsSubstring;
 
-        // Ring buffer of the newest `max` MATCHING entries, in chronological
-        // order — scanning the whole file but never holding more than `max`.
-        var window = new Queue<LogEntryDto>(Math.Min(max, 1024));
+        // Tail across the roll boundary: walk the rolling files newest → oldest,
+        // pulling each file's newest matching entries until the window is full. A
+        // just-rolled (near-empty) newest file then falls back to the prior file
+        // instead of returning almost nothing. Memory stays bounded to `max`: each
+        // file is scanned through a ring sized to the entries still needed.
+        var result = new List<LogEntryDto>(Math.Min(max, 1024));
+        foreach (var path in LogFilesNewestFirst()) {
+            if (result.Count >= max) {
+                break;
+            }
+            var remaining = max - result.Count;
+            var window = new Queue<LogEntryDto>(Math.Min(remaining, 1024));
 
-        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        using var reader = new StreamReader(fs);
-        string? line;
-        while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) is not null) {
-            if (line.Length == 0) {
-                continue;
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(fs)) {
+                string? line;
+                while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) is not null) {
+                    if (line.Length == 0) {
+                        continue;
+                    }
+                    var entry = TryParse(line);
+                    if (entry is null) {
+                        continue; // a torn final line or a non-CLEF row — skip, never throw
+                    }
+                    if (LevelRank(entry.Level) < minRank) {
+                        continue;
+                    }
+                    if (!string.IsNullOrEmpty(contains) &&
+                        !entry.Message.Contains(contains, StringComparison.OrdinalIgnoreCase)) {
+                        continue;
+                    }
+                    window.Enqueue(entry);
+                    if (window.Count > remaining) {
+                        window.Dequeue();
+                    }
+                }
             }
-            var entry = TryParse(line);
-            if (entry is null) {
-                continue; // a torn final line or a non-CLEF row — skip, never throw
-            }
-            if (LevelRank(entry.Level) < minRank) {
-                continue;
-            }
-            if (!string.IsNullOrEmpty(contains) &&
-                !entry.Message.Contains(contains, StringComparison.OrdinalIgnoreCase)) {
-                continue;
-            }
-            window.Enqueue(entry);
-            if (window.Count > max) {
-                window.Dequeue();
+
+            // `window` holds this file's newest `remaining` matches oldest-first;
+            // reverse to newest-first and append after the already-collected newer
+            // entries, keeping `result` globally newest-first.
+            foreach (var entry in window.Reverse()) {
+                result.Add(entry);
             }
         }
 
-        // §29.9 wants newest-first.
-        return window.Reverse().ToList();
+        return result;
     }
 
     /// <summary>
@@ -124,15 +136,11 @@ public sealed partial class LogService : ILogService {
     /// <c>openastroara-*.log</c>.
     /// </summary>
     private string? ResolveLogFile(string? logFileName) {
+        if (string.IsNullOrEmpty(logFileName)) {
+            return LogFilesNewestFirst().FirstOrDefault();
+        }
         if (!Directory.Exists(_logsDir)) {
             return null;
-        }
-        if (string.IsNullOrEmpty(logFileName)) {
-            return Directory.EnumerateFiles(_logsDir, LogGlob, SearchOption.TopDirectoryOnly)
-                .Select(p => new FileInfo(p))
-                .OrderByDescending(f => f.LastWriteTimeUtc)
-                .Select(f => f.FullName)
-                .FirstOrDefault();
         }
         // Reject any path component (a/b, ../x, absolute) — only a bare file name
         // in the logs dir is addressable.
@@ -148,6 +156,20 @@ public sealed partial class LogService : ILogService {
             return null;
         }
         return File.Exists(full) ? full : null;
+    }
+
+    /// <summary>
+    /// The rolling log files, newest first. Serilog names them
+    /// <c>openastroara-&lt;yyyyMMdd&gt;[_NNN].log</c> (the <c>_NNN</c> suffix on a
+    /// same-day size roll), so an ordinal-descending filename sort is chronological
+    /// (date, then roll sequence) — and deterministic, unlike last-write time.
+    /// </summary>
+    private IEnumerable<string> LogFilesNewestFirst() {
+        if (!Directory.Exists(_logsDir)) {
+            return Array.Empty<string>();
+        }
+        return Directory.EnumerateFiles(_logsDir, LogGlob, SearchOption.TopDirectoryOnly)
+            .OrderByDescending(Path.GetFileName, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -192,16 +214,17 @@ public sealed partial class LogService : ILogService {
         }
     }
 
-    // Serilog levels in increasing severity. Unknown ⇒ Information (rank 1) so a
-    // typo'd filter doesn't silently drop everything.
+    // Serilog levels in increasing severity, each distinct so a MinLevel filter of
+    // "Debug" still excludes "Verbose". Unknown ⇒ Information so a typo'd filter
+    // doesn't silently drop everything.
     private static int LevelRank(string level) => level switch {
         "Verbose" => 0,
-        "Debug" => 0,
-        "Information" => 1,
-        "Warning" => 2,
-        "Error" => 3,
-        "Fatal" => 4,
-        _ => 1,
+        "Debug" => 1,
+        "Information" => 2,
+        "Warning" => 3,
+        "Error" => 4,
+        "Fatal" => 5,
+        _ => 2,
     };
 
     [LoggerMessage(Level = LogLevel.Information,
