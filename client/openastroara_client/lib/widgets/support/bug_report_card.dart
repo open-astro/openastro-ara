@@ -67,7 +67,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            const Text('The bundle (≈ a few hundred KB) contains:'),
+            const Text('The bundle contains:'),
             const SizedBox(height: 8),
             const Text('• the daemon\'s recent log files'),
             const Text(
