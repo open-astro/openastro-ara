@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,7 +48,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bug report failed: $e')),
+        SnackBar(content: Text('Bug report failed: ${_friendly(e)}')),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -59,10 +60,13 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Before you share this bug report'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        // Scrollable so the disclosure can't overflow on a small viewport or a
+        // large accessibility font scale.
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             const Text('The bundle (≈ a few hundred KB) contains:'),
             const SizedBox(height: 8),
             const Text('• the daemon\'s recent log files'),
@@ -78,7 +82,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
               'Only share it with people you trust (e.g. the developers) — '
               'treat it like a password.',
             ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -136,6 +141,24 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         ),
       ),
     );
+  }
+
+  // Short, user-facing message — don't leak Dio's verbose toString (URLs etc.).
+  static String _friendly(Object e) {
+    if (e is DioException) {
+      return switch (e.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.sendTimeout ||
+        DioExceptionType.receiveTimeout =>
+          'the daemon took too long to respond.',
+        DioExceptionType.connectionError =>
+          'could not reach the daemon.',
+        DioExceptionType.badResponse =>
+          'the daemon returned an error (${e.response?.statusCode}).',
+        _ => 'something went wrong talking to the daemon.',
+      };
+    }
+    return 'an unexpected error occurred.';
   }
 
   static String _humanSize(int bytes) {

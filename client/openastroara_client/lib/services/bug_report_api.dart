@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../models/bug_report_preparation.dart';
 import '../models/server.dart';
+import 'content_disposition.dart';
 
 /// Result of a bug-report download: the ZIP bytes + the server-supplied file
 /// name (from `Content-Disposition`), used as the default Save-As name.
@@ -62,41 +63,12 @@ class BugReportApi implements BugReportClient {
       options: Options(responseType: ResponseType.bytes),
     );
     final bytes = Uint8List.fromList(res.data ?? const <int>[]);
-    final name = _fileNameFromContentDisposition(
-            res.headers.value('content-disposition')) ??
-        'openastroara-bug-report.zip';
+    final name =
+        fileNameFromContentDisposition(res.headers.value('content-disposition')) ??
+            'openastroara-bug-report.zip';
     return (bytes: bytes, fileName: name);
   }
 
   @override
   void close() => _dio.close(force: true);
-
-  // Pull the file name out of a Content-Disposition header, if present —
-  // preferring the RFC 5987 filename*=UTF-8''<pct-encoded> form — and strip any
-  // path component (defence-in-depth before it reaches the Save dialog).
-  static String? _fileNameFromContentDisposition(String? header) {
-    if (header == null) return null;
-    final extended =
-        RegExp("filename\\*=[^']*'[^']*'([^;]+)", caseSensitive: false)
-            .firstMatch(header);
-    if (extended != null) {
-      final raw = extended.group(1)!.trim();
-      String decoded;
-      try {
-        decoded = Uri.decodeComponent(raw);
-      } catch (_) {
-        decoded = raw;
-      }
-      return _basename(decoded);
-    }
-    final plain = RegExp('filename="?([^";]+)"?', caseSensitive: false)
-        .firstMatch(header);
-    final name = plain?.group(1)?.trim();
-    return name == null ? null : _basename(name);
-  }
-
-  static String? _basename(String name) {
-    final last = name.split(RegExp(r'[/\\]')).last.trim();
-    return last.isEmpty ? null : last;
-  }
 }
