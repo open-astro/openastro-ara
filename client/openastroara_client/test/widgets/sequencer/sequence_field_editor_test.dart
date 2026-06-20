@@ -527,6 +527,34 @@ void main() {
       expect(data(c)['Offset'], -12.5);
     });
 
+    testWidgets('the offset clamps to the ±90° altitude domain', (tester) async {
+      final c = await pumpAltitude(tester);
+      final field = find.descendant(
+        of: find.byKey(const Key('Data_offset')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field, '-200');
+      await tester.pump();
+      expect(data(c)['Offset'], -90.0); // clamped to the lower bound
+      expect(tester.widget<TextField>(field).controller!.text, '-90');
+    });
+
+    testWidgets('a partial "-" offset entry commits nothing (model unchanged)',
+        (tester) async {
+      final c = await pumpAltitude(tester);
+      expect(data(c)['Offset'], 30.0); // AltitudeCondition default
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_offset')),
+          matching: find.byType(TextField),
+        ),
+        '-',
+      );
+      await tester.pump();
+      // '-' doesn't parse → no write; the model keeps its prior value (not 0).
+      expect(data(c)['Offset'], 30.0);
+    });
+
     testWidgets('a Data missing Comparator falls back to the condition default',
         (tester) async {
       // AltitudeCondition → LessThan(1); AboveHorizonCondition → GreaterThan(3).

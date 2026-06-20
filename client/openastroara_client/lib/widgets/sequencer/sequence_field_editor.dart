@@ -861,12 +861,16 @@ class _WaitLoopDataEditor extends StatelessWidget {
             style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
         // Controlled (like the coordinates fields) so the display tracks an
-        // external state change; signed because a horizon offset may be negative.
+        // external state change; signed + clamped to the altitude domain (±90°:
+        // a target altitude / horizon offset can't meaningfully exceed the
+        // celestial pole), matching the bounds the other numeric fields set.
         _NumField(
           key: Key('${fieldKey}_offset'),
           value: offset,
           isInt: false,
           signed: true,
+          min: -90,
+          max: 90,
           onChanged: (v) => onChanged(withData(newOffset: v.toDouble())),
         ),
         const SizedBox(height: 8),
