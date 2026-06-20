@@ -13,9 +13,12 @@ import 'sequence_load_dialog.dart';
 import 'sequence_new_dialog.dart';
 
 /// §25.5.3 sequencer toolbar. New opens the §38.7 template picker; Load opens
-/// the §38 sequence picker; Run / Pause / Abort drive the lifecycle endpoints on
-/// the selected sequence, gated by its live run state. Save / Validate stay
-/// disabled pending later slices (the tree-editing + serialization path).
+/// the §38 sequence picker; Run / Abort drive the lifecycle endpoints on the
+/// selected sequence, gated by its live run state; Save / Validate / Export /
+/// Import act on the loaded body. Pause is intentionally omitted until the
+/// daemon supports real run suspension: its PauseAsync is an accepted no-op that
+/// never actually suspends a run (PORT_TODO §38), so a Pause control would
+/// mislead the user into thinking a run paused.
 class SequencerToolbar extends ConsumerWidget {
   const SequencerToolbar({super.key});
 
@@ -51,15 +54,13 @@ class SequencerToolbar extends ConsumerWidget {
     // Validate works on whatever's loaded in the editor (even if not dirty).
     final editorLoaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
     final canValidate = connected && editorLoaded && !busy;
-    final isRunning = runState == SequenceRunState.running;
-    final isPaused = runState == SequenceRunState.paused;
     final isActive = runState?.isActive ?? false;
-    // Run = start when there's no active run; resume when paused. Disabled only
-    // while running/starting/aborting. Pause only while running; Abort while any
-    // run is active. A null run state (no active run / unknown) → Run only.
     final isAborting = runState == SequenceRunState.aborting;
-    final canRunOrResume = hasSelection && (!isActive || isPaused);
-    final canPause = hasSelection && isRunning;
+    // Run = start whenever no run is active (including re-running a finished one);
+    // disabled while starting/running/aborting. Pause is intentionally not offered
+    // (the daemon's pause is a no-op — see the class doc); re-add Pause + Resume
+    // when the engine grows a real pause hook and emits paused/resumed.
+    final canRun = hasSelection && !isActive;
     // Abort while a run is active, but not when it's already aborting.
     final canAbort = hasSelection && isActive && !isAborting;
 
@@ -131,17 +132,10 @@ class SequencerToolbar extends ConsumerWidget {
                 const VerticalDivider(width: 16, indent: 8, endIndent: 8),
                 _ToolButton(
                   icon: Icons.play_arrow,
-                  label: isPaused ? 'Resume' : 'Run',
-                  onPressed: canRunOrResume
-                      ? () => _lifecycle(context, ref,
-                          (api, id) => isPaused ? api.resume(id) : api.start(id))
-                      : null,
-                ),
-                _ToolButton(
-                  icon: Icons.pause,
-                  label: 'Pause',
-                  onPressed: canPause
-                      ? () => _lifecycle(context, ref, (api, id) => api.pause(id))
+                  label: 'Run',
+                  onPressed: canRun
+                      ? () => _lifecycle(
+                          context, ref, (api, id) => api.start(id))
                       : null,
                 ),
                 _ToolButton(
