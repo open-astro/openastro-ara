@@ -62,6 +62,12 @@
          build on the patched lib. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <!-- §29.9.2 daemon log file: a rolling Compact-JSON (CLEF) sink the §29.9
+         log endpoints tail/download. Both Apache-2.0 (Serilog), release-safe.
+         Tail reads the CLEF lines back with System.Text.Json directly (no
+         reader dependency), so the parse stays AOT-clean. -->
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageReference Include="Zeroconf" Version="3.6.11" />
     <!-- Phase 6: ASCOM Alpaca for cross-platform equipment discovery + typed proxies per §6.2 / §52 -->
     <PackageReference Include="ASCOM.Alpaca.Components" Version="2.1.0" />
