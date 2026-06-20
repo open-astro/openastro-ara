@@ -225,6 +225,9 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     private bool TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName) {
         try {
             if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
+                // Log the skip so an operator who symlinked a log/profile into place isn't
+                // left wondering why the bundle's logs/ or profile.json is missing.
+                LogSymlinkSkipped(sourcePath);
                 return false;
             }
             // CreateEntryFromFile reads the whole file; a CancellationToken can't abort it
@@ -281,7 +284,8 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             // turn the stream into a 500.
             var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
             return (stream, Path.GetFileName(path));
-        } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException or IOException) {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // FileNotFoundException / DirectoryNotFoundException derive from IOException.
             LogBundleVanished(path, ex);
             return null;
         }
@@ -331,6 +335,10 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Skipping unreadable/vanished bug-report entry {SourcePath}")]
     partial void LogEntrySkipped(string sourcePath, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "Skipping symlinked bug-report entry {SourcePath} (not following it out of the profile root)")]
+    partial void LogSymlinkSkipped(string sourcePath);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Bug-report bundle retention prune failed (best-effort)")]
     partial void LogPruneFailed(Exception ex);
