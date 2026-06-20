@@ -527,6 +527,36 @@ void main() {
       expect(data(c)['Offset'], -12.5);
     });
 
+    testWidgets('a Data missing Comparator falls back to the condition default',
+        (tester) async {
+      // AltitudeCondition → LessThan(1); AboveHorizonCondition → GreaterThan(3).
+      for (final (type, label) in [
+        (_altitude, 'Less than (<)'),
+        ('OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
+            'Greater than (>)'),
+      ]) {
+        final data = conditionForType(type)!.build()['Data'] as Map<String, dynamic>;
+        data.remove('Comparator'); // a body that arrived without the key
+        final detail = SequenceDetail(
+          id: 's',
+          body: {
+            r'$type':
+                'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+            'Name': 'root',
+            'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+            'Conditions': {
+              r'$type': conditionsWrapperType,
+              r'$values': [
+                {...conditionForType(type)!.build(), 'Data': data},
+              ],
+            },
+          },
+        );
+        await _pump(tester, detail: detail, select: const []);
+        expect(find.text(label), findsOneWidget, reason: type);
+      }
+    });
+
     testWidgets('a stored comparator outside the allow-list coerces (no assert)',
         (tester) async {
       // A body persisted with GreaterThanOrEqual (4) — not user-selectable.
@@ -553,8 +583,9 @@ void main() {
       );
       final c = await _pump(tester, detail: detail, select: const []);
       expect(tester.takeException(), isNull); // no DropdownButton assert
-      // The dropdown shows the coerced GreaterThan label, not a blank.
-      expect(find.text('Greater than (>)'), findsOneWidget);
+      // The dropdown coerces to THIS condition's default (AltitudeCondition →
+      // Less than), not a fixed GreaterThan bias, and never a blank.
+      expect(find.text('Less than (<)'), findsOneWidget);
       // Editing an UNRELATED field preserves the raw stored comparator (4) —
       // coercion is display-only and never silently flips the loop direction.
       await tester.enterText(

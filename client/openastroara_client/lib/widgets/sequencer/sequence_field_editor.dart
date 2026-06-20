@@ -513,11 +513,23 @@ class _FieldControl extends StatelessWidget {
         return _labelled(_WaitLoopDataEditor(
           fieldKey: field.key,
           value: value,
+          // Fall back to THIS condition's own catalogued Comparator default
+          // (AltitudeCondition → LessThan, AboveHorizon → GreaterThan) for a body
+          // that arrives without one, rather than a fixed GreaterThan bias.
+          fallbackComparator: _comparatorOf(field.defaultValue),
           onChanged: onChanged,
         ));
       case InstructionFieldType.filter:
         return _labelled(_FilterEditor(value: value, onChanged: onChanged));
     }
+  }
+
+  /// The `Comparator` from a `waitLoopData` field's catalogued default `Data`
+  /// map, or 3 (GreaterThan, the daemon-coerced safe value) if absent. Used as
+  /// the per-condition fallback when a stored node has no Comparator.
+  static int _comparatorOf(Object? dataDefault) {
+    final c = dataDefault is Map ? dataDefault['Comparator'] : null;
+    return c is num ? c.toInt() : 3;
   }
 
   /// `X × Y` integer editor over the nested `BinningMode` object. Each change
@@ -779,11 +791,17 @@ class _WaitLoopDataEditor extends StatelessWidget {
   const _WaitLoopDataEditor({
     required this.fieldKey,
     required this.value,
+    required this.fallbackComparator,
     required this.onChanged,
   });
 
   final String fieldKey;
   final Object? value;
+
+  /// The Comparator to assume when a stored `Data` has none — this condition's
+  /// own catalogued default (AltitudeCondition → LessThan/1, AboveHorizon →
+  /// GreaterThan/3), so a body missing the key keeps the right loop direction.
+  final int fallbackComparator;
   final ValueChanged<Map<String, dynamic>> onChanged;
 
   @override
@@ -795,16 +813,18 @@ class _WaitLoopDataEditor extends StatelessWidget {
         : const <String, dynamic>{};
     final type = data[r'$type'] is String ? data[r'$type'] as String : waitLoopDataType;
     // `is num` (not `is int`), matching the Offset/coordinate reads — a JSON
-    // serializer may emit the enum as `1.0`, which `is int` would miss and
-    // silently default to 3 (a semantic reversal for AltitudeCondition).
-    final rawComparator =
-        data['Comparator'] is num ? (data['Comparator'] as num).toInt() : 3;
-    // For DISPLAY only: coerce an out-of-allow-list comparator (missing, or a
-    // stale persisted *OrEqual) to a selectable value so DropdownButton can't
-    // assert "no matching item". The RAW value is preserved on write-back below,
-    // so touching an unrelated field never silently flips the comparator — only
-    // an explicit pick changes it.
-    final comparator = altitudeComparators.containsKey(rawComparator) ? rawComparator : 3;
+    // serializer may emit the enum as `1.0`, which `is int` would miss. Falls
+    // back to this condition's own default comparator (not a fixed GreaterThan).
+    final rawComparator = data['Comparator'] is num
+        ? (data['Comparator'] as num).toInt()
+        : fallbackComparator;
+    // For DISPLAY only: coerce an out-of-allow-list comparator (a stale persisted
+    // *OrEqual) to this condition's default selectable value so DropdownButton
+    // can't assert "no matching item". The RAW value is preserved on write-back
+    // below, so touching an unrelated field never silently flips the comparator —
+    // only an explicit pick changes it. (fallbackComparator is always 1 or 3.)
+    final comparator =
+        altitudeComparators.containsKey(rawComparator) ? rawComparator : fallbackComparator;
     final offset = data['Offset'] is num ? (data['Offset'] as num).toDouble() : 0.0;
     final coords = data['Coordinates'];
 
