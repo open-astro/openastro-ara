@@ -167,6 +167,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task PrepareAsync_reaps_orphaned_temp_bundles() {
+            // Simulate a .tmp- leftover from a prepare that crashed before its rename.
+            var dir = Path.Combine(_profileDir, "bug-reports");
+            Directory.CreateDirectory(dir);
+            var orphan = Path.Combine(dir, ".tmp-deadbeef.zip");
+            await File.WriteAllTextAsync(orphan, "half-written");
+
+            await _svc.PrepareAsync(null, CancellationToken.None);
+
+            Assert.That(File.Exists(orphan), Is.False);
+        }
+
+        [Test]
         public async Task PrepareAsync_each_call_stages_a_distinct_bundle() {
             var first = await _svc.PrepareAsync("same-key", CancellationToken.None);
             var second = await _svc.PrepareAsync("same-key", CancellationToken.None);

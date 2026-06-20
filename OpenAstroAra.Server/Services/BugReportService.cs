@@ -93,6 +93,12 @@ public sealed partial class BugReportService : IBugReportService {
     private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_bugReportsDir);
+        // Reap .tmp-*.zip orphans left by a prepare that crashed mid-zip (before its
+        // File.Move reveal) — neither PruneOldBundles nor FindBundlePath sees the temp
+        // prefix, so without this they'd accumulate. Runs before this prepare stages its
+        // own temp, so it never targets ours; a concurrent prepare holds its temp with
+        // FileShare.None, so the delete simply skips that (locked) one.
+        SweepStaleTempBundles();
 
         var baseName = ZipPrefix + createdUtc.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)
             + "-" + id.ToString("N", CultureInfo.InvariantCulture);
@@ -130,9 +136,26 @@ public sealed partial class BugReportService : IBugReportService {
             PruneOldBundles(zipPath);
             return sizeBytes;
         } catch {
+            // tempPath: the staged archive if the rename hadn't happened. zipPath: only
+            // exists if File.Move succeeded and a later step (the prune) threw — in which
+            // case the caller never got a download URL, so reclaiming it is correct, not a
+            // lost bundle. TryDelete is File.Exists-guarded, so it's a no-op otherwise.
             TryDelete(tempPath);
             TryDelete(zipPath);
             throw;
+        }
+    }
+
+    // Best-effort reaper for .tmp-*.zip orphans from a crashed prepare. Never fails the
+    // caller; a still-in-progress prepare's temp is FileShare.None-locked, so TryDelete
+    // skips it and only genuinely orphaned temps are removed.
+    private void SweepStaleTempBundles() {
+        try {
+            foreach (var temp in Directory.EnumerateFiles(_bugReportsDir, TempPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+                TryDelete(temp);
+            }
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogPruneFailed(ex);
         }
     }
 
