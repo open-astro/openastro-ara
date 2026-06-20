@@ -719,6 +719,11 @@ public partial class Program {
         // between the temp write and its File.Move rename. Same boot-time, pre-request-acceptance, best-effort sweep.
         ClientSettingsService.SweepOrphans(profileDir, app.Services.GetService<ILogger<ClientSettingsService>>());
 
+        // §54 bug-report analogue: reclaim any bug-reports/.tmp-*.zip orphaned by a prepare hard-killed before its
+        // File.Move reveal. Startup-only (no in-flight prepare can race it), which also avoids the cross-platform
+        // unlink()-of-an-open-file hazard a concurrent sweep would have. Best-effort.
+        BugReportService.SweepStaleTempBundles(profileDir, app.Services.GetService<ILogger<BugReportService>>());
+
         // §37: eagerly construct the multi-profile repository at boot (not on first request) so it
         // migrates the legacy profile.json into the profiles/ set and loads the active profile into
         // the live store before any request is served.

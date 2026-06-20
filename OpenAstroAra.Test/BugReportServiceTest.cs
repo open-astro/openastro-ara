@@ -167,16 +167,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task PrepareAsync_reaps_orphaned_temp_bundles() {
+        public async Task SweepStaleTempBundles_reaps_orphaned_temps_at_startup() {
             // Simulate a .tmp- leftover from a prepare that crashed before its rename.
             var dir = Path.Combine(_profileDir, "bug-reports");
             Directory.CreateDirectory(dir);
             var orphan = Path.Combine(dir, ".tmp-deadbeef.zip");
             await File.WriteAllTextAsync(orphan, "half-written");
 
-            await _svc.PrepareAsync(null, CancellationToken.None);
+            BugReportService.SweepStaleTempBundles(_profileDir);
 
             Assert.That(File.Exists(orphan), Is.False);
+        }
+
+        [Test]
+        public void SweepStaleTempBundles_is_a_noop_when_dir_absent() {
+            // No bug-reports/ yet — must not throw.
+            Assert.DoesNotThrow(() => BugReportService.SweepStaleTempBundles(_profileDir));
         }
 
         [Test]

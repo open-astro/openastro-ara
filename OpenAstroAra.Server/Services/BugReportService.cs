@@ -93,12 +93,6 @@ public sealed partial class BugReportService : IBugReportService {
     private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_bugReportsDir);
-        // Reap .tmp-*.zip orphans left by a prepare that crashed mid-zip (before its
-        // File.Move reveal) — neither PruneOldBundles nor FindBundlePath sees the temp
-        // prefix, so without this they'd accumulate. Runs before this prepare stages its
-        // own temp, so it never targets ours; a concurrent prepare holds its temp with
-        // FileShare.None, so the delete simply skips that (locked) one.
-        SweepStaleTempBundles();
 
         var baseName = ZipPrefix + createdUtc.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)
             + "-" + id.ToString("N", CultureInfo.InvariantCulture);
@@ -146,16 +140,32 @@ public sealed partial class BugReportService : IBugReportService {
         }
     }
 
-    // Best-effort reaper for .tmp-*.zip orphans from a crashed prepare. Never fails the
-    // caller; a still-in-progress prepare's temp is FileShare.None-locked, so TryDelete
-    // skips it and only genuinely orphaned temps are removed.
-    private void SweepStaleTempBundles() {
+    /// <summary>
+    /// Reclaim crash-only <c>.tmp-*.zip</c> orphans under <c>{profileDir}/bug-reports/</c>
+    /// left by a prepare that was hard-killed before its <c>File.Move</c> reveal — neither
+    /// <see cref="PruneOldBundles"/> nor <see cref="FindBundlePath"/> sees the temp prefix,
+    /// so without this they'd accumulate. A graceful prepare reclaims its own temp on an
+    /// exception, so these only linger after a hard kill. Static + startup-only (mirrors
+    /// <see cref="BackupService.SweepOrphans"/>): called before the daemon accepts requests,
+    /// so no in-flight prepare can race it — which also sidesteps the cross-platform
+    /// <c>unlink()</c>-of-an-open-file hazard a concurrent sweep would have. Best-effort.
+    /// </summary>
+    internal static void SweepStaleTempBundles(string profileDir, ILogger? logger = null) {
+        ArgumentException.ThrowIfNullOrEmpty(profileDir);
+        var bugReportsDir = Path.Combine(profileDir, BugReportsDirName);
         try {
-            foreach (var temp in Directory.EnumerateFiles(_bugReportsDir, TempPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+            if (!Directory.Exists(bugReportsDir)) {
+                return;
+            }
+            // GetFiles (materialized), not EnumerateFiles: we delete during the loop, and
+            // removing entries mid lazy-enumeration can skip or repeat names.
+            foreach (var temp in Directory.GetFiles(bugReportsDir, TempPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
                 TryDelete(temp);
             }
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-            LogPruneFailed(ex);
+            if (logger is not null) {
+                LogStaticPruneFailed(logger, ex);
+            }
         }
     }
 
@@ -298,4 +308,8 @@ public sealed partial class BugReportService : IBugReportService {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Bug-report bundle retention prune failed (best-effort)")]
     partial void LogPruneFailed(Exception ex);
+
+    // Static (the sweep runs at startup before the service instance exists), so it takes the logger explicitly.
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bug-report temp-orphan sweep failed at startup (best-effort)")]
+    private static partial void LogStaticPruneFailed(ILogger logger, Exception ex);
 }
