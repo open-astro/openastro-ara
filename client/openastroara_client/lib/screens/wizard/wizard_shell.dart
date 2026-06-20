@@ -40,6 +40,9 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   Widget build(BuildContext context) {
     final state = ref.watch(wizardControllerProvider);
     final controller = ref.read(wizardControllerProvider.notifier);
+    // Gate Next / Save Profile on the current screen's inline validation (set by
+    // the validated screens; reset to true by the controller on each step).
+    final stepValid = ref.watch(wizardStepValidProvider);
     final info = ProfileWizard.steps[state.step]!;
     final body = wizardScreenBuilders[state.step]?.call(context) ??
         Center(child: Text('Missing screen builder for step ${state.step}'));
@@ -73,6 +76,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
                 ? controller.next
                 : () => _saveAndExit(controller),
             isLast: state.step == ProfileWizard.totalSteps,
+            canAdvance: stepValid,
           ),
         ],
       ),
@@ -218,6 +222,11 @@ class _BottomNavBar extends StatelessWidget {
   final VoidCallback onNext;
   final bool isLast;
 
+  /// False when the current screen has a blocking inline validation error —
+  /// disables Next / Save Profile (Back + Skip stay available so the user can
+  /// always leave the screen).
+  final bool canAdvance;
+
   const _BottomNavBar({
     required this.currentStep,
     required this.stageLabel,
@@ -225,10 +234,16 @@ class _BottomNavBar extends StatelessWidget {
     required this.onSkip,
     required this.onNext,
     required this.isLast,
+    required this.canAdvance,
   });
 
   @override
   Widget build(BuildContext context) {
+    final nextButton = FilledButton.icon(
+      onPressed: canAdvance ? onNext : null,
+      icon: Icon(isLast ? Icons.check : Icons.chevron_right),
+      label: Text(isLast ? 'Save Profile' : 'Next'),
+    );
     return Container(
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
@@ -253,11 +268,15 @@ class _BottomNavBar extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(width: 16),
-          FilledButton.icon(
-            onPressed: onNext,
-            icon: Icon(isLast ? Icons.check : Icons.chevron_right),
-            label: Text(isLast ? 'Save Profile' : 'Next'),
-          ),
+          // Only wrap in a Tooltip when disabled — an empty-message Tooltip on the
+          // enabled button can flash a blank popup on hover on some platforms.
+          if (canAdvance)
+            nextButton
+          else
+            Tooltip(
+              message: 'Fix the highlighted field to continue.',
+              child: nextButton,
+            ),
         ],
       ),
     );

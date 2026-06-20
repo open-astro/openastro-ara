@@ -10,6 +10,11 @@ import '../wizard_form_kit.dart';
 ProfileDraft _draftOf(WidgetRef ref) =>
     ref.read(wizardControllerProvider).draft;
 
+// Publish whether this screen's inline validation currently passes, so the
+// wizard shell can gate Next / Save Profile (see wizardStepValidProvider).
+void _reportStepValid(WidgetRef ref, bool valid) =>
+    ref.read(wizardStepValidProvider.notifier).setValid(valid);
+
 // ── Screen 11 — Plate solving (ASTAP) ───────────────────────────────────────
 
 /// §37.4 — points ARA's local plate solver at the ASTAP binary + star database
@@ -64,22 +69,22 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
           // silently dropped (and never reaches the daemon to fail late).
           onChanged: (v) {
             final t = v.trim();
+            String? err;
             if (t.isEmpty) {
-              setState(() => _radiusError = null);
               _ps.searchRadiusDeg = null;
-              return;
-            }
-            final d = double.tryParse(t);
-            if (d != null && d > 0 && d <= 180) {
-              setState(() => _radiusError = null);
-              _ps.searchRadiusDeg = d;
             } else {
-              // Out of range OR unparseable (e.g. a lone "1." the formatter lets
-              // through): surface the hint and don't write, so no invalid/stale
-              // value reaches Save without feedback.
-              setState(() =>
-                  _radiusError = 'Must be greater than 0 and at most 180°.');
+              final d = double.tryParse(t);
+              if (d != null && d > 0 && d <= 180) {
+                _ps.searchRadiusDeg = d;
+              } else {
+                // Out of range OR unparseable (e.g. a lone "1." the formatter
+                // lets through): surface the hint and don't write, so no
+                // invalid/stale value reaches Save without feedback.
+                err = 'Must be greater than 0 and at most 180°.';
+              }
             }
+            setState(() => _radiusError = err);
+            _reportStepValid(ref, err == null);
           },
         ),
         // Nullable so the selected entry communicates "not set" the way a blank
@@ -145,18 +150,20 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
       inputFormatters: WizardInput.unsignedInt,
       onChanged: (v) {
         final t = v.trim();
+        String? err;
         if (t.isEmpty) {
-          setState(() => _errors[key] = null);
           set(null);
-          return;
-        }
-        final n = int.tryParse(t);
-        if (n != null && n >= min && (max == null || n <= max)) {
-          setState(() => _errors[key] = null);
-          set(n);
         } else {
-          setState(() => _errors[key] = rangeError);
+          final n = int.tryParse(t);
+          if (n != null && n >= min && (max == null || n <= max)) {
+            set(n);
+          } else {
+            err = rangeError;
+          }
         }
+        setState(() => _errors[key] = err);
+        // The screen is valid only when none of its fields has an error.
+        _reportStepValid(ref, _errors.values.every((e) => e == null));
       },
     );
   }
@@ -317,19 +324,19 @@ class _ScreenImagingDefaultsState
           inputFormatters: WizardInput.unsignedInt,
           onChanged: (v) {
             final t = v.trim();
+            String? err;
             if (t.isEmpty) {
-              setState(() => _exposureError = null);
               _img.exposure = null;
-              return;
-            }
-            final n = int.tryParse(t);
-            if (n != null && n > 0) {
-              setState(() => _exposureError = null);
-              _img.exposure = Duration(seconds: n);
             } else {
-              setState(() =>
-                  _exposureError = 'Enter a whole number of seconds greater than 0.');
+              final n = int.tryParse(t);
+              if (n != null && n > 0) {
+                _img.exposure = Duration(seconds: n);
+              } else {
+                err = 'Enter a whole number of seconds greater than 0.';
+              }
             }
+            setState(() => _exposureError = err);
+            _reportStepValid(ref, err == null);
           },
         ),
         WizardDropdown<FrameType?>(
@@ -391,17 +398,22 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
             DropdownMenuEntry(
                 value: UnsafeConditionAction.ignore, label: 'Ignore'),
           ],
-          onChanged: (v) => setState(() {
-            _sp.onUnsafe = v;
-            // Auto-resume + delay are meaningless when ignoring unsafe conditions
-            // (nothing pauses), so clear them when Ignore is picked — the fields
-            // hide below, and we don't want stale values reaching Save.
-            if (v == UnsafeConditionAction.ignore) {
-              _sp.autoResumeWhenSafe = null;
-              _sp.resumeDelayMin = null;
-              _delayError = null;
-            }
-          }),
+          onChanged: (v) {
+            setState(() {
+              _sp.onUnsafe = v;
+              // Auto-resume + delay are meaningless when ignoring unsafe
+              // conditions (nothing pauses), so clear them when Ignore is picked
+              // — the fields hide below, and we don't want stale values reaching
+              // Save.
+              if (v == UnsafeConditionAction.ignore) {
+                _sp.autoResumeWhenSafe = null;
+                _sp.resumeDelayMin = null;
+                _delayError = null;
+              }
+            });
+            // Hiding/clearing the delay field can resolve a standing error.
+            _reportStepValid(ref, _delayError == null);
+          },
         ),
         // Hidden under Ignore — there's nothing to resume.
         if (_sp.onUnsafe != UnsafeConditionAction.ignore) ...[
@@ -427,19 +439,20 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
             inputFormatters: WizardInput.unsignedInt,
             onChanged: (v) {
               final t = v.trim();
+              String? err;
               if (t.isEmpty) {
-                setState(() => _delayError = null);
                 _sp.resumeDelayMin = null;
-                return;
-              }
-              final n = int.tryParse(t);
-              // 0 is valid (resume immediately); only a non-parse fails here.
-              if (n != null && n >= 0) {
-                setState(() => _delayError = null);
-                _sp.resumeDelayMin = n;
               } else {
-                setState(() => _delayError = 'Enter a whole number of minutes.');
+                final n = int.tryParse(t);
+                // 0 is valid (resume immediately); only a non-parse fails here.
+                if (n != null && n >= 0) {
+                  _sp.resumeDelayMin = n;
+                } else {
+                  err = 'Enter a whole number of minutes.';
+                }
               }
+              setState(() => _delayError = err);
+              _reportStepValid(ref, err == null);
             },
           ),
         ],
@@ -482,18 +495,19 @@ class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
           inputFormatters: WizardInput.unsignedDecimal,
           onChanged: (v) {
             final t = v.trim();
+            String? err;
             if (t.isEmpty) {
-              setState(() => _horizonError = null);
               _site.hardMinAltitudeDeg = null;
-              return;
-            }
-            final d = double.tryParse(t);
-            if (d != null && d >= 0 && d <= 90) {
-              setState(() => _horizonError = null);
-              _site.hardMinAltitudeDeg = d;
             } else {
-              setState(() => _horizonError = 'Enter a value between 0 and 90°.');
+              final d = double.tryParse(t);
+              if (d != null && d >= 0 && d <= 90) {
+                _site.hardMinAltitudeDeg = d;
+              } else {
+                err = 'Enter a value between 0 and 90°.';
+              }
             }
+            setState(() => _horizonError = err);
+            _reportStepValid(ref, err == null);
           },
         ),
         WizardDropdown<TwilightOption?>(
