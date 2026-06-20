@@ -105,8 +105,10 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
             if (connect is null) {
                 return; // a type with no auto-connectable service (e.g. guider/switch)
             }
-            await connect().ConfigureAwait(false);
+            // Log intent before dispatching so the attempt is always recorded — even
+            // if connect() faults synchronously (then LogConnectFailed follows it).
             LogReconnecting(type, device.Name);
+            await connect().ConfigureAwait(false);
         }
 #pragma warning disable CA1031 // one device's failure must not abort the others or startup
         catch (Exception ex) {

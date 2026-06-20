@@ -297,7 +297,17 @@ public sealed partial class LogService : ILogService {
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
             ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
 
-        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override long Seek(long offset, SeekOrigin origin) {
+            // Resolve End against the snapshot cap, not the live (still-growing) file
+            // end, so a seek stays consistent with the capped Length/Position view.
+            var target = origin switch {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => _inner.Position + offset,
+                SeekOrigin.End => _cap + offset,
+                _ => throw new ArgumentOutOfRangeException(nameof(origin)),
+            };
+            return _inner.Seek(target, SeekOrigin.Begin);
+        }
 
         public override void Flush() { }
         public override void SetLength(long value) => throw new NotSupportedException();

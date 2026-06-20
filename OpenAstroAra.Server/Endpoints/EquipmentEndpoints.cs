@@ -321,7 +321,9 @@ public static class EquipmentEndpoints {
         // §52.1 — remember the device so EquipmentAutoConnectService can re-establish it after a
         // daemon restart. Best-effort inside the store; only reached once the connect is accepted
         // (an OutdatedBlock returns above without persisting a device the daemon refused).
-        await selectionStore.RememberAsync(request.Device, ct);
+        // Persist with None, not the request token: the connect is already accepted, so a request
+        // cancellation racing in here must not surface as a 5xx for an operation that succeeded.
+        await selectionStore.RememberAsync(request.Device, CancellationToken.None);
         return Results.Accepted(value: accepted);
     }
 

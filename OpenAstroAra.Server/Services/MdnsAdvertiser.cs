@@ -50,6 +50,9 @@ public sealed partial class MdnsAdvertiser : IHostedService {
     private ServiceProfile? _profile;
 
     public MdnsAdvertiser(int port, ILogger<MdnsAdvertiser> logger) {
+        // Surface a bad port explicitly rather than silently truncating to ushort below.
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(port);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(port, ushort.MaxValue);
         _port = port;
         _logger = logger;
         // A DNS-SD instance name is a single DNS label, so collapse the dots a
