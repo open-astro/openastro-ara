@@ -13,7 +13,7 @@ ProfileDraft _draftOf(WidgetRef ref) =>
 // Publish whether this screen's inline validation currently passes, so the
 // wizard shell can gate Next / Save Profile (see wizardStepValidProvider).
 void _reportStepValid(WidgetRef ref, bool valid) =>
-    ref.read(wizardStepValidProvider.notifier).set(valid);
+    ref.read(wizardStepValidProvider.notifier).setValid(valid);
 
 // ── Screen 11 — Plate solving (ASTAP) ───────────────────────────────────────
 

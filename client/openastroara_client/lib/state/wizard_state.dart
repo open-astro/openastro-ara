@@ -48,7 +48,7 @@ class WizardController extends Notifier<WizardState> {
   // every navigation so a non-validated screen never inherits the prior
   // screen's invalid flag and disables Next.
   void _resetStepValidity() =>
-      ref.read(wizardStepValidProvider.notifier).set(true);
+      ref.read(wizardStepValidProvider.notifier).setValid(true);
 
   /// Save & Exit per §37 — the caller persists the partial draft to the
   /// profile store. The state stays put; the wizard host pops back to the
@@ -75,13 +75,14 @@ final wizardControllerProvider =
         WizardController.new);
 
 /// Whether the current wizard screen's inline field validation currently passes.
-/// Screens with validated fields ([screen_capture_setup]) call [set] false while
+/// Screens with validated fields ([screen_capture_setup]) call [WizardStepValid.setValid]
+/// false while
 /// an error is showing; [WizardShell] disables Next / Save Profile until it's
 /// true. The [WizardController] resets it to true on every step change.
 class WizardStepValid extends Notifier<bool> {
   @override
   bool build() => true;
-  void set(bool valid) => state = valid;
+  void setValid(bool valid) => state = valid;
 }
 
 final wizardStepValidProvider =

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/profile_draft.dart';
 import 'package:openastroara/screens/wizard/screens/screen_capture_setup.dart';
 import 'package:openastroara/screens/wizard/wizard_shell.dart';
 import 'package:openastroara/state/wizard_state.dart';
@@ -21,18 +22,24 @@ void main() {
     return container;
   }
 
+  // The field carrying a given label — resilient to field reordering, unlike a
+  // positional TextField index.
+  Finder fieldByLabel(String label) => find.ancestor(
+        of: find.text(label),
+        matching: find.byType(TextField),
+      );
+
   group('screen publishes validity', () {
     testWidgets('ScreenPlateSolve marks invalid radius then recovers',
         (tester) async {
       final container = await pumpScreen(tester, const ScreenPlateSolve());
       expect(container.read(wizardStepValidProvider), isTrue);
 
-      // Search radius is the 3rd field (ASTAP path, star DB, radius).
-      await tester.enterText(find.byType(TextField).at(2), '999');
+      await tester.enterText(fieldByLabel('Search radius (°)'), '999'); // > 180
       await tester.pump();
       expect(container.read(wizardStepValidProvider), isFalse);
 
-      await tester.enterText(find.byType(TextField).at(2), '45');
+      await tester.enterText(fieldByLabel('Search radius (°)'), '45');
       await tester.pump();
       expect(container.read(wizardStepValidProvider), isTrue);
     });
@@ -40,13 +47,30 @@ void main() {
     testWidgets('ScreenAutofocus marks out-of-range steps then recovers',
         (tester) async {
       final container = await pumpScreen(tester, const ScreenAutofocus());
-      // Fields: exposure (0), steps (1), step size (2).
-      await tester.enterText(find.byType(TextField).at(1), '99'); // > 31
+      await tester.enterText(fieldByLabel('Steps'), '99'); // > 31
       await tester.pump();
       expect(container.read(wizardStepValidProvider), isFalse);
 
-      await tester.enterText(find.byType(TextField).at(1), '7');
+      await tester.enterText(fieldByLabel('Steps'), '7');
       await tester.pump();
+      expect(container.read(wizardStepValidProvider), isTrue);
+    });
+
+    testWidgets('ScreenSafety recovers validity when switched to Ignore',
+        (tester) async {
+      final container = await pumpScreen(tester, const ScreenSafety());
+      // The resume-delay field is visible (default unsafe action is not Ignore).
+      // A 20-digit value overflows int64 → unparseable → marks the screen invalid.
+      await tester.enterText(fieldByLabel('Resume delay (minutes)'), '9' * 20);
+      await tester.pump();
+      expect(container.read(wizardStepValidProvider), isFalse);
+
+      // Switching the unsafe-action dropdown to Ignore hides + clears the delay
+      // field, which must clear the error and restore validity.
+      await tester.tap(find.byType(DropdownMenu<UnsafeConditionAction?>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ignore').last);
+      await tester.pumpAndSettle();
       expect(container.read(wizardStepValidProvider), isTrue);
     });
   });
@@ -56,14 +80,14 @@ void main() {
     addTearDown(container.dispose);
     final controller = container.read(wizardControllerProvider.notifier);
 
-    container.read(wizardStepValidProvider.notifier).set(false);
+    container.read(wizardStepValidProvider.notifier).setValid(false);
     expect(container.read(wizardStepValidProvider), isFalse);
 
     controller.next();
     expect(container.read(wizardStepValidProvider), isTrue,
         reason: 'a fresh screen starts valid');
 
-    container.read(wizardStepValidProvider.notifier).set(false);
+    container.read(wizardStepValidProvider.notifier).setValid(false);
     controller.back();
     expect(container.read(wizardStepValidProvider), isTrue);
   });
@@ -83,11 +107,12 @@ void main() {
         find.widgetWithText(FilledButton, 'Next'));
     expect(nextButton().onPressed, isNotNull, reason: 'enabled initially');
 
-    await tester.enterText(find.byType(TextField).at(2), '999'); // invalid
+    await tester.enterText(
+        fieldByLabel('Search radius (°)'), '999'); // invalid
     await tester.pump();
     expect(nextButton().onPressed, isNull, reason: 'disabled while invalid');
 
-    await tester.enterText(find.byType(TextField).at(2), '45'); // valid
+    await tester.enterText(fieldByLabel('Search radius (°)'), '45'); // valid
     await tester.pump();
     expect(nextButton().onPressed, isNotNull, reason: 're-enabled when fixed');
   });
