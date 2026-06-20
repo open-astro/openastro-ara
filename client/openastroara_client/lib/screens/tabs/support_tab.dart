@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/log_entry.dart';
 import '../../state/support/logs_state.dart';
+import '../../theme/ara_colors.dart';
 
 /// §54 Support tab — a live tail of the daemon's §29.9 logs with a level +
 /// substring filter and a "Download daemon log" action. (The §54 bug-report
@@ -249,7 +250,7 @@ class _LogRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = _levelColor(entry.level, theme);
+    final color = _levelColor(entry.level);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
@@ -260,7 +261,7 @@ class _LogRow extends StatelessWidget {
             child: Text(
               _hms(entry.timestamp),
               style: theme.textTheme.bodySmall
-                  ?.copyWith(fontFeatures: const [], color: theme.disabledColor),
+                  ?.copyWith(color: AraColors.textDisabled),
             ),
           ),
           SizedBox(
@@ -282,11 +283,13 @@ class _LogRow extends StatelessWidget {
     );
   }
 
-  static Color _levelColor(String level, ThemeData theme) => switch (level) {
-        'Error' || 'Fatal' => theme.colorScheme.error,
-        'Warning' => Colors.orange,
-        'Debug' || 'Verbose' => theme.disabledColor,
-        _ => theme.colorScheme.onSurface,
+  // The app's fixed dark palette (AraColors) — same semantic accents the §51
+  // diagnostics panel uses, so log levels read consistently across the app.
+  static Color _levelColor(String level) => switch (level) {
+        'Error' || 'Fatal' => AraColors.accentError,
+        'Warning' => AraColors.accentBusy,
+        'Debug' || 'Verbose' => AraColors.textDisabled,
+        _ => AraColors.textPrimary,
       };
 
   // Local wall-clock HH:mm:ss; the daemon stamps UTC.

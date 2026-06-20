@@ -94,7 +94,9 @@ class LogsApi implements LogsClient {
         RegExp("filename\\*=(?:[^']*'[^']*')?([^;]+)", caseSensitive: false)
             .firstMatch(header);
     if (extended != null) {
-      final raw = extended.group(1)!.trim().replaceAll('"', '');
+      // RFC 5987 ext-values are percent-encoded and never quoted, so just trim +
+      // decode — no quote-stripping (which the plain branch also doesn't do).
+      final raw = extended.group(1)!.trim();
       try {
         return Uri.decodeComponent(raw);
       } catch (_) {
