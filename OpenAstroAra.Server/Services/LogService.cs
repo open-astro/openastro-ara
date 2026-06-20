@@ -38,7 +38,8 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class LogService : ILogService {
     // Matches the sink path in Program.cs: "openastroara-.log" → Serilog inserts
     // the date, e.g. "openastroara-20260620.log".
-    private const string LogGlob = "openastroara-*.log";
+    private const string LogPrefix = "openastroara-";
+    private const string LogGlob = LogPrefix + "*.log";
     private const int DefaultMaxLines = 200;
     // Upper bound on a caller-requested tail size so a huge MaxLines can't force
     // an unbounded ring buffer on this internal diagnostic endpoint.
@@ -135,9 +136,9 @@ public sealed partial class LogService : ILogService {
 
     /// <summary>
     /// Resolve a download/tail target to an absolute path inside the logs dir, or
-    /// null. A caller-supplied name must be a bare <c>*.log</c> file name (no
-    /// directory component, no traversal) that exists; null selects the newest
-    /// <c>openastroara-*.log</c>.
+    /// null. A caller-supplied name must be a bare <c>openastroara-*.log</c> file
+    /// name (no directory component, no traversal) that exists; null selects the
+    /// newest such file.
     /// </summary>
     private string? ResolveLogFile(string? logFileName) {
         if (string.IsNullOrEmpty(logFileName)) {
@@ -147,8 +148,10 @@ public sealed partial class LogService : ILogService {
             return null;
         }
         // Reject any path component (a/b, ../x, absolute) — only a bare file name
-        // in the logs dir is addressable.
+        // in the logs dir is addressable — and scope it to the daemon's own
+        // openastroara-*.log family, not any *.log that happens to sit there.
         if (Path.GetFileName(logFileName) != logFileName ||
+            !logFileName.StartsWith(LogPrefix, StringComparison.OrdinalIgnoreCase) ||
             !logFileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase)) {
             return null;
         }

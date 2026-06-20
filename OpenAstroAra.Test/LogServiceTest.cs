@@ -229,7 +229,8 @@ namespace OpenAstroAra.Test {
 
             Assert.That(result, Is.Not.Null);
             Assert.That(result!.Value.FileName, Is.EqualTo("openastroara-20260619.log"));
-            using var reader = new StreamReader(result.Value.Stream);
+            await using var stream = result.Value.Stream;
+            using var reader = new StreamReader(stream);
             var text = await reader.ReadToEndAsync();
             Assert.That(text, Does.Contain("hello"));
         }
@@ -252,6 +253,17 @@ namespace OpenAstroAra.Test {
                 var result = await _svc.OpenDownloadAsync(bad, CancellationToken.None);
                 Assert.That(result, Is.Null, $"expected reject for '{bad}'");
             }
+        }
+
+        [Test]
+        public async Task OpenDownloadAsync_rejects_a_non_daemon_log_in_the_dir() {
+            // A *.log that the daemon's sink didn't write isn't downloadable, even
+            // though it sits in the logs dir.
+            WriteLog("some-other-service.log", "not even clef");
+
+            var result = await _svc.OpenDownloadAsync("some-other-service.log", CancellationToken.None);
+
+            Assert.That(result, Is.Null);
         }
 
         [Test]
