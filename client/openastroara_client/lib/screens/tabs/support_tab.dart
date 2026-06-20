@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/log_entry.dart';
 import '../../state/support/logs_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/support/bug_report_card.dart';
 
 /// §54 Support tab — a live tail of the daemon's §29.9 logs with a level +
 /// substring filter and a "Download daemon log" action. (The §54 bug-report
@@ -126,6 +127,8 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const BugReportCard(),
+        const Divider(height: 1),
         _toolbar(context),
         const Divider(height: 1),
         Expanded(child: _body(context)),
