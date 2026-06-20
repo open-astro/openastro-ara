@@ -106,7 +106,16 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     // (initState only covers the already-connected-on-open case). The callback
     // fires on change, never during this build, so the setState in _refresh is safe.
     ref.listen(logsApiProvider, (previous, next) {
-      if (next != null) _refresh();
+      if (next != null) {
+        // Server connected/switched: drop the prior server's entries so the
+        // spinner shows instead of flashing another server's logs while loading.
+        // (A same-server refresh keeps its entries — that path is non-destructive.)
+        setState(() {
+          _entries = null;
+          _error = null;
+        });
+        _refresh();
+      }
     });
     final hasServer = ref.watch(logsApiProvider) != null;
     if (!hasServer) {
@@ -151,6 +160,7 @@ class _SupportTabState extends ConsumerState<SupportTab> {
                 isDense: true,
                 prefixIcon: Icon(Icons.search, size: 18),
                 hintText: 'Filter by text…',
+                helperText: 'Press Enter to filter',
                 border: OutlineInputBorder(),
               ),
               // Re-check _loading at call time (not just the build-time gate) so a

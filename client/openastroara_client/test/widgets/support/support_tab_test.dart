@@ -49,7 +49,14 @@ LogEntry _entry(String level, String message) => LogEntry(
     );
 
 Widget _host(_FakeLogsClient api) => ProviderScope(
-      overrides: [logsApiProvider.overrideWithValue(api)],
+      // overrideWith (not overrideWithValue) so ref.onDispose(api.close) still
+      // runs on the fake, matching the real provider's lifecycle.
+      overrides: [
+        logsApiProvider.overrideWith((ref) {
+          ref.onDispose(api.close);
+          return api;
+        }),
+      ],
       child: const MaterialApp(home: Scaffold(body: SupportTab())),
     );
 
