@@ -85,15 +85,18 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             LogIdempotencyNotEnforced();
         }
 
-        var id = Guid.NewGuid();
-        var createdUtc = DateTimeOffset.UtcNow;
-
         // ZipArchive has no async write path; run the synchronous IO off the request
         // thread so a larger logs/ set doesn't tie up the connection's thread-pool slot.
-        // The gate serializes prepares so a concurrent one can't reap this bundle.
+        // The gate serializes prepares so a concurrent one can't reap this bundle. The id +
+        // timestamp are stamped INSIDE the gate, so CompletedUtc and the filename reflect
+        // when this bundle actually ran (the filename sort stays chronological-by-completion).
         await _gate.WaitAsync(ct).ConfigureAwait(false);
+        Guid id;
+        DateTimeOffset createdUtc;
         long sizeBytes;
         try {
+            id = Guid.NewGuid();
+            createdUtc = DateTimeOffset.UtcNow;
             sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, ct), ct).ConfigureAwait(false);
         } finally {
             _gate.Release();
@@ -230,9 +233,15 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
                 LogSymlinkSkipped(sourcePath);
                 return false;
             }
-            // CreateEntryFromFile reads the whole file; a CancellationToken can't abort it
-            // mid-copy (a .NET limitation), so cancellation is checked per-file by the caller.
-            archive.CreateEntryFromFile(sourcePath, entryName, CompressionLevel.Optimal);
+            // Open with FileShare.ReadWrite (not CreateEntryFromFile's FileShare.Read) so the
+            // current rolling log the §29.9 Serilog sink is actively writing can still be read
+            // into the bundle — matches how LogService reads the live log. The whole-file copy
+            // can't honour a CancellationToken mid-stream, so cancellation is checked per-file
+            // by the caller.
+            using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+            using var entryStream = entry.Open();
+            source.CopyTo(entryStream);
             return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // Vanished (rolling sink deleted a retained log) or unreadable between the
