@@ -70,6 +70,9 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
             remembered = await store.GetAllAsync(stoppingToken).ConfigureAwait(false);
             conn = profile.GetEquipmentConnection();
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
+            return; // clean shutdown during the read — not a failure worth logging
+        }
 #pragma warning disable CA1031 // never let a read failure fault startup
         catch (Exception ex) {
             LogReadFailed(ex);
