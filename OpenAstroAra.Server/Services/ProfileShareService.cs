@@ -15,6 +15,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using OpenAstroAra.Server.Contracts;
@@ -288,13 +289,47 @@ public sealed class ProfileShareService : IProfileShareService {
         return Task.FromResult(meta.Id);
     }
 
-    // Donor attribution (§70.3) is opt-in, and the current export always omits the
-    // donor block (Donor: null), so today this falls through to the neutral default.
-    // The DisplayName branch is reserved for a future opt-in export mode (or a
-    // hand-authored manifest) that carries the donor's chosen label — it is not yet
-    // reachable via the shipped export path.
-    private static string ImportedName(ProfileShareManifest m) =>
-        m.Donor?.DisplayName is { Length: > 0 } name ? name : "Imported profile";
+    // The display name a freshly-imported template gets, de-duplicated against the
+    // names already in the repo so a second import of the same rig doesn't collide
+    // with the first ("Imported — 2032 mm rig" → "Imported — 2032 mm rig (2)").
+    // Called at both preview (so the user sees the real name up front) and commit
+    // (authoritative against the repo state at create time).
+    private string ImportedName(ProfileShareManifest m) => MakeUniqueName(ImportedBaseName(m));
+
+    // The base label before de-duplication. Prefers the donor's opt-in display name
+    // (§70.3 — reserved for a future opt-in export mode / hand-authored manifest, not
+    // yet reachable via the shipped export path); otherwise derives a non-identifying
+    // label from the rig's effective focal length so repeated imports are
+    // distinguishable at a glance; falls back to a neutral label when neither is known.
+    private static string ImportedBaseName(ProfileShareManifest m) {
+        if (m.Donor?.DisplayName is { Length: > 0 } name) {
+            return name;
+        }
+        var efl = m.RigDescription?.EffectiveFocalLengthMm ?? 0;
+        if (efl > 0) {
+            var mm = (int)Math.Round(efl, MidpointRounding.AwayFromZero);
+            return $"Imported — {mm} mm rig";
+        }
+        return "Imported profile";
+    }
+
+    // Appends " (2)", " (3)", … until the name is free. Match is case-insensitive to
+    // mirror how a user perceives duplicates; the loop is bounded by the number of
+    // existing profiles, so it always terminates.
+    private string MakeUniqueName(string baseName) {
+        var existing = new HashSet<string>(
+            _repo.List().Profiles.Select(p => p.Name),
+            StringComparer.OrdinalIgnoreCase);
+        if (!existing.Contains(baseName)) {
+            return baseName;
+        }
+        for (var n = 2; ; n++) {
+            var candidate = $"{baseName} ({n})";
+            if (!existing.Contains(candidate)) {
+                return candidate;
+            }
+        }
+    }
 
     private void PruneExpired() {
         var now = _clock.GetUtcNow();

@@ -803,13 +803,13 @@ Deferred to **§43-2**:
   (it never compiles the WebView widget unless a test imports `aladin_view.dart`, which `aladin_view_test.dart` now does),
   so a fork/SDK mismatch surfaces as a client-test compile failure. Update the pinned SHA in `pubspec.yaml` after
   re-shimming. Surfaced 2026-06-14 by the #451 review (fork-maintenance dependency).
-- **§70 import — distinguish repeated-import profile names.** D-2 (#489) names every imported profile "Imported profile"
-  because the export deliberately strips the donor block (including any donor-chosen `display_name`) per the strip-all
-  privacy policy ([[project-profile-share-path-policy]]) — so the manifest carries no profile name to reuse. Result: two
-  imports of the same template land as two profiles both named "Imported profile". The recipient can rename via the §37/§30
-  management UI (PR C, #488), so this isn't blocking, but the default could be friendlier — e.g. derive a non-identifying
-  label from the `rig_description` ("Imported — 2032 mm rig") and/or auto-suffix a counter when the name already exists in
-  the repo. Flagged by the #489 review (minor / follow-up).
+- **§70 import — distinguish repeated-import profile names — RESOLVED.** `ProfileShareService.ImportedName` now derives a
+  non-identifying label from the `rig_description`'s effective focal length ("Imported — 1626 mm rig") when the share file
+  carries no donor display name (the current export omits it per the strip-all privacy policy
+  [[project-profile-share-path-policy]]), falling back to "Imported profile" only when the rig has no usable focal length;
+  the chosen name is then de-duplicated case-insensitively against the existing profiles (suffixing " (2)", " (3)", …) at
+  both preview and commit, so repeated imports of the same template no longer collide. Original gap (flagged by the #489
+  review, minor / follow-up): every imported profile was named "Imported profile" because the export strips the donor block.
 - **§70 import — `DroppedFields` can drift from the export's strip logic.** `ProfileShareService.DroppedFields` (the list the import preview shows the recipient as "you must re-enter these") is a hand-maintained static mirror of what `ExportAsync` actually strips (§70.1: equipment, paths, location, PHD2, notification tokens). Both sides were authored together so they agree today, but if the export's strip set changes, the import's advisory list won't follow automatically. Low severity (advisory text only, no runtime effect), but worth deriving both from one source — or at least a paired test asserting the export's stripped categories match `DroppedFields` — when §70 next gets touched. Flagged by the #489 review.
 - **§37 wizard — null=keep-base mappers can't clear a field back to empty.** The wizard draft→section mappers (applyDraftToPlateSolve and the others) use `copyWith`'s `?? base` null-preserves-base semantics, so a blank field inherits the base profile's value. Intended for the create-new-profile flow (you set values, you don't clear them), but it means re-running the wizard on an existing profile can't blank a path/value back to empty — only overwrite it. If the wizard ever becomes a full editor (vs. create-only), add an explicit "clear" affordance. Flagged by the #492 review.
 - **§37 wizard — per-screen validity gate — RESOLVED.** The shell now disables Next / Save Profile while the current screen has a blocking inline validation error (tooltip explains why; Back/Skip stay available). Implemented via `wizardStepValidProvider` that the validated capture-setup screens publish to and `WizardShell` reads; the controller resets it on each step change. Original gap (flagged by the #492 review): screen 11 had the first inline validation but no `canAdvance` hook, so the user could advance past a visible red error (safe — invalid values are never written to the draft — but deceptive).
