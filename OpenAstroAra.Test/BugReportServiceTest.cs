@@ -204,6 +204,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task PrepareAsync_concurrent_calls_each_resolve_to_a_distinct_bundle() {
+            // The _gate serializes prepares so one's prune can't reap the other's bundle.
+            // Two overlapping prepares must both yield distinct, downloadable bundles.
+            var results = await Task.WhenAll(
+                Enumerable.Range(0, 6).Select(_ => _svc.PrepareAsync(null, CancellationToken.None)));
+
+            var ids = results.Select(r => r.PreparationId).ToHashSet();
+            Assert.That(ids.Count, Is.EqualTo(results.Length), "preparation ids must be distinct");
+            foreach (var prep in results) {
+                var dl = await _svc.OpenDownloadAsync(prep.PreparationId, CancellationToken.None);
+                Assert.That(dl, Is.Not.Null, $"bundle {prep.PreparationId} must still resolve");
+                await dl!.Value.Stream.DisposeAsync();
+            }
+        }
+
+        [Test]
         public async Task PrepareAsync_each_call_stages_a_distinct_bundle() {
             var first = await _svc.PrepareAsync("same-key", CancellationToken.None);
             var second = await _svc.PrepareAsync("same-key", CancellationToken.None);

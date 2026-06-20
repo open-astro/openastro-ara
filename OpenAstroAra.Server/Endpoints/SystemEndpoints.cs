@@ -45,12 +45,30 @@ public static class SystemEndpoints {
            .WithName("PrepareBugReport");
 
         bug.MapGet("/download",
-                async (Guid preparationId, IBugReportService svc, CancellationToken ct) => {
+                async (Guid preparationId, string? acknowledge, IBugReportService svc, CancellationToken ct) => {
+                    // §54 PII backstop: the bundle carries the daemon logs, the full profile.json
+                    // (possible equipment credentials / API + notification tokens / precise
+                    // observatory coordinates / network endpoints), and a system-info.json with the
+                    // local filesystem path. The server refuses to serve it unless the caller passes
+                    // ?acknowledge=pii — so a client that hasn't shown the user a disclosure literally
+                    // can't download it (enforces the §54 disclosure rather than leaving it to honour).
+                    if (!string.Equals(acknowledge, "pii", StringComparison.Ordinal)) {
+                        return Results.Problem(
+                            type: "https://openastro.net/errors/bugreport-pii-ack-required",
+                            title: "Bug-report download requires PII acknowledgement",
+                            statusCode: StatusCodes.Status403Forbidden,
+                            detail: "The bug-report bundle contains the daemon logs, the full profile.json " +
+                                "(which may include equipment credentials, API/notification tokens, precise " +
+                                "observatory coordinates, and network endpoints), and a system-info.json with " +
+                                "the local filesystem path. Show the user this disclosure, then re-request " +
+                                "with ?acknowledge=pii to download.");
+                    }
                     var result = await svc.OpenDownloadAsync(preparationId, ct);
                     if (result is null) return Results.NotFound();
                     return Results.Stream(result.Value.Stream, "application/zip", result.Value.FileName);
                 })
             .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DownloadBugReport");
 

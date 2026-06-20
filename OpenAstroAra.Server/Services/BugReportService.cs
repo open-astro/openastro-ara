@@ -308,14 +308,18 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
         return null;
     }
 
+    // The URL is intentionally incomplete: the download endpoint also requires
+    // ?acknowledge=pii, which the client appends only after showing the user the §54
+    // PII disclosure — so a client can't blindly follow this URL and bypass the warning.
     private static Uri DownloadUrl(Guid id) =>
         new("/api/v1/bugreport/download?preparationId=" + id.ToString("D", CultureInfo.InvariantCulture), UriKind.Relative);
 
     private static void TryDelete(string path) {
         try {
-            if (File.Exists(path)) {
-                File.Delete(path);
-            }
+            // No File.Exists pre-check: File.Delete is a no-op on a missing file (and throws
+            // DirectoryNotFoundException — an IOException — on a missing dir), so dropping the
+            // check avoids a check-then-act race with another deleter.
+            File.Delete(path);
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // Best-effort cleanup; never let a cleanup failure replace the exception we're unwinding.
         }
