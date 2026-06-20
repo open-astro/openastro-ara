@@ -72,6 +72,11 @@ enum InstructionFieldType {
   /// `InputCoordinates` target, a degrees `Offset`, and a `Comparator`. Rendered
   /// as a composite sub-editor that rebuilds the whole object on any change.
   waitLoopData,
+
+  /// A `TimeCondition.SelectedProvider` — null (an absolute clock time) or a
+  /// sky-event provider object (`{$type}`, e.g. civil dusk). Rendered as a
+  /// dropdown over the fixed `timeProviders` map.
+  timeProvider,
 }
 
 /// The `BinningMode` default (1×1) the daemon's templates use.
@@ -146,6 +151,15 @@ class InstructionField {
   final num? min;
   final num? max;
 
+  /// Optional relevance predicate over the field's **sibling node** (the
+  /// instruction/condition/trigger map this field belongs to). When it returns
+  /// false the editor greys out and disables the field because the other fields'
+  /// values make it inert — e.g. a `TimeCondition`'s H/M/S are ignored by the
+  /// daemon (which computes the time) once a sky-event `SelectedProvider` is
+  /// chosen. Null = always enabled. Must be a const-constructible reference (a
+  /// top-level/static function), since the catalogs are `const`.
+  final bool Function(Map<String, dynamic> node)? enabledWhen;
+
   const InstructionField(
     this.key,
     this.label,
@@ -157,6 +171,7 @@ class InstructionField {
     this.requiresUserInput = false,
     this.min,
     this.max,
+    this.enabledWhen,
   })  : assert(
           enumLabels == null || enumValues == null,
           'a field is either an intEnum (enumLabels) or a stringEnum (enumValues), '

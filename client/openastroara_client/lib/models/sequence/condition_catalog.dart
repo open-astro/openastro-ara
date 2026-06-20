@@ -63,6 +63,61 @@ const Map<String, dynamic> aboveHorizonConditionData = {
   'Comparator': 3,
 };
 
+/// `TimeCondition.SelectedProvider` options: display label → the provider's
+/// assembly-qualified `$type`, or null for "Custom time" (the absolute
+/// Hours/Minutes/Seconds clock time). Grounded against
+/// `OpenAstroAra.Sequencer/Utility/DateTimeProvider/*.cs`. Insertion order is the
+/// dropdown order (Custom first). The provider objects carry no `[JsonProperty]`
+/// fields, so each is just `{$type}`.
+const Map<String, String?> timeProviders = {
+  'Custom time': null,
+  'Sunset': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunsetProvider, OpenAstroAra.Sequencer',
+  'Sunrise': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunriseProvider, OpenAstroAra.Sequencer',
+  'Civil Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDuskProvider, OpenAstroAra.Sequencer',
+  'Civil Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDawnProvider, OpenAstroAra.Sequencer',
+  'Nautical Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDuskProvider, OpenAstroAra.Sequencer',
+  'Nautical Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDawnProvider, OpenAstroAra.Sequencer',
+  'Astronomical Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider, OpenAstroAra.Sequencer',
+  'Astronomical Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DawnProvider, OpenAstroAra.Sequencer',
+  'Meridian': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.MeridianProvider, OpenAstroAra.Sequencer',
+};
+
+/// Build a `SelectedProvider` value from a [timeProviders] label: null (custom
+/// time) or `{$type}` for a sky-event provider. The dropdown only ever passes a
+/// known key; the assert catches a future catalog typo (a label not in the map
+/// would otherwise silently fall back to custom time).
+Map<String, dynamic>? timeProviderValue(String label) {
+  assert(timeProviders.containsKey(label), 'unknown time-provider label: $label');
+  final type = timeProviders[label];
+  return type == null ? null : <String, dynamic>{r'$type': type};
+}
+
+/// The [timeProviders] label for a stored `SelectedProvider` value (null or a
+/// `{$type}` map) — 'Custom time' for null/unrecognised.
+String timeProviderLabel(Object? value) {
+  final type = value is Map ? value[r'$type'] : null;
+  for (final entry in timeProviders.entries) {
+    if (entry.value == type) return entry.key;
+  }
+  return 'Custom time';
+}
+
+/// `enabledWhen` for a `TimeCondition`'s Hours/Minutes/Seconds: they're only
+/// user-meaningful in **Custom time** mode. Driven by [timeProviderLabel] (not a
+/// raw `== null` check) so it agrees with the When dropdown — an unrecognised
+/// stored `$type` reads as 'Custom time' there, and the H/M/S stay enabled to
+/// match (rather than greying out under a label that says Custom time). A
+/// top-level function so it's const-constructible.
+bool timeConditionUsesClock(Map<String, dynamic> node) =>
+    timeProviderLabel(node['SelectedProvider']) == 'Custom time';
+
+/// The inverse of [timeConditionUsesClock] — `enabledWhen` for `MinutesOffset`,
+/// which the daemon applies ONLY under a sky-event provider (`TimeCondition`'s
+/// `UpdateTime` adds it to `SelectedProvider.GetDateTime`); in Custom-time mode
+/// it's inert, so the editor greys it out.
+bool timeConditionUsesProvider(Map<String, dynamic> node) =>
+    !timeConditionUsesClock(node);
+
 /// One loop condition in the container's "add condition" picker.
 @immutable
 class ConditionDef {
@@ -168,6 +223,33 @@ const List<ConditionDef> conditionCatalog = [
           defaultValue: aboveHorizonConditionData),
       InstructionField('HasDsoParent', 'Has DSO parent', InstructionFieldType.boolean,
           defaultValue: false, editable: false),
+    ],
+  ),
+  // Run a container until a clock time or a sky event (sunset, civil dusk, …).
+  // Hours/Minutes/Seconds are the absolute time when SelectedProvider is null
+  // (Custom time); for a sky-event provider they're computed at runtime, and
+  // MinutesOffset shifts the result. All four are `[JsonProperty] public int`.
+  ConditionDef(
+    type: 'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
+    label: 'Until a time',
+    icon: Icons.schedule_outlined,
+    fields: [
+      InstructionField('SelectedProvider', 'When', InstructionFieldType.timeProvider,
+          defaultValue: null),
+      // H/M/S are the clock time only in Custom-time mode; under a sky-event
+      // provider the daemon computes them, so they grey out (enabledWhen).
+      InstructionField('Hours', 'Hour', InstructionFieldType.integer,
+          defaultValue: 0, min: 0, max: 23, enabledWhen: timeConditionUsesClock),
+      InstructionField('Minutes', 'Minute', InstructionFieldType.integer,
+          defaultValue: 0, min: 0, max: 59, enabledWhen: timeConditionUsesClock),
+      InstructionField('Seconds', 'Second', InstructionFieldType.integer,
+          defaultValue: 0, min: 0, max: 59, enabledWhen: timeConditionUsesClock),
+      // Deliberately unbounded (and signed via the free integer field): a
+      // sky-event offset is a relative shift in either direction (e.g. -15 =
+      // "15 min before sunset"); NINA imposes no ceiling on it. Greyed in
+      // Custom-time mode — the daemon only applies it under a provider.
+      InstructionField('MinutesOffset', 'Offset (min)', InstructionFieldType.integer,
+          defaultValue: 0, enabledWhen: timeConditionUsesProvider),
     ],
   ),
 ];

@@ -80,6 +80,18 @@ Future<ProviderContainer> _pump(WidgetTester tester,
 Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
     nodeAt(c.read(sequenceEditorProvider)!.body, p)!;
 
+/// Whether the `/cond/0/Hours` field's underlying `TextField` is disabled — the
+/// direct signal that the field is non-interactive (keyboard included), not just
+/// dimmed. `_FieldControl` sets `enabled: false` on the input when its
+/// `enabledWhen` predicate is false.
+bool _hoursDisabled(WidgetTester tester) {
+  final field = tester.widget<TextField>(find.descendant(
+    of: find.byKey(const ValueKey('/cond/0/Hours')),
+    matching: find.byType(TextField),
+  ));
+  return field.enabled == false;
+}
+
 void main() {
   testWidgets('placeholder when nothing is selected', (tester) async {
     await _pump(tester, detail: sampleDetail());
@@ -439,6 +451,43 @@ void main() {
       expect(conditionsOf(_nodeAt(c, const [])).single['Minutes'], 59); // clamped
       // and the displayed text was corrected to the clamped value
       expect(tester.widget<TextField>(minutes).controller!.text, '59');
+    });
+
+    testWidgets('TimeCondition When dropdown sets a sky-event provider',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      expect(find.text('Custom time'), findsOneWidget); // default provider label
+      await tester.tap(find.text('Custom time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Civil Dusk').last);
+      await tester.pumpAndSettle();
+      final provider = conditionsOf(_nodeAt(c, const [])).single['SelectedProvider'];
+      expect(provider, isA<Map>());
+      expect((provider as Map)[r'$type'], contains('CivilDuskProvider'));
+      // After the write-back rebuild, the controlled dropdown reflects the new
+      // selection (a FormField.initialValue would have stuck on 'Custom time').
+      expect(find.text('Civil Dusk'), findsOneWidget);
+      expect(find.text('Custom time'), findsNothing);
+      // …and the now-inert H/M/S fields are truly disabled (enabled:false), so a
+      // greyed field can't be edited via keyboard focus on desktop — not just dimmed.
+      expect(_hoursDisabled(tester), isTrue);
+    });
+
+    testWidgets('TimeCondition H/M/S are enabled in Custom-time mode',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      // Default is Custom time (null provider) → H/M/S editable (enabled).
+      expect(_hoursDisabled(tester), isFalse);
     });
 
     testWidgets('removing a condition deletes it from the body', (tester) async {

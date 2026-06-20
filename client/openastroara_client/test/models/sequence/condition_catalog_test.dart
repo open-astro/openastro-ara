@@ -90,6 +90,60 @@ void main() {
       expect(iter.max, isNull);
     });
 
+    test('TimeCondition builds a null provider (custom clock time) + clamped H/M/S', () {
+      final def = conditionForType(
+          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!;
+      final node = def.build();
+      expect(node.containsKey('SelectedProvider'), isTrue);
+      expect(node['SelectedProvider'], isNull); // Custom time by default
+      expect(node['Hours'], 0);
+      expect(node['MinutesOffset'], 0);
+      expect(def.fields.firstWhere((f) => f.key == 'Hours').max, 23);
+      expect(def.fields.firstWhere((f) => f.key == 'Minutes').max, 59);
+      expect(def.fields.firstWhere((f) => f.key == 'Seconds').max, 59);
+    });
+
+    test('TimeCondition H/M/S grey out under a sky-event provider (enabledWhen)', () {
+      final def = conditionForType(
+          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!;
+      final provider = timeProviderValue('Civil Dusk'); // a recognised provider
+      for (final key in ['Hours', 'Minutes', 'Seconds']) {
+        final f = def.fields.firstWhere((f) => f.key == key);
+        expect(f.enabledWhen, isNotNull, reason: key);
+        expect(f.enabledWhen!(const {'SelectedProvider': null}), isTrue, reason: key);
+        expect(f.enabledWhen!({'SelectedProvider': provider}), isFalse, reason: key);
+      }
+      // MinutesOffset is the inverse: enabled ONLY under a provider (the daemon
+      // applies it to the computed event time; it's inert for custom clock time).
+      final offset = def.fields.firstWhere((f) => f.key == 'MinutesOffset');
+      expect(offset.enabledWhen, isNotNull);
+      expect(offset.enabledWhen!(const {'SelectedProvider': null}), isFalse);
+      expect(offset.enabledWhen!({'SelectedProvider': provider}), isTrue);
+    });
+
+    test('an unrecognised SelectedProvider reads as Custom time consistently', () {
+      // The dropdown falls back to 'Custom time' for an unknown $type; the H/M/S
+      // relevance must agree (enabled) rather than greying under that label.
+      final def = conditionForType(
+          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!;
+      const unknown = {'SelectedProvider': {r'$type': 'Nope.NotAProvider'}};
+      expect(timeProviderLabel(unknown['SelectedProvider']), 'Custom time');
+      expect(def.fields.firstWhere((f) => f.key == 'Hours').enabledWhen!(unknown), isTrue);
+      expect(
+        def.fields.firstWhere((f) => f.key == 'MinutesOffset').enabledWhen!(unknown),
+        isFalse,
+      );
+    });
+
+    test('timeProvider helpers round-trip a provider \$type', () {
+      expect(timeProviderValue('Custom time'), isNull);
+      final dusk = timeProviderValue('Civil Dusk')!;
+      expect(dusk[r'$type'], contains('CivilDuskProvider'));
+      expect(timeProviderLabel(dusk), 'Civil Dusk');
+      expect(timeProviderLabel(null), 'Custom time');
+      expect(timeProviderLabel(const {r'$type': 'Unknown'}), 'Custom time');
+    });
+
     test('two builds share no map instance (fresh node each time)', () {
       final a = conditionForType(_loop)!.build();
       final b = conditionForType(_loop)!.build();

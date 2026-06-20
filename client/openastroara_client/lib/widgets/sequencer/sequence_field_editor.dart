@@ -79,6 +79,7 @@ class SequenceFieldEditor extends ConsumerWidget {
             key: ValueKey('${selectedPath.join(".")}/${field.key}'),
             field: field,
             value: node[field.key],
+            enabled: field.enabledWhen?.call(node) ?? true,
             onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
           ),
         ),
@@ -266,6 +267,7 @@ class _ConditionCard extends ConsumerWidget {
                 key: ValueKey('${containerPath.join(".")}/cond/$index/${field.key}'),
                 field: field,
                 value: condition[field.key],
+                enabled: field.enabledWhen?.call(condition) ?? true,
                 onChanged: (v) =>
                     notifier.setConditionFieldOn(containerPath, index, field.key, v),
               ),
@@ -390,6 +392,7 @@ class _TriggerCard extends ConsumerWidget {
                 key: ValueKey('${containerPath.join(".")}/trig/$index/${field.key}'),
                 field: field,
                 value: trigger[field.key],
+                enabled: field.enabledWhen?.call(trigger) ?? true,
                 onChanged: (v) =>
                     notifier.setTriggerFieldOn(containerPath, index, field.key, v),
               ),
@@ -406,14 +409,34 @@ class _FieldControl extends StatelessWidget {
     required this.field,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final InstructionField field;
   final Object? value;
   final ValueChanged<Object?> onChanged;
 
+  /// When false the input widgets are truly disabled (`enabled: false` /
+  /// `onChanged: null`), not just dimmed — so a greyed field can't be edited via
+  /// keyboard focus on desktop/web (where `IgnorePointer` only blocks the mouse).
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
+    final control = _control(context);
+    // Dim + a11y-disable + pointer-block the whole control (incl. its label and
+    // composite sub-editors) when inert; the interactive widgets are also
+    // `enabled: false` (in _control) so keyboard focus is blocked, not just the
+    // mouse.
+    return enabled
+        ? control
+        : Opacity(
+            opacity: 0.5,
+            child: Semantics(enabled: false, child: IgnorePointer(child: control)),
+          );
+  }
+
+  Widget _control(BuildContext context) {
     switch (field.type) {
       case InstructionFieldType.boolean:
         return Row(
@@ -421,7 +444,7 @@ class _FieldControl extends StatelessWidget {
             Expanded(child: _label()),
             Switch(
               value: value == true,
-              onChanged: onChanged,
+              onChanged: enabled ? onChanged : null,
             ),
           ],
         );
@@ -439,9 +462,11 @@ class _FieldControl extends StatelessWidget {
               for (final e in labels.entries)
                 DropdownMenuItem(value: e.key, child: Text(e.value)),
             ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+            onChanged: enabled
+                ? (v) {
+                    if (v != null) onChanged(v);
+                  }
+                : null,
           ),
         );
       case InstructionFieldType.stringEnum:
@@ -456,9 +481,11 @@ class _FieldControl extends StatelessWidget {
               for (final v in values)
                 DropdownMenuItem(value: v, child: Text(v)),
             ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+            onChanged: enabled
+                ? (v) {
+                    if (v != null) onChanged(v);
+                  }
+                : null,
           ),
         );
       case InstructionFieldType.number:
@@ -471,6 +498,7 @@ class _FieldControl extends StatelessWidget {
             isInt: false,
             min: field.min,
             max: field.max,
+            enabled: enabled,
             onChanged: (v) => onChanged(v.toDouble()),
           ));
         }
@@ -487,6 +515,7 @@ class _FieldControl extends StatelessWidget {
             isInt: true,
             min: field.min,
             max: field.max,
+            enabled: enabled,
             onChanged: (v) => onChanged(v.toInt()),
           ));
         }
@@ -507,6 +536,7 @@ class _FieldControl extends StatelessWidget {
         return _labelled(_CoordinatesEditor(
           fieldKey: field.key,
           value: value,
+          enabled: enabled,
           onChanged: onChanged,
         ));
       case InstructionFieldType.waitLoopData:
@@ -517,10 +547,32 @@ class _FieldControl extends StatelessWidget {
           // (AltitudeCondition → LessThan, AboveHorizon → GreaterThan) for a body
           // that arrives without one, rather than a fixed GreaterThan bias.
           fallbackComparator: _comparatorOf(field.defaultValue),
+          enabled: enabled,
           onChanged: onChanged,
         ));
+      case InstructionFieldType.timeProvider:
+        // null (custom clock time) or a {$type} sky-event provider object. A
+        // controlled `value:` (not FormField.initialValue, which only seeds on
+        // initState) so the selection tracks an external state change — matching
+        // the intEnum/stringEnum pickers above.
+        return _labelled(
+          DropdownButton<String>(
+            value: timeProviderLabel(value),
+            isExpanded: true,
+            dropdownColor: AraColors.bgPanel,
+            items: [
+              for (final label in timeProviders.keys)
+                DropdownMenuItem(value: label, child: Text(label)),
+            ],
+            onChanged: enabled
+                ? (label) {
+                    if (label != null) onChanged(timeProviderValue(label));
+                  }
+                : null,
+          ),
+        );
       case InstructionFieldType.filter:
-        return _labelled(_FilterEditor(value: value, onChanged: onChanged));
+        return _labelled(_FilterEditor(value: value, enabled: enabled, onChanged: onChanged));
     }
   }
 
@@ -583,6 +635,7 @@ class _FieldControl extends StatelessWidget {
   }) =>
       TextFormField(
         initialValue: initial,
+        enabled: enabled,
         keyboardType: keyboard,
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
@@ -614,10 +667,11 @@ class _FieldControl extends StatelessWidget {
 /// silently dropped. When no slots are labelled, an instruction to configure
 /// them is shown instead of an empty dropdown.
 class _FilterEditor extends ConsumerWidget {
-  const _FilterEditor({required this.value, required this.onChanged});
+  const _FilterEditor({required this.value, required this.onChanged, this.enabled = true});
 
   final Object? value;
   final ValueChanged<Object?> onChanged;
+  final bool enabled;
 
   static const String _filterInfoType =
       'OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core';
@@ -658,17 +712,19 @@ class _FilterEditor extends ConsumerWidget {
         for (final name in items)
           DropdownMenuItem(value: name, child: Text(name)),
       ],
-      onChanged: (name) {
-        // Ignore a pick of the (already-selected) unknown stored filter — there's
-        // no slot to resolve a position from, and the existing value stands.
-        final slot = slots.where((s) => s.name == name);
-        if (slot.isEmpty) return;
-        onChanged(<String, dynamic>{
-          r'$type': _filterInfoType,
-          '_name': slot.first.name,
-          '_position': slot.first.position,
-        });
-      },
+      onChanged: enabled
+          ? (name) {
+              // Ignore a pick of the (already-selected) unknown stored filter —
+              // there's no slot to resolve a position from, so the value stands.
+              final slot = slots.where((s) => s.name == name);
+              if (slot.isEmpty) return;
+              onChanged(<String, dynamic>{
+                r'$type': _filterInfoType,
+                '_name': slot.first.name,
+                '_position': slot.first.position,
+              });
+            }
+          : null,
     );
   }
 }
@@ -686,11 +742,13 @@ class _CoordinatesEditor extends StatelessWidget {
     required this.fieldKey,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String fieldKey;
   final Object? value;
   final ValueChanged<Map<String, dynamic>> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -729,27 +787,27 @@ class _CoordinatesEditor extends StatelessWidget {
       children: [
         _axisRow('RA', [
           _NumField(key: Key('${fieldKey}_ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
-              onChanged: (v) => onChanged(coord(raH: v.toInt()))),
+              enabled: enabled, onChanged: (v) => onChanged(coord(raH: v.toInt()))),
           _NumField(key: Key('${fieldKey}_ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
-              onChanged: (v) => onChanged(coord(raM: v.toInt()))),
+              enabled: enabled, onChanged: (v) => onChanged(coord(raM: v.toInt()))),
           _NumField(key: Key('${fieldKey}_ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
-              onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
+              enabled: enabled, onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
         ]),
         const SizedBox(height: 6),
         _axisRow('Dec', [
           _SignToggle(
             negative: neg,
-            onChanged: (n) => onChanged(coord(negDec: n)),
+            onChanged: enabled ? (n) => onChanged(coord(negDec: n)) : null,
           ),
           _NumField(key: Key('${fieldKey}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
-              onChanged: (v) => onChanged(coord(decD: v.toInt()))),
+              enabled: enabled, onChanged: (v) => onChanged(coord(decD: v.toInt()))),
           // At the ±90° pole, minutes/seconds must be 0 — disable them so the
           // constraint is visible (rather than silently snapping back on edit).
           _NumField(key: Key('${fieldKey}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
-              enabled: ri('DecDegrees') < 90,
+              enabled: enabled && ri('DecDegrees') < 90,
               onChanged: (v) => onChanged(coord(decM: v.toInt()))),
           _NumField(key: Key('${fieldKey}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
-              enabled: ri('DecDegrees') < 90,
+              enabled: enabled && ri('DecDegrees') < 90,
               onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
         ]),
       ],
@@ -793,6 +851,7 @@ class _WaitLoopDataEditor extends StatelessWidget {
     required this.value,
     required this.fallbackComparator,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String fieldKey;
@@ -803,6 +862,7 @@ class _WaitLoopDataEditor extends StatelessWidget {
   /// GreaterThan/3), so a body missing the key keeps the right loop direction.
   final int fallbackComparator;
   final ValueChanged<Map<String, dynamic>> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -852,9 +912,11 @@ class _WaitLoopDataEditor extends StatelessWidget {
             for (final e in altitudeComparators.entries)
               DropdownMenuItem(value: e.key, child: Text(e.value)),
           ],
-          onChanged: (v) {
-            if (v != null) onChanged(withData(newComparator: v));
-          },
+          onChanged: enabled
+              ? (v) {
+                  if (v != null) onChanged(withData(newComparator: v));
+                }
+              : null,
         ),
         const SizedBox(height: 8),
         const Text('Offset (°)',
@@ -871,6 +933,7 @@ class _WaitLoopDataEditor extends StatelessWidget {
           signed: true,
           min: -90,
           max: 90,
+          enabled: enabled,
           onChanged: (v) => onChanged(withData(newOffset: v.toDouble())),
         ),
         const SizedBox(height: 8),
@@ -880,6 +943,7 @@ class _WaitLoopDataEditor extends StatelessWidget {
         _CoordinatesEditor(
           fieldKey: '${fieldKey}_coords',
           value: coords,
+          enabled: enabled,
           onChanged: (c) => onChanged(withData(newCoords: c)),
         ),
       ],
@@ -1045,11 +1109,12 @@ class _SingleDecimalFormatter extends TextInputFormatter {
 class _SignToggle extends StatelessWidget {
   const _SignToggle({required this.negative, required this.onChanged});
   final bool negative;
-  final ValueChanged<bool> onChanged;
+  // Nullable so a disabled coordinates editor can grey + block the toggle.
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) => OutlinedButton(
-        onPressed: () => onChanged(!negative),
+        onPressed: onChanged == null ? null : () => onChanged!(!negative),
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
           // shrinkWrap drops the default ~48px of hidden touch padding that would
