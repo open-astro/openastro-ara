@@ -48,7 +48,7 @@ class SwitchPort {
   /// with a small epsilon rather than `==`. (A 0..1 PWM port is indistinguishable
   /// from boolean on min/max alone — the REST port DTO doesn't carry step size — so
   /// the UI treats any [0,1] range as a toggle.)
-  bool get isBoolean => min.abs() < 1e-6 && (max - 1).abs() < 1e-6;
+  bool get isBoolean => (min - 0).abs() < 1e-6 && (max - 1).abs() < 1e-6;
 
   factory SwitchPort.fromJson(Map<String, dynamic> json) {
     double dbl(String key) => (json[key] as num?)?.toDouble() ?? 0;
@@ -103,9 +103,17 @@ class SwitchDevice {
             .map(SwitchPort.fromJson)
             .toList(growable: false)
         : const <SwitchPort>[];
+    // alpaca_device_number is the SOLE address key for the multi-switch feature —
+    // a missing/garbled value would collide two devices on address 0. The daemon
+    // always sends it; assert in debug (mirroring _parseType's default) so schema
+    // drift surfaces immediately, while release still degrades to 0 rather than
+    // crashing the list.
+    final rawDeviceNumber = json['alpaca_device_number'];
+    assert(rawDeviceNumber is num,
+        'SwitchDto is missing alpaca_device_number — the multi-switch address key');
     return SwitchDevice(
       deviceId: json['device_id'] as String? ?? '',
-      alpacaDeviceNumber: (json['alpaca_device_number'] as num?)?.toInt() ?? 0,
+      alpacaDeviceNumber: (rawDeviceNumber as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? '',
       connectionState: _connectionFromWire(json['state'] as String?),
       ports: ports,

@@ -42,11 +42,18 @@ void main() {
 
     test('disconnected/error states map through', () {
       SwitchConnectionState stateOf(String s) => SwitchDevice.fromJson(
-            <String, dynamic>{'state': s},
+            <String, dynamic>{'alpaca_device_number': 0, 'state': s},
           ).connectionState;
       expect(stateOf('disconnected'), SwitchConnectionState.disconnected);
       expect(stateOf('connecting'), SwitchConnectionState.connecting);
       expect(stateOf('error'), SwitchConnectionState.error);
+    });
+
+    test('a missing alpaca_device_number asserts in debug (the address key)', () {
+      expect(
+        () => SwitchDevice.fromJson(const <String, dynamic>{'state': 'connected'}),
+        throwsA(isA<AssertionError>()),
+      );
     });
   });
 
