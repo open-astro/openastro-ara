@@ -66,21 +66,22 @@ public sealed partial class MdnsAdvertiser : IHostedService {
 
     public Task StartAsync(CancellationToken cancellationToken) {
         try {
-            var mdns = new MulticastService();
-            var discovery = new ServiceDiscovery(mdns);
+            // Assign the disposable fields immediately after construction so the
+            // catch's Cleanup() disposes them even if a later call (Advertise/Start/
+            // Announce) throws — otherwise those MulticastService sockets would leak.
+            _mdns = new MulticastService();
+            _discovery = new ServiceDiscovery(_mdns);
             // Null addresses → the profile fills A/AAAA from the live interfaces.
             var profile = new ServiceProfile(_instanceName, ServiceType, (ushort)_port, addresses: null);
             profile.AddProperty("uuid", ServerIdentity.Uuid);
             profile.AddProperty("nickname", ServerIdentity.Nickname);
             profile.AddProperty("version", ServerIdentity.Version);
-            discovery.Advertise(profile);
-            mdns.Start();
+            _profile = profile;
+            _discovery.Advertise(profile);
+            _mdns.Start();
             // Proactively announce so a client already passively listening populates
             // without waiting for its next active query.
-            discovery.Announce(profile);
-            _mdns = mdns;
-            _discovery = discovery;
-            _profile = profile;
+            _discovery.Announce(profile);
             LogAdvertising(_instanceName, ServiceType, _port);
         }
 #pragma warning disable CA1031 // best-effort discovery: any failure must not fault daemon startup
