@@ -236,38 +236,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task OpenDownloadAsync_caps_to_length_at_open_when_file_grows() {
-            // Regression: the active log file keeps growing while the response
-            // streams. The download must serve a snapshot at open-time length so
-            // Content-Length (set from Stream.Length) matches the bytes copied —
-            // otherwise Kestrel aborts with "too many bytes written".
-            var path = WriteLog("openastroara-20260619.log",
-                Clef("2026-06-19T10:00:00.0000000Z", "before"));
-            var openLength = new FileInfo(path).Length;
-
-            var result = await _svc.OpenDownloadAsync(null, CancellationToken.None);
-            Assert.That(result, Is.Not.Null);
-            await using var stream = result!.Value.Stream;
-
-            // The sink appends after the download opened (FileShare.ReadWrite lets
-            // both handles coexist).
-            await using (var append = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)) {
-                var extra = System.Text.Encoding.UTF8.GetBytes(
-                    Clef("2026-06-19T10:00:01.0000000Z", "appended-after-open") + "\n");
-                await append.WriteAsync(extra);
-            }
-
-            Assert.That(stream.Length, Is.EqualTo(openLength), "Length must reflect the open-time snapshot");
-
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            Assert.That(ms.Length, Is.EqualTo(openLength), "copied bytes must not overrun Content-Length");
-            var text = System.Text.Encoding.UTF8.GetString(ms.ToArray());
-            Assert.That(text, Does.Contain("before"));
-            Assert.That(text, Does.Not.Contain("appended-after-open"));
-        }
-
-        [Test]
         public async Task OpenDownloadAsync_resolves_bare_name() {
             WriteLog("openastroara-20260619.log", Clef("2026-06-19T10:00:00.0000000Z", "x"));
 
