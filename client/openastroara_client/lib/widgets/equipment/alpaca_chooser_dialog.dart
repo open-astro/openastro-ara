@@ -11,18 +11,24 @@ import '../../theme/ara_colors.dart';
 
 /// §52.2 Alpaca device chooser. Calls `/api/v1/equipment/discover/{type}`
 /// against the active server, shows the discovered devices, lets the user
-/// pick one. Selection lives in `alpacaSelectionProvider` and is consumed
-/// by each equipment panel's connection row.
+/// pick one. By default the pick is stored in `alpacaSelectionProvider` (the
+/// one-device-per-type selection each panel's connection row consumes).
+///
+/// Pass [onPick] to override that for a multi-instance type (Switch): the
+/// callback receives the chosen device instead of the default single-selection
+/// write, so the caller can e.g. connect an additional device.
 Future<void> showAlpacaChooserDialog(
   BuildContext context,
   EquipmentDeviceType type, {
   required String deviceTypeLabel,
+  void Function(DiscoveredDevice device)? onPick,
 }) {
   return showDialog<void>(
     context: context,
     builder: (_) => _AlpacaChooserDialog(
       type: type,
       deviceTypeLabel: deviceTypeLabel,
+      onPick: onPick,
     ),
   );
 }
@@ -30,10 +36,12 @@ Future<void> showAlpacaChooserDialog(
 class _AlpacaChooserDialog extends ConsumerStatefulWidget {
   final EquipmentDeviceType type;
   final String deviceTypeLabel;
+  final void Function(DiscoveredDevice device)? onPick;
 
   const _AlpacaChooserDialog({
     required this.type,
     required this.deviceTypeLabel,
+    this.onPick,
   });
 
   @override
@@ -71,7 +79,11 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
   }
 
   void _pick(DiscoveredDevice device) {
-    ref.read(alpacaSelectionProvider.notifier).select(widget.type, device);
+    if (widget.onPick != null) {
+      widget.onPick!(device);
+    } else {
+      ref.read(alpacaSelectionProvider.notifier).select(widget.type, device);
+    }
     Navigator.of(context).pop();
   }
 

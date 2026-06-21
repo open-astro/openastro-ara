@@ -15,6 +15,7 @@ import 'panels/equipment_guider_panel.dart';
 import 'panels/equipment_mount_panel.dart';
 import 'panels/equipment_rotator_panel.dart';
 import 'panels/equipment_safety_monitor_panel.dart';
+import 'panels/equipment_switch_panel.dart';
 import 'panels/equipment_weather_panel.dart';
 import 'panels/generic_placeholder_panel.dart';
 import 'panels/imaging_autofocus_panel.dart';
@@ -205,6 +206,7 @@ class _PanelBody extends StatelessWidget {
       'eq.dome' => const EquipmentDomePanel(),
       'eq.weather' => const EquipmentWeatherPanel(),
       'eq.safety' => const EquipmentSafetyMonitorPanel(),
+      'eq.switch' => const EquipmentSwitchPanel(),
       'img.defaults' => const ImagingDefaultsPanel(),
       'img.optics' => const OpticsPanel(),
       'img.autofocus' => const ImagingAutofocusPanel(),
