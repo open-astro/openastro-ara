@@ -27,6 +27,9 @@ enum EquipmentDeviceType {
   dome,
   weather,
   safetyMonitor,
+  // Multi-instance: unlike the others, several Switch devices can be connected at
+  // once (addressed by Alpaca device number). The selection/connect UI handles that.
+  switchDevice,
 }
 
 class EquipmentConnectionSettings {
