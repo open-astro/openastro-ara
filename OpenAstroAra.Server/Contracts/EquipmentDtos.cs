@@ -202,6 +202,7 @@ public sealed record DomeSlewRequestDto(double TargetAzimuthDeg);
 
 public sealed record SwitchDto(
     string DeviceId,
+    int AlpacaDeviceNumber,
     string Name,
     EquipmentConnectionState State,
     IReadOnlyList<SwitchPortDto> Ports);

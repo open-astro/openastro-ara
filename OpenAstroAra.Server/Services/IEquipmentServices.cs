@@ -81,10 +81,13 @@ public interface IDomeService {
 }
 
 public interface ISwitchService {
-    Task<SwitchDto?> GetAsync(CancellationToken ct);
+    // Multi-instance: switches are addressed by their AlpacaDeviceNumber (the {n} in
+    // /api/v1/equipment/switch/{n}). GetAllAsync lists every connected/known switch.
+    Task<IReadOnlyList<SwitchDto>> GetAllAsync(CancellationToken ct);
+    Task<SwitchDto?> GetAsync(int deviceNumber, CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
-    Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
-    Task SetValueAsync(SwitchValueRequestDto request, CancellationToken ct);
+    Task<OperationAcceptedDto> DisconnectAsync(int deviceNumber, string? idempotencyKey, CancellationToken ct);
+    Task SetValueAsync(int deviceNumber, SwitchValueRequestDto request, CancellationToken ct);
 }
 
 public interface IObservingConditionsService {

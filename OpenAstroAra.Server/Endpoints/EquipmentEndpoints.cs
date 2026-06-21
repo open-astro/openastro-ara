@@ -138,17 +138,35 @@ public static class EquipmentEndpoints {
         dome.MapPost("/shutter/close", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.CloseShutterAsync(key, ct)));
 
-        // ─── Switch ───
+        // ─── Switch (multi-instance, addressed by Alpaca device number — the {n}) ───
         var sw = equipment.MapGroup("/switch");
-        sw.MapGet("", async (ISwitchService svc, CancellationToken ct) => {
-            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        // List every connected/known switch ([] when none).
+        sw.MapGet("", async (ISwitchService svc, CancellationToken ct) =>
+            Results.Ok(await svc.GetAllAsync(ct)));
+        // One switch by device number (404 when not present).
+        sw.MapGet("/{n:int}", async (int n, ISwitchService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(n, ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
+        // Connect an ADDITIONAL switch (no longer evicts the others). The device's AlpacaDeviceNumber
+        // (in the body's DiscoveredDeviceDto) becomes its address.
         sw.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, IAlpacaBridgeHandshakeService bridge, IAlpacaBridgeGateNotifier notifier, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
             await ConnectGatedAsync(request, bridge, notifier, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
-        sw.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        sw.MapPost("/value", async ([FromBody] SwitchValueRequestDto request, ISwitchService svc, CancellationToken ct) => {
-            await svc.SetValueAsync(request, ct); return Results.Accepted();
+        // Disconnect is idempotent (like every device's disconnect): an unknown/already-disconnected
+        // device number is a no-op 202, not a 404.
+        sw.MapPost("/{n:int}/disconnect", async (int n, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(n, key, ct)));
+        // A write needs a live switch, so the errors map (per the file's convention): an out-of-range
+        // PortId → 400; no connected switch at {n} (unknown number or not Connected) → 409 Conflict —
+        // instead of an opaque 500.
+        sw.MapPost("/{n:int}/value", async (int n, [FromBody] SwitchValueRequestDto request, ISwitchService svc, CancellationToken ct) => {
+            try {
+                await svc.SetValueAsync(n, request, ct);
+                return Results.Accepted();
+            } catch (System.ArgumentException ex) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            } catch (System.InvalidOperationException ex) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
         });
 
         // ─── ObservingConditions ───

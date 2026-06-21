@@ -58,15 +58,16 @@ namespace OpenAstroAra.Test {
 
             using var svc = new SwitchService();
 
+            var n = device!.AlpacaDeviceNumber;
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, n, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected, Is.Not.Null, "connection never left the Connecting state");
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
             Assert.That(connected.Ports, Is.Not.Empty, "the simulated Switch should expose ports");
 
             // Idempotency (§60.5): a repeat connect to the same connected device is a no-op accept.
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            var stillConnected = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            var stillConnected = await svc.GetAsync(n, CancellationToken.None).ConfigureAwait(false);
             Assert.That(stillConnected!.State, Is.EqualTo(EquipmentConnectionState.Connected),
                 "a repeat connect to the same connected device must stay Connected");
 
@@ -74,9 +75,9 @@ namespace OpenAstroAra.Test {
             var writable = connected.Ports.FirstOrDefault(p => p.CanWrite && p.Max > p.Min);
             if (writable is not null) {
                 var target = Math.Abs(writable.Value - writable.Max) < double.Epsilon ? writable.Min : writable.Max;
-                await svc.SetValueAsync(new SwitchValueRequestDto(writable.Id, target), CancellationToken.None).ConfigureAwait(false);
+                await svc.SetValueAsync(n, new SwitchValueRequestDto(writable.Id, target), CancellationToken.None).ConfigureAwait(false);
 
-                var updated = await PollUntilPortAsync(svc, writable.Id, target).ConfigureAwait(false);
+                var updated = await PollUntilPortAsync(svc, n, writable.Id, target).ConfigureAwait(false);
                 Assert.That(updated, Is.Not.Null, "port never reflected the written value");
                 Assert.That(updated!.Value, Is.EqualTo(target).Within(1e-6),
                     "the cached port value should reflect the SetValue write");
@@ -84,8 +85,8 @@ namespace OpenAstroAra.Test {
                 Assert.Warn("no writable port on the simulated Switch — write path not exercised");
             }
 
-            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            await svc.DisconnectAsync(n, null, CancellationToken.None).ConfigureAwait(false);
+            var disconnected = await PollUntilAsync(svc, n, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
@@ -102,8 +103,9 @@ namespace OpenAstroAra.Test {
             Assert.That(device, Is.Not.Null, "no Switch device discovered from the running OmniSim");
 
             using var svc = new SwitchService();
+            var n = device!.AlpacaDeviceNumber;
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, n, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
             Assert.That(connected.Ports, Is.Not.Empty);
 
@@ -142,9 +144,9 @@ namespace OpenAstroAra.Test {
                 }
                 Assert.That(reflected, Is.True, "the mediator write should be reflected by the live wrapper Value");
             } finally {
-                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                await svc.DisconnectAsync(n, null, CancellationToken.None).ConfigureAwait(false);
             }
-            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            var disconnected = await PollUntilAsync(svc, n, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
@@ -161,27 +163,27 @@ namespace OpenAstroAra.Test {
             return null;
         }
 
-        private static async Task<SwitchDto?> PollUntilAsync(SwitchService svc, Func<EquipmentConnectionState, bool> predicate) {
+        private static async Task<SwitchDto?> PollUntilAsync(SwitchService svc, int deviceNumber, Func<EquipmentConnectionState, bool> predicate) {
             for (var i = 0; i < 50; i++) {
-                var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                var dto = await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
                 if (dto is not null && predicate(dto.State)) {
                     return dto;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
-            return await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            return await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
         }
 
-        private static async Task<SwitchPortDto?> PollUntilPortAsync(SwitchService svc, int portId, double target) {
+        private static async Task<SwitchPortDto?> PollUntilPortAsync(SwitchService svc, int deviceNumber, int portId, double target) {
             for (var i = 0; i < 40; i++) {
-                var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                var dto = await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
                 var port = dto?.Ports.FirstOrDefault(p => p.Id == portId);
                 if (port is not null && Math.Abs(port.Value - target) < 1e-6) {
                     return port;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
-            var final = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            var final = await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
             return final?.Ports.FirstOrDefault(p => p.Id == portId);
         }
     }
