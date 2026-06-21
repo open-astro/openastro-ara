@@ -39,11 +39,13 @@ class _FakeSwitchApi implements SwitchClient {
   void close() {}
 }
 
-SwitchDevice _device(List<SwitchPort> ports) => SwitchDevice(
+SwitchDevice _device(List<SwitchPort> ports,
+        {SwitchConnectionState state = SwitchConnectionState.connected}) =>
+    SwitchDevice(
       deviceId: 'sw-0',
       alpacaDeviceNumber: 0,
       name: 'PowerBox',
-      connectionState: SwitchConnectionState.connected,
+      connectionState: state,
       ports: ports,
     );
 
@@ -62,6 +64,31 @@ Future<_FakeSwitchApi> _pump(WidgetTester tester, List<SwitchDevice> devices) as
 }
 
 void main() {
+  testWidgets('a connecting switch settles to connected via the poll', (tester) async {
+    // The daemon's connect is 202 + background, so the first read shows `connecting`.
+    // The panel polls while anything is connecting; once the daemon finishes, the
+    // card must settle to Connected without the user re-opening the panel.
+    final api = _FakeSwitchApi([_device(const [], state: SwitchConnectionState.connecting)]);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+        switchApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentSwitchPanel())),
+    ));
+    await tester.pump(); // build
+    await tester.pump(); // resolve the initial getAll
+    expect(find.text('Connecting'), findsOneWidget);
+
+    // Daemon finished connecting in the background.
+    api.devices = [_device(const [], state: SwitchConnectionState.connected)];
+    await tester.pump(const Duration(milliseconds: 1600)); // fire the settle-poll tick → refresh
+    await tester.pump(); // resolve the refresh getAll
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Connecting'), findsNothing);
+  });
+
   testWidgets('empty list shows the empty state + Add switch', (tester) async {
     await _pump(tester, const []);
     expect(find.text('No switches connected'), findsOneWidget);
