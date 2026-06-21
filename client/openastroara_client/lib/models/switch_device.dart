@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 // Client mirror of the daemon's multi-instance Switch surface
 // (`GET /api/v1/equipment/switch` → `SwitchDto[]`). Each connected ASCOM Switch
 // device is addressed by its `alpaca_device_number` (the `{n}` in
@@ -55,6 +57,20 @@ class SwitchPort {
       canWrite: json['can_write'] as bool? ?? false,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SwitchPort &&
+          other.id == id &&
+          other.name == name &&
+          other.value == value &&
+          other.min == min &&
+          other.max == max &&
+          other.canWrite == canWrite);
+
+  @override
+  int get hashCode => Object.hash(id, name, value, min, max, canWrite);
 }
 
 /// A connected (or known-but-disconnected) Switch device and its ports.
@@ -91,4 +107,23 @@ class SwitchDevice {
       ports: ports,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SwitchDevice &&
+          other.deviceId == deviceId &&
+          other.alpacaDeviceNumber == alpacaDeviceNumber &&
+          other.name == name &&
+          other.connectionState == connectionState &&
+          listEquals(other.ports, ports));
+
+  @override
+  int get hashCode => Object.hash(
+        deviceId,
+        alpacaDeviceNumber,
+        name,
+        connectionState,
+        Object.hashAll(ports),
+      );
 }

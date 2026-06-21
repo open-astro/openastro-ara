@@ -49,4 +49,29 @@ void main() {
       expect(stateOf('error'), SwitchConnectionState.error);
     });
   });
+
+  group('structural equality', () {
+    Map<String, dynamic> payload() => <String, dynamic>{
+          'device_id': 'sw-0',
+          'alpaca_device_number': 0,
+          'name': 'A',
+          'state': 'connected',
+          'ports': <Map<String, dynamic>>[
+            {'id': 0, 'name': 'P', 'value': 1, 'min': 0, 'max': 1, 'can_write': true},
+          ],
+        };
+
+    test('equal payloads compare equal (incl. ports)', () {
+      expect(SwitchDevice.fromJson(payload()), SwitchDevice.fromJson(payload()));
+      expect(SwitchDevice.fromJson(payload()).hashCode,
+          SwitchDevice.fromJson(payload()).hashCode);
+    });
+
+    test('a changed port value breaks equality (drives UI rebuilds)', () {
+      final changed = payload();
+      (changed['ports'] as List).first['value'] = 0;
+      expect(SwitchDevice.fromJson(payload()),
+          isNot(SwitchDevice.fromJson(changed)));
+    });
+  });
 }

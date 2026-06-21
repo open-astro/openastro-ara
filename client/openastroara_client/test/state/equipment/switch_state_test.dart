@@ -166,13 +166,30 @@ void main() {
     expect(list.firstWhere((d) => d.alpacaDeviceNumber == 1).isConnected, isTrue);
   });
 
-  test('a failed connect surfaces as an error state', () async {
-    final api = _FakeSwitchApi()..throwOnConnect = true;
+  test('a failed action throws to the caller and keeps the list intact', () async {
+    final api = _FakeSwitchApi()
+      ..devices = [
+        SwitchDevice(
+            deviceId: 'sw-0',
+            alpacaDeviceNumber: 0,
+            name: 'A',
+            connectionState: SwitchConnectionState.connected,
+            ports: const []),
+      ]
+      ..throwOnConnect = true;
     final c = _container(const [server], api);
     await c.read(savedServersProvider.future);
     await c.read(switchListProvider.future);
 
-    await c.read(switchListProvider.notifier).connect(_discovered(0));
-    expect(c.read(switchListProvider).hasError, isTrue);
+    // The error propagates to the caller (the UI surfaces it per-control)...
+    await expectLater(
+      c.read(switchListProvider.notifier).connect(_discovered(1)),
+      throwsA(isA<StateError>()),
+    );
+    // ...and the loaded list is NOT wiped — a one-off failure on one device
+    // doesn't blow away the view of every other switch.
+    final state = c.read(switchListProvider);
+    expect(state.hasError, isFalse);
+    expect(state.value!.single.alpacaDeviceNumber, 0);
   });
 }

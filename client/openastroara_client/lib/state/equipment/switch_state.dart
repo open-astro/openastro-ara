@@ -37,6 +37,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // the post-action refresh from connect/etc. passes a pinned client and always
   // proceeds (see refresh()).
   bool _refreshing = false;
+  // True while a connect/disconnect/setValue is in flight — a second action is
+  // dropped (re-entrancy guard) without touching the list's AsyncValue, so a
+  // one-off action failure never wipes the loaded device list.
+  bool _acting = false;
   // Bumped on every build() (active-server change). A refresh captures the gen at
   // its start and only writes if it still matches, so an in-flight read can't land
   // stale data over a new server's result.
@@ -51,6 +55,13 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     return api.getAll();
   }
 
+  // connect/disconnect/setValue run the 202-Accepted request then re-read the
+  // list. They share a re-entrancy guard (one action at a time), and a failure is
+  // RETHROWN to the caller rather than pushed into the list's state — for a
+  // multi-device list a one-off failure (one port write) shouldn't wipe the view
+  // of every other switch. The UI wraps each control to surface the error; the
+  // list keeps showing the last-read devices. (List-READ failures still surface as
+  // the provider's AsyncError, since a list we can't read can't be shown.)
   Future<void> connect(DiscoveredDevice device) => _act((api) => api.connect(device));
 
   Future<void> disconnect(int deviceNumber) =>
@@ -71,18 +82,19 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // mid-action server switch must not redirect the follow-up read). A failed
   // action surfaces as an error state rather than a bare throw.
   Future<void> _act(Future<void> Function(SwitchClient api) action) async {
-    if (state.isLoading) return; // re-entrancy guard against a double-tap
+    if (_acting) return; // re-entrancy guard against a double-tap
     final api = ref.read(switchApiProvider);
     if (api == null) return;
-    state = const AsyncValue<List<SwitchDevice>>.loading();
+    _acting = true;
     try {
+      // The action throws on failure — propagate to the caller (the list stays as
+      // last read). On success, re-read against the SAME client (a mid-action
+      // server switch must not redirect the follow-up read).
       await action(api);
-    } catch (e, st) {
-      if (ref.mounted) state = AsyncValue<List<SwitchDevice>>.error(e, st);
-      return;
+      if (ref.mounted) await refresh(api);
+    } finally {
+      _acting = false;
     }
-    if (!ref.mounted) return;
-    await refresh(api);
   }
 
   /// Re-read the switch list. [client] pins the read to a specific [SwitchClient]
