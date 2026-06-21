@@ -82,6 +82,9 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
 
     // ct unused by design: ports are served from the §32.4 cache, so there is no per-call HTTP read to
     // cancel. Returns a Task to satisfy the async interface without an await.
+    // Lists every KNOWN switch, not only the connected ones: a switch stays in the map as Disconnected
+    // (manual disconnect) or Error (failed connect) until it is reconnected or the daemon restarts, so a
+    // client can see and re-drive it. Callers wanting only live switches filter on State == Connected.
     public Task<IReadOnlyList<SwitchDto>> GetAllAsync(CancellationToken ct) {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -196,7 +199,10 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         }
         try {
             // Snapshot the connected (connection, client) pairs under the gate, then read each device's
-            // ports off-lock. One pass refreshes every connected switch.
+            // ports off-lock. One pass refreshes every connected switch SEQUENTIALLY under the single
+            // _refreshing guard, so the effective per-device refresh rate degrades with device count (a
+            // slow ASCOM read on switch A delays switch B's). Fine for the handful-of-switches case this
+            // targets; if large switch farms ever appear, parallelize the reads or guard per-connection.
             List<(SwitchConnection Conn, AlpacaSwitch Client)>? targets = null;
             lock (_gate) {
                 if (_disposed) {

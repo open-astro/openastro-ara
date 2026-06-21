@@ -69,8 +69,11 @@ namespace OpenAstroAra.Test {
             Assert.That(all[0].AlpacaDeviceNumber, Is.EqualTo(0), "list is ordered by device number");
             Assert.That(all[1].AlpacaDeviceNumber, Is.EqualTo(1));
 
-            // Disconnecting one leaves the other untouched.
+            // Disconnecting one leaves the other untouched; both entries remain (0 now Disconnected,
+            // 1 still Error) — disconnected switches stay listed until reconnect/restart.
             await svc.DisconnectAsync(0, null, CancellationToken.None);
+            var afterDisconnect = await svc.GetAllAsync(CancellationToken.None);
+            Assert.That(afterDisconnect, Has.Count.EqualTo(2), "both switches stay in the list");
             Assert.That((await svc.GetAsync(0, CancellationToken.None))!.State,
                 Is.EqualTo(EquipmentConnectionState.Disconnected));
             Assert.That((await svc.GetAsync(1, CancellationToken.None))!.State,
