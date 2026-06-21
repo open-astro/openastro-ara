@@ -365,6 +365,12 @@ public partial class Program {
         builder.Services.AddSingleton<IClientSettingsService>(sp =>
             new ClientSettingsService(profileDir, sp.GetRequiredService<ILogger<ClientSettingsService>>()));
 
+        // §52.1 — remembers the last device connected per type under
+        // {profileDir}/equipment-selection.json so EquipmentAutoConnectService can
+        // re-establish it on boot. Written at the connect chokepoint (ConnectGatedAsync).
+        builder.Services.AddSingleton<IEquipmentSelectionStore>(sp =>
+            new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>()));
+
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →
         // ImageReady → ImageArray download → §72 FITS write (atomic §28.7) → §28 catalog insert —
@@ -429,6 +435,17 @@ public partial class Program {
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
+
+        // §32.4 — advertise the daemon over mDNS (_openastroara._tcp) on the bound
+        // port so WILMA's first-run scan discovers it. Best-effort: the service
+        // swallows responder failures so it can never block startup.
+        builder.Services.AddHostedService(sp =>
+            new MdnsAdvertiser(port, sp.GetRequiredService<ILogger<MdnsAdvertiser>>()));
+
+        // §52.1 — on boot, re-establish each remembered device whose profile
+        // auto-connect bool is set (through the §68 bridge gate). Best-effort: a
+        // device failing never blocks the others or startup.
+        builder.Services.AddHostedService<EquipmentAutoConnectService>();
 
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop
