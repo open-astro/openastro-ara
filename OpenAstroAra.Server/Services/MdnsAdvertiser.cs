@@ -36,7 +36,7 @@ namespace OpenAstroAra.Server.Services;
 /// Makaretu.Dns.Multicast, which co-exists with the OS mDNSResponder/Avahi on
 /// :5353 via its socket-reuse handling.</para>
 /// </summary>
-public sealed partial class MdnsAdvertiser : IHostedService {
+public sealed partial class MdnsAdvertiser : IHostedService, IDisposable {
     // Must match ServerDiscoveryService.serviceType on the client and the
     // mdns_service string in /api/v1/server/info (the library appends ".local").
     private const string ServiceType = "_openastroara._tcp";
@@ -119,6 +119,11 @@ public sealed partial class MdnsAdvertiser : IHostedService {
         _mdns = null;
         _profile = null;
     }
+
+    // The host calls StopAsync (→ Cleanup) on graceful shutdown; Dispose covers the
+    // DI container disposing this singleton and any path where StopAsync didn't run.
+    // Cleanup is null-guarded, so a double call (StopAsync then Dispose) is safe.
+    public void Dispose() => Cleanup();
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "mDNS advertising '{Instance}' as {ServiceType}.local on port {Port}.")]
