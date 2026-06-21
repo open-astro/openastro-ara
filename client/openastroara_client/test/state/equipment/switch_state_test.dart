@@ -159,6 +159,22 @@ void main() {
     expect(api.calls, isNot(contains('connect:1')), reason: 'the dropped call never hit the API');
   });
 
+  test('a manual refresh racing an in-flight action is safe', () async {
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    final action = c.read(switchListProvider.notifier).connect(_discovered(0)); // gated, in flight
+    await c.read(switchListProvider.notifier).refresh(); // racing read — must not throw/corrupt
+    api.connectGate!.complete();
+    await action;
+
+    final list = c.read(switchListProvider).value!;
+    expect(list.map((d) => d.alpacaDeviceNumber), [0],
+        reason: 'the action result lands; the racing refresh neither lost nor duplicated it');
+  });
+
   test('a post-action list read failure surfaces as the provider error', () async {
     final api = _FakeSwitchApi();
     final c = _container(const [server], api);

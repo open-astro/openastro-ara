@@ -44,6 +44,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       SettingsPanelInfo(id: 'eq.dome', label: 'Dome', groupId: 'equipment'),
       SettingsPanelInfo(id: 'eq.weather', label: 'Weather', groupId: 'equipment'),
       SettingsPanelInfo(id: 'eq.safety', label: 'Safety Monitor', groupId: 'equipment'),
+      SettingsPanelInfo(id: 'eq.switch', label: 'Switch', groupId: 'equipment'),
     ],
   ),
   SettingsGroup(
