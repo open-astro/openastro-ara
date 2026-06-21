@@ -75,7 +75,17 @@ public sealed partial class LogService : ILogService {
         // FileShare.ReadWrite so the download coexists with the sink still
         // appending. The stream is owned by the response pipeline (disposed when
         // the response finishes).
-        Stream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        //
+        // Cap the readable view to the file's length at open time: this is the
+        // active log file and the Serilog sink keeps appending to it while the
+        // response streams. Results.Stream sets Content-Length from the stream's
+        // Length up front, then copies to EOF — so without the cap the copy reads
+        // the bytes the sink wrote mid-flight and overruns the promised length,
+        // and Kestrel aborts with "Response Content-Length mismatch: too many
+        // bytes written". The cap serves exactly the file as it was when the
+        // download began (a snapshot), which is also what a log download wants.
+        var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        Stream stream = new LengthCappedStream(file, file.Length);
         return Task.FromResult<(Stream Stream, string FileName)?>((stream, Path.GetFileName(path)));
     }
 
@@ -237,4 +247,82 @@ public sealed partial class LogService : ILogService {
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Log rotation requested via /api/v1/server/logs/rotate.")]
     private partial void LogRotationRequested();
+
+    /// <summary>
+    /// Read-only view over a seekable stream that reports EOF at a fixed length
+    /// captured when the download began. The daemon's log sink keeps appending to
+    /// the live file while the response streams; capping both <see cref="Length"/>
+    /// (so the response's Content-Length matches) and reads (so the copy stops at
+    /// the snapshot size instead of trailing the growing file) prevents the
+    /// "too many bytes written" mismatch that aborted the §54 log download.
+    /// </summary>
+    private sealed class LengthCappedStream : Stream {
+        private readonly Stream _inner;
+        private readonly long _cap;
+
+        public LengthCappedStream(Stream inner, long cap) {
+            _inner = inner;
+            _cap = cap;
+        }
+
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => _cap;
+
+        public override long Position {
+            get => _inner.Position;
+            set => _inner.Position = value;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) {
+            var remaining = _cap - _inner.Position;
+            if (remaining <= 0) {
+                return 0;
+            }
+            return _inner.Read(buffer, offset, (int)Math.Min(count, remaining));
+        }
+
+        public override int ReadByte() {
+            // Respect the cap and skip the base implementation's 1-byte array allocation.
+            return _inner.Position >= _cap ? -1 : _inner.ReadByte();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) {
+            var remaining = _cap - _inner.Position;
+            if (remaining <= 0) {
+                return 0;
+            }
+            if (buffer.Length > remaining) {
+                buffer = buffer[..(int)remaining];
+            }
+            return await _inner.ReadAsync(buffer, ct).ConfigureAwait(false);
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+        public override long Seek(long offset, SeekOrigin origin) {
+            // Resolve End against the snapshot cap, not the live (still-growing) file
+            // end, so a seek stays consistent with the capped Length/Position view.
+            var target = origin switch {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => _inner.Position + offset,
+                SeekOrigin.End => _cap + offset,
+                _ => throw new ArgumentOutOfRangeException(nameof(origin)),
+            };
+            return _inner.Seek(target, SeekOrigin.Begin);
+        }
+
+        public override void Flush() { }
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing) {
+            if (disposing) {
+                _inner.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
 }
