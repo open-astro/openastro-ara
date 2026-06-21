@@ -65,7 +65,9 @@ namespace OpenAstroAra.Test {
             await PollUntilNotConnectingAsync(svc, 1);
 
             var all = await svc.GetAllAsync(CancellationToken.None);
-            Assert.That(all, Has.Count.EqualTo(2), "both switches stay connected");
+            // Both devices are unreachable (→ Error), but the point is both REMAIN in the map — the
+            // second connect didn't evict the first (the single-instance bug this fixes).
+            Assert.That(all, Has.Count.EqualTo(2), "both switches remain in the map");
             Assert.That(all[0].AlpacaDeviceNumber, Is.EqualTo(0), "list is ordered by device number");
             Assert.That(all[1].AlpacaDeviceNumber, Is.EqualTo(1));
 

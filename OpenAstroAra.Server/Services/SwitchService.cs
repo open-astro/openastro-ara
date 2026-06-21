@@ -218,20 +218,27 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 return;
             }
             foreach (var (conn, client) in targets) {
-                var ports = ReadPorts(client);
-                lock (_gate) {
-                    // Write back only if this exact connection + client is still the live one (a concurrent
-                    // disconnect/replace supersedes the read we just did).
-                    if (!_disposed
-                        && _connections.TryGetValue(conn.DeviceNumber, out var current)
-                        && ReferenceEquals(current, conn)
-                        && conn.State == EquipmentConnectionState.Connected
-                        && ReferenceEquals(conn.Client, client)) {
-                        conn.CachedSnapshots = ports;
+                // Isolate each device: a read failure (ASCOM timeout / network hiccup) on one switch
+                // must not drop the rest of this tick's devices from the refresh.
+                try {
+                    var ports = ReadPorts(client);
+                    lock (_gate) {
+                        // Write back only if this exact connection + client is still the live one (a
+                        // concurrent disconnect/replace supersedes the read we just did).
+                        if (!_disposed
+                            && _connections.TryGetValue(conn.DeviceNumber, out var current)
+                            && ReferenceEquals(current, conn)
+                            && conn.State == EquipmentConnectionState.Connected
+                            && ReferenceEquals(conn.Client, client)) {
+                            conn.CachedSnapshots = ports;
+                        }
                     }
+                } catch (Exception ex) {
+                    LogPortReadFailed(ex);
                 }
             }
         } catch (Exception ex) {
+            // Backstop for anything outside the per-device loop (the timer callback must never fault).
             LogPortReadFailed(ex);
         } finally {
             Interlocked.Exchange(ref _refreshing, 0);
