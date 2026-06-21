@@ -42,6 +42,10 @@ class SwitchApi implements SwitchClient {
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
+          // Bound the request-body write too: connect/disconnect/setValue are
+          // POSTs on the control path, so a server that accepts the socket but
+          // stalls reading the body must not hang the call indefinitely.
+          sendTimeout: const Duration(seconds: 5),
         ));
 
   static const String _base = '/api/v1/equipment/switch';

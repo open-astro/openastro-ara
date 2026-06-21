@@ -121,6 +121,13 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       });
       if (ref.mounted && gen == _generation) state = next;
     } finally {
+      // Clear the manual-refresh flag ONLY when no rebuild happened mid-flight.
+      // The guard is deliberate, NOT an unconditional reset: if the server changed
+      // (gen bumped), build() already set _refreshing = false for the new
+      // generation AND a fresh manual refresh may have set it true again — an
+      // unconditional clear here would wipe that newer refresh's flag (a race).
+      // Every generation bump comes from build(), which resets the flag, so this
+      // stale branch can never strand _refreshing == true.
       if (manual && gen == _generation) _refreshing = false;
     }
   }
