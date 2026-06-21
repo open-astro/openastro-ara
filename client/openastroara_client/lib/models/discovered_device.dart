@@ -24,18 +24,26 @@ class DiscoveredDevice {
   });
 
   factory DiscoveredDevice.fromJson(Map<String, dynamic> json) {
-    // The daemon serializes records via System.Text.Json with the default
-    // camelCase naming policy (see `OpenAstroAra.Server/Program.cs`), so
-    // every key is camelCase. No PascalCase fallback needed.
+    // The daemon serializes with System.Text.Json's SnakeCaseLower policy
+    // (`OpenAstroAra.Server/Program.cs` ConfigureHttpJsonOptions +
+    // `AraJsonSerializerContext`), so keys are snake_case (`unique_id`,
+    // `host_name`, `alpaca_device_number`, …) — NOT camelCase. Reading camelCase
+    // here parsed every field to its default (blank name / id, device number 0),
+    // which broke the whole discover→select→connect flow. Read snake_case, with a
+    // camelCase fallback so either shape parses.
+    String str(String snake, String camel) =>
+        (json[snake] ?? json[camel]) as String? ?? '';
+    int integer(String snake, String camel) =>
+        ((json[snake] ?? json[camel]) as num?)?.toInt() ?? 0;
     return DiscoveredDevice(
-      uniqueId: json['uniqueId'] as String? ?? '',
+      uniqueId: str('unique_id', 'uniqueId'),
       name: json['name'] as String? ?? '',
       deviceType: _parseType(json['type']),
-      hostName: json['hostName'] as String? ?? '',
-      ipAddress: json['ipAddress'] as String? ?? '',
-      ipPort: (json['ipPort'] as int?) ?? 0,
-      alpacaDeviceNumber: (json['alpacaDeviceNumber'] as int?) ?? 0,
-      useHttps: (json['useHttps'] as bool?) ?? false,
+      hostName: str('host_name', 'hostName'),
+      ipAddress: str('ip_address', 'ipAddress'),
+      ipPort: integer('ip_port', 'ipPort'),
+      alpacaDeviceNumber: integer('alpaca_device_number', 'alpacaDeviceNumber'),
+      useHttps: (json['use_https'] ?? json['useHttps']) as bool? ?? false,
     );
   }
 
