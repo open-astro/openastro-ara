@@ -79,6 +79,8 @@ class DiscoveredDevice {
       case 'safetymonitor':
       case 'safety':
         return EquipmentDeviceType.safetyMonitor;
+      case 'switch':
+        return EquipmentDeviceType.switchDevice;
       default:
         // Fallback so a stray daemon value doesn't crash the chooser, but
         // assert in debug builds so future daemon-added types surface
@@ -113,8 +115,24 @@ class DiscoveredDevice {
         return 'observingconditions';
       case EquipmentDeviceType.safetyMonitor:
         return 'safetymonitor';
+      case EquipmentDeviceType.switchDevice:
+        return 'switch';
     }
   }
+
+  /// Snake_case body for the daemon's `ConnectRequestDto.Device` (System.Text.Json
+  /// `SnakeCaseLower`). `type` is the daemon's lowercase `DeviceType` token, which
+  /// matches the discovery URL segment for every type.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'unique_id': uniqueId,
+        'name': name,
+        'type': pathSegmentFor(deviceType),
+        'host_name': hostName,
+        'ip_address': ipAddress,
+        'ip_port': ipPort,
+        'alpaca_device_number': alpacaDeviceNumber,
+        'use_https': useHttps,
+      };
 
   @override
   bool operator ==(Object other) =>
