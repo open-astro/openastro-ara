@@ -70,17 +70,31 @@ public sealed partial class SwitchService : ISwitchMediator {
     /// </summary>
     public SwitchInfo GetInfo() {
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
-            var snapshots = connected ? _cachedSnapshots : Array.Empty<SwitchPortSnapshot>();
+            var primary = _disposed ? null : PrimaryConnectionLocked();
+            var snapshots = primary?.CachedSnapshots ?? Array.Empty<SwitchPortSnapshot>();
             var (writable, readonlySwitches) = BuildSwitchCollections(this, snapshots);
             return new SwitchInfo {
-                Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Connected = primary is not null,
+                Name = primary?.Device.Name ?? string.Empty,
+                DeviceId = primary?.Device.UniqueId ?? string.Empty,
                 WritableSwitches = writable,
                 ReadonlySwitches = readonlySwitches,
             };
         }
+    }
+
+    // The connection the single-target sequencer surface (GetInfo + SetSwitchValue) operates on: the
+    // connected switch with the lowest AlpacaDeviceNumber (deterministic). With one switch this is that
+    // switch; per-device sequencer targeting is a follow-up. Caller holds _gate.
+    private SwitchConnection? PrimaryConnectionLocked() {
+        SwitchConnection? primary = null;
+        foreach (var conn in _connections.Values) {
+            if (conn.State == EquipmentConnectionState.Connected && conn.Client is not null
+                && (primary is null || conn.DeviceNumber < primary.DeviceNumber)) {
+                primary = conn;
+            }
+        }
+        return primary;
     }
 
     // Splits the cached ports into NINA's writable/read-only collections, preserving cache order so
@@ -112,8 +126,9 @@ public sealed partial class SwitchService : ISwitchMediator {
         AlpacaSwitch? client;
         short portId;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
-            var id = WritablePortIdAt(_cachedSnapshots, switchIndex);
+            var primary = _disposed ? null : PrimaryConnectionLocked();
+            client = primary?.Client;
+            var id = primary is null ? null : WritablePortIdAt(primary.CachedSnapshots, switchIndex);
             if (client is null || id is null) {
                 LogSwitchWriteSkipped(switchIndex);
                 return;
@@ -179,11 +194,13 @@ public sealed partial class SwitchService : ISwitchMediator {
             TaskScheduler.Default);
     }
 
-    // Current cached value for a port id; NaN when unknown (disconnected / port no longer present).
+    // Current cached value for a port id on the primary switch; NaN when unknown (disconnected / port
+    // no longer present). The mediator wrappers are built from the primary's ports, so they read it back.
     internal double CachedPortValue(short portId) {
         lock (_gate) {
-            if (!_disposed && _state == EquipmentConnectionState.Connected) {
-                foreach (var snapshot in _cachedSnapshots) {
+            var primary = _disposed ? null : PrimaryConnectionLocked();
+            if (primary is not null) {
+                foreach (var snapshot in primary.CachedSnapshots) {
                     if (snapshot.Id == portId) {
                         return snapshot.Value;
                     }
@@ -196,17 +213,18 @@ public sealed partial class SwitchService : ISwitchMediator {
     internal bool MediatorConnected {
         get {
             lock (_gate) {
-                return !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+                return !_disposed && PrimaryConnectionLocked() is not null;
             }
         }
     }
 
     // Best-effort write used by IWritableSwitch.SetValue (no caller in the headless instruction set —
     // SetSwitchValue.Execute goes through the mediator method — but the wrapper contract must work).
+    // Targets the primary switch (the one its wrapper came from).
     internal void WriteSwitchValueBestEffort(short portId, double value) {
         AlpacaSwitch? client;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = (_disposed ? null : PrimaryConnectionLocked())?.Client;
         }
         if (client is null) {
             LogSwitchWriteSkipped(portId);

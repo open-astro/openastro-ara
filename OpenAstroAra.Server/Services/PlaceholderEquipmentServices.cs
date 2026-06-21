@@ -128,13 +128,17 @@ public sealed class PlaceholderDomeService : IDomeService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.shutter.close", idempotencyKey));
 }
 
+// Superseded by the real SwitchService (registered in Program.cs); kept only so the placeholder block
+// stays complete. Tracks the multi-instance ISwitchService surface.
 public sealed class PlaceholderSwitchService : ISwitchService {
-    public Task<SwitchDto?> GetAsync(CancellationToken ct) => Task.FromResult<SwitchDto?>(null);
+    public Task<IReadOnlyList<SwitchDto>> GetAllAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<SwitchDto>>(Array.Empty<SwitchDto>());
+    public Task<SwitchDto?> GetAsync(int deviceNumber, CancellationToken ct) => Task.FromResult<SwitchDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("switch.connect", idempotencyKey));
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+    public Task<OperationAcceptedDto> DisconnectAsync(int deviceNumber, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("switch.disconnect", idempotencyKey));
-    public Task SetValueAsync(SwitchValueRequestDto request, CancellationToken ct) => Task.CompletedTask;
+    public Task SetValueAsync(int deviceNumber, SwitchValueRequestDto request, CancellationToken ct) => Task.CompletedTask;
 }
 
 public sealed class PlaceholderObservingConditionsService : IObservingConditionsService {
