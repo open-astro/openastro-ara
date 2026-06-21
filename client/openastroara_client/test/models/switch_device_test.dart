@@ -84,7 +84,7 @@ void main() {
 
   group('SwitchPort.isBoolean', () {
     SwitchPort port(double min, double max) =>
-        SwitchPort.fromJson(<String, dynamic>{'min': min, 'max': max});
+        SwitchPort.fromJson(<String, dynamic>{'id': 0, 'min': min, 'max': max});
     test('treats a [0,1] range (with float noise) as boolean', () {
       expect(port(0, 1).isBoolean, isTrue);
       expect(port(0.0000001, 0.9999999).isBoolean, isTrue,

@@ -52,8 +52,15 @@ class SwitchPort {
 
   factory SwitchPort.fromJson(Map<String, dynamic> json) {
     double dbl(String key) => (json[key] as num?)?.toDouble() ?? 0;
+    // id is the port selector for setValue — surface a malformed/missing one
+    // (debug assert + release log) rather than silently writing to port 0.
+    final rawId = json['id'];
+    assert(rawId is num, 'SwitchPort is missing its id — the port selector');
+    if (rawId is! num) {
+      debugPrint('[switch] SwitchPort missing id — falling back to 0 (the port selector)');
+    }
     return SwitchPort(
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      id: (rawId as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? '',
       value: dbl('value'),
       min: dbl('min'),
@@ -111,6 +118,10 @@ class SwitchDevice {
     final rawDeviceNumber = json['alpaca_device_number'];
     assert(rawDeviceNumber is num,
         'SwitchDto is missing alpaca_device_number — the multi-switch address key');
+    if (rawDeviceNumber is! num) {
+      debugPrint('[switch] SwitchDto missing alpaca_device_number — falling back to '
+          '0 (distinct switches may collide on the same address)');
+    }
     return SwitchDevice(
       deviceId: json['device_id'] as String? ?? '',
       alpacaDeviceNumber: (rawDeviceNumber as num?)?.toInt() ?? 0,
