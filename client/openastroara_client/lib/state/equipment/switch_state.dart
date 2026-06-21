@@ -28,10 +28,16 @@ final switchApiProvider = Provider<SwitchClient?>((ref) {
   return api;
 });
 
-/// Live list of connected/known switches for the active server. Empty when no
-/// server is saved or no switch is connected. Exposes connect/disconnect/setValue
-/// actions that re-read the list after the daemon accepts the request (all are
+/// List of connected/known switches for the active server. Empty when no server
+/// is saved or no switch is connected. Exposes connect/disconnect/setValue actions
+/// that re-read the list after the daemon accepts the request (all are
 /// 202-Accepted, so the follow-up read may still show `connecting`).
+///
+/// Read is **pull-on-demand**: the list refreshes on build (active-server change),
+/// after an action, and on an explicit `refresh()` — there is no periodic timer, so
+/// a daemon-side change NOT triggered here (another client connects a switch, a
+/// switch drops) is invisible until the next read. Periodic/live (WS) refresh is a
+/// later slice; the UI can call `refresh()` on a cadence if needed.
 class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // Serializes manual refresh() so rapid taps don't stack concurrent getAll()s;
   // the post-action refresh from connect/etc. passes a pinned client and always
@@ -93,6 +99,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     final api = ref.read(switchApiProvider);
     if (api == null) return false; // no active server — dropped
     _acting = true;
+    final gen = _generation;
     try {
       // The action throws on failure — propagate to the caller (the list stays as
       // last read). On success, re-read against the SAME client (a mid-action
@@ -101,7 +108,12 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       if (ref.mounted) await refresh(api);
       return true;
     } finally {
-      _acting = false;
+      // Clear the guard ONLY if no server change happened mid-action. If the server
+      // switched (gen bumped), build() already reset _acting for the new generation
+      // — and a fresh action there may have set it true again; an unconditional clear
+      // here would wipe that newer action's guard, letting two control actions fly at
+      // once against the new server.
+      if (gen == _generation) _acting = false;
     }
   }
 
