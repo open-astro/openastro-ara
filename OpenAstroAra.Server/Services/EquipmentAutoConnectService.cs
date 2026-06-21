@@ -44,6 +44,12 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
     // bridge — auto-connect is background work, not part of readiness.
     private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(2);
 
+    // Per-device deadline for the gate handshake + connect dispatch. The §68.1
+    // bridge handshake does network I/O and can stall on a silent/unresponsive
+    // bridge; without a deadline the sequential boot loop would block on that one
+    // device. Bounds each device so a stuck one is skipped and the rest proceed.
+    private static readonly TimeSpan PerDeviceTimeout = TimeSpan.FromSeconds(30);
+
     private readonly IServiceProvider _services;
     private readonly ILogger<EquipmentAutoConnectService> _logger;
 
@@ -93,21 +99,26 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
 
     private async Task TryConnectAsync(DeviceType type, DiscoveredDeviceDto device,
             IAlpacaBridgeHandshakeService bridge, IAlpacaBridgeGateNotifier notifier, CancellationToken ct) {
+        // Bound this device to PerDeviceTimeout, still honouring daemon shutdown (ct).
+        // A stuck handshake/connect trips the deadline and we move on to the next device.
+        using var deviceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deviceCts.CancelAfter(PerDeviceTimeout);
+        var deviceCt = deviceCts.Token;
         try {
             // §68.1 gate — same decision the REST /connect path makes. Kept in sync
             // with EquipmentEndpoints.ConnectGatedAsync (the boot path can't reuse it
             // verbatim because that overload also persists to the selection store);
             // if the gate's block/warn handling changes there, mirror it here.
-            var handshake = await bridge.HandshakeAsync(EquipmentEndpoints.BridgeUri(device), ct).ConfigureAwait(false);
+            var handshake = await bridge.HandshakeAsync(EquipmentEndpoints.BridgeUri(device), deviceCt).ConfigureAwait(false);
             if (handshake.Status == AlpacaBridgeStatus.OutdatedBlock) {
                 LogBridgeBlocked(type, handshake.Version);
                 return;
             }
             if (handshake.Status == AlpacaBridgeStatus.OutdatedWarn) {
-                await notifier.NotifyOutdatedWarnAsync(handshake.Version, ct).ConfigureAwait(false);
+                await notifier.NotifyOutdatedWarnAsync(handshake.Version, deviceCt).ConfigureAwait(false);
             }
 
-            var connect = ResolveConnect(type, device, ct);
+            var connect = ResolveConnect(type, device, deviceCt);
             if (connect is null) {
                 return; // a type with no auto-connectable service (e.g. guider/switch)
             }
@@ -118,6 +129,11 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // daemon shutting down — unwind cleanly, don't log it as a device failure
+        }
+        catch (OperationCanceledException) {
+            // Our own per-device deadline fired (ct is not cancelled) — the bridge or
+            // device is unresponsive. Skip it; the others still get their turn.
+            LogConnectTimedOut(type, device.Name, (int)PerDeviceTimeout.TotalSeconds);
         }
 #pragma warning disable CA1031 // one device's failure must not abort the others or startup
         catch (Exception ex) {
@@ -171,6 +187,10 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Auto-connect of {DeviceType} '{DeviceName}' failed; it can be connected manually.")]
     private partial void LogConnectFailed(Exception ex, DeviceType deviceType, string deviceName);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Auto-connect of {DeviceType} '{DeviceName}' timed out after {TimeoutSeconds}s (unresponsive bridge/device); skipping — it can be connected manually.")]
+    private partial void LogConnectTimedOut(DeviceType deviceType, string deviceName, int timeoutSeconds);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Auto-connect-on-boot could not read its inputs; skipping (devices can be connected manually).")]
