@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,11 +14,43 @@ import '../../../widgets/settings/settings_row.dart';
 /// Switch devices can be connected at once (each addressed by its Alpaca device
 /// number), so this lists every connected switch with its ports + an "Add
 /// switch" action, instead of the one-device `AlpacaDeviceRow`.
-class EquipmentSwitchPanel extends ConsumerWidget {
+class EquipmentSwitchPanel extends ConsumerStatefulWidget {
   const EquipmentSwitchPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EquipmentSwitchPanel> createState() => _EquipmentSwitchPanelState();
+}
+
+class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
+  // The daemon's connect is 202-accepted + background, so a freshly-added switch
+  // first reads back as `connecting`. The provider is pull-on-demand (no periodic
+  // refresh), so without this the card would stay stuck on "Connecting" until the
+  // user re-opened the panel. While ANY switch is mid-connect, re-read so the card
+  // settles to its real state; the tick is a no-op (no network) when nothing is
+  // connecting, and stops when the panel is disposed.
+  Timer? _settlePoll;
+
+  @override
+  void initState() {
+    super.initState();
+    _settlePoll = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      final list = ref.read(switchListProvider).value;
+      final anyConnecting = list != null &&
+          list.any((d) => d.connectionState == SwitchConnectionState.connecting);
+      if (anyConnecting) {
+        ref.read(switchListProvider.notifier).refresh();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _settlePoll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final switches = ref.watch(switchListProvider);
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -25,7 +59,7 @@ class EquipmentSwitchPanel extends ConsumerWidget {
           children: [
             const Expanded(child: SettingsSectionHeader('Connected switches')),
             TextButton.icon(
-              onPressed: () => _addSwitch(context, ref),
+              onPressed: () => _addSwitch(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add switch'),
             ),
@@ -55,7 +89,7 @@ class EquipmentSwitchPanel extends ConsumerWidget {
     );
   }
 
-  Future<void> _addSwitch(BuildContext context, WidgetRef ref) {
+  Future<void> _addSwitch(BuildContext context) {
     final messenger = ScaffoldMessenger.of(context);
     return showAlpacaChooserDialog(
       context,
