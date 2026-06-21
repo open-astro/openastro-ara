@@ -48,7 +48,11 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
 
   @override
   Future<List<SwitchDevice>> build() async {
+    // Reset BOTH in-flight guards on a server change: a stale _acting from an
+    // action against the old server would otherwise lock out actions on the new
+    // one until the abandoned (force-closed) Dio call unwinds.
     _refreshing = false;
+    _acting = false;
     _generation++;
     final api = ref.watch(switchApiProvider);
     if (api == null) return const <SwitchDevice>[];

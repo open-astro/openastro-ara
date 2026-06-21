@@ -28,6 +28,7 @@ class _FakeSwitchApi implements SwitchClient {
   List<SwitchDevice> devices = const [];
   final List<String> calls = [];
   bool throwOnConnect = false;
+  bool throwOnGetAll = false;
   // When set, connect() awaits this before completing — lets a test hold one
   // action in flight to exercise the re-entrancy drop.
   Completer<void>? connectGate;
@@ -41,7 +42,10 @@ class _FakeSwitchApi implements SwitchClient {
       );
 
   @override
-  Future<List<SwitchDevice>> getAll() async => devices;
+  Future<List<SwitchDevice>> getAll() async {
+    if (throwOnGetAll) throw StateError('getAll failed');
+    return devices;
+  }
 
   @override
   Future<void> connect(DiscoveredDevice device) async {
@@ -153,6 +157,18 @@ void main() {
     api.connectGate!.complete();
     expect(await first, isTrue, reason: 'the first action ran');
     expect(api.calls, isNot(contains('connect:1')), reason: 'the dropped call never hit the API');
+  });
+
+  test('a post-action list read failure surfaces as the provider error', () async {
+    final api = _FakeSwitchApi();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future); // initial read ok (empty)
+
+    api.throwOnGetAll = true; // the post-connect refresh read fails
+    await c.read(switchListProvider.notifier).connect(_discovered(0));
+    expect(c.read(switchListProvider).hasError, isTrue,
+        reason: "a list we can't re-read becomes the provider's error");
   });
 
   test('disconnect targets one switch; setValue forwards the write', () async {

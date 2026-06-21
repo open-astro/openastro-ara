@@ -48,7 +48,7 @@ class SwitchPort {
   /// with a small epsilon rather than `==`. (A 0..1 PWM port is indistinguishable
   /// from boolean on min/max alone — the REST port DTO doesn't carry step size — so
   /// the UI treats any [0,1] range as a toggle.)
-  bool get isBoolean => (min - 0).abs() < 1e-6 && (max - 1).abs() < 1e-6;
+  bool get isBoolean => min.abs() < 1e-6 && (max - 1).abs() < 1e-6;
 
   factory SwitchPort.fromJson(Map<String, dynamic> json) {
     double dbl(String key) => (json[key] as num?)?.toDouble() ?? 0;
