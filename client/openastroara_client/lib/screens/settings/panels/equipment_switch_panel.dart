@@ -62,7 +62,10 @@ class EquipmentSwitchPanel extends ConsumerWidget {
       EquipmentDeviceType.switchDevice,
       deviceTypeLabel: 'switch',
       // Multi-instance: connect the pick (adding to the list) rather than the
-      // default single-selection write.
+      // default single-selection write. Fire-and-forget by design — the chooser
+      // closes on pick; a concurrent second connect (re-opening the chooser before
+      // this one finishes) is dropped by the notifier's _acting re-entrancy guard,
+      // and the server dedups a same-device reconnect anyway.
       onPick: (device) async {
         try {
           await ref.read(switchListProvider.notifier).connect(device);
@@ -176,6 +179,10 @@ class _PortRowState extends ConsumerState<_PortRow> {
             value: value,
           );
     } catch (e) {
+      // The write was rejected, so the server value is unchanged and
+      // didUpdateWidget won't reset us — snap the slider back off the (rejected)
+      // drag position to the last confirmed value.
+      if (mounted) setState(() => _dragValue = null);
       messenger.showSnackBar(SnackBar(
         content: Text("Couldn't set ${widget.port.name}: ${_msg(e)}"),
         backgroundColor: AraColors.accentError,
@@ -199,6 +206,12 @@ class _PortRowState extends ConsumerState<_PortRow> {
           onChanged: (on) => _write(on ? port.max : port.min),
         ),
       );
+    }
+    // A Slider asserts min < max. A malformed device can report min == max (the
+    // ASCOM spec forbids it for a non-boolean port, but don't trust that) — fall
+    // back to a read-only value rather than crash.
+    if (port.min >= port.max) {
+      return _PortLine(label: label, trailing: Text(_fmt(port.value)));
     }
     final value = (_dragValue ?? port.value).clamp(port.min, port.max);
     return Padding(

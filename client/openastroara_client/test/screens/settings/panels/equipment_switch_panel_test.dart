@@ -94,6 +94,15 @@ void main() {
     expect(api.calls, contains('setValue:0:0=1.0'));
   });
 
+  testWidgets('a writable port with degenerate bounds (min==max) shows no slider', (tester) async {
+    await _pump(tester, [
+      _device(const [SwitchPort(id: 0, name: 'Bad', value: 5, min: 5, max: 5, canWrite: true)]),
+    ]);
+    // Must not crash on the Slider's min < max assert — falls back to read-only.
+    expect(find.byType(Slider), findsNothing);
+    expect(find.text('Bad'), findsOneWidget);
+  });
+
   testWidgets('disconnect targets the device', (tester) async {
     final api = await _pump(tester, [_device(const [])]);
     await tester.tap(find.byIcon(Icons.link_off));
