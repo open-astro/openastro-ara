@@ -43,8 +43,12 @@ class SwitchPort {
     required this.canWrite,
   });
 
-  /// A two-state on/off port (min 0 / max 1) as opposed to a value/PWM port.
-  bool get isBoolean => min == 0 && max == 1;
+  /// A two-state on/off port (range [0,1]) as opposed to a value/PWM port. ASCOM
+  /// hardware can report the bounds with float noise (e.g. 0.9999999), so compare
+  /// with a small epsilon rather than `==`. (A 0..1 PWM port is indistinguishable
+  /// from boolean on min/max alone — the REST port DTO doesn't carry step size — so
+  /// the UI treats any [0,1] range as a toggle.)
+  bool get isBoolean => min.abs() < 1e-6 && (max - 1).abs() < 1e-6;
 
   factory SwitchPort.fromJson(Map<String, dynamic> json) {
     double dbl(String key) => (json[key] as num?)?.toDouble() ?? 0;

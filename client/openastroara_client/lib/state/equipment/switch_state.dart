@@ -56,18 +56,20 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   }
 
   // connect/disconnect/setValue run the 202-Accepted request then re-read the
-  // list. They share a re-entrancy guard (one action at a time), and a failure is
-  // RETHROWN to the caller rather than pushed into the list's state — for a
+  // list. They share a re-entrancy guard (one action at a time) and return whether
+  // the call was PERFORMED: `false` means it was dropped (another action in flight,
+  // or no active server) so the caller can distinguish "accepted" from "ignored".
+  // A failure is RETHROWN rather than pushed into the list's state — for a
   // multi-device list a one-off failure (one port write) shouldn't wipe the view
   // of every other switch. The UI wraps each control to surface the error; the
   // list keeps showing the last-read devices. (List-READ failures still surface as
   // the provider's AsyncError, since a list we can't read can't be shown.)
-  Future<void> connect(DiscoveredDevice device) => _act((api) => api.connect(device));
+  Future<bool> connect(DiscoveredDevice device) => _act((api) => api.connect(device));
 
-  Future<void> disconnect(int deviceNumber) =>
+  Future<bool> disconnect(int deviceNumber) =>
       _act((api) => api.disconnect(deviceNumber));
 
-  Future<void> setValue({
+  Future<bool> setValue({
     required int deviceNumber,
     required int portId,
     required double value,
@@ -81,10 +83,11 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // Run a 202-Accepted action then re-read the list against the SAME client (a
   // mid-action server switch must not redirect the follow-up read). A failed
   // action surfaces as an error state rather than a bare throw.
-  Future<void> _act(Future<void> Function(SwitchClient api) action) async {
-    if (_acting) return; // re-entrancy guard against a double-tap
+  // Returns true if the action ran, false if it was dropped (re-entrancy / no API).
+  Future<bool> _act(Future<void> Function(SwitchClient api) action) async {
+    if (_acting) return false; // another action in flight — dropped
     final api = ref.read(switchApiProvider);
-    if (api == null) return;
+    if (api == null) return false; // no active server — dropped
     _acting = true;
     try {
       // The action throws on failure — propagate to the caller (the list stays as
@@ -92,6 +95,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       // server switch must not redirect the follow-up read).
       await action(api);
       if (ref.mounted) await refresh(api);
+      return true;
     } finally {
       _acting = false;
     }

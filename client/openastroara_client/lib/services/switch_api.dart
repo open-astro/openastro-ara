@@ -63,7 +63,7 @@ class SwitchApi implements SwitchClient {
   Future<void> connect(DiscoveredDevice device) async {
     await _dio.post<void>(
       '$_base/connect',
-      data: <String, dynamic>{'device': device.toJson()},
+      data: <String, dynamic>{'device': device.toConnectRequestJson()},
     );
   }
 

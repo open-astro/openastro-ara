@@ -122,8 +122,9 @@ class DiscoveredDevice {
 
   /// Snake_case body for the daemon's `ConnectRequestDto.Device` (System.Text.Json
   /// `SnakeCaseLower`). `type` is the daemon's lowercase `DeviceType` token, which
-  /// matches the discovery URL segment for every type.
-  Map<String, dynamic> toJson() => <String, dynamic>{
+  /// matches the discovery URL segment for every type. Named for its one use (the
+  /// connect endpoint) so a future divergent connect body doesn't silently reuse it.
+  Map<String, dynamic> toConnectRequestJson() => <String, dynamic>{
         'unique_id': uniqueId,
         'name': name,
         'type': pathSegmentFor(deviceType),

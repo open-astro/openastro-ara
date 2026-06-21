@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
@@ -26,6 +28,9 @@ class _FakeSwitchApi implements SwitchClient {
   List<SwitchDevice> devices = const [];
   final List<String> calls = [];
   bool throwOnConnect = false;
+  // When set, connect() awaits this before completing — lets a test hold one
+  // action in flight to exercise the re-entrancy drop.
+  Completer<void>? connectGate;
 
   SwitchDevice _dev(int n, SwitchConnectionState s) => SwitchDevice(
         deviceId: 'sw-$n',
@@ -41,6 +46,7 @@ class _FakeSwitchApi implements SwitchClient {
   @override
   Future<void> connect(DiscoveredDevice device) async {
     calls.add('connect:${device.alpacaDeviceNumber}');
+    if (connectGate != null) await connectGate!.future;
     if (throwOnConnect) throw StateError('connect failed');
     devices = [...devices, _dev(device.alpacaDeviceNumber, SwitchConnectionState.connected)];
   }
@@ -132,6 +138,21 @@ void main() {
     final list = c.read(switchListProvider).value!;
     expect(list.map((d) => d.alpacaDeviceNumber), [0, 1],
         reason: 'both switches present after connecting two');
+  });
+
+  test('an action while another is in flight is dropped (returns false)', () async {
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    final first = c.read(switchListProvider.notifier).connect(_discovered(0)); // holds the gate
+    final dropped = await c.read(switchListProvider.notifier).connect(_discovered(1));
+    expect(dropped, isFalse, reason: 'second action dropped while the first is in flight');
+
+    api.connectGate!.complete();
+    expect(await first, isTrue, reason: 'the first action ran');
+    expect(api.calls, isNot(contains('connect:1')), reason: 'the dropped call never hit the API');
   });
 
   test('disconnect targets one switch; setValue forwards the write', () async {
