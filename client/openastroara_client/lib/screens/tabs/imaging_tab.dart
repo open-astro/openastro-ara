@@ -6,6 +6,7 @@ import '../../services/camera_exposure_api.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
+import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
@@ -47,15 +48,52 @@ class ImagingTab extends ConsumerWidget {
               ExposureControlsPanel(
                 liveViewOn: liveViewOn,
                 onTakeOne: exposing ? null : () => _takeOne(context, ref),
-                onLiveViewToggle: ref
-                    .read(liveViewControllerProvider.notifier)
-                    .set,
+                onLiveViewToggle: (v) {
+                  _toggleLiveView(context, ref, v);
+                },
               ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  /// §64 Live View toggle — drives the daemon's short-exposure loop. The
+  /// boolean controller keeps the UI intent (toggle + any cross-component
+  /// mirror); the frame notifier owns the start/poll/stop against the daemon,
+  /// seeded with the current Imaging-tab exposure/gain/binning.
+  Future<void> _toggleLiveView(
+      BuildContext context, WidgetRef ref, bool on) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = ref.read(liveViewControllerProvider.notifier);
+    controller.set(on); // optimistic — reflect the tap immediately
+    final lv = ref.read(liveViewFrameProvider.notifier);
+    if (on) {
+      final p = ref.read(exposureControllerProvider);
+      // inMicroseconds / 1e6 is lossless for sub-millisecond live exposures.
+      await lv.start(
+        exposureSec: p.exposure.inMicroseconds / 1e6,
+        gain: p.gain,
+        binX: p.bin,
+        binY: p.bin,
+      );
+      // A start() failure flips active back to false — keep the toggle honest
+      // (it can't sit stuck "on") AND surface why, since FrameViewer only shows
+      // the live error while active.
+      final lvState = ref.read(liveViewFrameProvider);
+      // Only an actual error means start failed — a null-error inactive state
+      // here means the user toggled OFF while start() was in flight (stop() set
+      // idle), which must not raise a spurious "couldn't start" snackbar.
+      if (!lvState.active && lvState.error != null) {
+        controller.set(false);
+        messenger.showSnackBar(SnackBar(
+          content: Text("Couldn't start Live View: ${lvState.error}"),
+        ));
+      }
+    } else {
+      await lv.stop();
+    }
   }
 
   /// §14e Take One — fire a single exposure on the connected camera. The
