@@ -1,8 +1,20 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/imaging/fov_box.dart';
 import 'package:openastroara/widgets/sky_atlas/aladin_view.dart';
 
 void main() {
+  // The bundled engine is inlined into a `<script>…</script>` block, so any
+  // `</script>` sequence in the asset would prematurely close it. The current
+  // bundle has none; this asserts it stays that way across future engine
+  // updates (a regression guard, not just a one-time manual check).
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test('bundled aladin.js has no </script> breakout sequence (§36.1)', () async {
+    final js = await rootBundle.loadString('assets/aladin/aladin.js');
+    expect(js.toLowerCase(), isNot(contains('</script')));
+    expect(js, contains('3.6.1')); // sanity: it's the pinned engine, not a stub
+  });
+
   group('fovBoxScript', () {
     test('a null box clears the overlay', () {
       expect(fovBoxScript(null), 'window.araClearFovBox && window.araClearFovBox();');

@@ -230,7 +230,11 @@ Future<String> _ensureAladinDataUrl() => _aladinDataUrl ??= _buildAladinDataUrl(
 Future<String> _buildAladinDataUrl() async {
   try {
     final js = await rootBundle.loadString('assets/aladin/aladin.js');
-    return 'data:text/html;base64,${base64Encode(utf8.encode(inlineAladinJs(js)))}';
+    // charset=utf-8 in the MIME type: the payload is UTF-8-encoded, and while the
+    // inline <meta charset> makes CEF render it correctly today, RFC 2397's default
+    // for text/* is US-ASCII, so declare the real charset rather than rely on the
+    // browser sniffing the meta tag.
+    return 'data:text/html;charset=utf-8;base64,${base64Encode(utf8.encode(inlineAladinJs(js)))}';
   } catch (_) {
     _aladinDataUrl = null; // don't cache the failure — allow a later retry
     rethrow;
