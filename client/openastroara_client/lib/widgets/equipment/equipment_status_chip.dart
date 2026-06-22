@@ -45,12 +45,16 @@ StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
       error: (_, _) => StatusLevel.error,
     );
 
+/// The app-shell tab index of the **Options** (Settings) tab — where the
+/// equipment panels live. Named rather than a bare literal so a tab reorder is a
+/// one-line change (the command palette uses the same index, app_shell.dart).
+const int kOptionsTabIndex = 3;
+
 /// Open Settings → Options at [panelId]'s equipment panel — the device's full
-/// connect/disconnect/control surface (the same navigation the command palette
-/// uses; app_shell tab index 3 = Options).
+/// connect/disconnect/control surface (the same navigation the command palette uses).
 void openEquipmentPanel(WidgetRef ref, String panelId) {
   ref.read(selectedSettingsPanelProvider.notifier).select(panelId);
-  ref.read(selectedTabIndexProvider.notifier).select(3);
+  ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
 }
 
 /// The §25.3 top-bar equipment chips, in device-type order: each shows live
