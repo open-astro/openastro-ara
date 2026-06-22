@@ -76,6 +76,11 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
   late final TextEditingController _target =
       TextEditingController(text: widget.status.position?.toString() ?? '');
 
+  // Whether this move should enable the device's temperature compensation. Seeded
+  // from the current state; the user toggles it per move (only shown when the
+  // device supports temp-comp — it's the only way the daemon exposes setting it).
+  late bool _useTempComp = widget.status.tempCompEnabled;
+
   @override
   void dispose() {
     _target.dispose();
@@ -141,6 +146,17 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
             ),
           ],
         ),
+        if (caps?.canTempComp ?? false)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(children: [
+              Checkbox(
+                value: _useTempComp,
+                onChanged: (v) => setState(() => _useTempComp = v ?? false),
+              ),
+              const Text('Use temperature compensation for this move'),
+            ]),
+          ),
       ],
     );
   }
@@ -171,8 +187,9 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         : raw;
     if (mounted && target != raw) _target.text = target.toString();
     try {
-      final performed =
-          await ref.read(focuserProvider.notifier).move(target);
+      final performed = await ref
+          .read(focuserProvider.notifier)
+          .move(target, useTempComp: _useTempComp);
       if (!performed) {
         messenger.showSnackBar(const SnackBar(
           content: Text('Another action is still in progress.'),

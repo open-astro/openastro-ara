@@ -106,6 +106,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// through the same 202-accept + re-read + re-entrancy machinery as
   /// connect/disconnect. Subclasses expose typed wrappers over this. Returns
   /// whether it was performed (`false` if dropped by the re-entrancy guard).
+  ///
+  /// Leave [pollAfter] `false` for move-like commands: the post-202 re-read
+  /// returns the device's busy sub-state (e.g. `isMoving`), and [isBusy] then
+  /// drives the fast settle-poll to track it to rest. `pollAfter: true` is only
+  /// for actions that begin a `connecting` transition (i.e. connect itself).
   @protected
   Future<bool> performAction(
           Future<void> Function(EquipmentDeviceClient<T> api) action,

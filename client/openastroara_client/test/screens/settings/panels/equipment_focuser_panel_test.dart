@@ -117,6 +117,34 @@ void main() {
     expect(btn.onPressed, isNull);
   });
 
+  testWidgets('a relative focuser allows a negative step and does not clamp',
+      (tester) async {
+    final api = await _pump(
+        tester,
+        FocuserStatus(
+          deviceId: 'foc-1',
+          name: 'Relative',
+          connectionState: EquipmentConnectionState.connected,
+          capabilities: const FocuserCapabilities(
+            minPosition: 0,
+            maxPosition: 0, // relative focusers report no absolute range
+            stepSizeUm: 1.0,
+            canTempComp: false,
+            absoluteFocuser: false,
+          ),
+          runtimeState: 'idle',
+          position: 0,
+          temperature: null,
+          tempCompEnabled: false,
+        ));
+    expect(find.text('Steps (±)'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '-300'); // inward, negative
+    await tester.tap(find.widgetWithText(FilledButton, 'Move'));
+    await tester.pumpAndSettle();
+    // Sent as-is (no clamp to the 0..0 absolute range).
+    expect(api.calls, contains('command:move:-300'));
+  });
+
   testWidgets('no device connected shows the empty state + Connect…',
       (tester) async {
     await _pump(tester, null);
