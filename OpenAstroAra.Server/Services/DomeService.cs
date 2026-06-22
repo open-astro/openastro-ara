@@ -72,7 +72,14 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             }
             var state = _state;
             var runtime = state == EquipmentConnectionState.Connected ? _runtime : IdleRuntime;
-            return Task.FromResult<DomeDto?>(new DomeDto(_device.UniqueId, _device.Name, state, runtime));
+            // Surface the read-once capabilities so the client can enable only the
+            // controls the dome supports (shutter / azimuth-slew / park / home).
+            var caps = state == EquipmentConnectionState.Connected && _domeCaps is { } c
+                ? new DomeCapabilitiesDto(
+                    c.CanSetShutter, c.CanSetAzimuth, c.CanSyncAzimuth, c.CanPark, c.CanFindHome)
+                : null;
+            return Task.FromResult<DomeDto?>(
+                new DomeDto(_device.UniqueId, _device.Name, state, caps, runtime));
         }
     }
 
