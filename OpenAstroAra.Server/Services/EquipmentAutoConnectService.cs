@@ -28,11 +28,6 @@ namespace OpenAstroAra.Server.Services;
 /// acts on it, so after a restart capture fails with "camera is not connected"
 /// until the user reconnects by hand.
 ///
-/// <para>Every connect routes through the same §68.1 AlpacaBridge version gate the
-/// REST <c>/connect</c> endpoints use, so a boot-time auto-connect can't bypass the
-/// handshake: a bridge below the minimum blocks the device (logged + skipped); a
-/// warn-band bridge connects but emits the advisory event.</para>
-///
 /// <para>Best-effort and fully isolated per device: a single device failing (bridge
 /// down, hardware unplugged, driver error) never blocks the others and never faults
 /// startup. It only attempts devices that were actually connected before, so it
@@ -44,10 +39,10 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
     // bridge — auto-connect is background work, not part of readiness.
     private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(2);
 
-    // Per-device deadline for the gate handshake + connect dispatch. The §68.1
-    // bridge handshake does network I/O and can stall on a silent/unresponsive
-    // bridge; without a deadline the sequential boot loop would block on that one
-    // device. Bounds each device so a stuck one is skipped and the rest proceed.
+    // Per-device deadline for the connect dispatch. The connect does network I/O
+    // and can stall on a silent/unresponsive bridge; without a deadline the
+    // sequential boot loop would block on that one device. Bounds each device so
+    // a stuck one is skipped and the rest proceed.
     private static readonly TimeSpan PerDeviceTimeout = TimeSpan.FromSeconds(30);
 
     private readonly IServiceProvider _services;
@@ -67,8 +62,6 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
 
         var store = _services.GetRequiredService<IEquipmentSelectionStore>();
         var profile = _services.GetRequiredService<IProfileStore>();
-        var bridge = _services.GetRequiredService<IAlpacaBridgeHandshakeService>();
-        var notifier = _services.GetRequiredService<IAlpacaBridgeGateNotifier>();
 
         IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto> remembered;
         EquipmentConnectionDto conn;
@@ -93,31 +86,18 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
             if (!AutoConnectEnabled(conn, type)) {
                 continue; // user opted this type out of connect-on-boot
             }
-            await TryConnectAsync(type, device, bridge, notifier, stoppingToken).ConfigureAwait(false);
+            await TryConnectAsync(type, device, stoppingToken).ConfigureAwait(false);
         }
     }
 
-    private async Task TryConnectAsync(DeviceType type, DiscoveredDeviceDto device,
-            IAlpacaBridgeHandshakeService bridge, IAlpacaBridgeGateNotifier notifier, CancellationToken ct) {
+    private async Task TryConnectAsync(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
         // Bound this device to PerDeviceTimeout, still honouring daemon shutdown (ct).
-        // A stuck handshake/connect trips the deadline and we move on to the next device.
+        // A stuck connect trips the deadline and we move on to the next device.
         using var deviceCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deviceCts.CancelAfter(PerDeviceTimeout);
         var deviceCt = deviceCts.Token;
         try {
-            // §68.1 gate — same decision the REST /connect path makes. Kept in sync
-            // with EquipmentEndpoints.ConnectGatedAsync (the boot path can't reuse it
-            // verbatim because that overload also persists to the selection store);
-            // if the gate's block/warn handling changes there, mirror it here.
-            var handshake = await bridge.HandshakeAsync(EquipmentEndpoints.BridgeUri(device), deviceCt).ConfigureAwait(false);
-            if (handshake.Status == AlpacaBridgeStatus.OutdatedBlock) {
-                LogBridgeBlocked(type, handshake.Version);
-                return;
-            }
-            if (handshake.Status == AlpacaBridgeStatus.OutdatedWarn) {
-                await notifier.NotifyOutdatedWarnAsync(handshake.Version, deviceCt).ConfigureAwait(false);
-            }
-
+            // Alpaca is open by design — connect the remembered device directly (no version gate).
             var connect = ResolveConnect(type, device, deviceCt);
             if (connect is null) {
                 return; // a type with no auto-connectable service (e.g. guider/switch)
@@ -179,10 +159,6 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Auto-connecting {DeviceType} '{DeviceName}' on boot (§52.1).")]
     private partial void LogReconnecting(DeviceType deviceType, string deviceName);
-
-    [LoggerMessage(Level = LogLevel.Warning,
-        Message = "Auto-connect skipped {DeviceType}: AlpacaBridge {BridgeVersion} is below the minimum supported version.")]
-    private partial void LogBridgeBlocked(DeviceType deviceType, string? bridgeVersion);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Auto-connect of {DeviceType} '{DeviceName}' failed; it can be connected manually.")]

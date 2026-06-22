@@ -43,9 +43,6 @@ public static class WsEventCatalog {
     public const string EquipmentDisconnected = "equipment.disconnected";
     public const string EquipmentConnectionFailed = "equipment.connection_failed";
     public const string EquipmentDiscoveryRefreshed = "equipment.discovery_refreshed";
-
-    /// <summary>§68.1 — a device connected through an AlpacaBridge in the 1.2–1.5 warn band; the client shows a dismissible "newer bridge recommended" banner.</summary>
-    public const string EquipmentAlpacaBridgeOutdatedWarn = "equipment.alpaca_bridge_outdated_warn";
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
@@ -143,7 +140,7 @@ public static class WsEventCatalog {
     /// </summary>
     public static readonly IReadOnlyList<string> All = new[] {
         EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
-        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentAlpacaBridgeOutdatedWarn,
+        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete,
