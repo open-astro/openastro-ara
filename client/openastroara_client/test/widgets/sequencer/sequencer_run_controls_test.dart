@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
@@ -50,6 +51,8 @@ class _FakeClient implements SequenceClient {
   Future<String> abort(String id) async => (calls..add('abort')).last;
   @override
   Future<String> stop(String id) async => (calls..add('stop')).last;
+  @override
+  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() async => const [];
   @override

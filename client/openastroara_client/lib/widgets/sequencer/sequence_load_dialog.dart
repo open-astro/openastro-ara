@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
+import '../../services/profile_share_file.dart' show shareFileName;
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_import.dart';
@@ -61,7 +66,15 @@ class SequenceLoadDialog extends ConsumerWidget {
                     '${s.instructionCount} instruction(s) · ${s.targetCount} target(s)',
                     style: const TextStyle(color: AraColors.textSecondary),
                   ),
-                  trailing: _RunStateBadge(s.currentRunState),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _RunStateBadge(s.currentRunState),
+                      // §70.5: export this sequence to a shareable .araseq.json
+                      // file. Doesn't select/pop — the user may export several.
+                      _ExportSequenceButton(id: s.id, name: s.name),
+                    ],
+                  ),
                   onTap: () {
                     ref.read(selectedSequenceIdProvider.notifier).select(s.id);
                     Navigator.of(context).pop(s.id);
@@ -140,6 +153,80 @@ class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
             )
           : const Icon(Icons.upload_file, size: 18),
       label: const Text('Import NINA…'),
+      onPressed: _busy ? null : _run,
+    );
+  }
+}
+
+/// §70.5 per-sequence "Export…" action. Stateful so it disables itself across
+/// the whole async flow (share-export round-trip → save picker) — without the
+/// busy guard a second tap could fire a second export / open a second picker.
+/// Mirrors the profile export flow (`profile_management_screen`): fetch the
+/// shareable manifest, pretty-print it, and let the OS save dialog write the
+/// `.araseq.json` file. Never pops the Load dialog (the user may export several).
+class _ExportSequenceButton extends ConsumerStatefulWidget {
+  const _ExportSequenceButton({required this.id, required this.name});
+  final String id;
+  final String name;
+
+  @override
+  ConsumerState<_ExportSequenceButton> createState() => _ExportSequenceButtonState();
+}
+
+class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final api = ref.read(sequenceApiProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon to export sequences.'),
+          backgroundColor: AraColors.accentError));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final share = await api.exportShare(widget.id);
+      // Pretty-print so the shared file is human-readable; saveFile writes the
+      // bytes itself on the desktop targets and returns the path (null on cancel).
+      final bytes = Uint8List.fromList(
+          utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)));
+      final saved = await FilePicker.saveFile(
+        dialogTitle: 'Save sequence share',
+        fileName: shareFileName(
+            share.sequenceName.isEmpty ? widget.name : share.sequenceName,
+            fallbackBase: 'sequence',
+            extension: 'araseq.json'),
+        // Pre-filter the OS dialog to .json so the user can't accidentally save
+        // over an unrelated file / drop the extension. The suggested name ends
+        // in `.araseq.json`, which satisfies the `json` filter.
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        bytes: bytes,
+      );
+      if (saved == null || !mounted) return; // cancelled / dialog gone
+      messenger.showSnackBar(SnackBar(
+          content: Text('Exported "${widget.name.isEmpty ? 'sequence' : widget.name}" '
+              '— share this file; the recipient imports it.')));
+    } catch (e, st) {
+      debugPrint('[sequencer] export error: $e\n$st');
+      messenger.showSnackBar(const SnackBar(
+          content: Text("Couldn't export that sequence."),
+          backgroundColor: AraColors.accentError));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: _busy
+          ? const SizedBox(
+              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.save_alt, size: 18),
+      tooltip: 'Export…',
       onPressed: _busy ? null : _run,
     );
   }

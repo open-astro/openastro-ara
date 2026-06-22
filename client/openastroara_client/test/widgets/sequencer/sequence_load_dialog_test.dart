@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_load_dialog.dart';
@@ -55,6 +56,9 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
+  Future<SequenceShareExport> exportShare(String id) async =>
+      const SequenceShareExport(sequenceName: 'fake', manifest: {'schemaVersion': 'v1'});
+  @override
   void close() {}
 }
 
@@ -100,6 +104,31 @@ void main() {
       await pumpDialog(tester, build: () async => const <SequenceListItem>[]);
       await tester.pumpAndSettle();
       expect(find.textContaining('No saved sequences'), findsOneWidget);
+    });
+
+    testWidgets('each row has an Export action; export with no server hints + keeps the dialog',
+        (tester) async {
+      // List one sequence but leave sequenceApiProvider null (no connected
+      // server), so the export tap exercises the no-server guard deterministically.
+      final container = ProviderContainer(overrides: [
+        sequenceListProvider.overrideWith(
+            () => _FakeListNotifier(() async => [_item('s1', 'M31 LRGB')])),
+        sequenceApiProvider.overrideWithValue(null),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequenceLoadDialog())),
+      ));
+      await tester.pumpAndSettle();
+
+      // The per-row Export action is present.
+      expect(find.byIcon(Icons.save_alt), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.save_alt));
+      await tester.pump(); // start _run → show the SnackBar
+      expect(find.textContaining('Connect to a daemon to export'), findsOneWidget);
+      // Export never pops the picker — the row is still there.
+      expect(find.text('M31 LRGB'), findsOneWidget);
     });
 
     testWidgets('lists sequences; tapping one selects it and dismisses',

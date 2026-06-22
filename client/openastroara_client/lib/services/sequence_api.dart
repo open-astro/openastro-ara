@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/sequence/nina_sequence_parser.dart';
 import '../models/sequence/sequence_node.dart';
+import '../models/sequence/sequence_share_export.dart';
 import '../models/sequence/sequence_summary.dart';
 import '../models/server.dart';
 
@@ -75,6 +76,12 @@ abstract interface class SequenceClient {
   Future<String> resume(String id);
   Future<String> abort(String id);
   Future<String> stop(String id);
+
+  /// §70.5 share-export: fetch the sequence's shareable manifest
+  /// (`POST /{id}/share-export`) so the client can write it to a `.araseq.json`
+  /// file. Throws on transport failure / unknown id (the daemon answers 404 → a
+  /// DioException here) or a manifest-less body ([FormatException]).
+  Future<SequenceShareExport> exportShare(String id);
 
   void close();
 }
@@ -321,6 +328,22 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> stop(String id) => _lifecycle(id, 'stop');
+
+  @override
+  Future<SequenceShareExport> exportShare(String id) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    final res = await _dio.post<dynamic>(
+      '/api/v1/sequences/${Uri.encodeComponent(id)}/share-export',
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'share-export returned an unexpected body (${data.runtimeType})');
+    }
+    return SequenceShareExport.fromJson(data);
+  }
 
   /// POST a lifecycle transition and return the accepted operation id. The
   /// daemon answers 202 with an OperationAccepted envelope ({ operation_id, … });
