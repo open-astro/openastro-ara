@@ -22,8 +22,10 @@ void main() {
     expect(find.text('Switch'), findsOneWidget);
     expect(find.textContaining('Multi-switch support is in progress'), findsNothing);
 
-    // Every one of the 11 slots offers a Choose action (all discoverable now);
-    // pre-fix, Switch had no button, so this would have been 10.
+    // Every slot offers a Choose action (all discoverable now); pre-fix, Switch
+    // had no button so this was 10. The count mirrors `_slots` in
+    // screen_equipment_discovery.dart — update it (deliberately) when a slot is
+    // added or removed.
     expect(find.widgetWithText(TextButton, 'Choose'), findsNWidgets(11));
   });
 }
