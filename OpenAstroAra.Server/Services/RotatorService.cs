@@ -35,7 +35,7 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class RotatorService : IRotatorService, IDisposable {
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
-    private static readonly RotatorStateDto IdleRuntime = new("idle", null, null);
+    private static readonly RotatorStateDto IdleRuntime = new("idle", null, null, false);
 
     private readonly ILogger<RotatorService> _logger;
     private readonly object _gate = new();
@@ -44,6 +44,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private RotatorStateDto _runtime = IdleRuntime;
+    private RotatorCapabilitiesDto? _capabilities;
     private int _refreshing;
     private long _connectGeneration;
     private bool _disposed;
@@ -64,7 +65,9 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             }
             var state = _state;
             var runtime = state == EquipmentConnectionState.Connected ? _runtime : IdleRuntime;
-            return Task.FromResult<RotatorDto?>(new RotatorDto(_device.UniqueId, _device.Name, state, runtime));
+            var caps = state == EquipmentConnectionState.Connected ? _capabilities : null;
+            return Task.FromResult<RotatorDto?>(
+                new RotatorDto(_device.UniqueId, _device.Name, state, caps, runtime));
         }
     }
 
@@ -129,6 +132,62 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
         return Task.FromResult(Accepted("rotator.move", idempotencyKey));
     }
 
+    public Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        AlpacaRotator? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("rotator is not connected");
+        }
+        var reverse = request.Reverse;
+        _ = Task.Run(() => SetReverseInBackground(client, reverse), CancellationToken.None);
+        return Task.FromResult(Accepted("rotator.reverse", idempotencyKey));
+    }
+
+    public Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        AlpacaRotator? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (IsAngleOutOfRange(request.SkyAngleDeg)) {
+            throw new ArgumentOutOfRangeException(nameof(request), request.SkyAngleDeg,
+                "SkyAngleDeg must be in [0, 360).");
+        }
+        if (client is null) {
+            throw new InvalidOperationException("rotator is not connected");
+        }
+        var angle = (float)request.SkyAngleDeg;
+        _ = Task.Run(() => SyncInBackground(client, angle), CancellationToken.None);
+        return Task.FromResult(Accepted("rotator.sync", idempotencyKey));
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background reverse boundary: the blocking ASCOM Reverse setter can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    private void SetReverseInBackground(AlpacaRotator client, bool reverse) {
+        try {
+            client.Reverse = reverse;
+            RefreshCacheOnce();
+        } catch (Exception ex) {
+            LogReverseFailed(ex, reverse);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background sync boundary: the blocking ASCOM Sync can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    private void SyncInBackground(AlpacaRotator client, float angle) {
+        try {
+            client.Sync(angle);
+            RefreshCacheOnce();
+        } catch (Exception ex) {
+            LogSyncFailed(ex, angle);
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background move boundary: the blocking ASCOM MoveAbsolute/MoveMechanical can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client before/during the move; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private void MoveInBackground(AlpacaRotator client, float target, bool useSkyAngle) {
@@ -187,7 +246,22 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
         try { mechanical = c.MechanicalPosition; } catch (Exception) { mechanical = null; }
         double? sky;
         try { sky = c.Position; } catch (Exception) { sky = null; }
-        return new RotatorStateDto(moving ? "moving" : "idle", mechanical, sky);
+        bool reverse;
+        try { reverse = c.Reverse; } catch (Exception) { reverse = false; }
+        return new RotatorStateDto(moving ? "moving" : "idle", mechanical, sky, reverse);
+    }
+
+    // Capabilities are read once on connect (they don't change while connected): whether the
+    // rotator supports the Reverse property and its minimum step size in degrees. Per-field
+    // tolerant — an unsupported property yields a safe default rather than failing the connect.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field capability read: an unsupported rotator property throws; that field falls back to a safe default rather than failing the connect. CA1031's log-and-recover boundary applies.")]
+    private static RotatorCapabilitiesDto ReadCapabilities(AlpacaRotator c) {
+        bool canReverse;
+        try { canReverse = c.CanReverse; } catch (Exception) { canReverse = false; }
+        double stepSize;
+        try { stepSize = c.StepSize; } catch (Exception) { stepSize = 0; }
+        return new RotatorCapabilitiesDto(canReverse, stepSize);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -207,10 +281,12 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
             client.Connected = true;
+            var caps = ReadCapabilities(client); // read once; they don't change while connected
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
+                    _capabilities = caps;
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -318,6 +394,12 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator move to {Target} failed")]
     private partial void LogMoveFailed(Exception ex, float target);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator set-reverse to {Reverse} failed")]
+    private partial void LogReverseFailed(Exception ex, bool reverse);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator sync to {Angle} failed")]
+    private partial void LogSyncFailed(Exception ex, float angle);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Rotator connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);

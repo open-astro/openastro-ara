@@ -110,6 +110,10 @@ public sealed class PlaceholderRotatorService : IRotatorService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.disconnect", idempotencyKey));
     public Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.move", idempotencyKey));
+    public Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.reverse", idempotencyKey));
+    public Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.sync", idempotencyKey));
 }
 
 public sealed class PlaceholderDomeService : IDomeService {
