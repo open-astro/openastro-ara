@@ -34,9 +34,10 @@ class LiveFrameState {
     bool? active,
     String? error,
     bool clearError = false,
+    bool clearJpeg = false,
   }) =>
       LiveFrameState(
-        jpeg: jpeg ?? this.jpeg,
+        jpeg: clearJpeg ? null : (jpeg ?? this.jpeg),
         seq: seq ?? this.seq,
         session: session ?? this.session,
         active: active ?? this.active,
@@ -127,11 +128,15 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
       if (api == null || !state.active) return;
       try {
         final f = await api.fetchFrame();
+        // A stop() (or a new start) can race in during the await — don't write a
+        // stale frame onto the idle/next-session state.
+        if (_api != api || !state.active) return;
         if (f != null && (f.session != state.session || f.seq != state.seq)) {
           state = state.copyWith(
               jpeg: f.bytes, seq: f.seq, session: f.session, clearError: true);
         }
       } catch (e) {
+        if (_api != api || !state.active) return;
         state = state.copyWith(error: _describe(e));
       }
       // Re-arm only while still live (stop() nulls _api and flips active).

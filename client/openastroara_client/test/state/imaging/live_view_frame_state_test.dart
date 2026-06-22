@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -63,31 +64,37 @@ void main() {
     expect(client.calls, isEmpty); // never built a client / called start
   });
 
-  test('start activates and polls a frame; change-detect ignores a repeat', () async {
-    // Two fetches return the same frame (seq 1), the third a new one (seq 2).
-    final f1 = LiveFrame(jpegA, 1, 7);
-    final client = _FakeLiveViewClient([f1, f1, LiveFrame(jpegB, 2, 7)]);
-    final c = _container(
-        _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]), client);
-    addTearDown(c.dispose);
-    await c.read(savedServersProvider.future); // let the async server list load
+  test('start activates and polls a frame; change-detect ignores a repeat', () {
+    // fakeAsync drives the 250 ms poll timer deterministically (no wall clock).
+    fakeAsync((async) {
+      // Two fetches return the same frame (seq 1), the third a new one (seq 2).
+      final f1 = LiveFrame(jpegA, 1, 7);
+      final client = _FakeLiveViewClient([f1, f1, LiveFrame(jpegB, 2, 7)]);
+      final c = _container(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]), client);
+      addTearDown(c.dispose);
 
-    await c.read(liveViewFrameProvider.notifier).start(exposureSec: 2.0, binX: 2);
-    expect(c.read(liveViewFrameProvider).active, isTrue);
-    expect(client.calls.first, startsWith('start:2.0:2'));
+      c.read(savedServersProvider); // kick the async server-list load
+      async.flushMicrotasks(); // resolve loadAll()
 
-    // Let the 250 ms poll timer fire a few times.
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    final s = c.read(liveViewFrameProvider);
-    expect(s.seq, 2); // advanced past the repeated seq-1 frame
-    expect(s.session, 7);
-    expect(s.jpeg, jpegB);
+      c.read(liveViewFrameProvider.notifier).start(exposureSec: 2.0, binX: 2);
+      async.flushMicrotasks(); // resolve start() → active + first poll scheduled
+      expect(c.read(liveViewFrameProvider).active, isTrue);
+      expect(client.calls.first, startsWith('start:2.0:2'));
 
-    await c.read(liveViewFrameProvider.notifier).stop();
-    final stopped = c.read(liveViewFrameProvider);
-    expect(stopped.active, isFalse);
-    expect(stopped.jpeg, isNull);
-    expect(client.calls, contains('stop'));
+      async.elapse(const Duration(milliseconds: 800)); // three 250 ms poll ticks
+      final s = c.read(liveViewFrameProvider);
+      expect(s.seq, 2); // advanced past the repeated seq-1 frame
+      expect(s.session, 7);
+      expect(s.jpeg, jpegB);
+
+      c.read(liveViewFrameProvider.notifier).stop();
+      async.flushMicrotasks();
+      final stopped = c.read(liveViewFrameProvider);
+      expect(stopped.active, isFalse);
+      expect(stopped.jpeg, isNull);
+      expect(client.calls, contains('stop'));
+    });
   });
 
   test('a start failure surfaces the error and leaves the loop inactive', () async {
