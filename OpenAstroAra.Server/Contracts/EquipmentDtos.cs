@@ -99,8 +99,9 @@ public sealed record CameraStateDto(
 public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = null, int BinX = 2, int BinY = 2);
 
 // All nullable fields are null until the session has the relevant value, not optional config:
-// StartedAtUtc is null only before Live View has ever been started; Width/Height/LastFrameAtUtc
-// are null until the first frame of the current session has been rendered.
+// StartedAtUtc is null before the first start AND after each stop (meta clears on stop) — use
+// SessionId > 0 to tell "stopped" from "never started"; Width/Height/LastFrameAtUtc are null until
+// the first frame of the current session has been rendered.
 // During an in-flight StopLiveViewAsync there is a brief window where Active=false but FrameSeq>0
 // (the frame is dropped only after the loop drains); treat FrameSeq as advisory, gate "live" on
 // Active. Once stop returns, FrameSeq is 0 and GET /liveview/frame is 204.
