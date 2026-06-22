@@ -94,6 +94,10 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
       ]);
     }
     final caps = s.capabilities;
+    // Absolute focusers take a destination (0..max, digits only); relative focusers
+    // take a signed step delta (negative = inward), so allow a leading '-' and
+    // don't clamp to the absolute range.
+    final absolute = caps?.absoluteFocuser ?? true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -114,18 +118,24 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
               child: TextField(
                 controller: _target,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                      absolute ? RegExp(r'[0-9]') : RegExp(r'[0-9-]')),
+                ],
                 decoration: InputDecoration(
                   isDense: true,
-                  labelText: 'Target',
-                  helperText:
-                      caps != null ? 'Range ${caps.minPosition}–${caps.maxPosition}' : null,
+                  labelText: absolute ? 'Target' : 'Steps (±)',
+                  helperText: absolute
+                      ? (caps != null
+                          ? 'Range ${caps.minPosition}–${caps.maxPosition}'
+                          : null)
+                      : 'Relative move (− inward)',
                 ),
               ),
             ),
             const SizedBox(width: 12),
             FilledButton(
-              onPressed: s.isMoving ? null : () => _move(caps),
+              onPressed: s.isMoving ? null : () => _move(caps, absolute),
               child: const Text('Move'),
             ),
           ],
@@ -142,7 +152,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         ]),
       );
 
-  Future<void> _move(FocuserCapabilities? caps) async {
+  Future<void> _move(FocuserCapabilities? caps, bool absolute) async {
     final messenger = ScaffoldMessenger.of(context);
     final raw = int.tryParse(_target.text.trim());
     if (raw == null) {
@@ -150,8 +160,13 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
           const SnackBar(content: Text('Enter a target position.')));
       return;
     }
-    // Clamp to the device's range when known, so a typo can't drive past limits.
-    final target = caps != null ? raw.clamp(caps.minPosition, caps.maxPosition) : raw;
+    // Clamp an absolute target to the device range (a typo can't drive past
+    // limits); a relative step delta is sent as-is. Reflect the actual value sent
+    // back into the field so it doesn't read a stale out-of-range number.
+    final target = (absolute && caps != null)
+        ? raw.clamp(caps.minPosition, caps.maxPosition)
+        : raw;
+    if (mounted && target != raw) _target.text = target.toString();
     try {
       final performed =
           await ref.read(focuserProvider.notifier).move(target);

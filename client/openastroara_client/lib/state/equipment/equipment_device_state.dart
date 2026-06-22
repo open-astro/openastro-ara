@@ -185,10 +185,17 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // refresh that fails to read, this isn't called (see refresh()) so a transient
   // error leaves the running timer in place rather than stranding the device.
   void _syncPolls(T? status) {
-    if (status?.isConnecting ?? false) {
+    if (status == null) {
+      _cancelAllPolls();
+      return;
+    }
+    // Fast-poll (settle cadence) while connecting OR while connected-but-busy (a
+    // focuser moving, a dome slewing) so the panel tracks the device to rest; the
+    // slow liveness-poll otherwise; nothing when disconnected/errored.
+    if (status.isConnecting || (status.isConnected && status.isBusy)) {
       _cancelLive();
       _armSettle();
-    } else if (status?.isConnected ?? false) {
+    } else if (status.isConnected) {
       _cancelSettle();
       _armLive();
     } else {

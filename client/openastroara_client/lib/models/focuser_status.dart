@@ -72,6 +72,9 @@ class FocuserStatus extends EquipmentDeviceStatus {
 
   bool get isMoving => runtimeState == 'moving';
 
+  @override
+  bool get isBusy => isMoving;
+
   factory FocuserStatus.fromJson(Map<String, dynamic> json) {
     final caps = json['capabilities'];
     final runtime = json['runtime'];
