@@ -33,10 +33,16 @@ class SettingsRow extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(label,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AraColors.textSecondary,
-                            )),
+                    // Ellipsize rather than overflow the fixed 280px column when the
+                    // label is long (or rendered in a wide font).
+                    Flexible(
+                      child: Text(label,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AraColors.textSecondary,
+                                  )),
+                    ),
                     if (helpKey != null) HelpIcon(helpKey: helpKey!),
                   ],
                 ),
