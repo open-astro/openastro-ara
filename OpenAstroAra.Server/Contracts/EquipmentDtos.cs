@@ -91,6 +91,22 @@ public sealed record CameraStateDto(
     bool CoolerOn,
     double? ExposureProgressPct);
 
+// §64 Live View: a server-driven short-exposure loop that renders the latest
+// frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
+// status; the frame bytes come from GET /camera/liveview/frame. ExposureSec is
+// short (sub-second to a few seconds); BinX/BinY default to 2 for a faster,
+// lower-noise framing loop.
+public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = null, int BinX = 2, int BinY = 2);
+
+public sealed record LiveViewStatusDto(
+    bool Active,
+    long FrameSeq,
+    int? Width,
+    int? Height,
+    double? ExposureSec,
+    string? StartedAtUtc,
+    string? LastFrameAtUtc);
+
 // Cooler control: turn the cooler on/off and optionally set the target CCD
 // temperature. CoolerOn and the set-point are independent ASCOM properties, so a
 // null TargetTemperatureC means "leave the set-point unchanged" — the service

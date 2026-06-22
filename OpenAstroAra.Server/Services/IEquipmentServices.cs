@@ -36,6 +36,11 @@ public interface ICameraService {
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task AbortExposureAsync(CancellationToken ct);
     Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
+    // §64 Live View: a short-exposure render loop for framing/focus (no catalog write).
+    Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct);
+    Task StopLiveViewAsync(CancellationToken ct);
+    LiveViewStatusDto GetLiveViewStatus();
+    (byte[] Jpeg, long Seq)? GetLiveViewFrame();
 }
 
 public interface ITelescopeService {

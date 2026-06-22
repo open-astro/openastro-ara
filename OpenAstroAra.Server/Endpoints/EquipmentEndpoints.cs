@@ -68,6 +68,22 @@ public static class EquipmentEndpoints {
             await svc.SetCoolerAsync(request.Enabled, request.TargetTemperatureC, ct);
             return Results.Accepted();
         });
+        // §64 Live View — short-exposure framing/focus loop (no catalog write).
+        camera.MapPost("/liveview/start", async ([FromBody] LiveViewStartRequestDto request, ICameraService svc, CancellationToken ct) => {
+            await svc.StartLiveViewAsync(request, ct);
+            return Results.Accepted();
+        });
+        camera.MapPost("/liveview/stop", async (ICameraService svc, CancellationToken ct) => {
+            await svc.StopLiveViewAsync(ct);
+            return Results.Accepted();
+        });
+        camera.MapGet("/liveview", (ICameraService svc) => Results.Ok(svc.GetLiveViewStatus()));
+        camera.MapGet("/liveview/frame", (ICameraService svc) => {
+            var frame = svc.GetLiveViewFrame();
+            return frame is null
+                ? Results.NoContent()
+                : Results.Bytes(frame.Value.Jpeg, "image/jpeg");
+        });
 
         // ─── Telescope ───
         var telescope = equipment.MapGroup("/telescope");
