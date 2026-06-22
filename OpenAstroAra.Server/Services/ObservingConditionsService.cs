@@ -49,13 +49,16 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     private sealed record Readings(
         double? TemperatureC,
         double? HumidityPct,
+        double? DewPointC,
         double? PressureHpa,
         double? CloudCoverPct,
         double? WindSpeedMs,
+        double? WindGustMs,
         double? WindDirectionDeg,
         double? RainRate);
 
-    private static readonly Readings EmptyReadings = new(null, null, null, null, null, null, null);
+    private static readonly Readings EmptyReadings =
+        new(null, null, null, null, null, null, null, null, null);
 
     private readonly ILogger<ObservingConditionsService> _logger;
     private readonly object _gate = new();
@@ -92,9 +95,11 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
                 State: state,
                 TemperatureC: r.TemperatureC,
                 HumidityPct: r.HumidityPct,
+                DewPointC: r.DewPointC,
                 PressureHpa: r.PressureHpa,
                 CloudCoverPct: r.CloudCoverPct,
                 WindSpeedMs: r.WindSpeedMs,
+                WindGustMs: r.WindGustMs,
                 WindDirectionDeg: r.WindDirectionDeg,
                 RainRate: r.RainRate,
                 // ObservingConditions has no intrinsic safe/unsafe state (that is SafetyMonitor's
@@ -179,16 +184,18 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         }
     }
 
-    // Reads all seven sensors, each independently: an ObservingConditions device implements only
+    // Reads all nine sensors, each independently: an ObservingConditions device implements only
     // the sensors it has, and an unimplemented (or transiently failing) sensor yields null rather
     // than failing the whole snapshot. Per-sensor failures do NOT demote the connection — weather
     // sensors are independently optional, unlike SafetyMonitor's single IsSafe.
     private Readings ReadSensors(AlpacaObservingConditions c) => new(
         TemperatureC: ReadSensor("Temperature", () => c.Temperature),
         HumidityPct: ReadSensor("Humidity", () => c.Humidity),
+        DewPointC: ReadSensor("DewPoint", () => c.DewPoint),
         PressureHpa: ReadSensor("Pressure", () => c.Pressure),
         CloudCoverPct: ReadSensor("CloudCover", () => c.CloudCover),
         WindSpeedMs: ReadSensor("WindSpeed", () => c.WindSpeed),
+        WindGustMs: ReadSensor("WindGust", () => c.WindGust),
         WindDirectionDeg: ReadSensor("WindDirection", () => c.WindDirection),
         RainRate: ReadSensor("RainRate", () => c.RainRate));
 
