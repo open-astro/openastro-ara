@@ -77,12 +77,15 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
             .map(FilterSlot.fromJson)
             .toList(growable: false)
         : const <FilterSlot>[];
+    // The wire sends -1 while moving / when no slot is selected; normalize that to
+    // null so `currentSlot != null` reliably means "a slot is selected".
+    final rawSlot = (r['current_slot'] as num?)?.toInt();
     return FilterWheelStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
       runtimeState: r['state'] as String? ?? '',
-      currentSlot: (r['current_slot'] as num?)?.toInt(),
+      currentSlot: (rawSlot != null && rawSlot >= 0) ? rawSlot : null,
       slots: slots,
     );
   }

@@ -148,11 +148,15 @@ class _SlotRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          if (isCurrent)
-            const Padding(
-              padding: EdgeInsets.only(right: 6),
-              child: Icon(Icons.check, size: 16, color: AraColors.accentConnected),
-            ),
+          // Fixed-width leading slot so every row's label starts at the same x;
+          // the active row shows a check, others reserve the space.
+          SizedBox(
+            width: 22,
+            child: isCurrent
+                ? const Icon(Icons.check,
+                    size: 16, color: AraColors.accentConnected)
+                : null,
+          ),
           Expanded(child: Text(label)),
           Text('offset ${slot.focusOffset}',
               style: Theme.of(context)

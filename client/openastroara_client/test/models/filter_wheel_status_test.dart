@@ -33,6 +33,7 @@ void main() {
     });
     expect(f.isMoving, isTrue);
     expect(f.isBusy, isTrue);
-    expect(f.current, isNull); // current_slot -1 matches no slot
+    expect(f.currentSlot, isNull); // wire -1 normalized to null
+    expect(f.current, isNull);
   });
 }
