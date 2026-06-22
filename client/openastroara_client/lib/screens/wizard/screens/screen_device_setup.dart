@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,6 +35,12 @@ void _assignDouble(String raw, void Function(double?) set) {
 
 ProfileDraft _draftOf(WidgetRef ref) =>
     ref.read(wizardControllerProvider).draft;
+
+/// A short, user-facing message for a refresh failure — never the full
+/// DioException dump (which carries the request URL / response body / internal
+/// addresses).
+String _describeError(Object e) =>
+    e is DioException ? (e.message ?? 'network error') : e.toString();
 
 /// The active daemon server, or null when none is connected — the wizard's
 /// "Refresh from connected device" affordances read the device through it.
@@ -135,7 +142,7 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
-            SnackBar(content: Text('Could not read the mount: $e')));
+            SnackBar(content: Text('Could not read the mount: ${_describeError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);
@@ -232,7 +239,7 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
-            SnackBar(content: Text('Could not read the camera: $e')));
+            SnackBar(content: Text('Could not read the camera: ${_describeError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);
@@ -366,6 +373,35 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
             content: Text('Connect a filter wheel that reports its slots first.')));
         return;
       }
+      // Replacing the list wipes anything the user already typed (names,
+      // wavelengths, offsets). Confirm first if there's existing data, so a
+      // fat-fingered Refresh can't silently destroy it.
+      final hasUserData = _fw.filters.any((f) =>
+          (f.name?.isNotEmpty ?? false) ||
+          f.type != null ||
+          f.wavelengthNm != null ||
+          f.focusOffsetSteps != null);
+      if (hasUserData) {
+        final replace = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Replace your filters?'),
+            content: Text('Load ${wheel.slots.length} slot(s) from the connected '
+                'wheel, replacing your ${_fw.filters.length} current filter(s)? '
+                'Names + focus offsets come from the wheel; any wavelengths/types '
+                'you entered are cleared.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Replace')),
+            ],
+          ),
+        );
+        if (replace != true || !mounted) return;
+      }
       setState(() {
         // Replace the slots with what the wheel reports — fresh FilterDef objects
         // so each row's ObjectKey changes and its (uncontrolled) name field
@@ -383,7 +419,7 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
-            SnackBar(content: Text('Could not read the filter wheel: $e')));
+            SnackBar(content: Text('Could not read the filter wheel: ${_describeError(e)}')));
       }
     } finally {
       if (mounted) setState(() => _refreshing = false);
