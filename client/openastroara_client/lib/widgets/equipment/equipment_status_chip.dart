@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_device_status.dart';
+import '../../models/switch_device.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/dome_state.dart';
@@ -145,6 +146,18 @@ class EquipmentStatusChip extends ConsumerWidget {
       );
 }
 
+/// Maps the multi-instance Switch list to the chip dot: connected (green) when
+/// *any* switch is connected, else disconnected; loading → info, error → error.
+/// Pure → unit-testable. (Switch has no busy state — `SwitchDevice` doesn't model
+/// it — so the chip never shows amber; see design/PORT_TODO.md.)
+StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async) => async.when(
+      data: (list) => list.any((s) => s.isConnected)
+          ? StatusLevel.connected
+          : StatusLevel.disconnected,
+      loading: () => StatusLevel.info,
+      error: (_, _) => StatusLevel.error,
+    );
+
 /// The Switch top-bar chip. Switch is multi-instance (a list of devices, each
 /// with its own connection), so it shows connected when *any* switch is connected.
 class SwitchStatusChip extends ConsumerWidget {
@@ -154,13 +167,7 @@ class SwitchStatusChip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final level = ref.watch(switchListProvider).when(
-          data: (list) => list.any((s) => s.isConnected)
-              ? StatusLevel.connected
-              : StatusLevel.disconnected,
-          loading: () => StatusLevel.info,
-          error: (_, _) => StatusLevel.error,
-        );
+    final level = switchChipLevel(ref.watch(switchListProvider));
     return EquipmentChip(
       icon: icon,
       label: label,

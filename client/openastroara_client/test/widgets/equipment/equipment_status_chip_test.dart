@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart';
@@ -49,6 +50,25 @@ void main() {
           StatusLevel.connected);
       expect(equipmentChipLevel(const AsyncData<_FakeStatus?>(null)),
           StatusLevel.disconnected);
+    });
+  });
+
+  group('switchChipLevel (multi-instance)', () {
+    SwitchDevice dev(SwitchConnectionState s) => SwitchDevice(
+        deviceId: 'sw', alpacaDeviceNumber: 0, name: 'sw', connectionState: s,
+        ports: const []);
+    test('green if any switch is connected, grey if none', () {
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.disconnected),
+            dev(SwitchConnectionState.connected),
+          ])),
+          StatusLevel.connected);
+      expect(switchChipLevel(AsyncData([dev(SwitchConnectionState.disconnected)])),
+          StatusLevel.disconnected);
+      expect(switchChipLevel(const AsyncData([])), StatusLevel.disconnected);
+      expect(switchChipLevel(const AsyncLoading()), StatusLevel.info);
+      expect(switchChipLevel(AsyncError('x', StackTrace.empty)), StatusLevel.error);
     });
   });
 
