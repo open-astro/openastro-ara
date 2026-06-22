@@ -218,12 +218,20 @@ public sealed partial class CameraService {
         Justification = "Live View loop boundary: a single frame's device/render failure (ASCOM throw, dropped link, decode error) must not fault the long-running loop — it is logged and the loop continues to the next frame. CA1031's log-and-recover boundary applies.")]
     private async Task RunLiveViewLoopAsync(LiveViewStartRequestDto request, long session, CancellationToken token) {
         var consecutiveFailures = 0;
+        // The bin/gain/subframe are constant for a session, so ApplyExposureSettings (up to ~10
+        // Alpaca round-trips) only needs to run once — re-running it every frame is pure latency on
+        // a slow bridge. Re-apply only when the device's settings may have changed under us: a manual
+        // capture interleaving (gate contention) applies its own settings, and a frame error leaves
+        // the device state unknown.
+        var settingsApplied = false;
         try {
             while (!token.IsCancellationRequested) {
                 // Per-frame mutual exclusion with real captures: skip this frame if a manual
                 // exposure holds the gate, so Live View never collides with a catalog capture. A
-                // skipped frame is not a failure (a capture is running), so don't count it.
+                // skipped frame is not a failure (a capture is running), so don't count it — but the
+                // capture changes the camera's settings, so re-apply ours on the next frame.
                 if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0) {
+                    settingsApplied = false;
                     await Task.Delay(LiveViewInterFrameDelay, token).ConfigureAwait(false);
                     continue;
                 }
@@ -236,11 +244,13 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    produced = await CaptureLiveFrameAsync(client, request, session, token).ConfigureAwait(false);
+                    produced = await CaptureLiveFrameAsync(client, request, session, applySettings: !settingsApplied, token).ConfigureAwait(false);
+                    settingsApplied = true; // settings are current (just applied, or unchanged since we hold the gate)
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;
                 } catch (Exception ex) {
                     LogLiveViewFrameFailed(ex);
+                    settingsApplied = false; // device state unknown after a failure — re-apply next frame
                 } finally {
                     Interlocked.Exchange(ref _captureInFlight, 0);
                 }
@@ -275,9 +285,13 @@ public sealed partial class CameraService {
 
     // Returns true if a frame was published, false if the frame was skipped (device never reached
     // ImageReady / dropped). Throwing propagates to the loop's catch, which counts it as a failure.
-    private async Task<bool> CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, long session, CancellationToken token) {
-        // Reuse the capture path's settings application (bin/gain, full-frame subframe).
-        ApplyExposureSettings(client, new ExposureRequestDto(request.ExposureSec, request.Gain, BinX: request.BinX, BinY: request.BinY));
+    private async Task<bool> CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, long session, bool applySettings, CancellationToken token) {
+        // Reuse the capture path's settings application (bin/gain, full-frame subframe). Applied only
+        // when the loop knows the device settings may be stale (first frame of a session, or after a
+        // manual capture / error) — see RunLiveViewLoopAsync's settingsApplied tracking.
+        if (applySettings) {
+            ApplyExposureSettings(client, new ExposureRequestDto(request.ExposureSec, request.Gain, BinX: request.BinX, BinY: request.BinY));
+        }
         // ApplyExposureSettings is up to 7 Alpaca round-trips with no ct hook; honor a stop that
         // arrived during it before kicking off an exposure we'd only abort on the first poll.
         token.ThrowIfCancellationRequested();
@@ -341,8 +355,10 @@ public sealed partial class CameraService {
         var cts = _liveViewCts;
         Volatile.Write(ref _liveViewActive, 0);
         if (cts is not null) {
+            // Guard both: a concurrent StopLiveViewAsync (under the mutex) may dispose the same CTS.
+            // Dispose is idempotent, but guard it to match the Cancel guard above and stay consistent.
             try { cts.Cancel(); } catch (ObjectDisposedException) { }
-            cts.Dispose();
+            try { cts.Dispose(); } catch (ObjectDisposedException) { }
         }
     }
 

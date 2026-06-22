@@ -77,7 +77,7 @@ public static class EquipmentEndpoints {
                 // Invalid exposure/binning request.
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
             } catch (InvalidOperationException ex) {
-                // Not connected, or an incompatible (tri-colour) sensor.
+                // Not connected, already running, or an incompatible (tri-colour) sensor.
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
         });
