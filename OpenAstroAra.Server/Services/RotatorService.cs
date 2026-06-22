@@ -154,6 +154,8 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             ObjectDisposedException.ThrowIf(_disposed, this);
             client = _state == EquipmentConnectionState.Connected ? _client : null;
         }
+        // Range first, then connection — matches MoveAsync's established order (and
+        // the test that exercises range validation via the disconnected path).
         if (IsAngleOutOfRange(request.SkyAngleDeg)) {
             throw new ArgumentOutOfRangeException(nameof(request), request.SkyAngleDeg,
                 "SkyAngleDeg must be in [0, 360).");
