@@ -34,6 +34,9 @@ class _FakeWeatherApi implements EquipmentDeviceClient<WeatherStatus> {
   @override
   Future<void> disconnect() async => calls.add('disconnect');
   @override
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
+      calls.add('command:$subpath');
+  @override
   void close() {}
 }
 

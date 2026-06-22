@@ -32,4 +32,9 @@ abstract class EquipmentDeviceStatus {
 
   bool get isConnecting => connectionState == EquipmentConnectionState.connecting;
   bool get isConnected => connectionState == EquipmentConnectionState.connected;
+
+  /// Whether the device is mid-operation (e.g. a focuser moving, a dome slewing).
+  /// Default `false`; device statuses with an activity sub-state override it. The
+  /// generic engine fast-polls a connected-but-busy device to track it to rest.
+  bool get isBusy => false;
 }

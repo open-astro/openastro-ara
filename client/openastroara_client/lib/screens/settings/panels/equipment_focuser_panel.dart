@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/equipment_device_status.dart';
+import '../../../models/focuser_status.dart';
+import '../../../services/equipment_device_api.dart';
+import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
-import '../../../widgets/equipment/alpaca_device_row.dart';
+import '../../../theme/ara_colors.dart';
+import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §37.4 Focuser panel. Auto-connect editable in 12h.2; movement +
-/// autofocus fields stay read-only refs (autofocus settings live in
-/// `autofocusSettingsProvider` per §37.11).
+/// §37.4 Focuser panel. Shows the connected focuser's live position / temperature
+/// and a move control via the shared connection card; the §37.11 autofocus rows
+/// below stay as references to the autofocus settings.
 class EquipmentFocuserPanel extends ConsumerWidget {
   const EquipmentFocuserPanel({super.key});
 
@@ -16,14 +22,22 @@ class EquipmentFocuserPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final connection = ref.watch(equipmentConnectionProvider);
     final n = ref.read(equipmentConnectionProvider.notifier);
+    final status = ref.watch(focuserProvider);
+    final notifier = ref.read(focuserProvider.notifier);
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Connection'),
-        const AlpacaDeviceRow(
+        EquipmentConnectionCard<FocuserStatus>(
+          status: status,
           deviceType: EquipmentDeviceType.focuser,
           deviceTypeLabel: 'focuser',
+          emptyLabel: 'No focuser connected.',
+          onConnect: notifier.connect,
+          onDisconnect: notifier.disconnect,
+          onRetry: notifier.refresh,
+          connectedBody: (context, s) => _FocuserBody(status: s),
         ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
@@ -31,16 +45,161 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           value: connection.autoConnect(EquipmentDeviceType.focuser),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
         ),
-        const SettingsSectionHeader('Movement'),
-        const SettingsRow(label: 'Step size (steps)', value: '50'),
-        const SettingsRow(label: 'Backlash IN (steps)', value: '0'),
-        const SettingsRow(label: 'Backlash OUT (steps)', value: '0'),
-        const SettingsRow(label: 'Initial settle (ms)', value: '500'),
         const SettingsSectionHeader('Autofocus'),
-        const SettingsRow(label: 'Use temp compensation', value: 'Off'),
+        const SettingsRow(
+          label: 'Use temp compensation',
+          value: 'Off',
+          hint: '§37.11 autofocus settings — overrideable per profile',
+        ),
         const SettingsRow(label: 'Run AF after filter change', value: 'On'),
         const SettingsRow(label: 'Trigger temp delta (°C)', value: '2.0'),
       ],
     );
+  }
+}
+
+/// The connected focuser's live body: position + temperature + temp-comp state,
+/// and a move-to-target control. A ConsumerStatefulWidget so the target field has
+/// a controller and can dispatch the move.
+class _FocuserBody extends ConsumerStatefulWidget {
+  final FocuserStatus status;
+  const _FocuserBody({required this.status});
+
+  @override
+  ConsumerState<_FocuserBody> createState() => _FocuserBodyState();
+}
+
+class _FocuserBodyState extends ConsumerState<_FocuserBody> {
+  // Seeded once from the current position. Intentionally NOT reseeded on live
+  // updates — this is the user's target, not a live value (the live position is
+  // shown separately), so a background poll can't clobber what they're typing.
+  late final TextEditingController _target =
+      TextEditingController(text: widget.status.position?.toString() ?? '');
+
+  // Whether this move should enable the device's temperature compensation. Seeded
+  // from the current state; the user toggles it per move (only shown when the
+  // device supports temp-comp — it's the only way the daemon exposes setting it).
+  late bool _useTempComp = widget.status.tempCompEnabled;
+
+  @override
+  void dispose() {
+    _target.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.status;
+    if (s.isConnecting) return const Text('Reading…');
+    if (s.connectionState == EquipmentConnectionState.error) {
+      return const Row(children: [
+        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+        SizedBox(width: 8),
+        Expanded(child: Text('Focuser read failed — check the device.')),
+      ]);
+    }
+    final caps = s.capabilities;
+    // Absolute focusers take a destination (0..max, digits only); relative focusers
+    // take a signed step delta (negative = inward), so allow a leading '-' and
+    // don't clamp to the absolute range.
+    final absolute = caps?.absoluteFocuser ?? true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _row('Position', s.position?.toString() ?? '—'),
+        if (s.temperature != null)
+          _row('Temperature', '${s.temperature!.toStringAsFixed(1)} °C'),
+        _row('Temp. compensation', s.tempCompEnabled ? 'On' : 'Off'),
+        if (s.isMoving)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text('Moving…', style: TextStyle(color: AraColors.accentBusy)),
+          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            SizedBox(
+              width: 140,
+              child: TextField(
+                controller: _target,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  // Anchored so a dash is only ever a leading sign (no '50-00').
+                  FilteringTextInputFormatter.allow(
+                      absolute ? RegExp(r'^[0-9]*$') : RegExp(r'^-?[0-9]*$')),
+                ],
+                decoration: InputDecoration(
+                  isDense: true,
+                  labelText: absolute ? 'Target' : 'Steps (±)',
+                  helperText: absolute
+                      ? (caps != null && caps.maxPosition > caps.minPosition
+                          ? 'Range ${caps.minPosition}–${caps.maxPosition}'
+                          : null)
+                      : 'Relative move (− inward)',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: s.isMoving ? null : () => _move(caps, absolute),
+              child: const Text('Move'),
+            ),
+          ],
+        ),
+        if (caps?.canTempComp ?? false)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(children: [
+              Checkbox(
+                value: _useTempComp,
+                onChanged: (v) => setState(() => _useTempComp = v ?? false),
+              ),
+              const Text('Use temperature compensation for this move'),
+            ]),
+          ),
+      ],
+    );
+  }
+
+  Widget _row(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(children: [
+          Expanded(child: Text(label)),
+          Text(value),
+        ]),
+      );
+
+  Future<void> _move(FocuserCapabilities? caps, bool absolute) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final raw = int.tryParse(_target.text.trim());
+    if (raw == null) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Enter a target position.')));
+      return;
+    }
+    // Clamp an absolute target to the device range (a typo can't drive past
+    // limits) — but only when the range is actually known (max > min); a missing
+    // max_position must not collapse the clamp to [0,0] and command a move to 0.
+    // A relative step delta is sent as-is. Reflect the value actually sent back
+    // into the field so it doesn't read a stale out-of-range number.
+    final target = (absolute && caps != null && caps.maxPosition > caps.minPosition)
+        ? raw.clamp(caps.minPosition, caps.maxPosition)
+        : raw;
+    if (mounted && target != raw) _target.text = target.toString();
+    try {
+      final performed = await ref
+          .read(focuserProvider.notifier)
+          .move(target, useTempComp: _useTempComp);
+      if (!performed) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Another action is still in progress.'),
+        ));
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text("Couldn't move: ${describeEquipmentError(e)}"),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 }

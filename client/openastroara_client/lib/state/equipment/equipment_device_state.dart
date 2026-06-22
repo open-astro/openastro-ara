@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/discovered_device.dart';
@@ -101,6 +102,21 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// Disconnect the device. Returns whether the call was performed (see [connect]).
   Future<bool> disconnect() => _act((api) => api.disconnect());
 
+  /// Run a device-specific control action (e.g. a focuser move, a filter change)
+  /// through the same 202-accept + re-read + re-entrancy machinery as
+  /// connect/disconnect. Subclasses expose typed wrappers over this. Returns
+  /// whether it was performed (`false` if dropped by the re-entrancy guard).
+  ///
+  /// Leave [pollAfter] `false` for move-like commands: the post-202 re-read
+  /// returns the device's busy sub-state (e.g. `isMoving`), and [isBusy] then
+  /// drives the fast settle-poll to track it to rest. `pollAfter: true` is only
+  /// for actions that begin a `connecting` transition (i.e. connect itself).
+  @protected
+  Future<bool> performAction(
+          Future<void> Function(EquipmentDeviceClient<T> api) action,
+          {bool pollAfter = false}) =>
+      _act(action, pollAfter: pollAfter);
+
   // Run a 202-Accepted action then re-read against the SAME client (a mid-action
   // server switch must not redirect the follow-up read). A failed action is
   // RETHROWN to the caller (the UI surfaces it) rather than wiping the last-read
@@ -174,10 +190,17 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // refresh that fails to read, this isn't called (see refresh()) so a transient
   // error leaves the running timer in place rather than stranding the device.
   void _syncPolls(T? status) {
-    if (status?.isConnecting ?? false) {
+    if (status == null) {
+      _cancelAllPolls();
+      return;
+    }
+    // Fast-poll (settle cadence) while connecting OR while connected-but-busy (a
+    // focuser moving, a dome slewing) so the panel tracks the device to rest; the
+    // slow liveness-poll otherwise; nothing when disconnected/errored.
+    if (status.isConnecting || (status.isConnected && status.isBusy)) {
       _cancelLive();
       _armSettle();
-    } else if (status?.isConnected ?? false) {
+    } else if (status.isConnected) {
       _cancelSettle();
       _armLive();
     } else {
