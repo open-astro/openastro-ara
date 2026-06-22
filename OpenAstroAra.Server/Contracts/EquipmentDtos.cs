@@ -98,6 +98,9 @@ public sealed record CameraStateDto(
 // lower-noise framing loop.
 public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = null, int BinX = 2, int BinY = 2);
 
+// All nullable fields are null until the session has the relevant value, not optional config:
+// StartedAtUtc is null only before Live View has ever been started; Width/Height/LastFrameAtUtc
+// are null until the first frame of the current session has been rendered.
 public sealed record LiveViewStatusDto(
     bool Active,
     long FrameSeq,
