@@ -91,6 +91,33 @@ public sealed record CameraStateDto(
     bool CoolerOn,
     double? ExposureProgressPct);
 
+// §64 Live View: a server-driven short-exposure loop that renders the latest
+// frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
+// status; the frame bytes come from GET /camera/liveview/frame. ExposureSec is
+// short (sub-second to a few seconds); BinX/BinY default to 2 for a faster,
+// lower-noise framing loop.
+public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = null, int BinX = 2, int BinY = 2);
+
+// All nullable fields are null until the session has the relevant value, not optional config:
+// StartedAtUtc is null before the first start AND after each stop (meta clears on stop) — use
+// SessionId > 0 to tell "stopped" from "never started"; Width/Height/LastFrameAtUtc are null until
+// the first frame of the current session has been rendered.
+// During an in-flight StopLiveViewAsync there is a brief window where Active=false but FrameSeq>0
+// (the frame is dropped only after the loop drains); treat FrameSeq as advisory, gate "live" on
+// Active. Once stop returns, FrameSeq is 0 and GET /liveview/frame is 204.
+public sealed record LiveViewStatusDto(
+    bool Active,
+    // Bumped each time Live View starts. FrameSeq restarts at 1 per session, so a client doing
+    // X-Frame-Seq change-detection should treat a changed SessionId as "new session" (FrameSeq
+    // going backward is a restart, not a regression). 0 before Live View has ever started.
+    long SessionId,
+    long FrameSeq,
+    int? Width,
+    int? Height,
+    double? ExposureSec,
+    string? StartedAtUtc,
+    string? LastFrameAtUtc);
+
 // Cooler control: turn the cooler on/off and optionally set the target CCD
 // temperature. CoolerOn and the set-point are independent ASCOM properties, so a
 // null TargetTemperatureC means "leave the set-point unchanged" — the service

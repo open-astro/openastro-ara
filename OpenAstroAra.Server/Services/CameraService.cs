@@ -923,6 +923,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _client = null;
         }
         _refreshTimer.Dispose();
+        CancelLiveViewForDispose();
         // Dispose the client directly (guarded): the courtesy AbortExposure/Connected=false are
         // blocking HTTP calls that would hang container shutdown if the device is unreachable.
         if (client is not null) {

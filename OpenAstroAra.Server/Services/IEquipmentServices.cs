@@ -36,6 +36,16 @@ public interface ICameraService {
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task AbortExposureAsync(CancellationToken ct);
     Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
+    // §64 Live View: a short-exposure render loop for framing/focus (no catalog write).
+    Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct);
+    // No CancellationToken by design: a stop is unconditional — it always runs to completion (it
+    // awaits the loop draining, up to the exposure cap). Omitting the param makes that explicit at
+    // every call site rather than handing callers a token that's silently ignored.
+    Task StopLiveViewAsync();
+    LiveViewStatusDto GetLiveViewStatus();
+    // ReadOnlyMemory (not byte[]): the published buffer is shared across readers and must not be
+    // mutated; the read-only view makes that explicit without a per-fetch defensive copy.
+    (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame();
 }
 
 public interface ITelescopeService {

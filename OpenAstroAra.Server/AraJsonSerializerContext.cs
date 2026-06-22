@@ -74,6 +74,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CameraDto))]
 [JsonSerializable(typeof(CameraStateDto))]
 [JsonSerializable(typeof(CameraCoolerRequestDto))]
+[JsonSerializable(typeof(LiveViewStartRequestDto))]
+[JsonSerializable(typeof(LiveViewStatusDto))]
 [JsonSerializable(typeof(ConnectRequestDto))]
 [JsonSerializable(typeof(DarkLibraryBuildRequestDto))]
 [JsonSerializable(typeof(DarkLibraryEntryDto))]

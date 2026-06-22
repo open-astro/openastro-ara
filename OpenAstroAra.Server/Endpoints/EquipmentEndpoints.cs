@@ -68,6 +68,45 @@ public static class EquipmentEndpoints {
             await svc.SetCoolerAsync(request.Enabled, request.TargetTemperatureC, ct);
             return Results.Accepted();
         });
+        // §64 Live View — short-exposure framing/focus loop (no catalog write).
+        camera.MapPost("/liveview/start", async ([FromBody] LiveViewStartRequestDto request, ICameraService svc, CancellationToken ct) => {
+            try {
+                await svc.StartLiveViewAsync(request, ct);
+                return Results.Accepted();
+            } catch (ArgumentException ex) {
+                // Invalid exposure/binning request.
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            } catch (InvalidOperationException ex) {
+                // Not connected, already running, or an incompatible (tri-colour) sensor.
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
+        camera.MapPost("/liveview/stop", async (ICameraService svc) => {
+            // 204, not 202: StopLiveViewAsync awaits the loop fully draining before returning, so the
+            // stop is confirmed complete by the time this responds (unlike /start, which is async).
+            // No ct: a stop is unconditional and never honors cancellation. It can take up to the
+            // exposure cap (LiveViewMaxExposureSec, 15 s) + readout while an in-flight, non-cancellable
+            // ImageArray download finishes — clients should allow a ~30 s timeout on this call.
+            await svc.StopLiveViewAsync();
+            return Results.NoContent();
+        });
+        camera.MapGet("/liveview", (ICameraService svc) => Results.Ok(svc.GetLiveViewStatus()));
+        camera.MapGet("/liveview/frame", (ICameraService svc, HttpContext http) => {
+            var frame = svc.GetLiveViewFrame();
+            if (frame is null) {
+                return Results.NoContent();
+            }
+            // Live frames are ephemeral — never let a proxy/client cache one and serve it stale.
+            http.Response.Headers.CacheControl = "no-store";
+            // Expose the frame's sequence + session so a poller can change-detect in a single request
+            // (no separate GET /liveview round-trip). A changed X-Live-Session means a new session
+            // (FrameSeq restarts at 1), so the poller treats it as new rather than a seq regression.
+            http.Response.Headers["X-Frame-Seq"] =
+                frame.Value.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            http.Response.Headers["X-Live-Session"] =
+                frame.Value.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
+        });
 
         // ─── Telescope ───
         var telescope = equipment.MapGroup("/telescope");
