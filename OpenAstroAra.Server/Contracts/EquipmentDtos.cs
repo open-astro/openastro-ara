@@ -91,8 +91,11 @@ public sealed record CameraStateDto(
     bool CoolerOn,
     double? ExposureProgressPct);
 
-// Cooler control: turn the cooler on/off and (when on) set the target CCD
-// temperature. TargetTemperatureC is ignored when Enabled is false.
+// Cooler control: turn the cooler on/off and optionally set the target CCD
+// temperature. CoolerOn and the set-point are independent ASCOM properties, so a
+// null TargetTemperatureC means "leave the set-point unchanged" — the service
+// only writes SetCCDTemperature when a target is supplied (a pure on/off toggle
+// sends null). TargetTemperatureC is likewise ignored when Enabled is false.
 public sealed record CameraCoolerRequestDto(bool Enabled, double? TargetTemperatureC = null);
 
 public sealed record ExposureRequestDto(
