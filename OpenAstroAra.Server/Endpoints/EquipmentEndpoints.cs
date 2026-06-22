@@ -119,6 +119,10 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         rotator.MapPost("/move", async ([FromBody] RotatorMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
+        rotator.MapPost("/reverse", async ([FromBody] RotatorReverseRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SetReverseAsync(request, key, ct)));
+        rotator.MapPost("/sync", async ([FromBody] RotatorSyncRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SyncAsync(request, key, ct)));
 
         // ─── Dome ───
         var dome = equipment.MapGroup("/dome");

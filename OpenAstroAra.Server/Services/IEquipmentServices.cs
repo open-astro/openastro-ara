@@ -68,6 +68,8 @@ public interface IRotatorService {
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 public interface IDomeService {

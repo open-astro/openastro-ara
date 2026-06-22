@@ -180,11 +180,19 @@ public sealed record RotatorDto(
     string DeviceId,
     string Name,
     EquipmentConnectionState State,
+    RotatorCapabilitiesDto? Capabilities,
     RotatorStateDto Runtime);
 
-public sealed record RotatorStateDto(string State, double? MechanicalAngleDeg, double? SkyAngleDeg);
+public sealed record RotatorCapabilitiesDto(bool CanReverse, double StepSize);
+
+public sealed record RotatorStateDto(
+    string State, double? MechanicalAngleDeg, double? SkyAngleDeg, bool Reverse);
 
 public sealed record RotatorMoveRequestDto(double TargetAngleDeg, bool UseSkyAngle = false);
+
+public sealed record RotatorReverseRequestDto(bool Reverse);
+
+public sealed record RotatorSyncRequestDto(double SkyAngleDeg);
 
 // ─── Dome (§10.6 row 6) ───────────────────────────────────────────────────────
 
