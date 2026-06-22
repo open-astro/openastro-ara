@@ -69,7 +69,7 @@ class _ConnectionCard extends ConsumerWidget {
         child: switch (status) {
           AsyncData(:final value) => value == null
               ? _Disconnected(onConnect: () => _connect(context, ref))
-              : _Connected(status: value, ref: ref),
+              : _Connected(status: value),
           AsyncError(:final error) => _MessageRow(
               icon: Icons.error_outline,
               color: AraColors.accentError,
@@ -95,7 +95,13 @@ class _ConnectionCard extends ConsumerWidget {
       // notifier's _acting guard drops a concurrent second connect.
       onPick: (device) async {
         try {
-          await ref.read(safetyMonitorProvider.notifier).connect(device);
+          final performed =
+              await ref.read(safetyMonitorProvider.notifier).connect(device);
+          if (!performed) {
+            messenger.showSnackBar(const SnackBar(
+              content: Text('Another connect/disconnect is still in progress.'),
+            ));
+          }
         } catch (e) {
           messenger.showSnackBar(SnackBar(
             content: Text("Couldn't connect ${device.name}: ${_msg(e)}"),
@@ -130,13 +136,12 @@ class _Disconnected extends StatelessWidget {
   }
 }
 
-class _Connected extends StatelessWidget {
+class _Connected extends ConsumerWidget {
   final SafetyMonitorStatus status;
-  final WidgetRef ref;
-  const _Connected({required this.status, required this.ref});
+  const _Connected({required this.status});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final title = status.name.isEmpty ? 'Safety monitor' : status.name;
     // The is_safe reading is only meaningful once connected; while connecting it's
     // still the daemon default — show the connection state instead of a stale flag.
@@ -153,7 +158,7 @@ class _Connected extends StatelessWidget {
             IconButton(
               tooltip: 'Disconnect',
               icon: const Icon(Icons.link_off, size: 18),
-              onPressed: () => _disconnect(context),
+              onPressed: () => _disconnect(context, ref),
             ),
           ],
         ),
@@ -177,10 +182,16 @@ class _Connected extends StatelessWidget {
     );
   }
 
-  Future<void> _disconnect(BuildContext context) async {
+  Future<void> _disconnect(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(safetyMonitorProvider.notifier).disconnect();
+      final performed =
+          await ref.read(safetyMonitorProvider.notifier).disconnect();
+      if (!performed) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Another connect/disconnect is still in progress.'),
+        ));
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text("Couldn't disconnect: ${_msg(e)}"),

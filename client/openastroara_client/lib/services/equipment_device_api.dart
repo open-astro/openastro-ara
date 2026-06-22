@@ -46,16 +46,18 @@ class EquipmentDeviceApi<T> implements EquipmentDeviceClient<T> {
           // Bound the body write too — connect/disconnect are POSTs, so a server
           // that accepts the socket but stalls reading the body must not hang.
           sendTimeout: const Duration(seconds: 5),
-          // A "not connected" device is a legitimate 404 on the status GET, not a
-          // transport error — accept it so it reads as data (null) rather than
-          // throwing a DioException the caller has to special-case.
-          validateStatus: (status) =>
-              status != null && (status < 400 || status == 404),
         ));
+
+  // A "not connected" device is a legitimate 404 on the status GET (only) — scope
+  // the exemption to that request so a 404 on the connect/disconnect POSTs (a
+  // routing/version bug) still throws instead of looking like a silent success.
+  static final Options _getStatusOptions = Options(
+    validateStatus: (status) => status != null && (status < 400 || status == 404),
+  );
 
   @override
   Future<T?> getStatus() async {
-    final res = await _dio.get<dynamic>(_base);
+    final res = await _dio.get<dynamic>(_base, options: _getStatusOptions);
     if (res.statusCode == 404) return null; // no device of this type connected
     final data = res.data;
     // Tolerate a malformed/proxy-rewritten non-object body without a TypeError
