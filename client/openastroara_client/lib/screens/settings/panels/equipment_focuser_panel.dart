@@ -119,14 +119,15 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
                 controller: _target,
                 keyboardType: TextInputType.number,
                 inputFormatters: [
+                  // Anchored so a dash is only ever a leading sign (no '50-00').
                   FilteringTextInputFormatter.allow(
-                      absolute ? RegExp(r'[0-9]') : RegExp(r'[0-9-]')),
+                      absolute ? RegExp(r'^[0-9]*$') : RegExp(r'^-?[0-9]*$')),
                 ],
                 decoration: InputDecoration(
                   isDense: true,
                   labelText: absolute ? 'Target' : 'Steps (±)',
                   helperText: absolute
-                      ? (caps != null
+                      ? (caps != null && caps.maxPosition > caps.minPosition
                           ? 'Range ${caps.minPosition}–${caps.maxPosition}'
                           : null)
                       : 'Relative move (− inward)',
@@ -161,9 +162,11 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
       return;
     }
     // Clamp an absolute target to the device range (a typo can't drive past
-    // limits); a relative step delta is sent as-is. Reflect the actual value sent
-    // back into the field so it doesn't read a stale out-of-range number.
-    final target = (absolute && caps != null)
+    // limits) — but only when the range is actually known (max > min); a missing
+    // max_position must not collapse the clamp to [0,0] and command a move to 0.
+    // A relative step delta is sent as-is. Reflect the value actually sent back
+    // into the field so it doesn't read a stale out-of-range number.
+    final target = (absolute && caps != null && caps.maxPosition > caps.minPosition)
         ? raw.clamp(caps.minPosition, caps.maxPosition)
         : raw;
     if (mounted && target != raw) _target.text = target.toString();
