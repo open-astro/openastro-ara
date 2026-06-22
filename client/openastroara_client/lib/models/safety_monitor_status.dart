@@ -14,8 +14,11 @@ class SafetyMonitorStatus extends EquipmentDeviceStatus {
   /// reads `false` in any other state (the daemon's default).
   final bool safe;
 
-  /// RFC3339 timestamp of the last safe⇄unsafe flip, or `''` if never observed.
-  final String lastTransitionAt;
+  /// Instant of the last safe⇄unsafe flip (UTC), or `null` if never observed /
+  /// unparseable. Normalized to UTC at parse time so equality doesn't trip on
+  /// RFC3339 format variation (`Z` vs `+00:00`) for the same instant — which would
+  /// otherwise flag two identical-state objects as unequal and flicker the panel.
+  final DateTime? lastTransitionAt;
 
   SafetyMonitorStatus({
     required this.deviceId,
@@ -32,10 +35,15 @@ class SafetyMonitorStatus extends EquipmentDeviceStatus {
         connectionState:
             equipmentConnectionStateFromWire(json['state'] as String?),
         // Tolerate a non-bool `safe` (a schema quirk sending 0/1) the same way the
-        // string fields tolerate a missing key — degrade to false, don't throw.
+        // string fields tolerate a missing key. Degrading to `false` (Unsafe) is the
+        // deliberate FAIL-SAFE direction for a safety monitor — when the reading is
+        // unparseable, block (show Unsafe) rather than green-light an exposure.
         safe: json['safe'] is bool ? json['safe'] as bool : false,
-        lastTransitionAt: json['last_transition_at'] as String? ?? '',
+        lastTransitionAt: _parseUtc(json['last_transition_at']),
       );
+
+  static DateTime? _parseUtc(Object? raw) =>
+      raw is String ? DateTime.tryParse(raw)?.toUtc() : null;
 
   @override
   bool operator ==(Object other) =>

@@ -51,7 +51,7 @@ SafetyMonitorStatus _status({
       name: 'CloudWatcher',
       connectionState: state,
       safe: safe,
-      lastTransitionAt: '2026-06-22T04:00:00Z',
+      lastTransitionAt: DateTime.utc(2026, 6, 22, 4),
     );
 
 // The settings panels are designed for the wide right-hand pane; give the test a

@@ -177,11 +177,11 @@ class _Connected extends ConsumerWidget {
             ]),
           _ => const Text('Reading…'),
         },
-        if (status.lastTransitionAt.isNotEmpty)
+        if (status.lastTransitionAt != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'Last change: ${_formatTransition(status.lastTransitionAt)}',
+              'Last change: ${_formatTransition(status.lastTransitionAt!)}',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -261,14 +261,11 @@ class _MessageRow extends StatelessWidget {
   }
 }
 
-/// Render the daemon's RFC3339 `last_transition_at` as `YYYY-MM-DD HH:MM UTC`,
-/// falling back to the raw string if it doesn't parse. Shown in UTC (with an
-/// explicit label) rather than device-local time — astronomy sessions are
-/// conventionally logged in UTC, and an unmarked local time misleads remote/
+/// Render the last-transition instant as `YYYY-MM-DD HH:MM UTC`. Shown in UTC
+/// (with an explicit label) rather than device-local time — astronomy sessions
+/// are conventionally logged in UTC, and an unmarked local time misleads remote/
 /// observatory users.
-String _formatTransition(String raw) {
-  final dt = DateTime.tryParse(raw);
-  if (dt == null) return raw;
+String _formatTransition(DateTime dt) {
   final u = dt.toUtc();
   String two(int n) => n.toString().padLeft(2, '0');
   return '${u.year}-${two(u.month)}-${two(u.day)} ${two(u.hour)}:${two(u.minute)} UTC';
