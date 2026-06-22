@@ -127,7 +127,10 @@ public sealed partial class CameraService {
                 try { await cts.CancelAsync().ConfigureAwait(false); } catch (ObjectDisposedException) { }
             }
             if (loop is not null) {
-                await loop.ConfigureAwait(false); // the loop swallows its own faults; never throws here
+                // May block until an in-flight frame's non-cancellable ImageArray download finishes
+                // (bounded by the exposure + readout, capped at LiveViewMaxExposureSec). Acceptable
+                // for framing, where exposures are short; the loop swallows its own faults.
+                await loop.ConfigureAwait(false);
             }
             cts?.Dispose();
             // Drop the last frame so GET /liveview/frame returns 204 once stopped. This MUST come
@@ -142,10 +145,14 @@ public sealed partial class CameraService {
     }
 
     public LiveViewStatusDto GetLiveViewStatus() {
+        // Read the frame (the writer's commit point) FIRST: its volatile-read acquire barrier makes
+        // the prior _liveViewMeta write visible, so a new FrameSeq always pairs with at-least-as-new
+        // meta. Reading meta first could observe a new seq alongside stale Width/Height.
+        var f = _liveViewFrame;
         var m = _liveViewMeta;
         return new LiveViewStatusDto(
             Active: Volatile.Read(ref _liveViewActive) == 1,
-            FrameSeq: _liveViewFrame?.Seq ?? 0,
+            FrameSeq: f?.Seq ?? 0,
             Width: m?.Width,
             Height: m?.Height,
             ExposureSec: m?.ExposureSec,
