@@ -57,6 +57,10 @@ final liveViewApiFactoryProvider =
 class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   Timer? _timer;
   LiveViewClient? _api;
+  // The in-flight stop's server round-trip. A new start() awaits it so a prior
+  // session's stop can't reach the (single-session) server AFTER the new start
+  // and kill it.
+  Future<void>? _stopInFlight;
   int _consecutiveErrors = 0;
   static const _pollInterval = Duration(milliseconds: 250);
   static const _maxBackoff = Duration(seconds: 5);
@@ -92,6 +96,14 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
       state = const LiveFrameState(error: 'Not connected to a server.');
       return;
     }
+    // Wait for a prior session's stop to reach the server before we POST start,
+    // so its 204-drain can't arrive after this start and stop the new session.
+    final prevStop = _stopInFlight;
+    if (prevStop != null) {
+      try {
+        await prevStop;
+      } catch (_) {}
+    }
     _timer?.cancel();
     _api?.close();
     _consecutiveErrors = 0;
@@ -121,12 +133,17 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     _api = null;
     state = LiveFrameState.idle;
     if (api != null) {
+      // Track the server round-trip so a racing start() can serialize behind it.
+      final f = api.stop();
+      _stopInFlight = f;
       try {
-        await api.stop();
+        await f;
       } catch (_) {
         // Best-effort: the server self-stops on disconnect anyway.
+      } finally {
+        api.close();
+        if (identical(_stopInFlight, f)) _stopInFlight = null;
       }
-      api.close();
     }
   }
 

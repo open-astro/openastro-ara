@@ -49,7 +49,7 @@ class ImagingTab extends ConsumerWidget {
                 liveViewOn: liveViewOn,
                 onTakeOne: exposing ? null : () => _takeOne(context, ref),
                 onLiveViewToggle: (v) {
-                  _toggleLiveView(ref, v);
+                  _toggleLiveView(context, ref, v);
                 },
               ),
             ],
@@ -63,7 +63,9 @@ class ImagingTab extends ConsumerWidget {
   /// boolean controller keeps the UI intent (toggle + any cross-component
   /// mirror); the frame notifier owns the start/poll/stop against the daemon,
   /// seeded with the current Imaging-tab exposure/gain/binning.
-  Future<void> _toggleLiveView(WidgetRef ref, bool on) async {
+  Future<void> _toggleLiveView(
+      BuildContext context, WidgetRef ref, bool on) async {
+    final messenger = ScaffoldMessenger.of(context);
     final controller = ref.read(liveViewControllerProvider.notifier);
     controller.set(on); // optimistic — reflect the tap immediately
     final lv = ref.read(liveViewFrameProvider.notifier);
@@ -76,10 +78,15 @@ class ImagingTab extends ConsumerWidget {
         binX: p.bin,
         binY: p.bin,
       );
-      // A start() failure flips active back to false — keep the toggle honest so
-      // it doesn't sit stuck "on" while Live View isn't running.
-      if (!ref.read(liveViewFrameProvider).active) {
+      // A start() failure flips active back to false — keep the toggle honest
+      // (it can't sit stuck "on") AND surface why, since FrameViewer only shows
+      // the live error while active.
+      final lvState = ref.read(liveViewFrameProvider);
+      if (!lvState.active) {
         controller.set(false);
+        messenger.showSnackBar(SnackBar(
+          content: Text("Couldn't start Live View: ${lvState.error ?? 'unknown error'}"),
+        ));
       }
     } else {
       await lv.stop();
