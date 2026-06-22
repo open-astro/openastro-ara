@@ -106,6 +106,31 @@ void main() {
       expect(find.textContaining('No saved sequences'), findsOneWidget);
     });
 
+    testWidgets('each row has an Export action; export with no server hints + keeps the dialog',
+        (tester) async {
+      // List one sequence but leave sequenceApiProvider null (no connected
+      // server), so the export tap exercises the no-server guard deterministically.
+      final container = ProviderContainer(overrides: [
+        sequenceListProvider.overrideWith(
+            () => _FakeListNotifier(() async => [_item('s1', 'M31 LRGB')])),
+        sequenceApiProvider.overrideWithValue(null),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequenceLoadDialog())),
+      ));
+      await tester.pumpAndSettle();
+
+      // The per-row Export action is present.
+      expect(find.byIcon(Icons.save_alt), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.save_alt));
+      await tester.pump(); // start _run → show the SnackBar
+      expect(find.textContaining('Connect to a daemon to export'), findsOneWidget);
+      // Export never pops the picker — the row is still there.
+      expect(find.text('M31 LRGB'), findsOneWidget);
+    });
+
     testWidgets('lists sequences; tapping one selects it and dismisses',
         (tester) async {
       // Launch via show() (not mounted directly) so the onTap pop has a route to

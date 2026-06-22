@@ -198,7 +198,11 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
             share.sequenceName.isEmpty ? widget.name : share.sequenceName,
             fallbackBase: 'sequence',
             extension: 'araseq.json'),
-        type: FileType.any,
+        // Pre-filter the OS dialog to .json so the user can't accidentally save
+        // over an unrelated file / drop the extension. The suggested name ends
+        // in `.araseq.json`, which satisfies the `json` filter.
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
         bytes: bytes,
       );
       if (saved == null || !mounted) return; // cancelled / dialog gone
@@ -221,7 +225,7 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
       icon: _busy
           ? const SizedBox(
               width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.ios_share, size: 18),
+          : const Icon(Icons.save_alt, size: 18),
       tooltip: 'Export…',
       onPressed: _busy ? null : _run,
     );
