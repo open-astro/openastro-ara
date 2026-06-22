@@ -39,7 +39,7 @@ class CameraCapabilities {
   });
 
   /// Whether this is a one-shot-colour sensor (has a Bayer pattern) vs mono.
-  bool get isColor => bayerPattern != null && bayerPattern!.isNotEmpty;
+  bool get isColor => bayerPattern?.isNotEmpty == true;
 
   factory CameraCapabilities.fromJson(Map<String, dynamic> json) {
     int i(String k) => (json[k] as num?)?.toInt() ?? 0;
