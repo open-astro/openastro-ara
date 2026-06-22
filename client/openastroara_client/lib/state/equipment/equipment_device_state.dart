@@ -72,10 +72,20 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // build(), so registering per-build cleans up the prior build's timers without
     // the callback list accumulating across server switches.
     ref.onDispose(_cancelAllPolls);
+    // Scope the background liveness poll to when a panel is actually watching:
+    // stop it when the last listener leaves (no point polling a device nobody is
+    // viewing — overnight that'd be thousands of idle GETs), and on a listener's
+    // return do an immediate fresh read which re-arms the poll if still connected.
+    ref.onCancel(_cancelLive);
+    ref.onResume(() {
+      if (ref.mounted) refresh();
+    });
     final api = watchClient();
     if (api == null) return null;
     final status = await api.getStatus();
-    _syncPolls(status);
+    // The notifier may have been disposed during the await — don't arm a (briefly)
+    // stale timer.
+    if (ref.mounted) _syncPolls(status);
     return status;
   }
 

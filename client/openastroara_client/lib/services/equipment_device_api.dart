@@ -73,9 +73,14 @@ class EquipmentDeviceApi<T> implements EquipmentDeviceClient<T> {
     final res = await _dio.get<dynamic>(_base, options: _getStatusOptions);
     if (res.statusCode == 404) return null; // no device of this type connected
     final data = res.data;
-    // Tolerate a malformed/proxy-rewritten non-object body without a TypeError
-    // escaping — reads as "not connected" rather than crashing the panel.
-    if (data is! Map<String, dynamic>) return null;
+    // A 200 whose body isn't a JSON object (a proxy HTML error page, a rewritten
+    // response) is an ERROR, not "not connected" — throw so it surfaces as the
+    // error state (Retry) rather than silently masquerading as no-device. Caught
+    // by the caller's AsyncValue.guard; no TypeError escapes.
+    if (data is! Map<String, dynamic>) {
+      throw Exception(
+          'unexpected ${res.statusCode} body from $_base — not a JSON object');
+    }
     return fromJson(data);
   }
 
