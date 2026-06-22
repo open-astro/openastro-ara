@@ -5,10 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/app_shell_state.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/command_palette.dart';
-import '../widgets/equipment/guider_chip.dart';
-import '../widgets/equipment_chip.dart';
+import '../widgets/equipment/equipment_status_chip.dart';
 import '../widgets/help_dialog.dart';
-import '../widgets/status_indicator.dart';
 import '../widgets/ws_connection_indicator.dart';
 import 'library/image_library_screen.dart';
 import 'stats/stats_dashboard_screen.dart';
@@ -45,6 +43,12 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
+    // Ties kOptionsTabIndex (used by the equipment chips to route to a device's
+    // settings panel) to the actual tab order — a reorder of _tabs that forgets
+    // to update the constant trips this in debug instead of silently navigating
+    // to the wrong tab.
+    assert(_tabs[kOptionsTabIndex].label == 'Options',
+        'kOptionsTabIndex must point at the Options tab — update it if _tabs is reordered.');
     return Scaffold(
       body: SafeArea(
         child: CallbackShortcuts(
@@ -103,31 +107,6 @@ class _TabSpec {
 class _TopEquipmentBar extends StatelessWidget {
   const _TopEquipmentBar();
 
-  // Per §25.3 device-type order. These chips are disconnected until Phase 12c
-  // wires their Alpaca chooser + connect flow. GUIDE is live (GuiderChip) and is
-  // inserted explicitly between ROT and FLAT in the row below — its position is
-  // structural, not matched on a label string.
-  static const _chipsBeforeGuide = <(IconData, String)>[
-    (Icons.camera_alt, 'CAM'),
-    (Icons.filter_alt, 'FW'),
-    (Icons.adjust, 'FOC'),
-    (Icons.public, 'MOUNT'),
-    (Icons.rotate_right, 'ROT'),
-  ];
-  static const _chipsAfterGuide = <(IconData, String)>[
-    (Icons.wb_sunny, 'FLAT'),
-    (Icons.power, 'SW'),
-    (Icons.cloud_outlined, 'WX'),
-    (Icons.shield_outlined, 'SAFE'),
-    (Icons.home_outlined, 'DOME'),
-  ];
-
-  static Widget _staticChip((IconData, String) spec) => EquipmentChip(
-        icon: spec.$1,
-        label: spec.$2,
-        status: StatusLevel.disconnected,
-      );
-
   @override
   Widget build(BuildContext context) {
     final shortcutLabel = Theme.of(context).platform == TargetPlatform.macOS
@@ -141,17 +120,13 @@ class _TopEquipmentBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
+          const Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  for (final spec in _chipsBeforeGuide) _staticChip(spec),
-                  const GuiderChip(),
-                  for (final spec in _chipsAfterGuide) _staticChip(spec),
-                ],
-              ),
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              // Per §25.3 device-type order; each chip is live (status dot) +
+              // clickable (routes to its Settings panel). See TopEquipmentChips.
+              child: TopEquipmentChips(),
             ),
           ),
           // §61.1 — visible magnifying-glass icon on the right side of the
