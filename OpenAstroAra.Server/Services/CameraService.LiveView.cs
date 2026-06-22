@@ -37,7 +37,9 @@ public sealed partial class CameraService {
     private const int LiveViewMaxDim = 1024;
     private static readonly TimeSpan LiveViewInterFrameDelay = TimeSpan.FromMilliseconds(100);
 
-    private readonly object _liveViewGate = new();
+    // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
+    // concurrent Start spinning up a second loop). State reads (status/frame) stay lock-free.
+    private readonly SemaphoreSlim _liveViewMutex = new(1, 1);
     private CancellationTokenSource? _liveViewCts;
     private Task? _liveViewLoop;
     private int _liveViewActive;
@@ -48,7 +50,7 @@ public sealed partial class CameraService {
     private sealed record LiveViewMeta(
         int? Width, int? Height, double? ExposureSec, DateTimeOffset StartedAt, DateTimeOffset? LastFrameAt);
 
-    public Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) {
+    public async Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) {
         if (request.ExposureSec <= 0) {
             throw new ArgumentOutOfRangeException(nameof(request), "ExposureSec must be positive.");
         }
@@ -59,40 +61,48 @@ public sealed partial class CameraService {
         // re-resolves the current client each frame so a later reconnect/disconnect is honored.
         _ = RequireConnectedClient();
 
-        lock (_liveViewGate) {
+        await _liveViewMutex.WaitAsync(ct).ConfigureAwait(false);
+        try {
             if (_liveViewLoop is { IsCompleted: false }) {
-                return Task.CompletedTask; // already running — idempotent start
+                return; // already running — idempotent start
             }
+            // A self-terminated loop (e.g. camera disconnect) leaves its spent CTS behind; dispose it
+            // before replacing so it isn't leaked.
+            _liveViewCts?.Dispose();
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
             _liveViewMeta = new LiveViewMeta(null, null, request.ExposureSec, DateTimeOffset.UtcNow, null);
             Volatile.Write(ref _liveViewActive, 1);
             _liveViewLoop = Task.Run(() => RunLiveViewLoopAsync(request, cts.Token), CancellationToken.None);
+        } finally {
+            _liveViewMutex.Release();
         }
         LogLiveViewStarted(request.ExposureSec, request.BinX, request.BinY);
-        return Task.CompletedTask;
     }
 
     public async Task StopLiveViewAsync(CancellationToken ct) {
-        Task? loop;
-        CancellationTokenSource? cts;
-        lock (_liveViewGate) {
-            cts = _liveViewCts;
-            loop = _liveViewLoop;
+        await _liveViewMutex.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            var cts = _liveViewCts;
+            var loop = _liveViewLoop;
             _liveViewCts = null;
             _liveViewLoop = null;
+            Volatile.Write(ref _liveViewActive, 0);
+            if (cts is null && loop is null) {
+                return; // not running — no-op
+            }
+            // Hold the mutex across the cancel + await so a concurrent Start can't spin up a second
+            // loop in the gap and race this one on _captureInFlight.
+            if (cts is not null) {
+                try { await cts.CancelAsync().ConfigureAwait(false); } catch (ObjectDisposedException) { }
+            }
+            if (loop is not null) {
+                await loop.ConfigureAwait(false); // the loop swallows its own faults; never throws here
+            }
+            cts?.Dispose();
+        } finally {
+            _liveViewMutex.Release();
         }
-        Volatile.Write(ref _liveViewActive, 0);
-        if (cts is null && loop is null) {
-            return; // not running — no-op
-        }
-        if (cts is not null) {
-            try { await cts.CancelAsync().ConfigureAwait(false); } catch (ObjectDisposedException) { }
-        }
-        if (loop is not null) {
-            await loop.ConfigureAwait(false); // the loop swallows its own faults; never throws here
-        }
-        cts?.Dispose();
         LogLiveViewStopped();
     }
 
@@ -186,17 +196,15 @@ public sealed partial class CameraService {
     // Called from Dispose: cancel the loop promptly without awaiting (the loop also breaks on the
     // _disposed/_client guard), and release the CTS.
     private void CancelLiveViewForDispose() {
-        CancellationTokenSource? cts;
-        lock (_liveViewGate) {
-            cts = _liveViewCts;
-            _liveViewCts = null;
-            _liveViewLoop = null;
-        }
+        var cts = _liveViewCts;
+        _liveViewCts = null;
+        _liveViewLoop = null;
         Volatile.Write(ref _liveViewActive, 0);
         if (cts is not null) {
             try { cts.Cancel(); } catch (ObjectDisposedException) { }
             cts.Dispose();
         }
+        _liveViewMutex.Dispose();
     }
 
     [LoggerMessage(EventId = 6410, Level = LogLevel.Information,
@@ -206,7 +214,7 @@ public sealed partial class CameraService {
     [LoggerMessage(EventId = 6411, Level = LogLevel.Information, Message = "Live View stopped.")]
     partial void LogLiveViewStopped();
 
-    [LoggerMessage(EventId = 6412, Level = LogLevel.Debug, Message = "Live View frame skipped after a device/render error.")]
+    [LoggerMessage(EventId = 6412, Level = LogLevel.Warning, Message = "Live View frame skipped after a device/render error.")]
     partial void LogLiveViewFrameFailed(Exception ex);
 
     [LoggerMessage(EventId = 6413, Level = LogLevel.Warning, Message = "Live View loop faulted and stopped.")]

@@ -33,26 +33,26 @@ namespace OpenAstroAra.Test {
         [Test]
         public void StartLiveViewAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new CameraService();
-            Assert.Throws<InvalidOperationException>(
-                () => { _ = svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None); });
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None));
         }
 
         [Test]
         public void StartLiveViewAsync_rejects_nonpositive_exposure_before_connected_check() {
             using var svc = new CameraService();
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => { _ = svc.StartLiveViewAsync(new LiveViewStartRequestDto(0), CancellationToken.None); });
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => { _ = svc.StartLiveViewAsync(new LiveViewStartRequestDto(-1.5), CancellationToken.None); });
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(0), CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(-1.5), CancellationToken.None));
         }
 
         [Test]
         public void StartLiveViewAsync_rejects_invalid_binning() {
             using var svc = new CameraService();
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => { _ = svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 0), CancellationToken.None); });
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => { _ = svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinY: 0), CancellationToken.None); });
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 0), CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinY: 0), CancellationToken.None));
         }
 
         [Test]
