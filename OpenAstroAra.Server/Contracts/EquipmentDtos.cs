@@ -200,7 +200,11 @@ public sealed record DomeDto(
     string DeviceId,
     string Name,
     EquipmentConnectionState State,
+    DomeCapabilitiesDto? Capabilities,
     DomeStateDto Runtime);
+
+public sealed record DomeCapabilitiesDto(
+    bool CanSetShutter, bool CanSetAzimuth, bool CanSyncAzimuth, bool CanPark, bool CanFindHome);
 
 public sealed record DomeStateDto(string State, double? AzimuthDeg, bool ShutterOpen, bool AtHome, bool Parked);
 
