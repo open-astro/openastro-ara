@@ -323,11 +323,26 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { canPulseGuide = c.CanPulseGuide; } catch (Exception) { canPulseGuide = false; }
         bool canFindHome;
         try { canFindHome = c.CanFindHome; } catch (Exception) { canFindHome = false; }
+        // Optics: ASCOM reports these in METRES; convert via OpticsMmFromMetres
+        // (×1000, non-positive → null). Each in its own try (most mounts
+        // NotImplement them → null).
+        double? focalLengthMm = null;
+        try { focalLengthMm = OpticsMmFromMetres(c.FocalLength); } catch (Exception) { focalLengthMm = null; }
+        double? apertureMm = null;
+        try { apertureMm = OpticsMmFromMetres(c.ApertureDiameter); } catch (Exception) { apertureMm = null; }
         return new TelescopeCapabilitiesDto(
             CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
             CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,
-            SupportedSiderealRates: ReadSiderealRates(c));
+            SupportedSiderealRates: ReadSiderealRates(c),
+            FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm);
     }
+
+    /// <summary>Convert an ASCOM optics property (metres) to mm for the wire, or
+    /// null when the driver reports a non-positive value (an unconfigured 0 / a
+    /// bogus negative) — so the wizard never auto-fills a useless 0. Internal for
+    /// direct unit testing (the read itself sits behind a sealed Alpaca client).</summary>
+    internal static double? OpticsMmFromMetres(double metres) =>
+        metres > 0 ? metres * 1000.0 : null;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing EquatorialSystem read throws; report null ('read failed, retry next pass') rather than failing the whole refresh — RefreshPass distinguishes a failed read from a device genuinely reporting Other. CA1031's log-and-recover boundary applies.")]
