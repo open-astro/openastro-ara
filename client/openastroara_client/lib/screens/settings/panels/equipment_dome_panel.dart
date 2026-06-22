@@ -133,10 +133,15 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
                 width: 130,
                 child: TextField(
                   controller: _az,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^[0-9]*\.?[0-9]*$')),
+                  ],
                   decoration: const InputDecoration(
-                      isDense: true, labelText: 'Azimuth (°)', helperText: '0–360'),
+                      isDense: true,
+                      labelText: 'Azimuth (°)',
+                      helperText: '0 to <360'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -157,13 +162,15 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
 
   Future<void> _slew() async {
     final messenger = ScaffoldMessenger.of(context);
-    final v = int.tryParse(_az.text.trim());
+    // ASCOM azimuth is [0, 360) — 360° ≡ 0° (North), so 360 is rejected (matches
+    // the daemon's IsAzimuthOutOfRange).
+    final v = double.tryParse(_az.text.trim());
     if (v == null || v < 0 || v >= 360) {
       messenger.showSnackBar(
-          const SnackBar(content: Text('Enter an azimuth in 0–360.')));
+          const SnackBar(content: Text('Enter an azimuth from 0 up to (not including) 360.')));
       return;
     }
-    await _run('slew', () => ref.read(domeProvider.notifier).slew(v.toDouble()));
+    await _run('slew', () => ref.read(domeProvider.notifier).slew(v));
   }
 
   Future<void> _run(String verb, Future<bool> Function() action) async {
