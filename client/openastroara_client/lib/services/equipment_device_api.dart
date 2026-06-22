@@ -36,6 +36,12 @@ abstract interface class EquipmentDeviceClient<T> {
   /// Disconnect the device (idempotent). 202-Accepted.
   Future<void> disconnect();
 
+  /// POST a device-specific control command to `{base}/{subpath}` (e.g. a focuser
+  /// `move`, a filter-wheel `position`, a flat-device `apply`). 202-Accepted +
+  /// background — poll [getStatus] for the result. [body] is the JSON request, or
+  /// omitted for a bodyless command.
+  Future<void> command(String subpath, [Map<String, dynamic>? body]);
+
   void close();
 }
 
@@ -95,6 +101,11 @@ class EquipmentDeviceApi<T> implements EquipmentDeviceClient<T> {
   @override
   Future<void> disconnect() async {
     await _dio.post<void>('$_base/disconnect');
+  }
+
+  @override
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
+    await _dio.post<void>('$_base/$subpath', data: body);
   }
 
   /// Releases the underlying Dio's connection pool. Call when the API is replaced

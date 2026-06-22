@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/discovered_device.dart';
@@ -100,6 +101,16 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
 
   /// Disconnect the device. Returns whether the call was performed (see [connect]).
   Future<bool> disconnect() => _act((api) => api.disconnect());
+
+  /// Run a device-specific control action (e.g. a focuser move, a filter change)
+  /// through the same 202-accept + re-read + re-entrancy machinery as
+  /// connect/disconnect. Subclasses expose typed wrappers over this. Returns
+  /// whether it was performed (`false` if dropped by the re-entrancy guard).
+  @protected
+  Future<bool> performAction(
+          Future<void> Function(EquipmentDeviceClient<T> api) action,
+          {bool pollAfter = false}) =>
+      _act(action, pollAfter: pollAfter);
 
   // Run a 202-Accepted action then re-read against the SAME client (a mid-action
   // server switch must not redirect the follow-up read). A failed action is
