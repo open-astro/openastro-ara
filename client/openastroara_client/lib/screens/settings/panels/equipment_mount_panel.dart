@@ -85,6 +85,7 @@ class _MountBody extends ConsumerWidget {
           Row(children: [
             const Expanded(child: Text('Tracking')),
             Switch(
+              key: const Key('mount_tracking_switch'),
               value: s.tracking,
               onChanged: s.parked
                   ? null

@@ -54,8 +54,10 @@ void main() {
     expect(formatRaHours(5.5), '05h 30m 00s');
     expect(formatRaHours(0), '00h 00m 00s');
     expect(formatRaHours(null), '—');
-    expect(formatDecDegrees(-12.25), '-12° 15′');
-    expect(formatDecDegrees(45.5), '+45° 30′');
+    expect(formatRaHours(-0.5), '00h 00m 00s'); // clamped to [0, 24)
+    expect(formatDecDegrees(-12.25), '-12° 15′ 00″');
+    expect(formatDecDegrees(45.5), '+45° 30′ 00″');
     expect(formatDecDegrees(null), '—');
+    expect(formatDecDegrees(120), '+90° 00′ 00″'); // clamped to [-90, 90]
   });
 }

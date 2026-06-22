@@ -92,7 +92,7 @@ void main() {
     await _pump(tester, _status());
     expect(find.text('EQ6-R'), findsOneWidget);
     expect(find.text('05h 30m 00s'), findsOneWidget);
-    expect(find.text('-12° 15′'), findsOneWidget);
+    expect(find.text('-12° 15′ 00″'), findsOneWidget);
     expect(find.byType(Switch), findsNWidgets(2)); // tracking + auto-connect
     expect(find.widgetWithText(OutlinedButton, 'Park'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Stop'), findsOneWidget);
@@ -100,7 +100,7 @@ void main() {
 
   testWidgets('toggling tracking sends the tracking command', (tester) async {
     final api = await _pump(tester, _status());
-    await tester.tap(find.byType(Switch).first); // tracking (above auto-connect)
+    await tester.tap(find.byKey(const Key('mount_tracking_switch')));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:tracking:enabled=true'));
   });
@@ -117,7 +117,8 @@ void main() {
     await _pump(tester, _status(parked: true));
     expect(find.widgetWithText(OutlinedButton, 'Unpark'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Park'), findsNothing);
-    final tracking = tester.widget<Switch>(find.byType(Switch).first);
+    final tracking =
+        tester.widget<Switch>(find.byKey(const Key('mount_tracking_switch')));
     expect(tracking.onChanged, isNull); // disabled while parked
   });
 

@@ -120,24 +120,28 @@ class MountStatus extends EquipmentDeviceStatus {
       runtimeState, rightAscensionHours, declinationDegrees, tracking, parked, atHome);
 }
 
-/// Format right ascension (decimal hours, [0, 24)) as `HHh MMm SSs`.
+/// Format right ascension (decimal hours, [0, 24)) as `HHh MMm SSs`. Clamped to
+/// the ASCOM range so a bad sensor read can't produce negative components.
 String formatRaHours(double? hours) {
   if (hours == null) return '—';
-  final totalSeconds = (hours * 3600).round();
+  final totalSeconds = (hours.clamp(0.0, 24.0) * 3600).round();
   final h = (totalSeconds ~/ 3600) % 24;
   final m = (totalSeconds % 3600) ~/ 60;
   final s = totalSeconds % 60;
   return '${_two(h)}h ${_two(m)}m ${_two(s)}s';
 }
 
-/// Format declination (decimal degrees, [-90, 90]) as `±DD° MM′`.
+/// Format declination (decimal degrees, [-90, 90]) as `±DD° MM′ SS″` — same
+/// arcsecond resolution as [formatRaHours]. Clamped to the ASCOM range.
 String formatDecDegrees(double? degrees) {
   if (degrees == null) return '—';
-  final sign = degrees < 0 ? '-' : '+';
-  final totalArcmin = (degrees.abs() * 60).round();
-  final d = totalArcmin ~/ 60;
-  final m = totalArcmin % 60;
-  return '$sign${_two(d)}° ${_two(m)}′';
+  final clamped = degrees.clamp(-90.0, 90.0);
+  final sign = clamped < 0 ? '-' : '+';
+  final totalArcsec = (clamped.abs() * 3600).round();
+  final d = totalArcsec ~/ 3600;
+  final m = (totalArcsec % 3600) ~/ 60;
+  final s = totalArcsec % 60;
+  return '$sign${_two(d)}° ${_two(m)}′ ${_two(s)}″';
 }
 
 String _two(int v) => v.toString().padLeft(2, '0');
