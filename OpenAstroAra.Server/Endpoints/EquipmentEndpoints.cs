@@ -87,6 +87,9 @@ public static class EquipmentEndpoints {
         telescope.MapPost("/abort", async (ITelescopeService svc, CancellationToken ct) => {
             await svc.AbortSlewAsync(ct); return Results.Accepted();
         });
+        telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
+            await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
+        });
 
         // ─── Focuser ───
         var focuser = equipment.MapGroup("/focuser");
