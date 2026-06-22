@@ -156,10 +156,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
         _cancelSettle();
         return;
       }
-      // A manual refresh (e.g. the user hit Retry) is already doing the read —
-      // skip WITHOUT spending a tick, so a concurrent refresh can't drain the
-      // budget faster than the poll's real cadence.
-      if (_refreshing) return;
+      // Skip WITHOUT spending a tick when a read is already in flight — either a
+      // manual refresh (user hit Retry) or an action's post-202 re-read (_acting).
+      // This keeps the budget honest AND avoids a second concurrent GET racing the
+      // re-read that _armSettle() was started alongside.
+      if (_refreshing || _acting) return;
       // Bound the poll so a device stuck in `connecting` can't keep firing reads
       // for the whole session (e.g. the network dropped after the connect 202).
       if (_settleTicks >= maxSettlePolls) {

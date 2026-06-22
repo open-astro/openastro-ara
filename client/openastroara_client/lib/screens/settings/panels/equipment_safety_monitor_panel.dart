@@ -157,8 +157,12 @@ class _Connected extends ConsumerWidget {
             ),
             EquipmentStateChip(state: status.connectionState),
             IconButton(
-              tooltip: 'Disconnect',
-              icon: const Icon(Icons.link_off, size: 18),
+              // While connecting, the same action aborts the in-progress connect —
+              // relabel so the user knows tapping it cancels rather than drops a
+              // live device.
+              tooltip: status.isConnecting ? 'Cancel connecting' : 'Disconnect',
+              icon: Icon(status.isConnecting ? Icons.close : Icons.link_off,
+                  size: 18),
               onPressed: () => _disconnect(context, ref),
             ),
           ],
