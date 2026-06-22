@@ -279,7 +279,9 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(slot.label,
-                      style: Theme.of(context).textTheme.bodyMedium),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AraColors.textPrimary,
+                          )),
                   const SizedBox(height: 2),
                   Text(
                     assignedLabel,
