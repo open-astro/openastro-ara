@@ -28,6 +28,7 @@ See `3rd-party-licenses.txt` (added at first release) for the bundled-dependency
 - **Serilog** (Apache-2.0) — structured logging.
 - **Accord.NET** (Accord.Math / Accord.Statistics, **LGPL-2.1**) — numerical/imaging algorithms, inherited from N.I.N.A. Distributed as separate, dynamically-linked .NET assemblies (satisfying the LGPL relinking allowance); ARA does not modify Accord.
 - **FreeImage** (via VVVV.FreeImage, used under the **FreeImage Public License v1.0** — the permissive arm of its FIPL-or-GPL dual license) — image-format decoding for the §2105 render path.
+- **Aladin Lite v3** ([CDS, Strasbourg](https://aladin.cds.unistra.fr/), **GPL v3**) — §36 Sky Atlas rendering. Sky Atlas rendering powered by [Aladin Lite](https://aladin.cds.unistra.fr/) (CDS, Strasbourg) under GPL v3. The engine is bundled with the WILMA desktop client (`client/.../assets/aladin/aladin.js`, v3.6.1) and runs inside a CEF/Chromium WebView process — a separate process boundary communicating with the Dart host only over `executeJavaScript`/`postMessage`, not statically or dynamically linked — which the GPL FAQ permits alongside ARA's MPL 2.0. The CDS logo + attribution Aladin renders in-view is retained. See `client/.../assets/aladin/ALADIN_LICENSE.md` for provenance + source.
 
 ## Trademarks
 

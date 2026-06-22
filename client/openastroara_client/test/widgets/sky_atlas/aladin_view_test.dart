@@ -31,6 +31,32 @@ void main() {
     });
   });
 
+  group('inlineAladinJs (§36.1 offline bundling)', () {
+    test('replaces the placeholder with the engine JS and drops the CDN src', () {
+      final html = inlineAladinJs('/* ENGINE */');
+      expect(html, contains('<script>/* ENGINE */</script>'));
+      expect(html, isNot(contains('__ALADIN_LITE_JS__')));
+      // The CDN script-src dependency is gone — the engine is bundled.
+      expect(html, isNot(contains('aladin.cds.unistra.fr/AladinLite/api')));
+    });
+
+    test('passes \$-dense minified JS through verbatim (no interpolation)', () {
+      // Minified Aladin is full of `$` identifiers and `${...}` template
+      // literals; replaceFirst must insert them literally, not interpret them.
+      const minified = r'const $a=1,b$=2;let s=`x${$a}y`;function $$(){return b$}';
+      final html = inlineAladinJs(minified);
+      expect(html, contains('<script>$minified</script>'));
+    });
+
+    test('inlines only once (single placeholder) even if JS contains the token', () {
+      // A pathological engine string that itself mentions the placeholder must
+      // not trigger a second substitution.
+      final html = inlineAladinJs('x __ALADIN_LITE_JS__ y');
+      // Exactly one inline <script>…</script> engine block.
+      expect('<script>x __ALADIN_LITE_JS__ y</script>'.allMatches(html).length, 1);
+    });
+  });
+
   group('gotoScript', () {
     test('wraps a plain target as a single JSON-encoded argument', () {
       expect(gotoScript('M31'), 'window.araGoto && window.araGoto("M31");');
