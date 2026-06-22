@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
@@ -150,9 +151,21 @@ class _AladinViewState extends ConsumerState<AladinView> {
     // manager init (the dispose guard after controller init still cleans up,
     // but this avoids the wasted allocation entirely).
     if (!mounted) return;
+    // Build the self-contained bootstrap page (the bundled Aladin Lite JS
+    // inlined into a data: URL). A failure here means the JS asset is missing
+    // from the bundle (a build misconfiguration) — degrade like a CEF failure.
+    final String dataUrl;
+    try {
+      dataUrl = await _ensureAladinDataUrl();
+    } catch (e, st) {
+      debugPrint('AladinView: bundled Aladin Lite JS load failed: $e\n$st');
+      if (mounted) setState(() => _unavailable = true);
+      return;
+    }
+    if (!mounted) return;
     try {
       final controller = WebviewManager().createWebView(loading: const _Loading());
-      await controller.initialize(_aladinDataUrl);
+      await controller.initialize(dataUrl);
       if (!mounted) {
         // The tab was disposed mid-init — release the browser we just created.
         await controller.dispose();
@@ -206,17 +219,49 @@ class _AladinViewState extends ConsumerState<AladinView> {
   }
 }
 
-// The Aladin Lite bootstrap, handed to CEF as a base64 `data:` URL so no temp
-// file or local HTTP server is needed. The page pulls Aladin Lite v3 from the
-// CDS CDN, pinned to a specific version (NOT `/latest/`) so a remote breaking
-// change can't silently alter the production atlas. Bundling the ~5 MB JS for
-// offline use — which also removes the runtime CDN trust + reachability
-// dependency entirely — is the next §36 slice (per §36.1). The CDS logo +
-// attribution Aladin renders bottom-right satisfies §36/§17.
-final String _aladinDataUrl =
-    'data:text/html;base64,${base64Encode(utf8.encode(_aladinBootstrapHtml))}';
+// The bundled Aladin Lite JS (vendored under assets/aladin/aladin.js, ~1.9 MB,
+// pinned to v3.6.1), read once and memoized. Re-reading the asset + re-base64
+// on every tab switch (this tab unmounts on switch) is wasteful, so the built
+// data: URL is cached for the process lifetime. A failure is NOT cached (clears
+// the future) so a later mount — e.g. after a transient I/O hiccup — can retry.
+Future<String>? _aladinDataUrl;
+Future<String> _ensureAladinDataUrl() => _aladinDataUrl ??= _buildAladinDataUrl();
 
-const String _aladinBootstrapHtml = '''
+Future<String> _buildAladinDataUrl() async {
+  try {
+    final js = await rootBundle.loadString('assets/aladin/aladin.js');
+    // charset=utf-8 in the MIME type: the payload is UTF-8-encoded, and while the
+    // inline <meta charset> makes CEF render it correctly today, RFC 2397's default
+    // for text/* is US-ASCII, so declare the real charset rather than rely on the
+    // browser sniffing the meta tag.
+    return 'data:text/html;charset=utf-8;base64,${base64Encode(utf8.encode(inlineAladinJs(js)))}';
+  } catch (_) {
+    _aladinDataUrl = null; // don't cache the failure — allow a later retry
+    rethrow;
+  }
+}
+
+/// Inlines the bundled Aladin Lite engine [js] into the bootstrap page at the
+/// `__ALADIN_LITE_JS__` placeholder. `replaceFirst` inserts the replacement
+/// literally (no `$`-substitution), so the minified engine — dense with `$`
+/// identifiers — passes through verbatim where Dart string interpolation would
+/// have mangled it. Split out so the splice is unit-testable without loading the
+/// ~1.9 MB asset. Exposed for testing.
+@visibleForTesting
+String inlineAladinJs(String js) =>
+    _aladinBootstrapHtml.replaceFirst('__ALADIN_LITE_JS__', js);
+
+// The Aladin Lite bootstrap, handed to CEF as a base64 `data:` URL so no temp
+// file or local HTTP server is needed. The Aladin Lite v3 engine is bundled
+// (inlined at `__ALADIN_LITE_JS__` from assets/aladin/aladin.js, pinned to a
+// specific version — NOT `/latest/` — so a remote breaking change can't silently
+// alter the production atlas), removing the runtime CDN trust + reachability
+// dependency for the engine entirely (per §36.1). Sky-survey TILES are still
+// fetched from the CDS HiPS servers at runtime, so imagery needs internet; the
+// engine, search, and overlays do not. A raw string (r'''): the page's helper JS
+// must pass through to CEF verbatim, un-interpolated. The CDS logo + attribution
+// Aladin renders bottom-right satisfies §36/§17/§36.11.
+const String _aladinBootstrapHtml = r'''
 <!DOCTYPE html>
 <html>
 <head>
@@ -233,19 +278,21 @@ const String _aladinBootstrapHtml = '''
   }
 </style>
 <script>
-  // Shown if the Aladin Lite script can't be fetched (no internet, DNS, CDN
-  // outage). Without this the data: page loads fine but the atlas is a blank
-  // black rectangle with no feedback.
+  // Shown if the bundled Aladin Lite engine fails to define `A` (a corrupt or
+  // truncated bundle). Without this the data: page loads fine but the atlas is a
+  // blank black rectangle with no feedback. (The engine is bundled, so this is
+  // no longer a network condition; sky-survey tiles still need internet, but a
+  // tile failure is Aladin's own blank-with-grid state, not this overlay.)
   function aladinLoadFailed() {
     var el = document.getElementById('atlas-error');
     if (el) el.style.display = 'flex';
   }
 </script>
-<script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/3.6.1/aladin.js" charset="utf-8" onerror="aladinLoadFailed()"></script>
+<script>__ALADIN_LITE_JS__</script>
 </head>
 <body>
 <div id="aladin-lite-div"></div>
-<div id="atlas-error">Could not load the sky atlas.<br>Check your internet connection, then reopen the Sky Atlas.</div>
+<div id="atlas-error">Could not start the sky atlas renderer.<br>Try closing and reopening the Sky Atlas.</div>
 <script>
   // The Aladin instance + a goto helper, exposed on window so the Dart side can
   // drive it via executeJavaScript (see AladinView.gotoScript). araGoto resolves
@@ -328,8 +375,8 @@ const String _aladinBootstrapHtml = '''
     if (araFovOverlay) araFovOverlay.removeAll();
   }
 
-  // A normal (non-async) external script blocks parsing until it loads or
-  // errors, so by here `A` is defined on success and undefined on failure.
+  // The inline engine script above runs to completion before this one starts,
+  // so by here `A` is defined on success and undefined if the bundle was bad.
   if (typeof A !== 'undefined') {
     A.init.then(function () {
       araAladin = A.aladin('#aladin-lite-div', {

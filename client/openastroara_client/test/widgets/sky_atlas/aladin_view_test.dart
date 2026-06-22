@@ -1,8 +1,20 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/imaging/fov_box.dart';
 import 'package:openastroara/widgets/sky_atlas/aladin_view.dart';
 
 void main() {
+  // The bundled engine is inlined into a `<script>…</script>` block, so any
+  // `</script>` sequence in the asset would prematurely close it. The current
+  // bundle has none; this asserts it stays that way across future engine
+  // updates (a regression guard, not just a one-time manual check).
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test('bundled aladin.js has no </script> breakout sequence (§36.1)', () async {
+    final js = await rootBundle.loadString('assets/aladin/aladin.js');
+    expect(js.toLowerCase(), isNot(contains('</script')));
+    expect(js, contains('3.6.1')); // sanity: it's the pinned engine, not a stub
+  });
+
   group('fovBoxScript', () {
     test('a null box clears the overlay', () {
       expect(fovBoxScript(null), 'window.araClearFovBox && window.araClearFovBox();');
@@ -28,6 +40,32 @@ void main() {
             widthDeg: 1, heightDeg: 1, rotationDeg: 0, cols: 2, rows: 3, overlapPct: 10)),
         'window.araSetFovBox && window.araSetFovBox(1.000000, 1.000000, 0.000000, 2, 3, 10.000000);',
       );
+    });
+  });
+
+  group('inlineAladinJs (§36.1 offline bundling)', () {
+    test('replaces the placeholder with the engine JS and drops the CDN src', () {
+      final html = inlineAladinJs('/* ENGINE */');
+      expect(html, contains('<script>/* ENGINE */</script>'));
+      expect(html, isNot(contains('__ALADIN_LITE_JS__')));
+      // The CDN script-src dependency is gone — the engine is bundled.
+      expect(html, isNot(contains('aladin.cds.unistra.fr/AladinLite/api')));
+    });
+
+    test('passes \$-dense minified JS through verbatim (no interpolation)', () {
+      // Minified Aladin is full of `$` identifiers and `${...}` template
+      // literals; replaceFirst must insert them literally, not interpret them.
+      const minified = r'const $a=1,b$=2;let s=`x${$a}y`;function $$(){return b$}';
+      final html = inlineAladinJs(minified);
+      expect(html, contains('<script>$minified</script>'));
+    });
+
+    test('inlines only once (single placeholder) even if JS contains the token', () {
+      // A pathological engine string that itself mentions the placeholder must
+      // not trigger a second substitution.
+      final html = inlineAladinJs('x __ALADIN_LITE_JS__ y');
+      // Exactly one inline <script>…</script> engine block.
+      expect('<script>x __ALADIN_LITE_JS__ y</script>'.allMatches(html).length, 1);
     });
   });
 
