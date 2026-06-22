@@ -169,6 +169,35 @@ void main() {
     expect(find.text('Connecting'), findsOneWidget);
   });
 
+  testWidgets('a connected monitor keeps polling so its reading stays live',
+      (tester) async {
+    // is_safe transitions autonomously on the device — the panel must pick up a
+    // safe→unsafe flip via the background liveness poll without any user action.
+    await _wideSurface(tester);
+    final api = _FakeSafetyApi(_status(safe: true));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+        safetyMonitorApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child:
+          const MaterialApp(home: Scaffold(body: EquipmentSafetyMonitorPanel())),
+    ));
+    await tester.pump(); // build
+    await tester.pump(); // resolve the initial getStatus
+    expect(find.text('Safe'), findsOneWidget);
+    final initial = api.getCount;
+
+    // Daemon flips to unsafe in the background.
+    api.status = _status(safe: false);
+    await tester.pump(const Duration(seconds: 16)); // > livePollInterval → live tick
+    await tester.pump(); // resolve the refresh
+    expect(api.getCount, greaterThan(initial));
+    expect(find.text('Unsafe'), findsOneWidget);
+    expect(find.text('Safe'), findsNothing);
+  });
+
   testWidgets('disconnect targets the device', (tester) async {
     final api = await _pump(tester, _status());
     await tester.tap(find.byIcon(Icons.link_off));

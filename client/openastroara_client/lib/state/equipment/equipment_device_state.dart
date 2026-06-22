@@ -28,9 +28,18 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// the poll stops; the card holds its last state and the user can refresh.
   static const int maxSettlePolls = 40;
 
+  /// Cadence of the background liveness poll that keeps a CONNECTED device's
+  /// reading current (its state — e.g. a SafetyMonitor's is_safe, weather sensors —
+  /// changes autonomously on the device, not just at connect). Slow by design; the
+  /// daemon caches device reads, and §60.9 equipment WS events will eventually
+  /// replace this poll with push.
+  static const Duration livePollInterval = Duration(seconds: 15);
+
+  // Fast, capped poll while a device is mid-connect (drives it to settlement).
   Timer? _settleTimer;
   int _settleTicks = 0;
-  bool _disposeHooked = false;
+  // Slow, uncapped poll while a device is connected (keeps the live reading fresh).
+  Timer? _liveTimer;
   // True while a manual (timer/user) refresh is in flight — a second is dropped so
   // a slow getStatus can't stack overlapping reads. Action-driven refreshes pass a
   // pinned client and bypass this guard (they must always re-read after the 202).
@@ -57,19 +66,16 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     _refreshing = false;
     _acting = false;
     _generation++;
-    _cancelSettle();
-    // Register the dispose-time timer teardown exactly once (not per rebuild, so
-    // the callback list can't grow on repeated server switches). The settle timer
-    // also self-cancels via its own `ref.mounted` check, which covers the case
-    // where this callback already fired on an earlier rebuild.
-    if (!_disposeHooked) {
-      _disposeHooked = true;
-      ref.onDispose(_cancelSettle);
-    }
+    _cancelAllPolls();
+    // Tear down both timers when the notifier is disposed OR rebuilt. Riverpod
+    // invokes and CLEARS onDispose callbacks on each rebuild before re-running
+    // build(), so registering per-build cleans up the prior build's timers without
+    // the callback list accumulating across server switches.
+    ref.onDispose(_cancelAllPolls);
     final api = watchClient();
     if (api == null) return null;
     final status = await api.getStatus();
-    _syncSettle(status);
+    _syncPolls(status);
     return status;
   }
 
@@ -139,24 +145,29 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
       });
       if (ref.mounted && gen == _generation) {
         state = next;
-        // Re-evaluate the settle-poll only on a SUCCESSFUL read. A transient read
-        // error mid-connect must NOT cancel the poll (it should keep retrying until
-        // the device actually settles), so leave the timer running on error.
-        if (next case AsyncData(:final value)) _syncSettle(value);
+        // Re-evaluate the polls only on a SUCCESSFUL read. A transient read error
+        // (mid-connect or mid-liveness) must NOT cancel the timer — it should keep
+        // retrying — so leave whatever is running in place on an error.
+        if (next case AsyncData(:final value)) _syncPolls(value);
       }
     } finally {
       if (manual && gen == _generation) _refreshing = false;
     }
   }
 
-  // Arm the settle-poll while the device is mid-connect; cancel it once the device
-  // settles (or disconnects). On a refresh that fails to read, the poll is left
-  // running (see refresh()) so a transient error doesn't strand a connecting device.
-  void _syncSettle(T? status) {
+  // Pick the right poll for the current state: the fast settle-poll while
+  // connecting, the slow liveness-poll while connected, neither otherwise. On a
+  // refresh that fails to read, this isn't called (see refresh()) so a transient
+  // error leaves the running timer in place rather than stranding the device.
+  void _syncPolls(T? status) {
     if (status?.isConnecting ?? false) {
+      _cancelLive();
       _armSettle();
-    } else {
+    } else if (status?.isConnected ?? false) {
       _cancelSettle();
+      _armLive();
+    } else {
+      _cancelAllPolls();
     }
   }
 
@@ -187,9 +198,33 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     });
   }
 
+  // Start the liveness-poll if it isn't already running. Uncapped — it runs as
+  // long as the device stays connected, keeping the reading current.
+  void _armLive() {
+    if (_liveTimer != null) return;
+    _liveTimer = Timer.periodic(livePollInterval, (_) {
+      if (!ref.mounted) {
+        _cancelLive();
+        return;
+      }
+      if (_refreshing || _acting) return; // a read is already in flight
+      refresh();
+    });
+  }
+
   void _cancelSettle() {
     _settleTimer?.cancel();
     _settleTimer = null;
     _settleTicks = 0;
+  }
+
+  void _cancelLive() {
+    _liveTimer?.cancel();
+    _liveTimer = null;
+  }
+
+  void _cancelAllPolls() {
+    _cancelSettle();
+    _cancelLive();
   }
 }

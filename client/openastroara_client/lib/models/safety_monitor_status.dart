@@ -31,7 +31,9 @@ class SafetyMonitorStatus extends EquipmentDeviceStatus {
         name: json['name'] as String? ?? '',
         connectionState:
             equipmentConnectionStateFromWire(json['state'] as String?),
-        safe: json['safe'] as bool? ?? false,
+        // Tolerate a non-bool `safe` (a schema quirk sending 0/1) the same way the
+        // string fields tolerate a missing key — degrade to false, don't throw.
+        safe: json['safe'] is bool ? json['safe'] as bool : false,
         lastTransitionAt: json['last_transition_at'] as String? ?? '',
       );
 
