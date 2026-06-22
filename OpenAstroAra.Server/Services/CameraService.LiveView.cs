@@ -46,6 +46,9 @@ public sealed partial class CameraService {
     // driver rejects) or a persistently-faulting device then surfaces as Active=false, not a silent
     // "running but never delivering" state.
     private const int LiveViewMaxConsecutiveFailures = 10;
+    // Reject an absurd binning up front (→ 400) rather than let the driver fail every frame until the
+    // consecutive-failure self-stop trips. 16 covers any real sensor.
+    private const int LiveViewMaxBin = 16;
 
     // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
     // concurrent Start spinning up a second loop). State reads (status/frame) stay lock-free. Not
@@ -78,8 +81,8 @@ public sealed partial class CameraService {
             throw new ArgumentOutOfRangeException(nameof(request),
                 $"ExposureSec must be in (0, {LiveViewMaxExposureSec}].");
         }
-        if (request.BinX < 1 || request.BinY < 1) {
-            throw new ArgumentOutOfRangeException(nameof(request), "BinX/BinY must be at least 1.");
+        if (request.BinX < 1 || request.BinX > LiveViewMaxBin || request.BinY < 1 || request.BinY > LiveViewMaxBin) {
+            throw new ArgumentOutOfRangeException(nameof(request), $"BinX/BinY must be in [1, {LiveViewMaxBin}].");
         }
         // Validates connectivity up front (throws if the camera isn't connected); the loop
         // re-resolves the current client each frame so a later reconnect/disconnect is honored.
@@ -96,7 +99,11 @@ public sealed partial class CameraService {
         await _liveViewMutex.WaitAsync(ct).ConfigureAwait(false);
         try {
             if (_liveViewLoop is { IsCompleted: false }) {
-                return; // already running — idempotent start
+                // Already running: refuse rather than silently ignore the new exposure/binning/gain
+                // (a 202 would lie). Stop-then-start to reconfigure. This also keeps the session's
+                // frame dimensions constant, so GetLiveViewStatus's frame/meta reads can't disagree.
+                throw new InvalidOperationException(
+                    "Live View is already running; stop it before starting with new parameters.");
             }
             // A self-terminated loop (e.g. camera disconnect) leaves its spent CTS behind; dispose it
             // before replacing so it isn't leaked.
@@ -153,7 +160,8 @@ public sealed partial class CameraService {
     public LiveViewStatusDto GetLiveViewStatus() {
         // Read the frame (the writer's commit point) FIRST: its volatile-read acquire barrier makes
         // the prior _liveViewMeta write visible, so a new FrameSeq always pairs with at-least-as-new
-        // meta. Reading meta first could observe a new seq alongside stale Width/Height.
+        // meta. Frame dimensions are session-constant (a re-start while running is refused, so the
+        // exposure/binning can't change mid-session), so the two reads can't disagree on Width/Height.
         var f = _liveViewFrame;
         var m = _liveViewMeta;
         return new LiveViewStatusDto(

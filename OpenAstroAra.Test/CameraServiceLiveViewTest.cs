@@ -69,6 +69,9 @@ namespace OpenAstroAra.Test {
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 0), CancellationToken.None));
             Assert.ThrowsAsync<ArgumentOutOfRangeException>(
                 () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinY: 0), CancellationToken.None));
+            // Absurdly large binning is rejected up front (cap is 16) rather than failing per-frame.
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0, BinX: 9999), CancellationToken.None));
         }
 
         [Test]
