@@ -70,8 +70,16 @@ public static class EquipmentEndpoints {
         });
         // §64 Live View — short-exposure framing/focus loop (no catalog write).
         camera.MapPost("/liveview/start", async ([FromBody] LiveViewStartRequestDto request, ICameraService svc, CancellationToken ct) => {
-            await svc.StartLiveViewAsync(request, ct);
-            return Results.Accepted();
+            try {
+                await svc.StartLiveViewAsync(request, ct);
+                return Results.Accepted();
+            } catch (ArgumentException ex) {
+                // Invalid exposure/binning request.
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            } catch (InvalidOperationException ex) {
+                // Not connected, or an incompatible (tri-colour) sensor.
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
         });
         camera.MapPost("/liveview/stop", async (ICameraService svc, CancellationToken ct) => {
             await svc.StopLiveViewAsync(ct);

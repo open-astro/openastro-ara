@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using ASCOM.Alpaca.Clients;
+using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Stretch;
@@ -67,7 +68,15 @@ public sealed partial class CameraService {
         }
         // Validates connectivity up front (throws if the camera isn't connected); the loop
         // re-resolves the current client each frame so a later reconnect/disconnect is honored.
-        _ = RequireConnectedClient();
+        var probe = RequireConnectedClient();
+        // SensorType.Color returns an already-debayered 3-plane array that ConvertImageArray rejects,
+        // so every frame would fail — the loop would spin forever with Active=true and no frame.
+        // Refuse up front rather than hide that behind an infinite retry (mono + RGGB are fine: both
+        // yield a 2D array ConvertImageArray handles).
+        if (probe.SensorType == SensorType.Color) {
+            throw new InvalidOperationException(
+                "Live View does not support tri-colour (SensorType.Color) cameras, which return an already-debayered 3-plane image array.");
+        }
 
         await _liveViewMutex.WaitAsync(ct).ConfigureAwait(false);
         try {
@@ -198,6 +207,9 @@ public sealed partial class CameraService {
             Interlocked.Exchange(ref _downloading, 0);
         }
         var (pixels, width, height) = ConvertImageArray(imageArray);
+        // Mono renders true luminance; an RGGB OSC frame renders its raw CFA mosaic as greyscale (no
+        // debayer here) — acceptable for framing/focus. A debayered live render is a later LV slice
+        // (tracked in PORT_TODO §64). SensorType.Color is refused at start (3-plane, unsupported).
         var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
         var jpeg = JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim);
 
