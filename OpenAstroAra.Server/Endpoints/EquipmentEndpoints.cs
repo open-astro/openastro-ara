@@ -64,6 +64,10 @@ public static class EquipmentEndpoints {
         camera.MapPost("/exposure/abort", async (ICameraService svc, CancellationToken ct) => {
             await svc.AbortExposureAsync(ct); return Results.Accepted();
         });
+        camera.MapPost("/cooler", async ([FromBody] CameraCoolerRequestDto request, ICameraService svc, CancellationToken ct) => {
+            await svc.SetCoolerAsync(request.Enabled, request.TargetTemperatureC, ct);
+            return Results.Accepted();
+        });
 
         // ─── Telescope ───
         var telescope = equipment.MapGroup("/telescope");
