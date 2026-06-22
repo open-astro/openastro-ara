@@ -41,6 +41,11 @@ public sealed partial class CameraService {
     // duration. 15 s is generous for framing while bounding worst-case stop/start latency.
     private const double LiveViewMaxExposureSec = 15.0;
     private static readonly TimeSpan LiveViewInterFrameDelay = TimeSpan.FromMilliseconds(100);
+    // After this many consecutive frames that fail or never produce an image, self-stop the loop
+    // rather than spinning forever with Active=true / FrameSeq=0 — a misconfig (e.g. a binning the
+    // driver rejects) or a persistently-faulting device then surfaces as Active=false, not a silent
+    // "running but never delivering" state.
+    private const int LiveViewMaxConsecutiveFailures = 10;
 
     // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
     // concurrent Start spinning up a second loop). State reads (status/frame) stay lock-free. Not
@@ -171,14 +176,17 @@ public sealed partial class CameraService {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Live View loop boundary: a single frame's device/render failure (ASCOM throw, dropped link, decode error) must not fault the long-running loop — it is logged and the loop continues to the next frame. CA1031's log-and-recover boundary applies.")]
     private async Task RunLiveViewLoopAsync(LiveViewStartRequestDto request, CancellationToken token) {
+        var consecutiveFailures = 0;
         try {
             while (!token.IsCancellationRequested) {
                 // Per-frame mutual exclusion with real captures: skip this frame if a manual
-                // exposure holds the gate, so Live View never collides with a catalog capture.
+                // exposure holds the gate, so Live View never collides with a catalog capture. A
+                // skipped frame is not a failure (a capture is running), so don't count it.
                 if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0) {
                     await Task.Delay(LiveViewInterFrameDelay, token).ConfigureAwait(false);
                     continue;
                 }
+                var produced = false;
                 try {
                     AlpacaCamera? client;
                     lock (_gate) {
@@ -187,13 +195,22 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    await CaptureLiveFrameAsync(client, request, token).ConfigureAwait(false);
+                    produced = await CaptureLiveFrameAsync(client, request, token).ConfigureAwait(false);
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;
                 } catch (Exception ex) {
                     LogLiveViewFrameFailed(ex);
                 } finally {
                     Interlocked.Exchange(ref _captureInFlight, 0);
+                }
+                // Self-stop on persistent failure rather than spin forever delivering nothing (a
+                // rejected setting, a device that never reaches ImageReady, a render that always
+                // throws). A single good frame resets the count.
+                if (produced) {
+                    consecutiveFailures = 0;
+                } else if (++consecutiveFailures >= LiveViewMaxConsecutiveFailures) {
+                    LogLiveViewStoppedAfterFailures(consecutiveFailures);
+                    break;
                 }
                 await Task.Delay(LiveViewInterFrameDelay, token).ConfigureAwait(false);
             }
@@ -212,7 +229,9 @@ public sealed partial class CameraService {
         }
     }
 
-    private async Task CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, CancellationToken token) {
+    // Returns true if a frame was published, false if the frame was skipped (device never reached
+    // ImageReady / dropped). Throwing propagates to the loop's catch, which counts it as a failure.
+    private async Task<bool> CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, CancellationToken token) {
         // Reuse the capture path's settings application (bin/gain, full-frame subframe).
         ApplyExposureSettings(client, new ExposureRequestDto(request.ExposureSec, request.Gain, BinX: request.BinX, BinY: request.BinY));
         // ApplyExposureSettings is up to 7 Alpaca round-trips with no ct hook; honor a stop that
@@ -227,7 +246,7 @@ public sealed partial class CameraService {
             // before the loop's next StartExposure (most ASCOM drivers reject a re-StartExposure
             // while one is still in flight). Quiet: a throw here (disconnected client) is ignored.
             TryAbortQuietly(client);
-            return; // skip this frame, the loop retries
+            return false; // skip this frame, the loop retries
         }
         token.ThrowIfCancellationRequested();
 
@@ -253,6 +272,7 @@ public sealed partial class CameraService {
             width, height, request.ExposureSec,
             prev?.StartedAt ?? DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
         _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq);
+        return true;
     }
 
     // Called from Dispose: cancel the loop promptly without awaiting (the loop also breaks on the
@@ -280,4 +300,8 @@ public sealed partial class CameraService {
 
     [LoggerMessage(EventId = 6413, Level = LogLevel.Warning, Message = "Live View loop faulted and stopped.")]
     partial void LogLiveViewLoopFaulted(Exception ex);
+
+    [LoggerMessage(EventId = 6414, Level = LogLevel.Error,
+        Message = "Live View self-stopped after {Failures} consecutive frames produced no image (check exposure/binning vs the camera's capabilities).")]
+    partial void LogLiveViewStoppedAfterFailures(int failures);
 }

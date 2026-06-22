@@ -93,6 +93,10 @@ public static class EquipmentEndpoints {
             }
             // Live frames are ephemeral — never let a proxy/client cache one and serve it stale.
             http.Response.Headers.CacheControl = "no-store";
+            // Expose the frame's sequence so a poller can change-detect in a single request
+            // (no separate GET /liveview round-trip).
+            http.Response.Headers["X-Frame-Seq"] =
+                frame.Value.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
         });
 
