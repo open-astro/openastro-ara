@@ -8,7 +8,7 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 
 ## Status
 
-**Pre-release** — **v0.0.1 is feature-complete**; active development is now on v0.1.0. Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the full port plan and `design/PORT_PROGRESS.md` for current status. First release target: `v0.0.1-ara.1`.
+**Pre-release** — **v0.0.1 is feature-complete and pending its first tagged release (`v0.0.1-ara.1`)**; v0.1.0 feature work is already underway. Ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the full port plan and `design/PORT_PROGRESS.md` for current status.
 
 ## Lineage
 
