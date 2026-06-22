@@ -37,7 +37,7 @@ class ProfileManagementScreen extends ConsumerWidget {
             label: const Text('Import'),
           ),
           TextButton.icon(
-            onPressed: () => _addProfile(context, ref),
+            onPressed: () => _addProfile(context),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add profile'),
           ),
@@ -55,17 +55,13 @@ class ProfileManagementScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _addProfile(BuildContext context, WidgetRef ref) async {
-    // The wizard fires onComplete only on Save (not on a back/cancel); refresh
-    // only then, so a cancelled wizard doesn't trigger a needless list re-fetch.
-    var created = false;
+  Future<void> _addProfile(BuildContext context) async {
+    // The wizard invalidates profileManagementProvider itself on a successful
+    // save, so this list refreshes on its own — no onComplete/refresh needed here.
+    // (A cancelled wizard never invalidates, so there's no needless re-fetch.)
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => WizardShell(onComplete: (_) => created = true)),
+      MaterialPageRoute(builder: (_) => const WizardShell()),
     );
-    if (created && context.mounted) {
-      await ref.read(profileManagementProvider.notifier).refresh();
-    }
   }
 
   /// §70 import — pick a shared profile-share file, preview what it'll create +
