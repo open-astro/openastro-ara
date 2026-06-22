@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // AsyncValue/AsyncData/AsyncError
 
 import '../../models/discovered_device.dart';
 import '../../models/equipment_device_status.dart';
@@ -15,7 +15,7 @@ import 'equipment_state_chip.dart';
 /// connect (via the §52.2 chooser) / disconnect controls + their error SnackBars;
 /// each panel supplies only the device-specific live body via [connectedBody].
 class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
-    extends ConsumerWidget {
+    extends StatelessWidget {
   final AsyncValue<T?> status;
   final EquipmentDeviceType deviceType;
   final String deviceTypeLabel;
@@ -48,7 +48,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Card(
       color: AraColors.bgPanel,
       margin: const EdgeInsets.only(top: 4, bottom: 8),

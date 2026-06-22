@@ -103,9 +103,10 @@ class _WeatherBody extends StatelessWidget {
     );
   }
 
-  // Returns null for an unimplemented (null) sensor so it's omitted from the list.
+  // Returns null for an unimplemented (null) sensor — or a non-finite one (a
+  // driver emitting NaN/Infinity) — so it's omitted rather than rendered as "NaN".
   Widget? _sensor(String label, double? value, String unit) {
-    if (value == null) return null;
+    if (value == null || !value.isFinite) return null;
     final shown = value == value.roundToDouble()
         ? value.toInt().toString()
         : value.toStringAsFixed(1);
