@@ -144,9 +144,6 @@ class _Connected extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final title = status.name.isEmpty ? 'Safety monitor' : status.name;
-    // The is_safe reading is only meaningful once connected; while connecting it's
-    // still the daemon default — show the connection state instead of a stale flag.
-    final showSafe = status.isConnected;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -168,10 +165,18 @@ class _Connected extends ConsumerWidget {
           ],
         ),
         const Divider(height: 20, color: AraColors.border),
-        if (showSafe)
-          _SafeIndicator(safe: status.safe)
-        else
-          const Text('Reading…'),
+        // The is_safe reading is only meaningful once connected. While connecting
+        // it's still the daemon default (show a transient); an `error` state is a
+        // failed read, not a flag — surface it distinctly rather than "Reading…".
+        switch (status.connectionState) {
+          EquipmentConnectionState.connected => _SafeIndicator(safe: status.safe),
+          EquipmentConnectionState.error => Row(children: const [
+              Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+              SizedBox(width: 8),
+              Expanded(child: Text('Sensor read failed — check the device.')),
+            ]),
+          _ => const Text('Reading…'),
+        },
         if (status.lastTransitionAt.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),

@@ -30,6 +30,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
 
   Timer? _settleTimer;
   int _settleTicks = 0;
+  bool _disposeHooked = false;
   // True while a manual (timer/user) refresh is in flight — a second is dropped so
   // a slow getStatus can't stack overlapping reads. Action-driven refreshes pass a
   // pinned client and bypass this guard (they must always re-read after the 202).
@@ -57,7 +58,14 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     _acting = false;
     _generation++;
     _cancelSettle();
-    ref.onDispose(_cancelSettle);
+    // Register the dispose-time timer teardown exactly once (not per rebuild, so
+    // the callback list can't grow on repeated server switches). The settle timer
+    // also self-cancels via its own `ref.mounted` check, which covers the case
+    // where this callback already fired on an earlier rebuild.
+    if (!_disposeHooked) {
+      _disposeHooked = true;
+      ref.onDispose(_cancelSettle);
+    }
     final api = watchClient();
     if (api == null) return null;
     final status = await api.getStatus();
@@ -111,7 +119,12 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     if (!ref.mounted) return;
     final manual = client == null;
     if (manual) {
-      if (_refreshing) return;
+      // Drop a manual (Retry / settle-poll) read while another read is in flight —
+      // either a prior manual one (_refreshing) OR an action's pinned post-202
+      // re-read (_acting, which uses the manual=false path and doesn't set
+      // _refreshing). Avoids two concurrent getStatus()es where the slower, staler
+      // response could land last within the same generation.
+      if (_refreshing || _acting) return;
       _refreshing = true;
     }
     final gen = _generation;

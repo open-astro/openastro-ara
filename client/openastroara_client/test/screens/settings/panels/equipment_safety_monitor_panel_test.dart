@@ -93,6 +93,16 @@ void main() {
     expect(find.text('Safe'), findsNothing);
   });
 
+  testWidgets('an error state shows a distinct message, not "Reading…"',
+      (tester) async {
+    await _pump(
+        tester, _status(state: EquipmentConnectionState.error, safe: false));
+    expect(find.text('Error'), findsOneWidget); // the chip
+    expect(find.text('Sensor read failed — check the device.'), findsOneWidget);
+    expect(find.text('Reading…'), findsNothing);
+    expect(find.text('Safe'), findsNothing);
+  });
+
   testWidgets('no device connected shows the empty state + Connect…',
       (tester) async {
     await _pump(tester, null);
