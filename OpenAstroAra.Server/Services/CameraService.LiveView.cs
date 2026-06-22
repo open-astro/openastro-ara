@@ -172,11 +172,12 @@ public sealed partial class CameraService {
             // reports no dimensions once stopped (honors the DTO "null between sessions" contract).
             // MUST come after `await loop`: cancellation can land during the non-cancellable
             // ImageArray download, so the loop may still publish one final frame after we cancel —
-            // nulling before the await would let that late write resurrect a stale frame. Order
-            // mirrors the commit protocol (meta first, frame/commit-point last): a reader seeing the
-            // null frame via its acquire fence is then guaranteed to also see the null meta.
-            _liveViewMeta = null;
+            // nulling before the await would let that late write resurrect a stale frame. Null the
+            // frame FIRST, meta second (status now reads frame→meta, and Width/Height live in the
+            // frame): the only transient a reader can catch is frame=null + meta=set, which is the
+            // legitimate "started, no frame yet" shape — not a frame-without-config contradiction.
             _liveViewFrame = null;
+            _liveViewMeta = null;
         } finally {
             _liveViewMutex.Release();
         }
@@ -259,11 +260,11 @@ public sealed partial class CameraService {
             // (disconnect → client-null break) or a fault must also leave GET /liveview/frame at 204,
             // not serving a stale last frame with Active=false. Runs after any final in-flight write
             // (CaptureLiveFrameAsync has returned by the time the loop body exits), so it's the last
-            // write — and it makes StopLiveViewAsync's post-await null redundant-but-harmless. Order
-            // mirrors the commit protocol (meta first, frame/commit-point last) so a reader seeing
-            // the null frame via its acquire fence also sees the null meta — no stale Width/Height.
-            _liveViewMeta = null;
+            // write — and it makes StopLiveViewAsync's post-await null redundant-but-harmless. Frame
+            // first, meta second (status reads frame→meta; Width/Height live in the frame): the only
+            // transient is frame=null + meta=set, i.e. the legitimate "started, no frame yet" shape.
             _liveViewFrame = null;
+            _liveViewMeta = null;
         }
     }
 
