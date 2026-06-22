@@ -77,7 +77,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task StopLiveViewAsync_when_not_running_is_a_noop() {
             using var svc = new CameraService();
-            await svc.StopLiveViewAsync(CancellationToken.None); // must not throw
+            await svc.StopLiveViewAsync(); // must not throw
             Assert.That(svc.GetLiveViewStatus().Active, Is.False);
         }
 
@@ -98,7 +98,7 @@ namespace OpenAstroAra.Test {
         public void Placeholder_live_view_surface_is_inert() {
             var svc = new PlaceholderCameraService();
             Assert.DoesNotThrowAsync(() => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None));
-            Assert.DoesNotThrowAsync(() => svc.StopLiveViewAsync(CancellationToken.None));
+            Assert.DoesNotThrowAsync(() => svc.StopLiveViewAsync());
             Assert.That(svc.GetLiveViewStatus().Active, Is.False);
             Assert.That(svc.GetLiveViewFrame(), Is.Null);
         }

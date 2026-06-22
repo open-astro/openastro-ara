@@ -81,10 +81,11 @@ public static class EquipmentEndpoints {
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
         });
-        camera.MapPost("/liveview/stop", async (ICameraService svc, CancellationToken ct) => {
+        camera.MapPost("/liveview/stop", async (ICameraService svc) => {
             // 204, not 202: StopLiveViewAsync awaits the loop fully draining before returning, so the
             // stop is confirmed complete by the time this responds (unlike /start, which is async).
-            await svc.StopLiveViewAsync(ct);
+            // No ct: a stop is unconditional and never honors cancellation.
+            await svc.StopLiveViewAsync();
             return Results.NoContent();
         });
         camera.MapGet("/liveview", (ICameraService svc) => Results.Ok(svc.GetLiveViewStatus()));

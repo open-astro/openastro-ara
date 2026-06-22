@@ -66,15 +66,22 @@ public sealed partial class CameraService {
     private volatile LiveViewFrameData? _liveViewFrame;
     private volatile LiveViewMeta? _liveViewMeta;
 
-    private sealed record LiveViewMeta(
-        int? Width, int? Height, double? ExposureSec, DateTimeOffset StartedAt, DateTimeOffset? LastFrameAt);
+    // Session-constant status (set once at start, nulled at teardown): the requested exposure and
+    // the session start. NOT written per frame, so a status read never tears against the frame.
+    private sealed record LiveViewMeta(double ExposureSec, DateTimeOffset StartedAt);
 
-    // Readonly fields (not properties) on a private type: no CA1819 byte[]-property concern, and the
-    // pair is immutable so a single volatile publish is tear-free.
+    // Everything per-frame that status exposes, published as ONE immutable volatile reference so a
+    // reader gets a consistent (Seq, Width, Height, CapturedAt) snapshot — no field-vs-field tear.
+    // Readonly fields (not properties) on a private type avoid the CA1819 byte[]-property concern.
     private sealed class LiveViewFrameData {
         public readonly byte[] Jpeg;
         public readonly long Seq;
-        public LiveViewFrameData(byte[] jpeg, long seq) { Jpeg = jpeg; Seq = seq; }
+        public readonly int Width;
+        public readonly int Height;
+        public readonly DateTimeOffset CapturedAt;
+        public LiveViewFrameData(byte[] jpeg, long seq, int width, int height, DateTimeOffset capturedAt) {
+            Jpeg = jpeg; Seq = seq; Width = width; Height = height; CapturedAt = capturedAt;
+        }
     }
 
     public async Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) {
@@ -114,7 +121,7 @@ public sealed partial class CameraService {
             _liveViewFrame = null;
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
-            _liveViewMeta = new LiveViewMeta(null, null, request.ExposureSec, DateTimeOffset.UtcNow, null);
+            _liveViewMeta = new LiveViewMeta(request.ExposureSec, DateTimeOffset.UtcNow);
             Volatile.Write(ref _liveViewActive, 1);
             _liveViewLoop = Task.Run(() => RunLiveViewLoopAsync(request, cts.Token), CancellationToken.None);
         } finally {
@@ -123,15 +130,14 @@ public sealed partial class CameraService {
         LogLiveViewStarted(request.ExposureSec, request.BinX, request.BinY);
     }
 
-    // The passed `ct` is intentionally NOT honored — a stop always runs to completion once
-    // requested; a caller cannot race-cancel it. The endpoint therefore returns 204 only after the
-    // loop has fully drained (up to LiveViewMaxExposureSec on a slow ImageArray download), so by the
-    // time the caller sees 204, status is already Active=false / FrameSeq=0.
-    public async Task StopLiveViewAsync(CancellationToken ct) {
-        // CancellationToken.None, NOT ct: a stop must always run to completion once requested. If we
-        // honored ct and the caller (HTTP request) disconnected while we were waiting for the mutex
-        // (held by an in-flight frame download), WaitAsync would throw and the loop would be left
-        // running with no one to stop it.
+    // No CancellationToken parameter by design: a stop always runs to completion once requested (a
+    // caller cannot race-cancel it). The endpoint returns 204 only after the loop has fully drained
+    // (up to LiveViewMaxExposureSec on a slow, non-cancellable ImageArray download), so by the time
+    // the caller sees 204, status is already Active=false / FrameSeq=0.
+    public async Task StopLiveViewAsync() {
+        // CancellationToken.None: even if a caller wanted to cancel, honoring it here could strand
+        // the loop running (e.g. an HTTP disconnect while we wait on the mutex held by an in-flight
+        // frame download). A stop is unconditional.
         await _liveViewMutex.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try {
             var cts = _liveViewCts;
@@ -170,20 +176,20 @@ public sealed partial class CameraService {
     }
 
     public LiveViewStatusDto GetLiveViewStatus() {
-        // Read the frame (the writer's commit point) FIRST: its volatile-read acquire barrier makes
-        // the prior _liveViewMeta write visible, so a new FrameSeq always pairs with at-least-as-new
-        // meta. Frame dimensions are session-constant (a re-start while running is refused, so the
-        // exposure/binning can't change mid-session), so the two reads can't disagree on Width/Height.
+        // Per-frame fields (Seq/Width/Height/LastFrameAt) come from the single atomic _liveViewFrame
+        // snapshot, so they can never tear against each other. The session-constant meta (exposure /
+        // start) is set once at start and not written per frame, so it can't tear against the frame
+        // either. (Both are nulled at teardown; gate "live" on Active per the DTO contract.)
         var f = _liveViewFrame;
         var m = _liveViewMeta;
         return new LiveViewStatusDto(
             Active: Volatile.Read(ref _liveViewActive) == 1,
             FrameSeq: f?.Seq ?? 0,
-            Width: m?.Width,
-            Height: m?.Height,
+            Width: f?.Width,
+            Height: f?.Height,
             ExposureSec: m?.ExposureSec,
             StartedAtUtc: m?.StartedAt.ToString("O"),
-            LastFrameAtUtc: m?.LastFrameAt?.ToString("O"));
+            LastFrameAtUtc: f?.CapturedAt.ToString("O"));
     }
 
     public (ReadOnlyMemory<byte> Jpeg, long Seq)? GetLiveViewFrame() {
@@ -297,14 +303,11 @@ public sealed partial class CameraService {
         var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
         var jpeg = JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim);
 
-        // Single writer (this loop): publish meta first, then the frame as the commit point — a
-        // reader seeing the new frame seq will also see consistent meta.
-        var prev = _liveViewMeta;
+        // Single writer (this loop). Meta (exposure/start) was set once at start and isn't touched
+        // here, so the only per-frame publish is the frame itself — one atomic volatile write
+        // carrying seq + dimensions + capture time, so status reads can't tear.
         var nextSeq = (_liveViewFrame?.Seq ?? 0) + 1;
-        _liveViewMeta = new LiveViewMeta(
-            width, height, request.ExposureSec,
-            prev?.StartedAt ?? DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq);
+        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq, width, height, DateTimeOffset.UtcNow);
         return true;
     }
 
@@ -314,9 +317,13 @@ public sealed partial class CameraService {
     // AlpacaCamera, the synchronous client.ImageArray throws ObjectDisposedException, which the
     // loop's top-level catch(Exception) absorbs (it never faults the task).
     private void CancelLiveViewForDispose() {
+        // Only READ the shared fields here — never write _liveViewCts/_liveViewLoop. This path runs
+        // without the mutex (it can't take it: StopLiveViewAsync holds the mutex while awaiting the
+        // loop, so blocking on it would deadlock). Writing _liveViewLoop=null here would race a
+        // concurrent StopLiveViewAsync, which could then read null, skip `await loop`, and report the
+        // stop complete before the loop drained. Cancelling the CTS is enough to end the loop; the
+        // mutex-protected Start/Stop own the field lifecycle and dispose the CTS.
         var cts = _liveViewCts;
-        _liveViewCts = null;
-        _liveViewLoop = null;
         Volatile.Write(ref _liveViewActive, 0);
         if (cts is not null) {
             try { cts.Cancel(); } catch (ObjectDisposedException) { }
