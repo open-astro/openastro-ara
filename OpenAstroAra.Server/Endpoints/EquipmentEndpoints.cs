@@ -84,7 +84,9 @@ public static class EquipmentEndpoints {
         camera.MapPost("/liveview/stop", async (ICameraService svc) => {
             // 204, not 202: StopLiveViewAsync awaits the loop fully draining before returning, so the
             // stop is confirmed complete by the time this responds (unlike /start, which is async).
-            // No ct: a stop is unconditional and never honors cancellation.
+            // No ct: a stop is unconditional and never honors cancellation. It can take up to the
+            // exposure cap (LiveViewMaxExposureSec, 15 s) + readout while an in-flight, non-cancellable
+            // ImageArray download finishes — clients should allow a ~30 s timeout on this call.
             await svc.StopLiveViewAsync();
             return Results.NoContent();
         });

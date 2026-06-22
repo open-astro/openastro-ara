@@ -58,7 +58,10 @@ public sealed partial class CameraService {
     [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed",
         Justification = "SemaphoreSlim allocates no unmanaged handle here (AvailableWaitHandle is never used); disposing it would race in-flight WaitAsync callers at teardown. GC reclaims it.")]
     private readonly SemaphoreSlim _liveViewMutex = new(1, 1);
-    private CancellationTokenSource? _liveViewCts;
+    // volatile: written under the mutex by Start/Stop, but read WITHOUT it in CancelLiveViewForDispose
+    // (which can't take the mutex — see there). volatile gives that lockless read an acquire fence so
+    // it can't observe a stale value on a weak memory model (ARM).
+    private volatile CancellationTokenSource? _liveViewCts;
     private Task? _liveViewLoop;
     private int _liveViewActive;
     // The latest frame + its seq, published as ONE reference so a reader can't observe a torn
