@@ -323,10 +323,19 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { canPulseGuide = c.CanPulseGuide; } catch (Exception) { canPulseGuide = false; }
         bool canFindHome;
         try { canFindHome = c.CanFindHome; } catch (Exception) { canFindHome = false; }
+        // Optics: ASCOM reports these in METRES; convert to mm. Each in its own try
+        // (most mounts NotImplement them → null). A non-positive value (an
+        // unconfigured driver returning 0) is treated as "not reported" so the
+        // wizard doesn't auto-fill a useless 0.
+        double? focalLengthMm = null;
+        try { var f = c.FocalLength; focalLengthMm = f > 0 ? f * 1000.0 : null; } catch (Exception) { focalLengthMm = null; }
+        double? apertureMm = null;
+        try { var a = c.ApertureDiameter; apertureMm = a > 0 ? a * 1000.0 : null; } catch (Exception) { apertureMm = null; }
         return new TelescopeCapabilitiesDto(
             CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
             CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,
-            SupportedSiderealRates: ReadSiderealRates(c));
+            SupportedSiderealRates: ReadSiderealRates(c),
+            FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

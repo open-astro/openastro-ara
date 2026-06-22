@@ -154,7 +154,13 @@ public sealed record TelescopeCapabilitiesDto(
     bool CanSlew, bool CanSync, bool CanPark, bool CanUnpark,
     bool CanSetTracking, bool CanPulseGuide,
     bool CanFindHome,
-    IReadOnlyList<string> SupportedSiderealRates);
+    IReadOnlyList<string> SupportedSiderealRates,
+    // Optics, in mm (ASCOM Telescope.FocalLength / ApertureDiameter report
+    // metres; converted at the read). Null when the driver doesn't report it —
+    // many mounts NotImplement these. Surfaced so the §37 wizard can auto-fill
+    // the optics screen from a connected mount.
+    double? FocalLengthMm = null,
+    double? ApertureDiameterMm = null);
 
 public sealed record TelescopeStateDto(
     string State,    // "idle" | "slewing" | "tracking" | "parked" | "unparking" | "error"
