@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/server.dart';
 import '../../services/profile_api.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sky_atlas/data_manager_state.dart';
 import '../../models/profile_draft.dart';
@@ -191,6 +192,13 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       _showError(messenger, error);
       return; // keep the wizard open so the user can retry
     }
+
+    // The new profile is now persisted + active on the daemon. Invalidate the
+    // cached profile list so it shows up immediately — the wizard is launched
+    // from entry points that pass no onComplete (the app-shell + Settings
+    // launchers), so we can't rely on the caller to refresh. Without this the
+    // save succeeds but the stale list makes it look like nothing was saved.
+    if (mounted) ref.invalidate(profileManagementProvider);
 
     // Exit the wizard first, THEN notify — so if onComplete routes/pops, it can't
     // race our pop into popping an unintended route.
