@@ -48,7 +48,9 @@ class ImagingTab extends ConsumerWidget {
               ExposureControlsPanel(
                 liveViewOn: liveViewOn,
                 onTakeOne: exposing ? null : () => _takeOne(context, ref),
-                onLiveViewToggle: (v) => _toggleLiveView(ref, v),
+                onLiveViewToggle: (v) {
+                  _toggleLiveView(ref, v);
+                },
               ),
             ],
           ),
@@ -61,19 +63,26 @@ class ImagingTab extends ConsumerWidget {
   /// boolean controller keeps the UI intent (toggle + any cross-component
   /// mirror); the frame notifier owns the start/poll/stop against the daemon,
   /// seeded with the current Imaging-tab exposure/gain/binning.
-  void _toggleLiveView(WidgetRef ref, bool on) {
-    ref.read(liveViewControllerProvider.notifier).set(on);
+  Future<void> _toggleLiveView(WidgetRef ref, bool on) async {
+    final controller = ref.read(liveViewControllerProvider.notifier);
+    controller.set(on); // optimistic — reflect the tap immediately
     final lv = ref.read(liveViewFrameProvider.notifier);
     if (on) {
       final p = ref.read(exposureControllerProvider);
-      lv.start(
-        exposureSec: p.exposure.inMilliseconds / 1000.0,
+      // inMicroseconds / 1e6 is lossless for sub-millisecond live exposures.
+      await lv.start(
+        exposureSec: p.exposure.inMicroseconds / 1e6,
         gain: p.gain,
         binX: p.bin,
         binY: p.bin,
       );
+      // A start() failure flips active back to false — keep the toggle honest so
+      // it doesn't sit stuck "on" while Live View isn't running.
+      if (!ref.read(liveViewFrameProvider).active) {
+        controller.set(false);
+      }
     } else {
-      lv.stop();
+      await lv.stop();
     }
   }
 

@@ -100,11 +100,15 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     try {
       await api.start(exposureSec: exposureSec, gain: gain, binX: binX, binY: binY);
     } catch (e) {
+      // Superseded by a second start() while this one was in flight — leave the
+      // new session alone (don't null its _api or stamp an error over it).
+      if (_api != api) return;
       _api = null;
       api.close();
       state = LiveFrameState(error: _describe(e));
       return;
     }
+    if (_api != api) return; // superseded during the await
     state = const LiveFrameState(active: true);
     _scheduleNext();
   }
