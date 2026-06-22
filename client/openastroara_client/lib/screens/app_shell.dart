@@ -43,6 +43,12 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
+    // Ties kOptionsTabIndex (used by the equipment chips to route to a device's
+    // settings panel) to the actual tab order — a reorder of _tabs that forgets
+    // to update the constant trips this in debug instead of silently navigating
+    // to the wrong tab.
+    assert(_tabs[kOptionsTabIndex].label == 'Options',
+        'kOptionsTabIndex must point at the Options tab — update it if _tabs is reordered.');
     return Scaffold(
       body: SafeArea(
         child: CallbackShortcuts(
