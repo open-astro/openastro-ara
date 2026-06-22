@@ -189,10 +189,15 @@ public sealed partial class CameraService {
         // snapshot, so they can never tear against each other. The session-constant meta (exposure /
         // start) is set once at start and not written per frame, so it can't tear against the frame
         // either. (Both are nulled at teardown; gate "live" on Active per the DTO contract.)
+        // Read Active FIRST: Start writes meta (release) then Active=1 (release), so an Active
+        // acquire-read gates the meta/frame reads that follow — observing Active=true then guarantees
+        // the matching non-null meta/frame is visible (reading them before the Active acquire could
+        // see Active=true with stale nulls on a weak memory model).
+        var active = Volatile.Read(ref _liveViewActive) == 1;
         var f = _liveViewFrame;
         var m = _liveViewMeta;
         return new LiveViewStatusDto(
-            Active: Volatile.Read(ref _liveViewActive) == 1,
+            Active: active,
             SessionId: Interlocked.Read(ref _liveViewSession),
             FrameSeq: f?.Seq ?? 0,
             Width: f?.Width,
