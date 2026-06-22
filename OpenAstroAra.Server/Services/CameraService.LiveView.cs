@@ -124,9 +124,9 @@ public sealed partial class CameraService {
     }
 
     // The passed `ct` is intentionally NOT honored — a stop always runs to completion once
-    // requested; a caller cannot race-cancel it. The endpoint therefore returns 202 only after the
+    // requested; a caller cannot race-cancel it. The endpoint therefore returns 204 only after the
     // loop has fully drained (up to LiveViewMaxExposureSec on a slow ImageArray download), so by the
-    // time the caller sees 202, status is already Active=false / FrameSeq=0.
+    // time the caller sees 204, status is already Active=false / FrameSeq=0.
     public async Task StopLiveViewAsync(CancellationToken ct) {
         // CancellationToken.None, NOT ct: a stop must always run to completion once requested. If we
         // honored ct and the caller (HTTP request) disconnected while we were waiting for the mutex
@@ -158,9 +158,11 @@ public sealed partial class CameraService {
             // reports no dimensions once stopped (honors the DTO "null between sessions" contract).
             // MUST come after `await loop`: cancellation can land during the non-cancellable
             // ImageArray download, so the loop may still publish one final frame after we cancel —
-            // nulling before the await would let that late write resurrect a stale frame.
-            _liveViewFrame = null;
+            // nulling before the await would let that late write resurrect a stale frame. Order
+            // mirrors the commit protocol (meta first, frame/commit-point last): a reader seeing the
+            // null frame via its acquire fence is then guaranteed to also see the null meta.
             _liveViewMeta = null;
+            _liveViewFrame = null;
         } finally {
             _liveViewMutex.Release();
         }
@@ -242,9 +244,11 @@ public sealed partial class CameraService {
             // (disconnect → client-null break) or a fault must also leave GET /liveview/frame at 204,
             // not serving a stale last frame with Active=false. Runs after any final in-flight write
             // (CaptureLiveFrameAsync has returned by the time the loop body exits), so it's the last
-            // write — and it makes StopLiveViewAsync's post-await null redundant-but-harmless.
+            // write — and it makes StopLiveViewAsync's post-await null redundant-but-harmless. Order
+            // mirrors the commit protocol (meta first, frame/commit-point last) so a reader seeing
+            // the null frame via its acquire fence also sees the null meta — no stale Width/Height.
+            _liveViewMeta = null;
             _liveViewFrame = null;
-            _liveViewMeta = null; // also reset dimensions/timestamps so idle status reports nothing
         }
     }
 
