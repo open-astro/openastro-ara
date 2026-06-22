@@ -6,6 +6,7 @@ import '../../services/camera_exposure_api.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
+import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
@@ -47,15 +48,33 @@ class ImagingTab extends ConsumerWidget {
               ExposureControlsPanel(
                 liveViewOn: liveViewOn,
                 onTakeOne: exposing ? null : () => _takeOne(context, ref),
-                onLiveViewToggle: ref
-                    .read(liveViewControllerProvider.notifier)
-                    .set,
+                onLiveViewToggle: (v) => _toggleLiveView(ref, v),
               ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  /// §64 Live View toggle — drives the daemon's short-exposure loop. The
+  /// boolean controller keeps the UI intent (toggle + any cross-component
+  /// mirror); the frame notifier owns the start/poll/stop against the daemon,
+  /// seeded with the current Imaging-tab exposure/gain/binning.
+  void _toggleLiveView(WidgetRef ref, bool on) {
+    ref.read(liveViewControllerProvider.notifier).set(on);
+    final lv = ref.read(liveViewFrameProvider.notifier);
+    if (on) {
+      final p = ref.read(exposureControllerProvider);
+      lv.start(
+        exposureSec: p.exposure.inMilliseconds / 1000.0,
+        gain: p.gain,
+        binX: p.bin,
+        binY: p.bin,
+      );
+    } else {
+      lv.stop();
+    }
   }
 
   /// §14e Take One — fire a single exposure on the connected camera. The
