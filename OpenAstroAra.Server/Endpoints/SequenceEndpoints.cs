@@ -191,8 +191,10 @@ public static class SequenceEndpoints {
 
         // Sharing (§70) — Phase 13.13 wired to ISequenceService.
         seq.MapPost("/{id:guid}/share-export",
-                async (Guid id, ISequenceService svc, CancellationToken ct) =>
-                    Results.Ok(await svc.ShareExportAsync(id, ct)))
+                async (Guid id, ISequenceService svc, CancellationToken ct) => {
+                    var share = await svc.ShareExportAsync(id, ct);
+                    return share is null ? Results.NotFound() : Results.Ok(share);
+                })
            .Produces<SequenceShareDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName("ShareExportSequence");

@@ -35,7 +35,10 @@ public interface ISequenceService {
     Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<SequenceDto?> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct);
     Task<bool> DeleteAsync(Guid id, CancellationToken ct);
-    Task<SequenceShareDto> ShareExportAsync(Guid id, CancellationToken ct);
+    /// <summary>§70.5 share-export. Returns null for an unknown id (the endpoint maps
+    /// that to 404); otherwise a share carrying the sequence body inline in
+    /// <c>Manifest</c>, mirroring the profile-share contract.</summary>
+    Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct);
 }
 
 /// <summary>
