@@ -82,10 +82,13 @@ class ImagingTab extends ConsumerWidget {
       // (it can't sit stuck "on") AND surface why, since FrameViewer only shows
       // the live error while active.
       final lvState = ref.read(liveViewFrameProvider);
-      if (!lvState.active) {
+      // Only an actual error means start failed — a null-error inactive state
+      // here means the user toggled OFF while start() was in flight (stop() set
+      // idle), which must not raise a spurious "couldn't start" snackbar.
+      if (!lvState.active && lvState.error != null) {
         controller.set(false);
         messenger.showSnackBar(SnackBar(
-          content: Text("Couldn't start Live View: ${lvState.error ?? 'unknown error'}"),
+          content: Text("Couldn't start Live View: ${lvState.error}"),
         ));
       }
     } else {
