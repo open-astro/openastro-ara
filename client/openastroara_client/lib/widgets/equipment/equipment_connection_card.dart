@@ -100,15 +100,12 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
               child: Text(title, style: Theme.of(context).textTheme.titleMedium),
             ),
             EquipmentStateChip(state: value.connectionState),
-            Builder(
-              builder: (context) => IconButton(
-                // While connecting, the same action aborts the in-progress connect.
-                tooltip:
-                    value.isConnecting ? 'Cancel connecting' : 'Disconnect',
-                icon: Icon(value.isConnecting ? Icons.close : Icons.link_off,
-                    size: 18),
-                onPressed: () => _disconnect(context),
-              ),
+            IconButton(
+              // While connecting, the same action aborts the in-progress connect.
+              tooltip: value.isConnecting ? 'Cancel connecting' : 'Disconnect',
+              icon: Icon(value.isConnecting ? Icons.close : Icons.link_off,
+                  size: 18),
+              onPressed: () => _disconnect(context),
             ),
           ],
         ),

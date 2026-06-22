@@ -98,6 +98,20 @@ void main() {
     expect(find.text('Wind gust'), findsNothing);
   });
 
+  testWidgets('an error sub-state shows a distinct message, not "no sensors"',
+      (tester) async {
+    await _pump(
+        tester,
+        _status(
+            state: EquipmentConnectionState.error,
+            temperature: null,
+            dewPoint: null,
+            windGust: null));
+    expect(find.text('Error'), findsOneWidget); // the chip
+    expect(find.text('Sensor read failed — check the device.'), findsOneWidget);
+    expect(find.text('This weather station reports no sensors.'), findsNothing);
+  });
+
   testWidgets('no device connected shows the empty state + Connect…',
       (tester) async {
     await _pump(tester, null);

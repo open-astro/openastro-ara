@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/equipment_device_status.dart';
 import '../../../models/weather_status.dart';
 import '../../../state/equipment/weather_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -67,7 +68,16 @@ class _WeatherBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // While connecting the readings are the daemon default (transient); an `error`
+    // sub-state is a failed read, not "no sensors" — surface it distinctly.
     if (status.isConnecting) return const Text('Reading…');
+    if (status.connectionState == EquipmentConnectionState.error) {
+      return const Row(children: [
+        Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
+        SizedBox(width: 8),
+        Expanded(child: Text('Sensor read failed — check the device.')),
+      ]);
+    }
 
     final rows = <Widget?>[
       _sensor('Temperature', status.temperatureC, '°C'),
