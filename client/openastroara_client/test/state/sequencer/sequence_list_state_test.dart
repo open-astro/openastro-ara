@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
@@ -61,6 +62,8 @@ class _FakeSeqClient implements SequenceClient {
   Future<String> abort(String id) async => 'op';
   @override
   Future<String> stop(String id) async => 'op';
+  @override
+  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() async => const [];
   @override

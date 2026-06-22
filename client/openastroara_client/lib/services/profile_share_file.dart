@@ -23,12 +23,16 @@ Map<String, dynamic> parseShareManifest(List<int> bytes) {
   return decoded;
 }
 
-/// A safe suggested filename for an exported profile share, derived from the
-/// profile's [name]. Strips characters that are illegal in filenames on any of
-/// the desktop targets (`/ \ : * ? " < > |` + control chars), collapses runs of
-/// whitespace/dashes, and falls back to "profile" when nothing usable is left —
-/// then appends the `.araprofile.json` suffix so shares are recognizable.
-String shareFileName(String name) {
+/// A safe suggested filename for an exported share, derived from the entity's
+/// [name]. Strips characters that are illegal in filenames on any of the desktop
+/// targets (`/ \ : * ? " < > |` + control chars), collapses runs of
+/// whitespace/dashes, and falls back to [fallbackBase] when nothing usable is
+/// left — then appends `.[extension]` so shares are recognizable.
+///
+/// Defaults produce a profile share (`<name>.araprofile.json`); the §70.5
+/// sequence export passes `fallbackBase: 'sequence', extension: 'araseq.json'`.
+String shareFileName(String name,
+    {String fallbackBase = 'profile', String extension = 'araprofile.json'}) {
   final cleaned = name
       // filename-illegal chars + control chars (incl. tab/LF/CR) → dash.
       .replaceAll(RegExp(r'[\/\\:*?"<>|\x00-\x1f]'), '-')
@@ -36,12 +40,12 @@ String shareFileName(String name) {
       .replaceAll(RegExp(r'\s+'), '-')
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
-  var base = cleaned.isEmpty ? 'profile' : cleaned;
-  // A profile literally named after a Windows reserved device (CON, NUL, COM1…)
+  var base = cleaned.isEmpty ? fallbackBase : cleaned;
+  // An entity literally named after a Windows reserved device (CON, NUL, COM1…)
   // would otherwise yield e.g. NUL.araprofile.json, which Windows redirects to
   // the device. Prefix an underscore so the name is always a real file.
   if (_windowsReserved.hasMatch(base)) base = '_$base';
-  return '$base.araprofile.json';
+  return '$base.$extension';
 }
 
 final RegExp _windowsReserved =
