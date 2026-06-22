@@ -82,8 +82,10 @@ public static class EquipmentEndpoints {
             }
         });
         camera.MapPost("/liveview/stop", async (ICameraService svc, CancellationToken ct) => {
+            // 204, not 202: StopLiveViewAsync awaits the loop fully draining before returning, so the
+            // stop is confirmed complete by the time this responds (unlike /start, which is async).
             await svc.StopLiveViewAsync(ct);
-            return Results.Accepted();
+            return Results.NoContent();
         });
         camera.MapGet("/liveview", (ICameraService svc) => Results.Ok(svc.GetLiveViewStatus()));
         camera.MapGet("/liveview/frame", (ICameraService svc, HttpContext http) => {

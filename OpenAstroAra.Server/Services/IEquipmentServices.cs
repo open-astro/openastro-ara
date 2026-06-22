@@ -38,6 +38,8 @@ public interface ICameraService {
     Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
     // §64 Live View: a short-exposure render loop for framing/focus (no catalog write).
     Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct);
+    // The ct is intentionally NOT honored: a stop always runs to completion (it awaits the loop
+    // draining, up to the exposure cap), so callers must not treat a cancelled ct as "stop failed".
     Task StopLiveViewAsync(CancellationToken ct);
     LiveViewStatusDto GetLiveViewStatus();
     // ReadOnlyMemory (not byte[]): the published buffer is shared across readers and must not be
