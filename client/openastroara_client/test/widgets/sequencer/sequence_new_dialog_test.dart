@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_new_dialog.dart';
@@ -61,6 +62,8 @@ class _NewClient implements SequenceClient {
   Future<String> abort(String id) async => 'op';
   @override
   Future<String> stop(String id) async => 'op';
+  @override
+  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
   @override
   void close() {}
 }

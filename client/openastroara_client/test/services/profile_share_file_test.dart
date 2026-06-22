@@ -50,6 +50,17 @@ void main() {
       // A name only *containing* a reserved word is fine.
       expect(shareFileName('nullarbor'), 'nullarbor.araprofile.json');
     });
+
+    test('§70.5 sequence export overrides the fallback base + extension', () {
+      // Same sanitization, different suffix/fallback for the .araseq.json share.
+      expect(
+          shareFileName('M31 LRGB', fallbackBase: 'sequence', extension: 'araseq.json'),
+          'M31-LRGB.araseq.json');
+      expect(shareFileName('///', fallbackBase: 'sequence', extension: 'araseq.json'),
+          'sequence.araseq.json');
+      expect(shareFileName('NUL', fallbackBase: 'sequence', extension: 'araseq.json'),
+          '_NUL.araseq.json');
+    });
   });
 
   group('shareExpiryNote', () {
