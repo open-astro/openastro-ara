@@ -118,6 +118,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
   // The device's own name, or the capitalized device-type label as a fallback.
   String _titleFor(T value) {
     if (value.name.isNotEmpty) return value.name;
+    if (deviceTypeLabel.isEmpty) return '';
     return deviceTypeLabel[0].toUpperCase() + deviceTypeLabel.substring(1);
   }
 

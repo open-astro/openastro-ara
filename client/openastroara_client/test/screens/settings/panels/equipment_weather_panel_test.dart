@@ -24,7 +24,7 @@ class _FakeSavedServerService implements SavedServerService {
 
 class _FakeWeatherApi implements EquipmentDeviceClient<WeatherStatus> {
   _FakeWeatherApi(this.status);
-  WeatherStatus? status;
+  final WeatherStatus? status;
   final List<String> calls = [];
   @override
   Future<WeatherStatus?> getStatus() async => status;
