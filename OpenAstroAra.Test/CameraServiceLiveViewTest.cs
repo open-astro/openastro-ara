@@ -54,6 +54,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void StartLiveViewAsync_accepts_the_exposure_cap_boundary() {
+            using var svc = new CameraService();
+            // 15.0 is the inclusive cap: it must pass validation and fall through to the
+            // connection check (InvalidOperation), NOT be rejected as out-of-range.
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(15.0), CancellationToken.None));
+        }
+
+        [Test]
         public void StartLiveViewAsync_rejects_invalid_binning() {
             using var svc = new CameraService();
             Assert.ThrowsAsync<ArgumentOutOfRangeException>(

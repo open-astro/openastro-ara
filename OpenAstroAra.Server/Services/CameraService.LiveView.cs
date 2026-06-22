@@ -203,6 +203,12 @@ public sealed partial class CameraService {
             LogLiveViewLoopFaulted(ex);
         } finally {
             Volatile.Write(ref _liveViewActive, 0);
+            // Clear the frame on EVERY exit, not just the StopLiveViewAsync path: a self-termination
+            // (disconnect → client-null break) or a fault must also leave GET /liveview/frame at 204,
+            // not serving a stale last frame with Active=false. Runs after any final in-flight write
+            // (CaptureLiveFrameAsync has returned by the time the loop body exits), so it's the last
+            // write — and it makes StopLiveViewAsync's post-await null redundant-but-harmless.
+            _liveViewFrame = null;
         }
     }
 
