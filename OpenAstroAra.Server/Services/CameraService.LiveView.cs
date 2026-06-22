@@ -51,12 +51,21 @@ public sealed partial class CameraService {
     private CancellationTokenSource? _liveViewCts;
     private Task? _liveViewLoop;
     private int _liveViewActive;
-    private long _liveViewSeq;
-    private volatile byte[]? _liveViewJpeg;
+    // The latest frame + its seq, published as ONE reference so a reader can't observe a torn
+    // (new-jpeg, old-seq) pair. Single writer (the loop), so no CAS needed. null = no frame yet.
+    private volatile LiveViewFrameData? _liveViewFrame;
     private volatile LiveViewMeta? _liveViewMeta;
 
     private sealed record LiveViewMeta(
         int? Width, int? Height, double? ExposureSec, DateTimeOffset StartedAt, DateTimeOffset? LastFrameAt);
+
+    // Readonly fields (not properties) on a private type: no CA1819 byte[]-property concern, and the
+    // pair is immutable so a single volatile publish is tear-free.
+    private sealed class LiveViewFrameData {
+        public readonly byte[] Jpeg;
+        public readonly long Seq;
+        public LiveViewFrameData(byte[] jpeg, long seq) { Jpeg = jpeg; Seq = seq; }
+    }
 
     public async Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) {
         if (request.ExposureSec <= 0 || request.ExposureSec > LiveViewMaxExposureSec) {
@@ -86,10 +95,9 @@ public sealed partial class CameraService {
             // A self-terminated loop (e.g. camera disconnect) leaves its spent CTS behind; dispose it
             // before replacing so it isn't leaked.
             _liveViewCts?.Dispose();
-            // Fresh session: reset the frame counter + drop any frame from a prior session so
-            // FrameSeq == 0 / GET /frame → 204 reliably mean "no frame yet this session".
-            Interlocked.Exchange(ref _liveViewSeq, 0);
-            _liveViewJpeg = null;
+            // Fresh session: drop any frame from a prior session so FrameSeq == 0 / GET /frame → 204
+            // reliably mean "no frame yet this session".
+            _liveViewFrame = null;
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
             _liveViewMeta = new LiveViewMeta(null, null, request.ExposureSec, DateTimeOffset.UtcNow, null);
@@ -102,7 +110,11 @@ public sealed partial class CameraService {
     }
 
     public async Task StopLiveViewAsync(CancellationToken ct) {
-        await _liveViewMutex.WaitAsync(ct).ConfigureAwait(false);
+        // CancellationToken.None, NOT ct: a stop must always run to completion once requested. If we
+        // honored ct and the caller (HTTP request) disconnected while we were waiting for the mutex
+        // (held by an in-flight frame download), WaitAsync would throw and the loop would be left
+        // running with no one to stop it.
+        await _liveViewMutex.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try {
             var cts = _liveViewCts;
             var loop = _liveViewLoop;
@@ -122,7 +134,7 @@ public sealed partial class CameraService {
             // after `await loop`: cancellation can land during the non-cancellable ImageArray
             // download, so the loop may still publish one final frame after we cancel — nulling
             // before the await would let that late write resurrect a stale frame.
-            _liveViewJpeg = null;
+            _liveViewFrame = null;
         } finally {
             _liveViewMutex.Release();
         }
@@ -133,7 +145,7 @@ public sealed partial class CameraService {
         var m = _liveViewMeta;
         return new LiveViewStatusDto(
             Active: Volatile.Read(ref _liveViewActive) == 1,
-            FrameSeq: Interlocked.Read(ref _liveViewSeq),
+            FrameSeq: _liveViewFrame?.Seq ?? 0,
             Width: m?.Width,
             Height: m?.Height,
             ExposureSec: m?.ExposureSec,
@@ -142,8 +154,8 @@ public sealed partial class CameraService {
     }
 
     public (byte[] Jpeg, long Seq)? GetLiveViewFrame() {
-        var jpeg = _liveViewJpeg;
-        return jpeg is null ? null : (jpeg, Interlocked.Read(ref _liveViewSeq));
+        var f = _liveViewFrame; // single volatile read — Jpeg and Seq are always consistent
+        return f is null ? null : (f.Jpeg, f.Seq);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -194,7 +206,12 @@ public sealed partial class CameraService {
 
         var ready = await WaitForImageReadyAsync(client, request.ExposureSec, token).ConfigureAwait(false);
         if (ready != true) {
-            return; // not-ready/dropped — skip this frame, the loop retries
+            // false = device didn't reach ImageReady in time; null = dropped/superseded. Either way
+            // WaitForImageReadyAsync does NOT abort, so the exposure may still be running — abort it
+            // before the loop's next StartExposure (most ASCOM drivers reject a re-StartExposure
+            // while one is still in flight). Quiet: a throw here (disconnected client) is ignored.
+            TryAbortQuietly(client);
+            return; // skip this frame, the loop retries
         }
         token.ThrowIfCancellationRequested();
 
@@ -212,12 +229,14 @@ public sealed partial class CameraService {
         var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
         var jpeg = JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim);
 
-        _liveViewJpeg = jpeg;
-        Interlocked.Increment(ref _liveViewSeq);
+        // Single writer (this loop): publish meta first, then the frame as the commit point — a
+        // reader seeing the new frame seq will also see consistent meta.
         var prev = _liveViewMeta;
+        var nextSeq = (_liveViewFrame?.Seq ?? 0) + 1;
         _liveViewMeta = new LiveViewMeta(
             width, height, request.ExposureSec,
             prev?.StartedAt ?? DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq);
     }
 
     // Called from Dispose: cancel the loop promptly without awaiting (the loop also breaks on the
