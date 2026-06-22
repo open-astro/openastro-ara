@@ -68,7 +68,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// Connect the chosen device. Returns whether the call was PERFORMED — `false`
   /// means it was dropped (another action in flight, or no active server).
   Future<bool> connect(DiscoveredDevice device) =>
-      _act((api) => api.connect(device));
+      _act((api) => api.connect(device), pollAfter: true);
 
   /// Disconnect the device. Returns whether the call was performed (see [connect]).
   Future<bool> disconnect() => _act((api) => api.disconnect());
@@ -77,8 +77,13 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // server switch must not redirect the follow-up read). A failed action is
   // RETHROWN to the caller (the UI surfaces it) rather than wiping the last-read
   // status. Returns true if performed, false if dropped (re-entrancy / no API).
+  // [pollAfter] arms the settle-poll on success (connect expects a
+  // connecting→connected transition) BEFORE the re-read, so a transient failure of
+  // that first re-read can't leave the device un-polled — the poll reads it to
+  // settlement on its own.
   Future<bool> _act(
-      Future<void> Function(EquipmentDeviceClient<T> api) action) async {
+      Future<void> Function(EquipmentDeviceClient<T> api) action,
+      {bool pollAfter = false}) async {
     if (_acting) return false;
     final api = readClient();
     if (api == null) return false;
@@ -86,7 +91,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     final gen = _generation;
     try {
       await action(api);
-      if (ref.mounted) await refresh(api);
+      if (ref.mounted) {
+        if (pollAfter) _armSettle();
+        await refresh(api);
+      }
       return true;
     } finally {
       // Clear the guard only if no server change happened mid-action — build()
@@ -127,28 +135,38 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   }
 
   // Arm the settle-poll while the device is mid-connect; cancel it once the device
-  // settles (or disconnects / errors). Idempotent — a no-op when a timer is already
-  // running for a still-connecting device, so repeated refreshes keep the SAME
-  // timer + tick budget rather than restarting (or stacking) it.
+  // settles (or disconnects). On a refresh that fails to read, the poll is left
+  // running (see refresh()) so a transient error doesn't strand a connecting device.
   void _syncSettle(T? status) {
-    final connecting = status?.isConnecting ?? false;
-    if (!connecting) {
+    if (status?.isConnecting ?? false) {
+      _armSettle();
+    } else {
       _cancelSettle();
-      return;
     }
-    if (_settleTimer != null) return; // already polling this connect attempt
+  }
+
+  // Start the bounded settle-poll if it isn't already running. Idempotent — a
+  // no-op when a timer is already polling, so repeated arms keep the SAME timer +
+  // tick budget rather than restarting (or stacking) it.
+  void _armSettle() {
+    if (_settleTimer != null) return;
     _settleTicks = 0;
     _settleTimer = Timer.periodic(settleInterval, (_) {
       if (!ref.mounted) {
         _cancelSettle();
         return;
       }
+      // A manual refresh (e.g. the user hit Retry) is already doing the read —
+      // skip WITHOUT spending a tick, so a concurrent refresh can't drain the
+      // budget faster than the poll's real cadence.
+      if (_refreshing) return;
       // Bound the poll so a device stuck in `connecting` can't keep firing reads
       // for the whole session (e.g. the network dropped after the connect 202).
-      if (++_settleTicks > maxSettlePolls) {
+      if (_settleTicks >= maxSettlePolls) {
         _cancelSettle();
         return;
       }
+      _settleTicks++;
       refresh();
     });
   }
