@@ -26,9 +26,13 @@ class _FakeSafetyApi implements EquipmentDeviceClient<SafetyMonitorStatus> {
   _FakeSafetyApi(this.status);
   SafetyMonitorStatus? status;
   final List<String> calls = [];
+  int getCount = 0;
 
   @override
-  Future<SafetyMonitorStatus?> getStatus() async => status;
+  Future<SafetyMonitorStatus?> getStatus() async {
+    getCount++;
+    return status;
+  }
   @override
   Future<void> connect(DiscoveredDevice device) async =>
       calls.add('connect:${device.name}');
@@ -124,6 +128,35 @@ void main() {
     expect(find.text('Connected'), findsOneWidget);
     expect(find.text('Safe'), findsOneWidget);
     expect(find.text('Connecting'), findsNothing);
+  });
+
+  testWidgets('a device wedged in connecting stops polling at the cap',
+      (tester) async {
+    // A device stuck in `connecting` (e.g. network dropped after the 202) must
+    // not poll forever — the settle-poll is capped at maxSettlePolls ticks.
+    await _wideSurface(tester);
+    final api = _FakeSafetyApi(
+        _status(state: EquipmentConnectionState.connecting, safe: false));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+        safetyMonitorApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child:
+          const MaterialApp(home: Scaffold(body: EquipmentSafetyMonitorPanel())),
+    ));
+    await tester.pump(); // build
+    await tester.pump(); // resolve the initial getStatus (getCount == 1)
+
+    // Pump well past the cap; the device never settles in the fake.
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pump();
+    }
+    // Initial read + at most maxSettlePolls (40) poll reads — NOT one per pump.
+    expect(api.getCount, lessThanOrEqualTo(42));
+    expect(find.text('Connecting'), findsOneWidget);
   });
 
   testWidgets('disconnect targets the device', (tester) async {

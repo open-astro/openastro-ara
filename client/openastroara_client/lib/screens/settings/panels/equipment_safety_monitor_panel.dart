@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/safety_monitor_status.dart';
+import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/safety_monitor_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -73,7 +74,7 @@ class _ConnectionCard extends ConsumerWidget {
           AsyncError(:final error) => _MessageRow(
               icon: Icons.error_outline,
               color: AraColors.accentError,
-              text: "Couldn't read the safety monitor: ${_msg(error)}",
+              text: "Couldn't read the safety monitor: ${describeEquipmentError(error)}",
               onRetry: () => ref.read(safetyMonitorProvider.notifier).refresh(),
             ),
           _ => const Padding(
@@ -104,7 +105,7 @@ class _ConnectionCard extends ConsumerWidget {
           }
         } catch (e) {
           messenger.showSnackBar(SnackBar(
-            content: Text("Couldn't connect ${device.name}: ${_msg(e)}"),
+            content: Text("Couldn't connect ${device.name}: ${describeEquipmentError(e)}"),
             backgroundColor: AraColors.accentError,
           ));
         }
@@ -171,7 +172,7 @@ class _Connected extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'Last change: ${status.lastTransitionAt}',
+              'Last change: ${_formatTransition(status.lastTransitionAt)}',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -194,7 +195,7 @@ class _Connected extends ConsumerWidget {
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't disconnect: ${_msg(e)}"),
+        content: Text("Couldn't disconnect: ${describeEquipmentError(e)}"),
         backgroundColor: AraColors.accentError,
       ));
     }
@@ -251,5 +252,12 @@ class _MessageRow extends StatelessWidget {
   }
 }
 
-String _msg(Object? e) =>
-    e == null ? 'unknown error' : e.toString().replaceFirst('Exception: ', '');
+/// Render the daemon's RFC3339 `last_transition_at` as a friendly local
+/// `YYYY-MM-DD HH:MM`, falling back to the raw string if it doesn't parse.
+String _formatTransition(String raw) {
+  final dt = DateTime.tryParse(raw);
+  if (dt == null) return raw;
+  final l = dt.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${l.year}-${two(l.month)}-${two(l.day)} ${two(l.hour)}:${two(l.minute)}';
+}

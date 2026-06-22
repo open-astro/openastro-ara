@@ -3,6 +3,19 @@ import 'package:dio/dio.dart';
 import '../models/discovered_device.dart';
 import '../models/server.dart';
 
+/// A short, user-facing message for an equipment API error. A [DioException]'s
+/// `toString()` dumps the request URL + headers + body (a multi-line paragraph in
+/// a SnackBar), so extract just the gist. Shared by every equipment panel.
+String describeEquipmentError(Object? e) {
+  if (e == null) return 'unknown error';
+  if (e is DioException) {
+    final code = e.response?.statusCode;
+    if (code != null) return 'server returned $code';
+    return e.message ?? 'network error';
+  }
+  return e.toString().replaceFirst('Exception: ', '');
+}
+
 /// Generic single-instance equipment-device REST client: live status +
 /// connect/disconnect over `/api/v1/equipment/{path}`. Every non-Switch Alpaca
 /// device shares this envelope (Switch is the multi-instance outlier with its own

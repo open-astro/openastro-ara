@@ -22,7 +22,14 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// Cadence of the mid-connect settle-poll. Matches the Switch panel's poll.
   static const Duration settleInterval = Duration(milliseconds: 1500);
 
+  /// Upper bound on settle-poll ticks (~60 s at [settleInterval]). A device
+  /// wedged in `connecting` — or a daemon that never settles it — must not keep
+  /// the timer (and its network reads) alive for the whole session. After the cap
+  /// the poll stops; the card holds its last state and the user can refresh.
+  static const int maxSettlePolls = 40;
+
   Timer? _settleTimer;
+  int _settleTicks = 0;
   // True while a manual (timer/user) refresh is in flight — a second is dropped so
   // a slow getStatus can't stack overlapping reads. Action-driven refreshes pass a
   // pinned client and bypass this guard (they must always re-read after the 202).
@@ -121,24 +128,34 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
 
   // Arm the settle-poll while the device is mid-connect; cancel it once the device
   // settles (or disconnects / errors). Idempotent — a no-op when a timer is already
-  // running for a still-connecting device, so repeated refreshes don't stack timers.
+  // running for a still-connecting device, so repeated refreshes keep the SAME
+  // timer + tick budget rather than restarting (or stacking) it.
   void _syncSettle(T? status) {
     final connecting = status?.isConnecting ?? false;
-    if (connecting) {
-      _settleTimer ??= Timer.periodic(settleInterval, (_) {
-        if (!ref.mounted) {
-          _cancelSettle();
-          return;
-        }
-        refresh();
-      });
-    } else {
+    if (!connecting) {
       _cancelSettle();
+      return;
     }
+    if (_settleTimer != null) return; // already polling this connect attempt
+    _settleTicks = 0;
+    _settleTimer = Timer.periodic(settleInterval, (_) {
+      if (!ref.mounted) {
+        _cancelSettle();
+        return;
+      }
+      // Bound the poll so a device stuck in `connecting` can't keep firing reads
+      // for the whole session (e.g. the network dropped after the connect 202).
+      if (++_settleTicks > maxSettlePolls) {
+        _cancelSettle();
+        return;
+      }
+      refresh();
+    });
   }
 
   void _cancelSettle() {
     _settleTimer?.cancel();
     _settleTimer = null;
+    _settleTicks = 0;
   }
 }
