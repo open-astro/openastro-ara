@@ -8,13 +8,11 @@ import 'package:openastroara/widgets/equipment/equipment_status_chip.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
 class _FakeStatus extends EquipmentDeviceStatus {
-  _FakeStatus(this._state, {bool busy = false}) : _busy = busy;
-  final EquipmentConnectionState _state;
-  final bool _busy;
+  _FakeStatus(this.connectionState, {this.isBusy = false});
   @override
-  EquipmentConnectionState get connectionState => _state;
+  final EquipmentConnectionState connectionState;
   @override
-  bool get isBusy => _busy;
+  final bool isBusy;
   @override
   String get name => 'fake';
 }
@@ -27,7 +25,7 @@ void main() {
           StatusLevel.connected);
       expect(
           equipmentStatusLevel(
-              _FakeStatus(EquipmentConnectionState.connected, busy: true)),
+              _FakeStatus(EquipmentConnectionState.connected, isBusy: true)),
           StatusLevel.busy);
       expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.connecting)),
           StatusLevel.info);
