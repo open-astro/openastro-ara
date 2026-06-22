@@ -109,12 +109,6 @@ public sealed partial class CameraService {
             _liveViewCts = null;
             _liveViewLoop = null;
             Volatile.Write(ref _liveViewActive, 0);
-            // Drop the last frame so GET /liveview/frame returns 204 once stopped — a client polling
-            // only the frame endpoint then has a staleness signal, not a frozen last image.
-            _liveViewJpeg = null;
-            if (cts is null && loop is null) {
-                return; // not running — no-op
-            }
             // Hold the mutex across the cancel + await so a concurrent Start can't spin up a second
             // loop in the gap and race this one on _captureInFlight.
             if (cts is not null) {
@@ -124,6 +118,11 @@ public sealed partial class CameraService {
                 await loop.ConfigureAwait(false); // the loop swallows its own faults; never throws here
             }
             cts?.Dispose();
+            // Drop the last frame so GET /liveview/frame returns 204 once stopped. This MUST come
+            // after `await loop`: cancellation can land during the non-cancellable ImageArray
+            // download, so the loop may still publish one final frame after we cancel — nulling
+            // before the await would let that late write resurrect a stale frame.
+            _liveViewJpeg = null;
         } finally {
             _liveViewMutex.Release();
         }
