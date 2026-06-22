@@ -47,6 +47,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void StartLiveViewAsync_rejects_exposure_over_the_cap() {
+            using var svc = new CameraService();
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.StartLiveViewAsync(new LiveViewStartRequestDto(120), CancellationToken.None));
+        }
+
+        [Test]
         public void StartLiveViewAsync_rejects_invalid_binning() {
             using var svc = new CameraService();
             Assert.ThrowsAsync<ArgumentOutOfRangeException>(

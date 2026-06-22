@@ -35,10 +35,17 @@ public sealed partial class CameraService {
 
     // Downscale cap for the live JPEG: framing/focus wants responsiveness over full resolution.
     private const int LiveViewMaxDim = 1024;
+    // Live View is for framing/focus; a long exposure both defeats that and would hold the capture
+    // gate (starving real captures/the sequencer) for its whole duration. Cap it.
+    private const double LiveViewMaxExposureSec = 60.0;
     private static readonly TimeSpan LiveViewInterFrameDelay = TimeSpan.FromMilliseconds(100);
 
     // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
-    // concurrent Start spinning up a second loop). State reads (status/frame) stay lock-free.
+    // concurrent Start spinning up a second loop). State reads (status/frame) stay lock-free. Not
+    // disposed: we never touch its AvailableWaitHandle, so there is no unmanaged resource to release,
+    // and disposing at teardown would throw ObjectDisposedException into any in-flight WaitAsync.
+    [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed",
+        Justification = "SemaphoreSlim allocates no unmanaged handle here (AvailableWaitHandle is never used); disposing it would race in-flight WaitAsync callers at teardown. GC reclaims it.")]
     private readonly SemaphoreSlim _liveViewMutex = new(1, 1);
     private CancellationTokenSource? _liveViewCts;
     private Task? _liveViewLoop;
@@ -51,8 +58,9 @@ public sealed partial class CameraService {
         int? Width, int? Height, double? ExposureSec, DateTimeOffset StartedAt, DateTimeOffset? LastFrameAt);
 
     public async Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) {
-        if (request.ExposureSec <= 0) {
-            throw new ArgumentOutOfRangeException(nameof(request), "ExposureSec must be positive.");
+        if (request.ExposureSec <= 0 || request.ExposureSec > LiveViewMaxExposureSec) {
+            throw new ArgumentOutOfRangeException(nameof(request),
+                $"ExposureSec must be in (0, {LiveViewMaxExposureSec}].");
         }
         if (request.BinX < 1 || request.BinY < 1) {
             throw new ArgumentOutOfRangeException(nameof(request), "BinX/BinY must be at least 1.");
@@ -69,6 +77,10 @@ public sealed partial class CameraService {
             // A self-terminated loop (e.g. camera disconnect) leaves its spent CTS behind; dispose it
             // before replacing so it isn't leaked.
             _liveViewCts?.Dispose();
+            // Fresh session: reset the frame counter + drop any frame from a prior session so
+            // FrameSeq == 0 / GET /frame → 204 reliably mean "no frame yet this session".
+            Interlocked.Exchange(ref _liveViewSeq, 0);
+            _liveViewJpeg = null;
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
             _liveViewMeta = new LiveViewMeta(null, null, request.ExposureSec, DateTimeOffset.UtcNow, null);
@@ -88,6 +100,9 @@ public sealed partial class CameraService {
             _liveViewCts = null;
             _liveViewLoop = null;
             Volatile.Write(ref _liveViewActive, 0);
+            // Drop the last frame so GET /liveview/frame returns 204 once stopped — a client polling
+            // only the frame endpoint then has a staleness signal, not a frozen last image.
+            _liveViewJpeg = null;
             if (cts is null && loop is null) {
                 return; // not running — no-op
             }
@@ -162,9 +177,10 @@ public sealed partial class CameraService {
     }
 
     private async Task CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, CancellationToken token) {
-        token.ThrowIfCancellationRequested();
         // Reuse the capture path's settings application (bin/gain, full-frame subframe).
         ApplyExposureSettings(client, new ExposureRequestDto(request.ExposureSec, request.Gain, BinX: request.BinX, BinY: request.BinY));
+        // ApplyExposureSettings is up to 7 Alpaca round-trips with no ct hook; honor a stop that
+        // arrived during it before kicking off an exposure we'd only abort on the first poll.
         token.ThrowIfCancellationRequested();
         client.StartExposure(request.ExposureSec, true);
 
@@ -204,7 +220,6 @@ public sealed partial class CameraService {
             try { cts.Cancel(); } catch (ObjectDisposedException) { }
             cts.Dispose();
         }
-        _liveViewMutex.Dispose();
     }
 
     [LoggerMessage(EventId = 6410, Level = LogLevel.Information,
