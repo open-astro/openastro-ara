@@ -1,5 +1,5 @@
 name: openastroara
-description: "WILMA — desktop client for the OpenAstro Ara astrophotography server (Phase 11 scaffold)."
+description: "OpenAstro Ara client — runs on WILMA: Windows, iOS, Linux, macOS, and Android (Phase 11 scaffold)."
 publish_to: 'none'
 
 version: 0.0.1+1
