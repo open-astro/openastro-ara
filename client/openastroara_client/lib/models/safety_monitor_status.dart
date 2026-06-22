@@ -6,6 +6,7 @@ import 'equipment_device_status.dart';
 /// connection state and the timestamp of the last safe⇄unsafe transition.
 class SafetyMonitorStatus extends EquipmentDeviceStatus {
   final String deviceId;
+  @override
   final String name;
   @override
   final EquipmentConnectionState connectionState;

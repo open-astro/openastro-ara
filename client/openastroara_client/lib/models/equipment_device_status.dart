@@ -26,6 +26,10 @@ EquipmentConnectionState equipmentConnectionStateFromWire(String? token) {
 abstract class EquipmentDeviceStatus {
   EquipmentConnectionState get connectionState;
 
+  /// The device's display name (the `name` field of the status envelope); may be
+  /// empty if the daemon didn't supply one.
+  String get name;
+
   bool get isConnecting => connectionState == EquipmentConnectionState.connecting;
   bool get isConnected => connectionState == EquipmentConnectionState.connected;
 }
