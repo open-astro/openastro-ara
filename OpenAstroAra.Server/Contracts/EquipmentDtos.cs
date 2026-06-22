@@ -91,6 +91,10 @@ public sealed record CameraStateDto(
     bool CoolerOn,
     double? ExposureProgressPct);
 
+// Cooler control: turn the cooler on/off and (when on) set the target CCD
+// temperature. TargetTemperatureC is ignored when Enabled is false.
+public sealed record CameraCoolerRequestDto(bool Enabled, double? TargetTemperatureC = null);
+
 public sealed record ExposureRequestDto(
     double ExposureSec,
     int? Gain,
