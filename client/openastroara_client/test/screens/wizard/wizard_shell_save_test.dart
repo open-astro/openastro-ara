@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_shell.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
@@ -33,6 +35,13 @@ class _FakeProfileApi extends ProfileApi {
     createCalls++;
     await _gate.future; // hold the save in-flight until the test releases it
     return ProfileMeta(id: 'profile-1', name: name);
+  }
+
+  int listCalls = 0;
+  @override
+  Future<ProfileList> listProfiles() async {
+    listCalls++;
+    return const ProfileList(activeId: null, profiles: []);
   }
 
   @override
@@ -133,5 +142,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(completed, isTrue);
+  });
+
+  testWidgets('a successful save refreshes the profile list (so the new profile shows)',
+      (tester) async {
+    // The bug: the wizard saved the profile on the daemon but the cached
+    // profile-list provider was never invalidated, so the new profile didn't
+    // appear and it looked like nothing saved. The wizard now invalidates it.
+    final api = _FakeProfileApi();
+    final container = ProviderContainer(overrides: [
+      activeServerProvider
+          .overrideWithValue(const AraServer(hostname: 'daemon', port: 5555)),
+      // The list provider reads the API through profileApiProvider — point it at
+      // the same fake so we can count list re-fetches.
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    addTearDown(container.dispose);
+    // Keep the list provider alive so an invalidate triggers a real re-fetch.
+    container.listen(profileManagementProvider, (_, _) {});
+    await container.read(profileManagementProvider.future);
+    expect(api.listCalls, 1, reason: 'initial load fetched the list once');
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+      ),
+    ));
+    await tester.tap(find.text('Save & Exit'));
+    await tester.pump();
+    api.releaseCreate();
+    await tester.pumpAndSettle();
+
+    expect(api.listCalls, 2,
+        reason: 'a successful save invalidates + re-fetches the profile list');
   });
 }
