@@ -144,11 +144,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   }
 }
 
-/// A single assignable equipment slot on Screen 3 — binds a discovery
-/// [type] (null = not discoverable yet) to a draft getter/setter.
+/// A single assignable equipment slot on Screen 3 — binds a discovery [type] to
+/// a draft getter/setter.
 class _Slot {
   final String label;
-  final EquipmentDeviceType? type;
+  final EquipmentDeviceType type;
   final String? Function(ProfileDraft) get;
   final void Function(ProfileDraft, String?) set;
   const _Slot(this.label, this.type, this.get, this.set);
@@ -165,10 +165,10 @@ const List<_Slot> _slots = <_Slot>[
   _Slot('Safety Monitor', EquipmentDeviceType.safetyMonitor, _gSafe, _sSafe),
   _Slot('Flat Panel', EquipmentDeviceType.flatPanel, _gFlat, _sFlat),
   _Slot('Guider (PHD2)', EquipmentDeviceType.guider, _gGuider, _sGuider),
-  // Switch is intentionally not discoverable here yet — multi-switch support
-  // is specced in §6.4 but not wired into discovery; shown disabled so the
-  // slot list still mirrors §37.2 without implying it works.
-  _Slot('Switch', null, _gSwitch, _sSwitch),
+  // Switch discovers like any other Alpaca device (§6.4 multi-switch is wired).
+  // The wizard assigns one switch as the profile's default; additional switches
+  // are added at runtime from Settings → Switch.
+  _Slot('Switch', EquipmentDeviceType.switchDevice, _gSwitch, _sSwitch),
 ];
 
 String? _gCamera(ProfileDraft d) => d.equipment.cameraDeviceId;
@@ -219,7 +219,6 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
 
   Future<void> _choose(_Slot slot) async {
     final type = slot.type;
-    if (type == null) return;
     final servers = ref.read(savedServersProvider).maybeWhen(
           data: (list) => list,
           orElse: () => const [],
@@ -260,7 +259,6 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
 
   Widget _slotRow(BuildContext context, _Slot slot) {
     final assignedId = slot.get(_draft);
-    final discoverable = slot.type != null;
     final assignedLabel = assignedId == null
         ? '— None'
         : (_assignedNames[slot.type] ?? assignedId);
@@ -281,18 +279,12 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(slot.label,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: discoverable
-                                ? AraColors.textPrimary
-                                : AraColors.textDisabled,
-                          )),
+                      style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: 2),
                   Text(
-                    discoverable
-                        ? assignedLabel
-                        : 'Multi-switch support is in progress (§6.4)',
+                    assignedLabel,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: assignedId != null && discoverable
+                          color: assignedId != null
                               ? AraColors.accentConnected
                               : AraColors.textSecondary,
                         ),
@@ -300,13 +292,10 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
                 ],
               ),
             ),
-            if (discoverable)
-              TextButton(
-                onPressed: () => _choose(slot),
-                child: Text(assignedId == null ? 'Choose' : 'Change'),
-              )
-            else
-              const SizedBox.shrink(),
+            TextButton(
+              onPressed: () => _choose(slot),
+              child: Text(assignedId == null ? 'Choose' : 'Change'),
+            ),
           ],
         ),
       ),
