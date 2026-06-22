@@ -277,7 +277,7 @@ namespace OpenAstroAra.Test {
             public Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceDto?> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) => throw new NotSupportedException();
             public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
-            public Task<SequenceShareDto> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+            public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
         }
 
         /// <summary>Records the event types published, to assert the WS lifecycle.</summary>
@@ -309,7 +309,7 @@ namespace OpenAstroAra.Test {
             public Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceDto?> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) => throw new NotSupportedException();
             public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
-            public Task<SequenceShareDto> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+            public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
         }
     }
 }

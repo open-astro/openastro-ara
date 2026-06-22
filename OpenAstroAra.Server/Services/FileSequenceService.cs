@@ -158,25 +158,24 @@ public sealed partial class FileSequenceService : ISequenceService {
         }
     }
 
-    public Task<SequenceShareDto> ShareExportAsync(Guid id, CancellationToken ct) {
+    public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) {
         var path = PathFor(id);
-        SequenceDto? existing = File.Exists(path) ? TryLoadFile(path) : null;
-        // Endpoint catches null Get for 404; the share contract is non-null.
-        // Synthesize an empty share for unknown ids (placeholder semantic that
-        // matches the prior in-memory impl).
-        existing ??= new SequenceDto(
-            Id: id, Name: "Unknown sequence", Description: null,
-            CreatedUtc: DateTimeOffset.UtcNow, ModifiedUtc: DateTimeOffset.UtcNow,
-            Body: JsonDocument.Parse("{}").RootElement.Clone(),
-            TemplateOrigin: null);
-        var manifestBytes = existing.Body.GetRawText().Length;
-        return Task.FromResult(new SequenceShareDto(
+        var existing = File.Exists(path) ? TryLoadFile(path) : null;
+        // Unknown (or unreadable) id → null so the endpoint returns 404, mirroring
+        // the profile-share contract — exporting a deleted sequence is a miss, not
+        // an empty placeholder share.
+        if (existing is null) return Task.FromResult<SequenceShareDto?>(null);
+        // PayloadBytes is the inline manifest's UTF-8 size (what the client will
+        // write to the .araseq.json file), not the on-disk SequenceDto wrapper.
+        var manifestBytes = System.Text.Encoding.UTF8.GetByteCount(existing.Body.GetRawText());
+        return Task.FromResult<SequenceShareDto?>(new SequenceShareDto(
             SequenceId: existing.Id,
             SequenceName: existing.Name,
             ShareFormat: "openastroara.v1",
             Manifest: existing.Body,
             PayloadBytes: manifestBytes,
-            DownloadUrl: new Uri($"/api/v1/sequences/{existing.Id}/share/payload", UriKind.Relative)));
+            // Manifest carries the share inline; no payload route (mirrors profiles).
+            DownloadUrl: null));
     }
 
     private string PathFor(Guid id) => Path.Combine(_libraryDir, $"{id:D}.json");

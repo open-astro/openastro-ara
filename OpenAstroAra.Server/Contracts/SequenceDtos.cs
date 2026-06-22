@@ -147,14 +147,19 @@ public sealed record SequenceImportResultDto(
     IReadOnlyList<string> DroppedInstructionTypes,
     bool LossyTranslation);
 
-/// <summary>POST /api/v1/sequences/{id}/share-export body. Returns SequenceShareDto per §70.</summary>
+/// <summary>Result of POST /api/v1/sequences/{id}/share-export (§70.5). The share
+/// JSON rides inline in <see cref="Manifest"/> — the client writes it straight to
+/// the chosen `.araseq.json` file — mirroring the profile-share contract
+/// (<c>ProfileShareDto</c>).</summary>
 public sealed record SequenceShareDto(
     Guid SequenceId,
     string SequenceName,
     string ShareFormat,
     System.Text.Json.JsonElement Manifest,
     long PayloadBytes,
-    Uri DownloadUrl);
+    // Null in v0.0.1: Manifest carries the share inline, so there is no payload
+    // route to GET (mirrors ProfileShareDto.DownloadUrl).
+    Uri? DownloadUrl);
 
 /// <summary>POST /api/v1/sequences/{id}/auto-flats-decision body per §48.</summary>
 public sealed record AutoFlatsDecisionRequestDto(
