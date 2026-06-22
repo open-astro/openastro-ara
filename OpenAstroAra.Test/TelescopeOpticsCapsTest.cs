@@ -46,6 +46,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void OpticsMmFromMetres_converts_and_zero_guards() {
+            // ASCOM reports metres; the wizard wants mm.
+            Assert.That(
+                OpenAstroAra.Server.Services.TelescopeService.OpticsMmFromMetres(0.714),
+                Is.EqualTo(714).Within(1e-6));
+            // An unconfigured driver returning 0 (or a bogus negative) → null, so the
+            // wizard never auto-fills a useless 0 mm.
+            Assert.That(
+                OpenAstroAra.Server.Services.TelescopeService.OpticsMmFromMetres(0), Is.Null);
+            Assert.That(
+                OpenAstroAra.Server.Services.TelescopeService.OpticsMmFromMetres(-1), Is.Null);
+        }
+
+        [Test]
         public void Optics_are_null_when_the_mount_does_not_report_them() {
             // Most mounts NotImplement FocalLength/ApertureDiameter — they ride the
             // wire as null (default), and the wizard then leaves the manual fields.
