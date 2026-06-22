@@ -44,7 +44,8 @@ public sealed partial class CameraService {
     // After this many consecutive frames that fail or never produce an image, self-stop the loop
     // rather than spinning forever with Active=true / FrameSeq=0 — a misconfig (e.g. a binning the
     // driver rejects) or a persistently-faulting device then surfaces as Active=false, not a silent
-    // "running but never delivering" state.
+    // "running but never delivering" state. A self-stop signals a config/device problem to act on,
+    // not a transient glitch (transient failures reset the counter on the next good frame).
     private const int LiveViewMaxConsecutiveFailures = 10;
     // Reject an absurd binning up front (→ 400) rather than let the driver fail every frame until the
     // consecutive-failure self-stop trips. 16 covers any real sensor.
@@ -122,6 +123,10 @@ public sealed partial class CameraService {
         LogLiveViewStarted(request.ExposureSec, request.BinX, request.BinY);
     }
 
+    // The passed `ct` is intentionally NOT honored — a stop always runs to completion once
+    // requested; a caller cannot race-cancel it. The endpoint therefore returns 202 only after the
+    // loop has fully drained (up to LiveViewMaxExposureSec on a slow ImageArray download), so by the
+    // time the caller sees 202, status is already Active=false / FrameSeq=0.
     public async Task StopLiveViewAsync(CancellationToken ct) {
         // CancellationToken.None, NOT ct: a stop must always run to completion once requested. If we
         // honored ct and the caller (HTTP request) disconnected while we were waiting for the mutex
@@ -289,8 +294,11 @@ public sealed partial class CameraService {
         return true;
     }
 
-    // Called from Dispose: cancel the loop promptly without awaiting (the loop also breaks on the
-    // _disposed/_client guard), and release the CTS.
+    // Called from Dispose: cancel the loop promptly without awaiting it, and release the CTS. Not
+    // awaiting is safe — the orphaned loop always completes on its own: it breaks on the
+    // _disposed/_client guard, and even if it's mid-download when Dispose tears down the
+    // AlpacaCamera, the synchronous client.ImageArray throws ObjectDisposedException, which the
+    // loop's top-level catch(Exception) absorbs (it never faults the task).
     private void CancelLiveViewForDispose() {
         var cts = _liveViewCts;
         _liveViewCts = null;
