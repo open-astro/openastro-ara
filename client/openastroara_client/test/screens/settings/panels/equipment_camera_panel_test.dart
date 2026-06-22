@@ -115,6 +115,14 @@ void main() {
     expect(api.calls, contains('command:cooler:enabled=true:target=-15.0'));
   });
 
+  testWidgets('toggling the cooler Switch sends enabled only (no set-point)',
+      (tester) async {
+    final api = await _pump(tester, _status());
+    await tester.tap(find.byType(Switch).first); // cooler switch (not auto-connect)
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:cooler:enabled=true:target=null'));
+  });
+
   testWidgets('no cooler control when the camera cannot set temperature',
       (tester) async {
     await _pump(tester, _status(canSetTemperature: false));

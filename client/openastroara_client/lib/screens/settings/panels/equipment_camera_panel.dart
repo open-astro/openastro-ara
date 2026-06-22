@@ -150,8 +150,11 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
         child: Row(children: [Expanded(child: Text(label)), Text(value)]),
       );
 
-  Future<void> _setCooler(bool on) => _run(() =>
-      ref.read(cameraStatusProvider.notifier).setCooler(on, targetTemperatureC: _parseTarget()));
+  // The Switch only toggles the cooler. CoolerOn and the set-point are
+  // independent ASCOM properties, so toggling never carries a (possibly stale)
+  // target — that's the "Set target" button's job.
+  Future<void> _setCooler(bool on) =>
+      _run(() => ref.read(cameraStatusProvider.notifier).setCooler(on));
 
   Future<void> _setTarget() async {
     final messenger = ScaffoldMessenger.of(context);
