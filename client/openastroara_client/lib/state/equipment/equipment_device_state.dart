@@ -76,6 +76,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // stop it when the last listener leaves (no point polling a device nobody is
     // viewing — overnight that'd be thousands of idle GETs), and on a listener's
     // return do an immediate fresh read which re-arms the poll if still connected.
+    // Only the LIVE poll is paused on listener-loss; the settle-poll is left to run
+    // (it's brief + capped, and under the default no-keepAlive lifecycle a fully
+    // listener-less notifier is disposed — onDispose → _cancelAllPolls tears down
+    // both timers). If this provider ever gains keepAlive, also cancel settle here.
     ref.onCancel(_cancelLive);
     ref.onResume(() {
       if (ref.mounted) refresh();
