@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/profile_draft.dart';
 import '../../../models/server.dart';
 import '../../../services/camera_geometry_api.dart';
+import '../../../services/filter_wheel_names_api.dart';
 import '../../../services/telescope_optics_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/wizard_state.dart';
@@ -119,8 +120,18 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
         if (optics.apertureMm != null) _t.apertureMm = optics.apertureMm;
         _seed++;
       });
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Filled optics from the connected mount.')));
+      // Be specific about what came back: a mount often reports one but not the
+      // other, so a blanket "filled optics" would hide that the user still needs
+      // to enter the missing field by hand.
+      final filled = [
+        if (optics.focalLengthMm != null) 'focal length',
+        if (optics.apertureMm != null) 'aperture',
+      ].join(' + ');
+      final missingNote = optics.focalLengthMm == null || optics.apertureMm == null
+          ? ' (the mount didn\'t report the other — enter it manually)'
+          : '';
+      messenger.showSnackBar(SnackBar(
+          content: Text('Filled $filled from the connected mount.$missingNote')));
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
@@ -336,6 +347,48 @@ class ScreenFilterWheel extends ConsumerStatefulWidget {
 
 class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
   late final FilterWheelSettings _fw = _draftOf(ref).filterWheel;
+  bool _refreshing = false;
+
+  Future<void> _refreshFromWheel() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the filter wheel.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      final wheel = await FilterWheelNamesApi(server).read();
+      if (!mounted) return;
+      if (wheel == null || wheel.slots.isEmpty) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Connect a filter wheel that reports its slots first.')));
+        return;
+      }
+      setState(() {
+        // Replace the slots with what the wheel reports — fresh FilterDef objects
+        // so each row's ObjectKey changes and its (uncontrolled) name field
+        // re-seeds. type/wavelength have no Alpaca source, so they stay blank for
+        // the user to fill.
+        _fw.filters
+          ..clear()
+          ..addAll(wheel.slots.map((s) => FilterDef()
+            ..name = s.name.trim().isEmpty ? null : s.name.trim()
+            ..focusOffsetSteps = s.focusOffset));
+      });
+      messenger.showSnackBar(SnackBar(
+          content: Text('Loaded ${wheel.slots.length} slot(s) from the connected '
+              'filter wheel.')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+            SnackBar(content: Text('Could not read the filter wheel: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +397,11 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
       intro: 'Name each filter slot. Focus offsets are left blank — they '
           'populate automatically on the first autofocus run per filter.',
       children: [
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected filter wheel',
+          busy: _refreshing,
+          onPressed: _refreshFromWheel,
+        ),
         for (int i = 0; i < _fw.filters.length; i++)
           _filterRow(context, i, _fw.filters[i]),
         const SizedBox(height: 4),
