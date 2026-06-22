@@ -28,6 +28,9 @@ class LiveFrameState {
 
   static const idle = LiveFrameState();
 
+  /// Note the sentinel params: `jpeg: null` / `error: null` are no-ops (they
+  /// keep the current value, the usual copyWith convention); pass `clearJpeg` /
+  /// `clearError` to actually blank those fields.
   LiveFrameState copyWith({
     Uint8List? jpeg,
     int? seq,
@@ -79,7 +82,8 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     _api = null;
     // Force-close a stop() still draining the server so its Dio socket doesn't
     // linger up to the ~15 s drain after the notifier is gone (cancels the
-    // in-flight request; stop()'s finally then no-ops on the closed client).
+    // in-flight request). stop()'s finally then calls close() again — an
+    // intentional, harmless double-close (Dio.close is idempotent).
     _stoppingApi?.close();
     _stoppingApi = null;
   }
