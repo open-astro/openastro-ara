@@ -1,7 +1,13 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
+import '../../../models/server.dart';
+import '../../../services/camera_geometry_api.dart';
+import '../../../services/filter_wheel_names_api.dart';
+import '../../../services/telescope_optics_api.dart';
+import '../../../state/saved_server_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
@@ -30,6 +36,52 @@ void _assignDouble(String raw, void Function(double?) set) {
 ProfileDraft _draftOf(WidgetRef ref) =>
     ref.read(wizardControllerProvider).draft;
 
+/// A short, user-facing message for a refresh failure — never the full
+/// DioException dump (which carries the request URL / response body / internal
+/// addresses).
+String _describeError(Object e) =>
+    e is DioException ? (e.message ?? 'network error') : e.toString();
+
+/// The active daemon server, or null when none is connected — the wizard's
+/// "Refresh from connected device" affordances read the device through it.
+AraServer? _activeServer(WidgetRef ref) => ref.read(savedServersProvider).maybeWhen(
+      data: (list) => list.isEmpty ? null : list.last,
+      orElse: () => null,
+    );
+
+/// "Refresh from connected device" button shared by the per-device wizard
+/// screens (§37): pulls the device's real settings off AlpacaBridge into the
+/// draft so the user doesn't hand-type what the daemon already knows. Shows a
+/// spinner while reading; the screen owns the actual read + draft write.
+class _RefreshFromDeviceButton extends StatelessWidget {
+  const _RefreshFromDeviceButton({
+    required this.label,
+    required this.busy,
+    required this.onPressed,
+  });
+  final String label;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: busy ? null : onPressed,
+          icon: busy
+              ? const SizedBox(
+                  width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.download_for_offline_outlined, size: 16),
+          label: Text(busy ? 'Reading…' : label),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Screen 4 — Telescope ────────────────────────────────────────────────────
 
 class ScreenTelescope extends ConsumerStatefulWidget {
@@ -40,11 +92,61 @@ class ScreenTelescope extends ConsumerStatefulWidget {
 
 class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
   late final TelescopeSettings _t = _draftOf(ref).telescope;
+  // Bumped on a successful refresh so the focal-length/aperture fields — which
+  // are uncontrolled (WizardTextField seeds from initialValue once) — re-seed to
+  // show the pulled values instead of the user's stale/empty entry.
+  int _seed = 0;
+  bool _refreshing = false;
 
   String get _focalRatio {
     final fl = _t.focalLengthMm, ap = _t.apertureMm;
     if (fl == null || ap == null || ap == 0) return '—';
     return 'f/${(fl / ap).toStringAsFixed(1)}';
+  }
+
+  Future<void> _refreshFromMount() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the mount.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      final optics = await TelescopeOpticsApi(server).read();
+      if (!mounted) return;
+      if (optics == null || !optics.hasAny) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Connect a mount that reports its focal length/aperture '
+                '(many don\'t), or enter them manually.')));
+        return;
+      }
+      setState(() {
+        if (optics.focalLengthMm != null) _t.focalLengthMm = optics.focalLengthMm;
+        if (optics.apertureMm != null) _t.apertureMm = optics.apertureMm;
+        _seed++;
+      });
+      // Be specific about what came back: a mount often reports one but not the
+      // other, so a blanket "filled optics" would hide that the user still needs
+      // to enter the missing field by hand.
+      final filled = [
+        if (optics.focalLengthMm != null) 'focal length',
+        if (optics.apertureMm != null) 'aperture',
+      ].join(' + ');
+      final missingNote = optics.focalLengthMm == null || optics.apertureMm == null
+          ? ' (the mount didn\'t report the other — enter it manually)'
+          : '';
+      messenger.showSnackBar(SnackBar(
+          content: Text('Filled $filled from the connected mount.$missingNote')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+            SnackBar(content: Text('Could not read the mount: ${_describeError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   @override
@@ -54,29 +156,40 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
       intro: 'Your imaging telescope. Focal length and aperture drive the FOV, '
           'image scale, and survey recommendations.',
       children: [
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected mount',
+          busy: _refreshing,
+          onPressed: _refreshFromMount,
+        ),
         WizardTextField(
           label: 'Telescope name',
           initialValue: _t.name,
           hint: 'e.g. ES ED102',
           onChanged: (v) => _t.name = v.trim().isEmpty ? null : v.trim(),
         ),
-        WizardTextField(
-          label: 'Focal length (mm)',
-          required: true,
-          initialValue: _t.focalLengthMm?.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) =>
-              setState(() => _assignDouble(v, (d) => _t.focalLengthMm = d)),
+        KeyedSubtree(
+          key: ValueKey('fl-$_seed'),
+          child: WizardTextField(
+            label: 'Focal length (mm)',
+            required: true,
+            initialValue: _t.focalLengthMm?.toString(),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            onChanged: (v) =>
+                setState(() => _assignDouble(v, (d) => _t.focalLengthMm = d)),
+          ),
         ),
-        WizardTextField(
-          label: 'Aperture (mm)',
-          required: true,
-          initialValue: _t.apertureMm?.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) =>
-              setState(() => _assignDouble(v, (d) => _t.apertureMm = d)),
+        KeyedSubtree(
+          key: ValueKey('ap-$_seed'),
+          child: WizardTextField(
+            label: 'Aperture (mm)',
+            required: true,
+            initialValue: _t.apertureMm?.toString(),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            onChanged: (v) =>
+                setState(() => _assignDouble(v, (d) => _t.apertureMm = d)),
+          ),
         ),
         WizardDerivedValue(label: 'Focal ratio', value: _focalRatio),
       ],
@@ -95,6 +208,43 @@ class ScreenCamera extends ConsumerStatefulWidget {
 class _ScreenCameraState extends ConsumerState<ScreenCamera> {
   late final ProfileDraft _draft = _draftOf(ref);
   late final CameraSettings _c = _draft.camera;
+  // Re-seeds the (uncontrolled) pixel-size field after a refresh — see the
+  // telescope screen for the same pattern.
+  int _seed = 0;
+  bool _refreshing = false;
+
+  Future<void> _refreshFromCamera() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the camera.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      final geometry = await CameraGeometryApi(server).read();
+      if (!mounted) return;
+      if (geometry == null) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Connect a camera that reports its sensor first.')));
+        return;
+      }
+      setState(() {
+        _c.pixelSizeMicrons = geometry.pixelSizeUm;
+        _seed++;
+      });
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Filled pixel size from the connected camera.')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+            SnackBar(content: Text('Could not read the camera: ${_describeError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   String get _imageScale {
     final px = _c.pixelSizeMicrons, fl = _draft.telescope.focalLengthMm;
@@ -117,6 +267,11 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
       step: 5,
       intro: 'Cooling, default capture parameters, and sensor geometry.',
       children: [
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected camera',
+          busy: _refreshing,
+          onPressed: _refreshFromCamera,
+        ),
         WizardTextField(
           label: 'Cooling target (°C)',
           initialValue: _c.coolingTargetC?.toString(),
@@ -171,14 +326,17 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
           inputFormatters: WizardInput.unsignedInt,
           onChanged: (v) => _c.defaultBin = _toInt(v),
         ),
-        WizardTextField(
-          label: 'Pixel size (µm)',
-          initialValue: _c.pixelSizeMicrons?.toString(),
-          helperText: 'Auto-filled from Alpaca when connected; editable.',
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) =>
-              setState(() => _assignDouble(v, (d) => _c.pixelSizeMicrons = d)),
+        KeyedSubtree(
+          key: ValueKey('px-$_seed'),
+          child: WizardTextField(
+            label: 'Pixel size (µm)',
+            initialValue: _c.pixelSizeMicrons?.toString(),
+            helperText: 'Auto-filled from Alpaca when connected; editable.',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            onChanged: (v) =>
+                setState(() => _assignDouble(v, (d) => _c.pixelSizeMicrons = d)),
+          ),
         ),
         WizardDerivedValue(label: 'Image scale', value: _imageScale),
       ],
@@ -196,6 +354,77 @@ class ScreenFilterWheel extends ConsumerStatefulWidget {
 
 class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
   late final FilterWheelSettings _fw = _draftOf(ref).filterWheel;
+  bool _refreshing = false;
+
+  Future<void> _refreshFromWheel() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the filter wheel.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      final wheel = await FilterWheelNamesApi(server).read();
+      if (!mounted) return;
+      if (wheel == null || wheel.slots.isEmpty) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Connect a filter wheel that reports its slots first.')));
+        return;
+      }
+      // Replacing the list wipes anything the user already typed (names,
+      // wavelengths, offsets). Confirm first if there's existing data, so a
+      // fat-fingered Refresh can't silently destroy it.
+      final hasUserData = _fw.filters.any((f) =>
+          (f.name?.isNotEmpty ?? false) ||
+          f.type != null ||
+          f.wavelengthNm != null ||
+          f.focusOffsetSteps != null);
+      if (hasUserData) {
+        final replace = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Replace your filters?'),
+            content: Text('Load ${wheel.slots.length} slot(s) from the connected '
+                'wheel, replacing your ${_fw.filters.length} current filter(s)? '
+                'Names + focus offsets come from the wheel; any wavelengths/types '
+                'you entered are cleared.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Replace')),
+            ],
+          ),
+        );
+        if (replace != true || !mounted) return;
+      }
+      setState(() {
+        // Replace the slots with what the wheel reports — fresh FilterDef objects
+        // so each row's ObjectKey changes and its (uncontrolled) name field
+        // re-seeds. type/wavelength have no Alpaca source, so they stay blank for
+        // the user to fill.
+        _fw.filters
+          ..clear()
+          ..addAll(wheel.slots.map((s) => FilterDef()
+            ..name = s.name.trim().isEmpty ? null : s.name.trim()
+            ..focusOffsetSteps = s.focusOffset));
+      });
+      messenger.showSnackBar(SnackBar(
+          content: Text('Loaded ${wheel.slots.length} slot(s) from the connected '
+              'filter wheel.')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+            SnackBar(content: Text('Could not read the filter wheel: ${_describeError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -204,6 +433,11 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
       intro: 'Name each filter slot. Focus offsets are left blank — they '
           'populate automatically on the first autofocus run per filter.',
       children: [
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected filter wheel',
+          busy: _refreshing,
+          onPressed: _refreshFromWheel,
+        ),
         for (int i = 0; i < _fw.filters.length; i++)
           _filterRow(context, i, _fw.filters[i]),
         const SizedBox(height: 4),
