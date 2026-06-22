@@ -26,6 +26,9 @@ final safetyMonitorApiProvider =
         orElse: () => null,
       )));
   if (server == null) return null;
+  // A fresh Dio-backed client is built per active-server change and torn down via
+  // onDispose; fine for the low connection churn here. (Pattern the other
+  // single-instance device panels reuse.)
   final api = ref.watch(safetyMonitorApiFactoryProvider)(server);
   ref.onDispose(api.close);
   return api;

@@ -117,7 +117,9 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     final gen = _generation;
     try {
       final api = client ?? readClient();
-      // Keep the prior status visible while reloading (don't flash blank).
+      // AsyncValue.guard captures the read into data/error rather than throwing;
+      // `state` isn't reassigned until it resolves, so the prior status stays
+      // visible while the read is in flight (no blank flash).
       final next = await AsyncValue.guard<T?>(() async {
         if (api == null) return null;
         return api.getStatus();

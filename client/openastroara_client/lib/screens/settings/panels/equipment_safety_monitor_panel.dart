@@ -256,12 +256,15 @@ class _MessageRow extends StatelessWidget {
   }
 }
 
-/// Render the daemon's RFC3339 `last_transition_at` as a friendly local
-/// `YYYY-MM-DD HH:MM`, falling back to the raw string if it doesn't parse.
+/// Render the daemon's RFC3339 `last_transition_at` as `YYYY-MM-DD HH:MM UTC`,
+/// falling back to the raw string if it doesn't parse. Shown in UTC (with an
+/// explicit label) rather than device-local time — astronomy sessions are
+/// conventionally logged in UTC, and an unmarked local time misleads remote/
+/// observatory users.
 String _formatTransition(String raw) {
   final dt = DateTime.tryParse(raw);
   if (dt == null) return raw;
-  final l = dt.toLocal();
+  final u = dt.toUtc();
   String two(int n) => n.toString().padLeft(2, '0');
-  return '${l.year}-${two(l.month)}-${two(l.day)} ${two(l.hour)}:${two(l.minute)}';
+  return '${u.year}-${two(u.month)}-${two(u.day)} ${two(u.hour)}:${two(u.minute)} UTC';
 }
