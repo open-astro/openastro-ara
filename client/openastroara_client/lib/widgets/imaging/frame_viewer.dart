@@ -97,7 +97,12 @@ class _LiveView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text('LIVE',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      // Pin to black for legibility on the amber accentBusy badge,
+                      // independent of the theme's default foreground.
+                      color: Colors.black,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
             ),
           ),
           if (state.error != null)

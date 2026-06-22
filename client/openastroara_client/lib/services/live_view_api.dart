@@ -78,9 +78,12 @@ class LiveViewApi implements LiveViewClient {
     if (res.statusCode == 204) return null;
     final bytes = res.data;
     if (bytes == null || bytes.isEmpty) return null;
+    // ResponseType.bytes already materialises a Uint8List — avoid re-copying the
+    // multi-KB JPEG on every poll tick (constant GC pressure at ~4 Hz).
+    final u8 = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
     final seq = int.tryParse(res.headers.value('x-frame-seq') ?? '') ?? 0;
     final session = int.tryParse(res.headers.value('x-live-session') ?? '') ?? 0;
-    return LiveFrame(Uint8List.fromList(bytes), seq, session);
+    return LiveFrame(u8, seq, session);
   }
 
   @override

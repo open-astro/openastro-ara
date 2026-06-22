@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/server.dart';
@@ -56,7 +57,9 @@ final liveViewApiFactoryProvider =
 class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   Timer? _timer;
   LiveViewClient? _api;
+  int _consecutiveErrors = 0;
   static const _pollInterval = Duration(milliseconds: 250);
+  static const _maxBackoff = Duration(seconds: 5);
 
   @override
   LiveFrameState build() {
@@ -91,6 +94,7 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     }
     _timer?.cancel();
     _api?.close();
+    _consecutiveErrors = 0;
     final api = ref.read(liveViewApiFactoryProvider)(server);
     _api = api;
     try {
@@ -123,7 +127,15 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   }
 
   void _scheduleNext() {
-    _timer = Timer(_pollInterval, () async {
+    // Back off after consecutive errors so a sustained server failure (camera
+    // dropped mid-session) doesn't hammer the endpoint — and re-render the
+    // viewer — at the full 4 Hz; capped at _maxBackoff.
+    final delay = _consecutiveErrors == 0
+        ? _pollInterval
+        : Duration(
+            milliseconds: (_pollInterval.inMilliseconds * (1 << _consecutiveErrors.clamp(1, 5)))
+                .clamp(_pollInterval.inMilliseconds, _maxBackoff.inMilliseconds));
+    _timer = Timer(delay, () async {
       final api = _api;
       if (api == null || !state.active) return;
       try {
@@ -131,12 +143,14 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
         // A stop() (or a new start) can race in during the await — don't write a
         // stale frame onto the idle/next-session state.
         if (_api != api || !state.active) return;
+        _consecutiveErrors = 0;
         if (f != null && (f.session != state.session || f.seq != state.seq)) {
           state = state.copyWith(
               jpeg: f.bytes, seq: f.seq, session: f.session, clearError: true);
         }
       } catch (e) {
         if (_api != api || !state.active) return;
+        _consecutiveErrors++;
         state = state.copyWith(error: _describe(e));
       }
       // Re-arm only while still live (stop() nulls _api and flips active).
@@ -146,7 +160,15 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     });
   }
 
-  static String _describe(Object e) => e.toString();
+  /// A short, user-facing message — never the multi-line DioException dump.
+  static String _describe(Object e) {
+    if (e is DioException) {
+      final code = e.response?.statusCode;
+      if (code != null) return 'server returned $code';
+      return e.message ?? 'network error';
+    }
+    return e.toString();
+  }
 }
 
 final liveViewFrameProvider =
