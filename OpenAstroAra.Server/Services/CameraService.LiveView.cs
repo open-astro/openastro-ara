@@ -258,7 +258,15 @@ public sealed partial class CameraService {
         token.ThrowIfCancellationRequested();
         client.StartExposure(request.ExposureSec, true);
 
-        var ready = await WaitForImageReadyAsync(client, request.ExposureSec, token).ConfigureAwait(false);
+        bool? ready;
+        try {
+            ready = await WaitForImageReadyAsync(client, request.ExposureSec, token).ConfigureAwait(false);
+        } catch (OperationCanceledException) when (token.IsCancellationRequested) {
+            // A stop arrived mid-wait: the exposure is still running on the device. Abort it before
+            // propagating, so the next session's StartExposure doesn't collide with a live exposure.
+            TryAbortQuietly(client);
+            throw;
+        }
         if (ready != true) {
             // false = device didn't reach ImageReady in time; null = dropped/superseded. Either way
             // WaitForImageReadyAsync does NOT abort, so the exposure may still be running — abort it
@@ -267,6 +275,8 @@ public sealed partial class CameraService {
             TryAbortQuietly(client);
             return false; // skip this frame, the loop retries
         }
+        // Exposure already completed (ImageReady): the camera holds a finished image, so a cancel
+        // here needs no abort — nothing is running to stop.
         token.ThrowIfCancellationRequested();
 
         object? imageArray;
