@@ -61,6 +61,7 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   // session's stop can't reach the (single-session) server AFTER the new start
   // and kill it.
   Future<void>? _stopInFlight;
+  LiveViewClient? _stoppingApi; // the client whose stop() round-trip is in flight
   int _consecutiveErrors = 0;
   static const _pollInterval = Duration(milliseconds: 250);
   static const _maxBackoff = Duration(seconds: 5);
@@ -76,6 +77,11 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     _timer = null;
     _api?.close();
     _api = null;
+    // Force-close a stop() still draining the server so its Dio socket doesn't
+    // linger up to the ~15 s drain after the notifier is gone (cancels the
+    // in-flight request; stop()'s finally then no-ops on the closed client).
+    _stoppingApi?.close();
+    _stoppingApi = null;
   }
 
   AraServer? _activeServer() =>
@@ -133,7 +139,9 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     _api = null;
     state = LiveFrameState.idle;
     if (api != null) {
-      // Track the server round-trip so a racing start() can serialize behind it.
+      // Track the server round-trip so a racing start() can serialize behind it,
+      // and so _teardown can force-close it if we're disposed mid-drain.
+      _stoppingApi = api;
       final f = api.stop();
       _stopInFlight = f;
       try {
@@ -143,6 +151,7 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
       } finally {
         api.close();
         if (identical(_stopInFlight, f)) _stopInFlight = null;
+        if (identical(_stoppingApi, api)) _stoppingApi = null;
       }
     }
   }
@@ -165,9 +174,14 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
         // stale frame onto the idle/next-session state.
         if (_api != api || !state.active) return;
         _consecutiveErrors = 0;
+        // A successful poll (even a 204 / unchanged frame) means the server has
+        // recovered — clear any stale error so it doesn't linger forever while
+        // the loop spins up its first frame.
         if (f != null && (f.session != state.session || f.seq != state.seq)) {
           state = state.copyWith(
               jpeg: f.bytes, seq: f.seq, session: f.session, clearError: true);
+        } else if (state.error != null) {
+          state = state.copyWith(clearError: true);
         }
       } catch (e) {
         if (_api != api || !state.active) return;
