@@ -5,7 +5,6 @@ import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/command_palette.dart';
 import 'panels/diagnostics_mode_panel.dart';
-import '../../widgets/equipment/alpaca_bridge_warning_banner.dart';
 import 'panels/equipment_camera_panel.dart';
 import 'panels/equipment_dome_panel.dart';
 import 'panels/equipment_filter_wheel_panel.dart';
@@ -65,10 +64,6 @@ class SettingsShell extends ConsumerWidget {
           child: Column(
             children: [
               _PanelHeader(info: selectedInfo),
-              // §68.2 — advisory banner on the Equipment panels when connected
-              // through an AlpacaBridge in the 1.2–1.5 warn band (self-hides
-              // otherwise).
-              if (selectedId.startsWith('eq.')) const AlpacaBridgeWarningBanner(),
               Expanded(child: _PanelBody(panelId: selectedId)),
             ],
           ),
