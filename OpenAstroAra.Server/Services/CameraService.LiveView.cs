@@ -37,8 +37,9 @@ public sealed partial class CameraService {
     // Downscale cap for the live JPEG: framing/focus wants responsiveness over full resolution.
     private const int LiveViewMaxDim = 1024;
     // Live View is for framing/focus; a long exposure both defeats that and would hold the capture
-    // gate (starving real captures/the sequencer) for its whole duration. Cap it.
-    private const double LiveViewMaxExposureSec = 60.0;
+    // gate (and a pending stop, since the ImageArray download is non-cancellable) for its whole
+    // duration. 15 s is generous for framing while bounding worst-case stop/start latency.
+    private const double LiveViewMaxExposureSec = 15.0;
     private static readonly TimeSpan LiveViewInterFrameDelay = TimeSpan.FromMilliseconds(100);
 
     // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
@@ -160,8 +161,10 @@ public sealed partial class CameraService {
             LastFrameAtUtc: m?.LastFrameAt?.ToString("O"));
     }
 
-    public (byte[] Jpeg, long Seq)? GetLiveViewFrame() {
+    public (ReadOnlyMemory<byte> Jpeg, long Seq)? GetLiveViewFrame() {
         var f = _liveViewFrame; // single volatile read — Jpeg and Seq are always consistent
+        // ReadOnlyMemory view: the buffer is shared (published, never mutated in place — each frame
+        // is a fresh array), so readers get a read-only window with no per-fetch copy.
         return f is null ? null : (f.Jpeg, f.Seq);
     }
 

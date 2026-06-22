@@ -40,7 +40,9 @@ public interface ICameraService {
     Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct);
     Task StopLiveViewAsync(CancellationToken ct);
     LiveViewStatusDto GetLiveViewStatus();
-    (byte[] Jpeg, long Seq)? GetLiveViewFrame();
+    // ReadOnlyMemory (not byte[]): the published buffer is shared across readers and must not be
+    // mutated; the read-only view makes that explicit without a per-fetch defensive copy.
+    (ReadOnlyMemory<byte> Jpeg, long Seq)? GetLiveViewFrame();
 }
 
 public interface ITelescopeService {

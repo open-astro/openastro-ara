@@ -101,6 +101,9 @@ public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = nul
 // All nullable fields are null until the session has the relevant value, not optional config:
 // StartedAtUtc is null only before Live View has ever been started; Width/Height/LastFrameAtUtc
 // are null until the first frame of the current session has been rendered.
+// During an in-flight StopLiveViewAsync there is a brief window where Active=false but FrameSeq>0
+// (the frame is dropped only after the loop drains); treat FrameSeq as advisory, gate "live" on
+// Active. Once stop returns, FrameSeq is 0 and GET /liveview/frame is 204.
 public sealed record LiveViewStatusDto(
     bool Active,
     long FrameSeq,

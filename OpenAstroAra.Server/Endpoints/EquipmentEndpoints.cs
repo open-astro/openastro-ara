@@ -86,11 +86,14 @@ public static class EquipmentEndpoints {
             return Results.Accepted();
         });
         camera.MapGet("/liveview", (ICameraService svc) => Results.Ok(svc.GetLiveViewStatus()));
-        camera.MapGet("/liveview/frame", (ICameraService svc) => {
+        camera.MapGet("/liveview/frame", (ICameraService svc, HttpContext http) => {
             var frame = svc.GetLiveViewFrame();
-            return frame is null
-                ? Results.NoContent()
-                : Results.Bytes(frame.Value.Jpeg, "image/jpeg");
+            if (frame is null) {
+                return Results.NoContent();
+            }
+            // Live frames are ephemeral — never let a proxy/client cache one and serve it stale.
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
         });
 
         // ─── Telescope ───
