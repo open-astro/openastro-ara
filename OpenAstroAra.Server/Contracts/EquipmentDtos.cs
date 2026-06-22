@@ -106,6 +106,10 @@ public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = nul
 // Active. Once stop returns, FrameSeq is 0 and GET /liveview/frame is 204.
 public sealed record LiveViewStatusDto(
     bool Active,
+    // Bumped each time Live View starts. FrameSeq restarts at 1 per session, so a client doing
+    // X-Frame-Seq change-detection should treat a changed SessionId as "new session" (FrameSeq
+    // going backward is a restart, not a regression). 0 before Live View has ever started.
+    long SessionId,
     long FrameSeq,
     int? Width,
     int? Height,

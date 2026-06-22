@@ -64,6 +64,9 @@ public sealed partial class CameraService {
     private volatile CancellationTokenSource? _liveViewCts;
     private Task? _liveViewLoop;
     private int _liveViewActive;
+    // Bumped once per start (under the mutex). Lets a polling client distinguish a session restart
+    // (FrameSeq resets to 1) from a mid-stream frame: a changed SessionId means "new session".
+    private long _liveViewSession;
     // The latest frame + its seq, published as ONE reference so a reader can't observe a torn
     // (new-jpeg, old-seq) pair. Single writer (the loop), so no CAS needed. null = no frame yet.
     private volatile LiveViewFrameData? _liveViewFrame;
@@ -79,11 +82,12 @@ public sealed partial class CameraService {
     private sealed class LiveViewFrameData {
         public readonly byte[] Jpeg;
         public readonly long Seq;
+        public readonly long SessionId;
         public readonly int Width;
         public readonly int Height;
         public readonly DateTimeOffset CapturedAt;
-        public LiveViewFrameData(byte[] jpeg, long seq, int width, int height, DateTimeOffset capturedAt) {
-            Jpeg = jpeg; Seq = seq; Width = width; Height = height; CapturedAt = capturedAt;
+        public LiveViewFrameData(byte[] jpeg, long seq, long sessionId, int width, int height, DateTimeOffset capturedAt) {
+            Jpeg = jpeg; Seq = seq; SessionId = sessionId; Width = width; Height = height; CapturedAt = capturedAt;
         }
     }
 
@@ -125,8 +129,9 @@ public sealed partial class CameraService {
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
             _liveViewMeta = new LiveViewMeta(request.ExposureSec, DateTimeOffset.UtcNow);
+            var session = Interlocked.Increment(ref _liveViewSession);
             Volatile.Write(ref _liveViewActive, 1);
-            _liveViewLoop = Task.Run(() => RunLiveViewLoopAsync(request, cts.Token), CancellationToken.None);
+            _liveViewLoop = Task.Run(() => RunLiveViewLoopAsync(request, session, cts.Token), CancellationToken.None);
         } finally {
             _liveViewMutex.Release();
         }
@@ -187,6 +192,7 @@ public sealed partial class CameraService {
         var m = _liveViewMeta;
         return new LiveViewStatusDto(
             Active: Volatile.Read(ref _liveViewActive) == 1,
+            SessionId: Interlocked.Read(ref _liveViewSession),
             FrameSeq: f?.Seq ?? 0,
             Width: f?.Width,
             Height: f?.Height,
@@ -195,16 +201,16 @@ public sealed partial class CameraService {
             LastFrameAtUtc: f?.CapturedAt.ToString("O"));
     }
 
-    public (ReadOnlyMemory<byte> Jpeg, long Seq)? GetLiveViewFrame() {
-        var f = _liveViewFrame; // single volatile read — Jpeg and Seq are always consistent
+    public (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame() {
+        var f = _liveViewFrame; // single volatile read — all fields are a consistent snapshot
         // ReadOnlyMemory view: the buffer is shared (published, never mutated in place — each frame
         // is a fresh array), so readers get a read-only window with no per-fetch copy.
-        return f is null ? null : (f.Jpeg, f.Seq);
+        return f is null ? null : (f.Jpeg, f.Seq, f.SessionId);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Live View loop boundary: a single frame's device/render failure (ASCOM throw, dropped link, decode error) must not fault the long-running loop — it is logged and the loop continues to the next frame. CA1031's log-and-recover boundary applies.")]
-    private async Task RunLiveViewLoopAsync(LiveViewStartRequestDto request, CancellationToken token) {
+    private async Task RunLiveViewLoopAsync(LiveViewStartRequestDto request, long session, CancellationToken token) {
         var consecutiveFailures = 0;
         try {
             while (!token.IsCancellationRequested) {
@@ -224,7 +230,7 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    produced = await CaptureLiveFrameAsync(client, request, token).ConfigureAwait(false);
+                    produced = await CaptureLiveFrameAsync(client, request, session, token).ConfigureAwait(false);
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;
                 } catch (Exception ex) {
@@ -263,7 +269,7 @@ public sealed partial class CameraService {
 
     // Returns true if a frame was published, false if the frame was skipped (device never reached
     // ImageReady / dropped). Throwing propagates to the loop's catch, which counts it as a failure.
-    private async Task<bool> CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, CancellationToken token) {
+    private async Task<bool> CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, long session, CancellationToken token) {
         // Reuse the capture path's settings application (bin/gain, full-frame subframe).
         ApplyExposureSettings(client, new ExposureRequestDto(request.ExposureSec, request.Gain, BinX: request.BinX, BinY: request.BinY));
         // ApplyExposureSettings is up to 7 Alpaca round-trips with no ct hook; honor a stop that
@@ -310,7 +316,7 @@ public sealed partial class CameraService {
         // here, so the only per-frame publish is the frame itself — one atomic volatile write
         // carrying seq + dimensions + capture time, so status reads can't tear.
         var nextSeq = (_liveViewFrame?.Seq ?? 0) + 1;
-        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq, width, height, DateTimeOffset.UtcNow);
+        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq, session, width, height, DateTimeOffset.UtcNow);
         return true;
     }
 

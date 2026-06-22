@@ -66,8 +66,8 @@ public sealed class PlaceholderCameraService : ICameraService {
     public Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
     public Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct) => Task.CompletedTask;
     public Task StopLiveViewAsync() => Task.CompletedTask;
-    public LiveViewStatusDto GetLiveViewStatus() => new(false, 0, null, null, null, null, null);
-    public (ReadOnlyMemory<byte> Jpeg, long Seq)? GetLiveViewFrame() => null;
+    public LiveViewStatusDto GetLiveViewStatus() => new(false, 0, 0, null, null, null, null, null);
+    public (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame() => null;
 }
 
 public sealed class PlaceholderTelescopeService : ITelescopeService {

@@ -45,7 +45,7 @@ public interface ICameraService {
     LiveViewStatusDto GetLiveViewStatus();
     // ReadOnlyMemory (not byte[]): the published buffer is shared across readers and must not be
     // mutated; the read-only view makes that explicit without a per-fetch defensive copy.
-    (ReadOnlyMemory<byte> Jpeg, long Seq)? GetLiveViewFrame();
+    (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame();
 }
 
 public interface ITelescopeService {

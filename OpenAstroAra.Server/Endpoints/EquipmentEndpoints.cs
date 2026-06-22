@@ -98,10 +98,13 @@ public static class EquipmentEndpoints {
             }
             // Live frames are ephemeral — never let a proxy/client cache one and serve it stale.
             http.Response.Headers.CacheControl = "no-store";
-            // Expose the frame's sequence so a poller can change-detect in a single request
-            // (no separate GET /liveview round-trip).
+            // Expose the frame's sequence + session so a poller can change-detect in a single request
+            // (no separate GET /liveview round-trip). A changed X-Live-Session means a new session
+            // (FrameSeq restarts at 1), so the poller treats it as new rather than a seq regression.
             http.Response.Headers["X-Frame-Seq"] =
                 frame.Value.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            http.Response.Headers["X-Live-Session"] =
+                frame.Value.SessionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return Results.Bytes(frame.Value.Jpeg, "image/jpeg");
         });
 
