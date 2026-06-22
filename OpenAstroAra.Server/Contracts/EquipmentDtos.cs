@@ -144,6 +144,10 @@ public sealed record SlewRequestDto(
 
 public sealed record ParkRequestDto(string? Reason = null);
 
+// Tracking control: start/stop sidereal tracking (the set-point rate is the
+// device's current TrackingRate; this only toggles Tracking on/off).
+public sealed record TelescopeTrackingRequestDto(bool Enabled);
+
 // ─── Focuser (§10.6 row 3) ────────────────────────────────────────────────────
 
 public sealed record FocuserDto(
