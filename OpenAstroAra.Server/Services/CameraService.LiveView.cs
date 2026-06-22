@@ -145,12 +145,17 @@ public sealed partial class CameraService {
                 // for framing, where exposures are short; the loop swallows its own faults.
                 await loop.ConfigureAwait(false);
             }
-            cts?.Dispose();
-            // Drop the last frame so GET /liveview/frame returns 204 once stopped. This MUST come
-            // after `await loop`: cancellation can land during the non-cancellable ImageArray
-            // download, so the loop may still publish one final frame after we cancel — nulling
-            // before the await would let that late write resurrect a stale frame.
+            // Guarded like CancelAsync above: CancelLiveViewForDispose (DI teardown, no mutex) can
+            // dispose the same CTS concurrently. Dispose is idempotent in practice, but guard it to
+            // match the cancel path and stay safe across that narrow window.
+            try { cts?.Dispose(); } catch (ObjectDisposedException) { }
+            // Drop the last frame AND its meta so GET /liveview/frame returns 204 and GET /liveview
+            // reports no dimensions once stopped (honors the DTO "null between sessions" contract).
+            // MUST come after `await loop`: cancellation can land during the non-cancellable
+            // ImageArray download, so the loop may still publish one final frame after we cancel —
+            // nulling before the await would let that late write resurrect a stale frame.
             _liveViewFrame = null;
+            _liveViewMeta = null;
         } finally {
             _liveViewMutex.Release();
         }
@@ -234,6 +239,7 @@ public sealed partial class CameraService {
             // (CaptureLiveFrameAsync has returned by the time the loop body exits), so it's the last
             // write — and it makes StopLiveViewAsync's post-await null redundant-but-harmless.
             _liveViewFrame = null;
+            _liveViewMeta = null; // also reset dimensions/timestamps so idle status reports nothing
         }
     }
 
