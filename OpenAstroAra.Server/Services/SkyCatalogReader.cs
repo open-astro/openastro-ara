@@ -35,6 +35,11 @@ namespace OpenAstroAra.Server.Services {
     /// </summary>
     internal static class SkyCatalogReader {
 
+        /// <summary>Hard upper bound on the rows any single read returns — a backstop so a no-<c>limit</c> request for a
+        /// large catalog (HYG is ~120k rows) can't force an unbounded ~10 MB+ response / heap spike. A caller's
+        /// <c>limit</c> can only reduce this, never exceed it; brightness filtering is done with <c>max_mag</c>.</summary>
+        public const int MaxObjects = 50_000;
+
         /// <summary>Whether a parser exists for this package id (only catalog packages with a known column layout).</summary>
         public static bool HasParser(string packageId) => packageId is "hyg-stars" or "openngc-dso";
 
@@ -148,15 +153,18 @@ namespace OpenAstroAra.Server.Services {
             return s.Length > 0 && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
 
-        // Sexagesimal "HH:MM:SS.ss" → decimal hours. Empty / malformed → false.
+        // Sexagesimal "HH:MM:SS.ss" → decimal hours. Empty / malformed / out-of-range → false.
         private static bool TryParseSexagesimalHours(string raw, out double hours) =>
-            TryParseSexagesimal(raw, out hours);
+            TryParseSexagesimal(raw, maxFirst: 24, out hours); // RA: 0 ≤ hours < 24
 
-        // Sexagesimal "±DD:MM:SS.s" → signed decimal degrees. Empty / malformed → false.
+        // Sexagesimal "±DD:MM:SS.s" → signed decimal degrees. Empty / malformed / out-of-range → false.
         private static bool TryParseSexagesimalDegrees(string raw, out double degrees) =>
-            TryParseSexagesimal(raw, out degrees);
+            TryParseSexagesimal(raw, maxFirst: 90, out degrees); // Dec: |deg| ≤ 90
 
-        private static bool TryParseSexagesimal(string raw, out double result) {
+        // Parse "A:B:C" → A + B/60 + C/3600, with a leading sign. Rejects out-of-range components (B/C must be in
+        // [0,60), A in [0, maxFirst]) so a placeholder stub like "99:99:99" is skipped rather than placed at a nonsense
+        // position — important if a future catalog carries partial rows.
+        private static bool TryParseSexagesimal(string raw, double maxFirst, out double result) {
             result = 0;
             var s = raw.Trim();
             if (s.Length == 0) {
@@ -171,6 +179,9 @@ namespace OpenAstroAra.Server.Services {
                 !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var a) ||
                 !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var b) ||
                 !double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var c)) {
+                return false;
+            }
+            if (a < 0 || a > maxFirst || b < 0 || b >= 60 || c < 0 || c >= 60) {
                 return false;
             }
             result = a + b / 60.0 + c / 3600.0;
