@@ -56,3 +56,29 @@ it in a `git diff --exit-code` CI check (the output isn't byte-stable).
 `disable-library-validation` (required to load the separately-signed CEF
 framework) + the App Sandbox is **incompatible with Mac App Store** distribution
 — fine for Developer-ID / direct distribution, which is how CEF apps ship.
+
+## Security posture (host entitlement tradeoff)
+
+Hosting CEF weakens the host app's Hardened Runtime, by design and unavoidably:
+
+- **`cs.allow-jit`** — narrow: permits JIT-compiled pages (V8). Required.
+- **`cs.allow-unsigned-executable-memory`** — broader than `allow-jit`: permits
+  *any* writable+executable mapping, not just JIT regions. CEF's own host
+  template (`packages/webview_cef/macos/webview_cef/helper/app.entitlements`)
+  prescribes it because the embedded Chromium allocates W+X memory outside the
+  JIT path; dropping it aborts at runtime. It is the standard, documented cost of
+  in-process CEF hosting.
+- **`cs.disable-library-validation`** — lets the host load the separately-signed
+  CEF framework (see Distribution note).
+
+Net: with these three, the host's Hardened Runtime offers little exploit
+mitigation. We accept this because (a) CEF requires all three to run, and (b) the
+attack surface is contained — the renderer/GPU/utility work runs in the
+**sandboxed** `Helper.app` subprocess (`app-sandbox` + `inherit`), not the host.
+This is the same posture every Electron/CEF desktop app ships with.
+
+`files.user-selected.read-write` on **both** `DebugProfile` and `Release` is
+**pre-existing** (§54 save-downloads / open-save dialogs) — it is *not* added by
+the CEF work; this PR only re-orders the keys and adds the three `cs.*`
+entitlements above. The two files are kept byte-identical so Debug and Release
+share one audited entitlement set.
