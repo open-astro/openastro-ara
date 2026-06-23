@@ -69,33 +69,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Every_catalog_entry_has_a_supported_download_format() {
+            // Build gate: a curator who adds an entry with an unhandled extension (.zip/.parquet/…) would otherwise
+            // have it silently written as raw bytes to catalog.csv at runtime — catch it here instead.
+            foreach (var pkg in DataManagerService.Catalog) {
+                Assert.That(DataManagerService.IsSupportedDownloadFormat(pkg.SourceUrl!), Is.True,
+                    $"catalog entry '{pkg.Id}' has an unsupported source format: {pkg.SourceUrl!.AbsolutePath}");
+            }
+        }
+
+        [Test]
         public async Task Lists_the_catalog_with_install_state_read_from_disk() {
-            var installedBytes = InstallPackage("tycho-2", 2048);
+            var installedBytes = InstallPackage("hyg-stars", 2048);
 
             var packages = await _svc.ListPackagesAsync(CancellationToken.None);
 
             Assert.That(packages.Select(p => p.Id), Is.EquivalentTo(DataManagerService.Catalog.Select(c => c.Id)),
                 "every catalog package is listed");
-            var tycho = packages.Single(p => p.Id == "tycho-2");
-            var gaia = packages.Single(p => p.Id == "gaia-edr3-bright");
+            var stars = packages.Single(p => p.Id == "hyg-stars");
+            var dso = packages.Single(p => p.Id == "openngc-dso");
             Assert.Multiple(() => {
-                Assert.That(tycho.IsInstalled, Is.True);
-                Assert.That(tycho.SizeBytes, Is.EqualTo(installedBytes), "installed size is measured from disk, not the catalog");
-                Assert.That(tycho.InstalledUtc, Is.Not.Null);
-                Assert.That(gaia.IsInstalled, Is.False, "an absent package is not installed");
-                Assert.That(gaia.InstalledUtc, Is.Null);
+                Assert.That(stars.IsInstalled, Is.True);
+                Assert.That(stars.SizeBytes, Is.EqualTo(installedBytes), "installed size is measured from disk, not the catalog");
+                Assert.That(stars.InstalledUtc, Is.Not.Null);
+                Assert.That(dso.IsInstalled, Is.False, "an absent package is not installed");
+                Assert.That(dso.InstalledUtc, Is.Null);
             });
         }
 
         [Test]
         public async Task A_dir_without_the_sentinel_reads_as_not_installed() {
             // A torn/interrupted install (files present, no .installed sentinel) must NOT count as installed.
-            var dir = Path.Combine(_root, "tycho-2");
+            var dir = Path.Combine(_root, "hyg-stars");
             Directory.CreateDirectory(dir);
             await File.WriteAllBytesAsync(Path.Combine(dir, "data.bin"), new byte[1024]);
 
             var listed = await _svc.ListPackagesAsync(CancellationToken.None);
-            Assert.That(listed.Single(p => p.Id == "tycho-2").IsInstalled, Is.False, "no sentinel → not installed");
+            Assert.That(listed.Single(p => p.Id == "hyg-stars").IsInstalled, Is.False, "no sentinel → not installed");
 
             var state = await _svc.GetStateAsync(CancellationToken.None);
             Assert.That(state.InstalledPackageCount, Is.EqualTo(0), "a torn install isn't counted");
@@ -104,21 +114,21 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task InstalledUtc_and_size_come_from_the_sentinel_not_the_dir() {
-            InstallPackage("tycho-2", 2048);
-            var sentinel = Path.Combine(_root, "tycho-2", SkyDataInstaller.InstalledMarkerFileName);
+            InstallPackage("hyg-stars", 2048);
+            var sentinel = Path.Combine(_root, "hyg-stars", SkyDataInstaller.InstalledMarkerFileName);
             var stamp = new System.DateTime(2025, 1, 2, 3, 4, 5, System.DateTimeKind.Utc);
             File.SetLastWriteTimeUtc(sentinel, stamp);
 
-            var tycho = (await _svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "tycho-2");
+            var stars = (await _svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "hyg-stars");
 
-            Assert.That(tycho.IsInstalled, Is.True);
-            Assert.That(tycho.InstalledUtc!.Value.UtcDateTime, Is.EqualTo(stamp), "InstalledUtc is the sentinel's write time");
-            Assert.That(tycho.SizeBytes, Is.EqualTo(2048), "the sentinel file itself is excluded from the measured size");
+            Assert.That(stars.IsInstalled, Is.True);
+            Assert.That(stars.InstalledUtc!.Value.UtcDateTime, Is.EqualTo(stamp), "InstalledUtc is the sentinel's write time");
+            Assert.That(stars.SizeBytes, Is.EqualTo(2048), "the sentinel file itself is excluded from the measured size");
         }
 
         [Test]
         public async Task State_reflects_installed_count_and_total_size() {
-            InstallPackage("tycho-2", 2048);
+            InstallPackage("hyg-stars", 2048);
             InstallPackage("horizon-default", 512);
 
             var state = await _svc.GetStateAsync(CancellationToken.None);
@@ -132,19 +142,19 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Delete_removes_an_installed_package() {
-            InstallPackage("tycho-2", 1024);
+            InstallPackage("hyg-stars", 1024);
 
-            var deleted = await _svc.DeleteAsync("tycho-2", CancellationToken.None);
+            var deleted = await _svc.DeleteAsync("hyg-stars", CancellationToken.None);
 
             Assert.That(deleted, Is.True);
-            Assert.That(Directory.Exists(Path.Combine(_root, "tycho-2")), Is.False);
+            Assert.That(Directory.Exists(Path.Combine(_root, "hyg-stars")), Is.False);
             var after = await _svc.ListPackagesAsync(CancellationToken.None);
-            Assert.That(after.Single(p => p.Id == "tycho-2").IsInstalled, Is.False);
+            Assert.That(after.Single(p => p.Id == "hyg-stars").IsInstalled, Is.False);
         }
 
         [Test]
         public async Task Delete_returns_false_for_an_uninstalled_or_unknown_package() {
-            Assert.That(await _svc.DeleteAsync("gaia-edr3-bright", CancellationToken.None), Is.False,
+            Assert.That(await _svc.DeleteAsync("openngc-dso", CancellationToken.None), Is.False,
                 "a catalog package that isn't installed has nothing to delete");
             Assert.That(await _svc.DeleteAsync("not-a-real-package", CancellationToken.None), Is.False,
                 "an unknown id deletes nothing");
@@ -153,7 +163,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Download_accepts_a_known_catalog_package() {
             var accepted = await _svc.DownloadAsync(
-                new DownloadRequestDto(PackageId: "tycho-2", ForceReinstall: false), "idem-1", CancellationToken.None);
+                new DownloadRequestDto(PackageId: "hyg-stars", ForceReinstall: false), "idem-1", CancellationToken.None);
 
             Assert.That(accepted.OperationType, Is.EqualTo("data-manager.download"));
             Assert.That(accepted.IdempotencyKey, Is.EqualTo("idem-1"));

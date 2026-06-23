@@ -30,6 +30,13 @@ See `3rd-party-licenses.txt` (added at first release) for the bundled-dependency
 - **FreeImage** (via VVVV.FreeImage, used under the **FreeImage Public License v1.0** — the permissive arm of its FIPL-or-GPL dual license) — image-format decoding for the §2105 render path.
 - **Aladin Lite v3** ([CDS, Strasbourg](https://aladin.cds.unistra.fr/), **GPL v3**) — §36 Sky Atlas rendering. Sky Atlas rendering powered by [Aladin Lite](https://aladin.cds.unistra.fr/) (CDS, Strasbourg) under GPL v3. The engine is bundled with the WILMA desktop client (`client/.../assets/aladin/aladin.js`, v3.6.1) and runs inside a CEF/Chromium WebView process — a separate process boundary communicating with the Dart host only over `executeJavaScript`/`postMessage`, not statically or dynamically linked — which the GPL FAQ permits alongside ARA's MPL 2.0. The CDS logo + attribution Aladin renders in-view is retained. See `client/.../assets/aladin/ALADIN_LICENSE.md` for provenance + source.
 
+## Downloadable sky-data catalogs
+
+The §36 Data Manager can download optional star/deep-sky catalogs for the Sky Atlas overlay. These are **not** bundled or redistributed with ARA — they are fetched on demand from their upstream sources at the user's request — but are credited here per their share-alike terms:
+
+- **HYG star database** ([Astronomy Nexus / David Nash](https://www.astronexus.com/hyg), **CC BY-SA**) — the named-star catalog (Hipparcos + Yale Bright Star + Gliese). Downloaded from the project's archived GitHub repository, commit-pinned.
+- **OpenNGC** ([Mattia Verga](https://github.com/mattiaverga/OpenNGC), **CC BY-SA 4.0**) — the NGC/IC deep-sky object catalog. Downloaded commit-pinned from its GitHub repository.
+
 ## Trademarks
 
 "N.I.N.A." and the N.I.N.A. logo are property of their respective owners. The OpenAstro Ara project does not use the N.I.N.A. wordmark or logo in any way that would imply endorsement.

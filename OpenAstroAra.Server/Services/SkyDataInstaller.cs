@@ -17,6 +17,7 @@ using System.Formats.Tar;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -111,12 +112,22 @@ namespace OpenAstroAra.Server.Services {
         /// is in place — a failed swap moves it back). <paramref name="maxBytes"/>, when set, caps the total extracted
         /// size (zip-bomb / disk-exhaustion guard); exceeding it aborts the install with an <see cref="InvalidDataException"/>.
         /// </summary>
-        internal static Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes,
-                DateTimeOffset? remoteLastModified, CancellationToken ct) {
+        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes,
+                DateTimeOffset? remoteLastModified, CancellationToken ct, string? expectedSha256 = null) {
             ArgumentNullException.ThrowIfNull(tarGz);
-            return InstallStagedAsync(
-                staging => ExtractTarGzAsync(tarGz, staging, maxBytes, ct),
-                targetDir, maxBytes, remoteLastModified, ct);
+            if (string.IsNullOrEmpty(expectedSha256)) {
+                await InstallStagedAsync(
+                    staging => ExtractTarGzAsync(tarGz, staging, maxBytes, ct),
+                    targetDir, maxBytes, remoteLastModified, verifyAfterFill: null, ct).ConfigureAwait(false);
+                return;
+            }
+            // Hash the raw download as it streams, then verify after staging is filled but BEFORE the swap, so a
+            // corrupt download is rejected without replacing a good prior install. `using` disposes the hasher.
+            using var hashing = new HashingReadStream(tarGz);
+            await InstallStagedAsync(
+                staging => ExtractTarGzAsync(hashing, staging, maxBytes, ct),
+                targetDir, maxBytes, remoteLastModified,
+                () => VerifyDigest(hashing, expectedSha256), ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -126,8 +137,8 @@ namespace OpenAstroAra.Server.Services {
         /// as a bare CSV (or CSV.gz) rather than a tar archive. <paramref name="destFileName"/> must be a plain file
         /// name (no path separators) — it names the file inside the package dir.
         /// </summary>
-        internal static Task InstallFromFileAsync(Stream source, string targetDir, string destFileName, bool gunzip,
-                long? maxBytes, DateTimeOffset? remoteLastModified, CancellationToken ct) {
+        internal static async Task InstallFromFileAsync(Stream source, string targetDir, string destFileName, bool gunzip,
+                long? maxBytes, DateTimeOffset? remoteLastModified, CancellationToken ct, string? expectedSha256 = null) {
             ArgumentNullException.ThrowIfNull(source);
             ArgumentException.ThrowIfNullOrEmpty(destFileName);
             // Require a plain file name that can't escape the package dir. Reject BOTH separators explicitly (not via
@@ -137,9 +148,29 @@ namespace OpenAstroAra.Server.Services {
             if (destFileName.AsSpan().IndexOfAny('/', '\\') >= 0 || destFileName is "." or "..") {
                 throw new ArgumentException("Destination file name must be a plain file name.", nameof(destFileName));
             }
-            return InstallStagedAsync(
-                staging => ExtractSingleFileAsync(source, Path.Combine(staging, destFileName), gunzip, maxBytes, ct),
-                targetDir, maxBytes, remoteLastModified, ct);
+            if (string.IsNullOrEmpty(expectedSha256)) {
+                await InstallStagedAsync(
+                    staging => ExtractSingleFileAsync(source, Path.Combine(staging, destFileName), gunzip, maxBytes, ct),
+                    targetDir, maxBytes, remoteLastModified, verifyAfterFill: null, ct).ConfigureAwait(false);
+                return;
+            }
+            // Hash the raw (still-compressed, if .gz) download and verify before the swap — see InstallFromTarGzAsync.
+            using var hashing = new HashingReadStream(source);
+            await InstallStagedAsync(
+                staging => ExtractSingleFileAsync(hashing, Path.Combine(staging, destFileName), gunzip, maxBytes, ct),
+                targetDir, maxBytes, remoteLastModified,
+                () => VerifyDigest(hashing, expectedSha256), ct).ConfigureAwait(false);
+        }
+
+        // Compare the hash accumulated by the streaming read to the expected hex digest; throw (→ the staging is
+        // discarded and any prior install restored by InstallStagedAsync) on mismatch.
+        private static Task VerifyDigest(HashingReadStream hashing, string expectedSha256) {
+            var actual = Convert.ToHexString(hashing.GetHashAndReset());
+            if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+                throw new InvalidDataException(
+                    $"Sky-data download SHA-256 mismatch: expected {expectedSha256.ToLowerInvariant()}, got {actual.ToLowerInvariant()}.");
+            }
+            return Task.CompletedTask;
         }
 
         // The shared atomic-install core: stage into a sibling temp dir via <paramref name="fillStaging"/>, stamp the
@@ -147,7 +178,7 @@ namespace OpenAstroAra.Server.Services {
         // Both the tar-archive and single-file installers funnel through here so the security-sensitive
         // staging/rollback logic exists once.
         private static async Task InstallStagedAsync(Func<string, Task> fillStaging, string targetDir, long? maxBytes,
-                DateTimeOffset? remoteLastModified, CancellationToken ct) {
+                DateTimeOffset? remoteLastModified, Func<Task>? verifyAfterFill, CancellationToken ct) {
             ArgumentException.ThrowIfNullOrEmpty(targetDir);
             if (maxBytes is < 0) {
                 throw new ArgumentOutOfRangeException(nameof(maxBytes));
@@ -168,6 +199,13 @@ namespace OpenAstroAra.Server.Services {
             var movedPriorAside = false;
             try {
                 await fillStaging(stagingDir).ConfigureAwait(false);
+
+                // Integrity gate (when supplied): verify the downloaded bytes' digest now — after staging is fully
+                // populated but BEFORE the swap — so a corrupt download throws here and the catch discards staging +
+                // restores any prior install, rather than replacing good data with bad.
+                if (verifyAfterFill is not null) {
+                    await verifyAfterFill().ConfigureAwait(false);
+                }
 
                 // Stamp the sentinel BEFORE the swap so it appears atomically with the directory at its final path.
                 // Line 1 is the install timestamp (kept for documentation; InstalledUtc is read from the file's
@@ -302,6 +340,68 @@ namespace OpenAstroAra.Server.Services {
                     }
                 }
                 await dest.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+            }
+        }
+
+        // A read-only pass-through stream that feeds every byte it yields into a running SHA-256, so the digest of a
+        // download can be computed in the same single pass that installs it (no second read, no full-file buffer).
+        // Does NOT dispose the wrapped stream — the fetch owns it — but disposes its own hasher.
+        private sealed class HashingReadStream : Stream {
+            [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213:Disposable fields should be disposed",
+                Justification = "Pass-through wrapper: the wrapped stream is owned by the fetch (SkyDataFetch.DisposeAsync), not this wrapper — the leaveOpen contract, matching GZipStream(leaveOpen: true) elsewhere.")]
+            private readonly Stream _inner;
+            private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+            public HashingReadStream(Stream inner) => _inner = inner;
+
+            // The accumulated digest; resets the hasher (called exactly once after the stream is fully read).
+            public byte[] GetHashAndReset() => _hash.GetHashAndReset();
+
+            public override int Read(byte[] buffer, int offset, int count) {
+                var n = _inner.Read(buffer, offset, count);
+                if (n > 0) {
+                    _hash.AppendData(buffer, offset, n);
+                }
+                return n;
+            }
+
+            public override int Read(Span<byte> buffer) {
+                var n = _inner.Read(buffer);
+                if (n > 0) {
+                    _hash.AppendData(buffer[..n]);
+                }
+                return n;
+            }
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) {
+                var n = await _inner.ReadAsync(buffer, ct).ConfigureAwait(false);
+                if (n > 0) {
+                    _hash.AppendData(buffer.Span[..n]);
+                }
+                return n;
+            }
+
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+                ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+            protected override void Dispose(bool disposing) {
+                if (disposing) {
+                    _hash.Dispose();
+                }
+                base.Dispose(disposing);
             }
         }
 

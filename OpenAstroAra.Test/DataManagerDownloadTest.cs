@@ -73,8 +73,31 @@ namespace OpenAstroAra.Test {
             return ms.ToArray();
         }
 
-        // The first catalog package id (tycho-2) — used so the download path resolves a real SourceUrl + target.
-        private static string PackageId => DataManagerService.Catalog[0].Id;
+        // Gzip raw bytes — the bare-CSV.gz catalog download shape.
+        private static byte[] Gz(byte[] data) {
+            var ms = new MemoryStream();
+            using (var gz = new GZipStream(ms, CompressionMode.Compress, leaveOpen: true)) {
+                gz.Write(data, 0, data.Length);
+            }
+            ms.Position = 0;
+            return ms.ToArray();
+        }
+
+        // Any package whose URL is a .tar.gz, so the download worker takes the archive-install path (currently the
+        // horizon-default profile — these tests exercise the worker: progress / WS events / cancel / force /
+        // conditional GET, and FakeSkyDataFetcher ignores the URL, so the package is just a vehicle for the .tar.gz
+        // routing). FirstOrDefault + an explicit throw so removing the last .tar.gz entry fails with a clear message
+        // rather than an opaque InvalidOperationException.
+        // Reuse the production format predicates so the test routes exactly as the worker does (same case semantics).
+        private static string PackageId =>
+            DataManagerService.Catalog.FirstOrDefault(p => DataManagerService.IsArchiveFormat(p.SourceUrl!))?.Id
+            ?? throw new InvalidOperationException("DataManagerDownloadTest needs a catalog package with a .tar.gz URL to exercise the archive-install path.");
+
+        // A catalog package distributed as a bare .csv.gz, so the worker takes the single-file (gunzip) install path.
+        private static string CsvGzPackageId =>
+            DataManagerService.Catalog.FirstOrDefault(p =>
+                p.SourceUrl!.AbsolutePath.EndsWith(".csv.gz", StringComparison.OrdinalIgnoreCase))?.Id
+            ?? throw new InvalidOperationException("DataManagerDownloadTest needs a catalog package with a .csv.gz URL to exercise the gunzip install path.");
 
         private DataManagerService NewService(ISkyDataFetcher fetcher, CapturingBroadcaster ws) =>
             new(_root, fetcher, ws, NullLogger<DataManagerService>.Instance);
@@ -112,6 +135,26 @@ namespace OpenAstroAra.Test {
             var complete = ws.Events.First(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete).Payload;
             Assert.That(complete.GetProperty("download_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
             Assert.That(complete.GetProperty("package_id").GetString(), Is.EqualTo(PackageId));
+        }
+
+        [Test]
+        public async Task A_download_whose_digest_does_not_match_the_catalog_fails_and_installs_nothing() {
+            // CsvGzPackageId carries an expected SHA-256 in the catalog (CatalogSha256). The fake serves arbitrary
+            // bytes, so the integrity check must reject the download before it's committed — exercising the worker →
+            // installer digest wiring end-to-end. (The matching-digest happy path is covered at the installer level in
+            // SkyDataInstallerTest, where the test controls the expected hash.)
+            Assert.That(DataManagerService.CatalogSha256.ContainsKey(CsvGzPackageId), Is.True,
+                "this test assumes the package has an expected digest");
+            var gz = Gz(Encoding.UTF8.GetBytes("definitely not the real catalog bytes\n"));
+            var ws = new CapturingBroadcaster();
+            var svc = NewService(new FakeSkyDataFetcher(gz), ws);
+
+            await svc.DownloadAsync(new DownloadRequestDto(CsvGzPackageId, ForceReinstall: false), null, CancellationToken.None);
+
+            var failed = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadFailed));
+            Assert.That(failed, Is.True, "a digest mismatch surfaces a failed event");
+            Assert.That(Directory.Exists(Path.Combine(_root, CsvGzPackageId)), Is.False,
+                "nothing is installed when the downloaded bytes don't match the expected digest");
         }
 
         [Test]
