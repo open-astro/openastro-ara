@@ -13,10 +13,16 @@ import 'data_manager_state.dart';
 typedef CatalogOverlayRequest = ({double? maxMag, int? limit});
 
 /// The catalog packages the overlay knows how to fetch + draw, keyed by package
-/// id (must match the daemon's `SkyCatalogReader.HasParser` allow-list). Mag 7.0
-/// keeps HYG to a few thousand of the brightest stars; OpenNGC is count-capped.
+/// id (must match the daemon's `SkyCatalogReader.HasParser` allow-list).
 const Map<String, CatalogOverlayRequest> kCatalogOverlayRequests = {
-  'hyg-stars': (maxMag: 7.0, limit: null),
+  // HYG: brightness is the meaningful axis, so max_mag is the curation lever —
+  // mag 7 yields ~9k of the brightest stars (~0.5 MB injected once, fine for
+  // desktop CEF). The limit is only a hard payload backstop: it sits above the
+  // mag-7 count so it never curates in practice, but caps the worst case if
+  // max_mag is ever loosened. (It can't act as "the brightest N" — the on-disk
+  // HYG order isn't by magnitude — so max_mag stays the primary filter.)
+  'hyg-stars': (maxMag: 7.0, limit: 12000),
+  // OpenNGC: most DSOs carry no magnitude, so count is the only available lever.
   'openngc-dso': (maxMag: null, limit: 5000),
 };
 

@@ -126,11 +126,8 @@ void main() {
         r'window.araAddCatalog && window.araAddCatalog([{"name":"\"); alert(1)//","ra":1.0,"dec":2.0}]);',
       );
     });
-
-    test('an empty list still produces a valid (empty-array) call', () {
-      expect(catalogScript(const []),
-          'window.araAddCatalog && window.araAddCatalog([]);');
-    });
+    // (No empty-list case: _runCatalog routes an empty overlay through
+    // clearCatalogScript, so catalogScript is only ever called with ≥1 object.)
   });
 
   group('clearCatalogScript', () {
