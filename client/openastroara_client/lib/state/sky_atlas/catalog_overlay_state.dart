@@ -45,7 +45,8 @@ final skyAtlasCatalogProvider = FutureProvider<List<CatalogObject>>((ref) async 
   // Each catalog fetches independently: one failing (a transient 500/timeout on
   // HYG, say) must not blank a successfully-fetched OpenNGC overlay, so a per-
   // catalog error degrades just that one to null rather than failing the whole
-  // provider. (eagerError:false + a per-future catch — a 404 already returns null.)
+  // provider. With every future catching to null, none can throw, so Future.wait
+  // never short-circuits (a 404 already returns null on its own).
   final fetched = await Future.wait(
     installed.map((p) {
       final req = kCatalogOverlayRequests[p.id]!;
@@ -56,7 +57,6 @@ final skyAtlasCatalogProvider = FutureProvider<List<CatalogObject>>((ref) async 
         },
       );
     }),
-    eagerError: false,
   );
 
   // A null entry (404 "package vanished", or a per-catalog fetch error above) is
