@@ -136,13 +136,13 @@ public static class SystemEndpoints {
                 async (string packageId, [FromQuery(Name = "max_mag")] double? maxMag, [FromQuery] int? limit,
                         IDataManagerService svc, CancellationToken ct) => {
                     if (limit is < 0) {
-                        return Results.BadRequest(new { error = "limit must be >= 0" });
+                        return Results.Problem(detail: "limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
                     }
                     var objects = await svc.ReadCatalogAsync(packageId, maxMag, limit, ct);
                     return objects is null ? Results.NotFound() : Results.Ok(objects);
                 })
             .Produces<IReadOnlyList<CatalogObjectDto>>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest) // body is an { error } object, not ProblemDetails
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetDataManagerCatalog");
 

@@ -57,7 +57,7 @@ namespace OpenAstroAra.Server.Services {
             };
         }
 
-        private static List<CatalogObjectDto> ParseHyg(TextReader reader, double? maxMag, int? limit, CancellationToken ct) {
+        private static List<CatalogObjectDto> ParseHyg(TextReader reader, double? maxMag, int limit, CancellationToken ct) {
             var result = new List<CatalogObjectDto>();
             var header = reader.ReadLine();
             if (header is null) {
@@ -88,7 +88,7 @@ namespace OpenAstroAra.Server.Services {
                 if (maxMag is { } cap && (mag is null || mag > cap)) {
                     continue;
                 }
-                if (limit is { } lim && result.Count >= lim) {
+                if (result.Count >= limit) {
                     break; // checked BEFORE Add so limit=0 (or negative) yields none, not one
                 }
                 var name = nameI >= 0 && nameI < f.Length ? f[nameI].Trim() : string.Empty;
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Server.Services {
             return result;
         }
 
-        private static List<CatalogObjectDto> ParseOpenNgc(TextReader reader, double? maxMag, int? limit, CancellationToken ct) {
+        private static List<CatalogObjectDto> ParseOpenNgc(TextReader reader, double? maxMag, int limit, CancellationToken ct) {
             var result = new List<CatalogObjectDto>();
             var header = reader.ReadLine();
             if (header is null) {
@@ -128,7 +128,7 @@ namespace OpenAstroAra.Server.Services {
                 if (maxMag is { } cap && (mag is null || mag > cap)) {
                     continue;
                 }
-                if (limit is { } lim && result.Count >= lim) {
+                if (result.Count >= limit) {
                     break; // checked BEFORE Add so limit=0 (or negative) yields none, not one
                 }
                 var common = Get(f, commonI).Trim();
