@@ -176,6 +176,9 @@ class _PlanningHeader extends StatelessWidget {
                     label: const Text('Frame'),
                   ),
                   const SizedBox(width: 12),
+                  // Base sky-imagery survey picker (the "how real it looks" knob).
+                  const _SurveyPicker(),
+                  const SizedBox(width: 12),
                 ],
               ),
             ),
@@ -185,6 +188,52 @@ class _PlanningHeader extends StatelessWidget {
             icon: const Icon(Icons.download_for_offline_outlined, size: 16),
             label: const Text('Data Manager'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Base sky-imagery survey dropdown. Lets the user pick how "real" the atlas
+/// looks (full-sky DSS2 colour by default, plus deeper partial-sky surveys);
+/// writes [skyAtlasSurveyProvider], which [AladinView] listens to.
+class _SurveyPicker extends ConsumerWidget {
+  const _SurveyPicker();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentId = ref.watch(skyAtlasSurveyProvider);
+    final selected = kSkySurveys.firstWhere(
+      (s) => s.id == currentId,
+      orElse: () => kSkySurveys.first,
+    );
+    return PopupMenuButton<String>(
+      tooltip: 'Sky imagery survey',
+      position: PopupMenuPosition.under,
+      onSelected: (id) => ref.read(skyAtlasSurveyProvider.notifier).set(id),
+      itemBuilder: (_) => [
+        for (final s in kSkySurveys)
+          PopupMenuItem<String>(
+            value: s.id,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                s.id == currentId ? Icons.check : Icons.image_outlined,
+                size: 18,
+              ),
+              title: Text(s.label),
+              subtitle: Text(s.coverage),
+            ),
+          ),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.image_outlined, size: 16),
+          const SizedBox(width: 6),
+          Text(selected.label, style: Theme.of(context).textTheme.bodyMedium),
+          const Icon(Icons.arrow_drop_down, size: 18),
         ],
       ),
     );

@@ -50,6 +50,14 @@ String fovBoxScript(FovBox? box) {
       '${box.cols}, ${box.rows}, ${n(box.overlapPct)});';
 }
 
+/// Builds the JS that switches the atlas's base imagery survey to [surveyId] (a
+/// CDS HiPS id). JSON-encoded like [gotoScript] so the id is always a single
+/// string argument to the page's `araSetSurvey` helper (no injection surface).
+/// Exposed for testing.
+@visibleForTesting
+String surveyScript(String surveyId) =>
+    'window.araSetSurvey && window.araSetSurvey(${jsonEncode(surveyId)});';
+
 // CEF's manager is a process-wide singleton; initialize it at most once so a
 // tab rebuild (switch away + back) can't re-run native init. A FAILED init is
 // not cached: _init() clears this on a manager-init failure so a later mount
@@ -129,6 +137,27 @@ class _AladinViewState extends ConsumerState<AladinView> {
     }
   }
 
+  // Switch the base imagery survey. Stashed until the browser is ready (the
+  // bootstrap applies the latest pending id once Aladin finishes init).
+  String? _pendingSurvey;
+  void _setSurvey(String surveyId) {
+    final controller = _controller;
+    if (controller == null) {
+      _pendingSurvey = surveyId;
+      return;
+    }
+    unawaited(_runSurvey(controller, surveyId));
+  }
+
+  Future<void> _runSurvey(WebViewController controller, String surveyId) async {
+    try {
+      await controller.executeJavaScript(surveyScript(surveyId));
+    } catch (e, st) {
+      // Degrade-not-crash: a failed survey swap leaves the current imagery up.
+      debugPrint('AladinView: survey switch failed: $e\n$st');
+    }
+  }
+
   Future<void> _init() async {
     // Manager init is separated from browser init so only a manager-init failure
     // resets the memoized future (allowing a retry); a browser-init failure
@@ -190,6 +219,15 @@ class _AladinViewState extends ConsumerState<AladinView> {
       if (box != null) {
         unawaited(_runFovBox(controller, box));
       }
+      // Restore the chosen survey: one stashed before the browser was ready, or
+      // — since this tab unmounts on switch — the provider's current selection.
+      // Only push when it differs from the bootstrap's hard-coded default, so a
+      // fresh mount doesn't needlessly reload the same imagery.
+      final String survey = _pendingSurvey ?? ref.read(skyAtlasSurveyProvider);
+      _pendingSurvey = null;
+      if (survey != kDefaultSkySurveyId) {
+        unawaited(_runSurvey(controller, survey));
+      }
     } catch (e, st) {
       // Same rationale as above: degrade-not-crash, but logged.
       debugPrint('AladinView: Aladin browser init failed: $e\n$st');
@@ -211,6 +249,8 @@ class _AladinViewState extends ConsumerState<AladinView> {
     // The Frame-mode FOV box (null when Frame is off or optics are unset) → draw
     // or clear the overlay.
     ref.listen<FovBox?>(frameFovBoxProvider, (_, next) => _setFovBox(next));
+    // The selected base imagery survey → swap the atlas's image layer.
+    ref.listen<String>(skyAtlasSurveyProvider, (_, next) => _setSurvey(next));
 
     if (_unavailable) return const _Unavailable();
     final controller = _controller;
@@ -375,6 +415,20 @@ const String _aladinBootstrapHtml = r'''
     if (araFovOverlay) araFovOverlay.removeAll();
   }
 
+  // §36 base-survey picker. araSetSurvey swaps the atlas's background imagery to
+  // a CDS HiPS id (e.g. 'CDS/P/DESI-Legacy-Surveys/DR10/color'); before Aladin
+  // finishes init the latest id is stashed and applied from A.init.then. Driven
+  // from Dart via AladinView.surveyScript.
+  var araPendingSurvey = null;
+  function araSetSurvey(id) {
+    if (!id) return;
+    if (araAladin) {
+      araAladin.setBaseImageLayer(id);
+    } else {
+      araPendingSurvey = id;
+    }
+  }
+
   // The inline engine script above runs to completion before this one starts,
   // so by here `A` is defined on success and undefined if the bundle was bad.
   if (typeof A !== 'undefined') {
@@ -391,6 +445,12 @@ const String _aladinBootstrapHtml = r'''
         var t = araPendingTarget;
         araPendingTarget = null;
         araGoto(t);
+      }
+      // Apply a survey chosen during Aladin's init window.
+      if (araPendingSurvey) {
+        var s = araPendingSurvey;
+        araPendingSurvey = null;
+        araAladin.setBaseImageLayer(s);
       }
       // Keep the FOV box centred as the user pans/zooms, and draw any box that
       // Dart pushed before Aladin finished initializing.
