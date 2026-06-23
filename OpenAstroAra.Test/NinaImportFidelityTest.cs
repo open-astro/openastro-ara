@@ -33,8 +33,10 @@ namespace OpenAstroAra.Test {
             // this fixture for real, exactly like AstrometryNativeTransformTest.
             try {
                 _ = new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(45.0), Epoch.J2000).Transform(Epoch.JNOW);
-            } catch (DllNotFoundException) {
-                Assert.Ignore("SOFA/NOVAS natives not present — run scripts/build-astrometry-natives.sh into the test bin dir to exercise NINA import.");
+            } catch (Exception e) when (e is DllNotFoundException or BadImageFormatException) {
+                // A missing/incompatible native can surface either way (absent lib vs wrong-arch
+                // binary); both mean "natives unavailable on this box" → skip, don't error the fixture.
+                Assert.Ignore("SOFA/NOVAS natives not present/loadable — run scripts/build-astrometry-natives.sh into the test bin dir to exercise NINA import.");
             }
         }
 
