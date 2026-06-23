@@ -4,6 +4,15 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- §36 embedded CEF (Aladin webview). These three are the standard
+	     CEF-on-macOS host entitlements (the plugin's authoritative template,
+	     packages/webview_cef/macos/webview_cef/helper/app.entitlements, prescribes
+	     all three): allow-jit + allow-unsigned-executable-memory for V8, which CEF's
+	     browser process also runs, and disable-library-validation so the host can
+	     load the separately-signed CEF framework. Required at runtime — dropping
+	     any of them risks an on-device JIT/exec-memory abort. (disable-library-
+	     validation + App Sandbox is incompatible with Mac App Store distribution,
+	     fine for Developer-ID; see macos/CEF_HELPER.md.) -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
