@@ -138,6 +138,8 @@ public static class SystemEndpoints {
                 async (string packageId, [FromQuery(Name = "max_mag")] double? maxMag, [FromQuery] int? limit,
                         IDataManagerService svc, CancellationToken ct) => {
                     if (limit is < 0) {
+                        // limit=0 is intentionally valid — it's a well-defined "max 0 rows" request that returns an
+                        // empty list (like a paging limit); only a negative count is a malformed request.
                         return Results.Problem(detail: "limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
                     }
                     if (maxMag is { } mm && !double.IsFinite(mm)) {

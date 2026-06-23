@@ -63,7 +63,8 @@ namespace OpenAstroAra.Server.Services {
             if (header is null) {
                 return result;
             }
-            var cols = IndexColumns(SplitCsv(header, ','));
+            var sb = new System.Text.StringBuilder(); // reused across header + every row to avoid a per-line allocation
+            var cols = IndexColumns(SplitCsv(header, ',', sb));
             int raI = cols.GetValueOrDefault("ra", -1);
             int decI = cols.GetValueOrDefault("dec", -1);
             int magI = cols.GetValueOrDefault("mag", -1);
@@ -75,7 +76,7 @@ namespace OpenAstroAra.Server.Services {
             string? line;
             while ((line = reader.ReadLine()) is not null) {
                 ct.ThrowIfCancellationRequested();
-                var f = SplitCsv(line, ',');
+                var f = SplitCsv(line, ',', sb);
                 if (!TryGetDouble(f, raI, out var raHours) || !TryGetDouble(f, decI, out var dec)) {
                     continue;
                 }
@@ -215,10 +216,10 @@ namespace OpenAstroAra.Server.Services {
 
         // A minimal RFC-4180-ish field splitter: handles double-quoted fields (with "" escapes) so a quoted value
         // containing the delimiter stays intact. HYG quotes its string columns; OpenNGC isn't quoted but this is safe
-        // for it too. Allocations are per-line; the catalog is read once per request.
-        private static string[] SplitCsv(string line, char delimiter) {
+        // for it too. The caller passes a reusable StringBuilder so a ~120k-row catalog doesn't allocate one per line.
+        private static string[] SplitCsv(string line, char delimiter, System.Text.StringBuilder sb) {
             var fields = new List<string>();
-            var sb = new System.Text.StringBuilder();
+            sb.Clear();
             var inQuotes = false;
             for (var i = 0; i < line.Length; i++) {
                 var ch = line[i];
