@@ -44,10 +44,12 @@ Map<String, dynamic> inputCoordinatesFromDeg(double raDeg, double decDeg) {
   };
 }
 
-/// Fold [raDeg] into `[0, 360)`. `360 % 360 == 0`, and Dart's `%` returns a
-/// non-negative result for a positive divisor, so a small negative input
-/// (e.g. -0.001 from upstream rounding) wraps to just under 360 rather than
-/// producing a negative hour.
+/// Fold [raDeg] into `[0, 360)`. For `double` operands Dart's `%` follows
+/// truncating division — the remainder takes the sign of the dividend, so
+/// `-15.0 % 360.0 == -15.0`, not `345.0` (unlike Dart's integer `%`, which is
+/// always non-negative). The `< 0` guard is therefore required, not defensive:
+/// it adds 360 back so a negative input (e.g. -0.001 from upstream rounding, or
+/// a genuine negative RA) maps to a non-negative hour rather than a negative one.
 double _normalizeRaDeg(double raDeg) {
   final wrapped = raDeg % 360.0;
   return wrapped < 0 ? wrapped + 360.0 : wrapped;
