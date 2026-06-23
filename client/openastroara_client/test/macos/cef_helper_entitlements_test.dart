@@ -55,9 +55,17 @@ void main() {
       expect(pbxproj.existsSync(), isTrue, reason: '${pbxproj.path} not found');
       final values = _entitlementAssignments(pbxproj.readAsStringSync());
       expect(values, isNotEmpty, reason: 'no CODE_SIGN_ENTITLEMENTS assignments found — pbxproj shape changed?');
-      // The Helper target's 3 configs must sign with the sandboxed client file…
-      expect(values, contains('Runner/Helper.entitlements'),
-          reason: 'the Helper target must point CODE_SIGN_ENTITLEMENTS at Runner/Helper.entitlements');
+      // ALL of the Helper target's configs must sign with the sandboxed client file.
+      // A Flutter macOS project has exactly three build configs (Debug/Profile/Release),
+      // so the Helper target contributes exactly three `Runner/Helper.entitlements`
+      // assignments. Asserting the count (not just "≥1") catches a *partial* repoint —
+      // e.g. a re-run of add_helper_target.rb that the manual fix-up only corrected for
+      // one config — which a "contains" check would silently pass.
+      final helperAssignments =
+          values.where((v) => v == 'Runner/Helper.entitlements').length;
+      expect(helperAssignments, 3,
+          reason: 'all three Helper configs (Debug/Profile/Release) must point '
+              'CODE_SIGN_ENTITLEMENTS at Runner/Helper.entitlements; found $helperAssignments');
       // …and NO assignment may reference the plugin's non-sandboxed helper.entitlements
       // (a re-run of add_helper_target.rb that forgot the repoint — see macos/CEF_HELPER.md).
       final pluginDefault = values.where((v) => v.contains('helper/helper.entitlements')).toList();
