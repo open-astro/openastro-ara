@@ -106,8 +106,17 @@ void main() {
       container: container,
       child: const MaterialApp(home: Scaffold(body: PlanningTab())),
     ));
-    await tester.pump(); // build + run the post-frame callback (kicks off hydrate)
-    await tester.pump(); // flush the getOptics() microtask → state assigned
+    // Pump until the hydrate lands rather than assuming a fixed microtask count
+    // or wall-clock delay: the first pump runs the post-frame callback (which
+    // kicks off getOptics()), and subsequent pumps flush however many async
+    // batches the load takes. Bounded so a genuinely stuck load fails the test
+    // instead of hanging. (Can't pumpAndSettle — AladinView animates forever in
+    // the headless env.)
+    for (var i = 0;
+        i < 10 && container.read(opticsSettingsProvider).fovWidthArcmin == null;
+        i++) {
+      await tester.pump();
+    }
 
     final optics = container.read(opticsSettingsProvider);
     expect(optics.focalLengthMm, 714);
