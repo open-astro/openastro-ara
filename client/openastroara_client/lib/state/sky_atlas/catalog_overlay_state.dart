@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/catalog_object.dart';
@@ -41,13 +42,25 @@ final skyAtlasCatalogProvider = FutureProvider<List<CatalogObject>>((ref) async 
       .toList(growable: false);
   if (installed.isEmpty) return const <CatalogObject>[];
 
-  final fetched = await Future.wait(installed.map((p) {
-    final req = kCatalogOverlayRequests[p.id]!;
-    return api.getCatalog(p.id, maxMag: req.maxMag, limit: req.limit);
-  }));
+  // Each catalog fetches independently: one failing (a transient 500/timeout on
+  // HYG, say) must not blank a successfully-fetched OpenNGC overlay, so a per-
+  // catalog error degrades just that one to null rather than failing the whole
+  // provider. (eagerError:false + a per-future catch — a 404 already returns null.)
+  final fetched = await Future.wait(
+    installed.map((p) {
+      final req = kCatalogOverlayRequests[p.id]!;
+      return api.getCatalog(p.id, maxMag: req.maxMag, limit: req.limit).catchError(
+        (Object e, StackTrace st) {
+          debugPrint('skyAtlasCatalogProvider: catalog "${p.id}" fetch failed: $e');
+          return null;
+        },
+      );
+    }),
+    eagerError: false,
+  );
 
-  // A 404 (package vanished between list + fetch) yields null — drop it; the
-  // rest still draw.
+  // A null entry (404 "package vanished", or a per-catalog fetch error above) is
+  // dropped — the rest still draw.
   return fetched
       .whereType<List<CatalogObject>>()
       .expand((list) => list)

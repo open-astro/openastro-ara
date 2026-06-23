@@ -9,13 +9,15 @@ import 'package:openastroara/state/sky_atlas/data_manager_state.dart';
 // A fake that records which catalogs were requested and returns a fixed set per
 // id (null → the daemon's 404 "no catalog" case).
 class _FakeClient implements DataManagerClient {
-  _FakeClient(this.catalogs);
+  _FakeClient(this.catalogs, {this.throwFor = const {}});
   final Map<String, List<CatalogObject>?> catalogs;
+  final Set<String> throwFor; // ids that fail with a non-404 error
   final List<String> requested = <String>[];
 
   @override
   Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit}) async {
     requested.add(packageId);
+    if (throwFor.contains(packageId)) throw StateError('boom $packageId');
     return catalogs[packageId];
   }
 
@@ -97,6 +99,29 @@ void main() {
 
     expect(client.requested.toSet(), {'hyg-stars', 'openngc-dso'});
     expect(objects.map((o) => o.name), ['Sol', 'Vega'], reason: 'the null catalog contributes nothing');
+  });
+
+  test('one catalog erroring does not blank the other', () async {
+    final client = _FakeClient(
+      {
+        'hyg-stars': const [CatalogObject(name: 'Sol', raDeg: 0, decDeg: 0)],
+        'openngc-dso': const [CatalogObject(name: 'M31', raDeg: 10, decDeg: 41)],
+      },
+      throwFor: {'hyg-stars'}, // a transient 500/timeout on one catalog
+    );
+    final c = _container(
+      packages: [
+        _pkg('hyg-stars', installed: true),
+        _pkg('openngc-dso', installed: true),
+      ],
+      client: client,
+    );
+
+    await c.read(dataManagerPackagesProvider.future); // resolve the dependency first
+    final objects = await c.read(skyAtlasCatalogProvider.future);
+
+    expect(objects.map((o) => o.name), ['M31'],
+        reason: 'the failed catalog degrades to nothing; the other still draws');
   });
 
   test('no installed catalog → empty overlay, no fetch', () async {

@@ -506,6 +506,8 @@ const String _aladinBootstrapHtml = r'''
     return araCatalog;
   }
   function araAddCatalog(objs) {
+    // Before Aladin is ready we keep only the LATEST set (replace, not queue) —
+    // the overlay is a full snapshot, so an earlier pending set is always stale.
     if (!araAladin) { araPendingCatalog = objs; return; }
     var cat = araEnsureCatalog();
     if (!cat) return;
