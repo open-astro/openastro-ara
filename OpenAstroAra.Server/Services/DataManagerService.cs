@@ -105,6 +105,16 @@ namespace OpenAstroAra.Server.Services {
         private static readonly HashSet<string> CatalogIds =
             new(Catalog.Select(p => p.Id), StringComparer.Ordinal);
 
+        // Expected SHA-256 (hex) of each package's downloaded artifact (the raw bytes at SourceUrl — the .csv.gz for
+        // hyg-stars, the .csv for openngc-dso), so a corrupted/wrong download is rejected before it replaces a good
+        // install (see SkyDataInstaller's verify-before-swap). Measured from the commit-pinned upstream files; kept
+        // internal (an install-integrity detail, not part of the wire DTO). Packages without an entry skip the check.
+        internal static readonly IReadOnlyDictionary<string, string> CatalogSha256 =
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["hyg-stars"] = "8e3ff9e67445e558a759b117910850cff1b1d4d492f45f715c2ee2db3d869bac",
+                ["openngc-dso"] = "840fe0c9ee1332e551b2e722a0e92726cd7b157914a3d2177602832aadd3aa9e",
+            };
+
         /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
         internal static bool IsArchiveFormat(Uri url) =>
             url.AbsolutePath.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
@@ -320,13 +330,14 @@ namespace OpenAstroAra.Server.Services {
                     LogCatalogSizeMissing(pkg.Id);
                 }
                 var ceiling = ExtractionCeiling(pkg);
+                var expectedSha = CatalogSha256.GetValueOrDefault(pkg.Id);
                 if (IsArchiveFormat(pkg.SourceUrl!)) {
-                    await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.LastModified, ct).ConfigureAwait(false);
+                    await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.LastModified, ct, expectedSha).ConfigureAwait(false);
                 } else if (IsBareCatalogFormat(pkg.SourceUrl!)) {
                     // A bare catalog file (a CSV, optionally gzip-compressed). Install it under a canonical name so the
                     // §36 catalog consumer reads {packageDir}/catalog.csv regardless of the upstream file name.
                     var gunzip = pkg.SourceUrl!.AbsolutePath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
-                    await SkyDataInstaller.InstallFromFileAsync(counting, targetDir, CatalogFileName, gunzip, ceiling, fetch.LastModified, ct).ConfigureAwait(false);
+                    await SkyDataInstaller.InstallFromFileAsync(counting, targetDir, CatalogFileName, gunzip, ceiling, fetch.LastModified, ct, expectedSha).ConfigureAwait(false);
                 } else {
                     // Fail fast (rather than silently writing raw bytes as catalog.csv) if a future catalog entry uses an
                     // unrecognised format — a curator mistake. SupportedDownloadFormat catches the same at test time.

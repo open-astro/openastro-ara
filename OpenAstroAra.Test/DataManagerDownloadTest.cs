@@ -138,21 +138,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_csv_gz_package_is_gunzipped_to_catalog_csv() {
-            // A package whose URL ends in .csv.gz routes through the single-file install path: the worker gunzips the
-            // download and writes it as the canonical catalog.csv (not a tar extraction).
-            var gz = Gz(Encoding.UTF8.GetBytes("id,proper,ra,dec\n0,Sol,0,0\n"));
+        public async Task A_download_whose_digest_does_not_match_the_catalog_fails_and_installs_nothing() {
+            // CsvGzPackageId carries an expected SHA-256 in the catalog (CatalogSha256). The fake serves arbitrary
+            // bytes, so the integrity check must reject the download before it's committed — exercising the worker →
+            // installer digest wiring end-to-end. (The matching-digest happy path is covered at the installer level in
+            // SkyDataInstallerTest, where the test controls the expected hash.)
+            Assert.That(DataManagerService.CatalogSha256.ContainsKey(CsvGzPackageId), Is.True,
+                "this test assumes the package has an expected digest");
+            var gz = Gz(Encoding.UTF8.GetBytes("definitely not the real catalog bytes\n"));
             var ws = new CapturingBroadcaster();
             var svc = NewService(new FakeSkyDataFetcher(gz), ws);
 
             await svc.DownloadAsync(new DownloadRequestDto(CsvGzPackageId, ForceReinstall: false), null, CancellationToken.None);
-            var done = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
-            Assert.That(done, Is.True, "a complete event is emitted for the csv.gz install");
 
-            var installed = Path.Combine(_root, CsvGzPackageId, DataManagerService.CatalogFileName);
-            Assert.That(await File.ReadAllTextAsync(installed), Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"),
-                "the .csv.gz is gunzipped to catalog.csv");
-            Assert.That(File.Exists(Path.Combine(_root, CsvGzPackageId, ".installed")), Is.True, "the sentinel is written");
+            var failed = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadFailed));
+            Assert.That(failed, Is.True, "a digest mismatch surfaces a failed event");
+            Assert.That(Directory.Exists(Path.Combine(_root, CsvGzPackageId)), Is.False,
+                "nothing is installed when the downloaded bytes don't match the expected digest");
         }
 
         [Test]

@@ -286,6 +286,59 @@ namespace OpenAstroAra.Test {
             Assert.That(TempDirs(), Is.Empty, "a rejected dest name leaks no staging dir");
         }
 
+        // ── SHA-256 integrity (verify-before-swap) ────────────────────────────────────────────────────────
+
+        // Convert.ToHexString returns upper-case hex; the installer compares OrdinalIgnoreCase, so case doesn't matter.
+        private static string Sha256Hex(byte[] data) =>
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data));
+
+        [Test]
+        public async Task Installs_a_file_whose_digest_matches() {
+            var target = Path.Combine(_root, "hyg-stars");
+            var bytes = Bytes("id,proper\n0,Sol\n");
+            using var src = new MemoryStream(bytes);
+
+            await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: false, maxBytes: null,
+                remoteLastModified: null, CancellationToken.None, expectedSha256: Sha256Hex(bytes));
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")), Is.EqualTo("id,proper\n0,Sol\n"));
+            Assert.That(File.Exists(Path.Combine(target, SkyDataInstaller.InstalledMarkerFileName)), Is.True);
+        }
+
+        [Test]
+        public async Task Installs_a_gzipped_file_whose_digest_matches_and_decompresses_it() {
+            var target = Path.Combine(_root, "hyg-stars");
+            var content = Bytes("id,proper,ra,dec\n0,Sol,0,0\n");
+            var gz = MakeGz(content).ToArray(); // digest is of the COMPRESSED download
+            using var src = new MemoryStream(gz);
+
+            await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: true, maxBytes: null,
+                remoteLastModified: null, CancellationToken.None, expectedSha256: Sha256Hex(gz));
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")),
+                Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"), "the digest covers the .gz bytes; content is decompressed");
+        }
+
+        [Test]
+        public async Task A_digest_mismatch_is_rejected_and_the_prior_install_survives() {
+            var target = Path.Combine(_root, "hyg-stars");
+            using (var first = new MemoryStream(Bytes("original"))) {
+                await SkyDataInstaller.InstallFromFileAsync(first, target, "catalog.csv", gunzip: false, maxBytes: null,
+                    remoteLastModified: null, CancellationToken.None);
+            }
+
+            using var tampered = new MemoryStream(Bytes("tampered"));
+            Assert.That(
+                async () => await SkyDataInstaller.InstallFromFileAsync(tampered, target, "catalog.csv", gunzip: false,
+                    maxBytes: null, remoteLastModified: null, CancellationToken.None,
+                    expectedSha256: new string('0', 64)),
+                Throws.InstanceOf<InvalidDataException>(), "a download whose digest doesn't match is rejected");
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")), Is.EqualTo("original"),
+                "verify happens before the swap, so the prior install is untouched on a mismatch");
+            Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up after the rejected install");
+        }
+
         // Sibling scratch dirs the installer creates under _root during a swap (".staging-*" / ".backup-*").
         private string[] TempDirs() =>
             Directory.EnumerateDirectories(_root, ".*", SearchOption.TopDirectoryOnly)
