@@ -6,6 +6,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>OpenAstroAra.Server</RootNamespace>
     <AssemblyName>OpenAstroAra.Server</AssemblyName>
+    <!--
+      The daemon speaks only invariant/wire formats (ISO-8601 timestamps,
+      snake_case keys, numeric REST values), so it runs InvariantGlobalization
+      in EVERY configuration — not just Release. Keeping it all-config makes a
+      Debug build behave identically to the shipped daemon (no machine-locale
+      date/number parsing in dev that's invariant in prod), and lets the CA13xx
+      locale-sensitivity analyzers correctly stand down in Debug too — they were
+      firing (as build-breaking errors under newer SDK analyzers) only because
+      this flag was previously Release-scoped, a Debug/Release skew. See §26.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,9 +36,6 @@
     source-gen stays in place so DTOs still benefit from it; only the
     sequence-body deserialization uses reflection.
   -->
-  <PropertyGroup Condition="'$(Configuration)'=='Release'">
-    <InvariantGlobalization>true</InvariantGlobalization>
-  </PropertyGroup>
 
   <ItemGroup>
     <!-- §72 FITS via CFITSIO. Portable net10.0 + AOT-compatible. -->
