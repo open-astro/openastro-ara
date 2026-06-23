@@ -270,6 +270,7 @@ namespace OpenAstroAra.Test {
         // A dest name that isn't a single plain file — a separator, or the "."/".." relative-dir tokens that
         // GetFileName passes through unchanged and Path.Combine would resolve to the package dir or its parent.
         [TestCase("sub/catalog.csv")]
+        [TestCase("sub\\catalog.csv")] // backslash isn't a Linux separator — reject it OS-independently
         [TestCase("..")]
         [TestCase(".")]
         [TestCase("../escaped.csv")]

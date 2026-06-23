@@ -130,10 +130,11 @@ namespace OpenAstroAra.Server.Services {
                 long? maxBytes, DateTimeOffset? remoteLastModified, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(source);
             ArgumentException.ThrowIfNullOrEmpty(destFileName);
-            // GetFileName("..") == ".." and GetFileName(".") == ".", so the separator check alone lets the relative-dir
-            // tokens through — and Path.Combine(staging, "..") escapes the package dir. Reject them explicitly.
-            if (!string.Equals(Path.GetFileName(destFileName), destFileName, StringComparison.Ordinal)
-                    || destFileName is "." or "..") {
+            // Require a plain file name that can't escape the package dir. Reject BOTH separators explicitly (not via
+            // Path.GetFileName, which is OS-dependent — on Linux it doesn't split on '\', so "sub\x" would slip
+            // through) and the relative-dir tokens "." / ".." (GetFileName returns those unchanged, and
+            // Path.Combine(staging, "..") resolves to the parent).
+            if (destFileName.AsSpan().IndexOfAny('/', '\\') >= 0 || destFileName is "." or "..") {
                 throw new ArgumentException("Destination file name must be a plain file name.", nameof(destFileName));
             }
             return InstallStagedAsync(
