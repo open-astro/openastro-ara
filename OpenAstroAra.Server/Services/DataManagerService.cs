@@ -70,7 +70,9 @@ namespace OpenAstroAra.Server.Services {
                 // this is a real CSV, but OpenNGC below is SEMICOLON-separated, so don't assume one delimiter.
                 Description: "≈120,000 stars with proper names (Hipparcos/Yale/Gliese) — the Sky Atlas star overlay.",
                 Category: "catalog",
-                SizeBytes: 48_000_000,
+                // Measured decompressed size of hygdata_v40.csv (curl | gunzip | wc -c). This is the extraction
+                // ceiling (×1.25 ≈ 42 MB), so it must be ≥ the real on-disk size or the install would size-cap-abort.
+                SizeBytes: 33_932_465,
                 Version: "v40",
                 IsInstalled: false,
                 InstalledUtc: null,
