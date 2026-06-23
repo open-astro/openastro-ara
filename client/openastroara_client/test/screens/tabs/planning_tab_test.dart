@@ -1,7 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/tabs/planning_tab.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+
+/// ProfileApi double returning a configured optics section, so the Planning
+/// tab's on-mount hydration has something to load.
+class _FakeProfileApi extends ProfileApi {
+  _FakeProfileApi() : super(const AraServer(hostname: 'test', port: 1));
+  @override
+  Future<OpticsSettings> getOptics() async => const OpticsSettings(
+        focalLengthMm: 714,
+        reducerFactor: 1.0,
+        sensorWidthPx: 6248,
+        sensorHeightPx: 4176,
+        pixelSizeUm: 3.76,
+      );
+}
 
 // Widget tests for the merged Planning tab (PORT_DECISIONS §36/§25.5). The
 // embedded AladinView can't start a webview in the headless test env, so it
@@ -72,5 +90,28 @@ void main() {
       ),
     );
     expect(addBtn.onPressed, isNull);
+  });
+
+  testWidgets('hydrates profile optics on mount so the FOV box has geometry',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      profileApiProvider.overrideWithValue(_FakeProfileApi()),
+    ]);
+    addTearDown(container.dispose);
+    // Starts at the zero default → no computable FOV (the bug: camera size never
+    // showed when framing).
+    expect(container.read(opticsSettingsProvider).fovWidthArcmin, isNull);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: PlanningTab())),
+    ));
+    await tester.pump(); // build + schedule the post-frame hydrate
+    await tester.pump(const Duration(milliseconds: 50)); // let getOptics resolve
+
+    final optics = container.read(opticsSettingsProvider);
+    expect(optics.focalLengthMm, 714);
+    expect(optics.fovWidthArcmin, isNotNull,
+        reason: 'optics hydrated on mount → frameFovBoxProvider can draw the FOV');
   });
 }
