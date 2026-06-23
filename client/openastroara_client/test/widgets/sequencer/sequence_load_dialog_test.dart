@@ -56,6 +56,10 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
+  Future<String> create(String name, Map<String, dynamic> body,
+          {String? description}) async =>
+      'new-seq';
+  @override
   Future<SequenceShareExport> exportShare(String id) async =>
       const SequenceShareExport(sequenceName: 'fake', manifest: {'schemaVersion': 'v1'});
   @override
