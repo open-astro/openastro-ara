@@ -19,6 +19,7 @@ using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
@@ -44,12 +45,18 @@ namespace OpenAstroAra.Sequencer.Container {
     [JsonObject(MemberSerialization.OptIn)]
     public class DeepSkyObjectContainer : SequentialContainer, IDeepSkyObjectContainer {
         private readonly IProfileService profileService;
-        private volatile NighttimeData? nighttimeData;
+        private readonly Lazy<NighttimeData> nighttimeData;
 
         [ImportingConstructor]
         public DeepSkyObjectContainer(IProfileService profileService) : base() {
             this.profileService = profileService;
             Target = NewTargetFromProfile();
+            // Lazy + the default ExecutionAndPublication mode: computed at most once, and safe to
+            // read from multiple threads — without paying the SOFA/NOVAS cost unless something asks.
+            nighttimeData = new Lazy<NighttimeData>(() => {
+                using var calculator = new NighttimeCalculator(profileService);
+                return calculator.Calculate();
+            });
         }
 
         [JsonProperty]
@@ -60,15 +67,7 @@ namespace OpenAstroAra.Sequencer.Container {
         /// lazily (it depends on the location, not the target) so import doesn't pay for
         /// it; callers that don't need it (round-trip, validation) never trigger it.
         /// </summary>
-        public NighttimeData NighttimeData {
-            get {
-                if (nighttimeData == null) {
-                    using var calculator = new NighttimeCalculator(profileService);
-                    nighttimeData = calculator.Calculate();
-                }
-                return nighttimeData;
-            }
-        }
+        public NighttimeData NighttimeData => nighttimeData.Value;
 
         [JsonProperty]
         public bool ExposureInfoListExpanded { get; set; }

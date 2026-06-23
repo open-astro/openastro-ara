@@ -67,7 +67,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Guider {
             // The parent block calls this each time it (re)starts executing (SequentialStrategy
             // .InitializeBlock), so zero the exposure tally here — otherwise a reset + replay would
             // carry the previous run's count and fire the dither off-cadence.
-            exposureCount = 0;
+            Interlocked.Exchange(ref exposureCount, 0);
         }
 
         public override object Clone() {
@@ -81,13 +81,17 @@ namespace OpenAstroAra.Sequencer.Trigger.Guider {
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
-            // RunTriggersAfter calls this once after each completed item. Tally exposures
-            // (TakeExposure / SmartExposure implement IExposureItem) and fire every Nth,
-            // matching NINA's "dither after N exposures" cadence.
-            if (previousItem is IExposureItem) {
-                exposureCount++;
+            // RunTriggersAfter calls this once after each completed item. Only an exposure
+            // (TakeExposure implements IExposureItem) advances the tally, and the dither fires
+            // *on* the exposure that completes a group of N — never on a following non-exposure
+            // item, which would otherwise re-fire while the count still sat on a multiple.
+            // Interlocked keeps the read-modify-write atomic in case a parallel container ever
+            // evaluates triggers off the imaging thread.
+            if (previousItem is not IExposureItem || AfterExposures <= 0) {
+                return false;
             }
-            return AfterExposures > 0 && exposureCount > 0 && exposureCount % AfterExposures == 0;
+            var count = Interlocked.Increment(ref exposureCount);
+            return count % AfterExposures == 0;
         }
     }
 }

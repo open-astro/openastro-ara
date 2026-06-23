@@ -72,7 +72,8 @@ namespace OpenAstroAra.Test {
                     { "$type": "NINA.Sequencer.Conditions.LoopCondition, NINA.Sequencer", "Iterations": 3, "CompletedIterations": 0 }
                   ],
                   "Items": [
-                    { "$type": "NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter, NINA.Sequencer" }
+                    { "$type": "NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter, NINA.Sequencer" },
+                    { "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer", "ExposureTime": 60.0, "Gain": 100, "Offset": 10, "Binning": { "$type": "NINA.Core.Model.Equipment.BinningMode, NINA.Core", "X": 1, "Y": 1 }, "ImageType": "LIGHT", "ExposureCount": 0 }
                   ],
                   "Triggers": [
                     {
@@ -122,9 +123,28 @@ namespace OpenAstroAra.Test {
 
             var smart = dso.Items.OfType<SmartExposure>().SingleOrDefault();
             Assert.That(smart, Is.Not.Null, "the SmartExposure must resolve to its ported type, not UnknownSequenceContainer");
-            Assert.That(smart!.Items, Has.Count.EqualTo(1), "the embedded SwitchFilter must survive import");
+            Assert.That(smart!.Items, Has.Count.EqualTo(2), "the embedded SwitchFilter + TakeExposure must survive import");
             Assert.That(smart.Items[0].GetType().Name, Is.EqualTo("SwitchFilter"));
+            Assert.That(smart.Items[1].GetType().Name, Is.EqualTo("TakeExposure"));
             Assert.That(smart.Conditions.Any(c => c.GetType().Name == "LoopCondition"), Is.True, "the exposure-count loop must survive import");
+        }
+
+        [Test]
+        public void Imported_dither_fires_on_the_imported_exposure() {
+            // End-to-end: the TakeExposure deserialized inside the SmartExposure is a real
+            // IExposureItem, so the imported DitherAfterExposures (AfterExposures=5) actually
+            // reaches its cadence when fed that exposure — i.e. dithering survives import, not
+            // just type resolution.
+            var smart = Deserialize(NinaSequenceJson)
+                .Items.OfType<DeepSkyObjectContainer>().Single()
+                .Items.OfType<SmartExposure>().Single();
+            var exposure = smart.Items.OfType<OpenAstroAra.Sequencer.Interfaces.IExposureItem>().Single();
+            var dither = smart.Triggers.OfType<DitherAfterExposures>().Single();
+
+            for (var i = 1; i < dither.AfterExposures; i++) {
+                Assert.That(dither.ShouldTrigger(exposure, null), Is.False, $"must not dither on imported exposure {i}");
+            }
+            Assert.That(dither.ShouldTrigger(exposure, null), Is.True, "the imported dither must fire on its Nth imported exposure");
         }
 
         [Test]
