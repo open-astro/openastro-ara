@@ -130,8 +130,10 @@ public static class SystemEndpoints {
             .WithName("GetDataManagerState");
 
         // §36 — serve an installed catalog's objects (normalized {name, ra°, dec°, mag}) for the Sky Atlas overlay.
-        // 404 when the package isn't a known catalog, isn't installed, or has no catalog.csv. Optional ?maxMag= drops
+        // 404 when the package isn't a known catalog, isn't installed, or has no catalog.csv. Optional ?max_mag= drops
         // fainter objects (e.g. naked-eye stars only) and ?limit= caps the count, keeping the overlay payload sane.
+        // NOTE: ?max_mag= also drops objects with NO recorded magnitude (e.g. OpenNGC DSOs carrying neither V- nor
+        // B-Mag), since they can't be compared to the threshold — omit the filter to include those.
         data.MapGet("/{packageId}/catalog",
                 async (string packageId, [FromQuery(Name = "max_mag")] double? maxMag, [FromQuery] int? limit,
                         IDataManagerService svc, CancellationToken ct) => {

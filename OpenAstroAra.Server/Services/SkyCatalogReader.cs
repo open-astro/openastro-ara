@@ -183,9 +183,11 @@ namespace OpenAstroAra.Server.Services {
                 s = s[1..];
             }
             var parts = s.Split(':');
+            // Hours/degrees and minutes are integral in this notation (Integer rejects "01.5"); only seconds may carry a
+            // fraction (e.g. "44.33"), so it alone parses as Float. This keeps "01.5:30:00" out rather than reading it as 2h.
             if (parts.Length != 3 ||
-                !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var a) ||
-                !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var b) ||
+                !double.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var a) ||
+                !double.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b) ||
                 !double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var c)) {
                 return false;
             }
