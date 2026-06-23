@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/catalog_object.dart';
 import 'package:openastroara/state/imaging/fov_box.dart';
 import 'package:openastroara/widgets/sky_atlas/aladin_view.dart';
 
@@ -103,6 +104,38 @@ void main() {
     test('escapes quotes so a survey id cannot break out of the string', () {
       expect(surveyScript('x"); alert(1)//'),
           r'window.araSetSurvey && window.araSetSurvey("x\"); alert(1)//");');
+    });
+  });
+
+  group('catalogScript', () {
+    test('encodes objects as a single JSON array argument (name/ra/dec/mag)', () {
+      expect(
+        catalogScript(const [
+          CatalogObject(name: 'Sol', raDeg: 0, decDeg: 0, magnitude: 4.85),
+          CatalogObject(name: 'M31', raDeg: 10.68, decDeg: 41.27),
+        ]),
+        'window.araAddCatalog && window.araAddCatalog('
+        '[{"name":"Sol","ra":0.0,"dec":0.0,"mag":4.85},'
+        '{"name":"M31","ra":10.68,"dec":41.27}]);',
+      );
+    });
+
+    test('a name with quotes is JSON-escaped, not able to break out / inject', () {
+      expect(
+        catalogScript(const [CatalogObject(name: '"); alert(1)//', raDeg: 1, decDeg: 2)]),
+        r'window.araAddCatalog && window.araAddCatalog([{"name":"\"); alert(1)//","ra":1.0,"dec":2.0}]);',
+      );
+    });
+
+    test('an empty list still produces a valid (empty-array) call', () {
+      expect(catalogScript(const []),
+          'window.araAddCatalog && window.araAddCatalog([]);');
+    });
+  });
+
+  group('clearCatalogScript', () {
+    test('clears the overlay', () {
+      expect(clearCatalogScript(), 'window.araClearCatalog && window.araClearCatalog();');
     });
   });
 }

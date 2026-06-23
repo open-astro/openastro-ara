@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/catalog_object.dart';
 import 'package:openastroara/models/data_package.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/data_manager_api.dart';
@@ -44,6 +45,10 @@ class _FakeDataManagerClient implements DataManagerClient {
     deleted.add(packageId);
     return true;
   }
+
+  @override
+  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit}) async =>
+      const <CatalogObject>[];
 
   @override
   void close() {}
