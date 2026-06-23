@@ -91,4 +91,18 @@ void main() {
       expect(gotoScript(r'a\b'), r'window.araGoto && window.araGoto("a\\b");');
     });
   });
+
+  group('surveyScript', () {
+    test('wraps a HiPS id as a single JSON-encoded argument', () {
+      expect(
+        surveyScript('CDS/P/DESI-Legacy-Surveys/DR10/color'),
+        'window.araSetSurvey && window.araSetSurvey("CDS/P/DESI-Legacy-Surveys/DR10/color");',
+      );
+    });
+
+    test('escapes quotes so a survey id cannot break out of the string', () {
+      expect(surveyScript('x"); alert(1)//'),
+          r'window.araSetSurvey && window.araSetSurvey("x\"); alert(1)//");');
+    });
+  });
 }

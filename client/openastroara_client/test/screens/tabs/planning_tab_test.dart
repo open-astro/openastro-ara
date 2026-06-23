@@ -6,6 +6,7 @@ import 'package:openastroara/screens/tabs/planning_tab.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 
 /// ProfileApi double returning a configured optics section, so the Planning
 /// tab's on-mount hydration has something to load.
@@ -90,6 +91,34 @@ void main() {
       ),
     );
     expect(addBtn.onPressed, isNull);
+  });
+
+  testWidgets('survey picker shows DSS2 by default and selecting one updates the provider',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(container.read(skyAtlasSurveyProvider), kDefaultSkySurveyId);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: PlanningTab())),
+    ));
+    await tester.pump();
+
+    // The picker shows the default survey's label.
+    expect(find.text('DSS2 colour'), findsOneWidget);
+
+    // Open the menu and pick a deeper survey. Fixed pumps (not pumpAndSettle):
+    // the embedded AladinView spinner never settles in the headless env.
+    await tester.tap(find.text('DSS2 colour'));
+    await tester.pump(); // start the menu route
+    await tester.pump(const Duration(milliseconds: 400)); // finish its open anim
+    await tester.tap(find.text('DESI Legacy DR10').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(container.read(skyAtlasSurveyProvider),
+        'CDS/P/DESI-Legacy-Surveys/DR10/color');
   });
 
   testWidgets('hydrates profile optics on mount so the FOV box has geometry',

@@ -47,3 +47,43 @@ final skyAtlasSearchProvider =
 /// this to false (no downloads yet); 12e.2 reads it from the Data Manager
 /// state once download tracking lands.
 final skyImageryAvailableProvider = Provider<bool>((ref) => false);
+
+/// A selectable Aladin base imagery survey (§36 "best-looking sky" picker). The
+/// [id] is the CDS HiPS identifier handed to Aladin's `setBaseImageLayer`; the
+/// [coverage] note tells the user a partial survey leaves the rest of the sky
+/// blank (not a bug).
+class SkySurvey {
+  final String id;
+  final String label;
+  final String coverage;
+  const SkySurvey(this.id, this.label, this.coverage);
+}
+
+/// The atlas's default base survey — full-sky colour photographs (DSS2). The
+/// Aladin bootstrap also hard-codes this as its initial `survey`, so the two
+/// must stay in sync (the view only pushes a survey change when it differs).
+const String kDefaultSkySurveyId = 'P/DSS2/color';
+
+/// The curated survey choices, verified against the CDS HiPS list. DSS2 colour
+/// is first (the full-sky default); the partial-coverage deep surveys follow,
+/// each flagged so the user understands the gaps.
+const List<SkySurvey> kSkySurveys = [
+  SkySurvey(kDefaultSkySurveyId, 'DSS2 colour', 'Full sky'),
+  SkySurvey('CDS/P/DESI-Legacy-Surveys/DR10/color', 'DESI Legacy DR10',
+      'Partial — deepest colour'),
+  SkySurvey('CDS/P/DECaPS/DR2/color', 'DECaPS DR2',
+      'Partial — southern Milky Way'),
+  SkySurvey('CDS/P/2MASS/color', '2MASS (infrared)', 'Full sky'),
+];
+
+/// The currently-selected base survey id. The Planning header's picker sets it;
+/// [AladinView] listens and calls `setBaseImageLayer`. Defaults to DSS2 colour.
+class SkyAtlasSurveyNotifier extends Notifier<String> {
+  @override
+  String build() => kDefaultSkySurveyId;
+  void set(String id) => state = id;
+}
+
+final skyAtlasSurveyProvider =
+    NotifierProvider<SkyAtlasSurveyNotifier, String>(
+        SkyAtlasSurveyNotifier.new);
