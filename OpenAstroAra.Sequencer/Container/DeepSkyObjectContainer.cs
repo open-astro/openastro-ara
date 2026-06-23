@@ -93,7 +93,9 @@ namespace OpenAstroAra.Sequencer.Container {
                 Triggers = new ObservableCollection<ISequenceTrigger>(Triggers.Select(t => (ISequenceTrigger)t.Clone())),
                 Conditions = new ObservableCollection<ISequenceCondition>(Conditions.Select(c => (ISequenceCondition)c.Clone())),
                 ExposureInfoListExpanded = ExposureInfoListExpanded,
-                ExposureInfoList = new ObservableCollection<ExposureInfo>(ExposureInfoList),
+                // Deep-copy: ExposureInfo.Count is mutable, so a shared reference would let a
+                // cloned target's exposure bookkeeping leak back into the original.
+                ExposureInfoList = new ObservableCollection<ExposureInfo>(ExposureInfoList.Select(e => e.Clone())),
             };
 
             // The ctor already built clone.Target from the profile — copy this target's

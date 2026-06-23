@@ -83,6 +83,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void WithDefaults_registers_the_nina_dither_trigger() {
+            // §38 — the most common trigger in real NINA plans. Without the prototype it would
+            // degrade to UnknownSequenceTrigger on import; assert it directly so a refactor that
+            // drops it fails here, not just in the higher-level import test.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var triggerNames = factory.Triggers.Select(t => t.GetType().Name).ToList();
+            Assert.That(triggerNames, Does.Contain("DitherAfterExposures"));
+        }
+
+        [Test]
         public void WithDefaults_factory_resolves_SequentialContainer_via_JSON() {
             // End-to-end: the JSON converter's GetContainer<T> reflection
             // lookup hits the registered prototype, clones it, returns a
