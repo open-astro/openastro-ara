@@ -36,7 +36,7 @@ namespace OpenAstroAra.Astrometry {
             RaiseCoordinatesChanged();
         }
 
-        public InputTarget(Angle latitude, Angle longitude, CustomHorizon horizon) {
+        public InputTarget(Angle latitude, Angle longitude, CustomHorizon? horizon) {
             this.latitude = latitude;
             this.longitude = longitude;
             DeepSkyObject = new DeepSkyObject(string.Empty, new Coordinates(Angle.Zero, Angle.Zero, Epoch.J2000), string.Empty, horizon);

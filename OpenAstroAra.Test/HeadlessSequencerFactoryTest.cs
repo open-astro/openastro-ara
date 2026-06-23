@@ -69,13 +69,17 @@ namespace OpenAstroAra.Test {
         // (instead of falling back to UnknownSequenceContainer).
 
         [Test]
-        public void WithDefaults_registers_the_three_structural_containers() {
+        public void WithDefaults_registers_the_structural_and_nina_target_containers() {
             var factory = HeadlessSequencerFactory.WithDefaults();
-            Assert.That(factory.Containers, Has.Count.EqualTo(3));
             var typeNames = factory.Containers.Select(c => c.GetType().Name).ToList();
+            // Structural containers.
             Assert.That(typeNames, Does.Contain("SequenceRootContainer"));
             Assert.That(typeNames, Does.Contain("SequentialContainer"));
             Assert.That(typeNames, Does.Contain("ParallelContainer"));
+            // §38 NINA import-fidelity container prototypes (per-target block + Smart Exposure)
+            // so real NINA exports resolve instead of degrading to UnknownSequenceContainer.
+            Assert.That(typeNames, Does.Contain("DeepSkyObjectContainer"));
+            Assert.That(typeNames, Does.Contain("SmartExposure"));
         }
 
         [Test]
