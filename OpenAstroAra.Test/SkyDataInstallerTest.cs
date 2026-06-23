@@ -211,6 +211,81 @@ namespace OpenAstroAra.Test {
             Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up after the limit abort");
         }
 
+        // ── single-file install (§36 bare CSV / CSV.gz catalogs) ──────────────────────────────────────────
+
+        // Gzip-compress bytes into an in-memory stream (the .csv.gz download shape).
+        private static MemoryStream MakeGz(byte[] data) {
+            var ms = new MemoryStream();
+            using (var gz = new GZipStream(ms, CompressionMode.Compress, leaveOpen: true)) {
+                gz.Write(data, 0, data.Length);
+            }
+            ms.Position = 0;
+            return ms;
+        }
+
+        [Test]
+        public async Task Installs_a_plain_file_under_the_given_name_with_a_sentinel() {
+            var target = Path.Combine(_root, "openngc-dso");
+            using var src = new MemoryStream(Bytes("name;ra;dec\nM31;10.68;41.27\n"));
+
+            await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: false,
+                maxBytes: null, remoteLastModified: null, CancellationToken.None);
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")),
+                Is.EqualTo("name;ra;dec\nM31;10.68;41.27\n"));
+            Assert.That(File.Exists(Path.Combine(target, SkyDataInstaller.InstalledMarkerFileName)), Is.True);
+        }
+
+        [Test]
+        public async Task Installs_a_gzipped_file_decompressed() {
+            var target = Path.Combine(_root, "hyg-stars");
+            using var src = MakeGz(Bytes("id,proper,ra,dec\n0,Sol,0,0\n"));
+
+            await SkyDataInstaller.InstallFromFileAsync(src, target, "catalog.csv", gunzip: true,
+                maxBytes: null, remoteLastModified: null, CancellationToken.None);
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")),
+                Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"), "the .csv.gz is decompressed on install");
+        }
+
+        [Test]
+        public async Task A_file_exceeding_the_cap_is_rejected_and_the_prior_install_survives() {
+            var target = Path.Combine(_root, "hyg-stars");
+            using (var first = new MemoryStream(Bytes("original"))) {
+                await SkyDataInstaller.InstallFromFileAsync(first, target, "catalog.csv", gunzip: false,
+                    maxBytes: null, remoteLastModified: null, CancellationToken.None);
+            }
+
+            using var tooBig = new MemoryStream(new byte[8 * 1024]);
+            Assert.That(
+                async () => await SkyDataInstaller.InstallFromFileAsync(tooBig, target, "catalog.csv", gunzip: false,
+                    maxBytes: 6 * 1024, remoteLastModified: null, CancellationToken.None),
+                Throws.InstanceOf<InvalidDataException>(), "a file past the byte cap is rejected");
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.csv")), Is.EqualTo("original"),
+                "the over-limit install left the prior install intact");
+            Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up after the cap abort");
+        }
+
+        // A dest name that isn't a single plain file — a separator, or the "."/".." relative-dir tokens that
+        // GetFileName passes through unchanged and Path.Combine would resolve to the package dir or its parent.
+        [TestCase("sub/catalog.csv")]
+        [TestCase("sub\\catalog.csv")] // backslash isn't a Linux separator — reject it OS-independently
+        [TestCase("..")]
+        [TestCase(".")]
+        [TestCase("../escaped.csv")]
+        public void Rejects_a_dest_file_name_that_is_not_a_plain_file(string destFileName) {
+            var target = Path.Combine(_root, "openngc-dso");
+            using var src = new MemoryStream(Bytes("x"));
+            Assert.That(
+                async () => await SkyDataInstaller.InstallFromFileAsync(src, target, destFileName, gunzip: false,
+                    maxBytes: null, remoteLastModified: null, CancellationToken.None),
+                Throws.InstanceOf<ArgumentException>(),
+                $"'{destFileName}' must be rejected — it can't be allowed to escape the package dir");
+            Assert.That(Directory.Exists(target), Is.False, "a rejected install creates no target dir");
+            Assert.That(TempDirs(), Is.Empty, "a rejected dest name leaks no staging dir");
+        }
+
         // Sibling scratch dirs the installer creates under _root during a swap (".staging-*" / ".backup-*").
         private string[] TempDirs() =>
             Directory.EnumerateDirectories(_root, ".*", SearchOption.TopDirectoryOnly)
