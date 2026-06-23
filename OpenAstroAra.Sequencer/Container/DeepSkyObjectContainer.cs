@@ -98,8 +98,11 @@ namespace OpenAstroAra.Sequencer.Container {
                 ExposureInfoList = new ObservableCollection<ExposureInfo>(ExposureInfoList.Select(e => e.Clone())),
             };
 
-            // The ctor already built clone.Target from the profile — copy this target's
-            // identity onto it rather than allocating a second InputTarget.
+            // The ctor already built clone.Target from the profile (so its observer frame /
+            // horizon already match) — copy this target's full serializable state onto it rather
+            // than allocating a second InputTarget. These four are InputTarget's complete
+            // [JsonProperty] surface (Rotation is a ShouldSerialize=false alias of PositionAngle).
+            clone.Target.Expanded = Target.Expanded;
             clone.Target.TargetName = Target.TargetName;
             clone.Target.PositionAngle = Target.PositionAngle;
             clone.Target.InputCoordinates = Target.InputCoordinates.Clone();

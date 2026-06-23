@@ -37,11 +37,13 @@ namespace OpenAstroAra.Test {
             var dso = new DeepSkyObjectContainer(new HeadlessProfileService());
             dso.Target.TargetName = "M31";
             dso.Target.PositionAngle = 33.0;
+            dso.Target.Expanded = true;
 
             var clone = (DeepSkyObjectContainer)dso.Clone();
             Assert.That(clone.Target, Is.Not.SameAs(dso.Target));
             Assert.That(clone.Target.TargetName, Is.EqualTo("M31"));
             Assert.That(clone.Target.PositionAngle, Is.EqualTo(33.0));
+            Assert.That(clone.Target.Expanded, Is.True, "the full InputTarget serializable state must survive clone");
         }
     }
 }
