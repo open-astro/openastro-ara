@@ -22,10 +22,13 @@
     <AnalysisMode>All</AnalysisMode>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- NuGet restore notices that can't be fixed without replacing the package stay
-         visible warnings but do not fail the build: NU1701 (VVVV.FreeImage is a
-         .NETFramework package consumed on net10.0), NU5104 (Accord.Math prerelease). -->
-    <WarningsNotAsErrors>NU1701;NU5104</WarningsNotAsErrors>
+    <!-- NuGet restore notice that can't be fixed without replacing the package stays
+         a visible warning but does not fail the build: NU5104 (Accord.Math prerelease).
+         (NU1701 used to be allowlisted for VVVV.FreeImage — a .NETFramework package on
+         net10.0 — but that dead dependency was removed, so the build emits no NU1701 at
+         all now; leaving it out means a NEW framework-package dep surfaces as an error
+         and gets a conscious decision rather than slipping in silently.) -->
+    <WarningsNotAsErrors>NU5104</WarningsNotAsErrors>
   </PropertyGroup>
 
 </Project>
