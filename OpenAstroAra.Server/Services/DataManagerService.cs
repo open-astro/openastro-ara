@@ -203,8 +203,12 @@ namespace OpenAstroAra.Server.Services {
                 try {
                     using var stream = File.OpenRead(path);
                     return SkyCatalogReader.Read(packageId, stream, maxMag, effectiveLimit, ct);
-                } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) {
-                    return null; // installed but no catalog.csv (or removed mid-read)
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    // Any file-read failure — missing/removed-mid-read catalog.csv, a permission error, a mid-stream
+                    // I/O fault — maps to null → 404 ("catalog unavailable"), never an unhandled 500. (FileNotFound /
+                    // DirectoryNotFound are IOException subclasses, so they're covered too.)
+                    LogCatalogReadFailed(packageId, ex);
+                    return null;
                 }
             }, ct);
         }
@@ -636,6 +640,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' deleted from the data root")]
         partial void LogDeleted(string packageId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Catalog '{PackageId}' could not be read — serving 'unavailable'")]
+        partial void LogCatalogReadFailed(string packageId, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' could not be deleted")]
         partial void LogDeleteFailed(string packageId, Exception ex);

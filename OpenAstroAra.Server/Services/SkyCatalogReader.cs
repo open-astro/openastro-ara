@@ -155,16 +155,16 @@ namespace OpenAstroAra.Server.Services {
 
         // Sexagesimal "HH:MM:SS.ss" → decimal hours. Empty / malformed / out-of-range → false.
         private static bool TryParseSexagesimalHours(string raw, out double hours) =>
-            TryParseSexagesimal(raw, maxFirst: 24, out hours); // RA: 0 ≤ hours < 24
+            TryParseSexagesimal(raw, maxFirst: 24, upperInclusive: false, out hours); // RA: 0 ≤ hours < 24
 
         // Sexagesimal "±DD:MM:SS.s" → signed decimal degrees. Empty / malformed / out-of-range → false.
         private static bool TryParseSexagesimalDegrees(string raw, out double degrees) =>
-            TryParseSexagesimal(raw, maxFirst: 90, out degrees); // Dec: |deg| ≤ 90
+            TryParseSexagesimal(raw, maxFirst: 90, upperInclusive: true, out degrees); // Dec: |deg| ≤ 90 (poles valid)
 
         // Parse "A:B:C" → A + B/60 + C/3600, with a leading sign. Rejects out-of-range components (B/C must be in
-        // [0,60), A in [0, maxFirst]) so a placeholder stub like "99:99:99" is skipped rather than placed at a nonsense
-        // position — important if a future catalog carries partial rows.
-        private static bool TryParseSexagesimal(string raw, double maxFirst, out double result) {
+        // [0,60), A in [0, maxFirst] — upper bound inclusive for Dec so ±90° poles are valid, exclusive for RA so
+        // 24:xx is rejected) so a placeholder stub like "99:99:99" is skipped rather than placed at a nonsense position.
+        private static bool TryParseSexagesimal(string raw, double maxFirst, bool upperInclusive, out double result) {
             result = 0;
             var s = raw.Trim();
             if (s.Length == 0) {
@@ -181,7 +181,8 @@ namespace OpenAstroAra.Server.Services {
                 !double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var c)) {
                 return false;
             }
-            if (a < 0 || a > maxFirst || b < 0 || b >= 60 || c < 0 || c >= 60) {
+            var overMax = upperInclusive ? a > maxFirst : a >= maxFirst;
+            if (a < 0 || overMax || b < 0 || b >= 60 || c < 0 || c >= 60) {
                 return false;
             }
             result = a + b / 60.0 + c / 3600.0;

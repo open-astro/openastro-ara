@@ -100,14 +100,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void OpenNgc_skips_out_of_range_sexagesimal_components() {
+        public void OpenNgc_skips_out_of_range_sexagesimal_but_keeps_the_poles() {
             var csv = "Name;Type;RA;Dec;V-Mag;B-Mag;Common names\n" +
                       "BAD1;G;99:99:99;+10:00:00;5;;\n" +   // RA components out of range → skipped
-                      "BAD2;G;01:00:00;+99:00:00;5;;\n" +   // Dec degrees > 90 → skipped
+                      "BAD2;G;01:00:00;+99:00:00;5;;\n" +   // Dec > 90 → skipped
+                      "BAD3;G;24:30:00;+10:00:00;5;;\n" +   // RA hours ≥ 24 (exclusive upper bound) → skipped
+                      "POLE;G;05:00:00;+90:00:00;5;;\n" +   // Dec exactly 90 (pole) → KEPT
                       "OK;G;01:00:00;+10:00:00;5;;\n";
             var rows = SkyCatalogReader.Read("openngc-dso", S(csv), maxMag: null, limit: null, CancellationToken.None);
-            Assert.That(rows.Single().Name, Is.EqualTo("OK"),
-                "placeholder/out-of-range positions are skipped, not placed at a nonsense RA/Dec");
+            var names = rows.Select(r => r.Name).ToList();
+            Assert.That(names, Has.Count.EqualTo(2));
+            Assert.That(names, Does.Contain("POLE").And.Contain("OK"),
+                "bad/out-of-range positions are skipped; the +90° pole is a valid Dec and is kept");
         }
 
         [Test]
