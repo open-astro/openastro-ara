@@ -267,14 +267,22 @@ namespace OpenAstroAra.Test {
             Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up after the cap abort");
         }
 
-        [Test]
-        public void Rejects_a_dest_file_name_with_a_path_separator() {
+        // A dest name that isn't a single plain file — a separator, or the "."/".." relative-dir tokens that
+        // GetFileName passes through unchanged and Path.Combine would resolve to the package dir or its parent.
+        [TestCase("sub/catalog.csv")]
+        [TestCase("..")]
+        [TestCase(".")]
+        [TestCase("../escaped.csv")]
+        public void Rejects_a_dest_file_name_that_is_not_a_plain_file(string destFileName) {
             var target = Path.Combine(_root, "openngc-dso");
             using var src = new MemoryStream(Bytes("x"));
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromFileAsync(src, target, "sub/catalog.csv", gunzip: false,
+                async () => await SkyDataInstaller.InstallFromFileAsync(src, target, destFileName, gunzip: false,
                     maxBytes: null, remoteLastModified: null, CancellationToken.None),
-                Throws.InstanceOf<ArgumentException>(), "a dest name with a separator can't escape the package dir");
+                Throws.InstanceOf<ArgumentException>(),
+                $"'{destFileName}' must be rejected — it can't be allowed to escape the package dir");
+            Assert.That(Directory.Exists(target), Is.False, "a rejected install creates no target dir");
+            Assert.That(TempDirs(), Is.Empty, "a rejected dest name leaks no staging dir");
         }
 
         // Sibling scratch dirs the installer creates under _root during a swap (".staging-*" / ".backup-*").
