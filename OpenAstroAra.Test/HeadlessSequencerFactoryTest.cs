@@ -69,13 +69,27 @@ namespace OpenAstroAra.Test {
         // (instead of falling back to UnknownSequenceContainer).
 
         [Test]
-        public void WithDefaults_registers_the_three_structural_containers() {
+        public void WithDefaults_registers_the_structural_and_nina_target_containers() {
             var factory = HeadlessSequencerFactory.WithDefaults();
-            Assert.That(factory.Containers, Has.Count.EqualTo(3));
             var typeNames = factory.Containers.Select(c => c.GetType().Name).ToList();
+            // Structural containers.
             Assert.That(typeNames, Does.Contain("SequenceRootContainer"));
             Assert.That(typeNames, Does.Contain("SequentialContainer"));
             Assert.That(typeNames, Does.Contain("ParallelContainer"));
+            // §38 NINA import-fidelity container prototypes (per-target block + Smart Exposure)
+            // so real NINA exports resolve instead of degrading to UnknownSequenceContainer.
+            Assert.That(typeNames, Does.Contain("DeepSkyObjectContainer"));
+            Assert.That(typeNames, Does.Contain("SmartExposure"));
+        }
+
+        [Test]
+        public void WithDefaults_registers_the_nina_dither_trigger() {
+            // §38 — the most common trigger in real NINA plans. Without the prototype it would
+            // degrade to UnknownSequenceTrigger on import; assert it directly so a refactor that
+            // drops it fails here, not just in the higher-level import test.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var triggerNames = factory.Triggers.Select(t => t.GetType().Name).ToList();
+            Assert.That(triggerNames, Does.Contain("DitherAfterExposures"));
         }
 
         [Test]

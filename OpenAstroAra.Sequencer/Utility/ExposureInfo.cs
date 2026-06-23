@@ -65,5 +65,10 @@ namespace OpenAstroAra.Sequencer.Utility {
         public void Increment() {
             Count++;
         }
+
+        /// <summary>A deep copy — the mutable <see cref="Count"/> is carried but not shared, so a
+        /// cloned container's exposure bookkeeping can't cross-contaminate the original's.</summary>
+        public ExposureInfo Clone() =>
+            new(Count, Filter, ExposureTime, Gain, Offset, ImageType, BinningX, BinningY, ROI);
     }
 }

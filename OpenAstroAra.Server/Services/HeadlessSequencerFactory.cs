@@ -25,12 +25,14 @@ using OpenAstroAra.Sequencer.SequenceItem.Dome;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Rotator;
 using OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor;
 using OpenAstroAra.Sequencer.SequenceItem.Switch;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
+using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Server.Services.Equipment;
@@ -290,6 +292,14 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new SequenceRootContainer(),
                 new SequentialContainer(),
                 new ParallelContainer(),
+                // §38 NINA import fidelity — the per-target block and the dominant imaging
+                // block in real NINA exports. Both are SequentialContainer subclasses (they
+                // carry a Strategy.$type, so the item converter routes them here). Registering
+                // the prototypes lets DeepSkyObjectContainer / SmartExposure resolve to the
+                // real types instead of degrading to UnknownSequenceContainer (which gutted
+                // the bulk of every imported plan).
+                new DeepSkyObjectContainer(profileService),
+                new SmartExposure(),
             },
             triggers: new List<ISequenceTrigger> {
                 // §58 — the meridian-flip trigger. Decision logic (#362) depends only on the telescope mediator
@@ -297,6 +307,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // prototype lets a saved sequence body with a MeridianFlipTrigger resolve to the real trigger
                 // (rather than falling back to UnknownSequenceTrigger).
                 new MeridianFlipTrigger(profileService, telescopeMediator, meridianFlipExecutor),
+                // §38 NINA import fidelity — the most common trigger in real plans (one per
+                // Smart Exposure). Carries AfterExposures + a TriggerRunner holding a Dither.
+                new DitherAfterExposures(),
             });
     }
 }

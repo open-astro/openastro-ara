@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
@@ -43,7 +44,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Camera")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class TakeExposure : SequenceItem, IValidatable {
+    public class TakeExposure : SequenceItem, IValidatable, IExposureItem {
 
         private readonly ICameraMediator cameraMediator;
         private readonly IImagingMediator imagingMediator;
