@@ -129,7 +129,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task State_reflects_installed_count_and_total_size() {
             InstallPackage("hyg-stars", 2048);
-            InstallPackage("horizon-default", 512);
+            InstallPackage("openngc-dso", 512);
 
             var state = await _svc.GetStateAsync(CancellationToken.None);
 

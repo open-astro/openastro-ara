@@ -89,21 +89,11 @@ namespace OpenAstroAra.Server.Services {
                 IsInstalled: false,
                 InstalledUtc: null,
                 SourceUrl: new Uri("https://raw.githubusercontent.com/mattiaverga/OpenNGC/36cb178a0f69dba8bfc03a99c10512831edf1c6b/database_files/NGC.csv")),
-            new DataPackageDto(
-                Id: "horizon-default",
-                Name: "Default 20° horizon profile",
-                Description: "Flat 20° altitude horizon — sensible default; replace with a site survey in §37.12.",
-                Category: "horizon",
-                SizeBytes: 4_096,
-                Version: "v1",
-                IsInstalled: false,
-                InstalledUtc: null,
-                SourceUrl: new Uri("https://data.openastro.net/horizon-default/v1.tar.gz")),
+            // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
+            // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
+            // the §36 Tonight's-Sky overlay, not fetched via the Data Manager; the real horizon feature re-adds it
+            // there. Tracked in PORT_TODO.
         };
-
-        // O(1) membership check used by the path-safety guard (the linear Catalog list is for ordered listing).
-        private static readonly HashSet<string> CatalogIds =
-            new(Catalog.Select(p => p.Id), StringComparer.Ordinal);
 
         // Expected SHA-256 (hex) of each package's downloaded artifact (the raw bytes at SourceUrl — the .csv.gz for
         // hyg-stars, the .csv for openngc-dso), so a corrupted/wrong download is rejected before it replaces a good
@@ -140,23 +130,34 @@ namespace OpenAstroAra.Server.Services {
         private readonly IWsBroadcaster _ws;
         private readonly ILogger<DataManagerService> _logger;
         private readonly TimeSpan _idleTimeout;
+        // The package set this instance serves + the per-package expected download digests. Default to the production
+        // Catalog/CatalogSha256; injectable so tests can drive the worker with synthetic packages + controlled
+        // integrity policy without depending on the production catalog's exact contents.
+        private readonly IReadOnlyList<DataPackageDto> _catalog;
+        private readonly HashSet<string> _catalogIds;
+        private readonly IReadOnlyDictionary<string, string> _expectedDigests;
 
         // In-flight downloads keyed by download id, plus a one-active-download-per-package guard.
         private readonly ConcurrentDictionary<Guid, DownloadJob> _downloads = new();
         private readonly ConcurrentDictionary<string, Guid> _activeByPackage = new(StringComparer.Ordinal);
 
         public DataManagerService(string dataRootPath, ISkyDataFetcher fetcher, IWsBroadcaster ws,
-            ILogger<DataManagerService> logger, TimeSpan? idleTimeout = null) {
+            ILogger<DataManagerService> logger, TimeSpan? idleTimeout = null,
+            IReadOnlyList<DataPackageDto>? catalog = null,
+            IReadOnlyDictionary<string, string>? expectedDigests = null) {
             _dataRoot = dataRootPath ?? throw new ArgumentNullException(nameof(dataRootPath));
             _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
             _ws = ws ?? throw new ArgumentNullException(nameof(ws));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _idleTimeout = idleTimeout ?? DefaultIdleTimeout;
+            _catalog = catalog ?? Catalog;
+            _catalogIds = new HashSet<string>(_catalog.Select(p => p.Id), StringComparer.Ordinal);
+            _expectedDigests = expectedDigests ?? CatalogSha256;
         }
 
         public Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct) {
-            var packages = new List<DataPackageDto>(Catalog.Count);
-            foreach (var pkg in Catalog) {
+            var packages = new List<DataPackageDto>(_catalog.Count);
+            foreach (var pkg in _catalog) {
                 packages.Add(Describe(pkg));
             }
             return Task.FromResult<IReadOnlyList<DataPackageDto>>(packages);
@@ -165,7 +166,7 @@ namespace OpenAstroAra.Server.Services {
         public Task<DataManagerStateDto> GetStateAsync(CancellationToken ct) {
             var installed = 0;
             long total = 0;
-            foreach (var pkg in Catalog) {
+            foreach (var pkg in _catalog) {
                 var dir = PackageDir(pkg.Id);
                 if (dir is not null && ReadInstall(dir) is { } info) {
                     installed++;
@@ -209,7 +210,7 @@ namespace OpenAstroAra.Server.Services {
             // Validate against the catalog in a single pass. Return a faulted Task rather than throwing synchronously —
             // this is a Task-returning (non-async) method, so a bare throw would surface at call time, before any
             // await, violating the TAP contract (the endpoint maps the fault to a 404).
-            var pkg = Catalog.FirstOrDefault(p => p.Id == request.PackageId);
+            var pkg = _catalog.FirstOrDefault(p => p.Id == request.PackageId);
             if (pkg is null) {
                 return Task.FromException<OperationAcceptedDto>(PackageNotFoundException.ForPackageId(request.PackageId));
             }
@@ -330,7 +331,7 @@ namespace OpenAstroAra.Server.Services {
                     LogCatalogSizeMissing(pkg.Id);
                 }
                 var ceiling = ExtractionCeiling(pkg);
-                var expectedSha = CatalogSha256.GetValueOrDefault(pkg.Id);
+                var expectedSha = _expectedDigests.GetValueOrDefault(pkg.Id);
                 if (IsArchiveFormat(pkg.SourceUrl!)) {
                     await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.LastModified, ct, expectedSha).ConfigureAwait(false);
                 } else if (IsBareCatalogFormat(pkg.SourceUrl!)) {
@@ -494,7 +495,7 @@ namespace OpenAstroAra.Server.Services {
         // Per-package directory — ONLY for a known catalog id, so a caller-supplied packageId (Delete,
         // Download) can never traverse out of the data root.
         private string? PackageDir(string packageId) =>
-            CatalogIds.Contains(packageId) ? Path.Combine(_dataRoot, packageId) : null;
+            _catalogIds.Contains(packageId) ? Path.Combine(_dataRoot, packageId) : null;
 
         // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
         // does not). Used by the ForceReinstall skip.
