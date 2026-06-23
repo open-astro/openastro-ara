@@ -83,10 +83,14 @@ namespace OpenAstroAra.Test {
             return ms.ToArray();
         }
 
-        // A catalog package whose URL is a .tar.gz, so the download worker takes the archive-install path. These
-        // tests exercise the worker (progress / WS events / cancel / force / conditional GET), not catalog specifics.
+        // Any package whose URL is a .tar.gz, so the download worker takes the archive-install path (currently the
+        // horizon-default profile — these tests exercise the worker: progress / WS events / cancel / force /
+        // conditional GET, and FakeSkyDataFetcher ignores the URL, so the package is just a vehicle for the .tar.gz
+        // routing). FirstOrDefault + an explicit throw so removing the last .tar.gz entry fails with a clear message
+        // rather than an opaque InvalidOperationException.
         private static string PackageId =>
-            DataManagerService.Catalog.First(p => p.SourceUrl!.AbsolutePath.EndsWith(".tar.gz", StringComparison.Ordinal)).Id;
+            DataManagerService.Catalog.FirstOrDefault(p => p.SourceUrl!.AbsolutePath.EndsWith(".tar.gz", StringComparison.Ordinal))?.Id
+            ?? throw new InvalidOperationException("DataManagerDownloadTest needs a catalog package with a .tar.gz URL to exercise the archive-install path.");
 
         // A catalog package distributed as a bare .csv.gz, so the worker takes the single-file (gunzip) install path.
         private static string CsvGzPackageId =>

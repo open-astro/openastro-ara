@@ -66,6 +66,8 @@ namespace OpenAstroAra.Server.Services {
                 // star-label overlay. Downloaded as a 13.6 MB .csv.gz; SizeBytes is the uncompressed on-disk footprint
                 // (the extraction cap is taken from it). Commit-pinned to the archived upstream repo so the URL is
                 // immutable. License: CC BY-SA (Astronomy Nexus) — see NOTICE.md.
+                // DELIMITER: comma-separated. NOTE for the future catalog consumer: delimiters differ per package —
+                // this is a real CSV, but OpenNGC below is SEMICOLON-separated, so don't assume one delimiter.
                 Description: "≈120,000 stars with proper names (Hipparcos/Yale/Gliese) — the Sky Atlas star overlay.",
                 Category: "catalog",
                 SizeBytes: 48_000_000,

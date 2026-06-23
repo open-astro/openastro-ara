@@ -76,14 +76,14 @@ namespace OpenAstroAra.Test {
 
             Assert.That(packages.Select(p => p.Id), Is.EquivalentTo(DataManagerService.Catalog.Select(c => c.Id)),
                 "every catalog package is listed");
-            var tycho = packages.Single(p => p.Id == "hyg-stars");
-            var gaia = packages.Single(p => p.Id == "openngc-dso");
+            var stars = packages.Single(p => p.Id == "hyg-stars");
+            var dso = packages.Single(p => p.Id == "openngc-dso");
             Assert.Multiple(() => {
-                Assert.That(tycho.IsInstalled, Is.True);
-                Assert.That(tycho.SizeBytes, Is.EqualTo(installedBytes), "installed size is measured from disk, not the catalog");
-                Assert.That(tycho.InstalledUtc, Is.Not.Null);
-                Assert.That(gaia.IsInstalled, Is.False, "an absent package is not installed");
-                Assert.That(gaia.InstalledUtc, Is.Null);
+                Assert.That(stars.IsInstalled, Is.True);
+                Assert.That(stars.SizeBytes, Is.EqualTo(installedBytes), "installed size is measured from disk, not the catalog");
+                Assert.That(stars.InstalledUtc, Is.Not.Null);
+                Assert.That(dso.IsInstalled, Is.False, "an absent package is not installed");
+                Assert.That(dso.InstalledUtc, Is.Null);
             });
         }
 
@@ -109,11 +109,11 @@ namespace OpenAstroAra.Test {
             var stamp = new System.DateTime(2025, 1, 2, 3, 4, 5, System.DateTimeKind.Utc);
             File.SetLastWriteTimeUtc(sentinel, stamp);
 
-            var tycho = (await _svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "hyg-stars");
+            var stars = (await _svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "hyg-stars");
 
-            Assert.That(tycho.IsInstalled, Is.True);
-            Assert.That(tycho.InstalledUtc!.Value.UtcDateTime, Is.EqualTo(stamp), "InstalledUtc is the sentinel's write time");
-            Assert.That(tycho.SizeBytes, Is.EqualTo(2048), "the sentinel file itself is excluded from the measured size");
+            Assert.That(stars.IsInstalled, Is.True);
+            Assert.That(stars.InstalledUtc!.Value.UtcDateTime, Is.EqualTo(stamp), "InstalledUtc is the sentinel's write time");
+            Assert.That(stars.SizeBytes, Is.EqualTo(2048), "the sentinel file itself is excluded from the measured size");
         }
 
         [Test]
