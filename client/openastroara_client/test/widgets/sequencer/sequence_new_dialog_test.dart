@@ -33,6 +33,10 @@ class _NewClient implements SequenceClient {
   }
 
   @override
+  Future<String> create(String name, Map<String, dynamic> body,
+          {String? description}) async =>
+      id;
+  @override
   Future<List<SequenceTemplate>> listTemplates() async => templates;
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);

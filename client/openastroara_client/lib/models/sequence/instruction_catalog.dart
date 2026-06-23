@@ -364,6 +364,12 @@ Object? deepCloneJson(Object? value) {
 const String sequentialContainerType =
     'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer';
 
+/// The assembly-qualified `$type` of the "Slew to RA/Dec" telescope instruction
+/// — the single source of truth, reused by the Planning tab's "Add to sequence"
+/// body builder so a typo can't drift the two apart.
+const String slewScopeToRaDecType =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
+
 const List<InstructionDef> instructionCatalog = [
   // ── Camera ────────────────────────────────────────────────────────────────
   InstructionDef(
@@ -439,7 +445,7 @@ const List<InstructionDef> instructionCatalog = [
   ),
   // ── Telescope ──────────────────────────────────────────────────────────────
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer',
+    type: slewScopeToRaDecType,
     label: 'Slew to RA/Dec',
     category: InstructionCategory.telescope,
     icon: Icons.my_location_outlined,

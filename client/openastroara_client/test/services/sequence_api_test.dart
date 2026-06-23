@@ -247,6 +247,53 @@ void main() {
     });
   });
 
+  group('SequenceApi.create', () {
+    test('posts name + body to /sequences and returns the created id', () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'id': 'seq-42', 'name': 'M31'};
+      });
+      final body = {'schemaVersion': 'openastroara-sequence-v1', 'x': 1};
+      final id = await api.create('  M31  ', body, description: 'planned');
+      expect(id, 'seq-42');
+      expect(captured!.path, endsWith('/api/v1/sequences'));
+      final sent = captured!.data as Map;
+      expect(sent['name'], 'M31'); // trimmed
+      expect(sent['description'], 'planned');
+      expect(sent['body'], body);
+    });
+
+    test('omits description when not supplied', () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'id': 'seq-1'};
+      });
+      await api.create('T', const {'schemaVersion': 'openastroara-sequence-v1'});
+      expect((captured!.data as Map).containsKey('description'), isFalse);
+    });
+
+    test('rejects an empty name', () {
+      final api = _api((_) => const {});
+      expect(() => api.create('   ', const {}), throwsA(isA<ArgumentError>()));
+    });
+
+    test('throws when no id comes back', () async {
+      final api = _api((_) => {'name': 'no id'});
+      expect(api.create('n', const {}), throwsA(isA<FormatException>()));
+    });
+
+    test('a rejected body (422) propagates as DioException', () async {
+      final api = _api((_) => {'error': 'bad body'}, statusCode: 422);
+      await expectLater(
+        api.create('n', const {}),
+        throwsA(isA<DioException>()
+            .having((e) => e.response?.statusCode, 'statusCode', 422)),
+      );
+    });
+  });
+
   group('SequenceTemplate.fromJson', () {
     test('degrades missing/wrong-typed fields', () {
       final t = SequenceTemplate.fromJson({'name': 'T'});

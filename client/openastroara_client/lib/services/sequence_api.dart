@@ -40,6 +40,17 @@ abstract interface class SequenceClient {
   /// or an unknown template (the daemon answers 404 → DioException here).
   Future<String> instantiateTemplate(String templateName, String newName);
 
+  /// Create a new sequence directly from a raw [body] (§38.5, `POST ""`), named
+  /// [name]. Used by surfaces that build a body locally (e.g. the Planning tab's
+  /// "Add to sequence" → a one-slew sequence) rather than starting from a server
+  /// template. The daemon schema-validates [body] and answers 422 (a
+  /// DioException here) when invalid. Returns the created sequence's id.
+  Future<String> create(
+    String name,
+    Map<String, dynamic> body, {
+    String? description,
+  });
+
   /// Fetch a sequence's full detail and parse its body into the editor tree.
   /// Returns the root [SequenceNode] (an empty named root if the body has no
   /// recognizable tree). Throws on transport failure / unknown id (404).
@@ -207,6 +218,32 @@ class SequenceApi implements SequenceClient {
     if (id is! String || id.isEmpty) {
       throw FormatException(
           'template instantiate returned no sequence id (${data.runtimeType})');
+    }
+    return id;
+  }
+
+  @override
+  Future<String> create(
+    String name,
+    Map<String, dynamic> body, {
+    String? description,
+  }) async {
+    if (name.trim().isEmpty) {
+      throw ArgumentError.value(name, 'name', 'sequence name must not be empty');
+    }
+    final res = await _dio.post<dynamic>(
+      '/api/v1/sequences',
+      data: <String, dynamic>{
+        'name': name.trim(),
+        'description': ?description,
+        'body': body,
+      },
+    );
+    final data = res.data;
+    final id = data is Map<String, dynamic> ? data['id'] : null;
+    if (id is! String || id.isEmpty) {
+      throw FormatException(
+          'sequence create returned no sequence id (${data.runtimeType})');
     }
     return id;
   }
