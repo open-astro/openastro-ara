@@ -193,5 +193,23 @@ namespace OpenAstroAra.Test {
                 }
             }
         }
+
+        [Test]
+        public async Task ReadCatalogAsync_is_null_until_installed_then_parses_catalog_csv() {
+            // Not installed → null; an unknown / non-catalog id → null (never touches the disk).
+            Assert.That(await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None), Is.Null);
+            Assert.That(await _svc.ReadCatalogAsync("not-a-catalog", null, null, CancellationToken.None), Is.Null);
+
+            // Install hyg-stars with a catalog.csv + the completed-install sentinel.
+            var dir = Path.Combine(_root, "hyg-stars");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(Path.Combine(dir, DataManagerService.CatalogFileName),
+                "id,proper,ra,dec,mag\n0,Sol,0.0,0.0,4.85\n");
+            await File.WriteAllTextAsync(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName), "stamp");
+
+            var rows = await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None);
+            Assert.That(rows, Is.Not.Null);
+            Assert.That(rows!.Single().Name, Is.EqualTo("Sol"));
+        }
     }
 }

@@ -129,6 +129,19 @@ public static class SystemEndpoints {
             .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
             .WithName("GetDataManagerState");
 
+        // §36 — serve an installed catalog's objects (normalized {name, ra°, dec°, mag}) for the Sky Atlas overlay.
+        // 404 when the package isn't a known catalog, isn't installed, or has no catalog.csv. Optional ?maxMag= drops
+        // fainter objects (e.g. naked-eye stars only) and ?limit= caps the count, keeping the overlay payload sane.
+        data.MapGet("/{packageId}/catalog",
+                async (string packageId, [FromQuery(Name = "max_mag")] double? maxMag, [FromQuery] int? limit,
+                        IDataManagerService svc, CancellationToken ct) => {
+                    var objects = await svc.ReadCatalogAsync(packageId, maxMag, limit, ct);
+                    return objects is null ? Results.NotFound() : Results.Ok(objects);
+                })
+            .Produces<IReadOnlyList<CatalogObjectDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetDataManagerCatalog");
+
         // ─── Planning (§36/§25.5) — Tonight's Sky ───
         var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
         planning.MapGet("/tonight",

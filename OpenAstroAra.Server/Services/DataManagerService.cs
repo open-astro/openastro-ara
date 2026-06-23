@@ -183,6 +183,26 @@ namespace OpenAstroAra.Server.Services {
                 LastSyncUtc: null));
         }
 
+        public Task<IReadOnlyList<CatalogObjectDto>?> ReadCatalogAsync(string packageId, double? maxMag, int? limit,
+                CancellationToken ct) {
+            if (!SkyCatalogReader.HasParser(packageId)) {
+                return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // not a parseable catalog package
+            }
+            var dir = PackageDir(packageId);
+            if (dir is null || ReadInstall(dir) is null) {
+                return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // unknown id, or not installed
+            }
+            var path = Path.Combine(dir, CatalogFileName);
+            if (!File.Exists(path)) {
+                return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // installed but no catalog.csv
+            }
+            // Parse off the request thread — a full catalog can be tens of MB, and the read+parse is CPU + blocking I/O.
+            return Task.Run<IReadOnlyList<CatalogObjectDto>?>(() => {
+                using var stream = File.OpenRead(path);
+                return SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
+            }, ct);
+        }
+
         public Task<bool> DeleteAsync(string packageId, CancellationToken ct) {
             var dir = PackageDir(packageId);
             if (dir is null || !Directory.Exists(dir)) {
