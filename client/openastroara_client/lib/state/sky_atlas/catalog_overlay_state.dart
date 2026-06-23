@@ -1,0 +1,74 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../models/catalog_object.dart';
+import 'data_manager_state.dart';
+
+/// Per-catalog request shape for the §36 Aladin marker overlay. A point overlay
+/// of every HYG star (~120k) would be unreadable and heavy, so each catalog is
+/// fetched with overlay-appropriate trimming:
+///   • [maxMag] caps brightness (stars: naked-eye-ish, keeping the field legible);
+///   • [limit] caps the count (DSOs often carry no magnitude, so they're capped
+///     by count instead). The daemon also hard-caps at 50k regardless.
+typedef CatalogOverlayRequest = ({double? maxMag, int? limit});
+
+/// The catalog packages the overlay knows how to fetch + draw, keyed by package
+/// id (must match the daemon's `SkyCatalogReader.HasParser` allow-list).
+const Map<String, CatalogOverlayRequest> kCatalogOverlayRequests = {
+  // HYG: brightness is the meaningful axis, so max_mag is the curation lever —
+  // mag 7 yields ~9k of the brightest stars (~0.5 MB injected once, fine for
+  // desktop CEF). The limit is only a hard payload backstop: it sits above the
+  // mag-7 count so it never curates in practice, but caps the worst case if
+  // max_mag is ever loosened. (It can't act as "the brightest N" — the on-disk
+  // HYG order isn't by magnitude — so max_mag stays the primary filter.)
+  'hyg-stars': (maxMag: 7.0, limit: 12000),
+  // OpenNGC: most DSOs carry no magnitude, so count is the only available lever.
+  'openngc-dso': (maxMag: null, limit: 5000),
+};
+
+/// The combined marker set for every installed catalog package, fetched from
+/// `GET /api/v1/data-manager/{id}/catalog`. Empty when no server is bound or no
+/// catalog package is installed — [AladinView] listens and draws the markers.
+///
+/// Rebuilds when the Data Manager package list changes (an install/delete flips
+/// `isInstalled`), so installing a catalog adds its overlay and deleting it
+/// removes it without any manual refresh.
+final skyAtlasCatalogProvider = FutureProvider<List<CatalogObject>>((ref) async {
+  final api = ref.watch(dataManagerApiProvider);
+  if (api == null) return const <CatalogObject>[];
+
+  // Depend on the package list so an install/delete re-runs this fetch. Use the
+  // loaded value only; while it's loading/errored, keep the previous overlay
+  // (returning [] here would briefly clear the markers on every refresh).
+  final packages = ref.watch(dataManagerPackagesProvider).asData?.value;
+  if (packages == null) return const <CatalogObject>[];
+
+  final installed = packages
+      .where((p) => p.isInstalled && kCatalogOverlayRequests.containsKey(p.id))
+      .toList(growable: false);
+  if (installed.isEmpty) return const <CatalogObject>[];
+
+  // Each catalog fetches independently: one failing (a transient 500/timeout on
+  // HYG, say) must not blank a successfully-fetched OpenNGC overlay, so a per-
+  // catalog error degrades just that one to null rather than failing the whole
+  // provider. With every future catching to null, none can throw, so Future.wait
+  // never short-circuits (a 404 already returns null on its own).
+  final fetched = await Future.wait(
+    installed.map((p) {
+      final req = kCatalogOverlayRequests[p.id]!;
+      return api.getCatalog(p.id, maxMag: req.maxMag, limit: req.limit).catchError(
+        (Object e, StackTrace st) {
+          debugPrint('skyAtlasCatalogProvider: catalog "${p.id}" fetch failed: $e');
+          return null;
+        },
+      );
+    }),
+  );
+
+  // A null entry (404 "package vanished", or a per-catalog fetch error above) is
+  // dropped — the rest still draw.
+  return fetched
+      .whereType<List<CatalogObject>>()
+      .expand((list) => list)
+      .toList(growable: false);
+});

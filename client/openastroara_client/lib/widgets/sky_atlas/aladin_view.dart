@@ -6,7 +6,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
+import '../../models/catalog_object.dart';
 import '../../state/imaging/fov_box.dart';
+import '../../state/sky_atlas/catalog_overlay_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -57,6 +59,28 @@ String fovBoxScript(FovBox? box) {
 @visibleForTesting
 String surveyScript(String surveyId) =>
     'window.araSetSurvey && window.araSetSurvey(${jsonEncode(surveyId)});';
+
+/// Builds the JS that draws (or replaces) the §36 installed-catalog marker
+/// overlay from [objects]. The whole list is JSON-encoded as a single argument
+/// to the page's `araAddCatalog`, so a star/DSO name containing quotes or markup
+/// can't break out of the literal or inject script — the same safety contract as
+/// [gotoScript]. An empty list clears the overlay. Exposed for testing.
+@visibleForTesting
+String catalogScript(List<CatalogObject> objects) {
+  final payload = objects
+      .map((o) => <String, dynamic>{
+            'name': o.name,
+            'ra': o.raDeg,
+            'dec': o.decDeg,
+            if (o.magnitude != null) 'mag': o.magnitude,
+          })
+      .toList(growable: false);
+  return 'window.araAddCatalog && window.araAddCatalog(${jsonEncode(payload)});';
+}
+
+/// Builds the JS that clears the installed-catalog marker overlay. Exposed for testing.
+@visibleForTesting
+String clearCatalogScript() => 'window.araClearCatalog && window.araClearCatalog();';
 
 // CEF's manager is a process-wide singleton; initialize it at most once so a
 // tab rebuild (switch away + back) can't re-run native init. A FAILED init is
@@ -158,6 +182,28 @@ class _AladinViewState extends ConsumerState<AladinView> {
     }
   }
 
+  // Draw (or replace/clear) the installed-catalog marker overlay. Stashed until
+  // the browser is ready, then applied from _init.
+  List<CatalogObject>? _pendingCatalog;
+  void _setCatalog(List<CatalogObject> objects) {
+    final controller = _controller;
+    if (controller == null) {
+      _pendingCatalog = objects;
+      return;
+    }
+    unawaited(_runCatalog(controller, objects));
+  }
+
+  Future<void> _runCatalog(WebViewController controller, List<CatalogObject> objects) async {
+    try {
+      await controller.executeJavaScript(
+          objects.isEmpty ? clearCatalogScript() : catalogScript(objects));
+    } catch (e, st) {
+      // Degrade-not-crash: a failed overlay update leaves the markers as-is.
+      debugPrint('AladinView: catalog overlay update failed: $e\n$st');
+    }
+  }
+
   Future<void> _init() async {
     // Manager init is separated from browser init so only a manager-init failure
     // resets the memoized future (allowing a retry); a browser-init failure
@@ -228,6 +274,15 @@ class _AladinViewState extends ConsumerState<AladinView> {
       if (survey != kDefaultSkySurveyId) {
         unawaited(_runSurvey(controller, survey));
       }
+      // Restore the installed-catalog overlay: markers stashed before the browser
+      // was ready, or — since this tab unmounts on switch — the provider's current
+      // value so returning to Planning re-draws them. Only push a non-empty set on
+      // a fresh mount (an empty overlay is the default, nothing to draw).
+      final catalog = _pendingCatalog ?? ref.read(skyAtlasCatalogProvider).asData?.value;
+      _pendingCatalog = null;
+      if (catalog != null && catalog.isNotEmpty) {
+        unawaited(_runCatalog(controller, catalog));
+      }
     } catch (e, st) {
       // Same rationale as above: degrade-not-crash, but logged.
       debugPrint('AladinView: Aladin browser init failed: $e\n$st');
@@ -251,6 +306,12 @@ class _AladinViewState extends ConsumerState<AladinView> {
     ref.listen<FovBox?>(frameFovBoxProvider, (_, next) => _setFovBox(next));
     // The selected base imagery survey → swap the atlas's image layer.
     ref.listen<String>(skyAtlasSurveyProvider, (_, next) => _setSurvey(next));
+    // The installed-catalog overlay (markers) → draw/replace/clear. Only the
+    // data value drives a redraw; loading/error states leave the overlay as-is.
+    ref.listen<AsyncValue<List<CatalogObject>>>(skyAtlasCatalogProvider, (_, next) {
+      final objects = next.asData?.value;
+      if (objects != null) _setCatalog(objects);
+    });
 
     if (_unavailable) return const _Unavailable();
     final controller = _controller;
@@ -429,6 +490,44 @@ const String _aladinBootstrapHtml = r'''
     }
   }
 
+  // §36 installed-catalog marker overlay. araAddCatalog(objs) draws an Aladin
+  // catalog of {name, ra, dec, mag} point sources (replacing any prior set);
+  // araClearCatalog removes them. Before Aladin finishes init the latest set is
+  // stashed and applied from A.init.then. Driven from Dart via
+  // AladinView.catalogScript / clearCatalogScript.
+  var araCatalog = null;
+  var araPendingCatalog = null;
+  function araEnsureCatalog() {
+    if (!araAladin) return null;
+    if (!araCatalog) {
+      araCatalog = A.catalog({ name: 'Catalog', shape: 'circle', sourceSize: 8, color: '#ffd54f' });
+      araAladin.addCatalog(araCatalog);
+    }
+    return araCatalog;
+  }
+  function araAddCatalog(objs) {
+    // Before Aladin is ready we keep only the LATEST set (replace, not queue) —
+    // the overlay is a full snapshot, so an earlier pending set is always stale.
+    if (!araAladin) { araPendingCatalog = objs; return; }
+    var cat = araEnsureCatalog(); // non-null here: the !araAladin guard above already returned
+    cat.removeAll();
+    if (!objs || !objs.length) return;
+    var sources = [];
+    for (var i = 0; i < objs.length; i++) {
+      var o = objs[i];
+      // Guard against a malformed entry — only place a source with numeric coords.
+      if (!o || typeof o.ra !== 'number' || typeof o.dec !== 'number') continue;
+      sources.push(A.source(o.ra, o.dec, { name: o.name || '', mag: o.mag }));
+    }
+    cat.addSources(sources);
+  }
+  function araClearCatalog() {
+    // Also drop any add stashed before init, so a clear that arrives during the
+    // init window cancels it rather than letting a stale set draw on init.
+    araPendingCatalog = null;
+    if (araCatalog) araCatalog.removeAll();
+  }
+
   // The inline engine script above runs to completion before this one starts,
   // so by here `A` is defined on success and undefined if the bundle was bad.
   if (typeof A !== 'undefined') {
@@ -451,6 +550,12 @@ const String _aladinBootstrapHtml = r'''
         var s = araPendingSurvey;
         araPendingSurvey = null;
         araAladin.setBaseImageLayer(s);
+      }
+      // Draw a catalog overlay pushed during Aladin's init window.
+      if (araPendingCatalog) {
+        var pc = araPendingCatalog;
+        araPendingCatalog = null;
+        araAddCatalog(pc);
       }
       // Keep the FOV box centred as the user pans/zooms, and draw any box that
       // Dart pushed before Aladin finished initializing.

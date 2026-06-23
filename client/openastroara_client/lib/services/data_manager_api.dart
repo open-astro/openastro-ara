@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../models/catalog_object.dart';
 import '../models/data_package.dart';
 import '../models/server.dart';
 
@@ -22,6 +23,13 @@ abstract interface class DataManagerClient {
   /// if there was nothing to delete (the package wasn't present / already gone) —
   /// false is NOT a failure (a real error throws). Idempotent.
   Future<bool> delete(String packageId);
+
+  /// Read an installed catalog package's objects (normalized {name, ra°, dec°,
+  /// mag}) for the Aladin overlay. Returns null when the package isn't a known
+  /// catalog, isn't installed, or has no catalog file (the daemon answers 404) —
+  /// null is "no overlay", not an error. [maxMag] drops fainter objects; [limit]
+  /// caps the count (the daemon also hard-caps at 50k).
+  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit});
 
   void close();
 }
@@ -107,6 +115,34 @@ class DataManagerApi implements DataManagerClient {
       // 404 → already gone (another client removed it). Idempotent: report "nothing
       // freed" (false), not an error; anything else propagates.
       if (e.response?.statusCode == 404) return false;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit}) async {
+    assert(packageId.isNotEmpty, 'packageId must not be empty');
+    try {
+      final res = await _dio.get<dynamic>(
+        '/api/v1/data-manager/${Uri.encodeComponent(packageId)}/catalog',
+        queryParameters: <String, dynamic>{
+          'max_mag': ?maxMag,
+          'limit': ?limit,
+        },
+      );
+      final data = res.data;
+      if (data is! List) {
+        throw FormatException('catalog returned a non-array body (${data.runtimeType})');
+      }
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(CatalogObject.tryFromJson)
+          .whereType<CatalogObject>() // drop positionless rows
+          .toList(growable: false);
+    } on DioException catch (e) {
+      // 404 → not a known catalog / not installed / no catalog file. That's "no
+      // overlay", not an error: return null so the caller just draws nothing.
+      if (e.response?.statusCode == 404) return null;
       rethrow;
     }
   }
