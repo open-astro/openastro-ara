@@ -58,10 +58,11 @@ namespace OpenAstroAra.Test {
             Assert.That(rows, Has.Count.EqualTo(1), "the dim star is dropped by maxMag, the bad-position row skipped");
             Assert.That(rows.Single().Name, Is.EqualTo("Vega"));
 
-            var limited = SkyCatalogReader.Read("hyg-stars",
-                S("id,proper,ra,dec,mag\n1,A,1,1,1\n2,B,2,2,2\n3,C,3,3,3\n"),
-                maxMag: null, limit: 2, CancellationToken.None);
-            Assert.That(limited, Has.Count.EqualTo(2));
+            const string three = "id,proper,ra,dec,mag\n1,A,1,1,1\n2,B,2,2,2\n3,C,3,3,3\n";
+            Assert.That(SkyCatalogReader.Read("hyg-stars", S(three), null, limit: 2, CancellationToken.None),
+                Has.Count.EqualTo(2));
+            Assert.That(SkyCatalogReader.Read("hyg-stars", S(three), null, limit: 0, CancellationToken.None),
+                Is.Empty, "limit 0 returns nothing, not one (the cap is checked before adding)");
         }
 
         [Test]

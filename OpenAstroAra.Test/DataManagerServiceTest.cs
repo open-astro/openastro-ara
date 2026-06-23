@@ -210,6 +210,12 @@ namespace OpenAstroAra.Test {
             var rows = await _svc.ReadCatalogAsync("hyg-stars", null, null, CancellationToken.None);
             Assert.That(rows, Is.Not.Null);
             Assert.That(rows!.Single().Name, Is.EqualTo("Sol"));
+
+            // Sentinel present but no catalog.csv (a torn/partial state, or removed mid-read) → null, not a throw/500.
+            var bare = Path.Combine(_root, "openngc-dso");
+            Directory.CreateDirectory(bare);
+            await File.WriteAllTextAsync(Path.Combine(bare, SkyDataInstaller.InstalledMarkerFileName), "stamp");
+            Assert.That(await _svc.ReadCatalogAsync("openngc-dso", null, null, CancellationToken.None), Is.Null);
         }
     }
 }

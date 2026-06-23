@@ -30,6 +30,8 @@ namespace OpenAstroAra.Server.Services {
     ///   • <b>openngc-dso</b> — semicolon-separated; <c>RA</c>/<c>Dec</c> in sexagesimal (HH:MM:SS / ±DD:MM:SS),
     ///     <c>V-Mag</c> magnitude, <c>Common names</c>/<c>Name</c>.
     /// Rows without a usable position are skipped; <paramref name="maxMag"/> / <paramref name="limit"/> trim the result.
+    /// NOTE: when <paramref name="maxMag"/> is set, objects with NO recorded magnitude are dropped (so e.g. OpenNGC DSOs
+    /// that carry neither V- nor B-Mag vanish under a magnitude filter) — callers that want those should omit the filter.
     /// </summary>
     internal static class SkyCatalogReader {
 
@@ -73,11 +75,11 @@ namespace OpenAstroAra.Server.Services {
                 if (maxMag is { } cap && (mag is null || mag > cap)) {
                     continue;
                 }
+                if (limit is { } lim && result.Count >= lim) {
+                    break; // checked BEFORE Add so limit=0 (or negative) yields none, not one
+                }
                 var name = nameI >= 0 && nameI < f.Length ? f[nameI].Trim() : string.Empty;
                 result.Add(new CatalogObjectDto(name, NormalizeRaDeg(raHours * 15.0), dec, mag));
-                if (limit is { } lim && result.Count >= lim) {
-                    break;
-                }
             }
             return result;
         }
@@ -113,13 +115,13 @@ namespace OpenAstroAra.Server.Services {
                 if (maxMag is { } cap && (mag is null || mag > cap)) {
                     continue;
                 }
+                if (limit is { } lim && result.Count >= lim) {
+                    break; // checked BEFORE Add so limit=0 (or negative) yields none, not one
+                }
                 var common = Get(f, commonI).Trim();
                 // "Common names" can list several comma-separated aliases — take the first; fall back to the catalog id.
                 var name = common.Length > 0 ? common.Split(',')[0].Trim() : Get(f, nameI).Trim();
                 result.Add(new CatalogObjectDto(name, NormalizeRaDeg(raHours * 15.0), dec, mag));
-                if (limit is { } lim && result.Count >= lim) {
-                    break;
-                }
             }
             return result;
         }

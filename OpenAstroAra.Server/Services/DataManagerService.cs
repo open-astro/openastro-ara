@@ -193,13 +193,16 @@ namespace OpenAstroAra.Server.Services {
                 return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // unknown id, or not installed
             }
             var path = Path.Combine(dir, CatalogFileName);
-            if (!File.Exists(path)) {
-                return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // installed but no catalog.csv
-            }
             // Parse off the request thread — a full catalog can be tens of MB, and the read+parse is CPU + blocking I/O.
+            // The open lives inside the lambda (not a File.Exists pre-check) so a missing or concurrently-deleted
+            // catalog.csv returns null → 404, rather than throwing across the await into a 500.
             return Task.Run<IReadOnlyList<CatalogObjectDto>?>(() => {
-                using var stream = File.OpenRead(path);
-                return SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
+                try {
+                    using var stream = File.OpenRead(path);
+                    return SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
+                } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) {
+                    return null; // installed but no catalog.csv (or removed mid-read)
+                }
             }, ct);
         }
 
