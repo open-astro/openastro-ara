@@ -63,6 +63,13 @@ namespace OpenAstroAra.Sequencer.Trigger.Guider {
 
         private int exposureCount;
 
+        public override void SequenceBlockInitialize() {
+            // The parent block calls this each time it (re)starts executing (SequentialStrategy
+            // .InitializeBlock), so zero the exposure tally here — otherwise a reset + replay would
+            // carry the previous run's count and fire the dither off-cadence.
+            exposureCount = 0;
+        }
+
         public override object Clone() {
             return new DitherAfterExposures(this) {
                 TriggerRunner = (SequentialContainer)TriggerRunner.Clone(),

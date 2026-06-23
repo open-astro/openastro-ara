@@ -44,7 +44,7 @@ namespace OpenAstroAra.Sequencer.Container {
     [JsonObject(MemberSerialization.OptIn)]
     public class DeepSkyObjectContainer : SequentialContainer, IDeepSkyObjectContainer {
         private readonly IProfileService profileService;
-        private NighttimeData? nighttimeData;
+        private volatile NighttimeData? nighttimeData;
 
         [ImportingConstructor]
         public DeepSkyObjectContainer(IProfileService profileService) : base() {
@@ -97,7 +97,8 @@ namespace OpenAstroAra.Sequencer.Container {
                 ExposureInfoList = new ObservableCollection<ExposureInfo>(ExposureInfoList),
             };
 
-            clone.Target = NewTargetFromProfile();
+            // The ctor already built clone.Target from the profile — copy this target's
+            // identity onto it rather than allocating a second InputTarget.
             clone.Target.TargetName = Target.TargetName;
             clone.Target.PositionAngle = Target.PositionAngle;
             clone.Target.InputCoordinates = Target.InputCoordinates.Clone();
