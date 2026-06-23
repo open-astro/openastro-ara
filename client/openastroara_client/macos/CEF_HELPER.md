@@ -29,17 +29,27 @@ The wiring is committed, so a normal `flutter build macos` needs nothing extra
 beyond `packages/webview_cef/macos/setup_cef.sh` (downloads the git-ignored CEF
 binaries). Only re-run the injector if the plugin's helper target changes:
 
+The injector **re-points the Helper target at the plugin's non-sandboxed
+`helper.entitlements`**, which would drop `app-sandbox`+`inherit` and make macOS
+refuse to launch the helper from this sandboxed host. So always run it together
+with the repoint below as a single block — never the injector alone:
+
 ```sh
 gem install xcodeproj   # once
 # from client/openastroara_client:
 ruby packages/webview_cef/macos/webview_cef/helper/add_helper_target.rb \
   macos/Runner.xcodeproj openastroara ../packages/webview_cef/macos/webview_cef
+
+# REQUIRED follow-up: re-point the sandboxed Helper entitlements (the injector
+# resets these to the plugin's non-sandboxed default each run).
+ruby -e 'require "xcodeproj"; p=Xcodeproj::Project.open("macos/Runner.xcodeproj"); \
+  t=p.targets.find{|t|t.name=="Helper"}; \
+  t.build_configurations.each{|c| c.build_settings["CODE_SIGN_ENTITLEMENTS"]="Runner/Helper.entitlements"}; \
+  p.save; puts "repointed Helper -> Runner/Helper.entitlements"'
 ```
 
-The script regenerates target UUIDs each run (commit the result; don't put it in
-a `git diff --exit-code` CI check) and it **re-points the Helper target at the
-plugin's non-sandboxed `helper.entitlements`** — after re-running, set all three
-`Helper` configs' `CODE_SIGN_ENTITLEMENTS` back to `Runner/Helper.entitlements`.
+The script regenerates target UUIDs each run, so commit the result and don't put
+it in a `git diff --exit-code` CI check (the output isn't byte-stable).
 
 ## Distribution note
 
