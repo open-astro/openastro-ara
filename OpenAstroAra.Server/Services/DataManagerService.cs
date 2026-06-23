@@ -30,15 +30,16 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services {
 
     /// <summary>
-    /// §36 Data Manager — the real, disk-backed inventory + management layer (replaces the former
-    /// placeholder). Tracks which curated sky-data packages (star catalogs, horizon profiles, and —
-    /// once §36-2 lands the download engine — HiPS sky-survey imagery) are installed under the data
-    /// root, reports their on-disk size, and deletes them.
+    /// §36 Data Manager — the real, disk-backed inventory + acquisition layer. Tracks which curated sky-data
+    /// packages (star + deep-sky catalogs, horizon profiles) are installed under the data root, reports their
+    /// on-disk size, downloads + installs them, and deletes them.
     ///
-    /// This is §36-1: <see cref="ListPackagesAsync"/> / <see cref="DeleteAsync"/> / <see cref="GetStateAsync"/>
-    /// are real (read from + mutate the data root). <see cref="DownloadAsync"/> / <see cref="CancelAsync"/>
-    /// are the acquisition half — the fetch-archive → extract → progress-WS → cancel engine lands in §36-2;
-    /// for now they validate + acknowledge the request without downloading (tracked in PORT_TODO).
+    /// All of <see cref="ListPackagesAsync"/> / <see cref="DeleteAsync"/> / <see cref="GetStateAsync"/> (the
+    /// inventory half, §36-1) and <see cref="DownloadAsync"/> / <see cref="CancelAsync"/> (the acquisition half,
+    /// §36-2) are real: a download streams the package from its source URL, installs it atomically (stage → swap →
+    /// rollback-on-failure via <see cref="SkyDataInstaller"/>) under a size cap, and reports progress + completion
+    /// over the <c>data-manager.*</c> WS stream; a cancel tears down the in-flight transfer. Both <c>.tar.gz</c>
+    /// archives and bare <c>.csv</c>/<c>.csv.gz</c> catalog files are supported.
     ///
     /// Each package installs into <c>{dataRoot}/{packageId}/</c>. Only catalog ids map to a directory,
     /// so a caller-supplied <c>packageId</c> can never escape the data root (no path traversal).
@@ -46,31 +47,44 @@ namespace OpenAstroAra.Server.Services {
     public sealed partial class DataManagerService : IDataManagerService {
 
         /// <summary>
+        /// The canonical file name a bare-CSV catalog package installs as, so the §36 catalog consumer can read
+        /// <c>{packageDir}/catalog.csv</c> regardless of the upstream file name (.csv or .csv.gz).
+        /// </summary>
+        internal const string CatalogFileName = "catalog.csv";
+
+        /// <summary>
         /// The curated set of installable §36 packages. Sizes/URLs are the catalog's advertised values;
-        /// the installed size is measured from disk. (Real HiPS survey entries + hosting arrive with the
-        /// §36-2 download engine.)
+        /// the installed size is measured from disk. Catalog star/DSO sources are commit-pinned upstream
+        /// (HYG, OpenNGC) — immutable while the repo exists; a self-hosted snapshot is the eventual robust home
+        /// (tracked in PORT_TODO).
         /// </summary>
         internal static readonly IReadOnlyList<DataPackageDto> Catalog = new[] {
             new DataPackageDto(
-                Id: "tycho-2",
-                Name: "Tycho-2 star catalog",
-                Description: "2.5M stars to mag 11 — plate-solve reference + §36.13 Sky Atlas overlay.",
+                Id: "hyg-stars",
+                Name: "HYG star catalog (named stars)",
+                // ~120k stars with proper names (Hipparcos + Yale + Gliese), the source for the §36 Sky Atlas
+                // star-label overlay. Downloaded as a 13.6 MB .csv.gz; SizeBytes is the uncompressed on-disk footprint
+                // (the extraction cap is taken from it). Commit-pinned to the archived upstream repo so the URL is
+                // immutable. License: CC BY-SA (Astronomy Nexus) — see NOTICE.md.
+                Description: "≈120,000 stars with proper names (Hipparcos/Yale/Gliese) — the Sky Atlas star overlay.",
                 Category: "catalog",
-                SizeBytes: 187_654_321,
-                Version: "v2024.10",
+                SizeBytes: 48_000_000,
+                Version: "v40",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://data.openastro.net/tycho-2/2024.10.tar.gz")),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/astronexus/HYG-Database/c7f7f883fe678cc7680169a50ccd7dcc49b060ce/hyg/CURRENT/hygdata_v40.csv.gz")),
             new DataPackageDto(
-                Id: "gaia-edr3-bright",
-                Name: "Gaia EDR3 (mag ≤ 13)",
-                Description: "Deeper plate-solve reference frame for long exposures; optional.",
+                Id: "openngc-dso",
+                Name: "OpenNGC deep-sky objects",
+                // The NGC/IC deep-sky catalog (galaxies, nebulae, clusters) for the §36 DSO overlay. A bare semicolon-
+                // separated CSV (no archive). Commit-pinned upstream URL. License: CC BY-SA 4.0 — see NOTICE.md.
+                Description: "NGC/IC deep-sky catalog — galaxies, nebulae, clusters (the Sky Atlas DSO overlay).",
                 Category: "catalog",
-                SizeBytes: 4_294_967_296,
-                Version: "v2022",
+                SizeBytes: 3_876_288,
+                Version: "git-36cb178",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://data.openastro.net/gaia-edr3-bright/2022.tar.gz")),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/mattiaverga/OpenNGC/36cb178a0f69dba8bfc03a99c10512831edf1c6b/database_files/NGC.csv")),
             new DataPackageDto(
                 Id: "horizon-default",
                 Name: "Default 20° horizon profile",
@@ -288,7 +302,17 @@ namespace OpenAstroAra.Server.Services {
                 if (pkg.SizeBytes <= 0) {
                     LogCatalogSizeMissing(pkg.Id);
                 }
-                await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), fetch.LastModified, ct).ConfigureAwait(false);
+                var ceiling = ExtractionCeiling(pkg);
+                var path = pkg.SourceUrl!.AbsolutePath;
+                if (path.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase)) {
+                    await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.LastModified, ct).ConfigureAwait(false);
+                } else {
+                    // A bare catalog file (a CSV, optionally gzip-compressed). Install it under a canonical name so the
+                    // §36 catalog consumer reads {packageDir}/catalog.csv regardless of the upstream file name.
+                    var gunzip = path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
+                    await SkyDataInstaller.InstallFromFileAsync(counting, targetDir, CatalogFileName, gunzip, ceiling, fetch.LastModified, ct).ConfigureAwait(false);
+                }
 
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
                 LogDownloadComplete(pkg.Id, job.Id);

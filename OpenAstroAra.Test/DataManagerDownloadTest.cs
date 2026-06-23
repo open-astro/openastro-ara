@@ -73,8 +73,24 @@ namespace OpenAstroAra.Test {
             return ms.ToArray();
         }
 
-        // The first catalog package id (tycho-2) — used so the download path resolves a real SourceUrl + target.
-        private static string PackageId => DataManagerService.Catalog[0].Id;
+        // Gzip raw bytes — the bare-CSV.gz catalog download shape.
+        private static byte[] Gz(byte[] data) {
+            var ms = new MemoryStream();
+            using (var gz = new GZipStream(ms, CompressionMode.Compress, leaveOpen: true)) {
+                gz.Write(data, 0, data.Length);
+            }
+            ms.Position = 0;
+            return ms.ToArray();
+        }
+
+        // A catalog package whose URL is a .tar.gz, so the download worker takes the archive-install path. These
+        // tests exercise the worker (progress / WS events / cancel / force / conditional GET), not catalog specifics.
+        private static string PackageId =>
+            DataManagerService.Catalog.First(p => p.SourceUrl!.AbsolutePath.EndsWith(".tar.gz", StringComparison.Ordinal)).Id;
+
+        // A catalog package distributed as a bare .csv.gz, so the worker takes the single-file (gunzip) install path.
+        private static string CsvGzPackageId =>
+            DataManagerService.Catalog.First(p => p.SourceUrl!.AbsolutePath.EndsWith(".csv.gz", StringComparison.Ordinal)).Id;
 
         private DataManagerService NewService(ISkyDataFetcher fetcher, CapturingBroadcaster ws) =>
             new(_root, fetcher, ws, NullLogger<DataManagerService>.Instance);
@@ -112,6 +128,24 @@ namespace OpenAstroAra.Test {
             var complete = ws.Events.First(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete).Payload;
             Assert.That(complete.GetProperty("download_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
             Assert.That(complete.GetProperty("package_id").GetString(), Is.EqualTo(PackageId));
+        }
+
+        [Test]
+        public async Task A_csv_gz_package_is_gunzipped_to_catalog_csv() {
+            // A package whose URL ends in .csv.gz routes through the single-file install path: the worker gunzips the
+            // download and writes it as the canonical catalog.csv (not a tar extraction).
+            var gz = Gz(Encoding.UTF8.GetBytes("id,proper,ra,dec\n0,Sol,0,0\n"));
+            var ws = new CapturingBroadcaster();
+            var svc = NewService(new FakeSkyDataFetcher(gz), ws);
+
+            await svc.DownloadAsync(new DownloadRequestDto(CsvGzPackageId, ForceReinstall: false), null, CancellationToken.None);
+            var done = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+            Assert.That(done, Is.True, "a complete event is emitted for the csv.gz install");
+
+            var installed = Path.Combine(_root, CsvGzPackageId, DataManagerService.CatalogFileName);
+            Assert.That(await File.ReadAllTextAsync(installed), Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"),
+                "the .csv.gz is gunzipped to catalog.csv");
+            Assert.That(File.Exists(Path.Combine(_root, CsvGzPackageId, ".installed")), Is.True, "the sentinel is written");
         }
 
         [Test]
