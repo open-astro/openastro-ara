@@ -87,11 +87,14 @@ namespace OpenAstroAra.Sequencer.Trigger.Guider {
             // item, which would otherwise re-fire while the count still sat on a multiple.
             // Interlocked keeps the read-modify-write atomic in case a parallel container ever
             // evaluates triggers off the imaging thread.
-            if (previousItem is not IExposureItem || AfterExposures <= 0) {
+            // Capture AfterExposures once: re-reading it for the modulo would risk a
+            // DivideByZeroException if another thread set it to 0 between the guard and the modulo.
+            var after = AfterExposures;
+            if (previousItem is not IExposureItem || after <= 0) {
                 return false;
             }
             var count = Interlocked.Increment(ref exposureCount);
-            return count % AfterExposures == 0;
+            return count % after == 0;
         }
     }
 }

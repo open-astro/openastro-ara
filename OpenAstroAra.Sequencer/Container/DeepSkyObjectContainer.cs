@@ -21,6 +21,7 @@ using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -51,12 +52,14 @@ namespace OpenAstroAra.Sequencer.Container {
         public DeepSkyObjectContainer(IProfileService profileService) : base() {
             this.profileService = profileService;
             Target = NewTargetFromProfile();
-            // Lazy + the default ExecutionAndPublication mode: computed at most once, and safe to
-            // read from multiple threads — without paying the SOFA/NOVAS cost unless something asks.
+            // Lazy so we don't pay the SOFA/NOVAS cost unless something asks. PublicationOnly
+            // (not the default ExecutionAndPublication) so a transient failure — natives not yet
+            // loaded, profile location not set — is NOT cached permanently: a later access retries
+            // instead of leaving the container poisoned for its lifetime.
             nighttimeData = new Lazy<NighttimeData>(() => {
                 using var calculator = new NighttimeCalculator(profileService);
                 return calculator.Calculate();
-            });
+            }, LazyThreadSafetyMode.PublicationOnly);
         }
 
         [JsonProperty]
