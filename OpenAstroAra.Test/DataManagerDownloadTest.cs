@@ -18,6 +18,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
@@ -83,24 +84,26 @@ namespace OpenAstroAra.Test {
             return ms.ToArray();
         }
 
-        // Any package whose URL is a .tar.gz, so the download worker takes the archive-install path (currently the
-        // horizon-default profile — these tests exercise the worker: progress / WS events / cancel / force /
-        // conditional GET, and FakeSkyDataFetcher ignores the URL, so the package is just a vehicle for the .tar.gz
-        // routing). FirstOrDefault + an explicit throw so removing the last .tar.gz entry fails with a clear message
-        // rather than an opaque InvalidOperationException.
-        // Reuse the production format predicates so the test routes exactly as the worker does (same case semantics).
-        private static string PackageId =>
-            DataManagerService.Catalog.FirstOrDefault(p => DataManagerService.IsArchiveFormat(p.SourceUrl!))?.Id
-            ?? throw new InvalidOperationException("DataManagerDownloadTest needs a catalog package with a .tar.gz URL to exercise the archive-install path.");
+        // A self-contained synthetic catalog injected into the service, so the worker tests don't depend on the
+        // production catalog's exact contents (which changes as real packages are added/removed). These tests exercise
+        // the worker — progress / WS events / cancel / force / conditional GET / format routing — and
+        // FakeSkyDataFetcher ignores the URL, so each URL only selects the install path.
+        private const string PackageId = "test-archive";    // .tar.gz → archive-install path
+        private const string CsvGzPackageId = "test-csvgz";  // .csv.gz → single-file gunzip path
 
-        // A catalog package distributed as a bare .csv.gz, so the worker takes the single-file (gunzip) install path.
-        private static string CsvGzPackageId =>
-            DataManagerService.Catalog.FirstOrDefault(p =>
-                p.SourceUrl!.AbsolutePath.EndsWith(".csv.gz", StringComparison.OrdinalIgnoreCase))?.Id
-            ?? throw new InvalidOperationException("DataManagerDownloadTest needs a catalog package with a .csv.gz URL to exercise the gunzip install path.");
+        private static readonly IReadOnlyList<DataPackageDto> TestCatalog = new[] {
+            new DataPackageDto(PackageId, "Test archive", "", "catalog", 1 << 20, "1", false, null,
+                new Uri("https://example.test/test.tar.gz")),
+            new DataPackageDto(CsvGzPackageId, "Test csv.gz", "", "catalog", 1 << 20, "1", false, null,
+                new Uri("https://example.test/test.csv.gz")),
+        };
 
+        private static readonly IReadOnlyDictionary<string, string> NoDigests = new Dictionary<string, string>();
+
+        // Worker-mechanics tests don't verify integrity (empty digest map); the dedicated digest test injects its own.
         private DataManagerService NewService(ISkyDataFetcher fetcher, CapturingBroadcaster ws) =>
-            new(_root, fetcher, ws, NullLogger<DataManagerService>.Instance);
+            new(_root, fetcher, ws, NullLogger<DataManagerService>.Instance,
+                catalog: TestCatalog, expectedDigests: NoDigests);
 
         // Poll until predicate holds or the timeout elapses (the worker runs on a background task).
         private static async Task<bool> Eventually(Func<bool> predicate, int timeoutMs = 5000) {
@@ -138,16 +141,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_download_whose_digest_does_not_match_the_catalog_fails_and_installs_nothing() {
-            // CsvGzPackageId carries an expected SHA-256 in the catalog (CatalogSha256). The fake serves arbitrary
-            // bytes, so the integrity check must reject the download before it's committed — exercising the worker →
-            // installer digest wiring end-to-end. (The matching-digest happy path is covered at the installer level in
-            // SkyDataInstallerTest, where the test controls the expected hash.)
-            Assert.That(DataManagerService.CatalogSha256.ContainsKey(CsvGzPackageId), Is.True,
-                "this test assumes the package has an expected digest");
-            var gz = Gz(Encoding.UTF8.GetBytes("definitely not the real catalog bytes\n"));
+        public async Task A_csv_gz_download_with_a_matching_digest_is_gunzipped_to_catalog_csv() {
+            // Inject an expected digest equal to the served .csv.gz bytes — the worker verifies it, then the
+            // single-file path gunzips it to the canonical catalog.csv.
+            var gz = Gz(Encoding.UTF8.GetBytes("id,proper,ra,dec\n0,Sol,0,0\n"));
+            var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(gz));
             var ws = new CapturingBroadcaster();
-            var svc = NewService(new FakeSkyDataFetcher(gz), ws);
+            var svc = new DataManagerService(_root, new FakeSkyDataFetcher(gz), ws,
+                NullLogger<DataManagerService>.Instance, catalog: TestCatalog,
+                expectedDigests: new Dictionary<string, string> { [CsvGzPackageId] = digest });
+
+            await svc.DownloadAsync(new DownloadRequestDto(CsvGzPackageId, ForceReinstall: false), null, CancellationToken.None);
+
+            var done = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+            Assert.That(done, Is.True, "a matching digest + csv.gz install completes");
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(_root, CsvGzPackageId, DataManagerService.CatalogFileName)),
+                Is.EqualTo("id,proper,ra,dec\n0,Sol,0,0\n"), "the .csv.gz is gunzipped to catalog.csv");
+        }
+
+        [Test]
+        public async Task A_download_whose_digest_does_not_match_fails_and_installs_nothing() {
+            // Inject an expected digest the served bytes can't match, so the integrity check rejects the download
+            // before it's committed — exercising the worker → installer digest wiring end-to-end.
+            var gz = Gz(Encoding.UTF8.GetBytes("not the expected bytes\n"));
+            var ws = new CapturingBroadcaster();
+            var svc = new DataManagerService(_root, new FakeSkyDataFetcher(gz), ws,
+                NullLogger<DataManagerService>.Instance, catalog: TestCatalog,
+                expectedDigests: new Dictionary<string, string> { [CsvGzPackageId] = new string('0', 64) });
 
             await svc.DownloadAsync(new DownloadRequestDto(CsvGzPackageId, ForceReinstall: false), null, CancellationToken.None);
 
@@ -262,7 +282,8 @@ namespace OpenAstroAra.Test {
             var ws = new CapturingBroadcaster();
             var svc = new DataManagerService(_root,
                 new TricklingFetcher(archive, chunk: 16, gap: TimeSpan.FromMilliseconds(40)),
-                ws, NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(400));
+                ws, NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(400),
+                catalog: TestCatalog, expectedDigests: NoDigests);
 
             await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
 
@@ -277,7 +298,8 @@ namespace OpenAstroAra.Test {
             // OpenAsync never returns (no response headers) — the watchdog must bound the pre-fetch phase too.
             var ws = new CapturingBroadcaster();
             var svc = new DataManagerService(_root, new StallingHeaderFetcher(), ws,
-                NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(150));
+                NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(150),
+                catalog: TestCatalog, expectedDigests: NoDigests);
 
             await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
 
@@ -352,7 +374,8 @@ namespace OpenAstroAra.Test {
         public async Task A_stalled_download_is_cancelled_by_the_idle_watchdog() {
             var ws = new CapturingBroadcaster();
             var svc = new DataManagerService(_root, new StallingFetcher(), ws,
-                NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(150));
+                NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(150),
+                catalog: TestCatalog, expectedDigests: NoDigests);
 
             await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
 
