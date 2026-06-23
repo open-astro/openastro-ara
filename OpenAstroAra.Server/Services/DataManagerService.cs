@@ -105,6 +105,19 @@ namespace OpenAstroAra.Server.Services {
         private static readonly HashSet<string> CatalogIds =
             new(Catalog.Select(p => p.Id), StringComparer.Ordinal);
 
+        /// <summary>A `.tar.gz`/`.tgz` archive package — installed via the tar-extraction path.</summary>
+        internal static bool IsArchiveFormat(Uri url) =>
+            url.AbsolutePath.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
+            url.AbsolutePath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>A bare `.csv`/`.csv.gz` catalog file — installed via the single-file path.</summary>
+        internal static bool IsBareCatalogFormat(Uri url) =>
+            url.AbsolutePath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ||
+            url.AbsolutePath.EndsWith(".csv.gz", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Whether the download worker can install this package's source format (else it fails fast).</summary>
+        internal static bool IsSupportedDownloadFormat(Uri url) => IsArchiveFormat(url) || IsBareCatalogFormat(url);
+
         // Don't flood the WS channel: a long download emits at most one progress event per this interval.
         private const long ProgressThrottleMs = 500;
 
@@ -307,15 +320,18 @@ namespace OpenAstroAra.Server.Services {
                     LogCatalogSizeMissing(pkg.Id);
                 }
                 var ceiling = ExtractionCeiling(pkg);
-                var path = pkg.SourceUrl!.AbsolutePath;
-                if (path.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ||
-                    path.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase)) {
+                if (IsArchiveFormat(pkg.SourceUrl!)) {
                     await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ceiling, fetch.LastModified, ct).ConfigureAwait(false);
-                } else {
+                } else if (IsBareCatalogFormat(pkg.SourceUrl!)) {
                     // A bare catalog file (a CSV, optionally gzip-compressed). Install it under a canonical name so the
                     // §36 catalog consumer reads {packageDir}/catalog.csv regardless of the upstream file name.
-                    var gunzip = path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
+                    var gunzip = pkg.SourceUrl!.AbsolutePath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase);
                     await SkyDataInstaller.InstallFromFileAsync(counting, targetDir, CatalogFileName, gunzip, ceiling, fetch.LastModified, ct).ConfigureAwait(false);
+                } else {
+                    // Fail fast (rather than silently writing raw bytes as catalog.csv) if a future catalog entry uses an
+                    // unrecognised format — a curator mistake. SupportedDownloadFormat catches the same at test time.
+                    throw new InvalidOperationException(
+                        $"Unsupported sky-data package format for '{pkg.Id}': {pkg.SourceUrl!.AbsolutePath}");
                 }
 
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);

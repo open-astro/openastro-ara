@@ -69,6 +69,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Every_catalog_entry_has_a_supported_download_format() {
+            // Build gate: a curator who adds an entry with an unhandled extension (.zip/.parquet/…) would otherwise
+            // have it silently written as raw bytes to catalog.csv at runtime — catch it here instead.
+            foreach (var pkg in DataManagerService.Catalog) {
+                Assert.That(DataManagerService.IsSupportedDownloadFormat(pkg.SourceUrl!), Is.True,
+                    $"catalog entry '{pkg.Id}' has an unsupported source format: {pkg.SourceUrl!.AbsolutePath}");
+            }
+        }
+
+        [Test]
         public async Task Lists_the_catalog_with_install_state_read_from_disk() {
             var installedBytes = InstallPackage("hyg-stars", 2048);
 
