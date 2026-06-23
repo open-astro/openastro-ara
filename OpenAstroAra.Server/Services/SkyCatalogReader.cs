@@ -49,7 +49,10 @@ namespace OpenAstroAra.Server.Services {
             // The cap is intrinsic to Read, not just the caller — a null (or over-cap) limit is bounded to MaxObjects,
             // so this method can't be a footgun that returns an unbounded list. (A negative limit yields none.)
             var effectiveLimit = limit is { } l ? Math.Min(l, MaxObjects) : MaxObjects;
-            using var reader = new StreamReader(csv);
+            // leaveOpen: the caller owns the stream's lifetime (it opened it) — don't dispose it here, which would
+            // otherwise double-dispose the FileStream the DataManager opens with its own `using`.
+            using var reader = new StreamReader(csv, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true,
+                bufferSize: -1, leaveOpen: true);
             return packageId switch {
                 "hyg-stars" => ParseHyg(reader, maxMag, effectiveLimit, ct),
                 "openngc-dso" => ParseOpenNgc(reader, maxMag, effectiveLimit, ct),
