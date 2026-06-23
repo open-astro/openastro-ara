@@ -33,6 +33,7 @@ void main() {
       expect(CatalogObject.tryFromJson(const {'name': 'NoPos', 'magnitude': 5}), isNull);
       expect(CatalogObject.tryFromJson(const {'name': 'BadRa', 'ra_deg': 'x', 'dec_deg': 2}), isNull);
       expect(CatalogObject.tryFromJson(const {'name': 'NaN', 'ra_deg': double.nan, 'dec_deg': 2}), isNull);
+      expect(CatalogObject.tryFromJson(const {'name': 'Inf', 'ra_deg': 1, 'dec_deg': double.infinity}), isNull);
     });
 
     test('a missing name degrades to empty (still placeable)', () {

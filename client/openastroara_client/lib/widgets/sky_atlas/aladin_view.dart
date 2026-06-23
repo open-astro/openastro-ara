@@ -523,6 +523,9 @@ const String _aladinBootstrapHtml = r'''
     cat.addSources(sources);
   }
   function araClearCatalog() {
+    // Also drop any add stashed before init, so a clear that arrives during the
+    // init window cancels it rather than letting a stale set draw on init.
+    araPendingCatalog = null;
     if (araCatalog) araCatalog.removeAll();
   }
 
