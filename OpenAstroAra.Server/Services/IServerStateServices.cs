@@ -81,6 +81,12 @@ public interface IDataManagerService {
     Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct);
     Task<bool> DeleteAsync(string packageId, CancellationToken ct);
     Task<DataManagerStateDto> GetStateAsync(CancellationToken ct);
+
+    /// <summary>§36 — read an installed catalog package's objects for the Sky Atlas overlay, normalized to
+    /// {name, ra°, dec°, mag}. Returns null when the package isn't a known catalog, isn't installed, or has no
+    /// installed <c>catalog.csv</c> (the endpoint maps null to 404). <paramref name="maxMag"/> drops fainter objects;
+    /// <paramref name="limit"/> caps the count (both optional).</summary>
+    Task<IReadOnlyList<CatalogObjectDto>?> ReadCatalogAsync(string packageId, double? maxMag, int? limit, CancellationToken ct);
 }
 
 /// <summary>Backup (§43).</summary>

@@ -53,6 +53,17 @@ public sealed record DataManagerActiveDownloadDto(
     long TotalBytes,
     double PercentComplete);
 
+/// <summary>
+/// GET /api/v1/data-manager/{packageId}/catalog — one row of an installed §36 sky-data catalog, normalized across the
+/// per-package on-disk formats for the Sky Atlas overlay. <see cref="RaDeg"/>/<see cref="DecDeg"/> are decimal degrees
+/// (ICRS); <see cref="Magnitude"/> is null when the source row didn't carry one.
+/// </summary>
+public sealed record CatalogObjectDto(
+    string Name,
+    double RaDeg,
+    double DecDeg,
+    double? Magnitude);
+
 // ─── Bug report (§54) ───────────────────────────────────────────────────────
 
 public sealed record BugReportPreparationDto(

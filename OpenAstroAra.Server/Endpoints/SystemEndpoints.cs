@@ -129,6 +129,31 @@ public static class SystemEndpoints {
             .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
             .WithName("GetDataManagerState");
 
+        // §36 — serve an installed catalog's objects (normalized {name, ra°, dec°, mag}) for the Sky Atlas overlay.
+        // 404 when the package isn't a known catalog, isn't installed, or has no catalog.csv. Optional ?max_mag= drops
+        // fainter objects (e.g. naked-eye stars only) and ?limit= caps the count, keeping the overlay payload sane.
+        // NOTE: ?max_mag= also drops objects with NO recorded magnitude (e.g. OpenNGC DSOs carrying neither V- nor
+        // B-Mag), since they can't be compared to the threshold — omit the filter to include those.
+        data.MapGet("/{packageId}/catalog",
+                async (string packageId, [FromQuery(Name = "max_mag")] double? maxMag, [FromQuery] int? limit,
+                        IDataManagerService svc, CancellationToken ct) => {
+                    if (limit is < 0) {
+                        // limit=0 is intentionally valid — it's a well-defined "max 0 rows" request that returns an
+                        // empty list (like a paging limit); only a negative count is a malformed request.
+                        return Results.Problem(detail: "limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (maxMag is { } mm && !double.IsFinite(mm)) {
+                        // NaN would make `mag > maxMag` always false (every magnitude row passes); ±∞ is meaningless here.
+                        return Results.Problem(detail: "max_mag must be a finite number", statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    var objects = await svc.ReadCatalogAsync(packageId, maxMag, limit, ct);
+                    return objects is null ? Results.NotFound() : Results.Ok(objects);
+                })
+            .Produces<IReadOnlyList<CatalogObjectDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetDataManagerCatalog");
+
         // ─── Planning (§36/§25.5) — Tonight's Sky ───
         var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
         planning.MapGet("/tonight",

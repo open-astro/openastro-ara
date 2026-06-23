@@ -183,6 +183,37 @@ namespace OpenAstroAra.Server.Services {
                 LastSyncUtc: null));
         }
 
+        public Task<IReadOnlyList<CatalogObjectDto>?> ReadCatalogAsync(string packageId, double? maxMag, int? limit,
+                CancellationToken ct) {
+            if (!SkyCatalogReader.HasParser(packageId)) {
+                return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // not a parseable catalog package
+            }
+            var dir = PackageDir(packageId);
+            if (dir is null || ReadInstall(dir) is null) {
+                return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // unknown id, or not installed
+            }
+            var path = Path.Combine(dir, CatalogFileName);
+            // Parse off the request thread — a full catalog can be tens of MB, and the read+parse is CPU + blocking I/O.
+            // The open lives inside the lambda (not a File.Exists pre-check) so a missing or concurrently-deleted
+            // catalog.csv returns null → 404, rather than throwing across the await into a 500. (SkyCatalogReader.Read
+            // enforces the MaxObjects cap intrinsically, so a no-limit request is still bounded.)
+            return Task.Run<IReadOnlyList<CatalogObjectDto>?>(() => {
+                try {
+                    using var stream = File.OpenRead(path);
+                    return SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    // Any file-read failure — missing/removed-mid-read catalog.csv, a permission error, a mid-stream
+                    // I/O fault — maps to null → 404 ("catalog unavailable"), never an unhandled 500. (FileNotFound /
+                    // DirectoryNotFound are IOException subclasses, so they're covered too.)
+                    // OperationCanceledException is deliberately NOT caught: a cancelled request is the caller giving up,
+                    // not a read failure, so it propagates as cancellation (ASP.NET maps it to the normal abort path) and
+                    // isn't logged as an error.
+                    LogCatalogReadFailed(packageId, ex);
+                    return null;
+                }
+            }, ct);
+        }
+
         public Task<bool> DeleteAsync(string packageId, CancellationToken ct) {
             var dir = PackageDir(packageId);
             if (dir is null || !Directory.Exists(dir)) {
@@ -610,6 +641,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' deleted from the data root")]
         partial void LogDeleted(string packageId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Catalog '{PackageId}' could not be read — serving 'unavailable'")]
+        partial void LogCatalogReadFailed(string packageId, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' could not be deleted")]
         partial void LogDeleteFailed(string packageId, Exception ex);
