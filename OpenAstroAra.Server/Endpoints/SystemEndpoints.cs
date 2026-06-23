@@ -142,7 +142,7 @@ public static class SystemEndpoints {
                     return objects is null ? Results.NotFound() : Results.Ok(objects);
                 })
             .Produces<IReadOnlyList<CatalogObjectDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status400BadRequest) // body is an { error } object, not ProblemDetails
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetDataManagerCatalog");
 

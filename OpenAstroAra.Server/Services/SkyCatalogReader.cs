@@ -46,10 +46,13 @@ namespace OpenAstroAra.Server.Services {
         public static IReadOnlyList<CatalogObjectDto> Read(string packageId, Stream csv, double? maxMag, int? limit,
                 CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(csv);
+            // The cap is intrinsic to Read, not just the caller — a null (or over-cap) limit is bounded to MaxObjects,
+            // so this method can't be a footgun that returns an unbounded list. (A negative limit yields none.)
+            var effectiveLimit = limit is { } l ? Math.Min(l, MaxObjects) : MaxObjects;
             using var reader = new StreamReader(csv);
             return packageId switch {
-                "hyg-stars" => ParseHyg(reader, maxMag, limit, ct),
-                "openngc-dso" => ParseOpenNgc(reader, maxMag, limit, ct),
+                "hyg-stars" => ParseHyg(reader, maxMag, effectiveLimit, ct),
+                "openngc-dso" => ParseOpenNgc(reader, maxMag, effectiveLimit, ct),
                 _ => throw new InvalidOperationException($"No sky-catalog parser for package '{packageId}'."),
             };
         }
@@ -74,6 +77,11 @@ namespace OpenAstroAra.Server.Services {
                 ct.ThrowIfCancellationRequested();
                 var f = SplitCsv(line, ',');
                 if (!TryGetDouble(f, raI, out var raHours) || !TryGetDouble(f, decI, out var dec)) {
+                    continue;
+                }
+                // Range-validate like the OpenNGC path: a corrupted row (e.g. ra=999 / dec=-200) is skipped rather than
+                // wrapped by NormalizeRaDeg into a plausible-but-wrong position. RA: [0,24), Dec: [-90,90].
+                if (raHours < 0 || raHours >= 24 || dec < -90 || dec > 90) {
                     continue;
                 }
                 double? mag = TryGetDouble(f, magI, out var m) ? m : null;

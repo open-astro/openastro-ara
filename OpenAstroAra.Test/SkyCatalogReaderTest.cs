@@ -66,6 +66,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Hyg_skips_out_of_range_ra_or_dec() {
+            var csv = "id,proper,ra,dec,mag\n" +
+                      "1,BadRa,999,10,3\n" +    // ra hours ≥ 24 → skipped
+                      "2,BadDec,5,-200,3\n" +   // dec < -90 → skipped
+                      "3,Ok,5,10,3\n";
+            var rows = SkyCatalogReader.Read("hyg-stars", S(csv), maxMag: null, limit: null, CancellationToken.None);
+            Assert.That(rows.Single().Name, Is.EqualTo("Ok"), "a corrupted ra/dec row is skipped, not wrapped");
+        }
+
+        [Test]
         public void Hyg_handles_a_quoted_field_containing_the_delimiter() {
             var rows = SkyCatalogReader.Read("hyg-stars",
                 S("id,proper,ra,dec,mag\n3,\"Alpha, the first\",1.0,2.0,5.0\n"),

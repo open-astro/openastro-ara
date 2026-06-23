@@ -193,16 +193,14 @@ namespace OpenAstroAra.Server.Services {
                 return Task.FromResult<IReadOnlyList<CatalogObjectDto>?>(null); // unknown id, or not installed
             }
             var path = Path.Combine(dir, CatalogFileName);
-            // Enforce a server-side hard cap (a caller's limit can only reduce it, never exceed it) so a no-limit
-            // request for a large catalog can't force an unbounded response / heap spike.
-            var effectiveLimit = limit is { } l ? Math.Min(l, SkyCatalogReader.MaxObjects) : SkyCatalogReader.MaxObjects;
             // Parse off the request thread — a full catalog can be tens of MB, and the read+parse is CPU + blocking I/O.
             // The open lives inside the lambda (not a File.Exists pre-check) so a missing or concurrently-deleted
-            // catalog.csv returns null → 404, rather than throwing across the await into a 500.
+            // catalog.csv returns null → 404, rather than throwing across the await into a 500. (SkyCatalogReader.Read
+            // enforces the MaxObjects cap intrinsically, so a no-limit request is still bounded.)
             return Task.Run<IReadOnlyList<CatalogObjectDto>?>(() => {
                 try {
                     using var stream = File.OpenRead(path);
-                    return SkyCatalogReader.Read(packageId, stream, maxMag, effectiveLimit, ct);
+                    return SkyCatalogReader.Read(packageId, stream, maxMag, limit, ct);
                 } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                     // Any file-read failure — missing/removed-mid-read catalog.csv, a permission error, a mid-stream
                     // I/O fault — maps to null → 404 ("catalog unavailable"), never an unhandled 500. (FileNotFound /
