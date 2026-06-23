@@ -35,6 +35,11 @@ class _PlanningTabState extends ConsumerState<PlanningTab> {
     // Pull the profile's optics so the FOV box reflects the user's camera +
     // scope. Without this, optics stay at the zero default (only Settings →
     // Optics ever hydrated them) and Frame mode draws nothing.
+    //
+    // TODO(§36): re-hydrate when the active profile changes while Planning is
+    // open (e.g. swap profiles mid-session without remounting the tab) — today
+    // the optics only refresh on mount, so a mid-session switch shows stale
+    // geometry until the tab is rebuilt.
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateOptics());
   }
 
@@ -43,8 +48,10 @@ class _PlanningTabState extends ConsumerState<PlanningTab> {
     if (api == null) return; // no active server — keep whatever's loaded
     try {
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (_) {
+    } catch (e) {
       // Non-fatal: Frame mode just falls back to "no FOV box" until optics load.
+      // Log it so a persistently-empty FOV box has a breadcrumb to chase.
+      debugPrint('PlanningTab: optics hydrate failed — FOV box disabled: $e');
     }
   }
 

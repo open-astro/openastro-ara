@@ -106,8 +106,8 @@ void main() {
       container: container,
       child: const MaterialApp(home: Scaffold(body: PlanningTab())),
     ));
-    await tester.pump(); // build + schedule the post-frame hydrate
-    await tester.pump(const Duration(milliseconds: 50)); // let getOptics resolve
+    await tester.pump(); // build + run the post-frame callback (kicks off hydrate)
+    await tester.pump(); // flush the getOptics() microtask → state assigned
 
     final optics = container.read(opticsSettingsProvider);
     expect(optics.focalLengthMm, 714);
