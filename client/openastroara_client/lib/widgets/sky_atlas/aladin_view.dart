@@ -509,8 +509,7 @@ const String _aladinBootstrapHtml = r'''
     // Before Aladin is ready we keep only the LATEST set (replace, not queue) —
     // the overlay is a full snapshot, so an earlier pending set is always stale.
     if (!araAladin) { araPendingCatalog = objs; return; }
-    var cat = araEnsureCatalog();
-    if (!cat) return;
+    var cat = araEnsureCatalog(); // non-null here: the !araAladin guard above already returned
     cat.removeAll();
     if (!objs || !objs.length) return;
     var sources = [];
