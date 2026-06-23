@@ -111,9 +111,39 @@ namespace OpenAstroAra.Server.Services {
         /// is in place — a failed swap moves it back). <paramref name="maxBytes"/>, when set, caps the total extracted
         /// size (zip-bomb / disk-exhaustion guard); exceeding it aborts the install with an <see cref="InvalidDataException"/>.
         /// </summary>
-        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes,
+        internal static Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes,
                 DateTimeOffset? remoteLastModified, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(tarGz);
+            return InstallStagedAsync(
+                staging => ExtractTarGzAsync(tarGz, staging, maxBytes, ct),
+                targetDir, maxBytes, remoteLastModified, ct);
+        }
+
+        /// <summary>
+        /// Install a single (optionally gzip-compressed) <paramref name="source"/> stream as the package's sole
+        /// content file <paramref name="destFileName"/> under <paramref name="targetDir"/>, with the same atomic
+        /// staging/swap/rollback + size cap as <see cref="InstallFromTarGzAsync"/>. For catalog packages distributed
+        /// as a bare CSV (or CSV.gz) rather than a tar archive. <paramref name="destFileName"/> must be a plain file
+        /// name (no path separators) — it names the file inside the package dir.
+        /// </summary>
+        internal static Task InstallFromFileAsync(Stream source, string targetDir, string destFileName, bool gunzip,
+                long? maxBytes, DateTimeOffset? remoteLastModified, CancellationToken ct) {
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentException.ThrowIfNullOrEmpty(destFileName);
+            if (!string.Equals(Path.GetFileName(destFileName), destFileName, StringComparison.Ordinal)) {
+                throw new ArgumentException("Destination file name must be a plain file name.", nameof(destFileName));
+            }
+            return InstallStagedAsync(
+                staging => ExtractSingleFileAsync(source, Path.Combine(staging, destFileName), gunzip, maxBytes, ct),
+                targetDir, maxBytes, remoteLastModified, ct);
+        }
+
+        // The shared atomic-install core: stage into a sibling temp dir via <paramref name="fillStaging"/>, stamp the
+        // sentinel, then swap into place (moving any prior install aside first so a mid-swap failure restores it).
+        // Both the tar-archive and single-file installers funnel through here so the security-sensitive
+        // staging/rollback logic exists once.
+        private static async Task InstallStagedAsync(Func<string, Task> fillStaging, string targetDir, long? maxBytes,
+                DateTimeOffset? remoteLastModified, CancellationToken ct) {
             ArgumentException.ThrowIfNullOrEmpty(targetDir);
             if (maxBytes is < 0) {
                 throw new ArgumentOutOfRangeException(nameof(maxBytes));
@@ -133,7 +163,7 @@ namespace OpenAstroAra.Server.Services {
 
             var movedPriorAside = false;
             try {
-                await ExtractTarGzAsync(tarGz, stagingDir, maxBytes, ct).ConfigureAwait(false);
+                await fillStaging(stagingDir).ConfigureAwait(false);
 
                 // Stamp the sentinel BEFORE the swap so it appears atomically with the directory at its final path.
                 // Line 1 is the install timestamp (kept for documentation; InstalledUtc is read from the file's
@@ -236,6 +266,38 @@ namespace OpenAstroAra.Server.Services {
                         // later entry writes "through" it), so skipping them is both sufficient and safer.
                         break;
                 }
+            }
+        }
+
+        // Write a single (optionally gzip-decompressed) source stream to destPath, capping the written size at
+        // maxBytes (a zip-bomb / disk-exhaustion guard for the gz case, where a small download can expand large).
+        // leaveOpen on the GZipStream so the caller (the fetch) keeps owning the source, mirroring ExtractTarGzAsync.
+        private static async Task ExtractSingleFileAsync(Stream source, string destPath, bool gunzip, long? maxBytes,
+                CancellationToken ct) {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destPath))!);
+            if (gunzip) {
+                // leaveOpen so the caller (the fetch) keeps owning `source`, mirroring ExtractTarGzAsync.
+                await using var gz = new GZipStream(source, CompressionMode.Decompress, leaveOpen: true);
+                await CopyCappedAsync(gz, destPath, maxBytes, ct).ConfigureAwait(false);
+            } else {
+                await CopyCappedAsync(source, destPath, maxBytes, ct).ConfigureAwait(false);
+            }
+        }
+
+        // Stream-copy input → destPath, capping the written size at maxBytes (the zip-bomb / disk-exhaustion guard).
+        private static async Task CopyCappedAsync(Stream input, string destPath, long? maxBytes, CancellationToken ct) {
+            await using var dest = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            var buffer = new byte[81920];
+            long written = 0;
+            int read;
+            while ((read = await input.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0) {
+                if (maxBytes is { } cap) {
+                    written += read;
+                    if (written > cap) {
+                        throw new InvalidDataException($"File exceeds the {cap}-byte install limit and was rejected.");
+                    }
+                }
+                await dest.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
             }
         }
 
