@@ -4,7 +4,8 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as p;
+// No package:path import — Dart's File/Directory accept forward slashes on every
+// platform (Windows included), and `path` isn't a direct dependency.
 
 /// §36 guard for the macOS CEF multi-process helper wiring (see `macos/CEF_HELPER.md`).
 ///
@@ -26,8 +27,8 @@ import 'package:path/path.dart' as p;
 Directory _packageRoot() {
   var dir = Directory.current;
   for (var i = 0; i < 8; i++) {
-    if (File(p.join(dir.path, 'pubspec.yaml')).existsSync() &&
-        Directory(p.join(dir.path, 'macos')).existsSync()) {
+    if (File('${dir.path}/pubspec.yaml').existsSync() &&
+        Directory('${dir.path}/macos').existsSync()) {
       return dir;
     }
     final parent = dir.parent;
@@ -46,8 +47,8 @@ List<String> _entitlementAssignments(String pbxproj) => RegExp(
 
 void main() {
   final root = _packageRoot();
-  final pbxproj = File(p.join(root.path, 'macos', 'Runner.xcodeproj', 'project.pbxproj'));
-  final helperEnts = File(p.join(root.path, 'macos', 'Runner', 'Helper.entitlements'));
+  final pbxproj = File('${root.path}/macos/Runner.xcodeproj/project.pbxproj');
+  final helperEnts = File('${root.path}/macos/Runner/Helper.entitlements');
 
   group('macOS CEF Helper entitlements wiring', () {
     test('every CODE_SIGN_ENTITLEMENTS assignment is client-owned (none on the plugin default)', () {
