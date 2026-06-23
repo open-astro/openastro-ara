@@ -205,6 +205,9 @@ namespace OpenAstroAra.Server.Services {
                     // Any file-read failure — missing/removed-mid-read catalog.csv, a permission error, a mid-stream
                     // I/O fault — maps to null → 404 ("catalog unavailable"), never an unhandled 500. (FileNotFound /
                     // DirectoryNotFound are IOException subclasses, so they're covered too.)
+                    // OperationCanceledException is deliberately NOT caught: a cancelled request is the caller giving up,
+                    // not a read failure, so it propagates as cancellation (ASP.NET maps it to the normal abort path) and
+                    // isn't logged as an error.
                     LogCatalogReadFailed(packageId, ex);
                     return null;
                 }

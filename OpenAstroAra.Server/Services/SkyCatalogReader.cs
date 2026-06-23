@@ -193,6 +193,11 @@ namespace OpenAstroAra.Server.Services {
             if (a < 0 || overMax || b < 0 || b >= 60 || c < 0 || c >= 60) {
                 return false;
             }
+            // At the inclusive upper bound (Dec's ±90° pole) only exactly maxFirst:00:00 is valid — +90:30:00 would
+            // otherwise slip through as 90.5°, an impossible declination. (RA is exclusive, so a==maxFirst is already out.)
+            if (upperInclusive && a == maxFirst && (b != 0 || c != 0)) {
+                return false;
+            }
             result = a + b / 60.0 + c / 3600.0;
             if (negative) {
                 result = -result;

@@ -138,6 +138,10 @@ public static class SystemEndpoints {
                     if (limit is < 0) {
                         return Results.Problem(detail: "limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
                     }
+                    if (maxMag is { } mm && !double.IsFinite(mm)) {
+                        // NaN would make `mag > maxMag` always false (every magnitude row passes); ±∞ is meaningless here.
+                        return Results.Problem(detail: "max_mag must be a finite number", statusCode: StatusCodes.Status400BadRequest);
+                    }
                     var objects = await svc.ReadCatalogAsync(packageId, maxMag, limit, ct);
                     return objects is null ? Results.NotFound() : Results.Ok(objects);
                 })

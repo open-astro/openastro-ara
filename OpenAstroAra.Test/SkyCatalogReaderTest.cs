@@ -115,6 +115,7 @@ namespace OpenAstroAra.Test {
                       "BAD1;G;99:99:99;+10:00:00;5;;\n" +   // RA components out of range → skipped
                       "BAD2;G;01:00:00;+99:00:00;5;;\n" +   // Dec > 90 → skipped
                       "BAD3;G;24:30:00;+10:00:00;5;;\n" +   // RA hours ≥ 24 (exclusive upper bound) → skipped
+                      "BAD4;G;01:00:00;+90:30:00;5;;\n" +   // Dec 90:30:00 = 90.5° (past the pole) → skipped
                       "POLE;G;05:00:00;+90:00:00;5;;\n" +   // Dec exactly 90 (pole) → KEPT
                       "OK;G;01:00:00;+10:00:00;5;;\n";
             var rows = SkyCatalogReader.Read("openngc-dso", S(csv), maxMag: null, limit: null, CancellationToken.None);
