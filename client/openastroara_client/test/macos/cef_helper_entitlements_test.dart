@@ -49,6 +49,18 @@ void main() {
   final root = _packageRoot();
   final pbxproj = File('${root.path}/macos/Runner.xcodeproj/project.pbxproj');
   final helperEnts = File('${root.path}/macos/Runner/Helper.entitlements');
+  final debugEnts = File('${root.path}/macos/Runner/DebugProfile.entitlements');
+  final releaseEnts = File('${root.path}/macos/Runner/Release.entitlements');
+
+  // The three Hardened-Runtime keys the CEF host must carry. allow-unsigned-
+  // executable-memory is required on the *host* (not just the renderer) because
+  // this build runs the GPU in-process under ANGLE SwiftShader, whose Reactor
+  // JIT allocates W+X memory outside the V8 JIT path — see macos/CEF_HELPER.md.
+  const hostCsKeys = [
+    'com.apple.security.cs.allow-jit',
+    'com.apple.security.cs.allow-unsigned-executable-memory',
+    'com.apple.security.cs.disable-library-validation',
+  ];
 
   group('macOS CEF Helper entitlements wiring', () {
     test('every CODE_SIGN_ENTITLEMENTS assignment is client-owned (none on the plugin default)', () {
@@ -84,6 +96,28 @@ void main() {
       ]) {
         expect(ents.contains(key), isTrue, reason: 'Helper.entitlements must declare $key');
       }
+    });
+
+    test('host DebugProfile/Release entitlements carry all three CEF cs.* keys', () {
+      // Completes the guard: the pbxproj test above proves the Helper *points* at
+      // the right file, but a regression that dropped a cs.* key from the host
+      // entitlements would still build and then abort on-device (JIT / SwiftShader
+      // W+X). Assert the keys are present in both host configs.
+      for (final f in [debugEnts, releaseEnts]) {
+        expect(f.existsSync(), isTrue, reason: '${f.path} is missing');
+        final ents = f.readAsStringSync();
+        for (final key in hostCsKeys) {
+          expect(ents.contains(key), isTrue,
+              reason: '${f.path} must declare $key (CEF host Hardened-Runtime requirement)');
+        }
+      }
+    });
+
+    test('DebugProfile and Release host entitlements stay byte-identical', () {
+      // One audited entitlement set for both configs — drift between them is how a
+      // Release build silently loses a key that Debug has (or vice versa).
+      expect(debugEnts.readAsStringSync(), releaseEnts.readAsStringSync(),
+          reason: 'DebugProfile.entitlements and Release.entitlements must be identical');
     });
   });
 }

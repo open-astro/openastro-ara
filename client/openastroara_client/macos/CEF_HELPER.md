@@ -61,21 +61,29 @@ framework) + the App Sandbox is **incompatible with Mac App Store** distribution
 
 Hosting CEF weakens the host app's Hardened Runtime, by design and unavoidably:
 
-- **`cs.allow-jit`** — narrow: permits JIT-compiled pages (V8). Required.
+- **`cs.allow-jit`** — narrow: permits the V8 JIT's W+X mapping. Required.
 - **`cs.allow-unsigned-executable-memory`** — broader than `allow-jit`: permits
-  *any* writable+executable mapping, not just JIT regions. CEF's own host
+  *any* writable+executable mapping, not just the V8 JIT region. **The host
+  specifically needs it** (not only the renderer): this build runs the GPU
+  **in-process** in the host browser process and routes WebGL through ANGLE's
+  **SwiftShader** (`common/webview_app.cc` appends `in-process-gpu` +
+  `use-angle=swiftshader` + `enable-unsafe-swiftshader` — the offscreen GPU
+  *subprocess* fails to launch under software rendering, `gpu_process_host`
+  error 1003). SwiftShader's Reactor backend JITs shader programs into W+X memory
+  at runtime, *outside* the V8 JIT path that `allow-jit` covers — so the host
+  aborts on first WebGL init (i.e. as soon as Aladin renders) without this key.
+  `allow-jit` alone is **not** sufficient for the host here. The plugin's own
   template (`packages/webview_cef/macos/webview_cef/helper/app.entitlements`)
-  prescribes it because the embedded Chromium allocates W+X memory outside the
-  JIT path; dropping it aborts at runtime. It is the standard, documented cost of
-  in-process CEF hosting.
+  prescribes it for the same reason.
 - **`cs.disable-library-validation`** — lets the host load the separately-signed
   CEF framework (see Distribution note).
 
 Net: with these three, the host's Hardened Runtime offers little exploit
-mitigation. We accept this because (a) CEF requires all three to run, and (b) the
-attack surface is contained — the renderer/GPU/utility work runs in the
-**sandboxed** `Helper.app` subprocess (`app-sandbox` + `inherit`), not the host.
-This is the same posture every Electron/CEF desktop app ships with.
+mitigation. We accept this because (a) CEF + in-process SwiftShader require all
+three to run, and (b) the larger attack surface is contained — the
+renderer/Blink/V8/JS work runs in the **sandboxed** `Helper.app` subprocess
+(`app-sandbox` + `inherit`), not the host; only the SwiftShader GPU path is
+in-process. This is the same posture every Electron/CEF desktop app ships with.
 
 `files.user-selected.read-write` on **both** `DebugProfile` and `Release` is
 **pre-existing** (§54 save-downloads / open-save dialogs) — it is *not* added by
