@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/imaging/framing_state.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/settings/optics_settings_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/sky_atlas/aladin_view.dart';
@@ -15,15 +17,46 @@ import '../../widgets/sky_atlas/tonight_sky_panel.dart';
 /// **finds** a target (Explore / Tonight's Sky + universal search) and **frames
 /// it** for capture (Frame toggle → framing panel), without a tab switch.
 ///
-/// This slice does the structural merge + mode model. The profile-derived FOV
-/// overlay + "Build Sequence" output land in the next §36 slice — until then
-/// Frame mode shows the rotation/mosaic controls (relocated from the old
-/// Framing tab) and the sequence action stays disabled.
-class PlanningTab extends ConsumerWidget {
+/// On mount it hydrates the profile's optics (sensor size + focal length) from
+/// the daemon so Frame mode's FOV overlay can draw — otherwise the optics
+/// provider holds its zero default and `frameFovBoxProvider` returns null (the
+/// camera/sensor size never appears when framing).
+class PlanningTab extends ConsumerStatefulWidget {
   const PlanningTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlanningTab> createState() => _PlanningTabState();
+}
+
+class _PlanningTabState extends ConsumerState<PlanningTab> {
+  @override
+  void initState() {
+    super.initState();
+    // Pull the profile's optics so the FOV box reflects the user's camera +
+    // scope. Without this, optics stay at the zero default (only Settings →
+    // Optics ever hydrated them) and Frame mode draws nothing.
+    //
+    // TODO(§36): re-hydrate when the active profile changes while Planning is
+    // open (e.g. swap profiles mid-session without remounting the tab) — today
+    // the optics only refresh on mount, so a mid-session switch shows stale
+    // geometry until the tab is rebuilt.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateOptics());
+  }
+
+  Future<void> _hydrateOptics() async {
+    final api = ref.read(profileApiProvider);
+    if (api == null) return; // no active server — keep whatever's loaded
+    try {
+      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    } catch (e) {
+      // Non-fatal: Frame mode just falls back to "no FOV box" until optics load.
+      // Log it so a persistently-empty FOV box has a breadcrumb to chase.
+      debugPrint('PlanningTab: optics hydrate failed — FOV box disabled: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final mode = ref.watch(skyAtlasModeProvider);
     final frameMode = ref.watch(frameModeEnabledProvider);
 
