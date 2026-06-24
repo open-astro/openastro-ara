@@ -129,6 +129,16 @@ const List<TriggerDef> triggerCatalog = [
           defaultValue: 1, min: 1),
     ],
   ),
+  // §38 NINA import — run autofocus every N exposures (the autofocus sibling of the dither trigger).
+  TriggerDef(
+    type: 'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer',
+    label: 'Autofocus After Exposures',
+    icon: Icons.center_focus_strong_outlined,
+    fields: [
+      InstructionField('AfterExposures', 'After exposures', InstructionFieldType.integer,
+          defaultValue: 1, min: 1),
+    ],
+  ),
 ];
 
 /// `$type` → [TriggerDef] index. Throws (in release too) on a duplicate `$type`
