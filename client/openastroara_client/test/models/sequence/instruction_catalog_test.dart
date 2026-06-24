@@ -12,9 +12,10 @@ void main() {
   group('catalog integrity', () {
     test('every entry has an assembly-qualified OpenAstroAra \$type', () {
       for (final def in instructionCatalog) {
-        // Leaves live under .SequenceItem.; containers under .Container.
-        expect(def.type,
-            contains(def.isContainer ? 'OpenAstroAra.Sequencer.Container.' : 'OpenAstroAra.Sequencer.SequenceItem.'));
+        // Leaves live under .SequenceItem.; structural containers under .Container. — except a
+        // Smart Exposure, which is a container yet lives under .SequenceItem.Imaging (it subclasses
+        // SequentialContainer in C#). So just assert the OpenAstroAra.Sequencer namespace + assembly.
+        expect(def.type, contains('OpenAstroAra.Sequencer.'));
         expect(def.type, endsWith(', OpenAstroAra.Sequencer'));
         expect(def.label, isNotEmpty);
       }

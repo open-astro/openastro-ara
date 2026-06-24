@@ -18,6 +18,13 @@ String nodeLabel(Map<String, dynamic> node) {
   if (isContainer(node)) {
     final name = node['Name'];
     if (name is String && name.isNotEmpty) return name;
+    // §38 — a Deep Sky Object container is identified by its target, not a user-given Name
+    // (NINA often leaves Name empty). Prefer the target name so imported plans read by target.
+    final target = node['Target'];
+    if (target is Map) {
+      final targetName = target['TargetName'];
+      if (targetName is String && targetName.isNotEmpty) return targetName;
+    }
   }
   if (type is String) {
     final def = instructionForType(type);

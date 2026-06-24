@@ -559,6 +559,28 @@ const List<InstructionDef> instructionCatalog = [
     strategyType:
         'OpenAstroAra.Sequencer.Container.ExecutionStrategy.ParallelStrategy, OpenAstroAra.Sequencer',
   ),
+  // §38 NINA import — the per-target block. A SequentialContainer subclass that also carries a
+  // Target (name + coordinates); the target name is surfaced in the tree label (see node_display).
+  InstructionDef(
+    type:
+        'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer',
+    label: 'Deep Sky Object',
+    category: InstructionCategory.container,
+    icon: Icons.travel_explore_outlined,
+    strategyType:
+        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
+  ),
+  // §38 NINA import — NINA's "Smart Exposure": a SequentialContainer subclass bundling a filter
+  // switch + exposure + dither into one block. Renders as a container; its children show nested.
+  InstructionDef(
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Imaging.SmartExposure, OpenAstroAra.Sequencer',
+    label: 'Smart Exposure',
+    category: InstructionCategory.container,
+    icon: Icons.burst_mode_outlined,
+    strategyType:
+        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
+  ),
 ];
 
 /// The catalog grouped by category, preserving declaration order, with empty

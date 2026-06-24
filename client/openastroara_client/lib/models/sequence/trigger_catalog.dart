@@ -118,6 +118,17 @@ const List<TriggerDef> triggerCatalog = [
           defaultValue: 'Camera', enumValues: reconnectDeviceNames),
     ],
   ),
+  // §38 NINA import — dither every N exposures (the most common trigger in real plans, one per
+  // Smart Exposure). AfterExposures is the cadence; the C# default is 1.
+  TriggerDef(
+    type: 'OpenAstroAra.Sequencer.Trigger.Guider.DitherAfterExposures, OpenAstroAra.Sequencer',
+    label: 'Dither After Exposures',
+    icon: Icons.scatter_plot_outlined,
+    fields: [
+      InstructionField('AfterExposures', 'After exposures', InstructionFieldType.integer,
+          defaultValue: 1, min: 1),
+    ],
+  ),
 ];
 
 /// `$type` → [TriggerDef] index. Throws (in release too) on a duplicate `$type`
