@@ -85,6 +85,11 @@ abstract interface class SequenceClient {
   Future<String> start(String id);
   Future<String> pause(String id);
   Future<String> resume(String id);
+
+  /// §38 skip-current: cancel whatever the run is executing right now (e.g. a
+  /// target that's no longer well-positioned) so the sequence advances to the
+  /// next item. A no-op the daemon still 202-accepts when nothing is running.
+  Future<String> skipCurrent(String id);
   Future<String> abort(String id);
   Future<String> stop(String id);
 
@@ -359,6 +364,9 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> resume(String id) => _lifecycle(id, 'resume');
+
+  @override
+  Future<String> skipCurrent(String id) => _lifecycle(id, 'skip-current');
 
   @override
   Future<String> abort(String id) => _lifecycle(id, 'abort');

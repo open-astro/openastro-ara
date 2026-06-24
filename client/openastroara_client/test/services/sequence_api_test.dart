@@ -609,6 +609,21 @@ void main() {
       expect(api.abort('seq-1'), throwsA(isA<FormatException>()));
     });
 
+    test('skipCurrent posts to /skip-current and returns the op id', () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'operation_id': 'op-skip', 'operation_type': 'sequence_skip'};
+      });
+      expect(await api.skipCurrent('seq-1'), 'op-skip');
+      expect(captured!.path, endsWith('/sequences/seq-1/skip-current'));
+    });
+
+    test('skipCurrent rejects an empty id before any request', () async {
+      final api = _api((_) => {'operation_id': 'op'});
+      expect(() => api.skipCurrent(''), throwsA(isA<ArgumentError>()));
+    });
+
     test('a 409 (illegal transition) propagates as DioException', () async {
       final api = _api((_) => {'error': 'not running'}, statusCode: 409);
       expect(api.pause('seq-1'), throwsA(isA<DioException>()));

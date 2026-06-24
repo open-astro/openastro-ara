@@ -37,6 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Added
 - **§38 — skip the current target mid-run.** A new `POST /api/v1/sequences/{id}/skip-current` cancels whatever the running sequence is currently executing (e.g. a target that's drifted out of position) and advances to the next item — handy alongside the existing `AboveHorizonCondition`/`AltitudeCondition` sky-position gating. (`SequenceRootContainer.SkipCurrentRunningItems()` was already in the domain; this exposes it through the run engine + REST.)
+- **§38 — a Skip button on the sequencer toolbar (client).** The run controls now offer **Skip** (between Run and Abort), enabled only while a run is actively executing an item and not already aborting. It calls the `skip-current` endpoint so the user can drop a target that's no longer well-positioned and let the run move on — without aborting the whole sequence.
 
 ### Fixed
 - **§38 — a loaded/imported sequence now wires up its parent chain, so run-engine features that walk to the root work.** A serialized sequence body stores each node's `Parent` as null; on deserialize the parent links weren't re-established, so a running instruction couldn't find its root container — breaking running-item tracking (and therefore skip-current). `SequenceContainer`'s `[OnDeserialized]` hook now re-parents its children (Newtonsoft fires it bottom-up, so the whole tree is wired by the time the root's hook runs).

@@ -63,6 +63,8 @@ class _NewClient implements SequenceClient {
   @override
   Future<String> resume(String id) async => 'op';
   @override
+  Future<String> skipCurrent(String id) async => 'op';
+  @override
   Future<String> abort(String id) async => 'op';
   @override
   Future<String> stop(String id) async => 'op';
