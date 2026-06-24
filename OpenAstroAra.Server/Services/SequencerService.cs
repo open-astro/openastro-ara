@@ -155,7 +155,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         WriteCheckpointIfOwner(run, id);
         // Publish the running root so SkipAsync can reach it for the duration of the run.
         run.SetRoot(root);
-        await RunWorkerAsync(id, run, root);
+        try {
+            await RunWorkerAsync(id, run, root);
+        } finally {
+            // Release the sequence tree as soon as the run ends. The terminal RunState
+            // lingers in _runs (up to MaxRetainedRuns) so it stays queryable, but it no
+            // longer needs to pin every SequenceItem/container in memory. SkipAsync only
+            // reaches Root for abortable (non-terminal) runs, so a null here is harmless.
+            run.SetRoot(null);
+        }
     }
 
     private async Task<ISequenceRootContainer?> LoadRootAsync(Guid id, RunState run) {
