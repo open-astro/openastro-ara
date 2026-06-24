@@ -64,7 +64,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
                 Category = Category,
                 Description = Description,
                 Inherited = Inherited,
-                Coordinates = Coordinates.Clone(),
+                // Null-safe: a malformed/partial import could deserialize Coordinates as null
+                // (the [JsonProperty] setter would overwrite the ctor's instance), so don't NPE.
+                Coordinates = Coordinates?.Clone() ?? new InputCoordinates(),
                 PositionAngle = PositionAngle,
             };
         }

@@ -109,6 +109,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void CenterAndRotate_clone_survives_null_coordinates() {
+            // A malformed/partial import could leave Coordinates null; Clone() must not throw.
+            var car = new CenterAndRotate { PositionAngle = 90.0, Coordinates = null! };
+            CenterAndRotate clone = null!;
+            Assert.That(() => clone = (CenterAndRotate)car.Clone(), Throws.Nothing);
+            Assert.That(clone.Coordinates, Is.Not.Null);
+            Assert.That(clone.PositionAngle, Is.EqualTo(90.0));
+        }
+
+        [Test]
         public void Factory_registers_the_slice2_prototypes() {
             var factory = HeadlessSequencerFactory.WithDefaults();
             Assert.That(factory.Items.Select(i => i.GetType().Name), Does.Contain("RunAutofocus"));
