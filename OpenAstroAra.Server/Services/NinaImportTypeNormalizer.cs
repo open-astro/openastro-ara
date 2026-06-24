@@ -75,7 +75,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private static string ShortName(string typeString) {
-            var classSide = typeString.Split(',')[0];
+            // Strip any generic arguments first ('[' onward) so a comma inside the bracketed type
+            // params can't truncate the name, then drop the assembly suffix at the top-level comma.
+            var classSide = typeString.Split('[')[0].Split(',')[0];
             var lastDot = classSide.LastIndexOf('.');
             return lastDot >= 0 ? classSide[(lastDot + 1)..] : classSide;
         }

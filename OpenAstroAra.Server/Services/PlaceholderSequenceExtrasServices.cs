@@ -316,8 +316,11 @@ public sealed partial class PlaceholderSequenceImportService : ISequenceImportSe
             CreatedSequenceId: created.Id,
             Name: created.Name,
             Warnings: warnings.ToArray(),
-            DroppedInstructionTypes: normalized.UnsupportedTypes.ToArray(),
-            LossyTranslation: normalized.UnsupportedTypes.Count > 0);
+            // Nothing is dropped and the import isn't lossy — unsupported nodes are preserved
+            // verbatim (just not rendered as first-class). They're surfaced via the warning above,
+            // so these stay empty/false to avoid signalling data loss a client would act on.
+            DroppedInstructionTypes: Array.Empty<string>(),
+            LossyTranslation: false);
     }
 
     private static JsonElement BackfillSchemaVersion(JsonElement body) {
