@@ -50,6 +50,7 @@ public interface ISequencerService {
     Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> SkipAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct);
 

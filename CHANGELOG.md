@@ -35,7 +35,12 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added
+- **§38 — skip the current target mid-run.** A new `POST /api/v1/sequences/{id}/skip-current` cancels whatever the running sequence is currently executing (e.g. a target that's drifted out of position) and advances to the next item — handy alongside the existing `AboveHorizonCondition`/`AltitudeCondition` sky-position gating. (`SequenceRootContainer.SkipCurrentRunningItems()` was already in the domain; this exposes it through the run engine + REST.)
+
 ### Fixed
+- **§38 — a loaded/imported sequence now wires up its parent chain, so run-engine features that walk to the root work.** A serialized sequence body stores each node's `Parent` as null; on deserialize the parent links weren't re-established, so a running instruction couldn't find its root container — breaking running-item tracking (and therefore skip-current). `SequenceContainer`'s `[OnDeserialized]` hook now re-parents its children (Newtonsoft fires it bottom-up, so the whole tree is wired by the time the root's hook runs).
+
 - **§38 — imported autofocus / center-and-rotate steps now render as first-class blocks in the editor.** Building on the server-side port (#594), the client catalog now knows `RunAutofocus`, `CenterAndRotate` (coordinates + position-angle editable) and the `AutofocusAfterExposures` trigger, so imported plans containing them show real labels/icons instead of generic fallbacks.
 - **§38 — autofocus, center-and-rotate and autofocus-after-N-exposures now import from NINA too.** `RunAutofocus`, `CenterAndRotate` (coordinates + rotation angle preserved) and the `AutofocusAfterExposures` trigger were the last high-frequency NINA `$type`s still dropped on import; they now resolve to first-class ported types. (Their run-engine execution into the §59 autofocus / §28 centering services is a follow-up — for now an executed step fails loudly rather than silently skipping focus/centering.)
 - **§38 — imported NINA targets, Smart Exposures and dither triggers now render as first-class blocks in the sequence editor.** Building on the import + type-normalization fixes, the client catalog now knows `DeepSkyObjectContainer` (a target block, labelled by its target name — e.g. "T Cas" — rather than a generic container), `SmartExposure` (NINA's per-filter imaging block), and the `DitherAfterExposures` trigger (with its after-N-exposures cadence editable). Imported plans read by target with proper labels and icons instead of unlabeled rows.

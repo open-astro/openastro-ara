@@ -153,7 +153,17 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // interrupted run. Claim ownership first so this run's writes/clear win.
         ClaimCheckpoint(run);
         WriteCheckpointIfOwner(run, id);
-        await RunWorkerAsync(id, run, root);
+        // Publish the running root so SkipAsync can reach it for the duration of the run.
+        run.SetRoot(root);
+        try {
+            await RunWorkerAsync(id, run, root);
+        } finally {
+            // Release the sequence tree as soon as the run ends. The terminal RunState
+            // lingers in _runs (up to MaxRetainedRuns) so it stays queryable, but it no
+            // longer needs to pin every SequenceItem/container in memory. SkipAsync only
+            // reaches Root for abortable (non-terminal) runs, so a null here is harmless.
+            run.SetRoot(null);
+        }
     }
 
     private async Task<ISequenceRootContainer?> LoadRootAsync(Guid id, RunState run) {
@@ -178,6 +188,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
+
+    public Task<OperationAcceptedDto> SkipAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        // Skip whatever the run is currently executing (e.g. a target that isn't well-positioned):
+        // SkipCurrentRunningItems() cancels each running item so the sequence advances to the next.
+        // A no-op for a non-running run — skipping nothing is harmless, so it's always Accepted.
+        if (_runs.TryGetValue(id, out var run) && IsAbortableRun(run.State)) {
+            run.Root?.SkipCurrentRunningItems();
+        }
+        return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.skip", idempotencyKey));
+    }
 
     public async Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         await RequestCancelAsync(id, SequenceRunState.Aborting);
@@ -549,6 +569,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // on the request thread (StartAsync) and read on the shutdown thread.
         private volatile Task? _worker;
         public Task? Worker { get => _worker; set => _worker = value; }
+
+        // The running root container, so live controls (skip-current) can reach it. Set on the
+        // worker once the body loads; read on request threads — guarded by _gate.
+        private ISequenceRootContainer? _root;
+        public ISequenceRootContainer? Root { get { lock (_gate) { return _root; } } }
+        public void SetRoot(ISequenceRootContainer? root) { lock (_gate) { _root = root; } }
 
         public void SetDescription(string? description) {
             if (string.IsNullOrEmpty(description)) return;

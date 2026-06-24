@@ -140,6 +140,15 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("ResumeSequence");
 
+        // §38 — skip whatever the run is currently executing (e.g. a target that's no longer
+        // well-positioned in the sky), advancing the sequence to the next item.
+        seq.MapPost("/{id:guid}/skip-current",
+                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.SkipAsync(id, key, ct)))
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .WithName("SkipCurrentSequence");
+
         seq.MapPost("/{id:guid}/abort",
                 async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
                     Results.Accepted(value: await svc.AbortAsync(id, key, ct)))

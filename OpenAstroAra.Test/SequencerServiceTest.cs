@@ -184,6 +184,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Skip_current_skips_the_running_item_and_advances() {
+            // §38 — the only item is a 30s wait; skipping the current item cancels it so the run
+            // completes well within that wait (proving SkipCurrentRunningItems reaches the run).
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+
+            // Poll-skip until the run terminates rather than sleeping a fixed interval and
+            // skipping once: until the 30s wait leaf has registered as a running item, skip
+            // is a harmless no-op, so retrying absorbs scheduler starvation on a busy CI host
+            // without ever waiting out the full 30s wait. Each skip is idempotent (no-op on a
+            // terminal run), so over-calling is safe.
+            SequenceRunStateDto? state = null;
+            for (var i = 0; i < 250; i++) { // up to ~5s
+                await svc.SkipAsync(id, null, CancellationToken.None);
+                state = await svc.GetRunStateAsync(id, CancellationToken.None);
+                if (state is not null && state.State is SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped) {
+                    break;
+                }
+                await Task.Delay(20);
+            }
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "skipping the running 30s wait should let the run finish promptly");
+        }
+
+        [Test]
+        public async Task Skip_on_unknown_run_is_an_accepted_noop() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody());
+            Assert.That(await svc.SkipAsync(id, null, CancellationToken.None), Is.Not.Null);
+        }
+
+        [Test]
         public async Task Host_shutdown_stops_live_runs() {
             // On daemon shutdown (IHostedService.StopAsync), in-flight runs must be
             // cancelled rather than abandoned mid-execution.
