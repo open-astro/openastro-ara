@@ -9,6 +9,9 @@ import 'package:flutter/material.dart' show IconData, Icons;
 import 'instruction_catalog.dart';
 import 'nina_dom.dart';
 
+const _deepSkyObjectContainerType =
+    'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer';
+
 /// The label to show for [node]: a container's user-given `Name` first (so
 /// "Ha x20" shows, not the generic "Sequential Instruction Set" catalog label),
 /// then the catalog instruction label when known, else the short `$type`.
@@ -18,6 +21,16 @@ String nodeLabel(Map<String, dynamic> node) {
   if (isContainer(node)) {
     final name = node['Name'];
     if (name is String && name.isNotEmpty) return name;
+    // §38 — a Deep Sky Object container is identified by its target, not a user-given Name
+    // (NINA often leaves Name empty). Prefer the target name so imported plans read by target.
+    // Gated on the DSO type so another container that happens to carry a 'Target' isn't relabelled.
+    if (type == _deepSkyObjectContainerType) {
+      final target = node['Target'];
+      if (target is Map) {
+        final targetName = target['TargetName'];
+        if (targetName is String && targetName.isNotEmpty) return targetName;
+      }
+    }
   }
   if (type is String) {
     final def = instructionForType(type);

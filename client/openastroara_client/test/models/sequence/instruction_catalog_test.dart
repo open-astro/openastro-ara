@@ -12,9 +12,15 @@ void main() {
   group('catalog integrity', () {
     test('every entry has an assembly-qualified OpenAstroAra \$type', () {
       for (final def in instructionCatalog) {
-        // Leaves live under .SequenceItem.; containers under .Container.
-        expect(def.type,
-            contains(def.isContainer ? 'OpenAstroAra.Sequencer.Container.' : 'OpenAstroAra.Sequencer.SequenceItem.'));
+        // Leaves live under .SequenceItem.; structural containers under .Container. — plus the one
+        // exception, a Smart Exposure, which is a container that lives under .SequenceItem.Imaging
+        // (it subclasses SequentialContainer in C#). So a container may be either, a leaf must be
+        // .SequenceItem. — kept tight so a future mis-filed type still fails.
+        expect(
+            def.type,
+            matches(def.isContainer
+                ? r'OpenAstroAra\.Sequencer\.(Container|SequenceItem)\.'
+                : r'OpenAstroAra\.Sequencer\.SequenceItem\.'));
         expect(def.type, endsWith(', OpenAstroAra.Sequencer'));
         expect(def.label, isNotEmpty);
       }
