@@ -90,40 +90,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
             throw new NotImplementedException();
         }
 
-        protected Type? GetType(string typeString) {
-            var t = Type.GetType(typeString);
-            if (t != null) return t;
-
-            // Two distinct migrations live here:
-            //
-            // 1. NINA → OpenAstroAra namespace+assembly rename (post-0.5l/0.5g
-            //    project rename). A NINA-original sequence body has
-            //    "NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer";
-            //    we need to swap to
-            //    "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer".
-            //    The previous logic only swapped a ", NINA" assembly suffix,
-            //    leaving the namespace on the class side as NINA.*. That
-            //    yielded no Type.GetType hit and all NINA imports fell to
-            //    UnknownSequence* — the bug §38k-6 closes.
-            // 2. Pre-module-split → post-split (when N.I.N.A. used a single
-            //    "NINA" assembly). The class side keeps its short namespace
-            //    (e.g. "NINA.Sequencer.X") but the assembly token is ", NINA";
-            //    after the split that assembly became OpenAstroAra.Sequencer /
-            //    .Core / .Astrometry depending on the type. Kept as the
-            //    second-pass fallback below.
-            t = Type.GetType(NinaTypeRemapper.RemapNamespace(typeString));
-            if (t != null) return t;
-
-            // Pre-split assembly migration fallbacks. Only kicks in when the
-            // namespace remap above didn't find a match, so legacy "single-
-            // NINA-assembly" bodies still resolve.
-            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Sequencer", StringComparison.Ordinal));
-            if (t != null) return t;
-            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Core", StringComparison.Ordinal));
-            if (t != null) return t;
-            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Astrometry", StringComparison.Ordinal));
-            return t;
-        }
+        protected Type? GetType(string typeString) => NinaTypeRemapper.ResolveType(typeString);
     }
 
     /// <summary>
@@ -146,6 +113,41 @@ namespace OpenAstroAra.Sequencer.Serialization {
                 .Replace("NINA.Sequencer", "OpenAstroAra.Sequencer", StringComparison.Ordinal)
                 .Replace("NINA.Astrometry", "OpenAstroAra.Astrometry", StringComparison.Ordinal)
                 .Replace("NINA.Core", "OpenAstroAra.Core", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Resolve a (possibly NINA-original) assembly-qualified type name to the live
+        /// OpenAstroAra type, or <c>null</c> if it isn't a type this build knows. Two migrations:
+        /// (1) the §38k-6 NINA→OpenAstroAra namespace+assembly rename (a NINA body has
+        /// "NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer"); (2) the pre-module-split
+        /// single-"NINA"-assembly form where only the <c>, NINA</c> assembly token is rewritten.
+        /// </summary>
+        public static Type? ResolveType(string typeString) {
+            var t = Type.GetType(typeString);
+            if (t != null) return t;
+            t = Type.GetType(RemapNamespace(typeString));
+            if (t != null) return t;
+            // Pre-split assembly-migration fallbacks for legacy single-NINA-assembly bodies.
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Sequencer", StringComparison.Ordinal));
+            if (t != null) return t;
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Core", StringComparison.Ordinal));
+            if (t != null) return t;
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Astrometry", StringComparison.Ordinal));
+            return t;
+        }
+
+        /// <summary>
+        /// The canonical <c>"{FullName}, {AssemblyShortName}"</c> form of a sequence <c>$type</c>
+        /// when it resolves to a real type in this build; otherwise the original string unchanged.
+        /// Used to normalize an imported NINA body to OpenAstroAra type names **losslessly** — a
+        /// <c>$type</c> that doesn't resolve (an unsupported/unknown instruction) is left exactly as
+        /// it was, so its node keeps its original identity and all of its data.
+        /// </summary>
+        public static string Canonicalize(string typeString) {
+            var resolved = ResolveType(typeString);
+            return resolved?.FullName is { } fullName
+                ? $"{fullName}, {resolved.Assembly.GetName().Name}"
+                : typeString;
         }
     }
 }

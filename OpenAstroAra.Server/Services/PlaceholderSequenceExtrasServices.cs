@@ -287,6 +287,18 @@ public sealed partial class PlaceholderSequenceImportService : ISequenceImportSe
             warnings.Add($"schemaVersion was missing; backfilled to '{SequenceSchemaValidator.SchemaVersion}'.");
         }
 
+        // §38.4 — normalize NINA $type names to canonical OpenAstroAra form so the editor + client
+        // catalog (keyed on OpenAstroAra.Sequencer.*) recognize the imported nodes instead of
+        // rendering each as a generic fallback. Lossless: unresolved/unsupported types are left
+        // untouched (and reported), so no node data is dropped.
+        var normalized = NinaImportTypeNormalizer.Normalize(body);
+        body = normalized.Body;
+        if (normalized.UnsupportedTypes.Count > 0) {
+            warnings.Add(
+                $"{normalized.UnsupportedTypes.Count} instruction type(s) are not yet supported and were kept as-is: " +
+                string.Join(", ", normalized.UnsupportedTypes) + ".");
+        }
+
         // §38.4 step 6: persist the raw upload under imported/from-nina-YYYY-MM-DD/
         // for audit + recovery. Best-effort; failures log but don't abort the
         // import — the in-library copy is what the user actually works with.
@@ -304,8 +316,8 @@ public sealed partial class PlaceholderSequenceImportService : ISequenceImportSe
             CreatedSequenceId: created.Id,
             Name: created.Name,
             Warnings: warnings.ToArray(),
-            DroppedInstructionTypes: Array.Empty<string>(),
-            LossyTranslation: false);
+            DroppedInstructionTypes: normalized.UnsupportedTypes.ToArray(),
+            LossyTranslation: normalized.UnsupportedTypes.Count > 0);
     }
 
     private static JsonElement BackfillSchemaVersion(JsonElement body) {
