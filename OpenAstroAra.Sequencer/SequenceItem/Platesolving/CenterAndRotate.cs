@@ -56,8 +56,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
             }
         }
 
+        private InputCoordinates coordinates = null!;
+
         [JsonProperty]
-        public InputCoordinates Coordinates { get; set; }
+        public InputCoordinates Coordinates {
+            get => coordinates;
+            set {
+                coordinates = value;
+                RaisePropertyChanged();
+            }
+        }
 
         private double positionAngle;
 

@@ -77,9 +77,13 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
         }
 
         public override async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
-            if (TriggerRunner != null) {
-                await TriggerRunner.Run(progress, token);
+            // Clone tolerates a null TriggerRunner (a malformed import), but executing one must fail
+            // loudly — silently running nothing would skip the autofocus, the exact hazard this
+            // family avoids (RunAutofocus.Execute throws for the same reason).
+            if (TriggerRunner == null) {
+                throw new SequenceEntityFailedException("Autofocus-after-exposures has no trigger runner to execute.");
             }
+            await TriggerRunner.Run(progress, token);
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
