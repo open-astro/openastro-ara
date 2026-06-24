@@ -63,8 +63,10 @@ class SequencerToolbar extends ConsumerWidget {
     final canRun = hasSelection && !isActive;
     // Abort while a run is active, but not when it's already aborting.
     final canAbort = hasSelection && isActive && !isAborting;
-    // Skip-current shares Abort's gate: only meaningful while a run is actively
-    // executing an item, and pointless once a teardown (abort) is already underway.
+    // Skip-current shares Abort's gate exactly: both interrupt an active run, so
+    // Skip is offered in every state Abort is (including paused, which the daemon
+    // never actually reaches today — pause is a no-op, see the Pause/Resume note
+    // above) and withdrawn once a teardown (abort) is already underway.
     final canSkip = hasSelection && isActive && !isAborting;
 
     return Container(

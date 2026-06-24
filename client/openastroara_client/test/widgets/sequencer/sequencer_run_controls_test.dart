@@ -179,6 +179,16 @@ void main() {
       expect(btn(tester, 'Skip').onPressed, isNull);
     });
 
+    testWidgets('paused → Skip enabled (parity with Abort)', (tester) async {
+      // Skip shares Abort's gate exactly: paused is an active state, so both
+      // controls stay enabled there. (The daemon never actually reaches paused
+      // today — pause is a no-op — but the gate is pinned so the decision is
+      // explicit rather than incidental.)
+      await pump(tester, run: _info(SequenceRunState.paused));
+      expect(btn(tester, 'Skip').onPressed, isNotNull);
+      expect(btn(tester, 'Abort').onPressed, isNotNull);
+    });
+
     testWidgets('pressing Skip fires skip-current', (tester) async {
       final container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(_FakeClient()),
