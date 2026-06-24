@@ -24,14 +24,17 @@ using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.SequenceItem.Dome;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
+using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using OpenAstroAra.Sequencer.SequenceItem.Rotator;
 using OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor;
 using OpenAstroAra.Sequencer.SequenceItem.Switch;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
+using OpenAstroAra.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
@@ -253,6 +256,12 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // §38k-22 — filter-wheel instruction. SwitchFilter needs
                 // IProfileService (filter list) + IFilterWheelMediator.
                 new SwitchFilter(profileService, filterWheelMediator),
+                // §38 NINA import fidelity — autofocus + center-and-rotate steps (one per target in
+                // real plans). No equipment deps to construct the prototype; execution into the §59
+                // AF / §28 centering services is a run-engine follow-up (their Execute fails loudly
+                // for now rather than silently skipping focus/centering).
+                new RunAutofocus(),
+                new CenterAndRotate(),
                 // §38k-22 — Connect dir. All take the full 11 device mediators;
                 // Connect*/SwitchProfile also take IProfileService (profile-first),
                 // Disconnect* do not (camera-first). The Disconnect* classes were
@@ -310,6 +319,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // §38 NINA import fidelity — the most common trigger in real plans (one per
                 // Smart Exposure). Carries AfterExposures + a TriggerRunner holding a Dither.
                 new DitherAfterExposures(),
+                // §38 NINA import fidelity — the autofocus sibling: run autofocus every N exposures.
+                new AutofocusAfterExposures(),
             });
     }
 }
