@@ -63,6 +63,9 @@ class SequencerToolbar extends ConsumerWidget {
     final canRun = hasSelection && !isActive;
     // Abort while a run is active, but not when it's already aborting.
     final canAbort = hasSelection && isActive && !isAborting;
+    // Skip-current shares Abort's gate: only meaningful while a run is actively
+    // executing an item, and pointless once a teardown (abort) is already underway.
+    final canSkip = hasSelection && isActive && !isAborting;
 
     return Container(
       height: 44,
@@ -136,6 +139,16 @@ class SequencerToolbar extends ConsumerWidget {
                   onPressed: canRun
                       ? () => _lifecycle(
                           context, ref, (api, id) => api.start(id))
+                      : null,
+                ),
+                _ToolButton(
+                  icon: Icons.skip_next,
+                  label: 'Skip',
+                  // Skip the current target/item (e.g. one that's dropped below the
+                  // horizon) so the run advances to the next without aborting.
+                  onPressed: canSkip
+                      ? () => _lifecycle(
+                          context, ref, (api, id) => api.skipCurrent(id))
                       : null,
                 ),
                 _ToolButton(

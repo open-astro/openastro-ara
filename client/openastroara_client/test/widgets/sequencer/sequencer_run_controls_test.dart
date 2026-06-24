@@ -48,6 +48,8 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> resume(String id) async => (calls..add('resume')).last;
   @override
+  Future<String> skipCurrent(String id) async => (calls..add('skip-current')).last;
+  @override
   Future<String> abort(String id) async => (calls..add('abort')).last;
   @override
   Future<String> stop(String id) async => (calls..add('stop')).last;
@@ -159,6 +161,41 @@ void main() {
       await pump(tester, run: _info(SequenceRunState.completed));
       expect(btn(tester, 'Run').onPressed, isNotNull);
       expect(btn(tester, 'Abort').onPressed, isNull);
+    });
+
+    testWidgets('running → Skip enabled', (tester) async {
+      await pump(tester, run: _info(SequenceRunState.running));
+      expect(btn(tester, 'Skip').onPressed, isNotNull);
+    });
+
+    testWidgets('no active run → Skip disabled', (tester) async {
+      await pump(tester, run: null);
+      expect(btn(tester, 'Skip').onPressed, isNull);
+    });
+
+    testWidgets('aborting → Skip disabled (teardown already underway)',
+        (tester) async {
+      await pump(tester, run: _info(SequenceRunState.aborting));
+      expect(btn(tester, 'Skip').onPressed, isNull);
+    });
+
+    testWidgets('pressing Skip fires skip-current', (tester) async {
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+        sequenceRunStateProvider
+            .overrideWith(() => _FakeRunNotifier(_info(SequenceRunState.running))),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      btn(tester, 'Skip').onPressed!();
+      await tester.pumpAndSettle();
+      final fake = container.read(sequenceApiProvider) as _FakeClient;
+      expect(fake.calls, contains('skip-current'));
     });
 
     testWidgets('a command in flight disables the controls', (tester) async {

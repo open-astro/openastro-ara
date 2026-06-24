@@ -64,6 +64,8 @@ class _RecordingClient implements SequenceClient {
   @override
   Future<String> resume(String id) => throw UnimplementedError();
   @override
+  Future<String> skipCurrent(String id) => throw UnimplementedError();
+  @override
   Future<String> abort(String id) => throw UnimplementedError();
   @override
   Future<String> stop(String id) => throw UnimplementedError();
