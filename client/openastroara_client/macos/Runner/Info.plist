@@ -28,6 +28,16 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Opt OUT of Flutter's experimental "merged UI + platform thread" mode. It
+	     changes how the macOS main run loop services timers, which stops the
+	     webview_cef (CEF) message pump — an NSTimer on the main run loop driving
+	     CefDoMessageLoopWork (CefWrapper.mm) — from firing. Without that pump CEF
+	     stalls and the Sky Atlas webview renders white/blank. This regression is
+	     Flutter-version-driven, not CEF-version-driven (it broke the embed on both
+	     CEF 130 and 149), so the opt-out is the real fix. Remove only once the fork
+	     drives the pump via the run-loop-merge-safe path. -->
+	<key>FLTEnableMergedPlatformUIThread</key>
+	<false/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_openastroara._tcp</string>

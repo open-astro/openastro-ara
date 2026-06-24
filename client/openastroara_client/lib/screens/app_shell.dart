@@ -83,7 +83,22 @@ class _AppShellState extends ConsumerState<AppShell> {
                         ],
                       ),
                       const VerticalDivider(width: 1, thickness: 1),
-                      Expanded(child: _tabs[selectedTab].body),
+                      // IndexedStack (not `_tabs[selectedTab].body`) so every tab
+                      // is built ONCE and kept alive, showing only the selected
+                      // one. Critical for the Planning/Sky Atlas tab: its CEF
+                      // (webview_cef) browser must be created once and persist.
+                      // Rebuilding it per tab-switch — i.e. creating the CEF
+                      // browser lazily on navigation rather than at startup —
+                      // renders the Aladin webview black on CEF 149 single-process
+                      // OSR (the offscreen browser never paints). Keeping it alive
+                      // also avoids tearing down + re-creating the browser (and
+                      // losing atlas state) every time the user leaves and returns.
+                      Expanded(
+                        child: IndexedStack(
+                          index: selectedTab,
+                          children: [for (final t in _tabs) t.body],
+                        ),
+                      ),
                     ],
                   ),
                 ),

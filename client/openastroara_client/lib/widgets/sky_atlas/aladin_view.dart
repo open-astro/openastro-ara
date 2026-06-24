@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -321,21 +322,29 @@ class _AladinViewState extends ConsumerState<AladinView> {
 }
 
 // The bundled Aladin Lite JS (vendored under assets/aladin/aladin.js, ~1.9 MB,
-// pinned to v3.6.1), read once and memoized. Re-reading the asset + re-base64
-// on every tab switch (this tab unmounts on switch) is wasteful, so the built
-// data: URL is cached for the process lifetime. A failure is NOT cached (clears
-// the future) so a later mount — e.g. after a transient I/O hiccup — can retry.
+// pinned to v3.6.1) is inlined into the bootstrap page, written once to a temp
+// file, and loaded via a short file:// URL — memoized for the process lifetime so
+// re-mounting the (unmount-on-switch) tab doesn't rewrite the file. A failure is
+// NOT cached (clears the future) so a later mount — e.g. after a transient I/O
+// hiccup — can retry.
+//
+// Why a file:// URL and not a self-contained `data:` URL: inlining the ~1.9 MB
+// engine makes the assembled document ~2.5 MB, and a `data:` URL carries the whole
+// document IN the URL string. That exceeds Chromium's max URL length
+// (url::kMaxURLChars ≈ 2 MB), so CEF 149 silently rejects the navigation and the
+// webview stays blank (no atlas — the symptom that replaced the old crash). The
+// temp file keeps the URL short while the engine stays bundled/offline (no CDN, no
+// local HTTP server) per §36.1; sky-survey tiles still need internet.
 Future<String>? _aladinDataUrl;
 Future<String> _ensureAladinDataUrl() => _aladinDataUrl ??= _buildAladinDataUrl();
 
 Future<String> _buildAladinDataUrl() async {
   try {
     final js = await rootBundle.loadString('assets/aladin/aladin.js');
-    // charset=utf-8 in the MIME type: the payload is UTF-8-encoded, and while the
-    // inline <meta charset> makes CEF render it correctly today, RFC 2397's default
-    // for text/* is US-ASCII, so declare the real charset rather than rely on the
-    // browser sniffing the meta tag.
-    return 'data:text/html;charset=utf-8;base64,${base64Encode(utf8.encode(inlineAladinJs(js)))}';
+    final html = inlineAladinJs(js);
+    final file = File('${Directory.systemTemp.path}/openastroara_sky_atlas.html');
+    await file.writeAsString(html, flush: true);
+    return Uri.file(file.path).toString();
   } catch (_) {
     _aladinDataUrl = null; // don't cache the failure — allow a later retry
     rethrow;
@@ -562,7 +571,7 @@ const String _aladinBootstrapHtml = r'''
       araAladin.on('positionChanged', function () { araRedrawFovBox(); });
       araAladin.on('zoomChanged', function () { araRedrawFovBox(); });
       araRedrawFovBox();
-    });
+    }).catch(function (e) { aladinLoadFailed(); });
   } else {
     aladinLoadFailed();
   }

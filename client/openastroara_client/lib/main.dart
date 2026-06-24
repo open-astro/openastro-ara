@@ -1,7 +1,9 @@
 import 'dart:developer' as developer;
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:webview_cef/webview_cef.dart';
 
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
@@ -12,8 +14,43 @@ void main() {
   runApp(const ProviderScope(child: OpenAstroAraApp()));
 }
 
-class OpenAstroAraApp extends StatelessWidget {
+class OpenAstroAraApp extends StatefulWidget {
   const OpenAstroAraApp({super.key});
+
+  @override
+  State<OpenAstroAraApp> createState() => _OpenAstroAraAppState();
+}
+
+class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
+  AppLifecycleListener? _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // Shut CEF down cleanly before the OS tears the process down. The Sky Atlas
+    // webview (webview_cef) runs CEF in single-process mode; if exit() runs while
+    // CEF's SwiftShader GPU/renderer threads are still live, teardown segfaults.
+    // onExitRequested intercepts the platform terminate request, lets us quit CEF
+    // (CloseAllBrowsers + CefShutdown — a no-op if the atlas was never opened),
+    // then allows exit. See the §36 Sky Atlas notes.
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: () async {
+        try {
+          await WebviewManager().quit();
+        } catch (e, st) {
+          developer.log('CEF shutdown on exit failed',
+              name: 'openastroara.webview', error: e, stackTrace: st);
+        }
+        return AppExitResponse.exit;
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
