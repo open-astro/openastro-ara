@@ -39,6 +39,19 @@ namespace OpenAstroAra.Sequencer.Container {
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context) {
             AfterParentChanged();
+            // A serialized body writes Parent as null, so re-establish the parent chain here: each
+            // child points back at this container. Newtonsoft fires [OnDeserialized] bottom-up, so by
+            // the time the root's hook runs the whole tree is wired — which running-item tracking
+            // (skip-current) and any other GetRootContainer/parent walk depends on.
+            foreach (var item in Items) {
+                item.AttachNewParent(this);
+            }
+            foreach (var condition in Conditions) {
+                condition.AttachNewParent(this);
+            }
+            foreach (var trigger in Triggers) {
+                trigger.AttachNewParent(this);
+            }
         }
 
         private bool isExpanded = true;

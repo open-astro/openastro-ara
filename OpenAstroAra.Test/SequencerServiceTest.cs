@@ -184,6 +184,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Skip_current_skips_the_running_item_and_advances() {
+            // §38 — the only item is a 30s wait; skipping the current item cancels it so the run
+            // completes well within that wait (proving SkipCurrentRunningItems reaches the run).
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await Task.Delay(300); // let the leaf register as a running item before we skip it
+
+            await svc.SkipAsync(id, null, CancellationToken.None);
+
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "skipping the running 30s wait should let the run finish promptly");
+        }
+
+        [Test]
+        public async Task Skip_on_unknown_run_is_an_accepted_noop() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody());
+            Assert.That(await svc.SkipAsync(id, null, CancellationToken.None), Is.Not.Null);
+        }
+
+        [Test]
         public async Task Host_shutdown_stops_live_runs() {
             // On daemon shutdown (IHostedService.StopAsync), in-flight runs must be
             // cancelled rather than abandoned mid-execution.
