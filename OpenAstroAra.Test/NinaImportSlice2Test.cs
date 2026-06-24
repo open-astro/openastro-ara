@@ -82,6 +82,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void AutofocusAfterExposures_fires_every_Nth_exposure_and_resets_on_replay() {
+            var exposure = HeadlessSequencerFactory.WithDefaults()
+                .GetItem<OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure>()!;
+            var trigger = new AutofocusAfterExposures { AfterExposures = 3 };
+
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.False); // 1
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.False); // 2
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.True);  // 3 → fire
+            // A non-exposure item must not advance the tally (and must not re-fire).
+            Assert.That(trigger.ShouldTrigger(new RunAutofocus(), null), Is.False);
+
+            // Reset + replay: the next exposure is #1 again, not #4.
+            trigger.SequenceBlockInitialize();
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.False);
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.False);
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.True, "must fire on exposure 3 of the replay");
+        }
+
+        [Test]
+        public void AutofocusAfterExposures_never_fires_when_AfterExposures_is_zero() {
+            var exposure = HeadlessSequencerFactory.WithDefaults()
+                .GetItem<OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure>()!;
+            var trigger = new AutofocusAfterExposures { AfterExposures = 0 };
+            Assert.That(trigger.ShouldTrigger(exposure, null), Is.False, "AfterExposures<=0 must be a safe no-op (no divide-by-zero)");
+        }
+
+        [Test]
         public void Factory_registers_the_slice2_prototypes() {
             var factory = HeadlessSequencerFactory.WithDefaults();
             Assert.That(factory.Items.Select(i => i.GetType().Name), Does.Contain("RunAutofocus"));

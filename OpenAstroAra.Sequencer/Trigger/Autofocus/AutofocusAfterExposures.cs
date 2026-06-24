@@ -82,6 +82,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             // Only an exposure (IExposureItem) advances the tally, and the trigger fires *on* the
             // exposure that completes a group of N. Capture AfterExposures once so a concurrent write
             // to 0 can't turn the modulo into a DivideByZeroException; Interlocked keeps it atomic.
+            // The tally counts exposures *taken*, independent of whether the fired autofocus then
+            // succeeds — the cadence is exposure-driven, and a failed autofocus surfaces as a
+            // SequenceEntityFailedException through the run-engine rather than rewinding the count.
             var after = AfterExposures;
             if (previousItem is not IExposureItem || after <= 0) {
                 return false;
