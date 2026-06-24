@@ -18,6 +18,13 @@ SequenceDetail emptySequence() => SequenceDetail(
     );
 
 Future<ProviderContainer> _pump(WidgetTester tester, {SequenceDetail? detail}) async {
+  // Tall viewport so the lazy palette list builds all instruction tiles — the smoke checks below
+  // assert on tiles (e.g. "Dither") that would otherwise scroll below the default 600px fold as the
+  // catalog grows.
+  tester.view.physicalSize = const Size(1000, 4000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+
   final container = ProviderContainer();
   addTearDown(container.dispose);
   if (detail != null) {

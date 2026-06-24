@@ -443,6 +443,13 @@ const List<InstructionDef> instructionCatalog = [
       InstructionField('RelativePosition', 'Steps', InstructionFieldType.integer, defaultValue: 0),
     ],
   ),
+  // §38 NINA import — run an autofocus routine. No serialized fields.
+  InstructionDef(
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer',
+    label: 'Run Autofocus',
+    category: InstructionCategory.focuser,
+    icon: Icons.center_focus_strong_outlined,
+  ),
   // ── Telescope ──────────────────────────────────────────────────────────────
   InstructionDef(
     type: slewScopeToRaDecType,
@@ -452,6 +459,19 @@ const List<InstructionDef> instructionCatalog = [
     fields: [
       InstructionField('Coordinates', 'Coordinates', InstructionFieldType.coordinates,
           defaultValue: defaultCoordinates),
+      InstructionField('Inherited', 'Inherit from target', InstructionFieldType.boolean, defaultValue: false),
+    ],
+  ),
+  // §38 NINA import — center-and-rotate: slew + plate-solve to centre, then rotate to PositionAngle.
+  InstructionDef(
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer',
+    label: 'Center and Rotate',
+    category: InstructionCategory.telescope,
+    icon: Icons.crop_rotate_outlined,
+    fields: [
+      InstructionField('Coordinates', 'Coordinates', InstructionFieldType.coordinates,
+          defaultValue: defaultCoordinates),
+      InstructionField('PositionAngle', 'Position angle (°)', InstructionFieldType.number, defaultValue: 0.0),
       InstructionField('Inherited', 'Inherit from target', InstructionFieldType.boolean, defaultValue: false),
     ],
   ),
