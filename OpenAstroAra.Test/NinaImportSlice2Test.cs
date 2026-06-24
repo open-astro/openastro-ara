@@ -119,6 +119,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void AutofocusAfterExposures_clone_survives_null_TriggerRunner() {
+            var trigger = new AutofocusAfterExposures { AfterExposures = 4 };
+            // A malformed import (TriggerRunner: null) can null the base property (protected setter,
+            // reachable by the deserializer); simulate it via reflection.
+            typeof(OpenAstroAra.Sequencer.Trigger.SequenceTrigger)
+                .GetProperty(nameof(trigger.TriggerRunner))!
+                .SetValue(trigger, null);
+
+            AutofocusAfterExposures clone = null!;
+            Assert.That(() => clone = (AutofocusAfterExposures)trigger.Clone(), Throws.Nothing);
+            Assert.That(clone.TriggerRunner, Is.Not.Null);
+            Assert.That(clone.AfterExposures, Is.EqualTo(4));
+        }
+
+        [Test]
         public void Factory_registers_the_slice2_prototypes() {
             var factory = HeadlessSequencerFactory.WithDefaults();
             Assert.That(factory.Items.Select(i => i.GetType().Name), Does.Contain("RunAutofocus"));

@@ -70,12 +70,16 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
 
         public override object Clone() {
             return new AutofocusAfterExposures(this) {
-                TriggerRunner = (SequentialContainer)TriggerRunner.Clone(),
+                // Null-safe: a malformed import could deserialize TriggerRunner as null (the base
+                // [JsonProperty] setter would overwrite the ctor's instance), so don't NPE on Clone.
+                TriggerRunner = (SequentialContainer)(TriggerRunner?.Clone() ?? new SequentialContainer()),
             };
         }
 
         public override async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
-            await TriggerRunner.Run(progress, token);
+            if (TriggerRunner != null) {
+                await TriggerRunner.Run(progress, token);
+            }
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {

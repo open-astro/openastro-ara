@@ -45,14 +45,30 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
             Coordinates = new InputCoordinates();
         }
 
+        private bool inherited;
+
         [JsonProperty]
-        public bool Inherited { get; set; }
+        public bool Inherited {
+            get => inherited;
+            set {
+                inherited = value;
+                RaisePropertyChanged();
+            }
+        }
 
         [JsonProperty]
         public InputCoordinates Coordinates { get; set; }
 
+        private double positionAngle;
+
         [JsonProperty]
-        public double PositionAngle { get; set; }
+        public double PositionAngle {
+            get => positionAngle;
+            set {
+                positionAngle = value;
+                RaisePropertyChanged();
+            }
+        }
 
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) =>
             throw new SequenceEntityFailedException("Center-and-rotate is not yet wired for sequence execution.");
