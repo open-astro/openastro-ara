@@ -63,7 +63,7 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
         var store = _services.GetRequiredService<IEquipmentSelectionStore>();
         var profile = _services.GetRequiredService<IProfileStore>();
 
-        IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto> remembered;
+        IReadOnlyList<DiscoveredDeviceDto> remembered;
         EquipmentConnectionDto conn;
         try {
             remembered = await store.GetAllAsync(stoppingToken).ConfigureAwait(false);
@@ -79,14 +79,16 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
         }
 #pragma warning restore CA1031
 
-        foreach (var (type, device) in remembered) {
+        // One entry per single-instance type plus each remembered switch — reconnect them all
+        // (subject to the per-type connect-on-boot toggle).
+        foreach (var device in remembered) {
             if (stoppingToken.IsCancellationRequested) {
                 return;
             }
-            if (!AutoConnectEnabled(conn, type)) {
+            if (!AutoConnectEnabled(conn, device.Type)) {
                 continue; // user opted this type out of connect-on-boot
             }
-            await TryConnectAsync(type, device, stoppingToken).ConfigureAwait(false);
+            await TryConnectAsync(device.Type, device, stoppingToken).ConfigureAwait(false);
         }
     }
 
@@ -98,9 +100,10 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
         var deviceCt = deviceCts.Token;
         try {
             // Alpaca is open by design — connect the remembered device directly (no version gate).
-            var connect = ResolveConnect(type, device, deviceCt);
+            // The resolver is shared with the manual /reconnect endpoints (IEquipmentReconnector).
+            var connect = _services.GetRequiredService<IEquipmentReconnector>().ResolveConnect(type, device, deviceCt);
             if (connect is null) {
-                return; // a type with no auto-connectable service (e.g. guider/switch)
+                return; // a type with no auto-connectable service (e.g. guider)
             }
             // Log intent before dispatching so the attempt is always recorded — even
             // if connect() faults synchronously (then LogConnectFailed follows it).
@@ -122,27 +125,8 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
 #pragma warning restore CA1031
     }
 
-    /// <summary>Maps a device type to its service's connect call, or null when the type has no
-    /// connect-on-boot path (Switch has no auto-connect setting; Guider connects via PHD2, not Alpaca).</summary>
-    private Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
-        var req = new ConnectRequestDto(device);
-        return type switch {
-            DeviceType.Camera => () => _services.GetRequiredService<ICameraService>().ConnectAsync(req, null, ct),
-            DeviceType.Telescope => () => _services.GetRequiredService<ITelescopeService>().ConnectAsync(req, null, ct),
-            DeviceType.Focuser => () => _services.GetRequiredService<IFocuserService>().ConnectAsync(req, null, ct),
-            DeviceType.FilterWheel => () => _services.GetRequiredService<IFilterWheelService>().ConnectAsync(req, null, ct),
-            DeviceType.Rotator => () => _services.GetRequiredService<IRotatorService>().ConnectAsync(req, null, ct),
-            DeviceType.Dome => () => _services.GetRequiredService<IDomeService>().ConnectAsync(req, null, ct),
-            DeviceType.SafetyMonitor => () => _services.GetRequiredService<ISafetyMonitorService>().ConnectAsync(req, null, ct),
-            DeviceType.ObservingConditions => () => _services.GetRequiredService<IObservingConditionsService>().ConnectAsync(req, null, ct),
-            DeviceType.FlatDevice or DeviceType.CoverCalibrator =>
-                () => _services.GetRequiredService<IFlatDeviceService>().ConnectAsync(req, null, ct),
-            _ => null,
-        };
-    }
-
-    /// <summary>The profile auto-connect bool for a device type. Switch/Guider map to no bool here
-    /// (Switch has none; Guider's connect is out of this Alpaca path), so they never auto-connect.</summary>
+    /// <summary>The profile auto-connect bool for a device type. Guider maps to no bool here
+    /// (its connect is out of this Alpaca path), so it never auto-connects.</summary>
     private static bool AutoConnectEnabled(EquipmentConnectionDto conn, DeviceType type) => type switch {
         DeviceType.Camera => conn.Camera,
         DeviceType.Telescope => conn.Mount,
@@ -153,6 +137,7 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
         DeviceType.SafetyMonitor => conn.SafetyMonitor,
         DeviceType.ObservingConditions => conn.Weather,
         DeviceType.FlatDevice or DeviceType.CoverCalibrator => conn.FlatPanel,
+        DeviceType.Switch => conn.Switch,
         _ => false,
     };
 

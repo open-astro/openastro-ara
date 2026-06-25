@@ -31,6 +31,9 @@ class _FakeSwitchApi implements SwitchClient {
   @override
   Future<void> connect(DiscoveredDevice device) async => calls.add('connect:${device.alpacaDeviceNumber}');
   @override
+  Future<void> reconnect() async => calls.add("reconnect");
+
+  @override
   Future<void> disconnect(int deviceNumber) async => calls.add('disconnect:$deviceNumber');
   @override
   Future<void> setValue({required int deviceNumber, required int portId, required double value}) async =>
@@ -95,6 +98,40 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Add switch'), findsOneWidget);
   });
 
+  testWidgets('offers Reconnect when no switch is connected (post power-cycle)',
+      (tester) async {
+    await _pump(tester, const []);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+  });
+
+  testWidgets('hides Reconnect while a switch is connected', (tester) async {
+    // Guard from review: reconnectAll re-dispatches every remembered switch, so
+    // it must not be offered while one is live (re-connecting a switch whose
+    // remembered host differs can tear down the live connection).
+    await _pump(tester, [_device(const [])]);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);
+  });
+
+  testWidgets('hides Reconnect while a switch is connecting', (tester) async {
+    await _pump(tester,
+        [_device(const [], state: SwitchConnectionState.connecting)]);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);
+  });
+
+  testWidgets('offers Reconnect when a remembered switch is in error',
+      (tester) async {
+    await _pump(
+        tester, [_device(const [], state: SwitchConnectionState.error)]);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+  });
+
+  testWidgets('tapping Reconnect dispatches reconnect', (tester) async {
+    final api = await _pump(tester, const []);
+    await tester.tap(find.widgetWithText(TextButton, 'Reconnect'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('reconnect'));
+  });
+
   testWidgets('renders a connected switch with its ports', (tester) async {
     await _pump(tester, [
       _device(const [
@@ -106,7 +143,10 @@ void main() {
     expect(find.text('PowerBox'), findsOneWidget);
     expect(find.text('Connected'), findsOneWidget);
     expect(find.text('Dew A'), findsOneWidget); // boolean → toggle
-    expect(find.byType(Switch), findsOneWidget);
+    // Scope to the switch Card so the panel's "Auto-connect on boot" toggle
+    // (a separate Switch at the top of the panel) isn't matched.
+    expect(find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+        findsOneWidget);
     expect(find.text('PWM'), findsOneWidget); // value → slider
     expect(find.byType(Slider), findsOneWidget);
     expect(find.text('Volts'), findsOneWidget); // read-only → text value
@@ -116,7 +156,8 @@ void main() {
     final api = await _pump(tester, [
       _device(const [SwitchPort(id: 0, name: 'Dew A', value: 0, min: 0, max: 1, canWrite: true)]),
     ]);
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.descendant(
+        of: find.byType(Card), matching: find.byType(Switch)));
     await tester.pumpAndSettle();
     expect(api.calls, contains('setValue:0:0=1.0'));
   });

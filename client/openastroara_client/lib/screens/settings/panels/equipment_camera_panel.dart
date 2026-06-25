@@ -36,6 +36,7 @@ class EquipmentCameraPanel extends ConsumerWidget {
           emptyLabel: 'No camera connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _CameraBody(status: s),
         ),

@@ -35,6 +35,7 @@ class EquipmentWeatherPanel extends ConsumerWidget {
           emptyLabel: 'No weather station connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _WeatherBody(status: s),
         ),

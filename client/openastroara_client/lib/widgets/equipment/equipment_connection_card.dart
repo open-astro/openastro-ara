@@ -30,6 +30,10 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
   final Future<bool> Function() onDisconnect;
   final VoidCallback onRetry;
 
+  /// Optional one-tap reconnect of the last-connected device (no re-discovery).
+  /// When supplied, a **Reconnect** button is shown while disconnected.
+  final Future<bool> Function()? onReconnect;
+
   /// The device-specific live content shown once connected (e.g. a Safe/Unsafe
   /// indicator, a weather sensor grid). The header (name + state chip + disconnect)
   /// is rendered by the card.
@@ -45,6 +49,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     required this.onDisconnect,
     required this.onRetry,
     required this.connectedBody,
+    this.onReconnect,
   });
 
   @override
@@ -80,6 +85,12 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         const EquipmentStateChip(state: EquipmentConnectionState.disconnected),
         const SizedBox(width: 12),
         Expanded(child: Text(emptyLabel)),
+        if (onReconnect != null)
+          TextButton.icon(
+            onPressed: () => _reconnect(context),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Reconnect'),
+          ),
         TextButton.icon(
           onPressed: () => _connect(context),
           icon: const Icon(Icons.search, size: 16),
@@ -87,6 +98,28 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         ),
       ],
     );
+  }
+
+  Future<void> _reconnect(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final performed = await onReconnect!();
+      if (!performed) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Another connect/disconnect is still in progress.'),
+        ));
+      }
+    } catch (e) {
+      // 404 = nothing has ever been connected for this type, so there's no
+      // remembered device to reconnect — point the user at Connect… instead.
+      final text = isNotFoundEquipmentError(e)
+          ? 'No previous $deviceTypeLabel to reconnect — use Connect… first.'
+          : "Couldn't reconnect: ${describeEquipmentError(e)}";
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 
   Widget _connected(BuildContext context, T value) {

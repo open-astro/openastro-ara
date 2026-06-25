@@ -299,7 +299,8 @@ public sealed class InMemoryProfileStore : IProfileStore {
         FlatPanel: true,
         Dome: false,
         Weather: false,
-        SafetyMonitor: true);
+        SafetyMonitor: true,
+        Switch: true);
 
     public EquipmentConnectionDto GetEquipmentConnection() {
         lock (_lock) { return _equipmentConnection; }

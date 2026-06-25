@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/switch_device.dart';
+import '../../../services/equipment_device_api.dart' show isNotFoundEquipmentError;
 import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §6 Switch panel. Unlike the single-instance device panels, several ASCOM
@@ -52,18 +54,46 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
   @override
   Widget build(BuildContext context) {
     final switches = ref.watch(switchListProvider);
+    final connection = ref.watch(equipmentConnectionProvider);
+    final connNotifier = ref.read(equipmentConnectionProvider.notifier);
+    // Only offer Reconnect while no switch is currently connected/connecting —
+    // reconnectAll re-dispatches every remembered switch, and re-connecting one
+    // that's live can tear it down if the daemon's remembered UniqueId differs
+    // from the live connection (e.g. its Alpaca host IP changed). An empty list
+    // (every() is true) still offers it — that's the post-power-cycle case.
+    final canReconnect = switches.maybeWhen(
+      data: (list) => list.every((d) =>
+          d.connectionState != SwitchConnectionState.connected &&
+          d.connectionState != SwitchConnectionState.connecting),
+      orElse: () => false,
+    );
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         Row(
           children: [
             const Expanded(child: SettingsSectionHeader('Connected switches')),
+            // Reconnect every switch the daemon remembers (e.g. after a gear
+            // power-cycle) without re-discovering each one.
+            if (canReconnect)
+              TextButton.icon(
+                onPressed: () => _reconnectAll(context),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Reconnect'),
+              ),
             TextButton.icon(
               onPressed: () => _addSwitch(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add switch'),
             ),
           ],
+        ),
+        SettingsSwitchRow(
+          label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
+          value: connection.autoConnect(EquipmentDeviceType.switchDevice),
+          onChanged: (v) =>
+              connNotifier.setAutoConnect(EquipmentDeviceType.switchDevice, v),
         ),
         const SizedBox(height: 4),
         ...switch (switches) {
@@ -87,6 +117,28 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
         },
       ],
     );
+  }
+
+  Future<void> _reconnectAll(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final performed = await ref.read(switchListProvider.notifier).reconnectAll();
+      if (!performed) {
+        // Re-entrancy guard fired (a port write/connect is still in flight) —
+        // tell the user instead of swallowing the tap.
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Another connect/disconnect is still in progress.'),
+        ));
+      }
+    } catch (e) {
+      final text = isNotFoundEquipmentError(e)
+          ? 'No previous switches to reconnect — use “Add switch” first.'
+          : "Couldn't reconnect switches: ${_msg(e)}";
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 
   Future<void> _addSwitch(BuildContext context) {

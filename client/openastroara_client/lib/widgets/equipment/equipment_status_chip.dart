@@ -7,6 +7,7 @@ import '../../state/app_shell_state.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/equipment/rotator_state.dart';
@@ -61,8 +62,7 @@ void openEquipmentPanel(WidgetRef ref, String panelId) {
 /// The §25.3 top-bar equipment chips, in device-type order: each shows live
 /// connection status (green dot when connected) and, on tap, jumps to that
 /// device's Settings panel to connect/control it. GUIDE keeps its bespoke
-/// [GuiderChip] (own status type + PHD2 dialog); SW is multi-instance; FLAT has
-/// no live status provider yet so it's clickable-but-static (routes to its panel).
+/// [GuiderChip] (own status type + PHD2 dialog); SW is multi-instance.
 class TopEquipmentChips extends StatelessWidget {
   const TopEquipmentChips({super.key});
 
@@ -96,7 +96,12 @@ class TopEquipmentChips extends StatelessWidget {
             panelId: 'eq.rotator',
             watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
         const GuiderChip(),
-        const _FlatChip(),
+        EquipmentStatusChip(
+            icon: Icons.wb_sunny,
+            label: 'FLAT',
+            panelId: 'eq.flat',
+            watchLevel: (ref) =>
+                equipmentChipLevel(ref.watch(flatPanelProvider))),
         const SwitchStatusChip(icon: Icons.power, label: 'SW'),
         EquipmentStatusChip(
             icon: Icons.cloud_outlined,
@@ -175,18 +180,4 @@ class SwitchStatusChip extends ConsumerWidget {
       onTap: () => openEquipmentPanel(ref, 'eq.switch'),
     );
   }
-}
-
-/// FLAT (cover/calibrator) has no live status provider yet, so it shows
-/// disconnected but stays clickable — routing to its Settings panel to connect.
-class _FlatChip extends ConsumerWidget {
-  const _FlatChip();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => EquipmentChip(
-        icon: Icons.wb_sunny,
-        label: 'FLAT',
-        status: StatusLevel.disconnected,
-        onTap: () => openEquipmentPanel(ref, 'eq.flat'),
-      );
 }

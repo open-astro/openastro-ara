@@ -51,6 +51,7 @@ class EquipmentConnectionSettings {
       EquipmentDeviceType.dome: false,
       EquipmentDeviceType.weather: false,
       EquipmentDeviceType.safetyMonitor: true,
+      EquipmentDeviceType.switchDevice: true,
     },
   });
 

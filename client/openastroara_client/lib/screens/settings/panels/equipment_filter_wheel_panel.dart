@@ -38,6 +38,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           emptyLabel: 'No filter wheel connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _FilterWheelBody(status: s),
         ),

@@ -56,6 +56,11 @@ class _FakeSwitchApi implements SwitchClient {
   }
 
   @override
+
+  Future<void> reconnect() async => calls.add("reconnect");
+
+
+  @override
   Future<void> disconnect(int deviceNumber) async {
     calls.add('disconnect:$deviceNumber');
     devices = devices

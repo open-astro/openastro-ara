@@ -36,6 +36,7 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           emptyLabel: 'No focuser connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _FocuserBody(status: s),
         ),

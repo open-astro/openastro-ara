@@ -35,6 +35,7 @@ class EquipmentMountPanel extends ConsumerWidget {
           emptyLabel: 'No mount connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _MountBody(status: s),
         ),

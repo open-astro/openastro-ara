@@ -19,6 +19,11 @@ abstract interface class SwitchClient {
   /// Disconnect the switch at [deviceNumber] (idempotent). 202-Accepted.
   Future<void> disconnect(int deviceNumber);
 
+  /// Reconnect every switch the daemon remembers (no re-discovery), e.g. after a
+  /// gear power-cycle (`POST /api/v1/equipment/switch/reconnect`). 202-Accepted;
+  /// throws a 404 when no switch has ever been connected.
+  Future<void> reconnect();
+
   /// Write [value] to [portId] of the switch at [deviceNumber]. 202-Accepted.
   Future<void> setValue({
     required int deviceNumber,
@@ -74,6 +79,11 @@ class SwitchApi implements SwitchClient {
   @override
   Future<void> disconnect(int deviceNumber) async {
     await _dio.post<void>('$_base/$deviceNumber/disconnect');
+  }
+
+  @override
+  Future<void> reconnect() async {
+    await _dio.post<void>('$_base/reconnect');
   }
 
   @override

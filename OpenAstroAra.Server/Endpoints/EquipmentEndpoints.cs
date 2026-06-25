@@ -300,7 +300,40 @@ public static class EquipmentEndpoints {
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
 
+        // ─── Manual reconnect (§52.1) ───
+        // Reconnect the remembered device(s) for the type without re-running discovery (the same
+        // path auto-connect-on-boot uses). 202 when at least one connect was dispatched; 404 when
+        // nothing has ever been connected for the type (so there's nothing to reconnect). Switch
+        // reconnects every remembered switch. Guider has no entry — it connects via PHD2, not this flow.
+        camera.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Camera, ct));
+        telescope.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Telescope, ct));
+        focuser.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Focuser, ct));
+        filterwheel.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.FilterWheel, ct));
+        rotator.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Rotator, ct));
+        dome.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Dome, ct));
+        sw.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.Switch, ct));
+        oc.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.ObservingConditions, ct));
+        safety.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.SafetyMonitor, ct));
+        flat.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.CoverCalibrator, ct));
+
         return app;
+    }
+
+    // Manual reconnect helper: dispatch a connect to the remembered device(s) for the type.
+    //   404 Not Found  — nothing remembered for the type yet (connect it once via /connect first).
+    //   202 Accepted   — at least one connect was dispatched; each connects in the background.
+    //   502 Bad Gateway — devices were remembered but every dispatch threw synchronously (e.g. all
+    //                     their Alpaca servers are down on a rig restart), so don't claim "reconnecting".
+    private static async Task<IResult> ReconnectAsync(IEquipmentReconnector reconnector, DeviceType type, CancellationToken ct) {
+        var outcome = await reconnector.ReconnectAsync(type, ct);
+        if (outcome.Attempted == 0) {
+            return Results.NotFound();
+        }
+        return outcome.Dispatched > 0
+            ? Results.Accepted()
+            : Results.Problem(
+                "Every remembered device failed to reconnect — check the devices are powered on and reachable.",
+                statusCode: StatusCodes.Status502BadGateway);
     }
 
     // Extracted (not an inline lambda) so the validation/connection error mapping is unit-testable with a mocked

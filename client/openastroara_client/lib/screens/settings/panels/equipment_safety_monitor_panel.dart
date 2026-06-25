@@ -35,6 +35,7 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
           emptyLabel: 'No safety monitor connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _SafetyBody(status: s),
         ),

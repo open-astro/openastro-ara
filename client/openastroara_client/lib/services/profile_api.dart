@@ -488,6 +488,7 @@ class ProfileApi {
       EquipmentDeviceType.dome: read('dome', false),
       EquipmentDeviceType.weather: read('weather', false),
       EquipmentDeviceType.safetyMonitor: read('safety_monitor', true),
+      EquipmentDeviceType.switchDevice: read('switch', true),
     });
   }
 
@@ -504,6 +505,7 @@ class ProfileApi {
         'dome': v.autoConnect(EquipmentDeviceType.dome),
         'weather': v.autoConnect(EquipmentDeviceType.weather),
         'safety_monitor': v.autoConnect(EquipmentDeviceType.safetyMonitor),
+        'switch': v.autoConnect(EquipmentDeviceType.switchDevice),
       };
 
   // ── PHD2 settings JSON mapping ─────────────────────────────────────────
