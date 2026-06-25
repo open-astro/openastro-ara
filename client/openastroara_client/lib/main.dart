@@ -9,6 +9,7 @@ import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'state/saved_server_state.dart';
 import 'theme/ara_theme.dart';
+import 'widgets/sky_atlas/aladin_view.dart' show disposeAladinTempDir;
 
 void main() {
   runApp(const ProviderScope(child: OpenAstroAraApp()));
@@ -33,6 +34,10 @@ class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
     // segfaults. onExitRequested intercepts the platform terminate request, lets us
     // quit CEF (CloseAllBrowsers + CefShutdown — a no-op if the atlas was never
     // opened), then allows exit. See the §36 Sky Atlas notes.
+    //
+    // WebviewManager() is a process singleton (factory => _instance in webview_cef),
+    // so this quit() tears down the very instance AladinView.initialize() set up —
+    // the graceful-shutdown contract depends on that.
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
         try {
@@ -44,6 +49,8 @@ class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
           developer.log('CEF shutdown on exit failed or timed out',
               name: 'openastroara.webview', error: e, stackTrace: st);
         }
+        // Remove the atlas bootstrap temp dir on a clean exit (best-effort).
+        await disposeAladinTempDir();
         return AppExitResponse.exit;
       },
     );

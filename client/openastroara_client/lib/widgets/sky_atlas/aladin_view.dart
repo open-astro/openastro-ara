@@ -336,7 +336,25 @@ class _AladinViewState extends ConsumerState<AladinView> {
 // temp file keeps the URL short while the engine stays bundled/offline (no CDN, no
 // local HTTP server) per §36.1; sky-survey tiles still need internet.
 Future<String>? _aladinDataUrl;
+// The unique temp dir created for this process's bootstrap file, retained so the
+// graceful-exit path can delete it (see disposeAladinTempDir).
+Directory? _aladinTempDir;
 Future<String> _ensureAladinDataUrl() => _aladinDataUrl ??= _buildAladinDataUrl();
+
+/// Best-effort removal of the bootstrap temp dir, called from the app's
+/// onExitRequested handler so a clean quit doesn't leave the file behind. Only
+/// ever touches *this* process's own dir (a uniquely-named createTemp result), so
+/// it can't race a concurrent second instance's live dir. A crash/kill skips this;
+/// the unique name means orphans never collide and the OS reaps the temp root.
+Future<void> disposeAladinTempDir() async {
+  final dir = _aladinTempDir;
+  _aladinTempDir = null;
+  _aladinDataUrl = null;
+  if (dir == null) return;
+  try {
+    if (dir.existsSync()) await dir.delete(recursive: true);
+  } catch (_) {/* best-effort — never let cleanup throw on the exit path */}
+}
 
 Future<String> _buildAladinDataUrl() async {
   try {
@@ -346,8 +364,9 @@ Future<String> _buildAladinDataUrl() async {
     // world-writable temp root: the random directory name can't be pre-placed as a
     // hostile symlink before first launch, and it can't collide with a second app
     // instance (e.g. a debug + a release build) racing a shared path. Memoized, so
-    // this runs once per process — one small dir per launch, which the OS reaps.
+    // this runs once per process; disposeAladinTempDir deletes it on a clean exit.
     final dir = await Directory.systemTemp.createTemp('openastroara_sky_atlas_');
+    _aladinTempDir = dir;
     final file = File('${dir.path}/atlas.html');
     await file.writeAsString(html, flush: true);
     return Uri.file(file.path).toString();
