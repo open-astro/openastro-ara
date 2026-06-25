@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
@@ -53,7 +54,7 @@ namespace OpenAstroAra.Test {
             foreach (var (t, impl) in services) {
                 sp.Setup(s => s.GetService(t)).Returns(impl);
             }
-            return new EquipmentReconnector(sp.Object, store);
+            return new EquipmentReconnector(sp.Object, store, NullLogger<EquipmentReconnector>.Instance);
         }
 
         [Test]
@@ -87,6 +88,27 @@ namespace OpenAstroAra.Test {
             var n = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
 
             Assert.That(n, Is.EqualTo(2));
+            sw.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
+
+        [Test]
+        public async Task ReconnectAsync_isolates_a_failing_device_and_attempts_the_rest() {
+            // Rig-restart case: one switch's Alpaca server isn't up yet and its ConnectAsync throws.
+            // The other switch must still be attempted, and the call must not propagate the failure.
+            var sw = new Mock<ISwitchService>();
+            var first = true;
+            sw.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()))
+                .Returns(() => {
+                    if (first) { first = false; throw new InvalidOperationException("switch not ready"); }
+                    return Task.FromResult(Accepted());
+                });
+            var r = Build(
+                new FakeStore(Device(DeviceType.Switch, "sw-0", 0), Device(DeviceType.Switch, "sw-1", 1)),
+                (typeof(ISwitchService), sw.Object));
+
+            var n = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
+
+            Assert.That(n, Is.EqualTo(2)); // both attempted despite the first throwing
             sw.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 

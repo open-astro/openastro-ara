@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
@@ -36,14 +37,17 @@ public interface IEquipmentReconnector {
     Task<int> ReconnectAsync(DeviceType type, CancellationToken ct);
 }
 
-public sealed class EquipmentReconnector : IEquipmentReconnector {
+public sealed partial class EquipmentReconnector : IEquipmentReconnector {
 
     private readonly IServiceProvider _services;
     private readonly IEquipmentSelectionStore _store;
+    private readonly ILogger<EquipmentReconnector> _logger;
 
-    public EquipmentReconnector(IServiceProvider services, IEquipmentSelectionStore store) {
+    public EquipmentReconnector(IServiceProvider services, IEquipmentSelectionStore store,
+            ILogger<EquipmentReconnector> logger) {
         _services = services;
         _store = store;
+        _logger = logger;
     }
 
     public Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
@@ -66,7 +70,7 @@ public sealed class EquipmentReconnector : IEquipmentReconnector {
 
     public async Task<int> ReconnectAsync(DeviceType type, CancellationToken ct) {
         var remembered = await _store.GetAllAsync(ct).ConfigureAwait(false);
-        var dispatched = 0;
+        var attempted = 0;
         // FlatDevice/CoverCalibrator are the same physical device under two tokens
         // (ASCOM type vs NINA concept), so a remembered "CoverCalibrator" still satisfies
         // a "FlatDevice" reconnect (and vice-versa).
@@ -75,16 +79,32 @@ public sealed class EquipmentReconnector : IEquipmentReconnector {
             if (connect is null) {
                 continue;
             }
-            // The service's ConnectAsync returns once accepted and connects in the background,
-            // so this awaits only the dispatch — each device proceeds independently.
-            await connect().ConfigureAwait(false);
-            dispatched++;
+            attempted++;
+            try {
+                // The service's ConnectAsync returns once accepted and connects in the
+                // background, so this awaits only the dispatch.
+                await connect().ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                throw; // daemon shutting down — unwind cleanly
+            }
+#pragma warning disable CA1031 // one device failing the dispatch (e.g. its Alpaca server isn't up yet during a rig restart) must not abort the others
+            catch (Exception ex) {
+                LogDispatchFailed(ex, device.Type, device.Name);
+            }
+#pragma warning restore CA1031
         }
-        return dispatched;
+        // Count every remembered+connectable device we attempted (not just clean dispatches),
+        // so the endpoint returns 202 "reconnecting" rather than 404 when a device throws.
+        return attempted;
     }
 
     private static bool SameGroup(DeviceType a, DeviceType b) => Normalize(a) == Normalize(b);
 
     private static DeviceType Normalize(DeviceType t) =>
         t == DeviceType.FlatDevice ? DeviceType.CoverCalibrator : t;
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Reconnect dispatch for {DeviceType} '{DeviceName}' failed; the other remembered devices still get their turn.")]
+    private partial void LogDispatchFailed(Exception ex, DeviceType deviceType, string deviceName);
 }

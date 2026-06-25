@@ -142,6 +142,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task GetAll_collapses_a_legacy_and_canonical_switch_key_for_the_same_device() {
+            // First boot after upgrade: a file can hold BOTH the legacy bare "Switch" and a new
+            // "Switch:0" for the same switch. GetAll must return one (else auto-connect doubles up).
+            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
+                "{ \"Switch\": { \"UniqueId\": \"legacy\", \"Name\": \"old\", \"Type\": \"Switch\", " +
+                "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
+                "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false }, " +
+                "\"Switch:0\": { \"UniqueId\": \"current\", \"Name\": \"new\", \"Type\": \"Switch\", " +
+                "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
+                "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false } }");
+
+            var switches = (await _store.GetAllAsync(CancellationToken.None))
+                .Where(d => d.Type == DeviceType.Switch).ToList();
+            Assert.That(switches.Count, Is.EqualTo(1));
+            Assert.That(switches[0].UniqueId, Is.EqualTo("current")); // canonical "Switch:0" wins
+        }
+
+        [Test]
         public async Task GetAll_tolerates_a_corrupt_file() {
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), "{ not json");
             var all = await _store.GetAllAsync(CancellationToken.None);

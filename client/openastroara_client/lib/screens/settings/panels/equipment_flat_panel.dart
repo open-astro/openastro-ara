@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/equipment_device_status.dart';
 import '../../../services/equipment_device_api.dart' show isNotFoundEquipmentError;
 import '../../../state/equipment/flat_panel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -18,6 +19,16 @@ class EquipmentFlatPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final connection = ref.watch(equipmentConnectionProvider);
     final n = ref.read(equipmentConnectionProvider.notifier);
+    // Only offer Reconnect while NOT connected/connecting — matching the other
+    // panels' card behaviour, so it can't interrupt an already-connected panel.
+    final flat = ref.watch(flatPanelProvider);
+    final canReconnect = flat.maybeWhen(
+      data: (s) =>
+          s == null ||
+          (s.connectionState != EquipmentConnectionState.connected &&
+              s.connectionState != EquipmentConnectionState.connecting),
+      orElse: () => false,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -28,16 +39,17 @@ class EquipmentFlatPanel extends ConsumerWidget {
           deviceTypeLabel: 'flat panel',
           hint: '§10.6 — Alpaca exposes flat panels as CoverCalibrator',
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          // Reconnect the last-connected flat panel without re-discovery (e.g.
-          // after a gear power-cycle). The top-bar FLAT chip reflects the result.
-          child: TextButton.icon(
-            onPressed: () => _reconnect(context, ref),
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Reconnect last'),
+        if (canReconnect)
+          Align(
+            alignment: Alignment.centerLeft,
+            // Reconnect the last-connected flat panel without re-discovery (e.g.
+            // after a gear power-cycle). The top-bar FLAT chip reflects the result.
+            child: TextButton.icon(
+              onPressed: () => _reconnect(context, ref),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reconnect last'),
+            ),
           ),
-        ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
           helpKey: 'eq.auto_connect_on_boot',

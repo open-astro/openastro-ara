@@ -121,9 +121,15 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         } finally {
             _gate.Release();
         }
-        // The dictionary key is purely an internal upsert/dedup handle; each value already
-        // carries its own Type + Alpaca device number, so the remembered set is just the values.
-        return raw.Values.ToList();
+        // Re-key every value by its canonical KeyFor and let later entries win. This collapses a
+        // legacy bare "Switch" entry (written before multi-switch) with the new "Switch:{number}"
+        // entry for the same switch, so a first-boot-after-upgrade read can't return both and make
+        // auto-connect attempt the same switch twice. Single-instance types already key canonically.
+        var canonical = new Dictionary<string, DiscoveredDeviceDto>();
+        foreach (var device in raw.Values) {
+            canonical[KeyFor(device)] = device;
+        }
+        return canonical.Values.ToList();
     }
 
     // Upsert/dedup key: single-instance types collapse to one entry per type (newest wins);
