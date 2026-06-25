@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/equipment_device_api.dart' show isNotFoundEquipmentError;
+import '../../../state/equipment/flat_panel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/alpaca_device_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -25,6 +28,16 @@ class EquipmentFlatPanel extends ConsumerWidget {
           deviceTypeLabel: 'flat panel',
           hint: '§10.6 — Alpaca exposes flat panels as CoverCalibrator',
         ),
+        Align(
+          alignment: Alignment.centerLeft,
+          // Reconnect the last-connected flat panel without re-discovery (e.g.
+          // after a gear power-cycle). The top-bar FLAT chip reflects the result.
+          child: TextButton.icon(
+            onPressed: () => _reconnect(context, ref),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Reconnect last'),
+          ),
+        ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
           helpKey: 'eq.auto_connect_on_boot',
@@ -44,5 +57,20 @@ class EquipmentFlatPanel extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _reconnect(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(flatPanelProvider.notifier).reconnect();
+    } catch (e) {
+      final text = isNotFoundEquipmentError(e)
+          ? 'No previous flat panel to reconnect — use Choose… first.'
+          : "Couldn't reconnect the flat panel: $e";
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 }

@@ -100,9 +100,8 @@ namespace OpenAstroAra.Test {
                 return Task.CompletedTask;
             }
 
-            public Task<System.Collections.Generic.IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) =>
-                Task.FromResult<System.Collections.Generic.IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto>>(
-                    new System.Collections.Generic.Dictionary<DeviceType, DiscoveredDeviceDto>());
+            public Task<System.Collections.Generic.IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) =>
+                Task.FromResult<System.Collections.Generic.IReadOnlyList<DiscoveredDeviceDto>>(Remembered);
         }
     }
 }

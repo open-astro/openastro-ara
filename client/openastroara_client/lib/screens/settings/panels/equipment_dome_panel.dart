@@ -36,6 +36,7 @@ class EquipmentDomePanel extends ConsumerWidget {
           emptyLabel: 'No dome connected.',
           onConnect: notifier.connect,
           onDisconnect: notifier.disconnect,
+          onReconnect: notifier.reconnect,
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _DomeBody(status: s),
         ),

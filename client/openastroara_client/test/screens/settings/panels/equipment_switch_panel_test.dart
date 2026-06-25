@@ -31,6 +31,9 @@ class _FakeSwitchApi implements SwitchClient {
   @override
   Future<void> connect(DiscoveredDevice device) async => calls.add('connect:${device.alpacaDeviceNumber}');
   @override
+  Future<void> reconnect() async => calls.add("reconnect");
+
+  @override
   Future<void> disconnect(int deviceNumber) async => calls.add('disconnect:$deviceNumber');
   @override
   Future<void> setValue({required int deviceNumber, required int portId, required double value}) async =>
@@ -106,7 +109,10 @@ void main() {
     expect(find.text('PowerBox'), findsOneWidget);
     expect(find.text('Connected'), findsOneWidget);
     expect(find.text('Dew A'), findsOneWidget); // boolean → toggle
-    expect(find.byType(Switch), findsOneWidget);
+    // Scope to the switch Card so the panel's "Auto-connect on boot" toggle
+    // (a separate Switch at the top of the panel) isn't matched.
+    expect(find.descendant(of: find.byType(Card), matching: find.byType(Switch)),
+        findsOneWidget);
     expect(find.text('PWM'), findsOneWidget); // value → slider
     expect(find.byType(Slider), findsOneWidget);
     expect(find.text('Volts'), findsOneWidget); // read-only → text value
@@ -116,7 +122,8 @@ void main() {
     final api = await _pump(tester, [
       _device(const [SwitchPort(id: 0, name: 'Dew A', value: 0, min: 0, max: 1, canWrite: true)]),
     ]);
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.descendant(
+        of: find.byType(Card), matching: find.byType(Switch)));
     await tester.pumpAndSettle();
     expect(api.calls, contains('setValue:0:0=1.0'));
   });

@@ -235,7 +235,8 @@ public sealed record EquipmentConnectionDto(
     bool FlatPanel,
     bool Dome,
     bool Weather,
-    bool SafetyMonitor);
+    bool SafetyMonitor,
+    bool Switch = true);
 
 /// <summary>
 /// §65.2 stretch defaults per profile. <c>LightDefault</c> is the

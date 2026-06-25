@@ -28,17 +28,22 @@ namespace OpenAstroAra.Server.Services;
 /// missing link that lets auto-connect-on-boot know <em>which</em> device to talk to.
 /// </summary>
 public interface IEquipmentSelectionStore {
-    /// <summary>Record (upsert) the device most recently connected for its type. Best-effort:
-    /// a write failure is logged and swallowed so it never fails the connect that triggered it.</summary>
+    /// <summary>Record (upsert) the device most recently connected. Single-instance types keep one
+    /// entry per type (newest wins); <see cref="DeviceType.Switch"/> is multi-instance so each switch
+    /// is remembered independently (keyed by its Alpaca device number). Best-effort: a write failure is
+    /// logged and swallowed so it never fails the connect that triggered it.</summary>
     Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct);
 
-    /// <summary>The remembered device per type, newest write wins. Empty when nothing has been connected yet.</summary>
-    Task<IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct);
+    /// <summary>Every remembered device — one per single-instance type, plus each remembered switch.
+    /// Each entry carries its own <see cref="DiscoveredDeviceDto.Type"/> and Alpaca device number.
+    /// Empty when nothing has been connected yet.</summary>
+    Task<IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct);
 }
 
 /// <summary>
 /// File-backed <see cref="IEquipmentSelectionStore"/>: one <c>equipment-selection.json</c> under the
-/// profile dir mapping device-type name → the last <see cref="DiscoveredDeviceDto"/> connected for it.
+/// profile dir mapping a per-device key → the last <see cref="DiscoveredDeviceDto"/> connected for it
+/// (device-type name for single-instance types; <c>Switch:{deviceNumber}</c> per switch).
 /// Writes are atomic (temp file + rename) and serialized by a semaphore so two concurrent connects
 /// can't tear the file. Mirrors the <see cref="ClientSettingsService"/> persistence pattern.
 /// </summary>
@@ -69,7 +74,13 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         var tmp = _path + ".tmp";
         try {
             var map = await ReadLocked(ct).ConfigureAwait(false);
-            map[device.Type.ToString()] = device;
+            if (device.Type == DeviceType.Switch) {
+                // Switch is multi-instance: drop any legacy single-switch entry (keyed by the
+                // bare type name from before multi-switch) so it doesn't double up with the
+                // device-number-keyed entries this and later remembers write.
+                map.Remove(DeviceType.Switch.ToString());
+            }
+            map[KeyFor(device)] = device;
             var json = JsonSerializer.Serialize(map, JsonOptions);
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
             File.Move(tmp, _path, overwrite: true);
@@ -102,7 +113,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         }
     }
 
-    public async Task<IReadOnlyDictionary<DeviceType, DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) {
+    public async Task<IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         Dictionary<string, DiscoveredDeviceDto> raw;
         try {
@@ -110,15 +121,17 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         } finally {
             _gate.Release();
         }
-        var result = new Dictionary<DeviceType, DiscoveredDeviceDto>();
-        foreach (var (key, device) in raw) {
-            // Tolerate an unknown/renamed type name in an older file rather than throwing.
-            if (Enum.TryParse<DeviceType>(key, out var type)) {
-                result[type] = device;
-            }
-        }
-        return result;
+        // The dictionary key is purely an internal upsert/dedup handle; each value already
+        // carries its own Type + Alpaca device number, so the remembered set is just the values.
+        return raw.Values.ToList();
     }
+
+    // Upsert/dedup key: single-instance types collapse to one entry per type (newest wins);
+    // Switch is multi-instance, so each switch is kept independently by its device number.
+    private static string KeyFor(DiscoveredDeviceDto device) =>
+        device.Type == DeviceType.Switch
+            ? $"{DeviceType.Switch}:{device.AlpacaDeviceNumber}"
+            : device.Type.ToString();
 
     // Caller holds _gate.
     private async Task<Dictionary<string, DiscoveredDeviceDto>> ReadLocked(CancellationToken ct) {

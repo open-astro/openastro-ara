@@ -16,6 +16,11 @@ String describeEquipmentError(Object? e) {
   return e.toString().replaceFirst('Exception: ', '');
 }
 
+/// True when [e] is a 404 from the equipment API — e.g. a reconnect with no
+/// remembered device for that type, distinct from a real failure.
+bool isNotFoundEquipmentError(Object? e) =>
+    e is DioException && e.response?.statusCode == 404;
+
 /// Generic single-instance equipment-device REST client: live status +
 /// connect/disconnect over `/api/v1/equipment/{path}`. Every non-Switch Alpaca
 /// device shares this envelope (Switch is the multi-instance outlier with its own

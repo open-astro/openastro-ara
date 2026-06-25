@@ -102,6 +102,13 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// Disconnect the device. Returns whether the call was performed (see [connect]).
   Future<bool> disconnect() => _act((api) => api.disconnect());
 
+  /// Reconnect the last-connected device of this type — the daemon remembers it,
+  /// so no re-discovery is needed (§52.1, `POST /equipment/{type}/reconnect`).
+  /// Throws a 404 when nothing has ever been connected for this type. Returns
+  /// whether the call was performed (see [connect]).
+  Future<bool> reconnect() =>
+      _act((api) => api.command('reconnect'), pollAfter: true);
+
   /// Run a device-specific control action (e.g. a focuser move, a filter change)
   /// through the same 202-accept + re-read + re-entrancy machinery as
   /// connect/disconnect. Subclasses expose typed wrappers over this. Returns

@@ -364,6 +364,10 @@ public partial class Program {
         builder.Services.AddSingleton<IEquipmentSelectionStore>(sp =>
             new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>()));
 
+        // §52.1 — connects remembered devices without re-discovery; shared by auto-connect-on-boot
+        // (EquipmentAutoConnectService) and the manual POST /equipment/{type}/reconnect endpoints.
+        builder.Services.AddSingleton<IEquipmentReconnector, EquipmentReconnector>();
+
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →
         // ImageReady → ImageArray download → §72 FITS write (atomic §28.7) → §28 catalog insert —
