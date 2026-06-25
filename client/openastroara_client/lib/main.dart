@@ -40,17 +40,25 @@ class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
     // the graceful-shutdown contract depends on that.
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
+        var quitCleanly = false;
         try {
           // Bound the wait: if CEF teardown ever hangs, a quit must not wedge the
           // whole app on exit. 3s is generous for CloseAllBrowsers + CefShutdown;
           // past that we log and exit anyway (the OS reclaims the process regardless).
           await WebviewManager().quit().timeout(const Duration(seconds: 3));
+          quitCleanly = true;
         } catch (e, st) {
           developer.log('CEF shutdown on exit failed or timed out',
               name: 'openastroara.webview', error: e, stackTrace: st);
         }
-        // Remove the atlas bootstrap temp dir on a clean exit (best-effort).
-        await disposeAladinTempDir();
+        // Only remove the atlas bootstrap temp dir once CEF has actually shut down.
+        // If quit() timed out, a CEF subprocess may still be mmap-reading the
+        // file:// bootstrap; deleting it underneath could SIGBUS/EIO that process
+        // mid-render. On a timed-out exit we leak this one temp dir to the OS
+        // (reclaimed with the process tree) rather than risk that.
+        if (quitCleanly) {
+          await disposeAladinTempDir();
+        }
         return AppExitResponse.exit;
       },
     );

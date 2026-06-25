@@ -5,7 +5,7 @@
 // NONE of ARA's app shell, connect flow, daemon, or tab switching in the way — a
 // single fullscreen webview loads a page directly. Run:
 //
-//   flutter run -t lib/main_atlas_test.dart -d macos
+//   flutter run -t tool/main_atlas_test.dart -d macos
 //
 // It loads a minimal Aladin Lite v3 bootstrap (below); the DSS2 star field +
 // coordinate grid render when the pipeline is healthy, blank/black when it isn't.
