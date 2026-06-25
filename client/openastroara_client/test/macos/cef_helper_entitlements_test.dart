@@ -75,16 +75,21 @@ void main() {
       expect(pbxproj.existsSync(), isTrue, reason: '${pbxproj.path} not found');
       final values = _entitlementAssignments(pbxproj.readAsStringSync());
       expect(values, isNotEmpty, reason: 'no CODE_SIGN_ENTITLEMENTS assignments found — pbxproj shape changed?');
-      // ALL of the Helper target's configs must sign with the sandboxed client file.
-      // A Flutter macOS project has exactly three build configs (Debug/Profile/Release),
-      // so the Helper target contributes exactly three `Runner/Helper.entitlements`
-      // assignments. Asserting the count (not just "≥1") catches a *partial* repoint —
-      // e.g. a re-run of add_helper_target.rb that the manual fix-up only corrected for
-      // one config — which a "contains" check would silently pass.
+      // ALL helper targets' configs must sign with the sandboxed client file.
+      // CEF on macOS needs the full five-helper set (base + GPU/Renderer/Plugin/
+      // Alerts), and a Flutter macOS project has three build configs
+      // (Debug/Profile/Release), so the helpers contribute exactly 5 × 3 = 15
+      // `Runner/Helper.entitlements` assignments. Asserting the count (not just
+      // "≥1") catches a *partial* repoint — e.g. a re-run of add_helper_target.rb
+      // that the manual fix-up only corrected for some targets/configs — which a
+      // "contains" check would silently pass.
+      const helperTargets = 5;
+      const buildConfigs = 3;
       final helperAssignments =
           values.where((v) => v == 'Runner/Helper.entitlements').length;
-      expect(helperAssignments, 3,
-          reason: 'all three Helper configs (Debug/Profile/Release) must point '
+      expect(helperAssignments, helperTargets * buildConfigs,
+          reason: 'all ${helperTargets * buildConfigs} helper configs '
+              '($helperTargets targets × $buildConfigs configs) must point '
               'CODE_SIGN_ENTITLEMENTS at Runner/Helper.entitlements; found $helperAssignments');
       // …and NO assignment may reference the plugin's non-sandboxed helper.entitlements
       // (a re-run of add_helper_target.rb that forgot the repoint — see macos/CEF_HELPER.md).

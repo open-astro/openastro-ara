@@ -27,14 +27,36 @@
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
+		3D25BFF6B7D7955205A079B0 /* process_helper_main.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */; };
+		3D98DD776333AA120EFC1F70 /* openastroara Helper (Plugin).app in Embed CEF Helper */ = {isa = PBXBuildFile; fileRef = 021CFAEF88B504C0F26FC046 /* openastroara Helper (Plugin).app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3DEA489D775E9C38B0D87E6D /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA9B5754F46A5D3C38E6A3E7 /* Pods_RunnerTests.framework */; };
-		4A7F4A23A245893F61665133 /* openastroara Helper.app in Embed CEF Helper */ = {isa = PBXBuildFile; fileRef = 6526BD9CE6FCD9CB3289EBDA /* openastroara Helper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		73D892989557511E17E93F1B /* process_helper_main.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
+		79013CFCC445C469D0E00FA0 /* openastroara Helper.app in Embed CEF Helper */ = {isa = PBXBuildFile; fileRef = 8D658B2833424F65FC9B8F3E /* openastroara Helper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		79FBEB3D35E94E328075234E /* process_helper_main.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */; };
 		8BF02F277096680330BEE525 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 905C50815A21DEB799616EA1 /* Pods_Runner.framework */; };
-		B1E743148CCE95A02524D5FB /* process_helper_main.cc in Sources */ = {isa = PBXBuildFile; fileRef = 696C1A9B749320A2245A13AF /* process_helper_main.cc */; };
+		905975B0E3ECCBE67784D555 /* openastroara Helper (Alerts).app in Embed CEF Helper */ = {isa = PBXBuildFile; fileRef = 5FE26C446FB6250F20FEF215 /* openastroara Helper (Alerts).app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		CC14DA3FFD86EBC733E04CAB /* process_helper_main.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */; };
+		DDBAE5FF70BFDFF4BD2423E9 /* openastroara Helper (GPU).app in Embed CEF Helper */ = {isa = PBXBuildFile; fileRef = 7D0E8B370A70BB8B1F063FBD /* openastroara Helper (GPU).app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F0A935B3FBCC01AFE28A1D01 /* openastroara Helper (Renderer).app in Embed CEF Helper */ = {isa = PBXBuildFile; fileRef = 0B7978919871A50B8597CE70 /* openastroara Helper (Renderer).app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F1017EA6335CD410CFB35212 /* process_helper_main.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0885AA62BB9588294320D3BF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EFC3E3D4701E281F340AC3CF;
+			remoteInfo = Helper;
+		};
+		328DBC206242C74934EE2B34 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7612D7DCBA6E6596A38B5B93;
+			remoteInfo = Helper_plugin;
+		};
 		331C80D9294CF71000263BE5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
@@ -49,12 +71,26 @@
 			remoteGlobalIDString = 33CC111A2044C6BA0003C045;
 			remoteInfo = FLX;
 		};
-		90F59EC65656AA44682F9AA6 /* PBXContainerItemProxy */ = {
+		7B2BF90743F7B54054D47FE7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 9445BB20629322C70832609B;
-			remoteInfo = Helper;
+			remoteGlobalIDString = 6177316E923C3EE819204128;
+			remoteInfo = Helper_renderer;
+		};
+		C11B9C22251A248D35727C4F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B010508D695D0442086C11F1;
+			remoteInfo = Helper_alerts;
+		};
+		D83D60BC1F36177028B614A2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 27FE7FBD03286AED0E42F2BE;
+			remoteInfo = Helper_gpu;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -75,7 +111,11 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				4A7F4A23A245893F61665133 /* openastroara Helper.app in Embed CEF Helper */,
+				79013CFCC445C469D0E00FA0 /* openastroara Helper.app in Embed CEF Helper */,
+				905975B0E3ECCBE67784D555 /* openastroara Helper (Alerts).app in Embed CEF Helper */,
+				DDBAE5FF70BFDFF4BD2423E9 /* openastroara Helper (GPU).app in Embed CEF Helper */,
+				3D98DD776333AA120EFC1F70 /* openastroara Helper (Plugin).app in Embed CEF Helper */,
+				F0A935B3FBCC01AFE28A1D01 /* openastroara Helper (Renderer).app in Embed CEF Helper */,
 			);
 			name = "Embed CEF Helper";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -83,6 +123,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		021CFAEF88B504C0F26FC046 /* openastroara Helper (Plugin).app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openastroara Helper (Plugin).app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0B7978919871A50B8597CE70 /* openastroara Helper (Renderer).app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openastroara Helper (Renderer).app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		333000ED22D3DE5D00554162 /* Warnings.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Warnings.xcconfig; sourceTree = "<group>"; };
@@ -99,10 +141,12 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
-		6526BD9CE6FCD9CB3289EBDA /* openastroara Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openastroara Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		696C1A9B749320A2245A13AF /* process_helper_main.cc */ = {isa = PBXFileReference; includeInIndex = 1; name = process_helper_main.cc; path = ../packages/webview_cef/macos/webview_cef/helper/process_helper_main.cc; sourceTree = "<group>"; };
+		5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */ = {isa = PBXFileReference; includeInIndex = 1; name = process_helper_main.cc; path = ../packages/webview_cef/macos/webview_cef/helper/process_helper_main.cc; sourceTree = "<group>"; };
+		5FE26C446FB6250F20FEF215 /* openastroara Helper (Alerts).app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openastroara Helper (Alerts).app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		7D0E8B370A70BB8B1F063FBD /* openastroara Helper (GPU).app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openastroara Helper (GPU).app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D658B2833424F65FC9B8F3E /* openastroara Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "openastroara Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		905C50815A21DEB799616EA1 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		A0D9F5DB4AF09BD0270EC700 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
@@ -115,6 +159,27 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		017D734C61DD368F08C85C50 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2A839CED784E903AE54C5D35 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		310439985949B76ABF8C17D3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		331C80D2294CF70F00263BE5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -132,7 +197,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		DEE4BF62BCEE142F4B9D1819 /* Frameworks */ = {
+		A9CE9B9F5ECEF5AE4FDB7ACA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ECDB18FD84DA3677A7ED6E1E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -193,7 +265,11 @@
 			children = (
 				33CC10ED2044A3C60003C045 /* openastroara.app */,
 				331C80D5294CF71000263BE5 /* RunnerTests.xctest */,
-				6526BD9CE6FCD9CB3289EBDA /* openastroara Helper.app */,
+				8D658B2833424F65FC9B8F3E /* openastroara Helper.app */,
+				5FE26C446FB6250F20FEF215 /* openastroara Helper (Alerts).app */,
+				7D0E8B370A70BB8B1F063FBD /* openastroara Helper (GPU).app */,
+				021CFAEF88B504C0F26FC046 /* openastroara Helper (Plugin).app */,
+				0B7978919871A50B8597CE70 /* openastroara Helper (Renderer).app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -246,7 +322,7 @@
 		F657F1450CF7C5CA2B119DF9 /* CEF Helper */ = {
 			isa = PBXGroup;
 			children = (
-				696C1A9B749320A2245A13AF /* process_helper_main.cc */,
+				5C97B3C3B0BF266F920AB5A4 /* process_helper_main.cc */,
 			);
 			name = "CEF Helper";
 			sourceTree = "<group>";
@@ -254,6 +330,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		27FE7FBD03286AED0E42F2BE /* Helper_gpu */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 84A1FACA1728113F91B96645 /* Build configuration list for PBXNativeTarget "Helper_gpu" */;
+			buildPhases = (
+				F32E6C6A4E6F890F4B22E736 /* Sources */,
+				ECDB18FD84DA3677A7ED6E1E /* Frameworks */,
+				1C9747935230997D8BB7D22D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Helper_gpu;
+			productName = Helper_gpu;
+			productReference = 7D0E8B370A70BB8B1F063FBD /* openastroara Helper (GPU).app */;
+			productType = "com.apple.product-type.application";
+		};
 		331C80D4294CF70F00263BE5 /* RunnerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 331C80DE294CF71000263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
@@ -289,7 +382,11 @@
 			);
 			dependencies = (
 				33CC11202044C79F0003C045 /* PBXTargetDependency */,
-				0A694700AA58C64B3343AE9B /* PBXTargetDependency */,
+				DB876DBC54BC85DCD7A30413 /* PBXTargetDependency */,
+				DB911A0757C657348133953B /* PBXTargetDependency */,
+				78C14ED29D0F44CA3F158913 /* PBXTargetDependency */,
+				7F9F2542D577F1B764F91D7C /* PBXTargetDependency */,
+				C55942FAD088D247EDE86B56 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -299,13 +396,64 @@
 			productReference = 33CC10ED2044A3C60003C045 /* openastroara.app */;
 			productType = "com.apple.product-type.application";
 		};
-		9445BB20629322C70832609B /* Helper */ = {
+		6177316E923C3EE819204128 /* Helper_renderer */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8961CD61F7FF5B16028AD0E7 /* Build configuration list for PBXNativeTarget "Helper" */;
+			buildConfigurationList = 258C9779FFCF92490095D056 /* Build configuration list for PBXNativeTarget "Helper_renderer" */;
 			buildPhases = (
-				1270E44D1C5092F9E19A595B /* Sources */,
-				DEE4BF62BCEE142F4B9D1819 /* Frameworks */,
-				557EB4746C6705763050C944 /* Resources */,
+				5A1C84ED07441AC241C84EFF /* Sources */,
+				017D734C61DD368F08C85C50 /* Frameworks */,
+				CE3E8C639FE413E8A92E72B4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Helper_renderer;
+			productName = Helper_renderer;
+			productReference = 0B7978919871A50B8597CE70 /* openastroara Helper (Renderer).app */;
+			productType = "com.apple.product-type.application";
+		};
+		7612D7DCBA6E6596A38B5B93 /* Helper_plugin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4A0566BDF5197AEE6AC04869 /* Build configuration list for PBXNativeTarget "Helper_plugin" */;
+			buildPhases = (
+				6B7063518B53A655D1AEC887 /* Sources */,
+				A9CE9B9F5ECEF5AE4FDB7ACA /* Frameworks */,
+				17E47802FE64B01E4D6B04C0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Helper_plugin;
+			productName = Helper_plugin;
+			productReference = 021CFAEF88B504C0F26FC046 /* openastroara Helper (Plugin).app */;
+			productType = "com.apple.product-type.application";
+		};
+		B010508D695D0442086C11F1 /* Helper_alerts */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F0F4A195D1C5952FA912CC9F /* Build configuration list for PBXNativeTarget "Helper_alerts" */;
+			buildPhases = (
+				519EE575DB37A991C438BD64 /* Sources */,
+				310439985949B76ABF8C17D3 /* Frameworks */,
+				2065969C77577C376A46B521 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Helper_alerts;
+			productName = Helper_alerts;
+			productReference = 5FE26C446FB6250F20FEF215 /* openastroara Helper (Alerts).app */;
+			productType = "com.apple.product-type.application";
+		};
+		EFC3E3D4701E281F340AC3CF /* Helper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FE95C8A9803D8C4451E6C62 /* Build configuration list for PBXNativeTarget "Helper" */;
+			buildPhases = (
+				C3EC774A10383E0BF8C928FA /* Sources */,
+				2A839CED784E903AE54C5D35 /* Frameworks */,
+				D53603C2E1AAB01C28AE7410 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -313,7 +461,7 @@
 			);
 			name = Helper;
 			productName = Helper;
-			productReference = 6526BD9CE6FCD9CB3289EBDA /* openastroara Helper.app */;
+			productReference = 8D658B2833424F65FC9B8F3E /* openastroara Helper.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -366,12 +514,37 @@
 				33CC10EC2044A3C60003C045 /* Runner */,
 				331C80D4294CF70F00263BE5 /* RunnerTests */,
 				33CC111A2044C6BA0003C045 /* Flutter Assemble */,
-				9445BB20629322C70832609B /* Helper */,
+				EFC3E3D4701E281F340AC3CF /* Helper */,
+				B010508D695D0442086C11F1 /* Helper_alerts */,
+				27FE7FBD03286AED0E42F2BE /* Helper_gpu */,
+				7612D7DCBA6E6596A38B5B93 /* Helper_plugin */,
+				6177316E923C3EE819204128 /* Helper_renderer */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		17E47802FE64B01E4D6B04C0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1C9747935230997D8BB7D22D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2065969C77577C376A46B521 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		331C80D3294CF70F00263BE5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -388,7 +561,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		557EB4746C6705763050C944 /* Resources */ = {
+		CE3E8C639FE413E8A92E72B4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D53603C2E1AAB01C28AE7410 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -483,14 +663,6 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		1270E44D1C5092F9E19A595B /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B1E743148CCE95A02524D5FB /* process_helper_main.cc in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		331C80D1294CF70F00263BE5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -509,15 +681,49 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		519EE575DB37A991C438BD64 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				73D892989557511E17E93F1B /* process_helper_main.cc in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A1C84ED07441AC241C84EFF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79FBEB3D35E94E328075234E /* process_helper_main.cc in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6B7063518B53A655D1AEC887 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC14DA3FFD86EBC733E04CAB /* process_helper_main.cc in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C3EC774A10383E0BF8C928FA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3D25BFF6B7D7955205A079B0 /* process_helper_main.cc in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F32E6C6A4E6F890F4B22E736 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1017EA6335CD410CFB35212 /* process_helper_main.cc in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		0A694700AA58C64B3343AE9B /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = Helper;
-			target = 9445BB20629322C70832609B /* Helper */;
-			targetProxy = 90F59EC65656AA44682F9AA6 /* PBXContainerItemProxy */;
-		};
 		331C80DA294CF71000263BE5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 33CC10EC2044A3C60003C045 /* Runner */;
@@ -527,6 +733,36 @@
 			isa = PBXTargetDependency;
 			target = 33CC111A2044C6BA0003C045 /* Flutter Assemble */;
 			targetProxy = 33CC111F2044C79F0003C045 /* PBXContainerItemProxy */;
+		};
+		78C14ED29D0F44CA3F158913 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Helper_gpu;
+			target = 27FE7FBD03286AED0E42F2BE /* Helper_gpu */;
+			targetProxy = D83D60BC1F36177028B614A2 /* PBXContainerItemProxy */;
+		};
+		7F9F2542D577F1B764F91D7C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Helper_plugin;
+			target = 7612D7DCBA6E6596A38B5B93 /* Helper_plugin */;
+			targetProxy = 328DBC206242C74934EE2B34 /* PBXContainerItemProxy */;
+		};
+		C55942FAD088D247EDE86B56 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Helper_renderer;
+			target = 6177316E923C3EE819204128 /* Helper_renderer */;
+			targetProxy = 7B2BF90743F7B54054D47FE7 /* PBXContainerItemProxy */;
+		};
+		DB876DBC54BC85DCD7A30413 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Helper;
+			target = EFC3E3D4701E281F340AC3CF /* Helper */;
+			targetProxy = 0885AA62BB9588294320D3BF /* PBXContainerItemProxy */;
+		};
+		DB911A0757C657348133953B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Helper_alerts;
+			target = B010508D695D0442086C11F1 /* Helper_alerts */;
+			targetProxy = C11B9C22251A248D35727C4F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -543,6 +779,80 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		0C192B593A090BDC03AFA52B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.plugin;
+				PRODUCT_NAME = "openastroara Helper (Plugin)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		2ED2B58184C8039F2E7C159F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.alerts;
+				PRODUCT_NAME = "openastroara Helper (Alerts)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
 		331C80DB294CF71000263BE5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = EDB2E6F95DE4B205D7C1DF9B /* Pods-RunnerTests.debug.xcconfig */;
@@ -824,9 +1134,10 @@
 			};
 			name = Release;
 		};
-		C7F4BBDCF7ED6B16E57E89E3 /* Profile */ = {
+		6E31336396084E4E378654A2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
@@ -853,16 +1164,17 @@
 					"-framework",
 					AppKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper;
-				PRODUCT_NAME = "openastroara Helper";
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.alerts;
+				PRODUCT_NAME = "openastroara Helper (Alerts)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 			};
-			name = Profile;
+			name = Debug;
 		};
-		F2A43BE94AF563283C071370 /* Release */ = {
+		77A3C1374A50AD6DB3EA71D1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
@@ -889,16 +1201,17 @@
 					"-framework",
 					AppKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper;
-				PRODUCT_NAME = "openastroara Helper";
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.renderer;
+				PRODUCT_NAME = "openastroara Helper (Renderer)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 			};
-			name = Release;
+			name = Debug;
 		};
-		F3E1EBC5268E951BCEE3C4AE /* Debug */ = {
+		879667B372F7652D98DB6788 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
@@ -932,9 +1245,389 @@
 			};
 			name = Debug;
 		};
+		8AE2E24CE9056772F3B78506 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper;
+				PRODUCT_NAME = "openastroara Helper";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Profile;
+		};
+		914C9C0CBD019F7436486C73 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.alerts;
+				PRODUCT_NAME = "openastroara Helper (Alerts)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Profile;
+		};
+		93371325FDA8F51E2B2D5276 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.gpu;
+				PRODUCT_NAME = "openastroara Helper (GPU)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Profile;
+		};
+		ACDE1E6813F17C730865D5A6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper;
+				PRODUCT_NAME = "openastroara Helper";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		AE340008EC05D9E7ABF0F4A2 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.renderer;
+				PRODUCT_NAME = "openastroara Helper (Renderer)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Profile;
+		};
+		BFB4EEBBF3FD8D1ED240F2A5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.gpu;
+				PRODUCT_NAME = "openastroara Helper (GPU)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		CA289601861E0904A20FF097 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.renderer;
+				PRODUCT_NAME = "openastroara Helper (Renderer)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		E342315644FA72E8AABAFF9C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.plugin;
+				PRODUCT_NAME = "openastroara Helper (Plugin)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		F14D65C4B690EBDE698FC9D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.gpu;
+				PRODUCT_NAME = "openastroara Helper (GPU)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		F6B2506CA32284C23A7B8B53 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CODE_SIGN_ENTITLEMENTS = Runner/Helper.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				INFOPLIST_FILE = "../packages/webview_cef/macos/webview_cef/helper/Helper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../../..",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					../packages/webview_cef/macos/webview_cef/third/cef,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lcef_dll_wrapper",
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.openastro.openastroara.helper.plugin;
+				PRODUCT_NAME = "openastroara Helper (Plugin)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Profile;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		258C9779FFCF92490095D056 /* Build configuration list for PBXNativeTarget "Helper_renderer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				77A3C1374A50AD6DB3EA71D1 /* Debug */,
+				AE340008EC05D9E7ABF0F4A2 /* Profile */,
+				CA289601861E0904A20FF097 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		331C80DE294CF71000263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -975,12 +1668,42 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		8961CD61F7FF5B16028AD0E7 /* Build configuration list for PBXNativeTarget "Helper" */ = {
+		4A0566BDF5197AEE6AC04869 /* Build configuration list for PBXNativeTarget "Helper_plugin" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F3E1EBC5268E951BCEE3C4AE /* Debug */,
-				C7F4BBDCF7ED6B16E57E89E3 /* Profile */,
-				F2A43BE94AF563283C071370 /* Release */,
+				0C192B593A090BDC03AFA52B /* Debug */,
+				F6B2506CA32284C23A7B8B53 /* Profile */,
+				E342315644FA72E8AABAFF9C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		84A1FACA1728113F91B96645 /* Build configuration list for PBXNativeTarget "Helper_gpu" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BFB4EEBBF3FD8D1ED240F2A5 /* Debug */,
+				93371325FDA8F51E2B2D5276 /* Profile */,
+				F14D65C4B690EBDE698FC9D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8FE95C8A9803D8C4451E6C62 /* Build configuration list for PBXNativeTarget "Helper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				879667B372F7652D98DB6788 /* Debug */,
+				8AE2E24CE9056772F3B78506 /* Profile */,
+				ACDE1E6813F17C730865D5A6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F0F4A195D1C5952FA912CC9F /* Build configuration list for PBXNativeTarget "Helper_alerts" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6E31336396084E4E378654A2 /* Debug */,
+				914C9C0CBD019F7436486C73 /* Profile */,
+				2ED2B58184C8039F2E7C159F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
