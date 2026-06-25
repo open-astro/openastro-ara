@@ -40,9 +40,17 @@ class _AppShellState extends ConsumerState<AppShell> {
     _TabSpec(icon: Icons.support_agent, label: 'Support', body: SupportTab()),
   ];
 
+  // Indices that have been visited at least once. A tab isn't built until first
+  // selected; once built it stays in this set so the IndexedStack keeps it alive
+  // (see the IndexedStack comment below). Monotonic — never removed.
+  final Set<int> _builtTabs = <int>{};
+
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
+    // Mark the current tab built before assembling the stack, so it renders its
+    // real body this frame (and persists on every later frame).
+    _builtTabs.add(selectedTab);
     // Ties kOptionsTabIndex (used by the equipment chips to route to a device's
     // settings panel) to the actual tab order — a reorder of _tabs that forgets
     // to update the constant trips this in debug instead of silently navigating
@@ -83,20 +91,29 @@ class _AppShellState extends ConsumerState<AppShell> {
                         ],
                       ),
                       const VerticalDivider(width: 1, thickness: 1),
-                      // IndexedStack (not `_tabs[selectedTab].body`) so every tab
-                      // is built ONCE and kept alive, showing only the selected
-                      // one. Critical for the Planning/Sky Atlas tab: its CEF
-                      // (webview_cef) browser must be created once and persist.
-                      // Rebuilding it per tab-switch — i.e. creating the CEF
-                      // browser lazily on navigation rather than at startup —
-                      // renders the Aladin webview black on CEF 149 single-process
-                      // OSR (the offscreen browser never paints). Keeping it alive
-                      // also avoids tearing down + re-creating the browser (and
-                      // losing atlas state) every time the user leaves and returns.
+                      // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
+                      // once built, is KEPT ALIVE and merely hidden when another is
+                      // selected. Critical for the Planning/Sky Atlas tab: its CEF
+                      // (webview_cef) browser must persist — tearing it down on a
+                      // tab-switch and re-creating it leaves the Aladin webview
+                      // black on CEF 149 OSR (the offscreen browser never repaints)
+                      // and loses atlas state.
+                      //
+                      // Lazy build: an unvisited tab renders an empty placeholder
+                      // instead of its real body, so we DON'T run every tab's
+                      // initState at startup (no eager API/poll calls before the
+                      // user even opens that tab). A tab builds the first time it's
+                      // selected (it's in _builtTabs) and stays alive thereafter —
+                      // so the atlas still persists across switches once opened.
                       Expanded(
                         child: IndexedStack(
                           index: selectedTab,
-                          children: [for (final t in _tabs) t.body],
+                          children: [
+                            for (var i = 0; i < _tabs.length; i++)
+                              _builtTabs.contains(i)
+                                  ? _tabs[i].body
+                                  : const SizedBox.shrink(),
+                          ],
                         ),
                       ),
                     ],
