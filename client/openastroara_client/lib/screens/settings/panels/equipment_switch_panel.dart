@@ -56,6 +56,17 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
     final switches = ref.watch(switchListProvider);
     final connection = ref.watch(equipmentConnectionProvider);
     final connNotifier = ref.read(equipmentConnectionProvider.notifier);
+    // Only offer Reconnect while no switch is currently connected/connecting —
+    // reconnectAll re-dispatches every remembered switch, and re-connecting one
+    // that's live can tear it down if the daemon's remembered UniqueId differs
+    // from the live connection (e.g. its Alpaca host IP changed). An empty list
+    // (every() is true) still offers it — that's the post-power-cycle case.
+    final canReconnect = switches.maybeWhen(
+      data: (list) => list.every((d) =>
+          d.connectionState != SwitchConnectionState.connected &&
+          d.connectionState != SwitchConnectionState.connecting),
+      orElse: () => false,
+    );
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -64,11 +75,12 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
             const Expanded(child: SettingsSectionHeader('Connected switches')),
             // Reconnect every switch the daemon remembers (e.g. after a gear
             // power-cycle) without re-discovering each one.
-            TextButton.icon(
-              onPressed: () => _reconnectAll(context),
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Reconnect'),
-            ),
+            if (canReconnect)
+              TextButton.icon(
+                onPressed: () => _reconnectAll(context),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Reconnect'),
+              ),
             TextButton.icon(
               onPressed: () => _addSwitch(context),
               icon: const Icon(Icons.add, size: 18),
@@ -110,7 +122,14 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
   Future<void> _reconnectAll(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(switchListProvider.notifier).reconnectAll();
+      final performed = await ref.read(switchListProvider.notifier).reconnectAll();
+      if (!performed) {
+        // Re-entrancy guard fired (a port write/connect is still in flight) —
+        // tell the user instead of swallowing the tap.
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Another connect/disconnect is still in progress.'),
+        ));
+      }
     } catch (e) {
       final text = isNotFoundEquipmentError(e)
           ? 'No previous switches to reconnect — use “Add switch” first.'

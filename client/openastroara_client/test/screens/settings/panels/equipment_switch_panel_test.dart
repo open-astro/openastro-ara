@@ -98,6 +98,40 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Add switch'), findsOneWidget);
   });
 
+  testWidgets('offers Reconnect when no switch is connected (post power-cycle)',
+      (tester) async {
+    await _pump(tester, const []);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+  });
+
+  testWidgets('hides Reconnect while a switch is connected', (tester) async {
+    // Guard from review: reconnectAll re-dispatches every remembered switch, so
+    // it must not be offered while one is live (re-connecting a switch whose
+    // remembered host differs can tear down the live connection).
+    await _pump(tester, [_device(const [])]);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);
+  });
+
+  testWidgets('hides Reconnect while a switch is connecting', (tester) async {
+    await _pump(tester,
+        [_device(const [], state: SwitchConnectionState.connecting)]);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);
+  });
+
+  testWidgets('offers Reconnect when a remembered switch is in error',
+      (tester) async {
+    await _pump(
+        tester, [_device(const [], state: SwitchConnectionState.error)]);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+  });
+
+  testWidgets('tapping Reconnect dispatches reconnect', (tester) async {
+    final api = await _pump(tester, const []);
+    await tester.tap(find.widgetWithText(TextButton, 'Reconnect'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('reconnect'));
+  });
+
   testWidgets('renders a connected switch with its ports', (tester) async {
     await _pump(tester, [
       _device(const [
