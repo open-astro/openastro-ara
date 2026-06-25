@@ -15,10 +15,10 @@
   Keep only the JIT / framework-loading code-signing entitlements V8 + CEF need
   (hardened-runtime flags, orthogonal to the sandbox).
 
-  NOTE: the add_helper_target.rb injector points the Helper target's
-  CODE_SIGN_ENTITLEMENTS at the plugin's helper.entitlements; we repoint all three
-  configs to THIS file. If that script is ever re-run, repoint the Helper target
-  back to Runner/Helper.entitlements.
+  NOTE: the add_helper_target.rb injector points each helper target's
+  CODE_SIGN_ENTITLEMENTS at the plugin's helper.entitlements; we repoint all five
+  helper targets (every build config) to THIS file. If that script is ever re-run,
+  repoint the helpers back to Runner/Helper.entitlements (see macos/CEF_HELPER.md).
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
