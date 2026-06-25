@@ -81,3 +81,6 @@ WiX/
 **/MGEN/
 **/nikoncswrapper/
 **/Setup/
+
+# === Local-only reference docs (not tracked) ===
+design/AlpacaDeviceAPI_v1.yaml

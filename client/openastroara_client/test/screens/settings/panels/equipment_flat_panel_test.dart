@@ -43,15 +43,19 @@ class _FakeFlatApi implements EquipmentDeviceClient<FlatPanelStatus> {
 
 FlatPanelStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
+  bool lightOn = false,
+  int brightness = 0,
+  bool coverOpen = false,
+  String runtimeState = 'cover_closed',
 }) =>
     FlatPanelStatus(
       deviceId: 'flat-0',
       name: 'FlatMaster',
       connectionState: state,
-      runtimeState: 'cover_closed',
-      coverOpen: false,
-      lightOn: false,
-      brightness: 0,
+      runtimeState: runtimeState,
+      coverOpen: coverOpen,
+      lightOn: lightOn,
+      brightness: brightness,
     );
 
 // The settings panels are designed for the wide right-hand pane; give the test a
@@ -77,36 +81,78 @@ Future<_FakeFlatApi> _pump(WidgetTester tester, FlatPanelStatus? status) async {
 }
 
 void main() {
-  testWidgets('offers Reconnect last while no flat panel is connected',
+  testWidgets('no flat panel connected shows the empty state + Connect…',
       (tester) async {
     await _pump(tester, null);
-    expect(find.widgetWithText(TextButton, 'Reconnect last'), findsOneWidget);
+    expect(find.text('No flat panel connected.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
   });
 
-  testWidgets('offers Reconnect last when the flat panel is in error',
-      (tester) async {
-    await _pump(tester, _status(state: EquipmentConnectionState.error));
-    expect(find.widgetWithText(TextButton, 'Reconnect last'), findsOneWidget);
+  testWidgets('offers Reconnect while disconnected', (tester) async {
+    // The shared card surfaces Reconnect only in the disconnected state.
+    await _pump(tester, null);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
   });
 
-  testWidgets('hides Reconnect last while the flat panel is connected',
+  testWidgets('a connected panel with the light on shows its readout, no Reconnect',
       (tester) async {
-    // Guard from review finding #3: Reconnect must not be offered for an already
-    // connected panel, so it can't interrupt a live cover/light.
-    await _pump(tester, _status());
-    expect(find.widgetWithText(TextButton, 'Reconnect last'), findsNothing);
+    await _pump(tester,
+        _status(lightOn: true, brightness: 128, runtimeState: 'light_on'));
+    expect(find.text('FlatMaster'), findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Light on · brightness 128'), findsOneWidget);
+    // Reconnect is hidden while connected (Disconnect is offered instead).
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing);
   });
 
-  testWidgets('hides Reconnect last while the flat panel is connecting',
+  testWidgets('a connected panel with the light off shows "Light off"',
       (tester) async {
-    await _pump(tester, _status(state: EquipmentConnectionState.connecting));
-    expect(find.widgetWithText(TextButton, 'Reconnect last'), findsNothing);
+    await _pump(tester, _status(lightOn: false));
+    expect(find.text('Light off'), findsOneWidget);
   });
 
-  testWidgets('tapping Reconnect last dispatches the reconnect command',
+  testWidgets('a moving cover shows "Cover moving…"', (tester) async {
+    await _pump(tester, _status(runtimeState: 'cover_moving'));
+    expect(find.text('Cover moving…'), findsOneWidget);
+  });
+
+  testWidgets('connecting then settling to connected via the poll turns live',
       (tester) async {
+    // The daemon's connect is 202 + background, so the first read shows
+    // `connecting`. The generic engine polls while connecting; once the daemon
+    // finishes, the card settles to Connected without the user re-opening.
+    await _wideSurface(tester);
+    final api =
+        _FakeFlatApi(_status(state: EquipmentConnectionState.connecting));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+        flatPanelApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentFlatPanel())),
+    ));
+    await tester.pump(); // build
+    await tester.pump(); // resolve the initial getStatus
+    expect(find.text('Connecting'), findsOneWidget);
+
+    api.status = _status(lightOn: true, brightness: 64, runtimeState: 'light_on');
+    await tester.pump(const Duration(milliseconds: 1600)); // settle tick → refresh
+    await tester.pump(); // resolve the refresh getStatus
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Light on · brightness 64'), findsOneWidget);
+  });
+
+  testWidgets('disconnect targets the device', (tester) async {
+    final api = await _pump(tester, _status());
+    await tester.tap(find.byIcon(Icons.link_off));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('disconnect'));
+  });
+
+  testWidgets('Reconnect dispatches the reconnect command', (tester) async {
     final api = await _pump(tester, null);
-    await tester.tap(find.widgetWithText(TextButton, 'Reconnect last'));
+    await tester.tap(find.widgetWithText(TextButton, 'Reconnect'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:reconnect'));
   });
