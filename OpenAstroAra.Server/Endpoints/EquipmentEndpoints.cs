@@ -320,11 +320,20 @@ public static class EquipmentEndpoints {
     }
 
     // Manual reconnect helper: dispatch a connect to the remembered device(s) for the type.
-    // 202 Accepted once at least one connect is dispatched (each connects in the background);
-    // 404 when nothing is remembered for the type yet (connect it once via /connect first).
+    //   404 Not Found  — nothing remembered for the type yet (connect it once via /connect first).
+    //   202 Accepted   — at least one connect was dispatched; each connects in the background.
+    //   502 Bad Gateway — devices were remembered but every dispatch threw synchronously (e.g. all
+    //                     their Alpaca servers are down on a rig restart), so don't claim "reconnecting".
     private static async Task<IResult> ReconnectAsync(IEquipmentReconnector reconnector, DeviceType type, CancellationToken ct) {
-        var dispatched = await reconnector.ReconnectAsync(type, ct);
-        return dispatched > 0 ? Results.Accepted() : Results.NotFound();
+        var outcome = await reconnector.ReconnectAsync(type, ct);
+        if (outcome.Attempted == 0) {
+            return Results.NotFound();
+        }
+        return outcome.Dispatched > 0
+            ? Results.Accepted()
+            : Results.Problem(
+                "Every remembered device failed to reconnect — check the devices are powered on and reachable.",
+                statusCode: StatusCodes.Status502BadGateway);
     }
 
     // Extracted (not an inline lambda) so the validation/connection error mapping is unit-testable with a mocked

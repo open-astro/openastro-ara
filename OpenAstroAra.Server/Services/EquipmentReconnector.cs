@@ -33,9 +33,19 @@ public interface IEquipmentReconnector {
 
     /// <summary>Reconnect the remembered device(s) for <paramref name="type"/> — every remembered
     /// switch for <see cref="DeviceType.Switch"/>, otherwise the single remembered device. Returns
-    /// the number of devices a connect was dispatched for (0 = nothing remembered for this type).</summary>
-    Task<int> ReconnectAsync(DeviceType type, CancellationToken ct);
+    /// how many devices were <see cref="ReconnectOutcome.Attempted"/> (remembered + connectable) and
+    /// how many had a connect <see cref="ReconnectOutcome.Dispatched"/> without throwing, so the
+    /// caller can tell "nothing remembered" (0 attempted) from "dispatching in background" (≥1
+    /// dispatched) from "every dispatch failed synchronously" (attempted &gt; 0, 0 dispatched).</summary>
+    Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct);
 }
+
+/// <summary>Outcome of a <see cref="IEquipmentReconnector.ReconnectAsync"/> call.
+/// <paramref name="Attempted"/> is the count of remembered + connectable devices a connect was tried
+/// for; <paramref name="Dispatched"/> is how many of those returned from <c>ConnectAsync</c> without
+/// throwing (each then connects in the background). <c>Dispatched &lt; Attempted</c> means some
+/// devices failed to even dispatch (e.g. their Alpaca server is down on a rig restart).</summary>
+public readonly record struct ReconnectOutcome(int Attempted, int Dispatched);
 
 public sealed partial class EquipmentReconnector : IEquipmentReconnector {
 
@@ -68,9 +78,10 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         };
     }
 
-    public async Task<int> ReconnectAsync(DeviceType type, CancellationToken ct) {
+    public async Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct) {
         var remembered = await _store.GetAllAsync(ct).ConfigureAwait(false);
         var attempted = 0;
+        var dispatched = 0;
         // FlatDevice/CoverCalibrator are the same physical device under two tokens
         // (ASCOM type vs NINA concept), so a remembered "CoverCalibrator" still satisfies
         // a "FlatDevice" reconnect (and vice-versa).
@@ -84,6 +95,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
                 // The service's ConnectAsync returns once accepted and connects in the
                 // background, so this awaits only the dispatch.
                 await connect().ConfigureAwait(false);
+                dispatched++;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                 throw; // daemon shutting down — unwind cleanly
@@ -94,9 +106,11 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             }
 #pragma warning restore CA1031
         }
-        // Count every remembered+connectable device we attempted (not just clean dispatches),
-        // so the endpoint returns 202 "reconnecting" rather than 404 when a device throws.
-        return attempted;
+        // attempted vs dispatched lets the endpoint distinguish 404 (nothing remembered),
+        // 202 (≥1 dispatched, connecting in the background), and "all dispatches failed
+        // synchronously" (attempted > 0 but dispatched == 0) so the caller isn't told
+        // "reconnecting…" when every device failed on the spot.
+        return new ReconnectOutcome(attempted, dispatched);
     }
 
     private static bool SameGroup(DeviceType a, DeviceType b) => Normalize(a) == Normalize(b);

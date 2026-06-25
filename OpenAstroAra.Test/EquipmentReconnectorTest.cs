@@ -60,7 +60,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task ReconnectAsync_returns_zero_when_nothing_remembered() {
             var r = Build(new FakeStore());
-            Assert.That(await r.ReconnectAsync(DeviceType.Camera, CancellationToken.None), Is.EqualTo(0));
+            var outcome = await r.ReconnectAsync(DeviceType.Camera, CancellationToken.None);
+            Assert.That(outcome.Attempted, Is.EqualTo(0));
+            Assert.That(outcome.Dispatched, Is.EqualTo(0));
         }
 
         [Test]
@@ -70,9 +72,10 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(Accepted());
             var r = Build(new FakeStore(Device(DeviceType.Camera, "cam-1")), (typeof(ICameraService), cam.Object));
 
-            var n = await r.ReconnectAsync(DeviceType.Camera, CancellationToken.None);
+            var outcome = await r.ReconnectAsync(DeviceType.Camera, CancellationToken.None);
 
-            Assert.That(n, Is.EqualTo(1));
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
+            Assert.That(outcome.Dispatched, Is.EqualTo(1));
             cam.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Once);
         }
 
@@ -85,9 +88,10 @@ namespace OpenAstroAra.Test {
                 new FakeStore(Device(DeviceType.Switch, "sw-0", 0), Device(DeviceType.Switch, "sw-1", 1)),
                 (typeof(ISwitchService), sw.Object));
 
-            var n = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
+            var outcome = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
 
-            Assert.That(n, Is.EqualTo(2));
+            Assert.That(outcome.Attempted, Is.EqualTo(2));
+            Assert.That(outcome.Dispatched, Is.EqualTo(2));
             sw.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
@@ -106,10 +110,28 @@ namespace OpenAstroAra.Test {
                 new FakeStore(Device(DeviceType.Switch, "sw-0", 0), Device(DeviceType.Switch, "sw-1", 1)),
                 (typeof(ISwitchService), sw.Object));
 
-            var n = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
+            var outcome = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
 
-            Assert.That(n, Is.EqualTo(2)); // both attempted despite the first throwing
+            Assert.That(outcome.Attempted, Is.EqualTo(2)); // both attempted despite the first throwing
+            Assert.That(outcome.Dispatched, Is.EqualTo(1)); // only the second dispatched cleanly
             sw.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
+
+        [Test]
+        public async Task ReconnectAsync_reports_zero_dispatched_when_every_device_throws() {
+            // Total synchronous failure (e.g. every switch's Alpaca server down on a rig restart):
+            // each is attempted but none dispatches, so the endpoint can return 502 instead of 202.
+            var sw = new Mock<ISwitchService>();
+            sw.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()))
+                .Throws(new InvalidOperationException("switch not ready"));
+            var r = Build(
+                new FakeStore(Device(DeviceType.Switch, "sw-0", 0), Device(DeviceType.Switch, "sw-1", 1)),
+                (typeof(ISwitchService), sw.Object));
+
+            var outcome = await r.ReconnectAsync(DeviceType.Switch, CancellationToken.None);
+
+            Assert.That(outcome.Attempted, Is.EqualTo(2));
+            Assert.That(outcome.Dispatched, Is.EqualTo(0));
         }
 
         [Test]
@@ -122,16 +144,19 @@ namespace OpenAstroAra.Test {
             var r = Build(new FakeStore(Device(DeviceType.FlatDevice, "flat-1")),
                 (typeof(IFlatDeviceService), flat.Object));
 
-            var n = await r.ReconnectAsync(DeviceType.CoverCalibrator, CancellationToken.None);
+            var outcome = await r.ReconnectAsync(DeviceType.CoverCalibrator, CancellationToken.None);
 
-            Assert.That(n, Is.EqualTo(1));
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
+            Assert.That(outcome.Dispatched, Is.EqualTo(1));
         }
 
         [Test]
         public async Task ReconnectAsync_skips_a_type_with_no_alpaca_connect_path() {
             // Guider connects via PHD2, not this flow — even if one is remembered, nothing is dispatched.
             var r = Build(new FakeStore(Device(DeviceType.Guider, "phd2")));
-            Assert.That(await r.ReconnectAsync(DeviceType.Guider, CancellationToken.None), Is.EqualTo(0));
+            var outcome = await r.ReconnectAsync(DeviceType.Guider, CancellationToken.None);
+            Assert.That(outcome.Attempted, Is.EqualTo(0));
+            Assert.That(outcome.Dispatched, Is.EqualTo(0));
         }
     }
 }

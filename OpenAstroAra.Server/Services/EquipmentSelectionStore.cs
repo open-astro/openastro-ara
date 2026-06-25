@@ -121,13 +121,25 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         } finally {
             _gate.Release();
         }
-        // Re-key every value by its canonical KeyFor and let later entries win. This collapses a
+        // Re-key every value by its canonical KeyFor so a first-boot-after-upgrade read collapses a
         // legacy bare "Switch" entry (written before multi-switch) with the new "Switch:{number}"
-        // entry for the same switch, so a first-boot-after-upgrade read can't return both and make
-        // auto-connect attempt the same switch twice. Single-instance types already key canonically.
+        // entry for the same switch — otherwise auto-connect would attempt the same switch twice.
+        // The entry whose raw key already equals its canonical key (the post-upgrade "Switch:0")
+        // wins over a legacy alias, independent of dictionary iteration order: once an exact-keyed
+        // entry is seen for a canonical key it locks it, and a non-canonical alias never overwrites
+        // an exact one. (A canonical key is unique in the source dict, so at most one entry is exact
+        // per key.) Single-instance types are always exact, so this is a no-op for them.
         var canonical = new Dictionary<string, DiscoveredDeviceDto>();
-        foreach (var device in raw.Values) {
-            canonical[KeyFor(device)] = device;
+        var lockedByExactKey = new HashSet<string>();
+        foreach (var (rawKey, device) in raw) {
+            var key = KeyFor(device);
+            if (lockedByExactKey.Contains(key)) {
+                continue; // the canonical entry already won this key
+            }
+            canonical[key] = device;
+            if (rawKey == key) {
+                lockedByExactKey.Add(key);
+            }
         }
         return canonical.Values.ToList();
     }

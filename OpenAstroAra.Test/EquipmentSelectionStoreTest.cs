@@ -160,6 +160,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task GetAll_collapse_prefers_the_canonical_key_regardless_of_file_order() {
+            // Same device as the prior test but with the canonical "Switch:0" listed BEFORE the
+            // legacy bare "Switch" in the file (the reverse order). The canonical entry must still
+            // win — the de-dup can't depend on dictionary iteration order.
+            await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
+                "{ \"Switch:0\": { \"UniqueId\": \"current\", \"Name\": \"new\", \"Type\": \"Switch\", " +
+                "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
+                "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false }, " +
+                "\"Switch\": { \"UniqueId\": \"legacy\", \"Name\": \"old\", \"Type\": \"Switch\", " +
+                "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
+                "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false } }");
+
+            var switches = (await _store.GetAllAsync(CancellationToken.None))
+                .Where(d => d.Type == DeviceType.Switch).ToList();
+            Assert.That(switches.Count, Is.EqualTo(1));
+            Assert.That(switches[0].UniqueId, Is.EqualTo("current"));
+        }
+
+        [Test]
         public async Task GetAll_tolerates_a_corrupt_file() {
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), "{ not json");
             var all = await _store.GetAllAsync(CancellationToken.None);
