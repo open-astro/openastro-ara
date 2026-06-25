@@ -113,6 +113,17 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
   });
 
+  testWidgets('a disconnected (non-null) monitor shows the empty state + Reconnect',
+      (tester) async {
+    // The daemon keeps the device after a disconnect and reports
+    // state=disconnected (non-null, not a 404). The shared card must render the
+    // disconnected layout (Reconnect + Connect…), not the connected one.
+    await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
+    expect(find.text('No safety monitor connected.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+    expect(find.byIcon(Icons.link_off), findsNothing);
+  });
+
   testWidgets('a connecting monitor settles to connected via the poll',
       (tester) async {
     // The daemon's connect is 202 + background, so the first read shows

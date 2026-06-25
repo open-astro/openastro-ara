@@ -60,7 +60,11 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
         child: switch (status) {
-          AsyncData(:final value) => value == null
+          // A device that's never been connected 404s (null); one disconnected
+          // after a session reports a non-null status with state == disconnected.
+          // Both mean "no live device" — show the disconnected card (Reconnect +
+          // Connect…), not the connected layout.
+          AsyncData(:final value) => value == null || value.isDisconnected
               ? _disconnected(context)
               : _connected(context, value),
           AsyncError(:final error) => _MessageRow(

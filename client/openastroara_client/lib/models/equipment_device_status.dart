@@ -33,6 +33,13 @@ abstract class EquipmentDeviceStatus {
   bool get isConnecting => connectionState == EquipmentConnectionState.connecting;
   bool get isConnected => connectionState == EquipmentConnectionState.connected;
 
+  /// The device service keeps the last device after a disconnect and reports it
+  /// with `state == disconnected` (a non-null status, NOT a 404), so callers must
+  /// treat this as "no live device" — the same as a null status — rather than a
+  /// connected one. See [EquipmentConnectionCard].
+  bool get isDisconnected =>
+      connectionState == EquipmentConnectionState.disconnected;
+
   /// Whether the device is mid-operation (e.g. a focuser moving, a dome slewing).
   /// Default `false`; device statuses with an activity sub-state override it. The
   /// generic engine fast-polls a connected-but-busy device to track it to rest.
