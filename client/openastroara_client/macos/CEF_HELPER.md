@@ -41,10 +41,12 @@ The wiring is committed, so a normal `flutter build macos` needs nothing extra
 beyond `packages/webview_cef/macos/setup_cef.sh` (downloads the git-ignored CEF
 binaries). Only re-run the injector if the plugin's helper target changes:
 
-The injector **re-points every helper target at the plugin's own
-`helper.entitlements`**. We keep them pointed at our committed, audited
-`Runner/Helper.entitlements` instead, so always run the injector together with the
-repoint below as a single block — never the injector alone:
+The injector resets two things on every run that we override: it points each
+helper target at the plugin's own `helper.entitlements` (we keep our committed,
+audited `Runner/Helper.entitlements`), and it stamps the helpers at
+`MACOSX_DEPLOYMENT_TARGET = 10.15` (CEF 149 — like the host — requires **12.0**).
+So always run the injector together with the fix-up below as a single block —
+never the injector alone:
 
 ```sh
 gem install xcodeproj   # once
@@ -53,11 +55,14 @@ ruby packages/webview_cef/macos/webview_cef/helper/add_helper_target.rb \
   macos/Runner.xcodeproj openastroara ../packages/webview_cef/macos/webview_cef
 
 # REQUIRED follow-up: re-point ALL five helper targets' entitlements at our
-# committed file (the injector resets these to the plugin's default each run).
+# committed file AND set the 12.0 deployment target (the injector resets both
+# every run).
 ruby -e 'require "xcodeproj"; p=Xcodeproj::Project.open("macos/Runner.xcodeproj"); \
   p.targets.select{|t| t.name =~ /\AHelper(_[a-z]+)?\z/}.each{|t| \
-    t.build_configurations.each{|c| c.build_settings["CODE_SIGN_ENTITLEMENTS"]="Runner/Helper.entitlements"}}; \
-  p.save; puts "repointed all helpers -> Runner/Helper.entitlements"'
+    t.build_configurations.each{|c| \
+      c.build_settings["CODE_SIGN_ENTITLEMENTS"]="Runner/Helper.entitlements"; \
+      c.build_settings["MACOSX_DEPLOYMENT_TARGET"]="12.0"}}; \
+  p.save; puts "fixed up all helpers -> Runner/Helper.entitlements + 12.0"'
 ```
 
 The script regenerates target UUIDs each run, so commit the result and don't put

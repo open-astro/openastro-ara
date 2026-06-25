@@ -802,7 +802,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -839,7 +839,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1157,7 +1157,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1194,7 +1194,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1231,7 +1231,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1268,7 +1268,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1305,7 +1305,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1342,7 +1342,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1379,7 +1379,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1416,7 +1416,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1453,7 +1453,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1490,7 +1490,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1527,7 +1527,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1564,7 +1564,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
@@ -1601,7 +1601,7 @@
 					"$(inherited)",
 					../packages/webview_cef/macos/webview_cef/third/cef,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lcef_dll_wrapper",
