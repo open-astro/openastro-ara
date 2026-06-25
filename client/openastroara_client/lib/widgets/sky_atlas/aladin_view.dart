@@ -373,11 +373,15 @@ Future<String> _buildAladinDataUrl() async {
     await file.writeAsString(html, flush: true);
     return Uri.file(file.path).toString();
   } catch (_) {
+    // Capture our dir reference BEFORE clearing _aladinDataUrl: nulling the memo
+    // first would let a concurrent _ensureAladinDataUrl() start a second build that
+    // overwrites _aladinTempDir before we read it here (only reachable across an
+    // await, but cheap to make order-independent).
+    final partial = _aladinTempDir;
+    _aladinTempDir = null;
     _aladinDataUrl = null; // don't cache the failure — allow a later retry
     // If the dir was created before the write threw, delete it now so a retry
     // doesn't orphan it (the retry would overwrite _aladinTempDir with a new dir).
-    final partial = _aladinTempDir;
-    _aladinTempDir = null;
     if (partial != null) {
       try {
         if (partial.existsSync()) partial.deleteSync(recursive: true);
