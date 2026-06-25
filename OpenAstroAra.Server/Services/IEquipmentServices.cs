@@ -55,6 +55,7 @@ public interface ITelescopeService {
     Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct);
     Task SetTrackingAsync(bool enabled, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
 }

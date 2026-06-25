@@ -44,7 +44,6 @@ class EquipmentMountPanel extends ConsumerWidget {
           helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.mount),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.mount, v),
-          hint: '§52.1 connection lifecycle',
         ),
       ],
     );
@@ -111,6 +110,16 @@ class _MountBody extends ConsumerWidget {
                   : () => _run(context, ref, 'unpark',
                       () => ref.read(mountProvider.notifier).unpark()),
               child: const Text('Unpark'),
+            ),
+          // Home slews to the mount's homing switch — disabled while parked (must
+          // unpark first) or busy. Shown only when the mount supports FindHome.
+          if (caps?.canFindHome ?? false)
+            OutlinedButton(
+              onPressed: (s.isBusy || s.parked)
+                  ? null
+                  : () => _run(context, ref, 'home',
+                      () => ref.read(mountProvider.notifier).findHome()),
+              child: const Text('Home'),
             ),
           OutlinedButton(
             onPressed: () => _run(context, ref, 'stop',

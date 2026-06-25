@@ -43,6 +43,7 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
 MountStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
   bool canSetTracking = true,
+  bool canFindHome = false,
   bool tracking = false,
   bool parked = false,
   String runtimeState = 'idle',
@@ -57,7 +58,7 @@ MountStatus _status({
         canPark: true,
         canUnpark: true,
         canSetTracking: canSetTracking,
-        canFindHome: false,
+        canFindHome: canFindHome,
       ),
       runtimeState: runtimeState,
       rightAscensionHours: 5.5,
@@ -110,6 +111,26 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Park'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:park:enabled=null'));
+  });
+
+  testWidgets('Home is hidden when the mount cannot find home', (tester) async {
+    await _pump(tester, _status(canFindHome: false));
+    expect(find.widgetWithText(OutlinedButton, 'Home'), findsNothing);
+  });
+
+  testWidgets('Home shows and sends the home command when supported',
+      (tester) async {
+    final api = await _pump(tester, _status(canFindHome: true));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Home'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:home:enabled=null'));
+  });
+
+  testWidgets('Home is disabled while parked', (tester) async {
+    await _pump(tester, _status(canFindHome: true, parked: true));
+    final home = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Home'));
+    expect(home.onPressed, isNull); // must unpark before homing
   });
 
   testWidgets('parked mount shows Unpark and hides Park; tracking disabled',

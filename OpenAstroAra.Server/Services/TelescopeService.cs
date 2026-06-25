@@ -154,6 +154,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         return Task.FromResult(Accepted("telescope.unpark", idempotencyKey));
     }
 
+    public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        // FindHome blocks until the mount reaches its home switch; run it off the request
+        // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
+        // AtHome when it settles. The panel gates this on CanFindHome.
+        _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
+        return Task.FromResult(Accepted("telescope.findhome", idempotencyKey));
+    }
+
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct) {
         var client = RequireConnectedClient();
         // Prompt synchronous write off the request thread (blocking ASCOM HTTP PUT), then reflect.

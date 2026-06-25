@@ -119,10 +119,15 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         telescope.MapPost("/slew", async ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
-        telescope.MapPost("/park", async ([FromBody] ParkRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.ParkAsync(request, key, ct)));
+        // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
+        // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
+        // "Park does nothing"). Reason defaults to null when absent.
+        telescope.MapPost("/park", async ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ParkAsync(request ?? new ParkRequestDto(), key, ct)));
         telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
+        telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
         telescope.MapPost("/abort", async (ITelescopeService svc, CancellationToken ct) => {
             await svc.AbortSlewAsync(ct); return Results.Accepted();
         });

@@ -50,6 +50,9 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   /// Release the mount from the parked state.
   Future<bool> unpark() => performAction((api) => api.command('unpark'));
 
+  /// Slew the mount to its home position (homing switch). Gated on canFindHome.
+  Future<bool> findHome() => performAction((api) => api.command('home'));
+
   /// Abort an in-progress slew (panic stop).
   Future<bool> abortSlew() => performAction((api) => api.command('abort'));
 }
