@@ -94,6 +94,18 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
   });
 
+  testWidgets('a disconnected (non-null) status still offers Reconnect',
+      (tester) async {
+    // After a session disconnect the daemon keeps the device and reports
+    // state=disconnected (a non-null status, not a 404). The card must still show
+    // the disconnected layout with Reconnect — not treat the lingering device as
+    // connected (which would hide Reconnect behind a Disconnect button).
+    await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
+    expect(find.text('No flat panel connected.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Reconnect'), findsOneWidget);
+    expect(find.byIcon(Icons.link_off), findsNothing); // not the connected layout
+  });
+
   testWidgets('a connected panel with the light on shows its readout, no Reconnect',
       (tester) async {
     await _pump(tester,
