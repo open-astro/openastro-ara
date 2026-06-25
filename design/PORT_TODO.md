@@ -581,6 +581,17 @@ timeout — `get_profile`'s bare response fails deserialization and `GetProfiles
 runs in ~0.5s. A future nicety: give the connect-time getters a shorter timeout than the 60s default so a genuinely
 non-responsive guider degrades connect in seconds rather than a minute. Low priority. Surfaced 2026-06-13 by bench-3.
 
+**§36 CEF 149 — re-introduce a sandbox once the Mach-rendezvous issue allows it (CEF-149 OSR review note).** The CEF 149
+Sky Atlas runs with **no macOS App Sandbox** (host + helper) — CEF's browser process registers a PID-suffixed *global*
+Mach bootstrap name for the helper rendezvous that `bootstrap_check_in` denies under the sandbox, aborting
+`CefInitialize` — **and** no Chromium renderer sandbox (`webview_cef` sets `CefSettings.no_sandbox = true`, a plugin
+default). So the webview has zero OS/Chromium sandboxing. Accepted for now: Developer-ID desktop control app, fixed
+bundled offline Aladin page, only outbound CDS HiPS tile fetches. Two future-hardening tracks: (a) if a future CEF/plugin
+release makes the rendezvous name static (or offers a sandbox-compatible transport), re-enable `app-sandbox` on host +
+helper (and flip the entitlements-test guard back); (b) enable Chromium's own renderer sandbox by linking `cef_sandbox`
++ a sandboxed helper variant — independent of (a). See `client/.../macos/CEF_HELPER.md`. Surfaced 2026-06-24 by the
+CEF-149 OSR review; nothing tracks the migration except this entry + the entitlement comments.
+
 **§36 Data Manager — DeleteAsync conflates "not installed" and "permission denied" (§36-1 review note).** Both an
 unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locked or permission-denied dir) return
 `false` from `DeleteAsync`, so the caller can't tell "give up, it's gone" from "retry later, it's locked". Fine for the

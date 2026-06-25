@@ -48,9 +48,16 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabIndexProvider);
-    // Mark the current tab built before assembling the stack, so it renders its
-    // real body this frame (and persists on every later frame).
-    _builtTabs.add(selectedTab);
+    // Record the current tab as visited via a post-frame callback rather than
+    // mutating _builtTabs directly in build() (keeps build side-effect-free). The
+    // local `liveTabs` below already includes selectedTab, so the tab renders this
+    // frame without waiting for the callback — no first-open flash.
+    if (!_builtTabs.contains(selectedTab)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _builtTabs.add(selectedTab));
+      });
+    }
+    final liveTabs = {..._builtTabs, selectedTab};
     // Ties kOptionsTabIndex (used by the equipment chips to route to a device's
     // settings panel) to the actual tab order — a reorder of _tabs that forgets
     // to update the constant trips this in debug instead of silently navigating
@@ -110,7 +117,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                           index: selectedTab,
                           children: [
                             for (var i = 0; i < _tabs.length; i++)
-                              _builtTabs.contains(i)
+                              liveTabs.contains(i)
                                   ? _tabs[i].body
                                   : const SizedBox.shrink(),
                           ],
