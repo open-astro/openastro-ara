@@ -341,11 +341,13 @@ Future<String>? _aladinDataUrl;
 Directory? _aladinTempDir;
 Future<String> _ensureAladinDataUrl() => _aladinDataUrl ??= _buildAladinDataUrl();
 
-/// Best-effort removal of the bootstrap temp dir, called from the app's
-/// onExitRequested handler so a clean quit doesn't leave the file behind. Only
-/// ever touches *this* process's own dir (a uniquely-named createTemp result), so
-/// it can't race a concurrent second instance's live dir. A crash/kill skips this;
-/// the unique name means orphans never collide and the OS reaps the temp root.
+/// Best-effort removal of the bootstrap temp dir. **Exit-path only** — call this
+/// solely from the app's onExitRequested handler (after CEF has been quit), never
+/// mid-session: it deletes the file a live CEF browser may still be reading and
+/// clears the memoized URL, so a concurrent atlas mount could hit a use-after-delete.
+/// Only ever touches *this* process's own dir (a uniquely-named createTemp result),
+/// so it can't race a second instance's live dir. A crash/kill skips it; the unique
+/// name means orphans never collide and the OS reaps the temp root.
 Future<void> disposeAladinTempDir() async {
   final dir = _aladinTempDir;
   _aladinTempDir = null;

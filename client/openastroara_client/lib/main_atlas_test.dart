@@ -54,13 +54,14 @@ class _AtlasTestAppState extends State<_AtlasTestApp> {
   void initState() {
     super.initState();
     // Drive CefShutdown (CloseAllBrowsers + CefShutdown) BEFORE the process exits.
-    // Single-process CEF crashes on teardown if exit() runs while its SwiftShader
-    // GPU/renderer threads are still live; onExitRequested intercepts the macOS
-    // terminate request, lets us quit CEF cleanly, then allows exit.
+    // CEF crashes on teardown if exit() runs while its GPU/renderer threads are
+    // still live; onExitRequested intercepts the macOS terminate request, lets us
+    // quit CEF cleanly, then allows exit. Bounded by a timeout (as in production
+    // main.dart) so a hung teardown can't wedge the harness on exit.
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
         try {
-          await WebviewManager().quit();
+          await WebviewManager().quit().timeout(const Duration(seconds: 3));
         } catch (_) {}
         return AppExitResponse.exit;
       },
