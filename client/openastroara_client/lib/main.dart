@@ -28,17 +28,20 @@ class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
   void initState() {
     super.initState();
     // Shut CEF down cleanly before the OS tears the process down. The Sky Atlas
-    // webview (webview_cef) runs CEF in single-process mode; if exit() runs while
-    // CEF's SwiftShader GPU/renderer threads are still live, teardown segfaults.
-    // onExitRequested intercepts the platform terminate request, lets us quit CEF
-    // (CloseAllBrowsers + CefShutdown — a no-op if the atlas was never opened),
-    // then allows exit. See the §36 Sky Atlas notes.
+    // webview (webview_cef) runs CEF multi-process (browser + helper subprocesses);
+    // if exit() runs while CEF's GPU/renderer threads are still live, teardown
+    // segfaults. onExitRequested intercepts the platform terminate request, lets us
+    // quit CEF (CloseAllBrowsers + CefShutdown — a no-op if the atlas was never
+    // opened), then allows exit. See the §36 Sky Atlas notes.
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
         try {
-          await WebviewManager().quit();
+          // Bound the wait: if CEF teardown ever hangs, a quit must not wedge the
+          // whole app on exit. 3s is generous for CloseAllBrowsers + CefShutdown;
+          // past that we log and exit anyway (the OS reclaims the process regardless).
+          await WebviewManager().quit().timeout(const Duration(seconds: 3));
         } catch (e, st) {
-          developer.log('CEF shutdown on exit failed',
+          developer.log('CEF shutdown on exit failed or timed out',
               name: 'openastroara.webview', error: e, stackTrace: st);
         }
         return AppExitResponse.exit;

@@ -342,7 +342,13 @@ Future<String> _buildAladinDataUrl() async {
   try {
     final js = await rootBundle.loadString('assets/aladin/aladin.js');
     final html = inlineAladinJs(js);
-    final file = File('${Directory.systemTemp.path}/openastroara_sky_atlas.html');
+    // Write into a UNIQUE per-process temp dir rather than a fixed name in the
+    // world-writable temp root: the random directory name can't be pre-placed as a
+    // hostile symlink before first launch, and it can't collide with a second app
+    // instance (e.g. a debug + a release build) racing a shared path. Memoized, so
+    // this runs once per process — one small dir per launch, which the OS reaps.
+    final dir = await Directory.systemTemp.createTemp('openastroara_sky_atlas_');
+    final file = File('${dir.path}/atlas.html');
     await file.writeAsString(html, flush: true);
     return Uri.file(file.path).toString();
   } catch (_) {
@@ -361,8 +367,10 @@ Future<String> _buildAladinDataUrl() async {
 String inlineAladinJs(String js) =>
     _aladinBootstrapHtml.replaceFirst('__ALADIN_LITE_JS__', js);
 
-// The Aladin Lite bootstrap, handed to CEF as a base64 `data:` URL so no temp
-// file or local HTTP server is needed. The Aladin Lite v3 engine is bundled
+// The Aladin Lite bootstrap. The assembled document is written to a temp file and
+// loaded via a short file:// URL (see _buildAladinDataUrl — a `data:` URL would
+// exceed Chromium's ~2 MB max-URL length once the engine is inlined, so CEF 149
+// silently rejects it). The Aladin Lite v3 engine is bundled
 // (inlined at `__ALADIN_LITE_JS__` from assets/aladin/aladin.js, pinned to a
 // specific version — NOT `/latest/` — so a remote breaking change can't silently
 // alter the production atlas), removing the runtime CDN trust + reachability
