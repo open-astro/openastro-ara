@@ -10,16 +10,24 @@ import 'package:flutter_test/flutter_test.dart';
 /// §36 guard for the macOS CEF multi-process helper wiring (see `macos/CEF_HELPER.md`).
 ///
 /// The plugin's `add_helper_target.rb` injector points the `Helper` target's
-/// `CODE_SIGN_ENTITLEMENTS` at the plugin's **non-sandboxed** `helper.entitlements`.
-/// Because `openastroara` is App-Sandboxed, the helper must instead use the
-/// client-owned `Runner/Helper.entitlements` (which carries `app-sandbox` +
-/// `inherit`), or macOS silently refuses to launch the helper from the sandboxed
-/// host — a runtime-only failure that wouldn't surface at build time.
+/// `CODE_SIGN_ENTITLEMENTS` at the plugin's `helper.entitlements`. We repoint it at
+/// the client-owned `Runner/Helper.entitlements` instead, so the helper's sandbox
+/// posture matches the host's. Re-running the injector resets that pointer, and a
+/// developer could forget the manual repoint — these tests are the automated guard
+/// the #589 review asked for: they fail in CI (every client leg — pure text
+/// inspection, no macOS toolchain needed) if the wiring regresses.
 ///
-/// Re-running the injector resets that pointer, and a developer could forget the
-/// manual repoint. These tests are the automated guard the #589 review asked for:
-/// they fail in CI (every client leg — pure text inspection, no macOS toolchain
-/// needed) if the wiring regresses.
+/// CEF-149 sandbox model (the §36 CEF 130→149 / OSR move): the App Sandbox is **off**
+/// on the host. CEF's browser process registers a PID-suffixed *global* Mach bootstrap
+/// name for the helper rendezvous, which `bootstrap_check_in` denies under the sandbox
+/// ("Permission denied (1100)") — aborting `CefInitialize`. The name is PID-suffixed so
+/// a static `temporary-exception.mach-register.global-name` can't cover it, so the
+/// sandbox has to be disabled. With the host unsandboxed there is no container to join,
+/// so the helper drops `app-sandbox`/`inherit` too (declaring them with no host
+/// container left the helper's sandbox init invalid and crash-looped the network
+/// service). These tests pin that contract: helper is non-sandboxed + keeps the JIT
+/// keys; the host explicitly sets `app-sandbox` to false (a guard against an accidental
+/// re-enable that would re-break the Mach rendezvous).
 
 /// Walk up from the test's CWD to the package root (the dir holding `pubspec.yaml`
 /// next to `macos/`), so the file reads don't silently assume `flutter test`'s CWD
@@ -86,16 +94,27 @@ void main() {
               'repoint it to Runner/Helper.entitlements');
     });
 
-    test('Runner/Helper.entitlements joins the host sandbox and allows JIT', () {
+    test('Runner/Helper.entitlements is non-sandboxed (matches the unsandboxed host) and allows JIT', () {
       expect(helperEnts.existsSync(), isTrue, reason: '${helperEnts.path} is missing');
       final ents = helperEnts.readAsStringSync();
+      // Match the actual <key>…</key> DECLARATION, not a bare substring — these key
+      // names also appear in the file's header comment explaining why they're dropped,
+      // so a `contains` check would false-positive on the prose.
+      bool declaresKey(String key) =>
+          RegExp('<key>${RegExp.escape(key)}</key>').hasMatch(ents);
+      // Sandbox keys must be ABSENT: with the host unsandboxed there's no container to
+      // join, and declaring app-sandbox/inherit here crash-loops CEF's network service.
       for (final key in const [
-        'com.apple.security.app-sandbox', // sandboxed host can't launch a non-sandboxed nested helper
-        'com.apple.security.inherit', // join the host's sandbox container
-        'com.apple.security.cs.allow-jit', // V8 in the renderer
+        'com.apple.security.app-sandbox',
+        'com.apple.security.inherit',
       ]) {
-        expect(ents.contains(key), isTrue, reason: 'Helper.entitlements must declare $key');
+        expect(declaresKey(key), isFalse,
+            reason: 'Helper.entitlements must NOT declare $key — the host is unsandboxed '
+                '(CEF 149 Mach rendezvous); a nested sandbox crash-loops the network service');
       }
+      // …but the JIT key the renderer's V8 needs must stay.
+      expect(declaresKey('com.apple.security.cs.allow-jit'), isTrue,
+          reason: 'Helper.entitlements must declare com.apple.security.cs.allow-jit (V8 in the renderer)');
     });
 
     test('host DebugProfile/Release entitlements carry all three CEF cs.* keys', () {
@@ -110,6 +129,23 @@ void main() {
           expect(ents.contains(key), isTrue,
               reason: '${f.path} must declare $key (CEF host Hardened-Runtime requirement)');
         }
+      }
+    });
+
+    test('host DebugProfile/Release explicitly disable the App Sandbox (CEF 149 Mach rendezvous)', () {
+      // Pin the sandbox-off decision. Re-enabling app-sandbox on the host re-breaks
+      // CefInitialize (the PID-suffixed global Mach bootstrap name is denied under the
+      // sandbox), so flipping this back to <true/> must fail CI loudly rather than
+      // ship a build that crashes the moment the Planning atlas opens.
+      final sandboxValue =
+          RegExp(r'<key>com\.apple\.security\.app-sandbox</key>\s*<(true|false)/>');
+      for (final f in [debugEnts, releaseEnts]) {
+        final m = sandboxValue.firstMatch(f.readAsStringSync());
+        expect(m, isNotNull,
+            reason: '${f.path} must declare com.apple.security.app-sandbox (with an explicit boolean)');
+        expect(m!.group(1), 'false',
+            reason: '${f.path}: com.apple.security.app-sandbox must be <false/> — CEF 149 '
+                'multi-process Mach rendezvous cannot register a global bootstrap name under the sandbox');
       }
     });
 

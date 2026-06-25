@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -321,23 +322,71 @@ class _AladinViewState extends ConsumerState<AladinView> {
 }
 
 // The bundled Aladin Lite JS (vendored under assets/aladin/aladin.js, ~1.9 MB,
-// pinned to v3.6.1), read once and memoized. Re-reading the asset + re-base64
-// on every tab switch (this tab unmounts on switch) is wasteful, so the built
-// data: URL is cached for the process lifetime. A failure is NOT cached (clears
-// the future) so a later mount — e.g. after a transient I/O hiccup — can retry.
+// pinned to v3.6.1) is inlined into the bootstrap page, written once to a temp
+// file, and loaded via a short file:// URL — memoized for the process lifetime so
+// re-mounting the (unmount-on-switch) tab doesn't rewrite the file. A failure is
+// NOT cached (clears the future) so a later mount — e.g. after a transient I/O
+// hiccup — can retry.
+//
+// Why a file:// URL and not a self-contained `data:` URL: inlining the ~1.9 MB
+// engine makes the assembled document ~2.5 MB, and a `data:` URL carries the whole
+// document IN the URL string. That exceeds Chromium's max URL length
+// (url::kMaxURLChars ≈ 2 MB), so CEF 149 silently rejects the navigation and the
+// webview stays blank (no atlas — the symptom that replaced the old crash). The
+// temp file keeps the URL short while the engine stays bundled/offline (no CDN, no
+// local HTTP server) per §36.1; sky-survey tiles still need internet.
 Future<String>? _aladinDataUrl;
+// The unique temp dir created for this process's bootstrap file, retained so the
+// graceful-exit path can delete it (see disposeAladinTempDir).
+Directory? _aladinTempDir;
 Future<String> _ensureAladinDataUrl() => _aladinDataUrl ??= _buildAladinDataUrl();
+
+/// Best-effort removal of the bootstrap temp dir. **Exit-path only** — call this
+/// solely from the app's onExitRequested handler (after CEF has been quit), never
+/// mid-session: it deletes the file a live CEF browser may still be reading and
+/// clears the memoized URL, so a concurrent atlas mount could hit a use-after-delete.
+/// Only ever touches *this* process's own dir (a uniquely-named createTemp result),
+/// so it can't race a second instance's live dir. A crash/kill skips it; the unique
+/// name means orphans never collide and the OS reaps the temp root.
+Future<void> disposeAladinTempDir() async {
+  final dir = _aladinTempDir;
+  _aladinTempDir = null;
+  _aladinDataUrl = null;
+  if (dir == null) return;
+  try {
+    if (dir.existsSync()) await dir.delete(recursive: true);
+  } catch (_) {/* best-effort — never let cleanup throw on the exit path */}
+}
 
 Future<String> _buildAladinDataUrl() async {
   try {
     final js = await rootBundle.loadString('assets/aladin/aladin.js');
-    // charset=utf-8 in the MIME type: the payload is UTF-8-encoded, and while the
-    // inline <meta charset> makes CEF render it correctly today, RFC 2397's default
-    // for text/* is US-ASCII, so declare the real charset rather than rely on the
-    // browser sniffing the meta tag.
-    return 'data:text/html;charset=utf-8;base64,${base64Encode(utf8.encode(inlineAladinJs(js)))}';
+    final html = inlineAladinJs(js);
+    // Write into a UNIQUE per-process temp dir rather than a fixed name in the
+    // world-writable temp root: the random directory name can't be pre-placed as a
+    // hostile symlink before first launch, and it can't collide with a second app
+    // instance (e.g. a debug + a release build) racing a shared path. Memoized, so
+    // this runs once per process; disposeAladinTempDir deletes it on a clean exit.
+    final dir = await Directory.systemTemp.createTemp('openastroara_sky_atlas_');
+    _aladinTempDir = dir;
+    final file = File('${dir.path}/atlas.html');
+    await file.writeAsString(html, flush: true);
+    return Uri.file(file.path).toString();
   } catch (_) {
+    // Capture our dir reference BEFORE clearing _aladinDataUrl: nulling the memo
+    // first would let a concurrent _ensureAladinDataUrl() start a second build that
+    // overwrites _aladinTempDir before we read it here (only reachable across an
+    // await, but cheap to make order-independent).
+    final partial = _aladinTempDir;
+    _aladinTempDir = null;
     _aladinDataUrl = null; // don't cache the failure — allow a later retry
+    // If the dir was created before the write threw, delete it now so a retry
+    // doesn't orphan it (the retry would overwrite _aladinTempDir with a new dir).
+    if (partial != null) {
+      try {
+        if (await partial.exists()) await partial.delete(recursive: true);
+      } catch (_) {/* best-effort */}
+    }
     rethrow;
   }
 }
@@ -352,8 +401,10 @@ Future<String> _buildAladinDataUrl() async {
 String inlineAladinJs(String js) =>
     _aladinBootstrapHtml.replaceFirst('__ALADIN_LITE_JS__', js);
 
-// The Aladin Lite bootstrap, handed to CEF as a base64 `data:` URL so no temp
-// file or local HTTP server is needed. The Aladin Lite v3 engine is bundled
+// The Aladin Lite bootstrap. The assembled document is written to a temp file and
+// loaded via a short file:// URL (see _buildAladinDataUrl — a `data:` URL would
+// exceed Chromium's ~2 MB max-URL length once the engine is inlined, so CEF 149
+// silently rejects it). The Aladin Lite v3 engine is bundled
 // (inlined at `__ALADIN_LITE_JS__` from assets/aladin/aladin.js, pinned to a
 // specific version — NOT `/latest/` — so a remote breaking change can't silently
 // alter the production atlas), removing the runtime CDN trust + reachability
@@ -562,7 +613,7 @@ const String _aladinBootstrapHtml = r'''
       araAladin.on('positionChanged', function () { araRedrawFovBox(); });
       araAladin.on('zoomChanged', function () { araRedrawFovBox(); });
       araRedrawFovBox();
-    });
+    }).catch(function (e) { aladinLoadFailed(); });
   } else {
     aladinLoadFailed();
   }

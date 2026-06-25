@@ -1,31 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Entitlements for the CEF subprocess "openastroara Helper.app" (the §36 Aladin
-  webview's renderer/GPU/utility subprocesses).
+  webview's renderer / GPU / utility / network-service subprocesses).
 
-  This is the SANDBOXED-HOST variant of the plugin's
-  packages/webview_cef/macos/webview_cef/helper/helper.entitlements. The host app
-  (openastroara) enables the App Sandbox, and macOS refuses to launch a
-  non-sandboxed nested helper from a sandboxed host — so the helper must carry
-  BOTH com.apple.security.app-sandbox AND com.apple.security.inherit (it joins the
-  host's sandbox container rather than declaring its own access). See the plugin
-  README "Sandboxed hosts" note.
+  NON-sandboxed, to match the host. The host app (openastroara) runs WITHOUT the
+  App Sandbox (see Runner/DebugProfile.entitlements — CEF's Mach rendezvous can't
+  register a global bootstrap name under the sandbox). With the host unsandboxed
+  there is no container to join, so com.apple.security.inherit (+ app-sandbox) would
+  leave the helper's sandbox initialization invalid and crash the out-of-process
+  utilities — observed as the Network Service crash-looping ("Network service
+  crashed or was terminated, restarting service"), which left the Aladin atlas
+  unable to fetch HiPS tiles. So both keys are dropped here.
 
-  It also keeps the JIT / framework-loading code-signing entitlements V8 + CEF
-  need (these are hardened-runtime flags, orthogonal to the sandbox).
+  Keep only the JIT / framework-loading code-signing entitlements V8 + CEF need
+  (hardened-runtime flags, orthogonal to the sandbox).
 
   NOTE: the add_helper_target.rb injector points the Helper target's
-  CODE_SIGN_ENTITLEMENTS at the plugin's (non-sandboxed) helper.entitlements; we
-  repoint all three configs to THIS file. If that script is ever re-run, repoint
-  the Helper target back to Runner/Helper.entitlements.
+  CODE_SIGN_ENTITLEMENTS at the plugin's helper.entitlements; we repoint all three
+  configs to THIS file. If that script is ever re-run, repoint the Helper target
+  back to Runner/Helper.entitlements.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.inherit</key>
-	<true/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
