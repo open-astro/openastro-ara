@@ -44,6 +44,11 @@ class _AppShellState extends ConsumerState<AppShell> {
   // selected; once built it stays in this set so the IndexedStack keeps it alive
   // (see the IndexedStack comment below). Monotonic — never removed.
   final Set<int> _builtTabs = <int>{};
+  // Tabs with a post-frame "mark visited" callback already queued. Guards against
+  // a second build() in the same frame (e.g. two provider updates before the
+  // callback fires) queuing a duplicate callback — which would otherwise trigger
+  // a spurious extra rebuild on first open.
+  final Set<int> _pendingTabs = <int>{};
 
   @override
   Widget build(BuildContext context) {
@@ -51,9 +56,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     // Record the current tab as visited via a post-frame callback rather than
     // mutating _builtTabs directly in build() (keeps build side-effect-free). The
     // local `liveTabs` below already includes selectedTab, so the tab renders this
-    // frame without waiting for the callback — no first-open flash.
-    if (!_builtTabs.contains(selectedTab)) {
+    // frame without waiting for the callback — no first-open flash. `_pendingTabs`
+    // ensures only one callback is queued per unvisited tab.
+    if (!_builtTabs.contains(selectedTab) && _pendingTabs.add(selectedTab)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _pendingTabs.remove(selectedTab);
         if (mounted) setState(() => _builtTabs.add(selectedTab));
       });
     }

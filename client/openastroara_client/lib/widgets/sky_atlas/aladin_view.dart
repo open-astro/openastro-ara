@@ -384,7 +384,7 @@ Future<String> _buildAladinDataUrl() async {
     // doesn't orphan it (the retry would overwrite _aladinTempDir with a new dir).
     if (partial != null) {
       try {
-        if (partial.existsSync()) partial.deleteSync(recursive: true);
+        if (await partial.exists()) await partial.delete(recursive: true);
       } catch (_) {/* best-effort */}
     }
     rethrow;

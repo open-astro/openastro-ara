@@ -49,6 +49,7 @@ class _AtlasTestAppState extends State<_AtlasTestApp> {
   WebViewController? _controller;
   String _status = 'starting…';
   AppLifecycleListener? _lifecycle;
+  Directory? _tempDir;
 
   @override
   void initState() {
@@ -62,6 +63,12 @@ class _AtlasTestAppState extends State<_AtlasTestApp> {
       onExitRequested: () async {
         try {
           await WebviewManager().quit().timeout(const Duration(seconds: 3));
+        } catch (_) {}
+        // Remove our own unique bootstrap dir on a clean exit (best-effort).
+        try {
+          if (await (_tempDir?.exists() ?? Future.value(false))) {
+            await _tempDir!.delete(recursive: true);
+          }
         } catch (_) {}
         return AppExitResponse.exit;
       },
@@ -77,7 +84,12 @@ class _AtlasTestAppState extends State<_AtlasTestApp> {
 
   Future<void> _start() async {
     try {
-      final f = File('${Directory.systemTemp.path}/atlas_test_aladin.html');
+      // Unique per-process dir (matches production _buildAladinDataUrl) rather
+      // than a fixed name in the world-writable temp root: no symlink-race target
+      // and no clobbering between simultaneous runs (e.g. debug + release).
+      final dir = await Directory.systemTemp.createTemp('atlas_test_');
+      _tempDir = dir;
+      final f = File('${dir.path}/aladin.html');
       await f.writeAsString(_aladinHtml);
       final url = Uri.file(f.path).toString();
       await WebviewManager().initialize();
