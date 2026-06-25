@@ -374,6 +374,15 @@ Future<String> _buildAladinDataUrl() async {
     return Uri.file(file.path).toString();
   } catch (_) {
     _aladinDataUrl = null; // don't cache the failure — allow a later retry
+    // If the dir was created before the write threw, delete it now so a retry
+    // doesn't orphan it (the retry would overwrite _aladinTempDir with a new dir).
+    final partial = _aladinTempDir;
+    _aladinTempDir = null;
+    if (partial != null) {
+      try {
+        if (partial.existsSync()) partial.deleteSync(recursive: true);
+      } catch (_) {/* best-effort */}
+    }
     rethrow;
   }
 }
