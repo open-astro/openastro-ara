@@ -8,8 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
 import '../../models/catalog_object.dart';
+import '../../services/horizon_api.dart';
 import '../../state/imaging/fov_box.dart';
 import '../../state/sky_atlas/catalog_overlay_state.dart';
+import '../../state/sky_atlas/horizon_overlay_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -82,6 +84,29 @@ String catalogScript(List<CatalogObject> objects) {
 /// Builds the JS that clears the installed-catalog marker overlay. Exposed for testing.
 @visibleForTesting
 String clearCatalogScript() => 'window.araClearCatalog && window.araClearCatalog();';
+
+/// Builds the JS that draws (or replaces) the §36 local-horizon overlay from
+/// [horizon]: the horizon curve (a closed RA/Dec polyline), the zenith marker,
+/// and the N/E/S/W cardinal labels. The whole payload is JSON-encoded as a single
+/// argument to the page's `araSetHorizon`, so a value can't break out of the
+/// literal — the same safety contract as [catalogScript]. Exposed for testing.
+@visibleForTesting
+String horizonScript(Horizon horizon) {
+  final payload = <String, dynamic>{
+    'line': horizon.points
+        .map((p) => <double>[p.raDeg, p.decDeg])
+        .toList(growable: false),
+    'zenith': <double>[horizon.zenith.raDeg, horizon.zenith.decDeg],
+    'cardinals': horizon.cardinals
+        .map((c) => <String, dynamic>{'label': c.label, 'ra': c.raDeg, 'dec': c.decDeg})
+        .toList(growable: false),
+  };
+  return 'window.araSetHorizon && window.araSetHorizon(${jsonEncode(payload)});';
+}
+
+/// Builds the JS that clears the local-horizon overlay. Exposed for testing.
+@visibleForTesting
+String clearHorizonScript() => 'window.araClearHorizon && window.araClearHorizon();';
 
 // CEF's manager is a process-wide singleton; initialize it at most once so a
 // tab rebuild (switch away + back) can't re-run native init. A FAILED init is
@@ -205,6 +230,28 @@ class _AladinViewState extends ConsumerState<AladinView> {
     }
   }
 
+  // Draw (or clear) the §36 local-horizon overlay. Stashed until the browser is
+  // ready, then applied from _init. A null horizon clears the overlay.
+  Horizon? _pendingHorizon;
+  void _setHorizon(Horizon? horizon) {
+    final controller = _controller;
+    if (controller == null) {
+      _pendingHorizon = horizon;
+      return;
+    }
+    unawaited(_runHorizon(controller, horizon));
+  }
+
+  Future<void> _runHorizon(WebViewController controller, Horizon? horizon) async {
+    try {
+      await controller.executeJavaScript(
+          horizon == null ? clearHorizonScript() : horizonScript(horizon));
+    } catch (e, st) {
+      // Degrade-not-crash: a failed horizon update leaves the overlay as-is.
+      debugPrint('AladinView: horizon overlay update failed: $e\n$st');
+    }
+  }
+
   Future<void> _init() async {
     // Manager init is separated from browser init so only a manager-init failure
     // resets the memoized future (allowing a retry); a browser-init failure
@@ -284,6 +331,14 @@ class _AladinViewState extends ConsumerState<AladinView> {
       if (catalog != null && catalog.isNotEmpty) {
         unawaited(_runCatalog(controller, catalog));
       }
+      // Restore the local-horizon overlay: a horizon stashed before the browser
+      // was ready, or — since this tab unmounts on switch — the provider's current
+      // value so returning to Planning re-draws it.
+      final horizon = _pendingHorizon ?? ref.read(horizonProvider).asData?.value;
+      _pendingHorizon = null;
+      if (horizon != null) {
+        unawaited(_runHorizon(controller, horizon));
+      }
     } catch (e, st) {
       // Same rationale as above: degrade-not-crash, but logged.
       debugPrint('AladinView: Aladin browser init failed: $e\n$st');
@@ -312,6 +367,11 @@ class _AladinViewState extends ConsumerState<AladinView> {
     ref.listen<AsyncValue<List<CatalogObject>>>(skyAtlasCatalogProvider, (_, next) {
       final objects = next.asData?.value;
       if (objects != null) _setCatalog(objects);
+    });
+    // The local-horizon overlay (curve + zenith + cardinals) → draw/clear. Only
+    // the data value drives a redraw; loading/error states leave it as-is.
+    ref.listen<AsyncValue<Horizon?>>(horizonProvider, (_, next) {
+      if (next.hasValue) _setHorizon(next.value);
     });
 
     if (_unavailable) return const _Unavailable();
@@ -579,6 +639,64 @@ const String _aladinBootstrapHtml = r'''
     if (araCatalog) araCatalog.removeAll();
   }
 
+  // §36 local-horizon overlay. araSetHorizon(data) draws the horizon curve (a
+  // closed RA/Dec polyline) on its own graphic overlay plus a labelled catalog
+  // for the zenith + N/E/S/W cardinals; araClearHorizon removes them. Before
+  // Aladin finishes init the latest payload is stashed and applied from
+  // A.init.then. Driven from Dart via AladinView.horizonScript / clearHorizonScript.
+  var araHorizonOverlay = null; // the curve (graphicOverlay)
+  var araHorizonCat = null;     // zenith + cardinal labels (catalog)
+  var araPendingHorizon = null;
+  function araEnsureHorizonOverlay() {
+    if (!araAladin) return null;
+    if (!araHorizonOverlay) {
+      // Earthy brown, the conventional horizon colour, distinct from the cyan FOV box.
+      araHorizonOverlay = A.graphicOverlay({ color: '#a1887f', lineWidth: 2 });
+      araAladin.addOverlay(araHorizonOverlay);
+    }
+    return araHorizonOverlay;
+  }
+  function araEnsureHorizonCat() {
+    if (!araAladin) return null;
+    if (!araHorizonCat) {
+      araHorizonCat = A.catalog({ name: 'Horizon', shape: 'cross', sourceSize: 12, color: '#a1887f' });
+      araAladin.addCatalog(araHorizonCat);
+    }
+    return araHorizonCat;
+  }
+  function araSetHorizon(data) {
+    // Before Aladin is ready keep only the LATEST payload (replace, not queue) —
+    // the overlay is a full snapshot, so an earlier pending one is always stale.
+    if (!araAladin) { araPendingHorizon = data; return; }
+    var ov = araEnsureHorizonOverlay(); // non-null here: the !araAladin guard above already returned
+    var cat = araEnsureHorizonCat();
+    ov.removeAll();
+    cat.removeAll();
+    if (!data || !data.line || !data.line.length) return;
+    // The horizon is a closed curve, so a polygon outline traces it back onto itself.
+    ov.add(A.polygon(data.line));
+    var srcs = [];
+    if (data.zenith && data.zenith.length === 2) {
+      srcs.push(A.source(data.zenith[0], data.zenith[1], { name: 'Zenith' }));
+    }
+    if (data.cardinals) {
+      for (var i = 0; i < data.cardinals.length; i++) {
+        var c = data.cardinals[i];
+        if (c && typeof c.ra === 'number' && typeof c.dec === 'number') {
+          srcs.push(A.source(c.ra, c.dec, { name: c.label || '' }));
+        }
+      }
+    }
+    if (srcs.length) cat.addSources(srcs);
+  }
+  function araClearHorizon() {
+    // Also drop any payload stashed before init, so a clear arriving during the
+    // init window cancels it rather than letting a stale horizon draw on init.
+    araPendingHorizon = null;
+    if (araHorizonOverlay) araHorizonOverlay.removeAll();
+    if (araHorizonCat) araHorizonCat.removeAll();
+  }
+
   // The inline engine script above runs to completion before this one starts,
   // so by here `A` is defined on success and undefined if the bundle was bad.
   if (typeof A !== 'undefined') {
@@ -607,6 +725,12 @@ const String _aladinBootstrapHtml = r'''
         var pc = araPendingCatalog;
         araPendingCatalog = null;
         araAddCatalog(pc);
+      }
+      // Draw a horizon overlay pushed during Aladin's init window.
+      if (araPendingHorizon) {
+        var ph = araPendingHorizon;
+        araPendingHorizon = null;
+        araSetHorizon(ph);
       }
       // Keep the FOV box centred as the user pans/zooms, and draw any box that
       // Dart pushed before Aladin finished initializing.

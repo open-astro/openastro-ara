@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/catalog_object.dart';
+import 'package:openastroara/services/horizon_api.dart';
 import 'package:openastroara/state/imaging/fov_box.dart';
 import 'package:openastroara/widgets/sky_atlas/aladin_view.dart';
 
@@ -133,6 +134,32 @@ void main() {
   group('clearCatalogScript', () {
     test('clears the overlay', () {
       expect(clearCatalogScript(), 'window.araClearCatalog && window.araClearCatalog();');
+    });
+  });
+
+  group('horizonScript', () {
+    test('encodes the curve, zenith and cardinals as one JSON argument', () {
+      const horizon = Horizon(
+        horizonAltitudeDeg: 20,
+        zenith: HorizonPoint(123.4, 47.6),
+        points: [HorizonPoint(10, -5), HorizonPoint(20, -4)],
+        cardinals: [HorizonCardinal('N', 0, 70), HorizonCardinal('E', 90, 0)],
+        customHorizonIgnored: false,
+      );
+      expect(
+        horizonScript(horizon),
+        'window.araSetHorizon && window.araSetHorizon('
+        '{"line":[[10.0,-5.0],[20.0,-4.0]],'
+        '"zenith":[123.4,47.6],'
+        '"cardinals":[{"label":"N","ra":0.0,"dec":70.0},'
+        '{"label":"E","ra":90.0,"dec":0.0}]});',
+      );
+    });
+  });
+
+  group('clearHorizonScript', () {
+    test('clears the overlay', () {
+      expect(clearHorizonScript(), 'window.araClearHorizon && window.araClearHorizon();');
     });
   });
 }
