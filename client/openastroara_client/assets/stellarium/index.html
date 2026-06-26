@@ -462,6 +462,7 @@ var frameRotDeg = 0, frameCols = 1, frameRows = 1, frameOverlap = 10;
 var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
 var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
+var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
 
 function loadOptics() {
   if (!API) { optics = { ok: false }; return Promise.resolve(optics); }
@@ -520,7 +521,14 @@ function mosaicData() {
 }
 
 function updateFrame() {
-  if (!_frameGeo) { _frameGeo = stel.createObj('geojson'); stel.core.add(_frameGeo); }
+  // A geojson added straight to core never renders — it has to live inside a
+  // `layer` (whose render explicitly draws its children). Setting `.data` runs
+  // the engine's geojson parser, which honours each feature's stroke/fill props.
+  if (!_frameGeo) {
+    _frameLayer = stel.createLayer({ z: 80, visible: true });
+    _frameGeo = stel.createObj('geojson');
+    _frameLayer.add(_frameGeo);
+  }
   var show = frameOn && optics && optics.ok && frameRaDeg != null;
   _frameGeo.data = show ? mosaicData() : { type: 'FeatureCollection', features: [] };
   renderFramePanel();
