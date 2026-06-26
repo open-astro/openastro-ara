@@ -431,6 +431,15 @@ class _HoldButtonState extends State<_HoldButton> {
   }
 
   @override
+  void didUpdateWidget(_HoldButton old) {
+    super.didUpdateWidget(old);
+    // If the button becomes disabled WHILE physically held — e.g. the mount goes busy from another
+    // source (a sequence step, a GoTo) and the parent rebuilds with enabled=false — stop the axis.
+    // Without this the icon greys out but the move keeps running until the user releases.
+    if (!widget.enabled && _held) _up();
+  }
+
+  @override
   void dispose() {
     // Stop the axis if torn down mid-hold. onStop → _dispatchAxis reads the provider, which may
     // already be deactivating during teardown; _dispatchAxis's try/catch is what makes that safe, so

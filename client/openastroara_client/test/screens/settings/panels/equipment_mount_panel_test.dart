@@ -35,7 +35,10 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   Future<void> disconnect() async => calls.add('disconnect');
   @override
   Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
-      calls.add('command:$subpath:enabled=${body?['enabled']}');
+      // moveaxis carries axis/rate; everything else carries (or omits) `enabled`.
+      calls.add(body != null && body.containsKey('rate')
+          ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
+          : 'command:$subpath:enabled=${body?['enabled']}');
   @override
   void close() {}
 }
@@ -178,5 +181,33 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
     await tester.pumpAndSettle();
     expect(api.calls.any((c) => c.startsWith('command:slew')), isTrue);
+  });
+
+  testWidgets('a held direction button stops the axis if the mount goes busy',
+      (tester) async {
+    await _wideSurface(tester);
+    final api = _FakeMountApi(_status(canMoveAxis: true, axisRates: const [4.0]));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+        mountApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+    ));
+    await tester.pumpAndSettle();
+    // Press and hold the North button → starts a move at the picked rate.
+    final hold = await tester.startGesture(tester.getCenter(find.byIcon(Icons.north)));
+    await tester.pump();
+    expect(api.calls.any((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=4.0')),
+        isTrue);
+    // Mount goes busy from another source (a slew) while still held → pad disables,
+    // and the held button must dispatch a stop (rate 0) on the enabled→false transition.
+    api.status = _status(canMoveAxis: true, axisRates: const [4.0], runtimeState: 'slewing');
+    await tester.pump(const Duration(seconds: 16)); // live poll picks up the new status
+    await tester.pump();
+    expect(api.calls.any((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0')),
+        isTrue);
+    await hold.up();
   });
 }
