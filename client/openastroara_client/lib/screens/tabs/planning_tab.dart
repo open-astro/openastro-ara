@@ -7,6 +7,7 @@ import '../../state/settings/optics_settings_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/sky_atlas/stellarium_view.dart';
+import '../../widgets/sky_atlas/target_action_bar.dart';
 import '../../widgets/sky_atlas/data_manager_modal.dart';
 import '../../widgets/sky_atlas/sky_data_missing_banner.dart';
 import '../../widgets/sky_atlas/tonight_sky_panel.dart';
@@ -73,6 +74,7 @@ class _PlanningTabState extends ConsumerState<PlanningTab> {
           onOpenDataManager: () => _openDataManager(context),
         ),
         const _SearchBar(),
+        const TargetActionBar(),
         Expanded(
           child: Row(
             children: [
