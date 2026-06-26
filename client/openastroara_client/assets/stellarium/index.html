@@ -215,6 +215,22 @@ function renderInfo(sel) {
 
 function unixMsFromMjd(mjd) { return (mjd - 40587.0) * 86400000.0; }
 
+// Catalog stars render as filled discs; the engine scales the bright ones up so
+// far that at high zoom they become big "blotchy" blobs over the DSS2 photo
+// (Aladin has no catalog overlay, so its stars are just the survey's crisp
+// photographic points). Shrink the catalog discs to crisp points as you zoom into
+// the survey, but keep the full star-map look wide-field where there's no photo.
+var lastStarScale = -1;
+function updateStarScale() {
+  if (!stel) return;
+  var fovDeg = stel.fov / D2R;
+  var t = Math.max(0, Math.min(1, (fovDeg - 4) / (15 - 4))); // 0 ≤4° … 1 ≥15°
+  if (Math.abs(t - lastStarScale) < 0.02) return;            // avoid per-frame churn
+  lastStarScale = t;
+  stel.core.star_linear_scale = 0.35 + (0.8 - 0.35) * t;
+  stel.core.star_relative_scale = 0.6 + (1.1 - 0.6) * t;
+}
+
 function wireSelection() {
   var curKey = ' ';
   function selKey(sel) {
@@ -226,10 +242,10 @@ function wireSelection() {
   stel.change(function () {
     var sel = stel.core.selection || null;
     var k = selKey(sel);
-    if (k === curKey) return;
-    curKey = k;
-    renderInfo(sel);
+    if (k !== curKey) { curKey = k; renderInfo(sel); }
+    updateStarScale();
   });
+  updateStarScale();
 
   document.getElementById('i-close').onclick = function () { stel.core.selection = 0; };
   document.getElementById('i-center').onclick = function () {
