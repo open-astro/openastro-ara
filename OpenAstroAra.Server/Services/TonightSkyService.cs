@@ -136,7 +136,9 @@ public sealed class TonightSkyService : ITonightSkyService {
         var cosLat = Math.Cos(lat);
         var cosDec = Math.Cos(dec);
         double hourAngleDeg;
-        if (Math.Abs(cosLat) < 1e-9 || Math.Abs(cosDec) < 1e-9) {
+        // 1e-6 ≈ 0.2 arcsec from a pole — finer than any overlay resolves, and well clear of the
+        // ~1e8-magnitude sinH/cosH regime where one term could overflow before Atan2 normalises them.
+        if (Math.Abs(cosLat) < 1e-6 || Math.Abs(cosDec) < 1e-6) {
             hourAngleDeg = 0.0;
         } else {
             var sinH = -Math.Sin(az) * Math.Cos(alt) / cosDec;

@@ -192,7 +192,9 @@ public static class SystemEndpoints {
                 })
             .Produces<IReadOnlyList<TonightSkyObjectDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .WithName("GetTonightSky");
+            .WithName("GetTonightSky")
+            .WithDescription("Optional 'at' is an ISO-8601 instant; include a 'Z' or offset — a " +
+                "timezone-naive value is interpreted as UTC. Absent → now.");
 
         planning.MapGet("/horizon",
                 (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
@@ -203,7 +205,9 @@ public static class SystemEndpoints {
                 })
             .Produces<HorizonDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .WithName("GetPlanningHorizon");
+            .WithName("GetPlanningHorizon")
+            .WithDescription("Optional 'at' is an ISO-8601 instant; include a 'Z' or offset — a " +
+                "timezone-naive value is interpreted as UTC. Absent → now.");
 
         // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
