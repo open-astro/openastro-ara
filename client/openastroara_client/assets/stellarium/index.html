@@ -228,6 +228,26 @@ var stel = null;
 // Planning clock: null = live "now"; else a fixed unix-ms instant.
 var pinnedMs = null;
 
+// Re-read the observer site from the daemon profile so editing it in Options →
+// Safety → Site preferences moves the sky/Sun/visibility without reloading the
+// page (the URL lat/lon are only the initial seed). Polled every few seconds.
+function loadSite() {
+  if (!API || !stel) return;
+  fetch(API + '/api/v1/profile/site')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (s) {
+      if (!s) return;
+      var la = +s.latitude_deg, lo = +s.longitude_deg, el = +s.elevation_m || 0;
+      if (isNaN(la) || isNaN(lo) || (la === LAT && lo === LON && el === ELEV)) return;
+      LAT = la; LON = lo; ELEV = el;
+      stel.core.observer.latitude = LAT * D2R;
+      stel.core.observer.longitude = LON * D2R;
+      stel.core.observer.elevation = ELEV;
+      var sel = stel.core.selection; if (sel) renderInfo(sel);   // refresh visibility gate
+    })
+    .catch(function () {});
+}
+
 function setObserverTime() {
   if (!stel) return;
   var ms = pinnedMs === null ? Date.now() : pinnedMs;
@@ -236,9 +256,10 @@ function setObserverTime() {
 }
 function renderClock() {
   var el = document.getElementById('clock');
-  if (pinnedMs === null) { el.textContent = 'Live'; return; }
-  var d = new Date(pinnedMs);
-  el.textContent = d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  var ms = pinnedMs === null ? Date.now() : pinnedMs;
+  var d = new Date(ms);
+  var s = d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  el.textContent = (pinnedMs === null ? '● ' : '') + s;   // ● = live
 }
 function zoomBy(f) {
   if (!stel) return;
@@ -848,6 +869,8 @@ StelWebEngine({
     wireSelection();
     wireCmds();
     wireFrame();
+    loadSite();                              // pull the real site from the daemon
+    setInterval(loadSite, 5000);             // and keep it in sync with Options
   }
 });
 </script>
