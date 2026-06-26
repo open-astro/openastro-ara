@@ -189,9 +189,33 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
   @override
   void initState() {
     super.initState();
-    final rates = widget.status.capabilities?.axisRatesDegPerSec ?? const [];
-    // Default to a middle rate — a usable nudge without lurching at full speed.
-    _rate = rates.isEmpty ? null : rates[(rates.length - 1) ~/ 2];
+    _rate = _defaultRate(widget.status.capabilities?.axisRatesDegPerSec ?? const []);
+  }
+
+  @override
+  void didUpdateWidget(_ManualControl old) {
+    super.didUpdateWidget(old);
+    // If the panel rebuilds for a mount with a different rate set (e.g. disconnect
+    // then reconnect to different hardware), re-seed _rate — otherwise it holds the
+    // old mount's value: no chip shows selected and a nudge sends a stale rate the
+    // new driver may reject or clamp with no feedback.
+    final oldRates = old.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
+    final newRates = widget.status.capabilities?.axisRatesDegPerSec ?? const <double>[];
+    if (!_sameRates(oldRates, newRates)) {
+      _rate = _defaultRate(newRates);
+    }
+  }
+
+  // Default to a middle rate — a usable nudge without lurching at full speed.
+  static double? _defaultRate(List<double> rates) =>
+      rates.isEmpty ? null : rates[(rates.length - 1) ~/ 2];
+
+  static bool _sameRates(List<double> a, List<double> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   @override
