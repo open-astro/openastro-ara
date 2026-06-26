@@ -30,9 +30,9 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class HorizonServiceTest {
 
-        private static SiteSettingsDto Site(double lat, double lon, double horizon) =>
+        private static SiteSettingsDto Site(double lat, double lon, double horizon, bool customHorizon = false) =>
             new(SiteName: "Test", LatitudeDeg: lat, LongitudeDeg: lon, ElevationM: 0, TimeZone: "UTC",
-                UseCustomHorizon: false, DefaultHorizonAltitudeDeg: horizon, BortleClass: 4,
+                UseCustomHorizon: customHorizon, DefaultHorizonAltitudeDeg: horizon, BortleClass: 4,
                 TypicalSeeingArcsec: 2.5, TwilightDefinition: "astronomical");
 
         private static readonly DateTimeOffset At = new(2026, 6, 16, 4, 0, 0, TimeSpan.Zero);
@@ -98,6 +98,16 @@ namespace OpenAstroAra.Test {
             var dto = HorizonService.Compute(Site(lat: 12, lon: 34, horizon: 22.5), At);
             Assert.That(dto.AtUtc, Is.EqualTo(At));
             Assert.That(dto.HorizonAltitudeDeg, Is.EqualTo(22.5));
+        }
+
+        [Test]
+        public void Flags_custom_horizon_ignored_only_when_the_profile_wants_one() {
+            // This flat-horizon slice never honours a custom terrain horizon, so it advertises when one
+            // was requested (so a later slice can warn) and stays false otherwise.
+            Assert.That(HorizonService.Compute(Site(40, 0, 20, customHorizon: true), At).CustomHorizonIgnored,
+                Is.True);
+            Assert.That(HorizonService.Compute(Site(40, 0, 20, customHorizon: false), At).CustomHorizonIgnored,
+                Is.False);
         }
     }
 }

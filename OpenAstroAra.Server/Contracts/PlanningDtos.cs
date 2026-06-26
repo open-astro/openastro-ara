@@ -40,8 +40,12 @@ public sealed record TonightSkyObjectDto(
 /// time. <see cref="Points"/> is that curve — the site's horizon altitude
 /// (<see cref="HorizonAltitudeDeg"/>, the profile's DefaultHorizonAltitudeDeg) swept
 /// through azimuth 0→360° and closed back on itself; a target below it is "down".
-/// <see cref="Zenith"/> is the point straight up (dec = latitude, RA = local sidereal time);
-/// <see cref="Cardinals"/> marks N/E/S/W on the horizon for orientation.
+/// <see cref="Zenith"/> is the point straight up (dec = latitude, RA = local sidereal time) — its
+/// <see cref="HorizonPointDto.AzimuthDeg"/> is meaningless (the zenith has no azimuth) and is fixed
+/// at 0. <see cref="Cardinals"/> marks N/E/S/W on the horizon for orientation.
+/// <see cref="CustomHorizonIgnored"/> is true when the profile asks for a custom terrain horizon
+/// (<c>UseCustomHorizon</c>) that this flat-horizon slice does not yet honour — so a later slice can
+/// surface "terrain horizon not shown" without a breaking schema change.
 /// </summary>
 public sealed record HorizonDto(
     DateTimeOffset AtUtc,
@@ -49,7 +53,8 @@ public sealed record HorizonDto(
     double LocalSiderealTimeDeg,
     HorizonPointDto Zenith,
     IReadOnlyList<HorizonPointDto> Points,
-    IReadOnlyList<CardinalPointDto> Cardinals);
+    IReadOnlyList<CardinalPointDto> Cardinals,
+    bool CustomHorizonIgnored);
 
 /// <summary>One point on the horizon overlay: its equatorial (J2000) coordinates and the
 /// azimuth (degrees, north = 0, increasing eastward) it was projected from.</summary>

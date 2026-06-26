@@ -73,7 +73,10 @@ public sealed class HorizonService : IHorizonService {
             LocalSiderealTimeDeg: lst,
             Zenith: new HorizonPointDto(zenithRa, zenithDec, 0.0),
             Points: points,
-            Cardinals: cardinals);
+            Cardinals: cardinals,
+            // This slice always serves the flat DefaultHorizonAltitudeDeg; flag it when the profile
+            // actually wants a custom terrain horizon so a later slice can warn without a schema break.
+            CustomHorizonIgnored: site.UseCustomHorizon);
     }
 
     private static CardinalPointDto Cardinal(string label, double azDeg, double altDeg, double latDeg, double lstDeg) {
