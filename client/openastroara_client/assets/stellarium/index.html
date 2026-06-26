@@ -243,6 +243,7 @@ function loadSite() {
       stel.core.observer.latitude = LAT * D2R;
       stel.core.observer.longitude = LON * D2R;
       stel.core.observer.elevation = ELEV;
+      setObserverTime();                                         // force the observer to recompute
       var sel = stel.core.selection; if (sel) renderInfo(sel);   // refresh visibility gate
     })
     .catch(function () {});
@@ -870,7 +871,7 @@ StelWebEngine({
     wireCmds();
     wireFrame();
     loadSite();                              // pull the real site from the daemon
-    setInterval(loadSite, 5000);             // and keep it in sync with Options
+    setInterval(loadSite, 2000);             // and keep it in sync with Options (near-instant)
   }
 });
 </script>
