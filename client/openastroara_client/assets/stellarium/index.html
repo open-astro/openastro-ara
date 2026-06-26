@@ -413,17 +413,22 @@ function wireSelection() {
     if (!API || selRaHours == null) return;
     var btn = document.getElementById('i-goto');
     btn.textContent = 'Slewing…'; btn.disabled = true;
-    // Daemon JSON is snake_case (SnakeCaseLower policy).
-    fetch(API + '/api/v1/equipment/telescope/slew', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ right_ascension_hours: selRaHours, declination_degrees: selDecDeg, sync: false })
-    }).then(function (r) {
-      btn.textContent = r.ok ? 'Slew sent ✓' : (r.status === 500 ? 'No mount' : 'Slew failed');
-    }).catch(function () {
-      btn.textContent = 'No mount';
-    }).then(function () {
-      setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null && selVisible); }, 2200);
-    });
+    // A parked mount silently ignores slews, so unpark first; then slew. Daemon
+    // JSON is snake_case (SnakeCaseLower policy).
+    fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
+      .catch(function () {})
+      .then(function () {
+        return fetch(API + '/api/v1/equipment/telescope/slew', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ right_ascension_hours: selRaHours, declination_degrees: selDecDeg, sync: false })
+        });
+      }).then(function (r) {
+        btn.textContent = r.ok ? 'Slew sent ✓' : (r.status === 500 ? 'No mount' : 'Slew failed');
+      }).catch(function () {
+        btn.textContent = 'No mount';
+      }).then(function () {
+        setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null && selVisible); }, 2200);
+      });
   };
 }
 
