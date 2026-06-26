@@ -26,6 +26,18 @@ class StellariumServer {
 
   static const String _assetRoot = 'assets/stellarium';
 
+  // ── Flutter → page command channel ──────────────────────────────────────
+  // The multi-process CEF webview has no working Dart→page JS bridge
+  // (executeJavaScript / evaluateJavascript don't reach the renderer), so any
+  // command that originates in Flutter (e.g. a typed search — CEF can't receive
+  // keyboard text either) is dropped here as a one-shot JSON command and the
+  // page polls [GET /aracmd] to pick it up. Loopback + same-origin, so the page
+  // can always reach it.
+  final List<String> _commands = [];
+
+  /// Queue a command (a JSON string) for the page to pick up on its next poll.
+  void pushCommand(String json) => _commands.add(json);
+
   static Future<StellariumServer>? _instance;
 
   /// Start (or return the already-running) loopback asset server.
@@ -52,6 +64,17 @@ class StellariumServer {
       // Map the URL path onto an asset key. A bare "/" serves the bridge page.
       var path = request.uri.path;
       if (path == '/' || path.isEmpty) path = '/index.html';
+      // Flutter → page command channel: the page long-polls this; we hand back the
+      // oldest queued command (a JSON object) and drop it, or `{}` when idle.
+      if (path == '/aracmd') {
+        final cmd = _commands.isNotEmpty ? _commands.removeAt(0) : '{}';
+        response.headers.contentType =
+            ContentType('application', 'json', charset: 'utf-8');
+        response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+        response.write(cmd);
+        await response.close();
+        return;
+      }
       // Reject any traversal attempt before touching the bundle.
       if (path.contains('..')) {
         response.statusCode = HttpStatus.forbidden;

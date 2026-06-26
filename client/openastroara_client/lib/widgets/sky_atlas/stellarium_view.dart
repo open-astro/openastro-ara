@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +31,8 @@ Future<void> _ensureManagerInitialized() =>
 
 class _StellariumViewState extends ConsumerState<StellariumView> {
   WebViewController? _controller;
+  StellariumServer? _server;
+  final _searchCtrl = TextEditingController();
   bool _unavailable = false;
 
   @override
@@ -52,6 +55,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final String url;
     try {
       final server = await StellariumServer.start();
+      _server = server;
       // The page self-initialises from these query params: the observer site, and
       // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
       final site = ref.read(siteLocationProvider).asData?.value ??
@@ -88,8 +92,20 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 
   @override
   void dispose() {
+    _searchCtrl.dispose();
     unawaited(_controller?.dispose());
     super.dispose();
+  }
+
+  // CEF can't receive keyboard text or a JS-bridge call in the multi-process
+  // setup, so the typed search lives in Flutter and reaches the planetarium page
+  // through the loopback server's one-shot command channel (the page polls it).
+  void _pushCmd(Map<String, Object?> cmd) => _server?.pushCommand(jsonEncode(cmd));
+
+  void _submitSearch() {
+    final q = _searchCtrl.text.trim();
+    if (q.isEmpty) return;
+    _pushCmd({'type': 'search', 'q': q});
   }
 
   @override
@@ -97,7 +113,85 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     if (_unavailable) return const _Unavailable();
     final controller = _controller;
     if (controller == null) return const _Loading();
-    return ColoredBox(color: AraColors.bgPrimary, child: controller.webviewWidget);
+    return ColoredBox(
+      color: AraColors.bgPrimary,
+      child: Column(
+        children: [
+          _SearchBar(
+            controller: _searchCtrl,
+            onSubmit: _submitSearch,
+            onTonight: () => _pushCmd({'type': 'tonight'}),
+          ),
+          Expanded(child: controller.webviewWidget),
+        ],
+      ),
+    );
+  }
+}
+
+/// Thin top bar over the planetarium: a universal search field + a Tonight's Sky
+/// toggle. The field is Flutter (so the keyboard works); submitting it hands the
+/// query to the page via the loopback command channel.
+class _SearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+  final VoidCallback onTonight;
+
+  const _SearchBar({
+    required this.controller,
+    required this.onSubmit,
+    required this.onTonight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border(bottom: BorderSide(color: AraColors.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => onSubmit(),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 18),
+                hintText:
+                    'Search — M42, NGC 7000, Vega, Jupiter, 05:35 -05:23…',
+                hintStyle: const TextStyle(
+                    fontSize: 13, color: AraColors.textSecondary),
+                filled: true,
+                fillColor: AraColors.bgPrimary,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: AraColors.border),
+                ),
+                suffixIcon: IconButton(
+                  tooltip: 'Go',
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  onPressed: onSubmit,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: onTonight,
+            icon: const Icon(Icons.nights_stay_outlined, size: 16),
+            label: const Text("Tonight's Sky"),
+          ),
+        ],
+      ),
+    );
   }
 }
 

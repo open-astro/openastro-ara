@@ -16,7 +16,7 @@ WebGL/WASM planetarium renderer by Stellarium Labs SRL.
 ## How the vendored artifacts were built
 
 `stellarium-web-engine.js` + `stellarium-web-engine.wasm` were built from a clean
-checkout of the upstream repo in the official emscripten container, with two
+checkout of the upstream repo in the official emscripten container, with three
 adjustments to the build invocation (`SConstruct`), no source changes:
 
 ```sh
@@ -29,7 +29,7 @@ docker run --rm -v "$PWD":/src -w /src emscripten/emsdk:3.1.51 \
 # → build/stellarium-web-engine.js, build/stellarium-web-engine.wasm
 ```
 
-Two build-config deviations from upstream's default `make js`, **both build
+Three build-config deviations from upstream's default `make js`, **all build
 flags — no source files are changed:**
 
 1. **`EXPORTED_FUNCTIONS=['_free','_malloc']`.** Upstream's `SConstruct` lists
@@ -42,7 +42,19 @@ flags — no source files are changed:**
    boundary — and `onReady` never fires (blank planetarium: no stars/DSO load,
    `atmosphere`/`landscape` defaults never get turned off). Moving them into
    `EXPORTED_FUNCTIONS` fixes it.
-2. **`werror=0`.** Modern emscripten/clang promotes some warnings in the
+2. **`withStackSave` added to `EXTRA_EXPORTED_RUNTIME_METHODS`.** The engine's
+   async tile-download glue (`request_js.c` → emscripten's `wget2` XHR) calls the
+   runtime helper `withStackSave` in its **error** callback (`onerrorjs`) to
+   stack-allocate the HTTP `statusText`. Under `-O3` it gets dead-code-eliminated
+   unless named here, leaving it referenced-but-undefined. Every 404 tile then
+   throws `ReferenceError` so the wasm `onerror` never runs, the in-flight request
+   counter never decrements, and after 16 leaked 404s (DSS edge tiles, trimmed
+   offline catalog Norder1 misses) **the whole tile loader deadlocks** — DSS never
+   paints, constellation art drops the moment you zoom past wide-field, and
+   `core.fov` reads `NaN`. Listing it keeps the helper in the build. (emscripten
+   3.1.51 prints `invalid item in EXPORTED_RUNTIME_METHODS: withStackSave` — that
+   warning is harmless; the symbol is still emitted into the module.)
+3. **`werror=0`.** Modern emscripten/clang promotes some warnings in the
    vendored 2022-era C deps (e.g. K&R-style `zlib` prototypes) to errors.
 
 ## Sky data (`skydata/`)

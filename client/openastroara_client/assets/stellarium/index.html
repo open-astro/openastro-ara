@@ -43,6 +43,23 @@
   #info .acts { display: flex; gap: 6px; margin-top: 10px; }
   #info .acts button { flex: 1; font-size: 12px; padding: 6px 0; }
   #info .acts button[disabled] { opacity: .4; cursor: default; }
+  #info .warn { color: #ffb74d; }
+  /* Search + Tonight's Sky */
+  #topbar { top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; }
+  #q { width: 300px; font: inherit; color: #e0e0e0; background: rgba(20,20,20,.8); border: 1px solid #444;
+    border-radius: 6px; padding: 7px 11px; outline: none; }
+  #q:focus { border-color: #4fc3f7; }
+  #q::placeholder { color: #888; }
+  #searchmsg { top: 48px; left: 50%; transform: translateX(-50%); background: rgba(70,30,30,.92);
+    border: 1px solid #b55; border-radius: 6px; padding: 4px 11px; font-size: 12px; display: none; }
+  #tonight { left: 12px; top: 56px; width: 236px; max-height: 64%; overflow-y: auto;
+    background: rgba(15,15,18,.92); border: 1px solid #444; border-radius: 8px; padding: 8px; display: none; }
+  #tonight h3 { margin: 2px 4px 8px; font-size: 13px; color: #cfe; }
+  #tonight .empty { color: #888; font-size: 12px; padding: 6px 4px; }
+  #tonight .row { padding: 6px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  #tonight .row:hover { background: rgba(60,60,72,.75); border-color: #4fc3f7; }
+  #tonight .row .nm { font-size: 13px; }
+  #tonight .row .meta { font-size: 11px; color: #9ab; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -50,12 +67,19 @@
 
 <div id="status" class="ui">Loading planetarium…</div>
 
-<div id="timebar" class="ui" style="display:none">
+<div id="searchmsg" class="ui"></div>
+
+<div id="timebar" class="ui" style="display:none; top: 10px;">
   <button id="t-1h">−1h</button>
   <button id="t+1h">+1h</button>
   <span id="clock">—</span>
   <button id="t-tonight">Tonight</button>
   <button id="t-now" class="on">Now</button>
+</div>
+
+<div id="tonight" class="ui">
+  <h3>Tonight's Sky — best from your site</h3>
+  <div id="tonight-list"><div class="empty">Loading…</div></div>
 </div>
 
 <div id="layers" class="ui" style="display:none">
@@ -150,6 +174,7 @@ function setLayer(name, on) {
 // into a small info panel and offer Center (lock the view on it) + GoTo (slew
 // the connected mount to it via the daemon REST API).
 var selRaHours = null, selDecDeg = null;   // last selection's JNOW coords, for GoTo
+var selVisible = false;                     // does it ever rise above the site horizon?
 
 function pad2(n) { n = Math.abs(Math.round(n)); return (n < 10 ? '0' : '') + n; }
 function fmtRa(rad) {            // radians → "HHh MMm SSs"
@@ -191,7 +216,16 @@ function renderInfo(sel) {
     var azalt = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', radec));
     rows.push(['Az', fmtDeg(stel.anp(azalt[0]))]);
     rows.push(['Alt', fmtDeg(stel.anpm(azalt[1]))]);
-  } catch (e) { selRaHours = selDecDeg = null; }
+
+    // Site-visibility gate: an object at declination δ seen from latitude φ
+    // transits at altitude 90° − |φ − δ|. If that's at or below the horizon it
+    // NEVER rises from here (e.g. a deep-southern target from the north), so we
+    // flag it and block GoTo / sequencing — you can look, but you can't image
+    // what your site can't see.
+    var maxAlt = 90 - Math.abs(LAT - selDecDeg);
+    selVisible = maxAlt > 0;
+    rows.push(['Max alt', (maxAlt > 0 ? maxAlt.toFixed(0) + '°' : '<span class="warn">never rises here</span>')]);
+  } catch (e) { selRaHours = selDecDeg = null; selVisible = false; }
 
   // Rise/set tonight.
   try {
@@ -208,8 +242,9 @@ function renderInfo(sel) {
   }
   document.getElementById('i-rows').innerHTML = html;
 
-  // GoTo only makes sense with a connected daemon and a resolved RA/Dec.
-  document.getElementById('i-goto').disabled = !(API && selRaHours != null);
+  // GoTo needs a connected daemon, a resolved RA/Dec, and a target the site can
+  // actually reach.
+  document.getElementById('i-goto').disabled = !(API && selRaHours != null && selVisible);
   el.style.display = '';
 }
 
@@ -266,6 +301,133 @@ function wireSelection() {
       setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
     });
   };
+}
+
+// ---- Search + Tonight's Sky ---------------------------------------------
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+}
+var _msgTimer = null;
+function showSearchMsg(msg) {
+  var el = document.getElementById('searchmsg');
+  el.textContent = msg; el.style.display = '';
+  clearTimeout(_msgTimer); _msgTimer = setTimeout(function () { el.style.display = 'none'; }, 3500);
+}
+
+// Resolve a typed query to an engine object. Tries the raw text, a "NAME …"
+// form, and a normalised catalog id (M42 → "M 42", NGC7000 → "NGC 7000").
+function resolveQuery(q) {
+  q = (q || '').trim(); if (!q) return null;
+  var tries = [q, 'NAME ' + q];
+  var m = q.match(/^([A-Za-z]{1,4})\s*0*(\d+)$/);
+  if (m) { var id = m[1].toUpperCase() + ' ' + m[2]; tries.push(id, 'NAME ' + id); }
+  for (var i = 0; i < tries.length; i++) {
+    try { var o = stel.getObj(tries[i]); if (o) return o; } catch (e) {}
+  }
+  return null;
+}
+
+// Parse "HH:MM[:SS] ±DD:MM[:SS]" or "ra_deg dec_deg" → {raDeg, decDeg} (J2000).
+function parseRaDec(q) {
+  q = (q || '').trim();
+  var s = q.match(/^(\d{1,2})[:\sh](\d{1,2})(?:[:\sm](\d{1,2}(?:\.\d+)?))?\s+([+\-]?\d{1,2})[:\s°d](\d{1,2})(?:[:\s'](\d{1,2}(?:\.\d+)?))?$/);
+  if (s) {
+    var raH = (+s[1]) + (+s[2]) / 60 + (+(s[3] || 0)) / 3600;
+    var sign = s[4][0] === '-' ? -1 : 1;
+    var decD = Math.abs(+s[4]) + (+s[5]) / 60 + (+(s[6] || 0)) / 3600;
+    return { raDeg: raH * 15, decDeg: sign * decD };
+  }
+  var d = q.match(/^([+\-]?\d+(?:\.\d+)?)[ ,]+([+\-]?\d+(?:\.\d+)?)$/);
+  if (d) return { raDeg: +d[1], decDeg: +d[2] };
+  return null;
+}
+
+// A comfortable framing zoom for a found target — wide enough to see context,
+// tight enough that the DSS2 survey paints in. (Don't gate on the current FOV:
+// stel.fov can read NaN for a frame or two right after load.)
+var FRAME_FOV = 6 * D2R;
+
+// Point the view at a J2000 RA/Dec (no object to select — e.g. raw coordinates).
+function pointRaDec(raDeg, decDeg) {
+  var v = stel.s2c(raDeg * D2R, decDeg * D2R);
+  var obs = stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', v);
+  stel.lookAt(obs, 0.6);
+  stel.zoomTo(FRAME_FOV, 0.6);
+}
+
+function selectObject(o) {
+  stel.core.selection = o;
+  stel.pointAndLock(o, 0.7);
+  stel.zoomTo(FRAME_FOV, 0.7);
+}
+
+// Resolve + go to a typed query. Called from the Flutter search bar via the
+// loopback command channel (CEF can't take keyboard text in-page).
+function doSearch(q) {
+  q = (q == null ? '' : String(q));
+  if (!q.trim()) return;
+  var o = resolveQuery(q);
+  if (o) { selectObject(o); return; }
+  var rd = parseRaDec(q);
+  if (rd) {
+    stel.core.selection = 0;
+    pointRaDec(rd.raDeg, rd.decDeg);
+    showSearchMsg('Pointed to RA ' + rd.raDeg.toFixed(2) + '°  Dec ' + rd.decDeg.toFixed(2) + '°');
+    return;
+  }
+  showSearchMsg('Not found: ' + q);
+}
+
+var _tonightLoaded = false;
+function loadTonight() {
+  var list = document.getElementById('tonight-list');
+  if (!API) { list.innerHTML = '<div class="empty">Connect to a server to see Tonight\'s Sky.</div>'; return; }
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  fetch(API + '/api/v1/planning/tonight?limit=20')
+    .then(function (r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+    .then(function (items) {
+      if (!items || !items.length) { list.innerHTML = '<div class="empty">Nothing well-placed from your site right now.</div>'; return; }
+      list.innerHTML = '';
+      items.forEach(function (it) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var mag = (it.magnitude != null) ? 'mag ' + it.magnitude.toFixed(1) : '';
+        row.innerHTML = '<div class="nm">' + escapeHtml(it.name || it.id) + '</div>'
+          + '<div class="meta">' + escapeHtml(it.type || '') + (mag ? '  ·  ' + mag : '')
+          + '  ·  alt ' + Math.round(it.altitude_deg) + '°</div>';
+        row.onclick = function () {
+          var o = resolveQuery(it.name) || resolveQuery(it.id);
+          if (o) selectObject(o); else pointRaDec(it.ra_deg, it.dec_deg);
+        };
+        list.appendChild(row);
+      });
+    })
+    .catch(function (e) { list.innerHTML = '<div class="empty">Tonight\'s Sky unavailable (' + e + ').</div>'; });
+}
+
+function toggleTonight() {
+  var panel = document.getElementById('tonight');
+  var open = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = open ? '' : 'none';
+  if (open && !_tonightLoaded) { _tonightLoaded = true; loadTonight(); }
+}
+
+// Poll the loopback server for Flutter-originated commands (search, Tonight,
+// goto) and dispatch them. ~3/sec is plenty and stays cheap on loopback.
+function pollCmd() {
+  fetch('/aracmd', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (c) {
+      if (!c || !c.type) return;
+      if (c.type === 'search') doSearch(c.q || '');
+      else if (c.type === 'tonight') toggleTonight();
+      else if (c.type === 'goto' && c.ra != null) { stel.core.selection = 0; pointRaDec(c.ra, c.dec); }
+    })
+    .catch(function () {});
+}
+
+function wireCmds() {
+  setInterval(pollCmd, 350);
 }
 
 function wireControls() {
@@ -350,6 +512,7 @@ StelWebEngine({
     setObserverTime();
     wireControls();
     wireSelection();
+    wireCmds();
   }
 });
 </script>
