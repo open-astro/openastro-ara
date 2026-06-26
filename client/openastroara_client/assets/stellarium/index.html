@@ -109,6 +109,21 @@
   #frame .stp button { width: 28px; height: 26px; padding: 0; font-size: 16px; border-radius: 7px; }
   #frame .stp button:hover { background: rgba(255,255,255,0.12); }
   #frame .stp .val { min-width: 56px; text-align: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  #frame .frow .val { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--txt); }
+  /* Rotation dial (Keynote-style angle knob) + 1° nudges */
+  #frame .frot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px 0 10px; }
+  #frame .frot button { width: 28px; height: 28px; padding: 0; font-size: 17px; border-radius: 8px; background: rgba(255,255,255,0.07); }
+  #frame .frot button:hover { background: rgba(255,255,255,0.14); }
+  #frame .dial { position: relative; width: 66px; height: 66px; border-radius: 50%; flex: 0 0 auto; cursor: grab;
+    background: radial-gradient(circle at 50% 36%, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
+    border: 0.5px solid var(--hair); box-shadow: inset 0 1px 7px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3); }
+  #frame .dial:active { cursor: grabbing; }
+  #frame .dial::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px;
+    border-radius: 50%; background: rgba(255,255,255,0.30); }
+  #frame .dial-hand { position: absolute; left: 50%; bottom: 50%; width: 2.5px; height: 27px; margin-left: -1.25px;
+    transform-origin: 50% 100%; border-radius: 2px; background: linear-gradient(var(--accent), rgba(79,195,247,0.25)); }
+  #frame .dial-hand::after { content: ''; position: absolute; top: -4px; left: 50%; width: 9px; height: 9px; margin-left: -4.5px;
+    border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px rgba(79,195,247,0.7); }
   #frame #f-fov { font-size: 12.5px; font-variant-numeric: tabular-nums; }
   #frame #f-add { width: 100%; margin-top: 11px; font-size: 13px; font-weight: 600; padding: 9px 0; border-radius: 10px;
     background: var(--accent); color: #04222e; }
@@ -153,11 +168,17 @@
      and an N×M mosaic, then adds it to the sequence. -->
 <div id="frame" class="ui">
   <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
-  <div class="frow"><span class="k">Rotation</span>
-    <div class="stp"><button id="f-rot-">−</button><span class="val" id="f-rot">0°</span><button id="f-rot+">+</button></div>
+  <div class="frow"><span class="k">Rotation</span><span class="val" id="f-rot">0°</span></div>
+  <div class="frot">
+    <button id="f-rot-" title="−1°">−</button>
+    <div id="f-dial" class="dial" title="Drag to rotate"><div class="dial-hand"></div></div>
+    <button id="f-rot+" title="+1°">+</button>
   </div>
-  <div class="frow"><span class="k">Mosaic</span>
-    <div class="stp"><button id="f-mos-">−</button><span class="val" id="f-mos">1 × 1</span><button id="f-mos+">+</button></div>
+  <div class="frow"><span class="k">Columns</span>
+    <div class="stp"><button id="f-col-">−</button><span class="val" id="f-col">1</span><button id="f-col+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Rows</span>
+    <div class="stp"><button id="f-row-">−</button><span class="val" id="f-row">1</span><button id="f-row+">+</button></div>
   </div>
   <div class="frow"><span class="k">Overlap</span>
     <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
@@ -611,7 +632,10 @@ function updateFrame() {
 function fmtFovDeg(x) { return x >= 1 ? x.toFixed(2) + '°' : (x * 60).toFixed(1) + "'"; }
 function renderFramePanel() {
   document.getElementById('f-rot').textContent = frameRotDeg + '°';
-  document.getElementById('f-mos').textContent = frameCols + ' × ' + frameRows;
+  var _hand = document.querySelector('#f-dial .dial-hand');
+  if (_hand) _hand.style.transform = 'rotate(' + frameRotDeg + 'deg)';
+  document.getElementById('f-col').textContent = frameCols;
+  document.getElementById('f-row').textContent = frameRows;
   document.getElementById('f-ov').textContent = frameOverlap + '%';
   var fovEl = document.getElementById('f-fov');
   if (optics && optics.ok) {
@@ -651,17 +675,40 @@ function toggleFrame(on) {
 function wireFrame() {
   document.getElementById('frame-btn').onclick = function () { toggleFrame(); };
   document.getElementById('f-close').onclick = function () { toggleFrame(false); };
-  function bump(get, set, redraw) { return function () { set(get()); if (redraw) updateFrame(); else renderFramePanel(); }; }
-  document.getElementById('f-rot-').onclick = function () { frameRotDeg = (frameRotDeg + 355) % 360; updateFrame(); };
-  document.getElementById('f-rot+').onclick = function () { frameRotDeg = (frameRotDeg + 5) % 360; updateFrame(); };
-  document.getElementById('f-mos-').onclick = function () {
-    if (frameCols > 1 || frameRows > 1) { frameCols = Math.max(1, frameCols - 1); frameRows = Math.max(1, frameRows - 1); updateFrame(); }
-  };
-  document.getElementById('f-mos+').onclick = function () {
-    frameCols = Math.min(8, frameCols + 1); frameRows = Math.min(8, frameRows + 1); updateFrame();
-  };
-  document.getElementById('f-ov-').onclick = function () { frameOverlap = Math.max(0, frameOverlap - 5); updateFrame(); };
-  document.getElementById('f-ov+').onclick = function () { frameOverlap = Math.min(50, frameOverlap + 5); updateFrame(); };
+
+  // Press-and-hold to repeat (accelerating), so 1° rotation steps don't mean a
+  // hundred clicks. One tap = one step.
+  function holdRepeat(id, fn) {
+    var btn = document.getElementById(id), timer = null, delay = 0;
+    function tick() { fn(); delay = Math.max(45, delay * 0.82); timer = setTimeout(tick, delay); }
+    function start(e) { e.preventDefault(); stop(); fn(); delay = 340; timer = setTimeout(tick, delay); }
+    function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+    btn.addEventListener('mousedown', start);
+    ['mouseup', 'mouseleave'].forEach(function (ev) { btn.addEventListener(ev, stop); });
+  }
+
+  // Rotation dial — drag the knob to spin (0° = up); 1° nudges for precision.
+  var dial = document.getElementById('f-dial'), hand = dial.querySelector('.dial-hand'), dialing = false;
+  function setRot(deg) {
+    frameRotDeg = ((Math.round(deg) % 360) + 360) % 360;
+    hand.style.transform = 'rotate(' + frameRotDeg + 'deg)';
+    updateFrame();
+  }
+  function dialAngle(e) {
+    var r = dial.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    return Math.atan2(e.clientX - cx, -(e.clientY - cy)) * 180 / Math.PI;   // 0 = up, clockwise +
+  }
+  dial.addEventListener('mousedown', function (e) { dialing = true; setRot(dialAngle(e)); e.preventDefault(); });
+  window.addEventListener('mousemove', function (e) { if (dialing) setRot(dialAngle(e)); });
+  window.addEventListener('mouseup', function () { dialing = false; });
+  holdRepeat('f-rot-', function () { setRot(frameRotDeg - 1); });
+  holdRepeat('f-rot+', function () { setRot(frameRotDeg + 1); });
+  document.getElementById('f-col-').onclick = function () { frameCols = Math.max(1, frameCols - 1); updateFrame(); };
+  document.getElementById('f-col+').onclick = function () { frameCols = Math.min(8, frameCols + 1); updateFrame(); };
+  document.getElementById('f-row-').onclick = function () { frameRows = Math.max(1, frameRows - 1); updateFrame(); };
+  document.getElementById('f-row+').onclick = function () { frameRows = Math.min(8, frameRows + 1); updateFrame(); };
+  holdRepeat('f-ov-', function () { frameOverlap = Math.max(0, frameOverlap - 1); updateFrame(); });
+  holdRepeat('f-ov+', function () { frameOverlap = Math.min(50, frameOverlap + 1); updateFrame(); });
   document.getElementById('f-add').onclick = addFrameToSequence;
 }
 
