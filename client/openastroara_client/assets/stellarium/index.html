@@ -537,20 +537,29 @@ var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or nul
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
 var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
 
+// Apply a freshly-fetched optics payload and, if the field of view actually
+// changed, redraw — so editing optics in Options updates the box live.
+function applyOptics(o) {
+  var prev = (optics && optics.ok) ? optics.fovWDeg + 'x' + optics.fovHDeg : 'none';
+  var fl = o ? +o.focal_length_mm : 0, red = o ? (+o.reducer_factor || 1) : 1;
+  var sw = o ? +o.sensor_width_px : 0, sh = o ? +o.sensor_height_px : 0, ps = o ? +o.pixel_size_um : 0;
+  if (!(fl > 0) || !(sw > 0) || !(sh > 0) || !(ps > 0)) {
+    optics = { ok: false };
+  } else {
+    var arcsec = 206.265 * ps / (fl * red);             // arcsec per pixel
+    optics = { ok: true, fovWDeg: sw * arcsec / 3600, fovHDeg: sh * arcsec / 3600 };
+  }
+  var cur = optics.ok ? optics.fovWDeg + 'x' + optics.fovHDeg : 'none';
+  if (cur !== prev) { frameOn ? updateFrame() : renderFramePanel(); }
+  return optics;
+}
+
 function loadOptics() {
-  if (!API) { optics = { ok: false }; return Promise.resolve(optics); }
+  if (!API) return Promise.resolve(applyOptics(null));
   return fetch(API + '/api/v1/profile/optics')
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (o) {
-      if (!o) { optics = { ok: false }; return optics; }
-      var fl = +o.focal_length_mm, red = +o.reducer_factor || 1;
-      var sw = +o.sensor_width_px, sh = +o.sensor_height_px, ps = +o.pixel_size_um;
-      if (!(fl > 0) || !(sw > 0) || !(sh > 0) || !(ps > 0)) { optics = { ok: false }; return optics; }
-      var arcsec = 206.265 * ps / (fl * red);           // arcsec per pixel
-      optics = { ok: true, fovWDeg: sw * arcsec / 3600, fovHDeg: sh * arcsec / 3600 };
-      return optics;
-    })
-    .catch(function () { optics = { ok: false }; return optics; });
+    .then(applyOptics)
+    .catch(function () { return applyOptics(null); });
 }
 
 // Remember the target to frame (J2000). Called on every search / selection so
@@ -668,8 +677,8 @@ function toggleFrame(on) {
     var c = viewCenterRaDec();
     if (!isNaN(c[0])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
   }
-  if (frameOn && optics == null) loadOptics().then(updateFrame);
-  else updateFrame();
+  if (frameOn) loadOptics();   // always refresh from the profile on open
+  updateFrame();
 }
 
 function wireFrame() {
@@ -710,6 +719,8 @@ function wireFrame() {
   holdRepeat('f-ov-', function () { frameOverlap = Math.max(0, frameOverlap - 1); updateFrame(); });
   holdRepeat('f-ov+', function () { frameOverlap = Math.min(50, frameOverlap + 1); updateFrame(); });
   document.getElementById('f-add').onclick = addFrameToSequence;
+  // Pick up optics edited in Options → Imaging → Optics without reopening Frame.
+  setInterval(function () { if (frameOn) loadOptics(); }, 3000);
 }
 
 // Add the framed target to the sequence. The page can't build the daemon's NINA
