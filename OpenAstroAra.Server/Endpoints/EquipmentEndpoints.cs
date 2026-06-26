@@ -133,7 +133,16 @@ public static class EquipmentEndpoints {
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
         telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) => {
-            await svc.MoveAxisAsync(request.Axis, request.Rate, ct); return Results.Accepted();
+            // ASCOM axes: 0 = Primary, 1 = Secondary, 2 = Tertiary. Reject out-of-range up front (400)
+            // so an invalid enum cast can't surface as a driver 500. Rate is intentionally NOT clamped
+            // here: the UI speed picker constrains it to the mount's reported AxisRates, a direct API
+            // caller owns its choice of rate, and the driver clamps/rejects anything it can't honour.
+            if (request.Axis is < 0 or > 2) {
+                return Results.Problem($"axis must be 0, 1, or 2 (got {request.Axis}).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            await svc.MoveAxisAsync(request.Axis, request.Rate, ct);
+            return Results.Accepted();
         });
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();

@@ -165,6 +165,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // FindHome blocks until the mount reaches its home switch; run it off the request
         // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
         // AtHome when it settles. The panel gates this on CanFindHome.
+        // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
+        // workaround executes fine from a stationary state — verified on-device, the mount moves
+        // to home with tracking off — so homing doesn't need the motors pre-engaged.
         _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
         return Task.FromResult(Accepted("telescope.findhome", idempotencyKey));
     }
@@ -372,10 +375,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private static List<double> ReadAxisRates(AlpacaTelescope c) {
         try {
             // IAxisRates is a non-generic IEnumerable of IRate; each IRate is a [Minimum, Maximum] band.
-            // Most mounts (incl. iOptron) report discrete rates as single-value bands, so the Maximum is
-            // the usable slew rate. Distinct + ascending gives the direction-pad speed picker a clean list.
+            // Emit BOTH endpoints of every band: a discrete rate reports Minimum == Maximum (one value),
+            // while a mount that reports genuine continuous bands (Minimum < Maximum) contributes its
+            // floor and ceiling so the picker reflects the real span, not just the ceiling. The SortedSet
+            // dedups equal endpoints and yields a clean ascending list for the speed picker.
             var rates = new SortedSet<double>();
             foreach (IRate rate in c.AxisRates(TelescopeAxis.Primary)) {
+                if (rate.Minimum > 0) {
+                    rates.Add(rate.Minimum);
+                }
                 if (rate.Maximum > 0) {
                     rates.Add(rate.Maximum);
                 }
