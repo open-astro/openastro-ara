@@ -60,7 +60,13 @@ flags — no source files are changed:**
 ## Sky data (`skydata/`)
 
 The offline sky catalogues (stars, deep-sky objects, planets/Moon/Sun, the
-`guereins` horizon landscape, satellites, milky way, and the `western` sky
-culture + constellation art) are the engine's `test-skydata` set, served to the
-webview by `StellariumServer` so the planetarium works with no internet. The
-non-`western` sky cultures were trimmed to keep the bundle small.
+`horizon` landscape, satellites, milky way, and the `western` sky culture +
+constellation art) are the engine's `test-skydata` set, served to the webview by
+`StellariumServer` so the planetarium works with no internet. The non-`western`
+sky cultures were trimmed to keep the bundle small.
+
+The `horizon` landscape is the engine's `guereins` panorama with its tiles
+dimmed + desaturated (Pillow, brightness ×0.16, colour ×0.28) so the ground
+reads as a clean dark silhouette instead of a bright daytime photo — the
+panorama brightness is driven by the engine's global sky-brightness model, not a
+runtime tint, so it has to be baked into the images.

@@ -82,9 +82,9 @@ flutter:
     - assets/stellarium/skydata/dso/Norder0/
     - assets/stellarium/skydata/dso/Norder0/Dir0/
     - assets/stellarium/skydata/landscapes/
-    - assets/stellarium/skydata/landscapes/guereins/
-    - assets/stellarium/skydata/landscapes/guereins/Norder0/
-    - assets/stellarium/skydata/landscapes/guereins/Norder0/Dir0/
+    - assets/stellarium/skydata/landscapes/horizon/
+    - assets/stellarium/skydata/landscapes/horizon/Norder0/
+    - assets/stellarium/skydata/landscapes/horizon/Norder0/Dir0/
     - assets/stellarium/skydata/skycultures/
     - assets/stellarium/skydata/skycultures/western/
     - assets/stellarium/skydata/skycultures/western/illustrations/
