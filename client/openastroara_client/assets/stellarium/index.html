@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!--
+  §36 OpenAstro Ara Planetarium — embeds the Stellarium Web Engine
+  (https://github.com/Stellarium/stellarium-web-engine), © Stellarium Labs SRL,
+  licensed under the GNU AGPL v3 (see LICENSE-AGPL-3.0.txt in this directory).
+  OpenAstro Ara drives it through the window.araStel bridge below; the engine and
+  its sky data are served locally (fully offline) by the app's StellariumServer.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>OpenAstro Ara Planetarium</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="stel-canvas"></canvas>
+
+<script src="./stellarium-web-engine.js"></script>
+<script>
+'use strict';
+
+// Degrees↔radians; the engine takes angles in radians and time as MJD.
+var D2R = Math.PI / 180.0;
+function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
+
+// ── The Ara → engine bridge ─────────────────────────────────────────────────
+// Dart drives the planetarium by executeJavaScript('window.araStel.<fn>(...)').
+// Calls made before the WASM engine finishes loading are queued and flushed from
+// onReady, so an early setLocation/center is never dropped.
+var araStel = {
+  _stel: null,
+  _pending: [],
+  _framing: null, // the geojson FOV overlay object, lazily created
+
+  _run: function (fn) {
+    if (this._stel) { try { fn(this._stel); } catch (e) { console.error('araStel:', e); } }
+    else { this._pending.push(fn); }
+  },
+
+  _onReady: function (stel) {
+    this._stel = stel;
+    var p = this._pending; this._pending = [];
+    for (var i = 0; i < p.length; i++) { try { p[i](stel); } catch (e) { console.error('araStel flush:', e); } }
+  },
+
+  // Observer site — degrees / metres.
+  setLocation: function (latDeg, lonDeg, elevM) {
+    this._run(function (stel) {
+      stel.core.observer.latitude = latDeg * D2R;
+      stel.core.observer.longitude = lonDeg * D2R;
+      stel.core.observer.elevation = elevM || 0;
+    });
+  },
+
+  // Observer time. utc is a Modified Julian Date.
+  setTimeUnixMs: function (ms) {
+    this._run(function (stel) { stel.core.observer.utc = mjdFromUnixMs(ms); });
+  },
+  setTimeNow: function () { this.setTimeUnixMs(Date.now()); },
+
+  // Centre (and gently fly) the view on an equatorial (ICRF, J2000) coordinate.
+  centerRaDec: function (raDeg, decDeg, fovDeg) {
+    this._run(function (stel) {
+      var pos = stel.s2c(raDeg * D2R, decDeg * D2R); // ICRF cartesian
+      stel.lookAt(pos, 0.8);
+      if (fovDeg) stel.core.fov = fovDeg * D2R;
+    });
+  },
+
+  setFov: function (fovDeg) {
+    this._run(function (stel) { stel.core.fov = fovDeg * D2R; });
+  },
+
+  // Toggle a named sky layer on/off. Keeps the engine's attribute paths in one place.
+  setLayer: function (name, on) {
+    this._run(function (stel) {
+      var c = stel.core;
+      switch (name) {
+        case 'atmosphere': c.atmosphere.visible = on; break;
+        case 'landscape': c.landscapes.visible = on; break;
+        case 'azimuthalGrid': c.lines.azimuthal.visible = on; break;
+        case 'equatorialGrid': c.lines.equatorial.visible = on; break;
+        case 'constellationLines': c.constellations.lines_visible = on; break;
+        case 'constellationArt': c.constellations.images_visible = on; break;
+        case 'dsos': c.dsos.visible = on; break;
+        case 'dss': c.dss.visible = on; break;
+        default: console.warn('araStel.setLayer: unknown layer', name);
+      }
+    });
+  },
+
+  // Draw (or replace) the camera framing overlay: a cols×rows mosaic of FOV
+  // rectangles centred on (raDeg,decDeg), each fovWidthDeg×fovHeightDeg, the whole
+  // grid rotated by rotationDeg (position angle) about the centre. A GeoJSON
+  // polygon layer in ICRF degrees. clearFraming() removes it.
+  setFraming: function (spec) {
+    var self = this;
+    this._run(function (stel) {
+      if (!self._framing) self._framing = stel.core.add('geojson', { data: { type: 'FeatureCollection', features: [] } });
+      var features = araStel._mosaicPolygons(spec);
+      // setData is the engine's fast path (see geojson.js); fall back to .data if absent.
+      if (typeof setData === 'function') setData(self._framing, { type: 'FeatureCollection', features: features });
+      else self._framing.data = { type: 'FeatureCollection', features: features };
+    });
+  },
+  clearFraming: function () {
+    var self = this;
+    this._run(function (stel) {
+      if (self._framing) { if (typeof setData === 'function') setData(self._framing, { type: 'FeatureCollection', features: [] }); else self._framing.data = { type: 'FeatureCollection', features: [] }; }
+    });
+  },
+
+  // Build the mosaic rectangle polygons in ICRF [ra,dec] degrees. RA spacing is
+  // scaled by 1/cos(dec) so panels stay square on the sky near the poles.
+  _mosaicPolygons: function (s) {
+    var cols = s.cols > 0 ? s.cols : 1, rows = s.rows > 0 ? s.rows : 1;
+    var ovFrac = Math.min(0.95, Math.max(0, (s.overlapPct || 0) / 100));
+    var stepW = s.fovWidthDeg * (1 - ovFrac), stepH = s.fovHeightDeg * (1 - ovFrac);
+    var th = (s.rotationDeg || 0) * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
+    var cosd = Math.cos(s.decDeg * D2R); if (Math.abs(cosd) < 1e-6) cosd = cosd < 0 ? -1e-6 : 1e-6;
+    var hw = s.fovWidthDeg / 2, hh = s.fovHeightDeg / 2;
+    var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]]; // closed ring
+    var features = [];
+    for (var iy = 0; iy < rows; iy++) {
+      for (var ix = 0; ix < cols; ix++) {
+        var gx = (ix - (cols - 1) / 2) * stepW, gy = (iy - (rows - 1) / 2) * stepH;
+        var ring = corners.map(function (p) {
+          var lx = p[0] + gx, ly = p[1] + gy;
+          var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
+          return [s.raDeg + dx / cosd, s.decDeg + dy];
+        });
+        features.push({ type: 'Feature', properties: { fill: [0.3, 0.8, 1.0, 0.12], stroke: [0.3, 0.8, 1.0, 0.9] }, geometry: { type: 'Polygon', coordinates: [ring] } });
+      }
+    }
+    return features;
+  }
+};
+window.araStel = araStel;
+
+// ── Engine bootstrap ─────────────────────────────────────────────────────────
+StelWebEngine({
+  wasmFile: './stellarium-web-engine.wasm',
+  canvas: document.getElementById('stel-canvas'),
+  translateFn: function (domain, str) { return str; },
+  onReady: function (stel) {
+    var core = stel.core;
+    var base = './skydata/';
+    core.stars.addDataSource({ url: base + 'stars' });
+    core.skycultures.addDataSource({ url: base + 'skycultures/western', key: 'western' });
+    core.dsos.addDataSource({ url: base + 'dso' });
+    core.landscapes.addDataSource({ url: base + 'landscapes/guereins', key: 'guereins' });
+    core.milkyway.addDataSource({ url: base + 'surveys/milkyway' });
+    core.minor_planets.addDataSource({ url: base + 'mpcorb.dat', key: 'mpc_asteroids' });
+    core.planets.addDataSource({ url: base + 'surveys/sso/moon', key: 'moon' });
+    core.planets.addDataSource({ url: base + 'surveys/sso/sun', key: 'sun' });
+    core.planets.addDataSource({ url: base + 'surveys/sso/moon', key: 'default' });
+    core.comets.addDataSource({ url: base + 'CometEls.txt', key: 'mpc_comets' });
+    core.satellites.addDataSource({ url: base + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
+
+    stel.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
+    stel.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
+
+    // Sensible planning defaults: real horizon + atmosphere + constellation lines.
+    core.atmosphere.visible = true;
+    core.landscapes.visible = true;
+    core.constellations.lines_visible = true;
+    core.dsos.visible = true;
+
+    araStel._onReady(stel);
+  }
+});
+</script>
+</body>
+</html>

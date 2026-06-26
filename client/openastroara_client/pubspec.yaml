@@ -71,6 +71,45 @@ flutter:
   # and assets/aladin/ALADIN_LICENSE.md for provenance.
   assets:
     - assets/aladin/aladin.js
+    # §36 Planetarium — the Stellarium Web Engine (AGPL, built from pristine
+    # source: github.com/Stellarium/stellarium-web-engine; see
+    # assets/stellarium/LICENSE-AGPL-3.0.txt) plus the offline sky data served to
+    # the CEF webview by StellariumServer. Flutter doesn't recurse into asset
+    # directories, so each leaf dir is listed; regenerate with
+    #   (cd assets/stellarium && find . -type d | sort)
+    - assets/stellarium/
+    - assets/stellarium/skydata/
+    - assets/stellarium/skydata/dso/
+    - assets/stellarium/skydata/dso/Norder0/
+    - assets/stellarium/skydata/dso/Norder0/Dir0/
+    - assets/stellarium/skydata/landscapes/
+    - assets/stellarium/skydata/landscapes/guereins/
+    - assets/stellarium/skydata/landscapes/guereins/Norder0/
+    - assets/stellarium/skydata/landscapes/guereins/Norder0/Dir0/
+    - assets/stellarium/skydata/skycultures/
+    - assets/stellarium/skydata/skycultures/western/
+    - assets/stellarium/skydata/skycultures/western/illustrations/
+    - assets/stellarium/skydata/stars/
+    - assets/stellarium/skydata/stars/Norder0/
+    - assets/stellarium/skydata/stars/Norder0/Dir0/
+    - assets/stellarium/skydata/stars/Norder1/
+    - assets/stellarium/skydata/stars/Norder1/Dir0/
+    - assets/stellarium/skydata/surveys/
+    - assets/stellarium/skydata/surveys/milkyway/
+    - assets/stellarium/skydata/surveys/milkyway/Norder0/
+    - assets/stellarium/skydata/surveys/milkyway/Norder0/Dir0/
+    - assets/stellarium/skydata/surveys/sso/
+    - assets/stellarium/skydata/surveys/sso/moon/
+    - assets/stellarium/skydata/surveys/sso/moon/Norder0/
+    - assets/stellarium/skydata/surveys/sso/moon/Norder0/Dir0/
+    - assets/stellarium/skydata/surveys/sso/sun/
+    - assets/stellarium/skydata/surveys/sso/sun/Norder0/
+    - assets/stellarium/skydata/surveys/sso/sun/Norder0/Dir0/
+    - assets/stellarium/static/
+    - assets/stellarium/static/fonts/
+    - assets/stellarium/static/imgs/
+    - assets/stellarium/static/imgs/symbols/
+    - assets/stellarium/static/js/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

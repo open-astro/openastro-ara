@@ -6,7 +6,7 @@ import '../../state/profile_management_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
-import '../../widgets/sky_atlas/aladin_view.dart';
+import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../../widgets/sky_atlas/data_manager_modal.dart';
 import '../../widgets/sky_atlas/sky_data_missing_banner.dart';
 import '../../widgets/sky_atlas/tonight_sky_panel.dart';
@@ -78,7 +78,7 @@ class _PlanningTabState extends ConsumerState<PlanningTab> {
             children: [
               // Tonight's Sky view: a ranked side list; tapping an object recentres the atlas.
               if (mode == SkyAtlasMode.tonightsSky) const TonightSkyPanel(),
-              const Expanded(child: AladinView()),
+              const Expanded(child: StellariumView()),
               // Frame mode slides the framing controls in beside the atlas.
               if (frameMode)
                 _FramingParamsPanel(
