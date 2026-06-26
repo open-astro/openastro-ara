@@ -184,6 +184,28 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("GetTonightSky");
 
+        planning.MapGet("/horizon",
+                (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
+                    // `at` (ISO 8601) is optional → "now". A PRESENT-but-unparseable value is a client
+                    // error (400), mirroring /tonight, not a silent "now".
+                    System.DateTimeOffset atUtc;
+                    if (at is null) {
+                        atUtc = System.DateTimeOffset.UtcNow;
+                    } else if (System.DateTimeOffset.TryParse(at,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            out var parsed)) {
+                        atUtc = parsed;
+                    } else {
+                        return Results.Problem("Query parameter 'at' must be an ISO-8601 date-time.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    return Results.Ok(svc.GetHorizon(atUtc));
+                })
+            .Produces<HorizonDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("GetPlanningHorizon");
+
         // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 

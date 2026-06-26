@@ -120,6 +120,32 @@ public sealed class TonightSkyService : ITonightSkyService {
         return Rad2Deg(Math.Asin(Math.Clamp(sinAlt, -1.0, 1.0)));
     }
 
+    /// <summary>The equatorial (J2000) coordinates of the point at horizontal altitude/azimuth
+    /// <paramref name="altDeg"/>/<paramref name="azDeg"/> (azimuth measured from north, increasing
+    /// eastward) seen from <paramref name="latDeg"/> at local sidereal time <paramref name="lstDeg"/>.
+    /// The inverse of <see cref="AltitudeFromHourAngleDeg"/>; used to draw the local horizon as a curve
+    /// on the equatorial atlas. At a geographic pole (cos φ ≈ 0) or for a point at a celestial pole
+    /// (cos δ ≈ 0) the hour angle is degenerate, so it is pinned to 0 rather than dividing by zero.</summary>
+    internal static (double RaDeg, double DecDeg) EquatorialFromAltAz(
+            double altDeg, double azDeg, double latDeg, double lstDeg) {
+        var alt = Deg2Rad(altDeg);
+        var az = Deg2Rad(azDeg);
+        var lat = Deg2Rad(latDeg);
+        var sinDec = Math.Sin(alt) * Math.Sin(lat) + Math.Cos(alt) * Math.Cos(lat) * Math.Cos(az);
+        var dec = Math.Asin(Math.Clamp(sinDec, -1.0, 1.0));
+        var cosLat = Math.Cos(lat);
+        var cosDec = Math.Cos(dec);
+        double hourAngleDeg;
+        if (Math.Abs(cosLat) < 1e-9 || Math.Abs(cosDec) < 1e-9) {
+            hourAngleDeg = 0.0;
+        } else {
+            var sinH = -Math.Sin(az) * Math.Cos(alt) / cosDec;
+            var cosH = (Math.Sin(alt) - Math.Sin(dec) * Math.Sin(lat)) / (cosDec * cosLat);
+            hourAngleDeg = Rad2Deg(Math.Atan2(sinH, cosH));
+        }
+        return (Mod360(lstDeg - hourAngleDeg), Rad2Deg(dec));
+    }
+
     /// <summary>The object's highest possible altitude from this latitude — geometric upper culmination
     /// on the meridian: 90 − |φ − δ|, clamped to [−90, 90]. Ignores atmospheric refraction and the
     /// lower-transit altitude of circumpolar objects; sufficient as a ranking hint, not a precise rise.</summary>

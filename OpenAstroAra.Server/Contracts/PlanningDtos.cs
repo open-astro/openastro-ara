@@ -31,3 +31,29 @@ public sealed record TonightSkyObjectDto(
     double DecDeg,
     double AltitudeDeg,
     double MaxAltitudeDeg);
+
+/// <summary>
+/// §36 Planning horizon — the observer's local horizon projected onto the equatorial
+/// (RA/Dec, J2000) sky for the active profile's site at a given instant, so the Aladin
+/// atlas can overlay it. Aladin is an equatorial atlas, not an alt/az planetarium, so the
+/// horizon is a curve in RA/Dec that depends on the site latitude and the local sidereal
+/// time. <see cref="Points"/> is that curve — the site's horizon altitude
+/// (<see cref="HorizonAltitudeDeg"/>, the profile's DefaultHorizonAltitudeDeg) swept
+/// through azimuth 0→360° and closed back on itself; a target below it is "down".
+/// <see cref="Zenith"/> is the point straight up (dec = latitude, RA = local sidereal time);
+/// <see cref="Cardinals"/> marks N/E/S/W on the horizon for orientation.
+/// </summary>
+public sealed record HorizonDto(
+    DateTimeOffset AtUtc,
+    double HorizonAltitudeDeg,
+    double LocalSiderealTimeDeg,
+    HorizonPointDto Zenith,
+    IReadOnlyList<HorizonPointDto> Points,
+    IReadOnlyList<CardinalPointDto> Cardinals);
+
+/// <summary>One point on the horizon overlay: its equatorial (J2000) coordinates and the
+/// azimuth (degrees, north = 0, increasing eastward) it was projected from.</summary>
+public sealed record HorizonPointDto(double RaDeg, double DecDeg, double AzimuthDeg);
+
+/// <summary>A labelled compass point (N/E/S/W) sitting on the horizon, for orienting the overlay.</summary>
+public sealed record CardinalPointDto(string Label, double RaDeg, double DecDeg);

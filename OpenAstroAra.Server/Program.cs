@@ -353,6 +353,10 @@ public partial class Program {
         builder.Services.AddSingleton<ITonightSkyService>(sp =>
             new TonightSkyService(sp.GetRequiredService<IProfileStore>()));
 
+        // §36 Planning horizon — projects the site's local horizon onto the equatorial sky for the Aladin overlay.
+        builder.Services.AddSingleton<IHorizonService>(sp =>
+            new HorizonService(sp.GetRequiredService<IProfileStore>()));
+
         // §55.1 multi-device WILMA settings sync — opaque UI-preferences blob under {profileDir}/client-settings.json.
         // profileDir-scoped, so registered here alongside the other profile-dir-backed services.
         builder.Services.AddSingleton<IClientSettingsService>(sp =>
