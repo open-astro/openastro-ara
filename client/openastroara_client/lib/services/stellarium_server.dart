@@ -93,7 +93,9 @@ class StellariumServer {
         try {
           final raw = await utf8.decodeStream(request);
           final decoded = jsonDecode(raw);
-          if (decoded is Map<String, Object?>) _events.add(decoded);
+          if (decoded is Map) {
+            _events.add(Map<String, Object?>.from(decoded));
+          }
         } catch (_) {/* ignore malformed event bodies */}
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.statusCode = HttpStatus.ok;
