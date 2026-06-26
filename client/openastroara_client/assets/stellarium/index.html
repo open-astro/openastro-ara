@@ -63,10 +63,14 @@ var araStel = {
   setTimeNow: function () { this.setTimeUnixMs(Date.now()); },
 
   // Centre (and gently fly) the view on an equatorial (ICRF, J2000) coordinate.
+  // lookAt() wants the direction in the OBSERVED (alt/az) frame, so convert the
+  // ICRF direction through the current observer first (the 4th vector component
+  // defaults to 0 = "at infinity", correct for a star/DSO direction).
   centerRaDec: function (raDeg, decDeg, fovDeg) {
     this._run(function (stel) {
-      var pos = stel.s2c(raDeg * D2R, decDeg * D2R); // ICRF cartesian
-      stel.lookAt(pos, 0.8);
+      var icrf = stel.s2c(raDeg * D2R, decDeg * D2R);
+      var observed = stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', icrf);
+      stel.lookAt(observed, 0.8);
       if (fovDeg) stel.core.fov = fovDeg * D2R;
     });
   },

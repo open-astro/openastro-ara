@@ -6,6 +6,7 @@ import 'package:webview_cef/webview_cef.dart';
 
 import '../../services/stellarium_server.dart';
 import '../../state/sky_atlas/site_location_state.dart';
+import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
@@ -85,6 +86,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       _pendingSite = null;
       if (site != null) unawaited(_runSite(controller, site));
       unawaited(_runTimeNow(controller));
+      // Re-apply the selected target on (re)mount so returning to Planning keeps
+      // the view on it.
+      final target = ref.read(skyTargetProvider);
+      if (target != null) unawaited(_runCenter(controller, target));
       // Keep the clock live (~30 s cadence is smooth for a planning view).
       _clock = Timer.periodic(const Duration(seconds: 30), (_) {
         final c = _controller;
@@ -123,6 +128,23 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     }
   }
 
+  // Fly the view to a chosen target. A target set before the browser is ready is
+  // re-applied from the provider on init (the provider retains the last one).
+  void _centerOn(SkyTarget target) {
+    final controller = _controller;
+    if (controller == null) return;
+    unawaited(_runCenter(controller, target));
+  }
+
+  Future<void> _runCenter(WebViewController controller, SkyTarget t) async {
+    try {
+      await controller.executeJavaScript(
+          'window.araStel && window.araStel.centerRaDec(${t.raDeg}, ${t.decDeg});');
+    } catch (e, st) {
+      debugPrint('StellariumView: centerRaDec failed: $e\n$st');
+    }
+  }
+
   @override
   void dispose() {
     _clock?.cancel();
@@ -136,6 +158,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     ref.listen<AsyncValue<SiteLocation?>>(siteLocationProvider, (_, next) {
       final site = next.asData?.value;
       if (site != null) _setSite(site);
+    });
+    // A chosen target (Tonight's Sky, search) → fly the planetarium to it.
+    ref.listen<SkyTarget?>(skyTargetProvider, (_, target) {
+      if (target != null) _centerOn(target);
     });
 
     if (_unavailable) return const _Unavailable();
