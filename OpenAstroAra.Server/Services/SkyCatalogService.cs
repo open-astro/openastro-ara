@@ -52,7 +52,7 @@ namespace OpenAstroAra.Server.Services {
 
         private sealed record DsoRow(
             string Name, double RaDeg, double DecDeg, double? Mag, string Type,
-            bool HasM, bool HasNgc, bool HasIc);
+            bool HasM, bool HasNgc, bool HasIc, bool HasCaldwell);
 
         private sealed record CatalogDef(string Id, string Name, string Group, Func<DsoRow, bool> Match);
 
@@ -60,6 +60,7 @@ namespace OpenAstroAra.Server.Services {
         // PN planetary nebula, HII/EmN emission, RfN reflection, Neb/Cl+N nebula, SNR remnant.
         private static readonly IReadOnlyList<CatalogDef> Defs = new[] {
             new CatalogDef("messier", "Messier", "Catalogs", r => r.HasM),
+            new CatalogDef("caldwell", "Caldwell", "Catalogs", r => r.HasCaldwell),
             new CatalogDef("ngc", "NGC", "Catalogs", r => r.HasNgc),
             new CatalogDef("ic", "IC", "Catalogs", r => r.HasIc),
             new CatalogDef("galaxies", "Galaxies", "Types",
@@ -117,7 +118,8 @@ namespace OpenAstroAra.Server.Services {
                 var cols = header.Split(';');     // OpenNGC is semicolon-separated
                 int Idx(string n) => Array.IndexOf(cols, n);
                 int iName = Idx("Name"), iType = Idx("Type"), iRa = Idx("RA"), iDec = Idx("Dec"),
-                    iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC");
+                    iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC"),
+                    iId = Idx("Identifiers");
                 if (iName < 0 || iRa < 0 || iDec < 0) {
                     return _dsos = list;          // unexpected layout — nothing to place
                 }
@@ -139,7 +141,8 @@ namespace OpenAstroAra.Server.Services {
                     }
                     var type = iType >= 0 && f.Length > iType ? f[iType] : "";
                     bool Has(int i) => i >= 0 && f.Length > i && !string.IsNullOrWhiteSpace(f[i]);
-                    list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc)));
+                    bool hasCaldwell = iId >= 0 && f.Length > iId && HasCaldwellId(f[iId]);
+                    list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell));
                 }
                 return _dsos = list;
             }
@@ -147,6 +150,21 @@ namespace OpenAstroAra.Server.Services {
 
         private static bool TryNum(string s, out double v) =>
             double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v);
+
+        // Caldwell membership: OpenNGC lists it in the comma-separated Identifiers as "C NNN"
+        // (e.g. "C 020"). Require the space + all-digits tail so other C-prefixed ids don't match.
+        private static bool HasCaldwellId(string identifiers) {
+            foreach (var raw in identifiers.Split(',')) {
+                var t = raw.Trim();
+                if (t.Length > 2 && t[0] == 'C' && t[1] == ' ') {
+                    var rest = t.Substring(2).Trim();
+                    if (rest.Length > 0 && rest.All(char.IsDigit)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
 
         // OpenNGC RA "HH:MM:SS.s" (hours) → decimal degrees.
         private static bool TryRaToDeg(string s, out double deg) {
