@@ -82,6 +82,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(DarkLibraryStateDto))]
 [JsonSerializable(typeof(CatalogObjectDto))]
 [JsonSerializable(typeof(IReadOnlyList<CatalogObjectDto>))]
+[JsonSerializable(typeof(CatalogInfoDto))]
+[JsonSerializable(typeof(IReadOnlyList<CatalogInfoDto>))]
 [JsonSerializable(typeof(DataManagerActiveDownloadDto))]
 [JsonSerializable(typeof(DataManagerStateDto))]
 [JsonSerializable(typeof(DataPackageDto))]

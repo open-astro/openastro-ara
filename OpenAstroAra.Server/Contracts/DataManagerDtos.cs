@@ -64,6 +64,14 @@ public sealed record CatalogObjectDto(
     double DecDeg,
     double? Magnitude);
 
+/// <summary>§36 Catalogs — one selectable catalog/filter the planetarium can overlay
+/// (Messier, NGC, IC, or a type filter like "Galaxies"). <see cref="Group"/> buckets them
+/// in the UI ("Catalogs", "Types", later "AL Programs").</summary>
+public sealed record CatalogInfoDto(
+    string Id,
+    string Name,
+    string Group);
+
 // ─── Bug report (§54) ───────────────────────────────────────────────────────
 
 public sealed record BugReportPreparationDto(
