@@ -593,27 +593,35 @@ function catMeta(id) { return _catList && _catList.filter(function (c) { return 
 function catLimit(id) { var c = catMeta(id); return (c && c.group === 'Types') ? 400 : 500; }
 function catColor(id) { var c = catMeta(id); return (c && c.group === 'Types') ? '#ffb74d' : '#7ee787'; }
 
+// '__dsos' is the engine's full deep-sky layer (off by default); the rest are
+// server catalogs/type-filters drawn as overlays.
+function catIsOn(id) {
+  if (id === '__dsos') { return !!(stel && stel.core.dsos.visible); }
+  return !!(catData[id] && catData[id].on);
+}
+
 function renderCatalogPanel() {
   var el = document.getElementById('cat-list');
+  // "All deep sky" is always available (engine-side, no server data needed).
+  var html = '<div class="cat-group">Display</div>'
+    + '<div class="cat-row" data-cat="__dsos"><span>All deep sky</span><span class="dot' + (catIsOn('__dsos') ? ' on' : '') + '"></span></div>';
   if (!_catList || !_catList.length) {
-    el.innerHTML = '<div class="empty">No catalog data yet. Install the OpenNGC catalog in the Data Manager, then reopen this.</div>';
-    return;
-  }
-  var groups = {};
-  _catList.forEach(function (c) { (groups[c.group] = groups[c.group] || []).push(c); });
-  var html = '';
-  Object.keys(groups).forEach(function (g) {
-    html += '<div class="cat-group">' + escapeHtml(g) + '</div>';
-    groups[g].forEach(function (c) {
-      var on = catData[c.id] && catData[c.id].on;
-      html += '<div class="cat-row" data-cat="' + escapeHtml(c.id) + '"><span>' + escapeHtml(c.name) + '</span><span class="dot' + (on ? ' on' : '') + '"></span></div>';
+    html += '<div class="empty">Install the OpenNGC catalog in the Data Manager to add Messier, Caldwell, NGC/IC and type filters.</div>';
+  } else {
+    var groups = {};
+    _catList.forEach(function (c) { (groups[c.group] = groups[c.group] || []).push(c); });
+    Object.keys(groups).forEach(function (g) {
+      html += '<div class="cat-group">' + escapeHtml(g) + '</div>';
+      groups[g].forEach(function (c) {
+        html += '<div class="cat-row" data-cat="' + escapeHtml(c.id) + '"><span>' + escapeHtml(c.name) + '</span><span class="dot' + (catIsOn(c.id) ? ' on' : '') + '"></span></div>';
+      });
     });
-  });
+  }
   el.innerHTML = html;
   Array.prototype.forEach.call(el.querySelectorAll('.cat-row'), function (row) {
     row.onclick = function () {
       var id = row.dataset.cat;
-      var on = !(catData[id] && catData[id].on);
+      var on = !catIsOn(id);
       toggleCatalog(id, on);
       row.querySelector('.dot').classList.toggle('on', on);
     };
@@ -621,6 +629,7 @@ function renderCatalogPanel() {
 }
 
 function toggleCatalog(id, on) {
+  if (id === '__dsos') { stel.core.dsos.visible = on; stel.core.dsos.hints_visible = on; return; }
   if (!catData[id]) {
     var layer = stel.createLayer({ z: 60, visible: true });
     var geo = stel.createObj('geojson'); layer.add(geo);
@@ -976,7 +985,10 @@ StelWebEngine({
     core.landscapes.visible = false;
     core.lines.azimuthal.visible = true;
     core.constellations.lines_visible = true;
-    core.dsos.visible = true;
+    // Start with a clean sky: no deep-sky objects until the user picks catalogs
+    // (or "All deep sky") in the Catalogs panel — their choice, not a default dump.
+    core.dsos.visible = false;
+    core.dsos.hints_visible = false;
     // Pristine dark sky (Bortle 1) so the DSS2 survey renders bright and punchy
     // — the engine dims DSS by the sky-brightness/light-pollution model, which at
     // the default Bortle 3 washes the photographic imagery out. DSS2 is on by
