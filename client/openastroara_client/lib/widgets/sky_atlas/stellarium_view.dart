@@ -120,7 +120,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       messenger.showSnackBar(const SnackBar(
-        content: Text('Connect to a server before adding to a sequence.'),
+        content: Text('Connect to a server before creating a Run.'),
         backgroundColor: AraColors.accentError,
       ));
       return;
@@ -131,10 +131,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         buildSlewTargetBody(raDeg: raDeg, decDeg: decDeg, targetName: targetName),
       );
     } catch (e, st) {
-      debugPrint('[planning] framing add-to-sequence failed: $e\n$st');
+      debugPrint('[planning] framing create-run failed: $e\n$st');
       if (mounted) {
         messenger.showSnackBar(const SnackBar(
-          content: Text("Couldn't add to a sequence. Check the connection and try again."),
+          content: Text("Couldn't create the Run. Check the connection and try again."),
           backgroundColor: AraColors.accentError,
         ));
       }
@@ -143,7 +143,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     if (!mounted) return;
     ref.invalidate(sequenceListProvider);
     messenger.showSnackBar(
-      SnackBar(content: Text('Added "$targetName" to a new sequence.')),
+      SnackBar(content: Text('Created a Run for "$targetName".')),
     );
   }
 

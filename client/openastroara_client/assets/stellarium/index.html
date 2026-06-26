@@ -184,7 +184,7 @@
     <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
   </div>
   <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
-  <button id="f-add">Add to sequence</button>
+  <button id="f-add">Create Run</button>
   <div id="f-msg"></div>
 </div>
 
@@ -718,7 +718,7 @@ function wireFrame() {
 function addFrameToSequence() {
   if (frameRaDeg == null) return;
   var btn = document.getElementById('f-add');
-  btn.disabled = true; btn.textContent = 'Adding…';
+  btn.disabled = true; btn.textContent = 'Creating…';
   fetch('/araevent', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -726,11 +726,11 @@ function addFrameToSequence() {
       rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || 'Target',
     }),
   }).then(function (r) {
-    btn.textContent = r.ok ? 'Added ✓' : 'Add failed';
+    btn.textContent = r.ok ? 'Created ✓' : "Couldn't create";
   }).catch(function () {
-    btn.textContent = 'Add failed';
+    btn.textContent = "Couldn't create";
   }).then(function () {
-    setTimeout(function () { btn.textContent = 'Add to sequence'; renderFramePanel(); }, 1800);
+    setTimeout(function () { btn.textContent = 'Create Run'; renderFramePanel(); }, 1800);
   });
 }
 
