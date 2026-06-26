@@ -245,6 +245,10 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(TonightSkyObjectDto))]
 [JsonSerializable(typeof(IReadOnlyList<TonightSkyObjectDto>))]
 [JsonSerializable(typeof(HorizonDto))]
+[JsonSerializable(typeof(HorizonPointDto))]
+[JsonSerializable(typeof(CardinalPointDto))]
+[JsonSerializable(typeof(IReadOnlyList<HorizonPointDto>))]
+[JsonSerializable(typeof(IReadOnlyList<CardinalPointDto>))]
 [JsonSerializable(typeof(IReadOnlyList<SequenceTemplateDto>))]
 [JsonSerializable(typeof(IReadOnlyList<WsEventEnvelopeDto>))]
 // §28 catalog needs JSON-blob round-trip for the per-frame `tags` column.
