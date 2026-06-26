@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -38,6 +39,16 @@ class StellariumServer {
   /// Queue a command (a JSON string) for the page to pick up on its next poll.
   void pushCommand(String json) => _commands.add(json);
 
+  // ── page → Flutter reverse channel ──────────────────────────────────────
+  // Some actions originate in the page but must be handled by Flutter (e.g.
+  // "add this framed target to the sequence" — the daemon's NINA sequence DOM is
+  // built by Dart code, not the page). The page POSTs a JSON event to
+  // [POST /araevent]; we surface it on [events] for the widget to act on.
+  final _events = StreamController<Map<String, Object?>>.broadcast();
+
+  /// Events the planetarium page posts back to Flutter (e.g. `addToSequence`).
+  Stream<Map<String, Object?>> get events => _events.stream;
+
   static Future<StellariumServer>? _instance;
 
   /// Start (or return the already-running) loopback asset server.
@@ -72,6 +83,20 @@ class StellariumServer {
             ContentType('application', 'json', charset: 'utf-8');
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.write(cmd);
+        await response.close();
+        return;
+      }
+      // Page → Flutter reverse channel: the page POSTs a JSON event here; we
+      // decode it and surface it on [events]. Always answer 200 so the page's
+      // fetch resolves; a malformed body is just dropped.
+      if (path == '/araevent') {
+        try {
+          final raw = await utf8.decodeStream(request);
+          final decoded = jsonDecode(raw);
+          if (decoded is Map<String, Object?>) _events.add(decoded);
+        } catch (_) {/* ignore malformed event bodies */}
+        response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+        response.statusCode = HttpStatus.ok;
         await response.close();
         return;
       }
@@ -184,6 +209,7 @@ class StellariumServer {
   }
 
   Future<void> dispose() async {
+    await _events.close();
     await _server.close(force: true);
     if (identical(await _instance, this)) _instance = null;
   }

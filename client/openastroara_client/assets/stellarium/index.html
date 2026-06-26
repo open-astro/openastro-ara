@@ -60,6 +60,21 @@
   #tonight .row:hover { background: rgba(60,60,72,.75); border-color: #4fc3f7; }
   #tonight .row .nm { font-size: 13px; }
   #tonight .row .meta { font-size: 11px; color: #9ab; font-variant-numeric: tabular-nums; }
+  /* Framing */
+  #frame { left: 12px; top: 56px; width: 224px; background: rgba(15,15,18,.92);
+    border: 1px solid #444; border-radius: 8px; padding: 9px 11px 11px; display: none; }
+  #frame .fhdr { display: flex; align-items: center; font-size: 13px; color: #cfe; margin-bottom: 6px; }
+  #frame .fhdr .close { margin-left: auto; border: none; background: none; padding: 2px 6px; font-size: 13px; }
+  #frame .frow { display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+  #frame .frow > span.k { color: #9ab; }
+  #frame .stp { display: flex; align-items: center; gap: 5px; }
+  #frame .stp button { width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1; }
+  #frame .stp .val { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+  #frame #f-fov { font-variant-numeric: tabular-nums; color: #cfe; }
+  #frame #f-add { width: 100%; margin-top: 9px; font-size: 12px; padding: 7px 0; }
+  #frame #f-add:disabled { opacity: .4; cursor: default; }
+  #frame #f-msg { font-size: 11px; color: #9ab; margin-top: 7px; min-height: 14px; line-height: 1.3; }
+  #frame .warn { color: #ffb74d; }
 </style>
 </head>
 <body>
@@ -89,6 +104,26 @@
   <button data-layer="constellationArt">Art</button>
   <button data-layer="dss" class="on">DSS2</button>
   <button data-layer="equatorialGrid">Eq grid</button>
+  <button id="frame-btn" title="Camera framing overlay">Frame</button>
+</div>
+
+<!-- Framing overlay controls: draws the connected camera's field of view (from
+     your optics profile) on the selected target, with a position-angle rotation
+     and an N×M mosaic, then adds it to the sequence. -->
+<div id="frame" class="ui">
+  <div class="fhdr">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
+  <div class="frow"><span class="k">Rotation</span>
+    <div class="stp"><button id="f-rot-">−</button><span class="val" id="f-rot">0°</span><button id="f-rot+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Mosaic</span>
+    <div class="stp"><button id="f-mos-">−</button><span class="val" id="f-mos">1 × 1</span><button id="f-mos+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Overlap</span>
+    <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
+  <button id="f-add">Add to sequence</button>
+  <div id="f-msg"></div>
 </div>
 
 <div id="pad" class="ui pad" style="display:none">
@@ -207,6 +242,9 @@ function renderInfo(sel) {
   // RA/Dec (JNOW) + Az/Alt, from the ICRF position.
   try {
     var radec = sel.getInfo('radec');
+    // Frame this object too (J2000), so the framing box follows the selection.
+    var icrf = stel.c2s(radec);
+    setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target');
     var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
     var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
     selRaHours = ra * 12 / Math.PI;
@@ -348,11 +386,12 @@ function parseRaDec(q) {
 var FRAME_FOV = 6 * D2R;
 
 // Point the view at a J2000 RA/Dec (no object to select — e.g. raw coordinates).
-function pointRaDec(raDeg, decDeg) {
+function pointRaDec(raDeg, decDeg, name) {
   var v = stel.s2c(raDeg * D2R, decDeg * D2R);
   var obs = stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', v);
   stel.lookAt(obs, 0.6);
   stel.zoomTo(FRAME_FOV, 0.6);
+  setFrameTarget(raDeg, decDeg, name || '');
 }
 
 function selectObject(o) {
@@ -412,6 +451,151 @@ function toggleTonight() {
   if (open && !_tonightLoaded) { _tonightLoaded = true; loadTonight(); }
 }
 
+// ---- Framing overlay (camera FOV box + mosaic) --------------------------
+// Draws the connected camera's field of view as a GeoJSON rectangle on the sky
+// at the framed target, with a position-angle rotation and an N×M mosaic.
+// Optics come from the daemon profile; the box is in J2000 sky coordinates so
+// the engine projects + field-rotates it correctly as you pan/zoom. Every
+// control is a button stepper — CEF can't take in-page keyboard text.
+var frameOn = false;
+var frameRotDeg = 0, frameCols = 1, frameRows = 1, frameOverlap = 10;
+var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
+var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
+var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
+
+function loadOptics() {
+  if (!API) { optics = { ok: false }; return Promise.resolve(optics); }
+  return fetch(API + '/api/v1/profile/optics')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (o) {
+      if (!o) { optics = { ok: false }; return optics; }
+      var fl = +o.focal_length_mm, red = +o.reducer_factor || 1;
+      var sw = +o.sensor_width_px, sh = +o.sensor_height_px, ps = +o.pixel_size_um;
+      if (!(fl > 0) || !(sw > 0) || !(sh > 0) || !(ps > 0)) { optics = { ok: false }; return optics; }
+      var arcsec = 206.265 * ps / (fl * red);           // arcsec per pixel
+      optics = { ok: true, fovWDeg: sw * arcsec / 3600, fovHDeg: sh * arcsec / 3600 };
+      return optics;
+    })
+    .catch(function () { optics = { ok: false }; return optics; });
+}
+
+// Remember the target to frame (J2000). Called on every search / selection so
+// the box follows whatever you're looking at.
+function setFrameTarget(raDeg, decDeg, name) {
+  frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = name || '';
+  if (frameOn) updateFrame();
+}
+
+// Build the GeoJSON for the box (or mosaic grid) in J2000 RA/Dec. Each panel is
+// a rectangle of the camera FOV, offset on the mosaic grid and rotated by the
+// position angle in the local tangent plane (RA scaled by 1/cos(dec)).
+function mosaicData() {
+  var th = frameRotDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
+  var cosd = Math.cos(frameDecDeg * D2R) || 1e-6;
+  var w = optics.fovWDeg, h = optics.fovHDeg, hw = w / 2, hh = h / 2;
+  var ov = Math.max(0, Math.min(90, frameOverlap)) / 100;
+  var stepW = w * (1 - ov), stepH = h * (1 - ov);
+  var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]];
+  var multi = frameCols * frameRows > 1;
+  var feats = [];
+  for (var iy = 0; iy < frameRows; iy++) {
+    for (var ix = 0; ix < frameCols; ix++) {
+      var gx = (ix - (frameCols - 1) / 2) * stepW;
+      var gy = (iy - (frameRows - 1) / 2) * stepH;
+      var ring = corners.map(function (c) {
+        var lx = c[0] + gx, ly = c[1] + gy;
+        var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
+        return [frameRaDeg + dx / cosd, frameDecDeg + dy];
+      });
+      feats.push({
+        type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: {
+          stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
+          fill: '#4fc3f7', 'fill-opacity': multi ? 0.04 : 0.07,
+        },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features: feats };
+}
+
+function updateFrame() {
+  if (!_frameGeo) { _frameGeo = stel.createObj('geojson'); stel.core.add(_frameGeo); }
+  var show = frameOn && optics && optics.ok && frameRaDeg != null;
+  _frameGeo.data = show ? mosaicData() : { type: 'FeatureCollection', features: [] };
+  renderFramePanel();
+}
+
+function fmtFovDeg(x) { return x >= 1 ? x.toFixed(2) + '°' : (x * 60).toFixed(1) + "'"; }
+function renderFramePanel() {
+  document.getElementById('f-rot').textContent = frameRotDeg + '°';
+  document.getElementById('f-mos').textContent = frameCols + ' × ' + frameRows;
+  document.getElementById('f-ov').textContent = frameOverlap + '%';
+  var fovEl = document.getElementById('f-fov');
+  if (optics && optics.ok) {
+    var w = optics.fovWDeg, h = optics.fovHDeg;
+    var base = fmtFovDeg(w) + ' × ' + fmtFovDeg(h);
+    if (frameCols * frameRows > 1) {
+      var ov = frameOverlap / 100;
+      var tw = w * (1 + (frameCols - 1) * (1 - ov)), thh = h * (1 + (frameRows - 1) * (1 - ov));
+      base += '  (' + fmtFovDeg(tw) + ' × ' + fmtFovDeg(thh) + ')';
+    }
+    fovEl.textContent = base;
+  } else { fovEl.textContent = '—'; }
+  var msg = document.getElementById('f-msg');
+  if (!optics || !optics.ok) msg.innerHTML = '<span class="warn">Set your camera + focal length in Options → Imaging → Optics.</span>';
+  else if (frameRaDeg == null) msg.textContent = 'Search or tap a target to frame it.';
+  else msg.textContent = frameTargetName ? ('Framing ' + cleanName(frameTargetName)) : '';
+  document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
+}
+
+function toggleFrame(on) {
+  frameOn = (on == null) ? !frameOn : on;
+  document.getElementById('frame-btn').classList.toggle('on', frameOn);
+  document.getElementById('frame').style.display = frameOn ? '' : 'none';
+  if (frameOn && optics == null) loadOptics().then(updateFrame);
+  else updateFrame();
+}
+
+function wireFrame() {
+  document.getElementById('frame-btn').onclick = function () { toggleFrame(); };
+  document.getElementById('f-close').onclick = function () { toggleFrame(false); };
+  function bump(get, set, redraw) { return function () { set(get()); if (redraw) updateFrame(); else renderFramePanel(); }; }
+  document.getElementById('f-rot-').onclick = function () { frameRotDeg = (frameRotDeg + 355) % 360; updateFrame(); };
+  document.getElementById('f-rot+').onclick = function () { frameRotDeg = (frameRotDeg + 5) % 360; updateFrame(); };
+  document.getElementById('f-mos-').onclick = function () {
+    if (frameCols > 1 || frameRows > 1) { frameCols = Math.max(1, frameCols - 1); frameRows = Math.max(1, frameRows - 1); updateFrame(); }
+  };
+  document.getElementById('f-mos+').onclick = function () {
+    frameCols = Math.min(8, frameCols + 1); frameRows = Math.min(8, frameRows + 1); updateFrame();
+  };
+  document.getElementById('f-ov-').onclick = function () { frameOverlap = Math.max(0, frameOverlap - 5); updateFrame(); };
+  document.getElementById('f-ov+').onclick = function () { frameOverlap = Math.min(50, frameOverlap + 5); updateFrame(); };
+  document.getElementById('f-add').onclick = addFrameToSequence;
+}
+
+// Add the framed target to the sequence. The page can't build the daemon's NINA
+// sequence DOM itself, so it hands the target back to Flutter (which owns the
+// sequence builder) through the loopback server's reverse event channel.
+function addFrameToSequence() {
+  if (frameRaDeg == null) return;
+  var btn = document.getElementById('f-add');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  fetch('/araevent', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'addToSequence', raDeg: frameRaDeg, decDeg: frameDecDeg,
+      rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || 'Target',
+    }),
+  }).then(function (r) {
+    btn.textContent = r.ok ? 'Added ✓' : 'Add failed';
+  }).catch(function () {
+    btn.textContent = 'Add failed';
+  }).then(function () {
+    setTimeout(function () { btn.textContent = 'Add to sequence'; renderFramePanel(); }, 1800);
+  });
+}
+
 // Poll the loopback server for Flutter-originated commands (search, Tonight,
 // goto) and dispatch them. ~3/sec is plenty and stays cheap on loopback.
 function pollCmd() {
@@ -452,7 +636,7 @@ function wireControls() {
   document.getElementById('p-left').onclick = function () { panBy(-step, 0); };
   document.getElementById('p-right').onclick = function () { panBy(step, 0); };
 
-  Array.prototype.forEach.call(document.querySelectorAll('#layers button'), function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll('#layers button[data-layer]'), function (b) {
     b.onclick = function () { var on = !b.classList.contains('on'); b.classList.toggle('on', on); setLayer(b.dataset.layer, on); };
   });
 
@@ -513,6 +697,7 @@ StelWebEngine({
     wireControls();
     wireSelection();
     wireCmds();
+    wireFrame();
   }
 });
 </script>

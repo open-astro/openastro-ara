@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
+import '../../models/sequence/slew_target_body.dart';
 import '../../services/stellarium_server.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -32,6 +34,7 @@ Future<void> _ensureManagerInitialized() =>
 class _StellariumViewState extends ConsumerState<StellariumView> {
   WebViewController? _controller;
   StellariumServer? _server;
+  StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
   bool _unavailable = false;
 
@@ -56,6 +59,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     try {
       final server = await StellariumServer.start();
       _server = server;
+      // Handle events the page posts back (e.g. framing → add-to-sequence).
+      _eventSub = server.events.listen(_onPageEvent);
       // The page self-initialises from these query params: the observer site, and
       // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
       final site = ref.read(siteLocationProvider).asData?.value ??
@@ -92,9 +97,54 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 
   @override
   void dispose() {
+    unawaited(_eventSub?.cancel());
     _searchCtrl.dispose();
     unawaited(_controller?.dispose());
     super.dispose();
+  }
+
+  // Handle an event the planetarium page posted back through the loopback
+  // server's reverse channel. Today the only event is the framing panel's
+  // "add to sequence": the page owns the framing geometry but not the daemon's
+  // NINA sequence DOM, so it hands the target's coordinates here and we build +
+  // create the sequence with the shared Dart builder.
+  Future<void> _onPageEvent(Map<String, Object?> event) async {
+    if (event['type'] != 'addToSequence') return;
+    final raDeg = (event['raDeg'] as num?)?.toDouble();
+    final decDeg = (event['decDeg'] as num?)?.toDouble();
+    if (raDeg == null || decDeg == null) return;
+    final name = (event['name'] as String?)?.trim();
+    final targetName = (name == null || name.isEmpty) ? 'Target' : name;
+
+    final api = ref.read(sequenceApiProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Connect to a server before adding to a sequence.'),
+        backgroundColor: AraColors.accentError,
+      ));
+      return;
+    }
+    try {
+      await api.create(
+        targetName,
+        buildSlewTargetBody(raDeg: raDeg, decDeg: decDeg, targetName: targetName),
+      );
+    } catch (e, st) {
+      debugPrint('[planning] framing add-to-sequence failed: $e\n$st');
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text("Couldn't add to a sequence. Check the connection and try again."),
+          backgroundColor: AraColors.accentError,
+        ));
+      }
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(sequenceListProvider);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Added "$targetName" to a new sequence.')),
+    );
   }
 
   // CEF can't receive keyboard text or a JS-bridge call in the multi-process
