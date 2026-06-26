@@ -360,7 +360,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         double? apertureMm = null;
         try { apertureMm = OpticsMmFromMetres(c.ApertureDiameter); } catch (Exception) { apertureMm = null; }
         bool canMoveAxis;
-        try { canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary); } catch (Exception) { canMoveAxis = false; }
+        // The direction pad drives BOTH axes (N/S = secondary, E/W = primary, corners = both), so
+        // gate it conservatively on the mount supporting MoveAxis on each — a mount that can move only
+        // one axis would silently fail the other half of the pad. The rate list below is read from the
+        // primary axis and assumed representative of both (the near-universal case for GEM/alt-az mounts).
+        try {
+            canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary) && c.CanMoveAxis(TelescopeAxis.Secondary);
+        } catch (Exception) {
+            canMoveAxis = false;
+        }
         return new TelescopeCapabilitiesDto(
             CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
             CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,

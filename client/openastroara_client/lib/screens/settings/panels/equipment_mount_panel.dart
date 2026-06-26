@@ -339,18 +339,31 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     final rate = _rate;
     if (rate == null) return;
     for (final (axis, sign) in moves) {
-      ref.read(mountProvider.notifier).moveAxis(axis: axis, rate: sign * rate);
+      _dispatchAxis(axis, sign * rate);
     }
   }
 
   void _stop(Set<int> axes) {
-    // Best-effort: never let a teardown-time stop throw (ref may be deactivating).
+    for (final axis in axes) {
+      _dispatchAxis(axis, 0);
+    }
+  }
+
+  // Fire-and-forget one MoveAxis. The whole point is to not await (a release must
+  // not block the UI), so the returned Future's errors are caught here — both the
+  // synchronous `ref.read` (which can throw if the provider is deactivating during
+  // teardown) and the async HTTP send (e.g. a momentary network drop on release).
+  // A genuinely lost stop is covered by the deadman: the centre Stop / AbortSlew
+  // halts all axes. (A server-side MoveAxis watchdog that auto-stops on a lost
+  // heartbeat is a possible future hardening — tracked separately.)
+  void _dispatchAxis(int axis, double rate) {
     try {
-      for (final axis in axes) {
-        ref.read(mountProvider.notifier).moveAxis(axis: axis, rate: 0);
-      }
+      ref
+          .read(mountProvider.notifier)
+          .moveAxis(axis: axis, rate: rate)
+          .catchError((_) => false);
     } catch (_) {
-      // ignore — AbortSlew (Stop) is the backstop
+      // ref.read threw during teardown — nothing to do; Stop/AbortSlew is the backstop.
     }
   }
 
