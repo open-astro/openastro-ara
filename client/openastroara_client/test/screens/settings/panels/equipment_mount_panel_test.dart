@@ -43,6 +43,9 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
 MountStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
   bool canSetTracking = true,
+  bool canFindHome = false,
+  bool canMoveAxis = false,
+  List<double> axisRates = const [],
   bool tracking = false,
   bool parked = false,
   String runtimeState = 'idle',
@@ -57,7 +60,9 @@ MountStatus _status({
         canPark: true,
         canUnpark: true,
         canSetTracking: canSetTracking,
-        canFindHome: false,
+        canFindHome: canFindHome,
+        canMoveAxis: canMoveAxis,
+        axisRatesDegPerSec: axisRates,
       ),
       runtimeState: runtimeState,
       rightAscensionHours: 5.5,
@@ -112,6 +117,26 @@ void main() {
     expect(api.calls, contains('command:park:enabled=null'));
   });
 
+  testWidgets('Home is hidden when the mount cannot find home', (tester) async {
+    await _pump(tester, _status(canFindHome: false));
+    expect(find.widgetWithText(OutlinedButton, 'Home'), findsNothing);
+  });
+
+  testWidgets('Home shows and sends the home command when supported',
+      (tester) async {
+    final api = await _pump(tester, _status(canFindHome: true));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Home'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:home:enabled=null'));
+  });
+
+  testWidgets('Home is disabled while parked', (tester) async {
+    await _pump(tester, _status(canFindHome: true, parked: true));
+    final home = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Home'));
+    expect(home.onPressed, isNull); // must unpark before homing
+  });
+
   testWidgets('parked mount shows Unpark and hides Park; tracking disabled',
       (tester) async {
     await _pump(tester, _status(parked: true));
@@ -127,5 +152,31 @@ void main() {
     await _pump(tester, null);
     expect(find.text('No mount connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
+  });
+
+  testWidgets('manual control surfaces GoTo + speed + direction pad for a capable mount',
+      (tester) async {
+    await _pump(tester, _status(canMoveAxis: true, axisRates: const [1.0, 4.0]));
+    expect(find.text('Manual control'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'GoTo'), findsOneWidget);
+    expect(find.text('Speed'), findsOneWidget);
+    expect(find.text('4°/s'), findsOneWidget); // a reported rate chip
+    expect(find.byIcon(Icons.north), findsOneWidget); // a direction-pad button
+    expect(find.byIcon(Icons.stop), findsOneWidget); // the centre stop
+  });
+
+  testWidgets('the direction pad is hidden when the mount cannot MoveAxis',
+      (tester) async {
+    await _pump(tester, _status(canMoveAxis: false));
+    expect(find.byIcon(Icons.north), findsNothing);
+  });
+
+  testWidgets('GoTo dispatches a slew to the entered coordinates', (tester) async {
+    final api = await _pump(tester, _status(canMoveAxis: true, axisRates: const [4.0]));
+    await tester.enterText(find.widgetWithText(TextField, 'RA (h)'), '5.5');
+    await tester.enterText(find.widgetWithText(TextField, 'Dec (°)'), '-12.25');
+    await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
+    await tester.pumpAndSettle();
+    expect(api.calls.any((c) => c.startsWith('command:slew')), isTrue);
   });
 }

@@ -94,6 +94,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void FindHomeAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new TelescopeService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.FindHomeAsync(null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void MoveAxisAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new TelescopeService();
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.MoveAxisAsync(0, 1.5, CancellationToken.None));
+        }
+
+        [Test]
         public void SetTrackingAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new TelescopeService();
             Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetTrackingAsync(true, CancellationToken.None));

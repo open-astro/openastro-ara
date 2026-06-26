@@ -142,9 +142,18 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
-        ArgumentNullException.ThrowIfNull(request);
+        // No ArgumentNullException.ThrowIfNull(request): the /park endpoint substitutes
+        // `request ?? new ParkRequestDto()`, so request is never null here, and the Reason field is
+        // unused by the park itself — the param is kept only for the interface contract.
+        _ = request;
         var client = RequireConnectedClient();
-        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => c.Park()), CancellationToken.None);
+        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
+            // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
+            // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
+            // issue the park. The park itself stops tracking once the mount reaches the park position.
+            TryEnableTracking(c);
+            c.Park();
+        }), CancellationToken.None);
         return Task.FromResult(Accepted("telescope.park", idempotencyKey));
     }
 
@@ -154,12 +163,38 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         return Task.FromResult(Accepted("telescope.unpark", idempotencyKey));
     }
 
+    public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        // FindHome blocks until the mount reaches its home switch; run it off the request
+        // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
+        // AtHome when it settles. The panel gates this on CanFindHome.
+        // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
+        // workaround executes fine from a stationary state — verified on-device, the mount moves
+        // to home with tracking off — so homing doesn't need the motors pre-engaged.
+        _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
+        return Task.FromResult(Accepted("telescope.findhome", idempotencyKey));
+    }
+
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct) {
         var client = RequireConnectedClient();
         // Prompt synchronous write off the request thread (blocking ASCOM HTTP PUT), then reflect.
         // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
         // already cancelled, which would silently skip the write — the same hazard as the abort path.
         await Task.Run(() => client.Tracking = enabled, CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    public async Task MoveAxisAsync(int axis, double rate, CancellationToken ct) {
+        // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
+        // must always run to completion even if the request token cancelled, or a dropped token could
+        // strand the mount in motion (the same panic-stop reasoning as AbortSlewAsync). Discarded
+        // explicitly so the omission reads as deliberate, not an oversight.
+        _ = ct;
+        var client = RequireConnectedClient();
+        // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
+        // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
+        // backstop that halts all axes.
+        await Task.Run(() => client.MoveAxis((TelescopeAxis)axis, rate), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
 
@@ -330,11 +365,81 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { focalLengthMm = OpticsMmFromMetres(c.FocalLength); } catch (Exception) { focalLengthMm = null; }
         double? apertureMm = null;
         try { apertureMm = OpticsMmFromMetres(c.ApertureDiameter); } catch (Exception) { apertureMm = null; }
+        bool canMoveAxis;
+        // The direction pad drives BOTH axes (N/S = secondary, E/W = primary, corners = both), so
+        // gate it conservatively on the mount supporting MoveAxis on each — a mount that can move only
+        // one axis would silently fail the other half of the pad. The rate list below is read from the
+        // primary axis and assumed representative of both (the near-universal case for GEM/alt-az mounts).
+        try {
+            canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary) && c.CanMoveAxis(TelescopeAxis.Secondary);
+        } catch (Exception) {
+            canMoveAxis = false;
+        }
         return new TelescopeCapabilitiesDto(
             CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
             CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,
             SupportedSiderealRates: ReadSiderealRates(c),
-            FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm);
+            FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm,
+            CanMoveAxis: canMoveAxis,
+            MoveAxisRatesDegPerSec: ReadAxisRates(c));
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis; an empty list (no manual-control speeds offered) is the correct degraded result rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
+    private static List<double> ReadAxisRates(AlpacaTelescope c) {
+        // The direction pad drives BOTH axes with the same picked rate, but ASCOM allows each axis its
+        // own rate range, so a primary-only rate could be rejected on the secondary (N/S). Offer only
+        // rates the secondary axis can also honour: take the primary set, cap it at the secondary's
+        // max. Each read is best-effort (returns empty/null on a NotImplemented throw).
+        var primary = ReadAxisRateSet(c, TelescopeAxis.Primary);
+        if (primary.Count == 0) {
+            return [];
+        }
+        var secondaryMax = ReadAxisMaxRate(c, TelescopeAxis.Secondary);
+        var usable = secondaryMax is > 0
+            ? primary.Where(r => r <= secondaryMax.Value + 1e-9).ToList()
+            : [.. primary];
+        // If the secondary is so much slower that nothing survives the cap, fall back to the primary
+        // set rather than show no speeds at all (better a rate the secondary may clamp than none).
+        return usable.Count > 0 ? usable : [.. primary];
+    }
+
+    // Both [Minimum, Maximum] endpoints of every rate band for one axis (discrete rate → Min==Max),
+    // ascending + deduped; empty when the axis NotImplements MoveAxis/AxisRates.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis for the axis; an empty set (no speeds offered) is the correct degraded result. CA1031's log-and-recover boundary applies.")]
+    private static SortedSet<double> ReadAxisRateSet(AlpacaTelescope c, TelescopeAxis axis) {
+        var rates = new SortedSet<double>();
+        try {
+            foreach (IRate rate in c.AxisRates(axis)) {
+                if (rate.Minimum > 0) {
+                    rates.Add(rate.Minimum);
+                }
+                if (rate.Maximum > 0) {
+                    rates.Add(rate.Maximum);
+                }
+            }
+        } catch (Exception) {
+            return [];
+        }
+        return rates;
+    }
+
+    // The fastest rate one axis can move (max of its bands' maxima), or null if unreadable.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements the axis; null (no cap applied) is the correct degraded result. CA1031's log-and-recover boundary applies.")]
+    private static double? ReadAxisMaxRate(AlpacaTelescope c, TelescopeAxis axis) {
+        double max = 0;
+        try {
+            foreach (IRate rate in c.AxisRates(axis)) {
+                if (rate.Maximum > max) {
+                    max = rate.Maximum;
+                }
+            }
+        } catch (Exception) {
+            return null;
+        }
+        return max > 0 ? max : null;
     }
 
     /// <summary>Convert an ASCOM optics property (metres) to mm for the wire, or

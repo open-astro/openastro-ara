@@ -50,7 +50,35 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   /// Release the mount from the parked state.
   Future<bool> unpark() => performAction((api) => api.command('unpark'));
 
-  /// Abort an in-progress slew (panic stop).
+  /// Slew the mount to its home position (homing switch). Gated on canFindHome.
+  Future<bool> findHome() => performAction((api) => api.command('home'));
+
+  /// GoTo: slew to the given RA (hours) / Dec (degrees), or sync the pointing
+  /// model to them when [sync] is true. Gated on canSlew / canSync.
+  Future<bool> slewTo(double raHours, double decDegrees, {bool sync = false}) =>
+      performAction(
+        (api) => api.command('slew', {
+          'right_ascension_hours': raHours,
+          'declination_degrees': decDegrees,
+          'sync': sync,
+        }),
+        pollAfter: true,
+      );
+
+  /// Manual nudge on one axis (0 = primary/RA-Az, 1 = secondary/Dec-Alt) at [rate]
+  /// deg/sec; rate 0 stops that axis. The direction pad calls this on press (rate)
+  /// and release (0). Deliberately bypasses the [performAction] re-entrancy guard
+  /// and runs the client directly so the STOP can never be dropped while a start is
+  /// still in flight — a dropped stop would leave the mount running. [abortSlew] is
+  /// the backstop. Returns true if dispatched (false only when no active server).
+  Future<bool> moveAxis({required int axis, required double rate}) async {
+    final api = readClient();
+    if (api == null) return false;
+    await api.command('moveaxis', {'axis': axis, 'rate': rate});
+    return true;
+  }
+
+  /// Abort an in-progress slew (panic stop) — also halts a manual axis move.
   Future<bool> abortSlew() => performAction((api) => api.command('abort'));
 }
 

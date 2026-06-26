@@ -10,6 +10,11 @@ class MountCapabilities {
   final bool canUnpark;
   final bool canSetTracking;
   final bool canFindHome;
+  final bool canMoveAxis;
+
+  /// Primary-axis slew rates the mount offers (deg/sec, ascending), for the manual
+  /// direction pad's speed picker. Empty when the mount reports none.
+  final List<double> axisRatesDegPerSec;
 
   const MountCapabilities({
     required this.canSlew,
@@ -18,6 +23,8 @@ class MountCapabilities {
     required this.canUnpark,
     required this.canSetTracking,
     required this.canFindHome,
+    this.canMoveAxis = false,
+    this.axisRatesDegPerSec = const [],
   });
 
   factory MountCapabilities.fromJson(Map<String, dynamic> json) => MountCapabilities(
@@ -27,6 +34,11 @@ class MountCapabilities {
         canUnpark: json['can_unpark'] as bool? ?? false,
         canSetTracking: json['can_set_tracking'] as bool? ?? false,
         canFindHome: json['can_find_home'] as bool? ?? false,
+        canMoveAxis: json['can_move_axis'] as bool? ?? false,
+        axisRatesDegPerSec: (json['move_axis_rates_deg_per_sec'] as List<dynamic>?)
+                ?.map((e) => (e as num).toDouble())
+                .toList() ??
+            const [],
       );
 
   @override
@@ -38,11 +50,21 @@ class MountCapabilities {
           other.canPark == canPark &&
           other.canUnpark == canUnpark &&
           other.canSetTracking == canSetTracking &&
-          other.canFindHome == canFindHome);
+          other.canFindHome == canFindHome &&
+          other.canMoveAxis == canMoveAxis &&
+          _listEq(other.axisRatesDegPerSec, axisRatesDegPerSec));
+
+  static bool _listEq(List<double> a, List<double> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 
   @override
-  int get hashCode =>
-      Object.hash(canSlew, canSync, canPark, canUnpark, canSetTracking, canFindHome);
+  int get hashCode => Object.hash(canSlew, canSync, canPark, canUnpark,
+      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(axisRatesDegPerSec));
 }
 
 /// Live status of the connected ASCOM Telescope

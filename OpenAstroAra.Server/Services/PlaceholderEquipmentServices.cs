@@ -82,7 +82,10 @@ public sealed class PlaceholderTelescopeService : ITelescopeService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("telescope.park", idempotencyKey));
     public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("telescope.unpark", idempotencyKey));
+    public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("telescope.findhome", idempotencyKey));
     public Task SetTrackingAsync(bool enabled, CancellationToken ct) => Task.CompletedTask;
+    public Task MoveAxisAsync(int axis, double rate, CancellationToken ct) => Task.CompletedTask;
     public Task AbortSlewAsync(CancellationToken ct) => Task.CompletedTask;
 }
 

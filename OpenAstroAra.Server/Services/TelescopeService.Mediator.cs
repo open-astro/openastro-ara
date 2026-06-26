@@ -201,7 +201,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var targetDec = target.Dec;
         return RunMountOpAsync("telescope.slew",
             c => {
-                TryEnableTrackingForSlew(c);
+                TryEnableTracking(c);
                 // Async goto: returns immediately, Slewing goes true; the settle-wait below confirms
                 // arrival. Same call the REST SlewInBackground path uses.
                 c.SlewToCoordinatesAsync(targetRa, targetDec);
@@ -212,7 +212,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
-        RunMountOpAsync("telescope.park", c => c.Park(),
+        // TryEnableTracking before Park here too (not just the REST path): some mounts (iOptron) won't
+        // park from a stationary state, so an end-of-sequence auto-park would silently no-op otherwise.
+        RunMountOpAsync("telescope.park", c => { TryEnableTracking(c); c.Park(); },
             c => ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
@@ -347,8 +349,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort pre-slew aid: ASCOM requires Tracking for an equatorial goto, but a mount that rejects the write may still accept the slew (or fail it with its own clear error, which RunMountOpAsync logs); swallowing the write failure keeps the slew attempt authoritative. CA1031's log-and-recover boundary applies.")]
-    private void TryEnableTrackingForSlew(AlpacaTelescope client) {
+        Justification = "Best-effort pre-op aid: a goto needs Tracking, and some mounts (e.g. iOptron) won't park from a stationary/home state — both want Tracking enabled first. A mount that rejects the write may still accept the op (or fail it with its own clear error, which the op path logs); swallowing the write failure keeps the op attempt authoritative. CA1031's log-and-recover boundary applies.")]
+    private void TryEnableTracking(AlpacaTelescope client) {
         try {
             if (!client.Tracking) {
                 client.Tracking = true;
