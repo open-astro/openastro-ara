@@ -26,6 +26,16 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
     final notifier = ref.read(filterWheelProvider.notifier);
     final labels = ref.watch(filterWheelLabelsProvider);
     final labelsN = ref.read(filterWheelLabelsProvider.notifier);
+    // While a wheel is connected its own driver slot names are authoritative and
+    // shown live above, so the local "Slot labels" section is pure duplication —
+    // only surface it for offline sequence authoring. Show it ONLY on a resolved
+    // status that is genuinely absent/disconnected; loading and (transient) error
+    // keep it hidden so a single failed poll can't flash the editor in over a
+    // still-registered wheel.
+    final showSlotLabels = status.maybeWhen(
+      data: (s) => s == null || !s.isConnected,
+      orElse: () => false,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -51,18 +61,21 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         ),
         // Local slot labels — the user's filter names used when authoring
         // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
-        // independent of the connected wheel's own names shown live above.
-        const SettingsSectionHeader('Slot labels (for sequences)'),
-        for (var slot = 1; slot <= labels.slotCount; slot++)
-          EditableTextRow(
-            label: 'Slot $slot',
-            helpKey: slot == 1 ? 'eq.filterwheel.slot_labels' : null,
-            currentValue: labels.labelAt(slot),
-            getCanonical: () =>
-                ref.read(filterWheelLabelsProvider).labelAt(slot),
-            parse: (s) => labelsN.setLabel(slot, s),
-            hint: 'Empty = unused',
-          ),
+        // independent of the connected wheel's own names shown live above. Hidden
+        // while a wheel is connected (its driver names take over) to avoid duplication.
+        if (showSlotLabels) ...[
+          const SettingsSectionHeader('Slot labels (for sequences)'),
+          for (var slot = 1; slot <= labels.slotCount; slot++)
+            EditableTextRow(
+              label: 'Slot $slot',
+              helpKey: slot == 1 ? 'eq.filterwheel.slot_labels' : null,
+              currentValue: labels.labelAt(slot),
+              getCanonical: () =>
+                  ref.read(filterWheelLabelsProvider).labelAt(slot),
+              parse: (s) => labelsN.setLabel(slot, s),
+              hint: 'Empty = unused',
+            ),
+        ],
       ],
     );
   }
@@ -100,11 +113,15 @@ class _FilterWheelBody extends ConsumerWidget {
         if (status.slots.isEmpty)
           const Text('This filter wheel reports no slots.')
         else
+          // Focus offsets are only meaningful when the driver actually reports
+          // them; most wheels (e.g. ZWO EFW) report 0 for every slot, so hide the
+          // column entirely rather than show a row of "focus offset 0".
           for (final slot in status.slots)
             _SlotRow(
               slot: slot,
               isCurrent: slot.position == status.currentSlot,
               disabled: status.isMoving,
+              showOffset: status.slots.any((s) => s.focusOffset != 0),
               onSelect: () => _select(context, ref, slot),
             ),
       ],
@@ -134,36 +151,56 @@ class _SlotRow extends StatelessWidget {
   final FilterSlot slot;
   final bool isCurrent;
   final bool disabled;
+  // Whether to show the focus-offset column (any slot has a non-zero offset).
+  final bool showOffset;
   final VoidCallback onSelect;
   const _SlotRow({
     required this.slot,
     required this.isCurrent,
     required this.disabled,
+    required this.showOffset,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final label = slot.name.isEmpty ? 'Slot ${slot.position}' : slot.name;
+    final secondary = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: AraColors.textSecondary);
+    // Same empty-name fallback the "Current filter" header uses, so an unnamed
+    // slot reads consistently in both places.
+    final name = slot.name.isEmpty ? 'Slot ${slot.position}' : slot.name;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          // Fixed-width leading slot so every row's label starts at the same x;
-          // the active row shows a check, others reserve the space.
+          // The driver's own slot number (0-indexed, matching "Current filter
+          // (slot N)") — highlighted for the active slot.
           SizedBox(
-            width: 22,
+            width: 26,
+            child: Text(
+              '${slot.position}',
+              textAlign: TextAlign.center,
+              style: secondary?.copyWith(
+                  color: isCurrent
+                      ? AraColors.accentConnected
+                      : AraColors.textSecondary),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Fixed-width check slot so the name column starts at the same x on
+          // EVERY row — reserving the space whether or not this slot is active.
+          SizedBox(
+            width: 20,
             child: isCurrent
                 ? const Icon(Icons.check,
                     size: 16, color: AraColors.accentConnected)
                 : null,
           ),
-          Expanded(child: Text(label)),
-          Text('offset ${slot.focusOffset}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary)),
+          Expanded(child: Text(name)),
+          if (showOffset)
+            Text('focus offset ${slot.focusOffset}', style: secondary),
           const SizedBox(width: 12),
           TextButton(
             onPressed: (disabled || isCurrent) ? null : onSelect,
