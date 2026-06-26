@@ -6,6 +6,7 @@ import 'package:webview_cef/webview_cef.dart';
 
 import '../../services/stellarium_server.dart';
 import '../../state/imaging/fov_box.dart';
+import '../../state/sky_atlas/planning_time_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
@@ -86,7 +87,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       final site = _pendingSite ?? ref.read(siteLocationProvider).asData?.value;
       _pendingSite = null;
       if (site != null) unawaited(_runSite(controller, site));
-      unawaited(_runTimeNow(controller));
+      unawaited(_runTime(controller));
       // Re-apply the selected target on (re)mount so returning to Planning keeps
       // the view on it.
       final target = ref.read(skyTargetProvider);
@@ -95,7 +96,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // Keep the clock live (~30 s cadence is smooth for a planning view).
       _clock = Timer.periodic(const Duration(seconds: 30), (_) {
         final c = _controller;
-        if (c != null) unawaited(_runTimeNow(c));
+        if (c != null) unawaited(_runTime(c));
       });
     } catch (e, st) {
       debugPrint('StellariumView: browser init failed: $e\n$st');
@@ -122,11 +123,18 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     }
   }
 
-  Future<void> _runTimeNow(WebViewController controller) async {
+  // Push the planning time to the engine: a pinned time holds the sky there, else
+  // the live clock. Called on the periodic tick (so "live" keeps moving) and
+  // whenever the planning time changes.
+  Future<void> _runTime(WebViewController controller) async {
     try {
-      await controller.executeJavaScript('window.araStel && window.araStel.setTimeNow();');
+      final pinned = ref.read(planningTimeProvider);
+      final js = pinned == null
+          ? 'window.araStel && window.araStel.setTimeNow();'
+          : 'window.araStel && window.araStel.setTimeUnixMs(${pinned.millisecondsSinceEpoch});';
+      await controller.executeJavaScript(js);
     } catch (e, st) {
-      debugPrint('StellariumView: setTimeNow failed: $e\n$st');
+      debugPrint('StellariumView: set time failed: $e\n$st');
     }
   }
 
@@ -187,6 +195,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     ref.listen<AsyncValue<SiteLocation?>>(siteLocationProvider, (_, next) {
       final site = next.asData?.value;
       if (site != null) _setSite(site);
+    });
+    // Planning time changed (Now / Tonight / nudge) → repoint the engine clock.
+    ref.listen<DateTime?>(planningTimeProvider, (_, _) {
+      final c = _controller;
+      if (c != null) unawaited(_runTime(c));
     });
     // A chosen target (Tonight's Sky, search) → fly the planetarium to it, and
     // re-centre the framing overlay (if Frame mode is on) on the new target.
