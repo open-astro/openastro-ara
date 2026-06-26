@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
 import '../../services/stellarium_server.dart';
+import '../../state/imaging/fov_box.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
@@ -90,6 +91,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // the view on it.
       final target = ref.read(skyTargetProvider);
       if (target != null) unawaited(_runCenter(controller, target));
+      _updateFraming();
       // Keep the clock live (~30 s cadence is smooth for a planning view).
       _clock = Timer.periodic(const Duration(seconds: 30), (_) {
         final c = _controller;
@@ -145,6 +147,33 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     }
   }
 
+  // Draw the camera framing/mosaic overlay centred on the selected target, using
+  // the FOV box (size/rotation/mosaic) from the optics + framing controls. Cleared
+  // when Frame mode is off (no box) or nothing is selected.
+  void _updateFraming() {
+    final controller = _controller;
+    if (controller == null) return;
+    unawaited(_runFraming(
+        controller, ref.read(frameFovBoxProvider), ref.read(skyTargetProvider)));
+  }
+
+  Future<void> _runFraming(
+      WebViewController controller, FovBox? box, SkyTarget? target) async {
+    try {
+      if (box == null || target == null) {
+        await controller.executeJavaScript('window.araStel && window.araStel.clearFraming();');
+        return;
+      }
+      await controller.executeJavaScript('window.araStel && window.araStel.setFraming({'
+          'raDeg: ${target.raDeg}, decDeg: ${target.decDeg}, '
+          'fovWidthDeg: ${box.widthDeg}, fovHeightDeg: ${box.heightDeg}, '
+          'rotationDeg: ${box.rotationDeg}, cols: ${box.cols}, rows: ${box.rows}, '
+          'overlapPct: ${box.overlapPct}});');
+    } catch (e, st) {
+      debugPrint('StellariumView: framing update failed: $e\n$st');
+    }
+  }
+
   @override
   void dispose() {
     _clock?.cancel();
@@ -159,10 +188,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       final site = next.asData?.value;
       if (site != null) _setSite(site);
     });
-    // A chosen target (Tonight's Sky, search) → fly the planetarium to it.
+    // A chosen target (Tonight's Sky, search) → fly the planetarium to it, and
+    // re-centre the framing overlay (if Frame mode is on) on the new target.
     ref.listen<SkyTarget?>(skyTargetProvider, (_, target) {
       if (target != null) _centerOn(target);
+      _updateFraming();
     });
+    // The camera FOV box (size/rotation/mosaic, or null when Frame mode is off) →
+    // draw or clear the framing overlay.
+    ref.listen<FovBox?>(frameFovBoxProvider, (_, _) => _updateFraming());
 
     if (_unavailable) return const _Unavailable();
     final controller = _controller;

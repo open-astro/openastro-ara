@@ -99,27 +99,36 @@ var araStel = {
 
   // Draw (or replace) the camera framing overlay: a cols×rows mosaic of FOV
   // rectangles centred on (raDeg,decDeg), each fovWidthDeg×fovHeightDeg, the whole
-  // grid rotated by rotationDeg (position angle) about the centre. A GeoJSON
-  // polygon layer in ICRF degrees. clearFraming() removes it.
+  // grid rotated by rotationDeg (position angle) about the centre. Rendered as a
+  // GeoJSON polygon object (ICRF degrees) on its own layer; the object is recreated
+  // on each update (the simplest reliable way to restyle + reshape). Driven from
+  // Dart via StellariumView. clearFraming() removes it.
   setFraming: function (spec) {
     var self = this;
     this._run(function (stel) {
-      if (!self._framing) self._framing = stel.core.add('geojson', { data: { type: 'FeatureCollection', features: [] } });
-      var features = araStel._mosaicPolygons(spec);
-      // setData is the engine's fast path (see geojson.js); fall back to .data if absent.
-      if (typeof setData === 'function') setData(self._framing, { type: 'FeatureCollection', features: features });
-      else self._framing.data = { type: 'FeatureCollection', features: features };
+      if (!self._framingLayer) {
+        self._framingLayer = stel.createLayer({ id: 'ara-framing', z: 50, visible: true });
+      }
+      if (self._framingObj) { self._framingLayer.remove(self._framingObj); self._framingObj = null; }
+      self._framingObj = stel.createObj('geojson', {
+        data: { type: 'FeatureCollection', features: araStel._mosaicPolygons(spec) }
+      });
+      self._framingLayer.add(self._framingObj);
     });
   },
   clearFraming: function () {
     var self = this;
     this._run(function (stel) {
-      if (self._framing) { if (typeof setData === 'function') setData(self._framing, { type: 'FeatureCollection', features: [] }); else self._framing.data = { type: 'FeatureCollection', features: [] }; }
+      if (self._framingObj && self._framingLayer) {
+        self._framingLayer.remove(self._framingObj);
+        self._framingObj = null;
+      }
     });
   },
 
-  // Build the mosaic rectangle polygons in ICRF [ra,dec] degrees. RA spacing is
-  // scaled by 1/cos(dec) so panels stay square on the sky near the poles.
+  // Build the mosaic rectangle features in ICRF [ra,dec] degrees (the geojson
+  // layer's frame). RA spacing is scaled by 1/cos(dec) so panels stay square on
+  // the sky near the poles. Styling is per-feature properties (CSS hex + opacity).
   _mosaicPolygons: function (s) {
     var cols = s.cols > 0 ? s.cols : 1, rows = s.rows > 0 ? s.rows : 1;
     var ovFrac = Math.min(0.95, Math.max(0, (s.overlapPct || 0) / 100));
@@ -128,6 +137,7 @@ var araStel = {
     var cosd = Math.cos(s.decDeg * D2R); if (Math.abs(cosd) < 1e-6) cosd = cosd < 0 ? -1e-6 : 1e-6;
     var hw = s.fovWidthDeg / 2, hh = s.fovHeightDeg / 2;
     var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]]; // closed ring
+    var props = { 'stroke': '#4fc3f7', 'stroke-width': 2, 'stroke-opacity': 0.9, 'fill': '#4fc3f7', 'fill-opacity': 0.1 };
     var features = [];
     for (var iy = 0; iy < rows; iy++) {
       for (var ix = 0; ix < cols; ix++) {
@@ -137,7 +147,7 @@ var araStel = {
           var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
           return [s.raDeg + dx / cosd, s.decDeg + dy];
         });
-        features.push({ type: 'Feature', properties: { fill: [0.3, 0.8, 1.0, 0.12], stroke: [0.3, 0.8, 1.0, 0.9] }, geometry: { type: 'Polygon', coordinates: [ring] } });
+        features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [ring] } });
       }
     }
     return features;
