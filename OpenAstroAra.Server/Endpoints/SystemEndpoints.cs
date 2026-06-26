@@ -33,6 +33,27 @@ public static class SystemEndpoints {
             statusCode: StatusCodes.Status501NotImplemented,
             detail: $"{endpoint} is part of Phase 9's incremental implementation ({section}). Stub registered so the OpenAPI surface is stable; service wiring lands per area.");
 
+    /// <summary>Parses the optional <c>?at</c> ISO-8601 query parameter shared by the planning
+    /// endpoints. A null/absent value resolves to "now"; a present-but-unparseable value returns a 400
+    /// <see cref="IResult"/> rather than silently falling back to now, so the caller can't confuse a bad
+    /// timestamp with a real one. Returns null (with <paramref name="atUtc"/> set) on success.</summary>
+    private static IResult? TryParseAt(string? at, out System.DateTimeOffset atUtc) {
+        if (at is null) {
+            atUtc = System.DateTimeOffset.UtcNow;
+            return null;
+        }
+        if (System.DateTimeOffset.TryParse(at,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var parsed)) {
+            atUtc = parsed;
+            return null;
+        }
+        atUtc = default;
+        return Results.Problem("Query parameter 'at' must be an ISO-8601 date-time.",
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+
     public static IEndpointRouteBuilder MapSystemEndpoints(this IEndpointRouteBuilder app) {
         // ─── Bug report (§54) ───
         var bug = app.MapGroup("/api/v1/bugreport").WithTags("BugReport");
@@ -158,19 +179,8 @@ public static class SystemEndpoints {
         var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
         planning.MapGet("/tonight",
                 (ITonightSkyService svc, [FromQuery] int? limit, [FromQuery(Name = "at")] string? at) => {
-                    // `at` (ISO 8601) is optional → "now". A PRESENT-but-unparseable value is a client
-                    // error (400), not a silent "now" that the caller can't distinguish from a real one.
-                    System.DateTimeOffset atUtc;
-                    if (at is null) {
-                        atUtc = System.DateTimeOffset.UtcNow;
-                    } else if (System.DateTimeOffset.TryParse(at,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
-                            out var parsed)) {
-                        atUtc = parsed;
-                    } else {
-                        return Results.Problem("Query parameter 'at' must be an ISO-8601 date-time.",
-                            statusCode: StatusCodes.Status400BadRequest);
+                    if (TryParseAt(at, out var atUtc) is { } atError) {
+                        return atError;
                     }
                     // The service treats limit <= 0 as "return all" internally; don't expose that through the
                     // endpoint (the spec says limit >= 1) — a client passing 0 is a request error.
@@ -186,19 +196,8 @@ public static class SystemEndpoints {
 
         planning.MapGet("/horizon",
                 (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
-                    // `at` (ISO 8601) is optional → "now". A PRESENT-but-unparseable value is a client
-                    // error (400), mirroring /tonight, not a silent "now".
-                    System.DateTimeOffset atUtc;
-                    if (at is null) {
-                        atUtc = System.DateTimeOffset.UtcNow;
-                    } else if (System.DateTimeOffset.TryParse(at,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
-                            out var parsed)) {
-                        atUtc = parsed;
-                    } else {
-                        return Results.Problem("Query parameter 'at' must be an ISO-8601 date-time.",
-                            statusCode: StatusCodes.Status400BadRequest);
+                    if (TryParseAt(at, out var atUtc) is { } atError) {
+                        return atError;
                     }
                     return Results.Ok(svc.GetHorizon(atUtc));
                 })
