@@ -131,6 +131,10 @@ public static class EquipmentEndpoints {
         telescope.MapPost("/abort", async (ITelescopeService svc, CancellationToken ct) => {
             await svc.AbortSlewAsync(ct); return Results.Accepted();
         });
+        // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
+        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) => {
+            await svc.MoveAxisAsync(request.Axis, request.Rate, ct); return Results.Accepted();
+        });
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
         });

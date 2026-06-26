@@ -160,7 +160,12 @@ public sealed record TelescopeCapabilitiesDto(
     // many mounts NotImplement these. Surfaced so the §37 wizard can auto-fill
     // the optics screen from a connected mount.
     double? FocalLengthMm = null,
-    double? ApertureDiameterMm = null);
+    double? ApertureDiameterMm = null,
+    // Manual control: whether the mount supports MoveAxis on the primary axis, and
+    // the discrete primary-axis slew rates it offers (deg/sec, ascending) for the
+    // direction pad's speed selector. Empty when the mount reports no axis rates.
+    bool CanMoveAxis = false,
+    IReadOnlyList<double>? MoveAxisRatesDegPerSec = null);
 
 public sealed record TelescopeStateDto(
     string State,    // "idle" | "slewing" | "tracking" | "parked" | "unparking" | "error"
@@ -176,6 +181,10 @@ public sealed record SlewRequestDto(
     bool? Sync = false);
 
 public sealed record ParkRequestDto(string? Reason = null);
+
+// Manual axis move: Axis 0 = primary (RA/Az), 1 = secondary (Dec/Alt). Rate is deg/sec
+// (signed: positive/negative for the two directions); Rate 0 stops that axis.
+public sealed record MoveAxisRequestDto(int Axis, double Rate);
 
 // Tracking control: start/stop sidereal tracking (the set-point rate is the
 // device's current TrackingRate; this only toggles Tracking on/off).

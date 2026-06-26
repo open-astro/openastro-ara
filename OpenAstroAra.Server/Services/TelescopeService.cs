@@ -144,7 +144,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         var client = RequireConnectedClient();
-        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => c.Park()), CancellationToken.None);
+        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
+            // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
+            // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
+            // issue the park. The park itself stops tracking once the mount reaches the park position.
+            TryEnableTracking(c);
+            c.Park();
+        }), CancellationToken.None);
         return Task.FromResult(Accepted("telescope.park", idempotencyKey));
     }
 
@@ -169,6 +175,17 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
         // already cancelled, which would silently skip the write — the same hazard as the abort path.
         await Task.Run(() => client.Tracking = enabled, CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    public async Task MoveAxisAsync(int axis, double rate, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
+        // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
+        // backstop that halts all axes. CancellationToken.None (not ct): a stop must always send even
+        // if the request token cancelled — the same panic-stop reasoning as AbortSlewAsync — so a
+        // dropped token can never strand the mount in motion.
+        await Task.Run(() => client.MoveAxis((TelescopeAxis)axis, rate), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
 
@@ -339,11 +356,34 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { focalLengthMm = OpticsMmFromMetres(c.FocalLength); } catch (Exception) { focalLengthMm = null; }
         double? apertureMm = null;
         try { apertureMm = OpticsMmFromMetres(c.ApertureDiameter); } catch (Exception) { apertureMm = null; }
+        bool canMoveAxis;
+        try { canMoveAxis = c.CanMoveAxis(TelescopeAxis.Primary); } catch (Exception) { canMoveAxis = false; }
         return new TelescopeCapabilitiesDto(
             CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
             CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,
             SupportedSiderealRates: ReadSiderealRates(c),
-            FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm);
+            FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm,
+            CanMoveAxis: canMoveAxis,
+            MoveAxisRatesDegPerSec: ReadAxisRates(c));
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis; an empty list (no manual-control speeds offered) is the correct degraded result rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
+    private static List<double> ReadAxisRates(AlpacaTelescope c) {
+        try {
+            // IAxisRates is a non-generic IEnumerable of IRate; each IRate is a [Minimum, Maximum] band.
+            // Most mounts (incl. iOptron) report discrete rates as single-value bands, so the Maximum is
+            // the usable slew rate. Distinct + ascending gives the direction-pad speed picker a clean list.
+            var rates = new SortedSet<double>();
+            foreach (IRate rate in c.AxisRates(TelescopeAxis.Primary)) {
+                if (rate.Maximum > 0) {
+                    rates.Add(rate.Maximum);
+                }
+            }
+            return rates.ToList();
+        } catch (Exception) {
+            return [];
+        }
     }
 
     /// <summary>Convert an ASCOM optics property (metres) to mm for the wire, or
