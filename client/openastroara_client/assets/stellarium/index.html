@@ -178,11 +178,18 @@ StelWebEngine({
     stel.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
     stel.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 
-    // Sensible planning defaults: real horizon + atmosphere + constellation lines.
-    core.atmosphere.visible = true;
-    core.landscapes.visible = true;
+    // Planning defaults: a dark sky so targets are visible day or night (the
+    // atmosphere would wash them out in daylight), the azimuthal grid as a clean
+    // horizon / alt-az reference (instead of the photographic daytime ground),
+    // constellation lines + deep-sky objects on. A wide initial field shows a lot
+    // of sky at once (handy before the user navigates). Atmosphere + landscape are
+    // available as toggles for a realistic view.
+    core.atmosphere.visible = false;
+    core.landscapes.visible = false;
+    core.lines.azimuthal.visible = true;
     core.constellations.lines_visible = true;
     core.dsos.visible = true;
+    core.fov = 90 * D2R;
 
     araStel._onReady(stel);
   }
