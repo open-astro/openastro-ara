@@ -52,15 +52,6 @@ class StellariumServer {
       // Map the URL path onto an asset key. A bare "/" serves the bridge page.
       var path = request.uri.path;
       if (path == '/' || path.isEmpty) path = '/index.html';
-      // Diagnostic channel: the page POSTs status here (it's same-origin, so a
-      // plain fetch reaches us). Lets us see what the in-webview engine/bridge is
-      // doing without a JS console — invaluable for CEF debugging.
-      if (path == '/aralog') {
-        debugPrint('[ARALOG] ${request.uri.queryParameters['msg']}');
-        response.statusCode = HttpStatus.noContent;
-        await response.close();
-        return;
-      }
       // Reject any traversal attempt before touching the bundle.
       if (path.contains('..')) {
         response.statusCode = HttpStatus.forbidden;
@@ -73,12 +64,10 @@ class StellariumServer {
       try {
         data = await rootBundle.load(key);
       } catch (_) {
-        debugPrint('[SWE 404] $path');
         response.statusCode = HttpStatus.notFound;
         await response.close();
         return;
       }
-      if (range != null) debugPrint('[SWE range] $path  $range  (len=${data.lengthInBytes})');
       final bytes =
           data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       response.headers.contentType = _contentTypeFor(path);

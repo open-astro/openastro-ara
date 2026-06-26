@@ -31,6 +31,18 @@
   #pad .row { display: flex; gap: 6px; justify-content: center; }
   #layers { left: 12px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 320px; }
   #status { left: 50%; top: 50%; transform: translate(-50%,-50%); color: #888; }
+  #info { right: 12px; top: 60px; width: 264px; background: rgba(15,15,18,.88); border: 1px solid #444;
+    border-radius: 8px; padding: 10px 12px 12px; display: none; }
+  #info .close { position: absolute; right: 6px; top: 5px; border: none; background: none; padding: 2px 7px; font-size: 13px; }
+  #info h2 { margin: 0 2px 1px 0; font-size: 15px; line-height: 1.2; padding-right: 18px; }
+  #info .type { color: #7fb6e6; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+  #info table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  #info td { padding: 2px 0; vertical-align: top; }
+  #info td.k { color: #888; width: 56px; white-space: nowrap; }
+  #info td.v { font-variant-numeric: tabular-nums; }
+  #info .acts { display: flex; gap: 6px; margin-top: 10px; }
+  #info .acts button { flex: 1; font-size: 12px; padding: 6px 0; }
+  #info .acts button[disabled] { opacity: .4; cursor: default; }
 </style>
 </head>
 <body>
@@ -51,7 +63,7 @@
   <button data-layer="landscape">Landscape</button>
   <button data-layer="constellationLines" class="on">Lines</button>
   <button data-layer="constellationArt">Art</button>
-  <button data-layer="dss">DSS</button>
+  <button data-layer="dss" class="on">DSS2</button>
   <button data-layer="equatorialGrid">Eq grid</button>
 </div>
 
@@ -63,6 +75,19 @@
 <div id="zoom" class="ui pad" style="display:none">
   <button id="z-in">+</button>
   <button id="z-out">−</button>
+</div>
+
+<!-- Selected-object detail panel (SkySafari-style): tap an object to inspect it,
+     centre the view on it, or slew the connected mount to it. -->
+<div id="info" class="ui">
+  <button class="close" id="i-close" title="Deselect">✕</button>
+  <h2 id="i-name">—</h2>
+  <div class="type" id="i-type"></div>
+  <table id="i-rows"></table>
+  <div class="acts">
+    <button id="i-center" title="Centre the view on this object">Center</button>
+    <button id="i-goto" title="Slew the connected mount to this object">GoTo</button>
+  </div>
 </div>
 
 <script src="./stellarium-web-engine.js"></script>
@@ -120,6 +145,113 @@ function setLayer(name, on) {
   }
 }
 
+// ---- Selected-object detail panel ---------------------------------------
+// The engine selects whatever object you tap (core.selection); we mirror that
+// into a small info panel and offer Center (lock the view on it) + GoTo (slew
+// the connected mount to it via the daemon REST API).
+var selRaHours = null, selDecDeg = null;   // last selection's JNOW coords, for GoTo
+
+function pad2(n) { n = Math.abs(Math.round(n)); return (n < 10 ? '0' : '') + n; }
+function fmtRa(rad) {            // radians → "HHh MMm SSs"
+  var t = stel.a2tf(rad, 0);
+  return pad2(t.hours) + 'h ' + pad2(t.minutes) + 'm ' + pad2(t.seconds) + 's';
+}
+function fmtDeg(rad) {           // radians → "±DD° MM' SS""
+  var a = stel.a2af(rad, 0);
+  return a.sign + pad2(a.degrees) + '° ' + pad2(a.arcminutes) + "' " + pad2(a.arcseconds) + '"';
+}
+function cleanName(s) { return String(s || '').replace(/^NAME /, '').replace(/^\*\s*/, ''); }
+
+function renderInfo(sel) {
+  var el = document.getElementById('info');
+  if (!sel) { el.style.display = 'none'; selRaHours = selDecDeg = null; return; }
+
+  var names = [];
+  try { names = sel.designations() || []; } catch (e) {}
+  document.getElementById('i-name').textContent = names.length ? cleanName(names[0]) : 'Object';
+  var typeStr = '';
+  try { typeStr = sel.getInfo('type') || ''; } catch (e) {}
+  document.getElementById('i-type').textContent = String(typeStr).trim();
+
+  var rows = [];
+  function num(attr) { try { var v = sel.getInfo(attr); return (v != null && !isNaN(v)) ? v : null; } catch (e) { return null; } }
+
+  var vmag = num('vmag');
+  if (vmag != null) rows.push(['Mag', vmag.toFixed(1)]);
+
+  // RA/Dec (JNOW) + Az/Alt, from the ICRF position.
+  try {
+    var radec = sel.getInfo('radec');
+    var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
+    var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
+    selRaHours = ra * 12 / Math.PI;
+    selDecDeg = dec * 180 / Math.PI;
+    rows.push(['RA', fmtRa(ra)]);
+    rows.push(['Dec', fmtDeg(dec)]);
+    var azalt = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', radec));
+    rows.push(['Az', fmtDeg(stel.anp(azalt[0]))]);
+    rows.push(['Alt', fmtDeg(stel.anpm(azalt[1]))]);
+  } catch (e) { selRaHours = selDecDeg = null; }
+
+  // Rise/set tonight.
+  try {
+    var vis = sel.computeVisibility();
+    if (vis && vis.length && vis[0].rise != null) {
+      rows.push(['Rise', new Date(unixMsFromMjd(vis[0].rise)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+      rows.push(['Set', new Date(unixMsFromMjd(vis[0].set)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+    }
+  } catch (e) {}
+
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    html += '<tr><td class="k">' + rows[i][0] + '</td><td class="v">' + rows[i][1] + '</td></tr>';
+  }
+  document.getElementById('i-rows').innerHTML = html;
+
+  // GoTo only makes sense with a connected daemon and a resolved RA/Dec.
+  document.getElementById('i-goto').disabled = !(API && selRaHours != null);
+  el.style.display = '';
+}
+
+function unixMsFromMjd(mjd) { return (mjd - 40587.0) * 86400000.0; }
+
+function wireSelection() {
+  var curKey = ' ';
+  function selKey(sel) {
+    if (!sel) return null;
+    try { var d = sel.designations(); return (d && d.length) ? d[0] : 'obj'; } catch (e) { return 'obj'; }
+  }
+  // stel.change fires on any state change; only re-render when the selection
+  // actually differs (cheap key compare avoids per-frame churn).
+  stel.change(function () {
+    var sel = stel.core.selection || null;
+    var k = selKey(sel);
+    if (k === curKey) return;
+    curKey = k;
+    renderInfo(sel);
+  });
+
+  document.getElementById('i-close').onclick = function () { stel.core.selection = 0; };
+  document.getElementById('i-center').onclick = function () {
+    if (stel.core.selection) stel.pointAndLock(stel.core.selection, 0.5);
+  };
+  document.getElementById('i-goto').onclick = function () {
+    if (!API || selRaHours == null) return;
+    var btn = document.getElementById('i-goto');
+    btn.textContent = 'Slewing…'; btn.disabled = true;
+    fetch(API + '/api/v1/equipment/telescope/slew', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ RightAscensionHours: selRaHours, DeclinationDegrees: selDecDeg, Sync: false })
+    }).then(function (r) {
+      btn.textContent = r.ok ? 'Slew sent ✓' : 'Slew failed';
+    }).catch(function () {
+      btn.textContent = 'No mount';
+    }).then(function () {
+      setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
+    });
+  };
+}
+
 function wireControls() {
   ['timebar', 'layers', 'pad', 'zoom'].forEach(function (id) { document.getElementById(id).style.display = ''; });
   document.getElementById('status').style.display = 'none';
@@ -170,6 +302,12 @@ StelWebEngine({
     core.planets.addDataSource({ url: base + 'surveys/sso/moon', key: 'default' });
     core.comets.addDataSource({ url: base + 'CometEls.txt', key: 'mpc_comets' });
     core.satellites.addDataSource({ url: base + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
+    // DSS2 colour survey (real photographic sky imagery, shown as you zoom into a
+    // target). This is an online HiPS stream from CDS/STScI — tiles load on demand
+    // and are cached; off-net it simply stays blank and the vector sky is used.
+    // Toggle with the "DSS" layer button; defaults off so off-net users incur no
+    // failed requests until they ask for it.
+    core.dss.addDataSource({ url: 'https://alasky.u-strasbg.fr/DSS/DSSColor' });
     s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
     s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 
@@ -180,6 +318,13 @@ StelWebEngine({
     core.lines.azimuthal.visible = true;
     core.constellations.lines_visible = true;
     core.dsos.visible = true;
+    // Pristine dark sky (Bortle 1) so the DSS2 survey renders bright and punchy
+    // — the engine dims DSS by the sky-brightness/light-pollution model, which at
+    // the default Bortle 3 washes the photographic imagery out. DSS2 is on by
+    // default and the engine only paints it once you zoom in (FOV < ~20°), so it
+    // appears automatically when you frame a target and costs nothing wide-field.
+    core.bortle_index = 1;
+    core.dss.visible = true;
     s.zoomTo(90 * D2R, 0);
 
     // Self-init the observer from the URL params, then start the clock + controls.
@@ -188,6 +333,7 @@ StelWebEngine({
     core.observer.elevation = ELEV;
     setObserverTime();
     wireControls();
+    wireSelection();
   }
 });
 </script>
