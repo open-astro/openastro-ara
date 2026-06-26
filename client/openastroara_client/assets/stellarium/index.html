@@ -80,23 +80,25 @@ var araStel = {
   },
 
   // Zoom by a multiplicative factor (<1 zooms in), clamped to a sane FOV range.
-  // For touch/VNC where scroll-zoom isn't available.
+  // The current field of view is stel.fov (radians); zoomTo animates to the new
+  // one. For touch/VNC where scroll-zoom isn't available.
   zoomBy: function (factor) {
     this._run(function (stel) {
-      var fov = stel.core.fov * factor;
+      var fov = (stel.fov || 50 * D2R) * factor;
       fov = Math.max(0.05 * D2R, Math.min(160 * D2R, fov));
-      if (typeof stel.zoomTo === 'function') stel.zoomTo(fov, 0.25);
-      else stel.core.fov = fov;
+      stel.zoomTo(fov, 0.4);
     });
   },
 
-  // Pan the view by a delta in azimuth/altitude degrees (the observer's view
-  // direction). Pitch is clamped just shy of the zenith/nadir.
+  // Pan the view by a delta in azimuth/altitude degrees. Mirrors the engine's own
+  // drag handler: release any object lock (else it overrides the manual pan), then
+  // nudge the observer's yaw/pitch (pitch clamped to the zenith/nadir).
   panBy: function (dAzDeg, dAltDeg) {
     this._run(function (stel) {
+      stel.core.lock = null;
       var obs = stel.core.observer;
       obs.yaw = obs.yaw + dAzDeg * D2R;
-      obs.pitch = Math.max(-89 * D2R, Math.min(89 * D2R, obs.pitch + dAltDeg * D2R));
+      obs.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, obs.pitch + dAltDeg * D2R));
     });
   },
 
