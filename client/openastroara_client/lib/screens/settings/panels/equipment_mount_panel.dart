@@ -432,7 +432,10 @@ class _HoldButtonState extends State<_HoldButton> {
 
   @override
   void dispose() {
-    if (_held) widget.onStop(); // stop the axis if torn down mid-hold
+    // Stop the axis if torn down mid-hold. onStop → _dispatchAxis reads the provider, which may
+    // already be deactivating during teardown; _dispatchAxis's try/catch is what makes that safe, so
+    // that catch must not be removed. (Stop/AbortSlew is still the deadman if this ever no-ops.)
+    if (_held) widget.onStop();
     super.dispose();
   }
 

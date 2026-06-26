@@ -182,12 +182,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     public async Task MoveAxisAsync(int axis, double rate, CancellationToken ct) {
+        // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
+        // must always run to completion even if the request token cancelled, or a dropped token could
+        // strand the mount in motion (the same panic-stop reasoning as AbortSlewAsync). Discarded
+        // explicitly so the omission reads as deliberate, not an oversight.
+        _ = ct;
         var client = RequireConnectedClient();
         // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
         // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
-        // backstop that halts all axes. CancellationToken.None (not ct): a stop must always send even
-        // if the request token cancelled — the same panic-stop reasoning as AbortSlewAsync — so a
-        // dropped token can never strand the mount in motion.
+        // backstop that halts all axes.
         await Task.Run(() => client.MoveAxis((TelescopeAxis)axis, rate), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
