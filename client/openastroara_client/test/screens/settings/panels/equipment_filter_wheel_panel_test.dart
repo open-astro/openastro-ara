@@ -83,10 +83,46 @@ void main() {
     expect(find.text('EFW'), findsOneWidget);
     expect(find.text('L'), findsWidgets);
     expect(find.text('Hα'), findsWidgets);
-    expect(find.text('offset 12'), findsOneWidget);
+    // Focus offset is relabelled "focus offset" and shown because Hα has a non-zero offset.
+    expect(find.text('focus offset 12'), findsOneWidget);
     // Slot 0 is active → its button reads "Active"; slot 1 → "Select".
     expect(find.widgetWithText(TextButton, 'Active'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Select'), findsOneWidget);
+  });
+
+  testWidgets('shows the driver slot numbers (0-indexed)', (tester) async {
+    await _pump(tester, _status(currentSlot: 0));
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+  });
+
+  testWidgets('hides the focus-offset column when every slot is 0', (tester) async {
+    await _pump(
+        tester,
+        FilterWheelStatus(
+          deviceId: 'fw-0',
+          name: 'EFW',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: 0,
+          slots: const [
+            FilterSlot(position: 0, name: 'L', focusOffset: 0),
+            FilterSlot(position: 1, name: 'R', focusOffset: 0),
+          ],
+        ));
+    expect(find.textContaining('focus offset'), findsNothing);
+  });
+
+  testWidgets('hides the Slot labels section while a wheel is connected',
+      (tester) async {
+    await _pump(tester, _status(currentSlot: 0));
+    expect(find.text('Slot labels (for sequences)'), findsNothing);
+  });
+
+  testWidgets('shows the Slot labels section when no wheel is connected',
+      (tester) async {
+    await _pump(tester, null);
+    expect(find.text('Slot labels (for sequences)'), findsOneWidget);
   });
 
   testWidgets('selecting a slot sends the change command', (tester) async {

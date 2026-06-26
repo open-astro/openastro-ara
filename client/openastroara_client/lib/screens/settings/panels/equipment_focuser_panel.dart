@@ -7,14 +7,15 @@ import '../../../models/focuser_status.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/settings_nav.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.4 Focuser panel. Shows the connected focuser's live position / temperature
-/// and a move control via the shared connection card; the §37.11 autofocus rows
-/// below stay as references to the autofocus settings.
+/// and a move control via the shared connection card. The §37.11 autofocus
+/// settings live in their own editable panel (Imaging → Autofocus); this links there.
 class EquipmentFocuserPanel extends ConsumerWidget {
   const EquipmentFocuserPanel({super.key});
 
@@ -47,13 +48,19 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
         ),
         const SettingsSectionHeader('Autofocus'),
-        const SettingsRow(
-          label: 'Use temp compensation',
-          value: 'Off',
-          hint: '§37.11 autofocus settings — overrideable per profile',
+        // The editable autofocus settings (temp compensation, AF-after-filter-change,
+        // trigger temp delta — saved per profile) live in their own panel; link there
+        // rather than duplicate them here.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => ref
+                .read(selectedSettingsPanelProvider.notifier)
+                .select('img.autofocus'),
+            icon: const Icon(Icons.tune, size: 16),
+            label: const Text('Autofocus settings (Imaging → Autofocus)'),
+          ),
         ),
-        const SettingsRow(label: 'Run AF after filter change', value: 'On'),
-        const SettingsRow(label: 'Trigger temp delta (°C)', value: '2.0'),
       ],
     );
   }
