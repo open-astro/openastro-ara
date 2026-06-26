@@ -305,7 +305,7 @@ function updateStarScale() {
 }
 
 function wireSelection() {
-  var curKey = ' ';
+  var curKey = ' ';
   function selKey(sel) {
     if (!sel) return null;
     try { var d = sel.designations(); return (d && d.length) ? d[0] : 'obj'; } catch (e) { return 'obj'; }
