@@ -9,13 +9,13 @@ void main() {
     setUp(() => container = ProviderContainer());
     tearDown(() => container.dispose());
 
-    test('defaults to 0 (Imaging)', () {
+    test('defaults to 0 (Planning)', () {
       expect(container.read(selectedTabIndexProvider), 0);
     });
 
-    test('select accepts valid indices 0..4', () {
+    test('select accepts valid indices 0..3', () {
       final notifier = container.read(selectedTabIndexProvider.notifier);
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 4; i++) {
         notifier.select(i);
         expect(container.read(selectedTabIndexProvider), i,
             reason: 'failed for index $i');
@@ -28,8 +28,9 @@ void main() {
       // Negative.
       notifier.select(-1);
       expect(container.read(selectedTabIndexProvider), 2);
-      // Out of upper bound (5 tabs: Imaging/Planning/Sequencer/Options/Support).
-      notifier.select(5);
+      // Out of upper bound (4 tabs: Planning/Run/Live/Options — Support folded
+      // into the Options settings tree).
+      notifier.select(4);
       expect(container.read(selectedTabIndexProvider), 2);
       notifier.select(100);
       expect(container.read(selectedTabIndexProvider), 2);

@@ -14,14 +14,16 @@ import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
 import 'tabs/planning_tab.dart';
 import 'tabs/sequencer_tab.dart';
-import 'tabs/support_tab.dart';
 import 'wizard/wizard_shell.dart';
 
 /// Main app shell — replaces the first-run screen once a server is saved
 /// (playbook §25 layout: nav rail on left, top equipment bar, center
-/// workspace, bottom status). Per-area content lives in the 4 tab widgets
-/// (Imaging / Planning / Sequencer / Options — Planning merges the old Sky
-/// Atlas + Framing tabs, PORT_DECISIONS §36/§25.5).
+/// workspace, bottom status). Per-area content lives in the 4 tab widgets, in
+/// workflow order: Planning (find + frame the target) → Run (build + run the
+/// sequence) → Live (capture / live view) → Options. Support (§54 logs +
+/// bug report) folds into the Options settings tree rather than being its own
+/// destination. (Planning merges the old Sky Atlas + Framing tabs,
+/// PORT_DECISIONS §36/§25.5.)
 /// Equipment chips along the top are placeholder until Phase 12c wires the
 /// chooser bottom-sheet + Alpaca discovery flow per §25.3.
 class AppShell extends ConsumerStatefulWidget {
@@ -33,11 +35,10 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   static const _tabs = <_TabSpec>[
-    _TabSpec(icon: Icons.camera_alt, label: 'Imaging', body: ImagingTab()),
     _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
-    _TabSpec(icon: Icons.list_alt, label: 'Sequencer', body: SequencerTab()),
+    _TabSpec(icon: Icons.play_circle_outline, label: 'Run', body: SequencerTab()),
+    _TabSpec(icon: Icons.camera_alt, label: 'Live', body: ImagingTab()),
     _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
-    _TabSpec(icon: Icons.support_agent, label: 'Support', body: SupportTab()),
   ];
 
   // Indices that have been visited at least once. A tab isn't built until first

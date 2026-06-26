@@ -98,6 +98,16 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       SettingsPanelInfo(id: 'app.changelog', label: 'About', groupId: 'system'),
     ],
   ),
+  // §54 Support — the live daemon-log tail + bug-report bundle. Folded in here
+  // (rather than its own nav-rail destination) so the rail stays focused on the
+  // Planning → Run → Live → Options workflow.
+  SettingsGroup(
+    id: 'support',
+    label: 'Support',
+    panels: <SettingsPanelInfo>[
+      SettingsPanelInfo(id: 'support.logs', label: 'Logs & bug report', groupId: 'support'),
+    ],
+  ),
 ];
 
 class SelectedSettingsPanelNotifier extends Notifier<String> {

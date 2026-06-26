@@ -28,6 +28,7 @@ import 'panels/safety_site_panel.dart';
 import 'panels/session_filenames_panel.dart';
 import 'panels/session_notifications_panel.dart';
 import 'panels/sky_data_panel.dart';
+import '../tabs/support_tab.dart';
 import 'panels/storage_panel.dart';
 
 /// Settings shell per §25.5.5 — tree on the left, selected panel on the
@@ -215,6 +216,7 @@ class _PanelBody extends StatelessWidget {
       'sky.data' => const SkyDataPanel(),
       'profile.active' => const ProfileActivePanel(),
       'profile.wizard' => const ProfileWizardPanel(),
+      'support.logs' => const SupportTab(),
       _ => GenericPlaceholderPanel(
           panelId: panelId,
           label: findPanelInfo(panelId)?.label ?? panelId,
