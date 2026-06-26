@@ -52,6 +52,15 @@ class StellariumServer {
       // Map the URL path onto an asset key. A bare "/" serves the bridge page.
       var path = request.uri.path;
       if (path == '/' || path.isEmpty) path = '/index.html';
+      // Diagnostic channel: the page POSTs status here (it's same-origin, so a
+      // plain fetch reaches us). Lets us see what the in-webview engine/bridge is
+      // doing without a JS console — invaluable for CEF debugging.
+      if (path == '/aralog') {
+        debugPrint('[ARALOG] ${request.uri.queryParameters['msg']}');
+        response.statusCode = HttpStatus.noContent;
+        await response.close();
+        return;
+      }
       // Reject any traversal attempt before touching the bundle.
       if (path.contains('..')) {
         response.statusCode = HttpStatus.forbidden;
@@ -59,19 +68,36 @@ class StellariumServer {
         return;
       }
       final key = '$_assetRoot$path';
+      final range = request.headers.value(HttpHeaders.rangeHeader);
       final ByteData data;
       try {
         data = await rootBundle.load(key);
       } catch (_) {
+        debugPrint('[SWE 404] $path');
         response.statusCode = HttpStatus.notFound;
         await response.close();
         return;
       }
+      if (range != null) debugPrint('[SWE range] $path  $range  (len=${data.lengthInBytes})');
+      final bytes =
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       response.headers.contentType = _contentTypeFor(path);
       // The engine fetches gzipped data (e.g. the satellite TLEs) and inflates it
       // itself, so never let the HTTP layer claim/translate the encoding.
-      response.headers.set(HttpHeaders.contentLengthHeader, data.lengthInBytes);
-      response.add(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+      response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+      // The star/DSO tile loader uses HTTP Range requests; honour them with a 206
+      // partial response (a plain 200-with-full-body confuses the loader → no stars).
+      final r = _parseRange(range, bytes.length);
+      if (r != null) {
+        response.statusCode = HttpStatus.partialContent;
+        response.headers.set(HttpHeaders.contentRangeHeader,
+            'bytes ${r.$1}-${r.$2}/${bytes.length}');
+        response.headers.set(HttpHeaders.contentLengthHeader, r.$2 - r.$1 + 1);
+        response.add(bytes.sublist(r.$1, r.$2 + 1));
+      } else {
+        response.headers.set(HttpHeaders.contentLengthHeader, bytes.length);
+        response.add(bytes);
+      }
       await response.close();
     } catch (e, st) {
       debugPrint('StellariumServer: failed to serve ${request.uri}: $e\n$st');
@@ -80,6 +106,39 @@ class StellariumServer {
         await response.close();
       } catch (_) {/* response already closed/detached */}
     }
+  }
+
+  /// Parse a single `bytes=start-end` Range header into inclusive byte offsets,
+  /// clamped to the resource length. Returns null for absent/unsatisfiable/multi
+  /// ranges (the caller then serves the whole body).
+  @visibleForTesting
+  static (int, int)? parseRange(String? header, int length) => _parseRange(header, length);
+
+  static (int, int)? _parseRange(String? header, int length) {
+    if (header == null || length <= 0) return null;
+    const prefix = 'bytes=';
+    if (!header.startsWith(prefix)) return null;
+    final spec = header.substring(prefix.length);
+    if (spec.contains(',')) return null; // multi-range not supported
+    final dash = spec.indexOf('-');
+    if (dash < 0) return null;
+    final startStr = spec.substring(0, dash);
+    final endStr = spec.substring(dash + 1);
+    int start, end;
+    if (startStr.isEmpty) {
+      // suffix range: bytes=-N → the last N bytes
+      final n = int.tryParse(endStr);
+      if (n == null || n <= 0) return null;
+      start = (length - n).clamp(0, length - 1);
+      end = length - 1;
+    } else {
+      final s = int.tryParse(startStr);
+      if (s == null || s >= length) return null;
+      start = s;
+      end = endStr.isEmpty ? length - 1 : (int.tryParse(endStr) ?? length - 1);
+    }
+    end = end.clamp(start, length - 1);
+    return (start, end);
   }
 
   /// Content type by extension. The WASM type matters (streaming instantiation);

@@ -84,3 +84,8 @@ WiX/
 
 # === Local-only reference docs (not tracked) ===
 design/AlpacaDeviceAPI_v1.yaml
+
+# crash/core dumps (never commit)
+core
+*.core
+qemu_*.core

@@ -2,9 +2,11 @@
 <!--
   §36 OpenAstro Ara Planetarium — embeds the Stellarium Web Engine
   (https://github.com/Stellarium/stellarium-web-engine), © Stellarium Labs SRL,
-  licensed under the GNU AGPL v3 (see LICENSE-AGPL-3.0.txt in this directory).
-  OpenAstro Ara drives it through the window.araStel bridge below; the engine and
-  its sky data are served locally (fully offline) by the app's StellariumServer.
+  GNU AGPL v3 (see LICENSE-AGPL-3.0.txt). The page is SELF-DRIVEN: it reads its
+  observer location + the daemon API base from the URL query (?lat=&lon=&elev=&api=),
+  runs its own on-screen controls (which call the engine directly), and talks to
+  the daemon's REST API itself. The Flutter app only loads this URL — it never
+  pushes JS in (no fragile native bridge).
 -->
 <html>
 <head>
@@ -12,179 +14,150 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>OpenAstro Ara Planetarium</title>
 <style>
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: -apple-system, Roboto, "Segoe UI", sans-serif; color: #e0e0e0; }
   #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .ui { position: absolute; z-index: 10; }
+  button { font: inherit; color: #e0e0e0; background: rgba(20,20,20,.72); border: 1px solid #444;
+    border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { background: rgba(50,50,50,.85); }
+  button.on { border-color: #4fc3f7; color: #4fc3f7; }
+  .pad button { width: 38px; height: 38px; padding: 0; font-size: 18px; }
+  #timebar { top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center;
+    background: rgba(20,20,20,.72); border: 1px solid #444; border-radius: 8px; padding: 6px 8px; }
+  #clock { font-variant-numeric: tabular-nums; min-width: 142px; text-align: center; }
+  #zoom { right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+  #pad { left: 12px; bottom: 12px; }
+  #pad .row { display: flex; gap: 6px; justify-content: center; }
+  #layers { left: 12px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 320px; }
+  #status { left: 50%; top: 50%; transform: translate(-50%,-50%); color: #888; }
 </style>
 </head>
 <body>
 <canvas id="stel-canvas"></canvas>
 
+<div id="status" class="ui">Loading planetarium…</div>
+
+<div id="timebar" class="ui" style="display:none">
+  <button id="t-1h">−1h</button>
+  <button id="t+1h">+1h</button>
+  <span id="clock">—</span>
+  <button id="t-tonight">Tonight</button>
+  <button id="t-now" class="on">Now</button>
+</div>
+
+<div id="layers" class="ui" style="display:none">
+  <button data-layer="atmosphere">Atmosphere</button>
+  <button data-layer="landscape">Landscape</button>
+  <button data-layer="constellationLines" class="on">Lines</button>
+  <button data-layer="constellationArt">Art</button>
+  <button data-layer="dss">DSS</button>
+  <button data-layer="equatorialGrid">Eq grid</button>
+</div>
+
+<div id="pad" class="ui pad" style="display:none">
+  <div class="row"><button id="p-up">▲</button></div>
+  <div class="row"><button id="p-left">◀</button><button id="p-down">▼</button><button id="p-right">▶</button></div>
+</div>
+
+<div id="zoom" class="ui pad" style="display:none">
+  <button id="z-in">+</button>
+  <button id="z-out">−</button>
+</div>
+
 <script src="./stellarium-web-engine.js"></script>
 <script>
 'use strict';
-
-// Degrees↔radians; the engine takes angles in radians and time as MJD.
 var D2R = Math.PI / 180.0;
 function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
+function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
 
-// ── The Ara → engine bridge ─────────────────────────────────────────────────
-// Dart drives the planetarium by executeJavaScript('window.araStel.<fn>(...)').
-// Calls made before the WASM engine finishes loading are queued and flushed from
-// onReady, so an early setLocation/center is never dropped.
-var araStel = {
-  _stel: null,
-  _pending: [],
-  _framing: null, // the geojson FOV overlay object, lazily created
+// Config from the URL (the Flutter app injects these when it loads the page).
+var LAT = parseFloat(qp('lat', '0'));
+var LON = parseFloat(qp('lon', '0'));
+var ELEV = parseFloat(qp('elev', '0'));
+var API = qp('api', '');              // daemon base, e.g. http://127.0.0.1:5555
 
-  _run: function (fn) {
-    if (this._stel) { try { fn(this._stel); } catch (e) { console.error('araStel:', e); } }
-    else { this._pending.push(fn); }
-  },
+var stel = null;
+// Planning clock: null = live "now"; else a fixed unix-ms instant.
+var pinnedMs = null;
 
-  _onReady: function (stel) {
-    this._stel = stel;
-    var p = this._pending; this._pending = [];
-    for (var i = 0; i < p.length; i++) { try { p[i](stel); } catch (e) { console.error('araStel flush:', e); } }
-  },
-
-  // Observer site — degrees / metres.
-  setLocation: function (latDeg, lonDeg, elevM) {
-    this._run(function (stel) {
-      stel.core.observer.latitude = latDeg * D2R;
-      stel.core.observer.longitude = lonDeg * D2R;
-      stel.core.observer.elevation = elevM || 0;
-    });
-  },
-
-  // Observer time. utc is a Modified Julian Date.
-  setTimeUnixMs: function (ms) {
-    this._run(function (stel) { stel.core.observer.utc = mjdFromUnixMs(ms); });
-  },
-  setTimeNow: function () { this.setTimeUnixMs(Date.now()); },
-
-  // Centre (and gently fly) the view on an equatorial (ICRF, J2000) coordinate.
-  // lookAt() wants the direction in the OBSERVED (alt/az) frame, so convert the
-  // ICRF direction through the current observer first (the 4th vector component
-  // defaults to 0 = "at infinity", correct for a star/DSO direction).
-  centerRaDec: function (raDeg, decDeg, fovDeg) {
-    this._run(function (stel) {
-      var icrf = stel.s2c(raDeg * D2R, decDeg * D2R);
-      var observed = stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', icrf);
-      stel.lookAt(observed, 0.8);
-      if (fovDeg) stel.core.fov = fovDeg * D2R;
-    });
-  },
-
-  setFov: function (fovDeg) {
-    this._run(function (stel) { stel.core.fov = fovDeg * D2R; });
-  },
-
-  // Zoom by a multiplicative factor (<1 zooms in), clamped to a sane FOV range.
-  // The current field of view is stel.fov (radians); zoomTo animates to the new
-  // one. For touch/VNC where scroll-zoom isn't available.
-  zoomBy: function (factor) {
-    this._run(function (stel) {
-      var fov = (stel.fov || 50 * D2R) * factor;
-      fov = Math.max(0.05 * D2R, Math.min(160 * D2R, fov));
-      stel.zoomTo(fov, 0.4);
-    });
-  },
-
-  // Pan the view by a delta in azimuth/altitude degrees. Mirrors the engine's own
-  // drag handler: release any object lock (else it overrides the manual pan), then
-  // nudge the observer's yaw/pitch (pitch clamped to the zenith/nadir).
-  panBy: function (dAzDeg, dAltDeg) {
-    this._run(function (stel) {
-      stel.core.lock = null;
-      var obs = stel.core.observer;
-      obs.yaw = obs.yaw + dAzDeg * D2R;
-      obs.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, obs.pitch + dAltDeg * D2R));
-    });
-  },
-
-  // Toggle a named sky layer on/off. Keeps the engine's attribute paths in one place.
-  setLayer: function (name, on) {
-    this._run(function (stel) {
-      var c = stel.core;
-      switch (name) {
-        case 'atmosphere': c.atmosphere.visible = on; break;
-        case 'landscape': c.landscapes.visible = on; break;
-        case 'azimuthalGrid': c.lines.azimuthal.visible = on; break;
-        case 'equatorialGrid': c.lines.equatorial.visible = on; break;
-        case 'constellationLines': c.constellations.lines_visible = on; break;
-        case 'constellationArt': c.constellations.images_visible = on; break;
-        case 'dsos': c.dsos.visible = on; break;
-        case 'dss': c.dss.visible = on; break;
-        default: console.warn('araStel.setLayer: unknown layer', name);
-      }
-    });
-  },
-
-  // Draw (or replace) the camera framing overlay: a cols×rows mosaic of FOV
-  // rectangles centred on (raDeg,decDeg), each fovWidthDeg×fovHeightDeg, the whole
-  // grid rotated by rotationDeg (position angle) about the centre. Rendered as a
-  // GeoJSON polygon object (ICRF degrees) on its own layer; the object is recreated
-  // on each update (the simplest reliable way to restyle + reshape). Driven from
-  // Dart via StellariumView. clearFraming() removes it.
-  setFraming: function (spec) {
-    var self = this;
-    this._run(function (stel) {
-      if (!self._framingLayer) {
-        self._framingLayer = stel.createLayer({ id: 'ara-framing', z: 50, visible: true });
-      }
-      if (self._framingObj) { self._framingLayer.remove(self._framingObj); self._framingObj = null; }
-      self._framingObj = stel.createObj('geojson', {
-        data: { type: 'FeatureCollection', features: araStel._mosaicPolygons(spec) }
-      });
-      self._framingLayer.add(self._framingObj);
-    });
-  },
-  clearFraming: function () {
-    var self = this;
-    this._run(function (stel) {
-      if (self._framingObj && self._framingLayer) {
-        self._framingLayer.remove(self._framingObj);
-        self._framingObj = null;
-      }
-    });
-  },
-
-  // Build the mosaic rectangle features in ICRF [ra,dec] degrees (the geojson
-  // layer's frame). RA spacing is scaled by 1/cos(dec) so panels stay square on
-  // the sky near the poles. Styling is per-feature properties (CSS hex + opacity).
-  _mosaicPolygons: function (s) {
-    var cols = s.cols > 0 ? s.cols : 1, rows = s.rows > 0 ? s.rows : 1;
-    var ovFrac = Math.min(0.95, Math.max(0, (s.overlapPct || 0) / 100));
-    var stepW = s.fovWidthDeg * (1 - ovFrac), stepH = s.fovHeightDeg * (1 - ovFrac);
-    var th = (s.rotationDeg || 0) * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
-    var cosd = Math.cos(s.decDeg * D2R); if (Math.abs(cosd) < 1e-6) cosd = cosd < 0 ? -1e-6 : 1e-6;
-    var hw = s.fovWidthDeg / 2, hh = s.fovHeightDeg / 2;
-    var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]]; // closed ring
-    var props = { 'stroke': '#4fc3f7', 'stroke-width': 2, 'stroke-opacity': 0.9, 'fill': '#4fc3f7', 'fill-opacity': 0.1 };
-    var features = [];
-    for (var iy = 0; iy < rows; iy++) {
-      for (var ix = 0; ix < cols; ix++) {
-        var gx = (ix - (cols - 1) / 2) * stepW, gy = (iy - (rows - 1) / 2) * stepH;
-        var ring = corners.map(function (p) {
-          var lx = p[0] + gx, ly = p[1] + gy;
-          var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
-          return [s.raDeg + dx / cosd, s.decDeg + dy];
-        });
-        features.push({ type: 'Feature', properties: props, geometry: { type: 'Polygon', coordinates: [ring] } });
-      }
-    }
-    return features;
+function setObserverTime() {
+  if (!stel) return;
+  var ms = pinnedMs === null ? Date.now() : pinnedMs;
+  stel.core.observer.utc = mjdFromUnixMs(ms);
+  renderClock();
+}
+function renderClock() {
+  var el = document.getElementById('clock');
+  if (pinnedMs === null) { el.textContent = 'Live'; return; }
+  var d = new Date(pinnedMs);
+  el.textContent = d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function zoomBy(f) {
+  if (!stel) return;
+  var fov = (stel.fov || 50 * D2R) * f;
+  fov = Math.max(0.05 * D2R, Math.min(160 * D2R, fov));
+  stel.zoomTo(fov, 0.4);
+}
+function panBy(daz, dalt) {
+  if (!stel) return;
+  stel.core.lock = null;
+  var o = stel.core.observer;
+  o.yaw += daz * D2R;
+  o.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, o.pitch + dalt * D2R));
+}
+function setLayer(name, on) {
+  if (!stel) return;
+  var c = stel.core;
+  switch (name) {
+    case 'atmosphere': c.atmosphere.visible = on; break;
+    case 'landscape': c.landscapes.visible = on; break;
+    case 'constellationLines': c.constellations.lines_visible = on; break;
+    case 'constellationArt': c.constellations.images_visible = on; break;
+    case 'dss': c.dss.visible = on; break;
+    case 'equatorialGrid': c.lines.equatorial.visible = on; break;
   }
-};
-window.araStel = araStel;
+}
 
-// ── Engine bootstrap ─────────────────────────────────────────────────────────
+function wireControls() {
+  ['timebar', 'layers', 'pad', 'zoom'].forEach(function (id) { document.getElementById(id).style.display = ''; });
+  document.getElementById('status').style.display = 'none';
+
+  var nowBtn = document.getElementById('t-now');
+  function setNow() { pinnedMs = null; nowBtn.classList.add('on'); setObserverTime(); }
+  function pin(ms) { pinnedMs = ms; nowBtn.classList.remove('on'); setObserverTime(); }
+  document.getElementById('t-now').onclick = setNow;
+  document.getElementById('t-1h').onclick = function () { pin((pinnedMs === null ? Date.now() : pinnedMs) - 3600000); };
+  document.getElementById('t+1h').onclick = function () { pin((pinnedMs === null ? Date.now() : pinnedMs) + 3600000); };
+  document.getElementById('t-tonight').onclick = function () {
+    var d = new Date(); d.setHours(22, 0, 0, 0); pin(d.getTime());
+  };
+
+  document.getElementById('z-in').onclick = function () { zoomBy(0.6); };
+  document.getElementById('z-out').onclick = function () { zoomBy(1 / 0.6); };
+  var step = 10;
+  document.getElementById('p-up').onclick = function () { panBy(0, step); };
+  document.getElementById('p-down').onclick = function () { panBy(0, -step); };
+  document.getElementById('p-left').onclick = function () { panBy(-step, 0); };
+  document.getElementById('p-right').onclick = function () { panBy(step, 0); };
+
+  Array.prototype.forEach.call(document.querySelectorAll('#layers button'), function (b) {
+    b.onclick = function () { var on = !b.classList.contains('on'); b.classList.toggle('on', on); setLayer(b.dataset.layer, on); };
+  });
+
+  // Live clock tick: while "Now", keep the sky moving with the real time.
+  setInterval(function () { if (pinnedMs === null) setObserverTime(); }, 15000);
+  setInterval(renderClock, 1000);
+}
+
 StelWebEngine({
   wasmFile: './stellarium-web-engine.wasm',
   canvas: document.getElementById('stel-canvas'),
-  translateFn: function (domain, str) { return str; },
-  onReady: function (stel) {
-    var core = stel.core;
+  translateFn: function (d, s) { return s; },
+  onReady: function (s) {
+    stel = s;
+    var core = s.core;
     var base = './skydata/';
     core.stars.addDataSource({ url: base + 'stars' });
     core.skycultures.addDataSource({ url: base + 'skycultures/western', key: 'western' });
@@ -197,24 +170,24 @@ StelWebEngine({
     core.planets.addDataSource({ url: base + 'surveys/sso/moon', key: 'default' });
     core.comets.addDataSource({ url: base + 'CometEls.txt', key: 'mpc_comets' });
     core.satellites.addDataSource({ url: base + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
+    s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
+    s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 
-    stel.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
-    stel.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
-
-    // Planning defaults: a dark sky so targets are visible day or night (the
-    // atmosphere would wash them out in daylight), the azimuthal grid as a clean
-    // horizon / alt-az reference (instead of the photographic daytime ground),
-    // constellation lines + deep-sky objects on. A wide initial field shows a lot
-    // of sky at once (handy before the user navigates). Atmosphere + landscape are
-    // available as toggles for a realistic view.
+    // Planning defaults: dark sky (targets visible day or night), alt/az grid as a
+    // clean horizon reference, constellation lines + DSOs on.
     core.atmosphere.visible = false;
     core.landscapes.visible = false;
     core.lines.azimuthal.visible = true;
     core.constellations.lines_visible = true;
     core.dsos.visible = true;
-    core.fov = 90 * D2R;
+    s.zoomTo(90 * D2R, 0);
 
-    araStel._onReady(stel);
+    // Self-init the observer from the URL params, then start the clock + controls.
+    core.observer.latitude = LAT * D2R;
+    core.observer.longitude = LON * D2R;
+    core.observer.elevation = ELEV;
+    setObserverTime();
+    wireControls();
   }
 });
 </script>
