@@ -101,6 +101,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Due_east_is_east_of_the_meridian_and_due_west_is_its_mirror() {
+            // The round-trip altitude test passes through cos(H) — an even function — so it can't catch an
+            // East↔West RA sign flip (lstDeg + H instead of lstDeg − H). Pin the chirality directly: a
+            // point due east (az 90°) has not yet transited, so its hour angle (H = LST − RA) is negative;
+            // due west (az 270°) is the mirror (positive). A sign inversion can't satisfy both.
+            var dto = HorizonService.Compute(Site(lat: 45, lon: 0, horizon: 10), At);
+            var east = dto.Cardinals.Single(c => c.Label == "E");
+            var west = dto.Cardinals.Single(c => c.Label == "W");
+            Assert.That(SignedHourAngle(dto.LocalSiderealTimeDeg - east.RaDeg),
+                Is.LessThan(0).And.GreaterThan(-180), "due east must sit east of the meridian (H < 0)");
+            Assert.That(SignedHourAngle(dto.LocalSiderealTimeDeg - west.RaDeg),
+                Is.GreaterThan(0).And.LessThan(180), "due west must sit west of the meridian (H > 0)");
+        }
+
+        // Normalise an angle difference to (−180, 180] so an hour-angle sign test is wrap-safe.
+        private static double SignedHourAngle(double deg) {
+            var x = deg % 360.0;
+            if (x > 180.0) x -= 360.0;
+            if (x <= -180.0) x += 360.0;
+            return x;
+        }
+
+        [Test]
         public void Flags_custom_horizon_ignored_only_when_the_profile_wants_one() {
             // This flat-horizon slice never honours a custom terrain horizon, so it advertises when one
             // was requested (so a later slice can warn) and stays false otherwise.
