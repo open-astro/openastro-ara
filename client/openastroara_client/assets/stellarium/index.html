@@ -79,6 +79,27 @@ var araStel = {
     this._run(function (stel) { stel.core.fov = fovDeg * D2R; });
   },
 
+  // Zoom by a multiplicative factor (<1 zooms in), clamped to a sane FOV range.
+  // For touch/VNC where scroll-zoom isn't available.
+  zoomBy: function (factor) {
+    this._run(function (stel) {
+      var fov = stel.core.fov * factor;
+      fov = Math.max(0.05 * D2R, Math.min(160 * D2R, fov));
+      if (typeof stel.zoomTo === 'function') stel.zoomTo(fov, 0.25);
+      else stel.core.fov = fov;
+    });
+  },
+
+  // Pan the view by a delta in azimuth/altitude degrees (the observer's view
+  // direction). Pitch is clamped just shy of the zenith/nadir.
+  panBy: function (dAzDeg, dAltDeg) {
+    this._run(function (stel) {
+      var obs = stel.core.observer;
+      obs.yaw = obs.yaw + dAzDeg * D2R;
+      obs.pitch = Math.max(-89 * D2R, Math.min(89 * D2R, obs.pitch + dAltDeg * D2R));
+    });
+  },
+
   // Toggle a named sky layer on/off. Keeps the engine's attribute paths in one place.
   setLayer: function (name, on) {
     this._run(function (stel) {

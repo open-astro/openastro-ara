@@ -182,6 +182,21 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     }
   }
 
+  Future<void> _js(String code) async {
+    final controller = _controller;
+    if (controller == null) return;
+    try {
+      await controller.executeJavaScript(code);
+    } catch (e, st) {
+      debugPrint('StellariumView: nav js failed: $e\n$st');
+    }
+  }
+
+  // On-screen navigation for touch/VNC where scroll-zoom + drag-pan aren't easy.
+  void _zoom(double factor) => unawaited(_js('window.araStel && window.araStel.zoomBy($factor);'));
+  void _pan(double dAz, double dAlt) =>
+      unawaited(_js('window.araStel && window.araStel.panBy($dAz, $dAlt);'));
+
   @override
   void dispose() {
     _clock?.cancel();
@@ -214,8 +229,87 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     if (_unavailable) return const _Unavailable();
     final controller = _controller;
     if (controller == null) return const _Loading();
-    return ColoredBox(color: AraColors.bgPrimary, child: controller.webviewWidget);
+    return ColoredBox(
+      color: AraColors.bgPrimary,
+      child: Stack(
+        children: [
+          Positioned.fill(child: controller.webviewWidget),
+          // Touch/VNC navigation overlay: a pan d-pad (lower-left) and zoom
+          // buttons (lower-right), since scroll-zoom + drag-pan are awkward remote.
+          Positioned(
+            left: 12,
+            bottom: 12,
+            child: _PanPad(onPan: _pan),
+          ),
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: _ZoomControls(onZoom: _zoom),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+/// A compact 4-way pan d-pad. Each press nudges the view ~10° in az/alt.
+class _PanPad extends StatelessWidget {
+  const _PanPad({required this.onPan});
+  final void Function(double dAz, double dAlt) onPan;
+
+  static const _step = 10.0;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget btn(IconData icon, double dAz, double dAlt) => _NavButton(
+        icon: icon, onPressed: () => onPan(dAz, dAlt));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        btn(Icons.keyboard_arrow_up, 0, _step),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          btn(Icons.keyboard_arrow_left, -_step, 0),
+          const SizedBox(width: 40),
+          btn(Icons.keyboard_arrow_right, _step, 0),
+        ]),
+        btn(Icons.keyboard_arrow_down, 0, -_step),
+      ],
+    );
+  }
+}
+
+/// Zoom in / out buttons (factor < 1 zooms in).
+class _ZoomControls extends StatelessWidget {
+  const _ZoomControls({required this.onZoom});
+  final void Function(double factor) onZoom;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _NavButton(icon: Icons.add, onPressed: () => onZoom(0.6)),
+          const SizedBox(height: 6),
+          _NavButton(icon: Icons.remove, onPressed: () => onZoom(1.0 / 0.6)),
+        ],
+      );
+}
+
+class _NavButton extends StatelessWidget {
+  const _NavButton({required this.icon, required this.onPressed});
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.black54,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: IconButton(
+          icon: Icon(icon, size: 22, color: Colors.white),
+          onPressed: onPressed,
+          visualDensity: VisualDensity.compact,
+        ),
+      );
 }
 
 class _Loading extends StatelessWidget {
