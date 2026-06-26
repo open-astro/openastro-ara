@@ -89,7 +89,11 @@ namespace OpenAstroAra.Server.Services {
             if (rows is null) {
                 return null;   // source not installed
             }
-            IEnumerable<DsoRow> q = rows.Where(def.Match);
+            // Brightest first (objects with no magnitude sort last) so a ?limit= on a large
+            // type-filter (e.g. 10k galaxies) returns the most worthwhile to overlay, not an
+            // arbitrary file-order slice.
+            IEnumerable<DsoRow> q = rows.Where(def.Match)
+                .OrderBy(r => r.Mag ?? double.PositiveInfinity);
             if (limit is { } l) {
                 q = q.Take(Math.Max(0, l));
             }
