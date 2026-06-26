@@ -142,7 +142,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
-        ArgumentNullException.ThrowIfNull(request);
+        // No ArgumentNullException.ThrowIfNull(request): the /park endpoint substitutes
+        // `request ?? new ParkRequestDto()`, so request is never null here, and the Reason field is
+        // unused by the park itself — the param is kept only for the interface contract.
+        _ = request;
         var client = RequireConnectedClient();
         _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
             // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
@@ -384,14 +387,31 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis; an empty list (no manual-control speeds offered) is the correct degraded result rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
     private static List<double> ReadAxisRates(AlpacaTelescope c) {
+        // The direction pad drives BOTH axes with the same picked rate, but ASCOM allows each axis its
+        // own rate range, so a primary-only rate could be rejected on the secondary (N/S). Offer only
+        // rates the secondary axis can also honour: take the primary set, cap it at the secondary's
+        // max. Each read is best-effort (returns empty/null on a NotImplemented throw).
+        var primary = ReadAxisRateSet(c, TelescopeAxis.Primary);
+        if (primary.Count == 0) {
+            return [];
+        }
+        var secondaryMax = ReadAxisMaxRate(c, TelescopeAxis.Secondary);
+        var usable = secondaryMax is > 0
+            ? primary.Where(r => r <= secondaryMax.Value + 1e-9).ToList()
+            : [.. primary];
+        // If the secondary is so much slower that nothing survives the cap, fall back to the primary
+        // set rather than show no speeds at all (better a rate the secondary may clamp than none).
+        return usable.Count > 0 ? usable : [.. primary];
+    }
+
+    // Both [Minimum, Maximum] endpoints of every rate band for one axis (discrete rate → Min==Max),
+    // ascending + deduped; empty when the axis NotImplements MoveAxis/AxisRates.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements MoveAxis for the axis; an empty set (no speeds offered) is the correct degraded result. CA1031's log-and-recover boundary applies.")]
+    private static SortedSet<double> ReadAxisRateSet(AlpacaTelescope c, TelescopeAxis axis) {
+        var rates = new SortedSet<double>();
         try {
-            // IAxisRates is a non-generic IEnumerable of IRate; each IRate is a [Minimum, Maximum] band.
-            // Emit BOTH endpoints of every band: a discrete rate reports Minimum == Maximum (one value),
-            // while a mount that reports genuine continuous bands (Minimum < Maximum) contributes its
-            // floor and ceiling so the picker reflects the real span, not just the ceiling. The SortedSet
-            // dedups equal endpoints and yields a clean ascending list for the speed picker.
-            var rates = new SortedSet<double>();
-            foreach (IRate rate in c.AxisRates(TelescopeAxis.Primary)) {
+            foreach (IRate rate in c.AxisRates(axis)) {
                 if (rate.Minimum > 0) {
                     rates.Add(rate.Minimum);
                 }
@@ -399,10 +419,27 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     rates.Add(rate.Maximum);
                 }
             }
-            return rates.ToList();
         } catch (Exception) {
             return [];
         }
+        return rates;
+    }
+
+    // The fastest rate one axis can move (max of its bands' maxima), or null if unreadable.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Capability read boundary: AxisRates throws on a mount that NotImplements the axis; null (no cap applied) is the correct degraded result. CA1031's log-and-recover boundary applies.")]
+    private static double? ReadAxisMaxRate(AlpacaTelescope c, TelescopeAxis axis) {
+        double max = 0;
+        try {
+            foreach (IRate rate in c.AxisRates(axis)) {
+                if (rate.Maximum > max) {
+                    max = rate.Maximum;
+                }
+            }
+        } catch (Exception) {
+            return null;
+        }
+        return max > 0 ? max : null;
     }
 
     /// <summary>Convert an ASCOM optics property (metres) to mm for the wire, or

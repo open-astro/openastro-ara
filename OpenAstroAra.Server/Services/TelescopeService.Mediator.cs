@@ -212,7 +212,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
-        RunMountOpAsync("telescope.park", c => c.Park(),
+        // TryEnableTracking before Park here too (not just the REST path): some mounts (iOptron) won't
+        // park from a stationary state, so an end-of-sequence auto-park would silently no-op otherwise.
+        RunMountOpAsync("telescope.park", c => { TryEnableTracking(c); c.Park(); },
             c => ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
