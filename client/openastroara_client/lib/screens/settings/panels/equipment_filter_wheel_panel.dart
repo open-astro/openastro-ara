@@ -28,9 +28,12 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
     final labelsN = ref.read(filterWheelLabelsProvider.notifier);
     // While a wheel is connected its own driver slot names are authoritative and
     // shown live above, so the local "Slot labels" section is pure duplication —
-    // only surface it for offline sequence authoring (no wheel connected).
-    final wheelConnected = status.maybeWhen(
-      data: (s) => s?.isConnected ?? false,
+    // only surface it for offline sequence authoring. Show it ONLY on a resolved
+    // status that is genuinely absent/disconnected; loading and (transient) error
+    // keep it hidden so a single failed poll can't flash the editor in over a
+    // still-registered wheel.
+    final showSlotLabels = status.maybeWhen(
+      data: (s) => s == null || !s.isConnected,
       orElse: () => false,
     );
 
@@ -60,7 +63,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
         // independent of the connected wheel's own names shown live above. Hidden
         // while a wheel is connected (its driver names take over) to avoid duplication.
-        if (!wheelConnected) ...[
+        if (showSlotLabels) ...[
           const SettingsSectionHeader('Slot labels (for sequences)'),
           for (var slot = 1; slot <= labels.slotCount; slot++)
             EditableTextRow(
@@ -165,7 +168,9 @@ class _SlotRow extends StatelessWidget {
         .textTheme
         .bodySmall
         ?.copyWith(color: AraColors.textSecondary);
-    final name = slot.name.isEmpty ? '—' : slot.name;
+    // Same empty-name fallback the "Current filter" header uses, so an unnamed
+    // slot reads consistently in both places.
+    final name = slot.name.isEmpty ? 'Slot ${slot.position}' : slot.name;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -184,12 +189,15 @@ class _SlotRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          if (isCurrent)
-            const Padding(
-              padding: EdgeInsets.only(right: 4),
-              child: Icon(Icons.check,
-                  size: 16, color: AraColors.accentConnected),
-            ),
+          // Fixed-width check slot so the name column starts at the same x on
+          // EVERY row — reserving the space whether or not this slot is active.
+          SizedBox(
+            width: 20,
+            child: isCurrent
+                ? const Icon(Icons.check,
+                    size: 16, color: AraColors.accentConnected)
+                : null,
+          ),
           Expanded(child: Text(name)),
           if (showOffset)
             Text('focus offset ${slot.focusOffset}', style: secondary),
