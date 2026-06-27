@@ -39,6 +39,12 @@ dependencies:
   # them. See PORT_DECISIONS.md.
   webview_cef:
     path: packages/webview_cef
+  # SPIKE (macOS A/B): native-engine webview (WKWebView on macOS, WebView2 on
+  # Windows, WebKitGTK on Linux) embedded as a platform view. Used to evaluate
+  # replacing the CEF OSR path, which stalls under sustained GPU offscreen render.
+  # Selected at build time with --dart-define=WEBVIEW_ALL=true; default build is
+  # still CEF. See lib/widgets/sky_atlas/stellarium_view.dart.
+  webview_all: ^1.0.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
