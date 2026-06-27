@@ -643,17 +643,21 @@ function toggleCatalog(id, on) {
     .catch(function () {});
 }
 
-// Each object is a coloured point marker. Labels are the expensive part — the
-// engine repaints every title each frame, so hundreds of them lock the renderer.
-// Objects arrive brightest-first; label only the brightest few, dots for the rest.
-var CAT_LABELS = 25;
+// Each object is a coloured dot marker — NO per-feature `title`. The engine
+// re-lays-out and repaints every title as text each frame, and under CEF's
+// offscreen GL that text path locks the renderer even at ~100 objects (Safari,
+// same wasm, stays 60fps — so it's the CEF font path, not the point count).
+// Labelling 100+ catalog objects is unreadable clutter anyway; identity comes
+// from clicking a marker. Dots are cheap GL points and scale to thousands.
 function catalogGeojson(objs, id) {
   var col = catColor(id);
   return {
-    type: 'FeatureCollection', features: (objs || []).map(function (o, i) {
-      var props = { stroke: col, 'stroke-width': 5, 'stroke-opacity': 0.95, fill: col, 'fill-opacity': 0.9 };
-      if (i < CAT_LABELS) props.title = cleanName(o.name);
-      return { type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: [o.ra_deg, o.dec_deg] } };
+    type: 'FeatureCollection', features: (objs || []).map(function (o) {
+      return {
+        type: 'Feature',
+        properties: { stroke: col, 'stroke-width': 5, 'stroke-opacity': 0.95, fill: col, 'fill-opacity': 0.9 },
+        geometry: { type: 'Point', coordinates: [o.ra_deg, o.dec_deg] },
+      };
     }),
   };
 }
