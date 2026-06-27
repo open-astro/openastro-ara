@@ -1119,13 +1119,12 @@ StelWebEngine({
     // rebuilt so every rendered star registers a pickable area; this just controls
     // the on-sky NAME labels for bright stars.)
     core.stars.hints_visible = true;
-    // Go deep but bounded: show (and allow clicking) stars down to magnitude 12.
-    // The bundled catalogue stops at mag 7; the Gaia survey above fills 7→12. This
-    // is the practical deep limit under CEF — every rendered star registers a
-    // clickable hit-area each frame, and a dense field (Milky Way) at mag 16 is
-    // ~tens of thousands of stars, which stalls the offscreen renderer. Mag 12 is
-    // guide-star depth and keeps the count sane.
-    core.display_limit_mag = 12;
+    // Go deep: show (and click) stars down to magnitude 16. The bundled catalogue
+    // stops at mag 7; the Gaia survey above fills 7→16, loaded on demand as you
+    // zoom. Safe under CEF because the rebuilt engine caps clickable hit-area
+    // registration per frame (brightest first) — deep dense fields no longer stall
+    // the renderer the way "an area for every star" did.
+    core.display_limit_mag = 16;
     // Populate the map with object MARKERS by default so you can see what's out
     // there to capture — especially in unfamiliar regions (e.g. the southern sky)
     // where names alone don't help. The engine draws a marker for every DSO down
