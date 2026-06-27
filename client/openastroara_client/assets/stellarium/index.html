@@ -62,6 +62,25 @@
     border: 0.5px solid var(--hair); border-radius: 11px; box-shadow: var(--shadow); color: var(--txt); }
   .pad button:hover { background: var(--mat-2); }
 
+  /* Centre reticle — the GoTo aim point. Pan a target under it, then "GoTo here"
+     slews the mount to whatever is centred (works for objects the engine doesn't
+     mark, DSS2 features, bare sky positions). pointer-events off so it never eats
+     a drag/click. */
+  #reticle { left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; z-index: 9; display: none; pointer-events: none; }
+  #reticle .ring { position: absolute; left: 9px; top: 9px; width: 16px; height: 16px; border: 1px solid rgba(255,255,255,0.55);
+    border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.55); }
+  #reticle .h, #reticle .v { position: absolute; background: rgba(255,255,255,0.5); box-shadow: 0 0 2px rgba(0,0,0,0.55); }
+  #reticle .h { left: 0; top: 16.5px; width: 34px; height: 1px; }
+  #reticle .v { left: 16.5px; top: 0; width: 1px; height: 34px; }
+
+  /* "GoTo here" pill — slews to the reticle (view centre). Bottom centre, glass. */
+  #gotohere { bottom: 14px; left: 50%; transform: translateX(-50%); display: none; align-items: center; padding: 4px;
+    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid var(--hair); border-radius: 12px; box-shadow: var(--shadow); }
+  #gotohere button { padding: 6px 13px; font-size: 12.5px; color: var(--accent); white-space: nowrap; }
+  #gotohere button:hover { background: var(--accent-bg); }
+  #gotohere button[disabled] { opacity: .55; cursor: default; }
+
   #status { left: 50%; top: 50%; transform: translate(-50%,-50%); color: var(--dim); }
   #searchmsg { top: 64px; left: 50%; transform: translateX(-50%); padding: 9px 15px; font-size: 12.5px; display: none;
     max-width: 340px; line-height: 1.4; text-align: center;
@@ -153,6 +172,12 @@
 </head>
 <body>
 <canvas id="stel-canvas"></canvas>
+
+<div id="reticle" class="ui"><span class="ring"></span><span class="h"></span><span class="v"></span></div>
+
+<div id="gotohere" class="ui">
+  <button id="goto-center" title="Slew the mount to the centre of the view (the reticle)">⌖ GoTo here</button>
+</div>
 
 <div id="status" class="ui">Loading planetarium…</div>
 
@@ -428,6 +453,54 @@ function horizonBlockReason() {
   return null;
 }
 
+// Unpark then slew the mount to a JNOW RA/Dec, reporting a short status string via
+// cb. A parked mount silently ignores slews, so unpark first. Daemon JSON is
+// snake_case (SnakeCaseLower policy). Shared by the object panel's GoTo and the
+// "GoTo here" reticle slew.
+function slewMount(raHours, decDeg, cb) {
+  fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
+    .catch(function () {})
+    .then(function () {
+      return fetch(API + '/api/v1/equipment/telescope/slew', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ right_ascension_hours: raHours, declination_degrees: decDeg, sync: false }),
+      });
+    }).then(function (r) {
+      cb(r.ok ? 'Slew sent ✓' : (r.status === 500 ? 'No mount' : 'Slew failed'));
+    }).catch(function () {
+      cb('No mount');
+    });
+}
+
+// Slew to the reticle (view centre). This is how you GoTo ANYTHING you can put
+// under the crosshair — including objects the engine doesn't draw a clickable
+// marker for, DSS2 features, or a bare sky position. The centre's altitude is the
+// observer pitch, so the same horizon safety applies: block at/below the horizon.
+function gotoViewCenter() {
+  if (!stel) return;
+  if (!API) { showSearchMsg('Connect to a server to slew the mount.', 4000); return; }
+  var o = stel.core.observer;
+  var altDeg = o.pitch * 180 / Math.PI;
+  if (altDeg <= 0) {
+    showSearchMsg('⚠ The view centre is below your horizon (alt ' + Math.round(altDeg)
+      + '°). Slew blocked — it would point the mount at the ground.', 6000);
+    return;
+  }
+  // View-centre direction (OBSERVED) → ICRF → JNOW RA/Dec for the slew, mirroring
+  // the two-step frame conversions used elsewhere on the page.
+  var vObs = stel.s2c(o.yaw, o.pitch);
+  var icrf = stel.convertFrame(o, 'OBSERVED', 'ICRF', vObs);
+  var jnow = stel.c2s(stel.convertFrame(o, 'ICRF', 'JNOW', icrf));
+  var raH = stel.anp(jnow[0]) * 12 / Math.PI;
+  var decD = stel.anpm(jnow[1]) * 180 / Math.PI;
+  var btn = document.getElementById('goto-center');
+  btn.textContent = 'Slewing…'; btn.disabled = true;
+  slewMount(raH, decD, function (text) {
+    btn.textContent = text;
+    setTimeout(function () { btn.textContent = '⌖ GoTo here'; btn.disabled = false; }, 2200);
+  });
+}
+
 // Catalog stars render as filled discs; the engine scales the bright ones up so
 // far that at high zoom they become big "blotchy" blobs over the DSS2 photo
 // (Aladin has no catalog overlay, so its stars are just the survey's crisp
@@ -474,22 +547,10 @@ function wireSelection() {
     if (block) { showSearchMsg(block, 6000); return; }
     var btn = document.getElementById('i-goto');
     btn.textContent = 'Slewing…'; btn.disabled = true;
-    // A parked mount silently ignores slews, so unpark first; then slew. Daemon
-    // JSON is snake_case (SnakeCaseLower policy).
-    fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
-      .catch(function () {})
-      .then(function () {
-        return fetch(API + '/api/v1/equipment/telescope/slew', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ right_ascension_hours: selRaHours, declination_degrees: selDecDeg, sync: false })
-        });
-      }).then(function (r) {
-        btn.textContent = r.ok ? 'Slew sent ✓' : (r.status === 500 ? 'No mount' : 'Slew failed');
-      }).catch(function () {
-        btn.textContent = 'No mount';
-      }).then(function () {
-        setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
-      });
+    slewMount(selRaHours, selDecDeg, function (text) {
+      btn.textContent = text;
+      setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
+    });
   };
 
   // Stop — abort the mount's current slew (halts all axes). Always available when
@@ -943,6 +1004,11 @@ function wireCmds() {
 
 function wireControls() {
   ['timebar', 'layers', 'pad', 'zoom'].forEach(function (id) { document.getElementById(id).style.display = ''; });
+  // These default to display:none in CSS, so clearing the inline style would just
+  // fall back to hidden — set the explicit display they need.
+  document.getElementById('reticle').style.display = 'block';
+  document.getElementById('gotohere').style.display = 'flex';
+  document.getElementById('goto-center').onclick = gotoViewCenter;
   document.getElementById('status').style.display = 'none';
 
   var nowBtn = document.getElementById('t-now');
