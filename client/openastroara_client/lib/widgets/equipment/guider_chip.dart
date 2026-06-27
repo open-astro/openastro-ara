@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 import '../status_indicator.dart';
 import 'guider_dialog.dart';
@@ -60,7 +61,10 @@ class GuiderChip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final level = guiderChipLevel(ref.watch(guiderStatusProvider));
+    // Stale-guard: grey the dot when the server link is down (last status stale).
+    final level = ref.watch(serverLinkUpProvider)
+        ? guiderChipLevel(ref.watch(guiderStatusProvider))
+        : StatusLevel.disconnected;
     return Semantics(
       label: 'GUIDE (${level.name})',
       button: true,
