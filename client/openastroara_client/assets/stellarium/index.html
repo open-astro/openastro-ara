@@ -53,33 +53,8 @@
   #timebar button.on { background: var(--accent-bg); color: var(--accent); }
   #clock { font-variant-numeric: tabular-nums; min-width: 126px; text-align: center; font-size: 12px; padding: 0 6px; }
 
-  /* Pan + zoom — round glass buttons */
-  #zoom { right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
-  #pad { left: 14px; bottom: 14px; }
-  #pad .row { display: flex; gap: 8px; justify-content: center; }
-  .pad button { width: 40px; height: 40px; padding: 0; font-size: 16px; display: flex; align-items: center; justify-content: center;
-    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-    border: 0.5px solid var(--hair); border-radius: 11px; box-shadow: var(--shadow); color: var(--txt); }
-  .pad button:hover { background: var(--mat-2); }
-
-  /* Centre reticle — the GoTo aim point. Pan a target under it, then "GoTo here"
-     slews the mount to whatever is centred (works for objects the engine doesn't
-     mark, DSS2 features, bare sky positions). pointer-events off so it never eats
-     a drag/click. */
-  #reticle { left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; z-index: 9; display: none; pointer-events: none; }
-  #reticle .ring { position: absolute; left: 9px; top: 9px; width: 16px; height: 16px; border: 1px solid rgba(255,255,255,0.55);
-    border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.55); }
-  #reticle .h, #reticle .v { position: absolute; background: rgba(255,255,255,0.5); box-shadow: 0 0 2px rgba(0,0,0,0.55); }
-  #reticle .h { left: 0; top: 16.5px; width: 34px; height: 1px; }
-  #reticle .v { left: 16.5px; top: 0; width: 1px; height: 34px; }
-
-  /* "GoTo here" pill — slews to the reticle (view centre). Bottom centre, glass. */
-  #gotohere { bottom: 14px; left: 50%; transform: translateX(-50%); display: none; align-items: center; padding: 4px;
-    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-    border: 0.5px solid var(--hair); border-radius: 12px; box-shadow: var(--shadow); }
-  #gotohere button { padding: 6px 13px; font-size: 12.5px; color: var(--accent); white-space: nowrap; }
-  #gotohere button:hover { background: var(--accent-bg); }
-  #gotohere button[disabled] { opacity: .55; cursor: default; }
+  /* Pan + zoom are native (trackpad/mouse) in the webview, so there are no
+     on-screen pan/zoom pads. */
 
   #status { left: 50%; top: 50%; transform: translate(-50%,-50%); color: var(--dim); }
   #searchmsg { top: 64px; left: 50%; transform: translateX(-50%); padding: 9px 15px; font-size: 12.5px; display: none;
@@ -173,12 +148,6 @@
 <body>
 <canvas id="stel-canvas"></canvas>
 
-<div id="reticle" class="ui"><span class="ring"></span><span class="h"></span><span class="v"></span></div>
-
-<div id="gotohere" class="ui">
-  <button id="goto-center" title="Slew the mount to the centre of the view (the reticle)">⌖ GoTo here</button>
-</div>
-
 <div id="status" class="ui">Loading planetarium…</div>
 
 <div id="searchmsg" class="ui"></div>
@@ -239,15 +208,6 @@
   <div id="f-msg"></div>
 </div>
 
-<div id="pad" class="ui pad" style="display:none">
-  <div class="row"><button id="p-up">▲</button></div>
-  <div class="row"><button id="p-left">◀</button><button id="p-down">▼</button><button id="p-right">▶</button></div>
-</div>
-
-<div id="zoom" class="ui pad" style="display:none">
-  <button id="z-in">+</button>
-  <button id="z-out">−</button>
-</div>
 
 <!-- Selected-object detail panel (SkySafari-style): tap an object to inspect it,
      centre the view on it, or slew the connected mount to it. -->
@@ -316,19 +276,6 @@ function renderClock() {
   var d = new Date(ms);
   var s = d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   el.textContent = (pinnedMs === null ? '● ' : '') + s;   // ● = live
-}
-function zoomBy(f) {
-  if (!stel) return;
-  var fov = (stel.fov || 50 * D2R) * f;
-  fov = Math.max(0.05 * D2R, Math.min(160 * D2R, fov));
-  stel.zoomTo(fov, 0.4);
-}
-function panBy(daz, dalt) {
-  if (!stel) return;
-  stel.core.lock = null;
-  var o = stel.core.observer;
-  o.yaw += daz * D2R;
-  o.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, o.pitch + dalt * D2R));
 }
 function setLayer(name, on) {
   if (!stel) return;
@@ -469,8 +416,7 @@ function horizonBlockReason() {
 
 // Unpark then slew the mount to a JNOW RA/Dec, reporting a short status string via
 // cb. A parked mount silently ignores slews, so unpark first. Daemon JSON is
-// snake_case (SnakeCaseLower policy). Shared by the object panel's GoTo and the
-// "GoTo here" reticle slew.
+// snake_case (SnakeCaseLower policy). Used by the object panel's GoTo.
 function slewMount(raHours, decDeg, cb) {
   fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
     .catch(function () {})
@@ -484,35 +430,6 @@ function slewMount(raHours, decDeg, cb) {
     }).catch(function () {
       cb('No mount');
     });
-}
-
-// Slew to the reticle (view centre). This is how you GoTo ANYTHING you can put
-// under the crosshair — including objects the engine doesn't draw a clickable
-// marker for, DSS2 features, or a bare sky position. The centre's altitude is the
-// observer pitch, so the same horizon safety applies: block at/below the horizon.
-function gotoViewCenter() {
-  if (!stel) return;
-  if (!API) { showSearchMsg('Connect to a server to slew the mount.', 4000); return; }
-  var o = stel.core.observer;
-  var altDeg = o.pitch * 180 / Math.PI;
-  if (altDeg <= 0) {
-    showSearchMsg('⚠ The view centre is below your horizon (alt ' + Math.round(altDeg)
-      + '°). Slew blocked — it would point the mount at the ground.', 6000);
-    return;
-  }
-  // View-centre direction (OBSERVED) → ICRF → JNOW RA/Dec for the slew, mirroring
-  // the two-step frame conversions used elsewhere on the page.
-  var vObs = stel.s2c(o.yaw, o.pitch);
-  var icrf = stel.convertFrame(o, 'OBSERVED', 'ICRF', vObs);
-  var jnow = stel.c2s(stel.convertFrame(o, 'ICRF', 'JNOW', icrf));
-  var raH = stel.anp(jnow[0]) * 12 / Math.PI;
-  var decD = stel.anpm(jnow[1]) * 180 / Math.PI;
-  var btn = document.getElementById('goto-center');
-  btn.textContent = 'Slewing…'; btn.disabled = true;
-  slewMount(raH, decD, function (text) {
-    btn.textContent = text;
-    setTimeout(function () { btn.textContent = '⌖ GoTo here'; btn.disabled = false; }, 2200);
-  });
 }
 
 // Catalog stars render as filled discs; the engine scales the bright ones up so
@@ -1028,12 +945,7 @@ function wireCmds() {
 }
 
 function wireControls() {
-  ['timebar', 'layers', 'pad', 'zoom'].forEach(function (id) { document.getElementById(id).style.display = ''; });
-  // These default to display:none in CSS, so clearing the inline style would just
-  // fall back to hidden — set the explicit display they need.
-  document.getElementById('reticle').style.display = 'block';
-  document.getElementById('gotohere').style.display = 'flex';
-  document.getElementById('goto-center').onclick = gotoViewCenter;
+  ['timebar', 'layers'].forEach(function (id) { document.getElementById(id).style.display = ''; });
   document.getElementById('status').style.display = 'none';
 
   var nowBtn = document.getElementById('t-now');
@@ -1046,13 +958,7 @@ function wireControls() {
     var d = new Date(); d.setHours(22, 0, 0, 0); pin(d.getTime());
   };
 
-  document.getElementById('z-in').onclick = function () { zoomBy(0.6); };
-  document.getElementById('z-out').onclick = function () { zoomBy(1 / 0.6); };
-  var step = 10;
-  document.getElementById('p-up').onclick = function () { panBy(0, step); };
-  document.getElementById('p-down').onclick = function () { panBy(0, -step); };
-  document.getElementById('p-left').onclick = function () { panBy(-step, 0); };
-  document.getElementById('p-right').onclick = function () { panBy(step, 0); };
+  // Pan + zoom are native (trackpad/mouse) — no on-screen pads.
 
   Array.prototype.forEach.call(document.querySelectorAll('#layers button[data-layer]'), function (b) {
     b.onclick = function () { var on = !b.classList.contains('on'); b.classList.toggle('on', on); setLayer(b.dataset.layer, on); };
