@@ -1072,6 +1072,13 @@ StelWebEngine({
     var core = s.core;
     var base = './skydata/';
     core.stars.addDataSource({ url: base + 'stars' });
+    // Deep online star survey (Gaia DR2) so stars fill in past the bundled offline
+    // catalogue's mag-7 limit — down to the mag-16 cap set below. Tiles load on
+    // demand when you zoom in (like DSS2); off-net it simply stays at the bundled
+    // bright stars. key:'gaia' marks it as the supplementary deep survey: it sorts
+    // after the bundled catalogue (named bright stars keep winning selection) and
+    // its anonymous stars are drawn without name labels.
+    core.stars.addDataSource({ url: 'https://data.stellarium.org/surveys/gaia_dr2', key: 'gaia' });
     core.skycultures.addDataSource({ url: base + 'skycultures/western', key: 'western' });
     core.dsos.addDataSource({ url: base + 'dso' });
     core.landscapes.addDataSource({ url: base + 'landscapes/horizon', key: 'horizon' });
@@ -1108,9 +1115,15 @@ StelWebEngine({
     // Show bright-star NAME labels (SkySafari-style) so you can read what star you're
     // looking at as you zoom in. The engine labels only the brighter stars (it's
     // magnitude-gated), so the view stays uncluttered — and showing star hints also
-    // makes those stars selectable on click (the engine gates picking on hints, which
-    // is why bare star points weren't clickable before).
+    // (Star click-selection itself no longer depends on this — the engine was
+    // rebuilt so every rendered star registers a pickable area; this just controls
+    // the on-sky NAME labels for bright stars.)
     core.stars.hints_visible = true;
+    // Go deep but bounded: show (and allow clicking) stars down to magnitude 16.
+    // The bundled catalogue stops at mag 7; the Gaia survey above fills 7→16. The
+    // engine still limits by zoom, so wide-field stays bright-only and the faint
+    // Gaia stars appear only as you zoom in.
+    core.display_limit_mag = 16;
     // Populate the map with object MARKERS by default so you can see what's out
     // there to capture — especially in unfamiliar regions (e.g. the southern sky)
     // where names alone don't help. The engine draws a marker for every DSO down
