@@ -590,7 +590,13 @@ function loadCatalogList() {
 }
 
 function catMeta(id) { return _catList && _catList.filter(function (c) { return c.id === id; })[0]; }
-function catLimit(id) { var c = catMeta(id); return (c && c.group === 'Types') ? 250 : 300; }
+// INTERIM CAP. CEF's offscreen renderer here is software-GL: every overlay point
+// is its own draw call (the engine has no point batching), so ~300 markers lock
+// it (Safari, hardware-GL, does 300 at 60fps). Until the engine gets MultiPoint
+// batching, show the brightest CAT_MAX of each catalog — server sorts
+// brightest-first, so these are the best targets anyway.
+var CAT_MAX = 120;
+function catLimit(id) { return CAT_MAX; }
 function catColor(id) { var c = catMeta(id); return (c && c.group === 'Types') ? '#ffb74d' : '#7ee787'; }
 
 // '__dsos' is the engine's full deep-sky layer (off by default); the rest are
