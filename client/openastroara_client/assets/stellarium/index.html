@@ -85,6 +85,9 @@
   #info .acts button:hover { background: rgba(255,255,255,0.14); }
   #info .acts button[disabled] { opacity: .35; cursor: default; }
   #info .acts #i-goto { background: var(--accent-bg); color: var(--accent); }
+  #info .acts.mount { margin-top: 8px; }
+  #info .acts #i-stop { background: rgba(255,99,99,0.18); color: #ff8a80; }
+  #info .acts #i-stop:hover { background: rgba(255,99,99,0.28); }
   #info .warn { color: #ffb74d; }
 
   /* Left drawer cards — Tonight + Framing share the slot under the layer pills */
@@ -230,6 +233,10 @@
   <div class="acts">
     <button id="i-center" title="Centre the view on this object">Center</button>
     <button id="i-goto" title="Slew the connected mount to this object">GoTo</button>
+  </div>
+  <div class="acts mount">
+    <button id="i-stop" title="Abort the mount's current slew">Stop</button>
+    <button id="i-home" title="Send the mount to its home position">Home</button>
   </div>
 </div>
 
@@ -387,8 +394,11 @@ function renderInfo(sel) {
   document.getElementById('i-rows').innerHTML = html;
 
   // GoTo needs a connected daemon, a resolved RA/Dec, and a target the site can
-  // actually reach.
+  // actually reach. Stop/Home are mount controls, independent of the selection —
+  // available whenever the daemon is reachable.
   document.getElementById('i-goto').disabled = !(API && selRaHours != null && selVisible);
+  document.getElementById('i-stop').disabled = !API;
+  document.getElementById('i-home').disabled = !API;
   el.style.display = 'block';
 }
 
@@ -450,6 +460,41 @@ function wireSelection() {
         btn.textContent = 'No mount';
       }).then(function () {
         setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null && selVisible); }, 2200);
+      });
+  };
+
+  // Stop — abort the mount's current slew (halts all axes). Always available when
+  // the daemon is reachable; you want to be able to stop regardless of selection.
+  document.getElementById('i-stop').onclick = function () {
+    if (!API) return;
+    var btn = document.getElementById('i-stop');
+    var label = btn.textContent;
+    btn.textContent = 'Stopping…'; btn.disabled = true;
+    fetch(API + '/api/v1/equipment/telescope/abort', { method: 'POST' })
+      .then(function (r) { btn.textContent = r.ok ? 'Stopped ✓' : 'No mount'; })
+      .catch(function () { btn.textContent = 'No mount'; })
+      .then(function () {
+        setTimeout(function () { btn.textContent = label; btn.disabled = !API; }, 2200);
+      });
+  };
+
+  // Home — send the mount to its home position. Unpark first (a parked mount
+  // ignores the command), then FindHome.
+  document.getElementById('i-home').onclick = function () {
+    if (!API) return;
+    var btn = document.getElementById('i-home');
+    var label = btn.textContent;
+    btn.textContent = 'Homing…'; btn.disabled = true;
+    fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
+      .catch(function () {})
+      .then(function () {
+        return fetch(API + '/api/v1/equipment/telescope/home', { method: 'POST' });
+      }).then(function (r) {
+        btn.textContent = r.ok ? 'Homing ✓' : (r.status === 500 ? 'No mount' : 'Not supported');
+      }).catch(function () {
+        btn.textContent = 'No mount';
+      }).then(function () {
+        setTimeout(function () { btn.textContent = label; btn.disabled = !API; }, 2200);
       });
   };
 }
