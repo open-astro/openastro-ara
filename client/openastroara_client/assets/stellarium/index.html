@@ -590,12 +590,10 @@ function loadCatalogList() {
 }
 
 function catMeta(id) { return _catList && _catList.filter(function (c) { return c.id === id; })[0]; }
-// INTERIM CAP. CEF's offscreen renderer here is software-GL: every overlay point
-// is its own draw call (the engine has no point batching), so ~300 markers lock
-// it (Safari, hardware-GL, does 300 at 60fps). Until the engine gets MultiPoint
-// batching, show the brightest CAT_MAX of each catalog — server sorts
-// brightest-first, so these are the best targets anyway.
-var CAT_MAX = 120;
+// Show the brightest CAT_MAX of each catalog (server sorts brightest-first).
+// With GPU shared-texture OSR enabled this can be large; the cap is now about
+// keeping the sky readable rather than dodging the software-renderer lockup.
+var CAT_MAX = 400;
 function catLimit(id) { return CAT_MAX; }
 function catColor(id) { var c = catMeta(id); return (c && c.group === 'Types') ? '#ffb74d' : '#7ee787'; }
 
@@ -649,19 +647,31 @@ function toggleCatalog(id, on) {
     .catch(function () {});
 }
 
-// Each object is a coloured dot marker — NO per-feature `title`. The engine
-// re-lays-out and repaints every title as text each frame, and under CEF's
-// offscreen GL that text path locks the renderer even at ~100 objects (Safari,
-// same wasm, stays 60fps — so it's the CEF font path, not the point count).
-// Labelling 100+ catalog objects is unreadable clutter anyway; identity comes
-// from clicking a marker. Dots are cheap GL points and scale to thousands.
+// Markers are tiered to bound the per-frame CPU cost in the WASM render loop
+// (which GPU compositing does NOT relieve): an open ring + name label is a
+// 64-segment polygon plus per-frame text layout, so only the brightest
+// CAT_DETAIL objects get that treatment; every other object gets a cheap
+// single-vertex dot. Objects arrive brightest-first, so the notable members are
+// the ones that get rings + names. This keeps even a large NGC overlay smooth.
+var CAT_RING_DEG = 0.18;   // angular radius of the marker ring
+var CAT_DETAIL = 40;       // brightest N get a ring + name; the rest a plain dot
 function catalogGeojson(objs, id) {
   var col = catColor(id);
   return {
-    type: 'FeatureCollection', features: (objs || []).map(function (o) {
+    type: 'FeatureCollection', features: (objs || []).map(function (o, i) {
+      if (i < CAT_DETAIL) {
+        return {
+          type: 'Feature',
+          properties: {
+            stroke: col, 'stroke-width': 2, 'stroke-opacity': 0.95, 'fill-opacity': 0,
+            title: cleanName(o.name),
+          },
+          geometry: { type: 'Circle', center: [o.ra_deg, o.dec_deg], radius: CAT_RING_DEG },
+        };
+      }
       return {
         type: 'Feature',
-        properties: { stroke: col, 'stroke-width': 5, 'stroke-opacity': 0.95, fill: col, 'fill-opacity': 0.9 },
+        properties: { stroke: col, 'stroke-width': 4, 'stroke-opacity': 0.9, fill: col, 'fill-opacity': 0.85 },
         geometry: { type: 'Point', coordinates: [o.ra_deg, o.dec_deg] },
       };
     }),
