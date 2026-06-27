@@ -127,15 +127,17 @@ class WsEventStream {
     _reconnectTimer = null;
     final socket = _connect(_url, const {'X-Ara-WS-Version': wsVersion});
     _socket = socket;
-    // On a reconnect (we have a last-seen seq) ask the server to replay what we
-    // missed — it answers with a resume-response frame, then replays the gap.
-    // The send buffers in the sink until the HTTP upgrade completes; if the TCP
-    // connect fails before the upgrade the buffered token is dropped and this
-    // attempt is a cold connect — but _lastSeq is retained, so the next
-    // successful reconnect still resumes from it.
-    if (_lastSeq != null) {
-      socket.send(jsonEncode({'resume_token': _lastSeq.toString()}));
-    }
+    // ALWAYS send a resume request as the very first frame — even on a fresh
+    // connect (token "0"). The server gives the client a 5s window to send one,
+    // and it enforces that window by cancelling its `ReceiveAsync`, which in .NET
+    // ABORTS the WebSocket — so a silent fresh client gets dropped at t=5s and
+    // loops forever as "reconnecting". Sending "0" lands a frame immediately
+    // (no abort) and draws a resume-response back, which flips the link to
+    // `connected`. On a reconnect we send the real last-seen seq to replay the
+    // gap. The send buffers in the sink until the HTTP upgrade completes; if the
+    // TCP connect fails first the buffered token is dropped (cold connect) but
+    // _lastSeq is retained for the next successful reconnect.
+    socket.send(jsonEncode({'resume_token': _lastSeq?.toString() ?? '0'}));
     // cancelOnError auto-cancels the subscription before onError runs, so the
     // sub.cancel() inside _onClosed is a harmless no-op on the error path (and
     // the real cancel on the onDone path); either way the link is finished.
