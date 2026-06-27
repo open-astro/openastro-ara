@@ -56,39 +56,53 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   }
 
   Future<void> _init() async {
-    // Start the shared loopback asset server + build the page URL. Both renderers
-    // load the same self-driven page; all Flutter↔page comms go through this
-    // server's loopback channels, not a webview JS bridge.
-    final String url;
+    // Pin the autoDispose site/server providers for the duration of init. Without
+    // this, awaiting `siteLocationProvider.future` across the async gaps below
+    // races the provider's autodisposal ("Cannot use the Ref … after it has been
+    // disposed"); the old CEF-first ordering only masked it by delaying the read.
+    final keepSite = ref.listenManual(siteLocationProvider, (_, _) {});
+    final keepServers = ref.listenManual(savedServersProvider, (_, _) {});
     try {
-      final server = await StellariumServer.start();
-      _server = server;
-      // Handle events the page posts back (e.g. framing → add-to-sequence).
-      _eventSub = server.events.listen(_onPageEvent);
-      // The page self-initialises from these query params: the observer site, and
-      // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
-      final site = ref.read(siteLocationProvider).asData?.value ??
-          await ref.read(siteLocationProvider.future);
-      final servers = await ref.read(savedServersProvider.future);
-      final api = servers.isNotEmpty ? servers.last.baseUrl : '';
-      final query = {
-        'lat': (site?.latitudeDeg ?? 0).toString(),
-        'lon': (site?.longitudeDeg ?? 0).toString(),
-        'elev': (site?.elevationM ?? 0).toString(),
-        'api': api,
-      }.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
-      url = '${server.baseUrl}/index.html?$query';
-    } catch (e, st) {
-      debugPrint('StellariumView: asset server / site read failed: $e\n$st');
-      if (mounted) setState(() => _unavailable = true);
-      return;
-    }
-    if (!mounted) return;
+      // Start the shared loopback asset server + build the page URL. Both renderers
+      // load the same self-driven page; all Flutter↔page comms go through this
+      // server's loopback channels, not a webview JS bridge.
+      final String url;
+      try {
+        final server = await StellariumServer.start();
+        if (!mounted) return;
+        _server = server;
+        // Handle events the page posts back (e.g. framing → add-to-sequence).
+        _eventSub = server.events.listen(_onPageEvent);
+        // The page self-initialises from these query params: the observer site, and
+        // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
+        final site = ref.read(siteLocationProvider).asData?.value ??
+            await ref.read(siteLocationProvider.future);
+        if (!mounted) return;
+        final servers = await ref.read(savedServersProvider.future);
+        if (!mounted) return;
+        final api = servers.isNotEmpty ? servers.last.baseUrl : '';
+        final query = {
+          'lat': (site?.latitudeDeg ?? 0).toString(),
+          'lon': (site?.longitudeDeg ?? 0).toString(),
+          'elev': (site?.elevationM ?? 0).toString(),
+          'api': api,
+        }.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
+        url = '${server.baseUrl}/index.html?$query';
+      } catch (e, st) {
+        debugPrint('StellariumView: asset server / site read failed: $e\n$st');
+        if (mounted) setState(() => _unavailable = true);
+        return;
+      }
+      if (!mounted) return;
 
-    if (kUseWebViewAll) {
-      await _initWebViewAll(url);
-    } else {
-      await _initCef(url);
+      if (kUseWebViewAll) {
+        await _initWebViewAll(url);
+      } else {
+        await _initCef(url);
+      }
+    } finally {
+      keepSite.close();
+      keepServers.close();
     }
   }
 
@@ -121,10 +135,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // view. No OSR/IOSurface texture handoff, so it doesn't hit the CEF stall.
   Future<void> _initWebViewAll(String url) async {
     try {
-      final controller = wva.WebViewController()
-        ..setJavaScriptMode(wva.JavaScriptMode.unrestricted)
-        ..setBackgroundColor(AraColors.bgPrimary)
-        ..loadRequest(Uri.parse(url));
+      // Keep this minimal: webview_all notes some APIs are unimplemented on macOS
+      // WKWebView, and an unimplemented setter would abort the whole init. JS is on
+      // by default in WKWebView; we only strictly need to load the URL.
+      final controller = wva.WebViewController()..loadRequest(Uri.parse(url));
       if (!mounted) return;
       setState(() => _wvaController = controller);
     } catch (e, st) {
