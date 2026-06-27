@@ -63,7 +63,8 @@
   .pad button:hover { background: var(--mat-2); }
 
   #status { left: 50%; top: 50%; transform: translate(-50%,-50%); color: var(--dim); }
-  #searchmsg { top: 64px; left: 50%; transform: translateX(-50%); padding: 6px 14px; font-size: 12px; display: none;
+  #searchmsg { top: 64px; left: 50%; transform: translateX(-50%); padding: 9px 15px; font-size: 12.5px; display: none;
+    max-width: 340px; line-height: 1.4; text-align: center;
     background: rgba(70,30,30,0.78); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid rgba(255,120,120,0.4); border-radius: 10px; }
 
@@ -323,6 +324,8 @@ function setLayer(name, on) {
 // the connected mount to it via the daemon REST API).
 var selRaHours = null, selDecDeg = null;   // last selection's JNOW coords, for GoTo
 var selVisible = false;                     // does it ever rise above the site horizon?
+var selAltDeg = null;                       // current altitude (deg); ≤0 = below horizon now
+var selRiseStr = null;                      // tonight's rise time, formatted, or null
 
 function pad2(n) { n = Math.abs(Math.round(n)); return (n < 10 ? '0' : '') + n; }
 function fmtRa(rad) {            // radians → "HHh MMm SSs"
@@ -337,7 +340,8 @@ function cleanName(s) { return String(s || '').replace(/^NAME /, '').replace(/^\
 
 function renderInfo(sel) {
   var el = document.getElementById('info');
-  if (!sel) { el.style.display = 'none'; selRaHours = selDecDeg = null; return; }
+  if (!sel) { el.style.display = 'none'; selRaHours = selDecDeg = selAltDeg = null; selRiseStr = null; return; }
+  selAltDeg = null; selRiseStr = null;
 
   var names = [];
   try { names = sel.designations() || []; } catch (e) {}
@@ -365,6 +369,7 @@ function renderInfo(sel) {
     rows.push(['RA', fmtRa(ra)]);
     rows.push(['Dec', fmtDeg(dec)]);
     var azalt = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', radec));
+    selAltDeg = stel.anpm(azalt[1]) * 180 / Math.PI;
     rows.push(['Az', fmtDeg(stel.anp(azalt[0]))]);
     rows.push(['Alt', fmtDeg(stel.anpm(azalt[1]))]);
 
@@ -376,13 +381,14 @@ function renderInfo(sel) {
     var maxAlt = 90 - Math.abs(LAT - selDecDeg);
     selVisible = maxAlt > 0;
     rows.push(['Max alt', (maxAlt > 0 ? maxAlt.toFixed(0) + '°' : '<span class="warn">never rises here</span>')]);
-  } catch (e) { selRaHours = selDecDeg = null; selVisible = false; }
+  } catch (e) { selRaHours = selDecDeg = selAltDeg = null; selVisible = false; }
 
   // Rise/set tonight.
   try {
     var vis = sel.computeVisibility();
     if (vis && vis.length && vis[0].rise != null) {
-      rows.push(['Rise', new Date(unixMsFromMjd(vis[0].rise)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+      selRiseStr = new Date(unixMsFromMjd(vis[0].rise)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      rows.push(['Rise', selRiseStr]);
       rows.push(['Set', new Date(unixMsFromMjd(vis[0].set)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
     }
   } catch (e) {}
@@ -393,16 +399,34 @@ function renderInfo(sel) {
   }
   document.getElementById('i-rows').innerHTML = html;
 
-  // GoTo needs a connected daemon, a resolved RA/Dec, and a target the site can
-  // actually reach. Stop/Home are mount controls, independent of the selection —
-  // available whenever the daemon is reachable.
-  document.getElementById('i-goto').disabled = !(API && selRaHours != null && selVisible);
+  // GoTo needs a connected daemon and a resolved RA/Dec. We DON'T disable it for
+  // below-horizon targets — instead the click handler runs a horizon safety check
+  // and pops a clear "why it's blocked" message, so the user understands the gate
+  // rather than facing a dead greyed-out button. Stop/Home are mount controls,
+  // independent of the selection — available whenever the daemon is reachable.
+  document.getElementById('i-goto').disabled = !(API && selRaHours != null);
   document.getElementById('i-stop').disabled = !API;
   document.getElementById('i-home').disabled = !API;
   el.style.display = 'block';
 }
 
 function unixMsFromMjd(mjd) { return (mjd - 40587.0) * 86400000.0; }
+
+// Is it unsafe to slew the mount to the current selection right now? Returns a
+// human-readable reason if so (target never rises here, or is below the horizon
+// at this moment), or null when it's safe to slew. Drives the GoTo block message.
+function horizonBlockReason() {
+  var nm = (document.getElementById('i-name').textContent || 'This target').trim();
+  if (!selVisible) {
+    return '⚠ ' + nm + ' never rises above the horizon from your site — slew blocked.';
+  }
+  if (selAltDeg != null && selAltDeg <= 0) {
+    var rise = selRiseStr ? ' Rises ~' + selRiseStr + '.' : '';
+    return '⚠ ' + nm + ' is below your horizon now (alt ' + Math.round(selAltDeg) + '°).' + rise
+      + ' Slew blocked — it would point the mount at the ground.';
+  }
+  return null;
+}
 
 // Catalog stars render as filled discs; the engine scales the bright ones up so
 // far that at high zoom they become big "blotchy" blobs over the DSS2 photo
@@ -443,6 +467,11 @@ function wireSelection() {
   };
   document.getElementById('i-goto').onclick = function () {
     if (!API || selRaHours == null) return;
+    // Safety gate: never slew to a target at or below the horizon — the mount
+    // would swing to point at (or into) the ground, risking a pier/tripod strike.
+    // Block with a clear reason instead of slewing.
+    var block = horizonBlockReason();
+    if (block) { showSearchMsg(block, 6000); return; }
     var btn = document.getElementById('i-goto');
     btn.textContent = 'Slewing…'; btn.disabled = true;
     // A parked mount silently ignores slews, so unpark first; then slew. Daemon
@@ -459,7 +488,7 @@ function wireSelection() {
       }).catch(function () {
         btn.textContent = 'No mount';
       }).then(function () {
-        setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null && selVisible); }, 2200);
+        setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
       });
   };
 
@@ -504,10 +533,10 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
 }
 var _msgTimer = null;
-function showSearchMsg(msg) {
+function showSearchMsg(msg, ms) {
   var el = document.getElementById('searchmsg');
   el.textContent = msg; el.style.display = 'block';
-  clearTimeout(_msgTimer); _msgTimer = setTimeout(function () { el.style.display = 'none'; }, 3500);
+  clearTimeout(_msgTimer); _msgTimer = setTimeout(function () { el.style.display = 'none'; }, ms || 3500);
 }
 
 // Resolve a typed query to an engine object. Tries the raw text, a "NAME …"
