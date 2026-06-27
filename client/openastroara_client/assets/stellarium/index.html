@@ -539,15 +539,24 @@ function wireSelection() {
     // designation happens to be blank still count as distinct (re-render).
     try { var d = sel.designations(); return (d && d.length) ? d.join('|') : 'obj'; } catch (e) { return 'obj'; }
   }
-  // stel.change fires on any state change; only re-render when the selection
-  // actually differs (cheap key compare avoids per-frame churn).
-  stel.change(function () {
+  // Re-render the info panel only when the selection actually differs (cheap key
+  // compare avoids per-frame churn).
+  function syncSelection() {
     var sel = stel.core.selection || null;
     var k = selKey(sel);
     if (k !== curKey) { curKey = k; renderInfo(sel); }
+  }
+  // stel.change fires for JS-side state changes (e.g. selecting via the search bar
+  // sets core.selection in JS) — that path shows the panel fine. But when you CLICK
+  // a star/object the ENGINE sets core.selection internally, which does not reliably
+  // fire this JS callback, so the panel never updated and the name looked "missing".
+  // Poll core.selection as well so a clicked object always populates the panel.
+  stel.change(function () {
+    syncSelection();
     updateStarScale();
     followFrame();
   });
+  setInterval(syncSelection, 150);
   updateStarScale();
 
   document.getElementById('i-close').onclick = function () { stel.core.selection = 0; };
