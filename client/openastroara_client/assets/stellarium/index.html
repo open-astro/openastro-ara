@@ -1080,6 +1080,12 @@ StelWebEngine({
     // GeoJSON overlay can match it, so this is the right tool for the bulk display.
     core.dsos.visible = true;
     core.dsos.hints_visible = true;
+    // Show bright-star NAME labels (SkySafari-style) so you can read what star you're
+    // looking at as you zoom in. The engine labels only the brighter stars (it's
+    // magnitude-gated), so the view stays uncluttered — and showing star hints also
+    // makes those stars selectable on click (the engine gates picking on hints, which
+    // is why bare star points weren't clickable before).
+    core.stars.hints_visible = true;
     // Populate the map with object MARKERS by default so you can see what's out
     // there to capture — especially in unfamiliar regions (e.g. the southern sky)
     // where names alone don't help. The engine draws a marker for every DSO down
