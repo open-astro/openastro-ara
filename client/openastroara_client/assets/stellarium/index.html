@@ -574,108 +574,41 @@ function toggleTonight() {
   if (open && !_tonightLoaded) { _tonightLoaded = true; loadTonight(); }
 }
 
-// ---- Catalog overlays ---------------------------------------------------
-// Toggle named catalogs (Messier/NGC/IC) and object-type filters, fetched from
-// the daemon's OpenNGC-derived /api/v1/catalogs and drawn as labelled marker
-// layers — the engine can't filter its own DSOs, so these ride on top.
-var _catList = null;
-var catData = {};               // id -> { layer, geo, on }
+// ---- Deep-sky controls (native engine) ----------------------------------
+// The engine's own core.dsos layer renders the FULL bundled DSO catalog
+// (NGC / IC / Messier / Caldwell — designations parsed natively) as
+// magnitude-scaled hint circles + names, GPU-batched — SkySafari-quality,
+// thousands of objects, no lock. We do NOT reimplement that with per-object
+// overlays; this panel just drives the engine's native knobs. The search bar
+// already finds any object by designation (NGC 7000, M31, …) via stel.getObj.
+var HINT_MIN = -3, HINT_MAX = 5;   // core.dsos.hints_mag_offset clamp (more +ve = denser labels)
 
-function loadCatalogList() {
-  if (!API) { document.getElementById('cat-list').innerHTML = '<div class="empty">Connect to a server to load catalogs.</div>'; return; }
-  fetch(API + '/api/v1/catalogs')
-    .then(function (r) { return r.ok ? r.json() : []; })
-    .then(function (list) { _catList = list; renderCatalogPanel(); })
-    .catch(function () { document.getElementById('cat-list').innerHTML = '<div class="empty">Catalogs unavailable.</div>'; });
-}
-
-function catMeta(id) { return _catList && _catList.filter(function (c) { return c.id === id; })[0]; }
-// Show the brightest CAT_MAX of each catalog (server sorts brightest-first).
-// With GPU shared-texture OSR enabled this can be large; the cap is now about
-// keeping the sky readable rather than dodging the software-renderer lockup.
-var CAT_MAX = 400;
-function catLimit(id) { return CAT_MAX; }
-function catColor(id) { var c = catMeta(id); return (c && c.group === 'Types') ? '#ffb74d' : '#7ee787'; }
-
-// '__dsos' is the engine's full deep-sky layer (off by default); the rest are
-// server catalogs/type-filters drawn as overlays.
-function catIsOn(id) {
-  if (id === '__dsos') { return !!(stel && stel.core.dsos.visible); }
-  return !!(catData[id] && catData[id].on);
-}
+function dsosOn()    { return !!(stel && stel.core.dsos.visible); }
+function dsosHints() { return !!(stel && stel.core.dsos.hints_visible); }
 
 function renderCatalogPanel() {
   var el = document.getElementById('cat-list');
-  // "All deep sky" is always available (engine-side, no server data needed).
-  var html = '<div class="cat-group">Display</div>'
-    + '<div class="cat-row" data-cat="__dsos"><span>All deep sky</span><span class="dot' + (catIsOn('__dsos') ? ' on' : '') + '"></span></div>';
-  if (!_catList || !_catList.length) {
-    html += '<div class="empty">Install the OpenNGC catalog in the Data Manager to add Messier, Caldwell, NGC/IC and type filters.</div>';
-  } else {
-    var groups = {};
-    _catList.forEach(function (c) { (groups[c.group] = groups[c.group] || []).push(c); });
-    Object.keys(groups).forEach(function (g) {
-      html += '<div class="cat-group">' + escapeHtml(g) + '</div>';
-      groups[g].forEach(function (c) {
-        html += '<div class="cat-row" data-cat="' + escapeHtml(c.id) + '"><span>' + escapeHtml(c.name) + '</span><span class="dot' + (catIsOn(c.id) ? ' on' : '') + '"></span></div>';
-      });
-    });
-  }
-  el.innerHTML = html;
-  Array.prototype.forEach.call(el.querySelectorAll('.cat-row'), function (row) {
-    row.onclick = function () {
-      var id = row.dataset.cat;
-      var on = !catIsOn(id);
-      toggleCatalog(id, on);
-      row.querySelector('.dot').classList.toggle('on', on);
-    };
+  el.innerHTML =
+    '<div class="cat-group">Deep sky</div>'
+    + '<div class="cat-row" data-act="dsos"><span>Deep-sky objects</span><span class="dot' + (dsosOn() ? ' on' : '') + '"></span></div>'
+    + '<div class="cat-row" data-act="hints"><span>Names &amp; markers</span><span class="dot' + (dsosHints() ? ' on' : '') + '"></span></div>'
+    + '<div class="cat-group">Label density</div>'
+    + '<div class="cat-row" data-act="less"><span>Fewer labels</span></div>'
+    + '<div class="cat-row" data-act="more"><span>More labels</span></div>'
+    + '<div class="empty">Showing the full NGC / IC / Messier / Caldwell catalog from the engine. Use the search bar to jump to any object by name or number — e.g. “NGC 7000”, “M31”, “Vega”.</div>';
+  Array.prototype.forEach.call(el.querySelectorAll('[data-act]'), function (n) {
+    n.onclick = function () { dsoAction(n.dataset.act); };
   });
 }
 
-function toggleCatalog(id, on) {
-  if (id === '__dsos') { stel.core.dsos.visible = on; stel.core.dsos.hints_visible = on; return; }
-  if (!catData[id]) {
-    var layer = stel.createLayer({ z: 60, visible: true });
-    var geo = stel.createObj('geojson'); layer.add(geo);
-    catData[id] = { layer: layer, geo: geo, on: false };
-  }
-  catData[id].on = on;
-  if (!on) { catData[id].geo.data = { type: 'FeatureCollection', features: [] }; return; }
-  fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=' + catLimit(id))
-    .then(function (r) { return r.ok ? r.json() : []; })
-    .then(function (objs) { if (catData[id] && catData[id].on) catData[id].geo.data = catalogGeojson(objs, id); })
-    .catch(function () {});
-}
-
-// Markers are tiered to bound the per-frame CPU cost in the WASM render loop
-// (which GPU compositing does NOT relieve): an open ring + name label is a
-// 64-segment polygon plus per-frame text layout, so only the brightest
-// CAT_DETAIL objects get that treatment; every other object gets a cheap
-// single-vertex dot. Objects arrive brightest-first, so the notable members are
-// the ones that get rings + names. This keeps even a large NGC overlay smooth.
-var CAT_RING_DEG = 0.18;   // angular radius of the marker ring
-var CAT_DETAIL = 40;       // brightest N get a ring + name; the rest a plain dot
-function catalogGeojson(objs, id) {
-  var col = catColor(id);
-  return {
-    type: 'FeatureCollection', features: (objs || []).map(function (o, i) {
-      if (i < CAT_DETAIL) {
-        return {
-          type: 'Feature',
-          properties: {
-            stroke: col, 'stroke-width': 2, 'stroke-opacity': 0.95, 'fill-opacity': 0,
-            title: cleanName(o.name),
-          },
-          geometry: { type: 'Circle', center: [o.ra_deg, o.dec_deg], radius: CAT_RING_DEG },
-        };
-      }
-      return {
-        type: 'Feature',
-        properties: { stroke: col, 'stroke-width': 4, 'stroke-opacity': 0.9, fill: col, 'fill-opacity': 0.85 },
-        geometry: { type: 'Point', coordinates: [o.ra_deg, o.dec_deg] },
-      };
-    }),
-  };
+function dsoAction(act) {
+  if (!stel) return;
+  var d = stel.core.dsos;
+  if (act === 'dsos')       { d.visible = !d.visible; if (d.visible && !d.hints_visible) d.hints_visible = true; }
+  else if (act === 'hints') { d.hints_visible = !d.hints_visible; }
+  else if (act === 'more')  { d.hints_mag_offset = Math.min(HINT_MAX, (d.hints_mag_offset || 0) + 0.5); }
+  else if (act === 'less')  { d.hints_mag_offset = Math.max(HINT_MIN, (d.hints_mag_offset || 0) - 0.5); }
+  renderCatalogPanel();
 }
 
 function hideCatalogs() {
@@ -691,7 +624,7 @@ function toggleCatPanel() {
   if (open) {
     toggleFrame(false);
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
-    if (_catList === null) loadCatalogList();
+    renderCatalogPanel();
   }
 }
 
@@ -1005,10 +938,14 @@ StelWebEngine({
     core.landscapes.visible = false;
     core.lines.azimuthal.visible = true;
     core.constellations.lines_visible = true;
-    // Start with a clean sky: no deep-sky objects until the user picks catalogs
-    // (or "All deep sky") in the Catalogs panel — their choice, not a default dump.
-    core.dsos.visible = false;
-    core.dsos.hints_visible = false;
+    // The engine's NATIVE deep-sky layer (its built-in DSO catalog — NGC/IC/Messier
+    // etc.), drawn efficiently with magnitude-scaled hint circles + names, exactly
+    // like SkySafari. On by default so the planetarium shows deep-sky targets out of
+    // the box (this is what "used to show all the NGCs"); toggle via "All deep sky".
+    // The engine renders thousands of these batched on the GPU — no per-object
+    // GeoJSON overlay can match it, so this is the right tool for the bulk display.
+    core.dsos.visible = true;
+    core.dsos.hints_visible = true;
     // Pristine dark sky (Bortle 1) so the DSS2 survey renders bright and punchy
     // — the engine dims DSS by the sky-brightness/light-pollution model, which at
     // the default Bortle 3 washes the photographic imagery out. DSS2 is on by
