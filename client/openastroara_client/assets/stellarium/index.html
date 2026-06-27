@@ -150,15 +150,6 @@
     background: rgba(255,255,255,0.08); border: 1px solid var(--hair); font-size: 14px; line-height: 1; }
   #catalogs .cat-dens button:first-of-type { margin-left: auto; }
   #catalogs .cat-dens button:hover { background: rgba(255,255,255,0.16); }
-  #catalogs .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 7px; }
-  #catalogs .chip { font-size: 11px; padding: 4px 9px; border-radius: 999px; cursor: pointer; color: var(--txt);
-    background: rgba(255,255,255,0.06); border: 1px solid var(--hair); }
-  #catalogs .chip:hover { background: rgba(255,255,255,0.13); }
-  #catalogs .chip.on { background: var(--accent); border-color: var(--accent); color: #04121b; font-weight: 600; }
-  #catalogs .cat-objs .row { padding: 7px 9px; border-radius: 9px; cursor: pointer; }
-  #catalogs .cat-objs .row:hover { background: rgba(255,255,255,0.08); }
-  #catalogs .cat-objs .row .nm { font-size: 13px; font-weight: 500; color: var(--txt); }
-  #catalogs .cat-objs .row .meta { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -600,25 +591,19 @@ var HINT_MIN = -2, HINT_MAX = 7;   // core.dsos.hints_mag_offset clamp (more +ve
 function dsosOn()    { return !!(stel && stel.core.dsos.visible); }
 function dsosHints() { return !!(stel && stel.core.dsos.hints_visible); }
 
-// The whole sky displays natively (engine knob at top). Below it is a target
-// PICKER: pick a catalog/list → browse its objects → click one to point the sky
-// at it (native goto, same as search) and frame it. No per-object overlays.
-var _catalogs = null;     // catalog list metadata from /api/v1/catalogs
-var _activeCat = null;    // currently selected catalog id
-
+// No lists/overlays — the map just shows the objects the engine offers as
+// markers (core.dsos). This panel only drives the native knobs: show/hide the
+// objects and how dense the markers are.
 function renderCatalogPanel() {
   var el = document.getElementById('cat-list');
   el.innerHTML =
-    '<div class="cat-group">Sky display</div>'
-    + '<div class="cat-row" data-act="dsos"><span>Deep-sky objects</span><span class="dot' + (dsosOn() ? ' on' : '') + '"></span></div>'
-    + '<div class="cat-dens"><span>Object density</span><button data-act="less" title="Fewer objects">–</button><button data-act="more" title="More objects">+</button></div>'
-    + '<div class="cat-group">Catalogs &amp; lists</div>'
-    + '<div id="cat-chips" class="cat-chips"></div>'
-    + '<div id="cat-objs" class="cat-objs"><div class="empty">Pick a list above, then click an object to point the sky at it and frame it.</div></div>';
+    '<div class="cat-group">Deep sky</div>'
+    + '<div class="cat-row" data-act="dsos"><span>Show objects</span><span class="dot' + (dsosOn() ? ' on' : '') + '"></span></div>'
+    + '<div class="cat-dens"><span>Density</span><button data-act="less" title="Fewer objects">–</button><button data-act="more" title="More objects">+</button></div>'
+    + '<div class="empty">The map shows the objects the engine offers as markers. Raise density to see more. The search bar jumps to any object — “NGC 7000”, “M31”, “Vega”.</div>';
   Array.prototype.forEach.call(el.querySelectorAll('[data-act]'), function (n) {
     n.onclick = function () { dsoAction(n.dataset.act); };
   });
-  if (_catalogs === null) loadCatalogs(); else renderCatChips();
 }
 
 function dsoAction(act) {
@@ -629,53 +614,6 @@ function dsoAction(act) {
   else if (act === 'less')  { d.hints_mag_offset = Math.max(HINT_MIN, (d.hints_mag_offset || 0) - 0.5); }
   var dot = document.querySelector('#cat-list .cat-row[data-act="dsos"] .dot');
   if (dot) dot.classList.toggle('on', dsosOn());
-}
-
-function loadCatalogs() {
-  if (!API) { var o = document.getElementById('cat-objs'); if (o) o.innerHTML = '<div class="empty">Connect to a server to load catalogs.</div>'; return; }
-  fetch(API + '/api/v1/catalogs')
-    .then(function (r) { return r.ok ? r.json() : []; })
-    .then(function (list) { _catalogs = list || []; renderCatChips(); })
-    .catch(function () { var o = document.getElementById('cat-objs'); if (o) o.innerHTML = '<div class="empty">Catalogs unavailable.</div>'; });
-}
-
-function renderCatChips() {
-  var box = document.getElementById('cat-chips'); if (!box) return;
-  if (!_catalogs || !_catalogs.length) {
-    box.innerHTML = '<div class="empty">Install the OpenNGC catalog in the Data Manager to browse Messier, Caldwell, NGC/IC and object types.</div>';
-    return;
-  }
-  box.innerHTML = _catalogs.map(function (c) {
-    return '<button class="chip' + (c.id === _activeCat ? ' on' : '') + '" data-cat="' + escapeHtml(c.id) + '">' + escapeHtml(c.name) + '</button>';
-  }).join('');
-  Array.prototype.forEach.call(box.querySelectorAll('.chip'), function (b) {
-    b.onclick = function () { selectCatalog(b.dataset.cat); };
-  });
-}
-
-function selectCatalog(id) {
-  _activeCat = id;
-  renderCatChips();
-  var objs = document.getElementById('cat-objs');
-  objs.innerHTML = '<div class="empty">Loading…</div>';
-  fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=500')
-    .then(function (r) { return r.ok ? r.json() : []; })
-    .then(function (list) {
-      if (!list || !list.length) { objs.innerHTML = '<div class="empty">No objects in this list.</div>'; return; }
-      objs.innerHTML = '';
-      list.forEach(function (o) {
-        var nm = cleanName(o.name);
-        var row = document.createElement('div'); row.className = 'row';
-        var meta = (o.magnitude != null) ? 'mag ' + o.magnitude.toFixed(1) : '';
-        row.innerHTML = '<div class="nm">' + escapeHtml(nm) + '</div>' + (meta ? '<div class="meta">' + escapeHtml(meta) + '</div>' : '');
-        row.onclick = function () {
-          var ob = resolveQuery(o.name) || resolveQuery(nm);
-          if (ob) selectObject(ob); else pointRaDec(o.ra_deg, o.dec_deg, nm);
-        };
-        objs.appendChild(row);
-      });
-    })
-    .catch(function () { objs.innerHTML = '<div class="empty">Failed to load this list.</div>'; });
 }
 
 function hideCatalogs() {
