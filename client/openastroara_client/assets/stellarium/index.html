@@ -595,7 +595,7 @@ function toggleTonight() {
 // thousands of objects, no lock. We do NOT reimplement that with per-object
 // overlays; this panel just drives the engine's native knobs. The search bar
 // already finds any object by designation (NGC 7000, M31, …) via stel.getObj.
-var HINT_MIN = -3, HINT_MAX = 5;   // core.dsos.hints_mag_offset clamp (more +ve = denser labels)
+var HINT_MIN = -2, HINT_MAX = 7;   // core.dsos.hints_mag_offset clamp (more +ve = denser object markers)
 
 function dsosOn()    { return !!(stel && stel.core.dsos.visible); }
 function dsosHints() { return !!(stel && stel.core.dsos.hints_visible); }
@@ -611,7 +611,7 @@ function renderCatalogPanel() {
   el.innerHTML =
     '<div class="cat-group">Sky display</div>'
     + '<div class="cat-row" data-act="dsos"><span>Deep-sky objects</span><span class="dot' + (dsosOn() ? ' on' : '') + '"></span></div>'
-    + '<div class="cat-dens"><span>Labels</span><button data-act="less" title="Fewer labels">–</button><button data-act="more" title="More labels">+</button></div>'
+    + '<div class="cat-dens"><span>Object density</span><button data-act="less" title="Fewer objects">–</button><button data-act="more" title="More objects">+</button></div>'
     + '<div class="cat-group">Catalogs &amp; lists</div>'
     + '<div id="cat-chips" class="cat-chips"></div>'
     + '<div id="cat-objs" class="cat-objs"><div class="empty">Pick a list above, then click an object to point the sky at it and frame it.</div></div>';
@@ -1013,6 +1013,12 @@ StelWebEngine({
     // GeoJSON overlay can match it, so this is the right tool for the bulk display.
     core.dsos.visible = true;
     core.dsos.hints_visible = true;
+    // Populate the map with object MARKERS by default so you can see what's out
+    // there to capture — especially in unfamiliar regions (e.g. the southern sky)
+    // where names alone don't help. The engine draws a marker for every DSO down
+    // to (hints_limit + offset) and a NAME only for the brighter subset, so raising
+    // the offset adds mostly markers, not label clutter. Tunable in the panel.
+    core.dsos.hints_mag_offset = 3;
     // Pristine dark sky (Bortle 1) so the DSS2 survey renders bright and punchy
     // — the engine dims DSS by the sky-brightness/light-pollution model, which at
     // the default Bortle 3 washes the photographic imagery out. DSS2 is on by
