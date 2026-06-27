@@ -361,7 +361,20 @@ function fmtDeg(rad) {           // radians → "±DD° MM' SS""
   var a = stel.a2af(rad, 0);
   return a.sign + pad2(a.degrees) + '° ' + pad2(a.arcminutes) + "' " + pad2(a.arcseconds) + '"';
 }
-function cleanName(s) { return String(s || '').replace(/^NAME /, '').replace(/^\*\s*/, ''); }
+function cleanName(s) { return String(s || '').replace(/^NAME /, '').replace(/^\*\s*/, '').trim(); }
+
+// Pick the friendliest label from an object's designations. The engine usually
+// lists the proper name first ("Vega"), but not always — prefer an explicit
+// "NAME …" common name, then any non-empty designation (a Bayer id like "alf Lyr"
+// or a catalogue id like "HD 172167"). Skips blank/placeholder tokens so the
+// panel never shows an empty name when a star is clicked.
+function bestName(names) {
+  for (var i = 0; i < names.length; i++) {
+    if (/^NAME /.test(names[i])) { var c = cleanName(names[i]); if (c) return c; }
+  }
+  for (var j = 0; j < names.length; j++) { var c2 = cleanName(names[j]); if (c2) return c2; }
+  return '';
+}
 
 function renderInfo(sel) {
   var el = document.getElementById('info');
@@ -370,10 +383,11 @@ function renderInfo(sel) {
 
   var names = [];
   try { names = sel.designations() || []; } catch (e) {}
-  document.getElementById('i-name').textContent = names.length ? cleanName(names[0]) : 'Object';
   var typeStr = '';
-  try { typeStr = sel.getInfo('type') || ''; } catch (e) {}
-  document.getElementById('i-type').textContent = String(typeStr).trim();
+  try { typeStr = String(sel.getInfo('type') || '').trim(); } catch (e) {}
+  // Never blank: best designation → the type word ("Star") → "Object".
+  document.getElementById('i-name').textContent = bestName(names) || typeStr || 'Object';
+  document.getElementById('i-type').textContent = typeStr;
 
   var rows = [];
   function num(attr) { try { var v = sel.getInfo(attr); return (v != null && !isNaN(v)) ? v : null; } catch (e) { return null; } }
@@ -521,7 +535,9 @@ function wireSelection() {
   var curKey = ' ';
   function selKey(sel) {
     if (!sel) return null;
-    try { var d = sel.designations(); return (d && d.length) ? d[0] : 'obj'; } catch (e) { return 'obj'; }
+    // Key on the whole designation list so two different objects whose first
+    // designation happens to be blank still count as distinct (re-render).
+    try { var d = sel.designations(); return (d && d.length) ? d.join('|') : 'obj'; } catch (e) { return 'obj'; }
   }
   // stel.change fires on any state change; only re-render when the selection
   // actually differs (cheap key compare avoids per-frame churn).
