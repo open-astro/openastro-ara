@@ -590,7 +590,7 @@ function loadCatalogList() {
 }
 
 function catMeta(id) { return _catList && _catList.filter(function (c) { return c.id === id; })[0]; }
-function catLimit(id) { var c = catMeta(id); return (c && c.group === 'Types') ? 400 : 500; }
+function catLimit(id) { var c = catMeta(id); return (c && c.group === 'Types') ? 250 : 300; }
 function catColor(id) { var c = catMeta(id); return (c && c.group === 'Types') ? '#ffb74d' : '#7ee787'; }
 
 // '__dsos' is the engine's full deep-sky layer (off by default); the rest are
@@ -643,17 +643,17 @@ function toggleCatalog(id, on) {
     .catch(function () {});
 }
 
-// Each object is a labelled point marker (engine draws Point geometry as a
-// screen-fixed dot + the title) coloured by group.
+// Each object is a coloured point marker. Labels are the expensive part — the
+// engine repaints every title each frame, so hundreds of them lock the renderer.
+// Objects arrive brightest-first; label only the brightest few, dots for the rest.
+var CAT_LABELS = 25;
 function catalogGeojson(objs, id) {
   var col = catColor(id);
   return {
-    type: 'FeatureCollection', features: (objs || []).map(function (o) {
-      return {
-        type: 'Feature',
-        properties: { stroke: col, 'stroke-width': 6, 'stroke-opacity': 0.95, fill: col, 'fill-opacity': 0.9, title: cleanName(o.name) },
-        geometry: { type: 'Point', coordinates: [o.ra_deg, o.dec_deg] },
-      };
+    type: 'FeatureCollection', features: (objs || []).map(function (o, i) {
+      var props = { stroke: col, 'stroke-width': 5, 'stroke-opacity': 0.95, fill: col, 'fill-opacity': 0.9 };
+      if (i < CAT_LABELS) props.title = cleanName(o.name);
+      return { type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: [o.ra_deg, o.dec_deg] } };
     }),
   };
 }
