@@ -1072,13 +1072,11 @@ StelWebEngine({
     var core = s.core;
     var base = './skydata/';
     core.stars.addDataSource({ url: base + 'stars' });
-    // Deep online star survey (Gaia DR2) so stars fill in past the bundled offline
-    // catalogue's mag-7 limit — down to the mag-16 cap set below. Tiles load on
-    // demand when you zoom in (like DSS2); off-net it simply stays at the bundled
-    // bright stars. key:'gaia' marks it as the supplementary deep survey: it sorts
-    // after the bundled catalogue (named bright stars keep winning selection) and
-    // its anonymous stars are drawn without name labels.
-    core.stars.addDataSource({ url: 'https://data.stellarium.org/surveys/gaia_dr2', key: 'gaia' });
+    // NOTE: a deep online star survey (Gaia DR2) was trialled here to reach mag 16,
+    // but its high-volume online tiles destabilised the CEF offscreen renderer
+    // (lock-ups / idle freeze). Reverted — deep stars will be done with a bundled
+    // OFFLINE catalogue instead (stable, no online tile churn). The bundled mag-7
+    // stars remain fully clickable via the rebuilt engine.
     core.skycultures.addDataSource({ url: base + 'skycultures/western', key: 'western' });
     core.dsos.addDataSource({ url: base + 'dso' });
     core.landscapes.addDataSource({ url: base + 'landscapes/horizon', key: 'horizon' });
@@ -1119,12 +1117,8 @@ StelWebEngine({
     // rebuilt so every rendered star registers a pickable area; this just controls
     // the on-sky NAME labels for bright stars.)
     core.stars.hints_visible = true;
-    // Go deep: show (and click) stars down to magnitude 16. The bundled catalogue
-    // stops at mag 7; the Gaia survey above fills 7→16, loaded on demand as you
-    // zoom. Safe under CEF because the rebuilt engine caps clickable hit-area
-    // registration per frame (brightest first) — deep dense fields no longer stall
-    // the renderer the way "an area for every star" did.
-    core.display_limit_mag = 16;
+    // (Gaia deep-star cap removed with the online survey above; the bundled
+    // catalogue only reaches mag 7, so no explicit display limit is needed.)
     // Populate the map with object MARKERS by default so you can see what's out
     // there to capture — especially in unfamiliar regions (e.g. the southern sky)
     // where names alone don't help. The engine draws a marker for every DSO down
