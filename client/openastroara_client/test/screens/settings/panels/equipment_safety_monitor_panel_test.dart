@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/safety_monitor_status.dart';
@@ -70,6 +71,7 @@ Future<_FakeSafetyApi> _pump(
   final api = _FakeSafetyApi(status);
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      serverLinkUpProvider.overrideWith((ref) => true),
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       safetyMonitorApiFactoryProvider.overrideWithValue((_) => api),
@@ -134,6 +136,7 @@ void main() {
         _status(state: EquipmentConnectionState.connecting, safe: false));
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
         savedServerServiceProvider.overrideWithValue(
             _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
         safetyMonitorApiFactoryProvider.overrideWithValue((_) => api),
@@ -163,6 +166,7 @@ void main() {
         _status(state: EquipmentConnectionState.connecting, safe: false));
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
         savedServerServiceProvider.overrideWithValue(
             _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
         safetyMonitorApiFactoryProvider.overrideWithValue((_) => api),
@@ -191,6 +195,7 @@ void main() {
     final api = _FakeSafetyApi(_status(safe: true));
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
         savedServerServiceProvider.overrideWithValue(
             _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
         safetyMonitorApiFactoryProvider.overrideWithValue((_) => api),

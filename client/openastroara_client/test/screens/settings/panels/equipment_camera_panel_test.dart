@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
@@ -84,6 +85,7 @@ Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus? status) async {
   final api = _FakeCameraApi(status);
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      serverLinkUpProvider.overrideWith((ref) => true),
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       cameraStatusApiFactoryProvider.overrideWithValue((_) => api),

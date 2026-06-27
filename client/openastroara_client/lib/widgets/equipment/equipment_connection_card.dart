@@ -5,6 +5,7 @@ import '../../models/discovered_device.dart';
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart';
 import '../../state/settings/equipment_connection_state.dart';
+import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 import 'alpaca_chooser_dialog.dart';
 import 'equipment_state_chip.dart';
@@ -15,7 +16,7 @@ import 'equipment_state_chip.dart';
 /// connect (via the §52.2 chooser) / disconnect controls + their error SnackBars;
 /// each panel supplies only the device-specific live body via [connectedBody].
 class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
-    extends StatelessWidget {
+    extends ConsumerWidget {
   final AsyncValue<T?> status;
   final EquipmentDeviceType deviceType;
   final String deviceTypeLabel;
@@ -53,13 +54,18 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       color: AraColors.bgPanel,
       margin: const EdgeInsets.only(top: 4, bottom: 8),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-        child: switch (status) {
+        // Stale-guard: with the server link down, the held status is stale and
+        // connect/disconnect can't reach anything — show a clear "server offline"
+        // state instead of a misleading connected/disconnected device layout.
+        child: !ref.watch(serverLinkUpProvider)
+            ? _serverOffline(context)
+            : switch (status) {
           // A device that's never been connected 404s (null); one disconnected
           // after a session reports a non-null status with state == disconnected.
           // Both mean "no live device" — show the disconnected card (Reconnect +
@@ -80,6 +86,25 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
             ),
         },
       ),
+    );
+  }
+
+  // Shown while the server link is down: the device's status can't be trusted
+  // and connect/disconnect would have nothing to talk to. No Retry button — the
+  // link reconnects on its own, and the card refreshes when it does.
+  Widget _serverOffline(BuildContext context) {
+    return const Row(
+      children: [
+        Icon(Icons.cloud_off, color: AraColors.textSecondary, size: 20),
+        SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Server disconnected — device status is unavailable until the '
+            'connection is restored.',
+            style: TextStyle(color: AraColors.textSecondary),
+          ),
+        ),
+      ],
     );
   }
 
