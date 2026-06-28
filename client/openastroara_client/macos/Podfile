@@ -39,8 +39,4 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end
-  # The §36 webview_cef CEF link-flag workaround that lived here was removed when
-  # webview_cef moved to Swift Package Manager — it's no longer a CocoaPod, so
-  # there's no Pods-Runner xcconfig OTHER_LDFLAGS to rewrite. CEF is now embedded
-  # via the plugin's .xcframework binary target (packages/webview_cef).
 end
