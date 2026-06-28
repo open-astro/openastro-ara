@@ -673,7 +673,11 @@ function loadTonight() {
         row.appendChild(meta);
         row.onclick = function () {
           var o = resolveQuery(it.name) || resolveQuery(it.id);
-          if (o) selectObject(o); else pointRaDec(it.ra_deg, it.dec_deg);
+          if (o) { selectObject(o); }
+          // Guard the coordinate fallback: a daemon row missing ra_deg/dec_deg would
+          // otherwise feed NaN into stel.s2c() and throw with no user feedback.
+          else if (it.ra_deg != null && it.dec_deg != null) { pointRaDec(it.ra_deg, it.dec_deg); }
+          else { showSearchMsg('No coordinates for ' + (it.name || it.id || 'this object')); }
         };
         list.appendChild(row);
       });

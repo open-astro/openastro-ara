@@ -45,6 +45,9 @@ void main() {
     test('rejects a start at/after the end of the resource', () {
       expect(StellariumServer.parseRange('bytes=100-', 100), isNull);
     });
+    test('rejects an unsatisfiable range (last-pos < first-pos) instead of a 1-byte slice', () {
+      expect(StellariumServer.parseRange('bytes=50-10', 100), isNull);
+    });
     test('returns null for a non-bytes or malformed header', () {
       expect(StellariumServer.parseRange('items=0-1', 100), isNull);
       expect(StellariumServer.parseRange(null, 100), isNull);

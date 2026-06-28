@@ -189,6 +189,8 @@ public static class SystemEndpoints {
         const int defaultCatalogLimit = 500;
         catalogs.MapGet("/{catalogId}",
                 (string catalogId, [FromQuery] int? limit, ISkyCatalogService svc, CancellationToken ct) => {
+                    // limit == 0 is intentionally valid — it returns an empty 200, matching the
+                    // /data-manager/{id}/catalog route's documented contract. Only a negative limit is a 400.
                     if (limit is < 0) {
                         return Results.Problem("limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
                     }

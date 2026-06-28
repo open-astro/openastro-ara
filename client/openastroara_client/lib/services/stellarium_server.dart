@@ -221,6 +221,11 @@ class StellariumServer {
       start = s;
       end = endStr.isEmpty ? length - 1 : (int.tryParse(endStr) ?? length - 1);
     }
+    // Unsatisfiable range (last-byte-pos < first-byte-pos, e.g. "bytes=100-5"):
+    // return null so the caller serves the full body (200) rather than the clamp
+    // silently collapsing it to a wrong 1-byte 206. A 200-with-full-body is an
+    // RFC-allowed response to a Range the server chooses not to honour.
+    if (end < start) return null;
     end = end.clamp(start, length - 1);
     return (start, end);
   }
