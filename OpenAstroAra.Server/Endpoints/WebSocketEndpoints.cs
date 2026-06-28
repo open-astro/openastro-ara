@@ -155,8 +155,10 @@ public static partial class WebSocketEndpoints {
                     // (into the resume phase's own 4096-byte buffer, not this loop's
                     // buffer) is intentionally discarded: post-handshake the protocol is
                     // one-way (server→client) and the loop only watches for the client's
-                    // Close. If a future heartbeat/pong arrives as the first frame, read
-                    // its bytes from that buffer here before they're lost.
+                    // Close.
+                    // TODO(ws-heartbeat): if a client→server heartbeat/pong frame is ever
+                    // added, restructure so HandleResumePhaseAsync surfaces its buffer
+                    // bytes — they're unrecoverable here today and would be silently lost.
                     firstWasClose = first.MessageType == WebSocketMessageType.Close;
                 }
                 while (!firstWasClose && !ct.IsCancellationRequested && socket.State == WebSocketState.Open) {

@@ -26,4 +26,28 @@ void main() {
           'application/octet-stream');
     });
   });
+
+  group('StellariumServer.parseRange', () {
+    test('parses a closed range', () {
+      expect(StellariumServer.parseRange('bytes=10-20', 100), (10, 20));
+    });
+    test('open-ended range runs to the last byte', () {
+      expect(StellariumServer.parseRange('bytes=10-', 100), (10, 99));
+    });
+    test('suffix range returns the last N bytes', () {
+      expect(StellariumServer.parseRange('bytes=-15', 100), (85, 99));
+    });
+    test('rejects a malformed "bytes=-1-10" rather than throwing', () {
+      // Leading dash → the suffix branch with a non-numeric "1-10" → null (never
+      // reaches sublist with a bad index).
+      expect(StellariumServer.parseRange('bytes=-1-10', 100), isNull);
+    });
+    test('rejects a start at/after the end of the resource', () {
+      expect(StellariumServer.parseRange('bytes=100-', 100), isNull);
+    });
+    test('returns null for a non-bytes or malformed header', () {
+      expect(StellariumServer.parseRange('items=0-1', 100), isNull);
+      expect(StellariumServer.parseRange(null, 100), isNull);
+    });
+  });
 }

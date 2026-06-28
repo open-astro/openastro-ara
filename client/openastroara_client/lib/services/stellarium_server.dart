@@ -213,7 +213,11 @@ class StellariumServer {
       end = length - 1;
     } else {
       final s = int.tryParse(startStr);
-      if (s == null || s >= length) return null;
+      // `s < 0` is defensive: today startStr is the slice *before the first dash*
+      // so it can't hold a '-' (a leading dash makes it empty → the suffix branch),
+      // but guard anyway so a future change to the dash-splitting can't let a
+      // negative start slip past `>= length` and throw in bytes.sublist(s, …).
+      if (s == null || s < 0 || s >= length) return null;
       start = s;
       end = endStr.isEmpty ? length - 1 : (int.tryParse(endStr) ?? length - 1);
     }
