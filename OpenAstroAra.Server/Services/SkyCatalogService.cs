@@ -170,13 +170,15 @@ namespace OpenAstroAra.Server.Services {
         private static bool TryRaToDeg(string s, out double deg) {
             deg = 0;
             var p = s.Split(':');
-            if (p.Length < 2 || !TryNum(p[0], out var h)) {
+            if (p.Length < 2 || !TryNum(p[0], out var h) || !TryNum(p[1], out var m)) {
                 return false;
             }
-            TryNum(p[1], out var m);
             double sec = 0;
-            if (p.Length > 2) {
-                TryNum(p[2], out sec);
+            // Reject a malformed seconds field rather than silently treating it as 0
+            // — a bad token would otherwise mis-place the object instead of dropping
+            // the row (matters for any future user-imported catalog; OpenNGC is clean).
+            if (p.Length > 2 && !TryNum(p[2], out sec)) {
+                return false;
             }
             deg = (h + (m / 60.0) + (sec / 3600.0)) * 15.0;
             return deg >= 0 && deg < 360;
@@ -191,13 +193,12 @@ namespace OpenAstroAra.Server.Services {
             }
             int sign = s[0] == '-' ? -1 : 1;
             var p = s.TrimStart('+', '-').Split(':');
-            if (p.Length < 2 || !TryNum(p[0], out var d)) {
+            if (p.Length < 2 || !TryNum(p[0], out var d) || !TryNum(p[1], out var m)) {
                 return false;
             }
-            TryNum(p[1], out var m);
             double sec = 0;
-            if (p.Length > 2) {
-                TryNum(p[2], out sec);
+            if (p.Length > 2 && !TryNum(p[2], out sec)) {
+                return false;
             }
             deg = sign * (d + (m / 60.0) + (sec / 3600.0));
             return deg >= -90 && deg <= 90;

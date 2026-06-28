@@ -656,7 +656,7 @@ function loadTonight() {
         list.appendChild(row);
       });
     })
-    .catch(function (e) { list.innerHTML = '<div class="empty">Tonight\'s Sky unavailable (' + e + ').</div>'; });
+    .catch(function (e) { list.innerHTML = '<div class="empty">Tonight\'s Sky unavailable (' + escapeHtml(String(e)) + ').</div>'; });
 }
 
 function toggleTonight() {

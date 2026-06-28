@@ -239,6 +239,10 @@ public static partial class WebSocketEndpoints {
             if (winner != firstReceive) {
                 // Window elapsed, client silent → fresh subscription. Do NOT cancel
                 // firstReceive (that aborts the socket); pass it to the receive loop.
+                // (If ct cancelled mid-window the delay completes *cancelled*, which
+                // also lands here; the caller awaits firstReceive, it faults on the
+                // same cancellation, and the receive loop's OperationCanceledException
+                // handler tears the socket down cleanly.)
                 return (0, firstReceive);
             }
             result = await firstReceive;

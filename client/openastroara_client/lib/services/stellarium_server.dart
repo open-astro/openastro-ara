@@ -100,12 +100,26 @@ class StellariumServer {
       // fetch resolves; a malformed body is just dropped.
       if (path == '/araevent') {
         try {
-          final raw = await utf8.decodeStream(request);
-          final decoded = jsonDecode(raw);
+          // The page posts tiny JSON events; cap the body so a buggy or compromised
+          // page can't make us buffer an arbitrarily large payload (loopback-only,
+          // but bound the read regardless). Covers both known content-length and
+          // chunked bodies.
+          const maxEventBytes = 64 * 1024;
+          if (request.contentLength > maxEventBytes) {
+            throw const FormatException('event body too large');
+          }
+          final bytes = <int>[];
+          await for (final chunk in request) {
+            bytes.addAll(chunk);
+            if (bytes.length > maxEventBytes) {
+              throw const FormatException('event body too large');
+            }
+          }
+          final decoded = jsonDecode(utf8.decode(bytes));
           if (decoded is Map) {
             _events.add(Map<String, Object?>.from(decoded));
           }
-        } catch (_) {/* ignore malformed event bodies */}
+        } catch (_) {/* ignore malformed or oversized event bodies */}
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.statusCode = HttpStatus.ok;
         await response.close();
