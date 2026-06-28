@@ -203,8 +203,11 @@ public static partial class WebSocketEndpoints {
         }
 
         // Best-effort close — if the socket is already gone the framework
-        // throws, but there's nothing useful to do at that point.
-        if (socket.State == WebSocketState.Open) {
+        // throws, but there's nothing useful to do at that point. Echo the close
+        // from CloseReceived too (a client Close moves the state to CloseReceived,
+        // not Open): RFC 6455 §5.5.1 wants the close handshake completed, and some
+        // clients wait for the echo before dropping the TCP connection.
+        if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived) {
             try {
                 await socket.CloseAsync(
                     WebSocketCloseStatus.NormalClosure, "server closing", CancellationToken.None);

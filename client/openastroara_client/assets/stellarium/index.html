@@ -237,7 +237,18 @@ function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name)
 var LAT = parseFloat(qp('lat', '0'));
 var LON = parseFloat(qp('lon', '0'));
 var ELEV = parseFloat(qp('elev', '0'));
-var API = qp('api', '');              // daemon base, e.g. http://127.0.0.1:5555
+// daemon base, e.g. http://127.0.0.1:5555 or a LAN host the Flutter app picked.
+// Validate the scheme (http/https only) so a malformed or externally-influenced
+// query value can't turn a mount-control fetch into a javascript:/data: deputy.
+// NB: we deliberately do NOT pin to localhost — the daemon is commonly on the LAN.
+var API = (function () {
+  var raw = qp('api', '');
+  if (!raw) return '';
+  try {
+    var u = new URL(raw);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? raw : '';
+  } catch (e) { return ''; }
+})();
 
 var stel = null;
 // Planning clock: null = live "now"; else a fixed unix-ms instant.

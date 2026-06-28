@@ -139,7 +139,9 @@ namespace OpenAstroAra.Server.Services {
             while ((line = reader.ReadLine()) is not null) {
                 ct.ThrowIfCancellationRequested();
                 var f = line.Split(';');
-                if (f.Length <= iDec) {
+                // Guard every required column, not just Dec — the row body reads
+                // f[iName]/f[iRa]/f[iDec] and we don't assume a fixed column order.
+                if (f.Length <= Math.Max(iName, Math.Max(iRa, iDec))) {
                     continue;
                 }
                 if (!TryRaToDeg(f[iRa], out var ra) || !TryDecToDeg(f[iDec], out var dec)) {
@@ -209,7 +211,11 @@ namespace OpenAstroAra.Server.Services {
                 return false;
             }
             int sign = s[0] == '-' ? -1 : 1;
-            var p = s.TrimStart('+', '-').Split(':');
+            // Strip exactly ONE leading sign char. TrimStart('+','-') is greedy — a
+            // malformed "+-30:00:00" would lose both and silently return +30 instead of
+            // rejecting. (Matches SkyCatalogReader.TryParseSexagesimal's single-char strip.)
+            var body = (s[0] == '+' || s[0] == '-') ? s[1..] : s;
+            var p = body.Split(':');
             if (p.Length < 2 || !TryNum(p[0], out var d) || !TryNum(p[1], out var m)) {
                 return false;
             }
@@ -217,9 +223,10 @@ namespace OpenAstroAra.Server.Services {
             if (p.Length > 2 && !TryNum(p[2], out sec)) {
                 return false;
             }
-            // Arc-minutes/seconds in [0,60) — the overall sign is carried by `sign`, so a
-            // "-" inside a component (e.g. "30:-15:00") is malformed, not a real value.
-            if (m < 0 || m >= 60 || sec < 0 || sec >= 60) {
+            // Degrees magnitude + arc-min/sec all non-negative (min/sec < 60). The overall
+            // sign is carried by `sign`; a "-" inside a component — e.g. the "-30" left by a
+            // malformed "+-30", or "30:-15:00" — is invalid, not a real value.
+            if (d < 0 || m < 0 || m >= 60 || sec < 0 || sec >= 60) {
                 return false;
             }
             deg = sign * (d + (m / 60.0) + (sec / 3600.0));
