@@ -108,11 +108,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                       const VerticalDivider(width: 1, thickness: 1),
                       // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
                       // once built, is KEPT ALIVE and merely hidden when another is
-                      // selected. Critical for the Planning/Sky Atlas tab: its CEF
-                      // (webview_cef) browser must persist — tearing it down on a
-                      // tab-switch and re-creating it leaves the Aladin webview
-                      // black on CEF 149 OSR (the offscreen browser never repaints)
-                      // and loses atlas state.
+                      // selected. Critical for the Planning/Sky Atlas tab: its native
+                      // webview must persist — tearing it down on a tab-switch and
+                      // re-creating it reloads the planetarium and loses atlas state.
                       //
                       // Lazy build: an unvisited tab renders an empty placeholder
                       // instead of its real body, so we DON'T run every tab's

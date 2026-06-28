@@ -1,74 +1,22 @@
 import 'dart:developer' as developer;
-import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webview_cef/webview_cef.dart';
 
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'state/saved_server_state.dart';
 import 'theme/ara_theme.dart';
-import 'widgets/sky_atlas/aladin_view.dart' show disposeAladinTempDir;
 
 void main() {
   runApp(const ProviderScope(child: OpenAstroAraApp()));
 }
 
-class OpenAstroAraApp extends StatefulWidget {
+/// The planetarium renders in the platform's native webview (`webview_all`), which
+/// the OS tears down with the process — so there's no CEF/Chromium subprocess tree
+/// to shut down on exit, and the app needs no exit-lifecycle hook.
+class OpenAstroAraApp extends StatelessWidget {
   const OpenAstroAraApp({super.key});
-
-  @override
-  State<OpenAstroAraApp> createState() => _OpenAstroAraAppState();
-}
-
-class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
-  AppLifecycleListener? _lifecycle;
-
-  @override
-  void initState() {
-    super.initState();
-    // Shut CEF down cleanly before the OS tears the process down. The Sky Atlas
-    // webview (webview_cef) runs CEF multi-process (browser + helper subprocesses);
-    // if exit() runs while CEF's GPU/renderer threads are still live, teardown
-    // segfaults. onExitRequested intercepts the platform terminate request, lets us
-    // quit CEF (CloseAllBrowsers + CefShutdown — a no-op if the atlas was never
-    // opened), then allows exit. See the §36 Sky Atlas notes.
-    //
-    // WebviewManager() is a process singleton (factory => _instance in webview_cef),
-    // so this quit() tears down the very instance AladinView.initialize() set up —
-    // the graceful-shutdown contract depends on that.
-    _lifecycle = AppLifecycleListener(
-      onExitRequested: () async {
-        var quitCleanly = false;
-        try {
-          // Bound the wait: if CEF teardown ever hangs, a quit must not wedge the
-          // whole app on exit. 3s is generous for CloseAllBrowsers + CefShutdown;
-          // past that we log and exit anyway (the OS reclaims the process regardless).
-          await WebviewManager().quit().timeout(const Duration(seconds: 3));
-          quitCleanly = true;
-        } catch (e, st) {
-          developer.log('CEF shutdown on exit failed or timed out',
-              name: 'openastroara.webview', error: e, stackTrace: st);
-        }
-        // Only remove the atlas bootstrap temp dir once CEF has actually shut down.
-        // If quit() timed out, a CEF subprocess may still be mmap-reading the
-        // file:// bootstrap; deleting it underneath could SIGBUS/EIO that process
-        // mid-render. On a timed-out exit we leak this one temp dir to the OS
-        // (reclaimed with the process tree) rather than risk that.
-        if (quitCleanly) {
-          await disposeAladinTempDir();
-        }
-        return AppExitResponse.exit;
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _lifecycle?.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
