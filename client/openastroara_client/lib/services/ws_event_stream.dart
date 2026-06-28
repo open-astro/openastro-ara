@@ -204,6 +204,13 @@ class WsEventStream {
       // succeeded, so without it the backoff counter would ratchet to its 30s
       // ceiling across drops even though the server is healthy.
       _reconnectAttempt = 0;
+      // The server rejected our resume token (expired / invalid — `resumed:false`
+      // with a code). Drop _lastSeq so the next reconnect sends an empty token and
+      // falls back to a fresh subscription; otherwise we'd replay the same rejected
+      // token forever and the server would keep rejecting it (infinite loop, no events).
+      if (decoded['resumed'] == false && decoded['code'] != null) {
+        _lastSeq = null;
+      }
       return;
     }
     final WsEvent event;

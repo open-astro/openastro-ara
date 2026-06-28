@@ -330,10 +330,14 @@ public static partial class WebSocketEndpoints {
         }
 
         var currentSeq = broadcaster.CurrentSequence;
-        // If the client's last-seen seq is too far behind, the replay
-        // buffer doesn't cover the gap → token expired.
+        // Token is unusable if it's too far behind the replay buffer, OR ahead of the
+        // server's current seq — the latter means the in-memory counter reset (daemon
+        // restart), so the old token can never be satisfied. Without the `>` guard a
+        // post-restart client (currentSeq small, lastSeenSeq large) slips through, gets
+        // an empty replay with highWaterMark = lastSeenSeq, and the drain loop then
+        // skips every real event ≤ that stale mark → the client goes permanently deaf.
         const int replayWindow = 1000;
-        if (lastSeenSeq < currentSeq - replayWindow) {
+        if (lastSeenSeq > currentSeq || lastSeenSeq < currentSeq - replayWindow) {
             await SendResumeResponseAsync(socket, new WsResumeResponseDto(
                 Resumed: false,
                 MissedEvents: null,
@@ -349,8 +353,11 @@ public static partial class WebSocketEndpoints {
         // can complete out of seq order if one thread pauses between
         // Interlocked.Increment and Enqueue, so the queue's last element
         // isn't guaranteed to be the max. O(N) on N ≤ 1000 envelopes.
-        // Empty snapshot → fall back to lastSeenSeq so dedup-skip is a no-op.
-        var highWaterMark = missed.Count > 0 ? missed.Max(e => e.Seq) : lastSeenSeq;
+        // Empty snapshot → fall back to currentSeq (not lastSeenSeq): the client is
+        // caught up to here, so the drain loop should skip only what's already been
+        // sent and deliver everything newer. Using lastSeenSeq would be wrong if it
+        // ever exceeded currentSeq (the reset case the guard above now rejects).
+        var highWaterMark = missed.Count > 0 ? missed.Max(e => e.Seq) : currentSeq;
         await SendResumeResponseAsync(socket, new WsResumeResponseDto(
             Resumed: true,
             MissedEvents: missed.Count,

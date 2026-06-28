@@ -31,6 +31,14 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     // after the first scan would never appear. Re-run discovery on a loop while
     // this screen is shown so freshly-started servers turn up on their own
     // (deduped into _discovered) — the manual ⟳ button forces an immediate pass.
+    //
+    // This periodic pass is deliberately ADDITIVE (it does not clear _discovered):
+    // re-clearing every 4s would make the live list flicker (empty → repopulate) on
+    // every tick. The trade-off is that a server which moves ports / goes away leaves
+    // a stale entry until the user taps ⟳ Rescan, which DOES clear first (see
+    // [_rescan]). mDNS one-shot lookups don't surface goodbye/departure events, so
+    // pruning the dead entry automatically would need a TTL/liveness probe — out of
+    // scope here; the manual rescan is the clear-stale path.
     _rescanTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) ref.invalidate(discoveredServersProvider);
     });

@@ -91,6 +91,34 @@ void main() {
       await ws.dispose();
     });
 
+    test('an expired resume token clears _lastSeq so the next reconnect is fresh',
+        () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
+      ws.connect();
+
+      // See an event (so _lastSeq is set), then drop + reconnect resuming from it.
+      conn.legs.first.incoming.add(_envelope('e', 99));
+      await pumpEventQueue();
+      expect(ws.lastSeq, 99);
+      await conn.legs.first.drop();
+      await pumpEventQueue();
+      expect(conn.legs[1].sent, [jsonEncode({'resume_token': '99'})]);
+
+      // Server rejects the token as expired; the client must drop _lastSeq.
+      conn.legs[1].incoming.add(jsonEncode(
+          {'resumed': false, 'code': 'resume_token_expired', 'reason': 'too old'}));
+      await pumpEventQueue();
+      expect(ws.lastSeq, isNull, reason: 'expired token cleared');
+
+      // Next drop → reconnect must send an EMPTY token (fresh subscription), not '99'.
+      await conn.legs[1].drop();
+      await pumpEventQueue();
+      expect(conn.legs[2].sent, [jsonEncode({'resume_token': ''})],
+          reason: 'no longer replays the rejected token');
+      await ws.dispose();
+    });
+
     test('reconnects on drop and resumes from the last-seen seq', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
