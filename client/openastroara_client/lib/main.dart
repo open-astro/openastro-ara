@@ -75,6 +75,9 @@ class _OpenAstroAraAppState extends State<OpenAstroAraApp> {
     return MaterialApp(
       title: 'OpenAstro Ara WILMA',
       theme: buildAraTheme(),
+      // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
+      // first-run Rescan button); it adds nothing for users, so hide it.
+      debugShowCheckedModeBanner: false,
       home: const _RootRouter(),
     );
   }
