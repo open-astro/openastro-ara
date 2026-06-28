@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<!--
+  §36 OpenAstro Ara Planetarium — embeds the Stellarium Web Engine
+  (https://github.com/Stellarium/stellarium-web-engine), © Stellarium Labs SRL,
+  GNU AGPL v3 (see LICENSE-AGPL-3.0.txt). The page is SELF-DRIVEN: it reads its
+  observer location + the daemon API base from the URL query (?lat=&lon=&elev=&api=),
+  runs its own on-screen controls (which call the engine directly), and talks to
+  the daemon's REST API itself. The Flutter app only loads this URL — it never
+  pushes JS in (no fragile native bridge).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>OpenAstro Ara Planetarium</title>
+<style>
+  :root {
+    --mat: rgba(28,28,30,0.56);
+    --mat-2: rgba(58,58,60,0.55);
+    --hair: rgba(255,255,255,0.12);
+    --txt: #f5f5f7;
+    --dim: #98989f;
+    --accent: #4fc3f7;
+    --accent-bg: rgba(79,195,247,0.20);
+    --shadow: 0 10px 34px rgba(0,0,0,0.46);
+    --blur: blur(26px) saturate(180%);
+  }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Roboto, "Segoe UI", sans-serif;
+    color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
+  #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .ui { position: absolute; z-index: 10; }
+  button { font: inherit; font-size: 13px; font-weight: 500; color: var(--txt); background: transparent;
+    border: none; border-radius: 8px; padding: 6px 11px; cursor: pointer;
+    transition: background .15s ease, color .15s ease; }
+  button:hover { background: rgba(255,255,255,0.10); }
+  button:active { background: rgba(255,255,255,0.16); }
+
+  /* Layer toggles — one translucent pill group, top-left */
+  #layers { left: 14px; top: 14px; display: flex; gap: 2px; align-items: center; padding: 4px;
+    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid var(--hair); border-radius: 12px; box-shadow: var(--shadow); }
+  #layers button { padding: 5px 11px; font-size: 12px; color: var(--dim); border-radius: 8px; white-space: nowrap; }
+  #layers button:hover { color: var(--txt); background: rgba(255,255,255,0.08); }
+  #layers button.on { background: var(--accent-bg); color: var(--accent); }
+
+  /* Time bar — segmented, top centre */
+  #timebar { top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; align-items: center; padding: 4px;
+    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid var(--hair); border-radius: 12px; box-shadow: var(--shadow); }
+  #timebar button { padding: 5px 11px; font-size: 12px; color: var(--dim); }
+  #timebar button:hover { color: var(--txt); background: rgba(255,255,255,0.08); }
+  #timebar button.on { background: var(--accent-bg); color: var(--accent); }
+  #clock { font-variant-numeric: tabular-nums; min-width: 126px; text-align: center; font-size: 12px; padding: 0 6px; }
+
+  /* Pan + zoom are native (trackpad/mouse) in the webview, so there are no
+     on-screen pan/zoom pads. */
+
+  #status { left: 50%; top: 50%; transform: translate(-50%,-50%); color: var(--dim); }
+  #searchmsg { top: 64px; left: 50%; transform: translateX(-50%); padding: 9px 15px; font-size: 12.5px; display: none;
+    max-width: 340px; line-height: 1.4; text-align: center;
+    background: rgba(70,30,30,0.78); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid rgba(255,120,120,0.4); border-radius: 10px; }
+
+  /* Object info card — right */
+  #info { right: 14px; top: 64px; width: 268px; padding: 14px 15px 15px; display: none;
+    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
+  #info .close { position: absolute; right: 9px; top: 9px; border: none; background: none; padding: 3px 7px;
+    font-size: 13px; color: var(--dim); border-radius: 7px; }
+  #info .close:hover { background: rgba(255,255,255,0.10); color: var(--txt); }
+  #info h2 { margin: 0 20px 2px 0; font-size: 17px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+  #info .type { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 10px; }
+  #info table { width: 100%; font-size: 12.5px; border-collapse: collapse; }
+  #info td { padding: 2.5px 0; vertical-align: top; }
+  #info td.k { color: var(--dim); width: 58px; white-space: nowrap; }
+  #info td.v { font-variant-numeric: tabular-nums; }
+  #info .acts { display: flex; gap: 8px; margin-top: 13px; }
+  #info .acts button { flex: 1; font-size: 12.5px; padding: 8px 0; background: rgba(255,255,255,0.08); border-radius: 9px; }
+  #info .acts button:hover { background: rgba(255,255,255,0.14); }
+  #info .acts button[disabled] { opacity: .35; cursor: default; }
+  #info .acts #i-goto { background: var(--accent-bg); color: var(--accent); }
+  #info .acts.mount { margin-top: 8px; }
+  #info .acts #i-stop { background: rgba(255,99,99,0.18); color: #ff8a80; }
+  #info .acts #i-stop:hover { background: rgba(255,99,99,0.28); }
+  #info .warn { color: #ffb74d; }
+
+  /* Left drawer cards — Tonight + Framing share the slot under the layer pills */
+  #tonight, #frame { left: 14px; top: 64px; width: 250px; padding: 13px 15px 15px; display: none;
+    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
+  #tonight { max-height: 66%; overflow-y: auto; }
+  .card-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 11px; display: flex; align-items: center; }
+  .card-title .close { margin-left: auto; border: none; background: none; padding: 3px 7px; font-size: 13px; color: var(--dim); border-radius: 7px; }
+  .card-title .close:hover { background: rgba(255,255,255,0.10); color: var(--txt); }
+  #tonight h3 { margin: 0 0 11px; font-size: 13px; font-weight: 600; }
+  #tonight .empty { color: var(--dim); font-size: 12px; padding: 6px 2px; }
+  #tonight .row { padding: 7px 9px; border-radius: 9px; cursor: pointer; }
+  #tonight .row:hover { background: rgba(255,255,255,0.08); }
+  #tonight .row .nm { font-size: 13px; font-weight: 500; }
+  #tonight .row .meta { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; margin-top: 1px; }
+
+  /* Framing controls */
+  #frame .frow { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+  #frame .frow .k { color: var(--dim); font-size: 12.5px; }
+  #frame .stp { display: flex; align-items: center; gap: 0; background: rgba(255,255,255,0.07); border-radius: 9px; padding: 2px; }
+  #frame .stp button { width: 28px; height: 26px; padding: 0; font-size: 16px; border-radius: 7px; }
+  #frame .stp button:hover { background: rgba(255,255,255,0.12); }
+  #frame .stp .val { min-width: 56px; text-align: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  #frame .frow .val { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--txt); }
+  /* Rotation dial (Keynote-style angle knob) + 1° nudges */
+  #frame .frot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px 0 10px; }
+  #frame .frot button { width: 28px; height: 28px; padding: 0; font-size: 17px; border-radius: 8px; background: rgba(255,255,255,0.07); }
+  #frame .frot button:hover { background: rgba(255,255,255,0.14); }
+  #frame .dial { position: relative; width: 66px; height: 66px; border-radius: 50%; flex: 0 0 auto; cursor: grab;
+    background: radial-gradient(circle at 50% 36%, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
+    border: 0.5px solid var(--hair); box-shadow: inset 0 1px 7px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3); }
+  #frame .dial:active { cursor: grabbing; }
+  #frame .dial::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px;
+    border-radius: 50%; background: rgba(255,255,255,0.30); }
+  #frame .dial-hand { position: absolute; left: 50%; bottom: 50%; width: 2.5px; height: 27px; margin-left: -1.25px;
+    transform-origin: 50% 100%; border-radius: 2px; background: linear-gradient(var(--accent), rgba(79,195,247,0.25)); }
+  #frame .dial-hand::after { content: ''; position: absolute; top: -4px; left: 50%; width: 9px; height: 9px; margin-left: -4.5px;
+    border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px rgba(79,195,247,0.7); }
+  #frame #f-fov { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  #frame #f-add { width: 100%; margin-top: 11px; font-size: 13px; font-weight: 600; padding: 9px 0; border-radius: 10px;
+    background: var(--accent); color: #04222e; }
+  #frame #f-add:hover { background: #6fcef9; }
+  #frame #f-add:disabled { opacity: .4; cursor: default; background: rgba(255,255,255,0.12); color: var(--dim); }
+  #frame #f-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
+  #frame .warn { color: #ffb74d; }
+
+  /* Catalogs drawer */
+  #catalogs { left: 14px; top: 64px; width: 230px; max-height: 68%; overflow-y: auto; padding: 13px 14px 14px; display: none;
+    background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
+  #catalogs .empty { color: var(--dim); font-size: 12px; padding: 6px 2px; line-height: 1.4; }
+  #catalogs .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .05em; margin: 11px 2px 4px; }
+  #catalogs .cat-group:first-of-type { margin-top: 2px; }
+  #catalogs .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px;
+    border-radius: 9px; cursor: pointer; font-size: 13px; }
+  #catalogs .cat-row:hover { background: rgba(255,255,255,0.07); }
+  #catalogs .cat-row .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto; }
+  #catalogs .cat-row .dot.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px rgba(79,195,247,0.7); }
+</style>
+</head>
+<body>
+<canvas id="stel-canvas"></canvas>
+
+<div id="status" class="ui">Loading planetarium…</div>
+
+<div id="searchmsg" class="ui"></div>
+
+<div id="timebar" class="ui" style="display:none; top: 10px;">
+  <button id="t-1h">−1h</button>
+  <button id="t+1h">+1h</button>
+  <span id="clock">—</span>
+  <button id="t-tonight">Tonight</button>
+  <button id="t-now" class="on">Now</button>
+</div>
+
+<div id="tonight" class="ui">
+  <h3>Tonight's Sky — best from your site</h3>
+  <div id="tonight-list"><div class="empty">Loading…</div></div>
+</div>
+
+<div id="layers" class="ui" style="display:none">
+  <button data-layer="atmosphere">Atmosphere</button>
+  <button data-layer="landscape">Landscape</button>
+  <button data-layer="constellationLines" class="on">Lines</button>
+  <button data-layer="constellationArt">Art</button>
+  <button data-layer="dss" class="on">DSS2</button>
+  <button data-layer="equatorialGrid">Eq grid</button>
+  <button id="frame-btn" title="Camera framing overlay">Frame</button>
+  <button id="cat-btn" title="Catalog overlays">Catalogs</button>
+</div>
+
+<!-- Catalog overlays: toggle Messier / NGC / IC and object-type filters, drawn as
+     labelled markers from the daemon's OpenNGC-derived catalogs. -->
+<div id="catalogs" class="ui">
+  <div class="card-title">Catalogs<button class="close" id="cat-close" title="Hide">✕</button></div>
+  <div id="cat-list"><div class="empty">Loading…</div></div>
+</div>
+
+<!-- Framing overlay controls: draws the connected camera's field of view (from
+     your optics profile) on the selected target, with a position-angle rotation
+     and an N×M mosaic, then adds it to the sequence. -->
+<div id="frame" class="ui">
+  <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
+  <div class="frow"><span class="k">Rotation</span><span class="val" id="f-rot">0°</span></div>
+  <div class="frot">
+    <button id="f-rot-" title="−1°">−</button>
+    <div id="f-dial" class="dial" title="Drag to rotate"><div class="dial-hand"></div></div>
+    <button id="f-rot+" title="+1°">+</button>
+  </div>
+  <div class="frow"><span class="k">Columns</span>
+    <div class="stp"><button id="f-col-">−</button><span class="val" id="f-col">1</span><button id="f-col+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Rows</span>
+    <div class="stp"><button id="f-row-">−</button><span class="val" id="f-row">1</span><button id="f-row+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Overlap</span>
+    <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
+  </div>
+  <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
+  <button id="f-add">Create Run</button>
+  <div id="f-msg"></div>
+</div>
+
+
+<!-- Selected-object detail panel (SkySafari-style): tap an object to inspect it,
+     centre the view on it, or slew the connected mount to it. -->
+<div id="info" class="ui">
+  <button class="close" id="i-close" title="Deselect">✕</button>
+  <h2 id="i-name">—</h2>
+  <div class="type" id="i-type"></div>
+  <table id="i-rows"></table>
+  <div class="acts">
+    <button id="i-center" title="Centre the view on this object">Center</button>
+    <button id="i-goto" title="Slew the connected mount to this object">GoTo</button>
+  </div>
+  <div class="acts mount">
+    <button id="i-stop" title="Abort the mount's current slew">Stop</button>
+    <button id="i-home" title="Send the mount to its home position">Home</button>
+  </div>
+</div>
+
+<script src="./stellarium-web-engine.js"></script>
+<script>
+'use strict';
+var D2R = Math.PI / 180.0;
+function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
+function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
+
+// Config from the URL (the Flutter app injects these when it loads the page).
+var LAT = parseFloat(qp('lat', '0'));
+var LON = parseFloat(qp('lon', '0'));
+var ELEV = parseFloat(qp('elev', '0'));
+// daemon base, e.g. http://127.0.0.1:5555 or a LAN host the Flutter app picked.
+// Validate the scheme (http/https only) so a malformed or externally-influenced
+// query value can't turn a mount-control fetch into a javascript:/data: deputy.
+// NB: we deliberately do NOT pin to localhost — the daemon is commonly on the LAN.
+var API = (function () {
+  var raw = qp('api', '');
+  if (!raw) return '';
+  try {
+    var u = new URL(raw);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? raw : '';
+  } catch (e) { return ''; }
+})();
+
+var stel = null;
+// Planning clock: null = live "now"; else a fixed unix-ms instant.
+var pinnedMs = null;
+
+// Re-read the observer site from the daemon profile so editing it in Options →
+// Safety → Site preferences moves the sky/Sun/visibility without reloading the
+// page (the URL lat/lon are only the initial seed). Polled every few seconds.
+function loadSite() {
+  if (!API || !stel) return;
+  fetch(API + '/api/v1/profile/site')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (s) {
+      if (!s) return;
+      var la = +s.latitude_deg, lo = +s.longitude_deg, el = +s.elevation_m || 0;
+      if (isNaN(la) || isNaN(lo) || (la === LAT && lo === LON && el === ELEV)) return;
+      LAT = la; LON = lo; ELEV = el;
+      stel.core.observer.latitude = LAT * D2R;
+      stel.core.observer.longitude = LON * D2R;
+      stel.core.observer.elevation = ELEV;
+      setObserverTime();                                         // force the observer to recompute
+      var sel = stel.core.selection; if (sel) renderInfo(sel);   // refresh visibility gate
+    })
+    .catch(function () {});
+}
+
+function setObserverTime() {
+  if (!stel) return;
+  var ms = pinnedMs === null ? Date.now() : pinnedMs;
+  stel.core.observer.utc = mjdFromUnixMs(ms);
+  renderClock();
+}
+function renderClock() {
+  var el = document.getElementById('clock');
+  var ms = pinnedMs === null ? Date.now() : pinnedMs;
+  var d = new Date(ms);
+  var s = d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  el.textContent = (pinnedMs === null ? '● ' : '') + s;   // ● = live
+}
+function setLayer(name, on) {
+  if (!stel) return;
+  var c = stel.core;
+  switch (name) {
+    case 'atmosphere': c.atmosphere.visible = on; break;
+    case 'landscape': c.landscapes.visible = on; break;
+    case 'constellationLines': c.constellations.lines_visible = on; break;
+    case 'constellationArt': c.constellations.images_visible = on; break;
+    case 'dss': c.dss.visible = on; break;
+    case 'equatorialGrid': c.lines.equatorial.visible = on; break;
+  }
+}
+
+// ---- Selected-object detail panel ---------------------------------------
+// The engine selects whatever object you tap (core.selection); we mirror that
+// into a small info panel and offer Center (lock the view on it) + GoTo (slew
+// the connected mount to it via the daemon REST API).
+var selRaHours = null, selDecDeg = null;   // last selection's JNOW coords, for GoTo
+var selVisible = false;                     // does it ever rise above the site horizon?
+var selAltDeg = null;                       // current altitude (deg); ≤0 = below horizon now
+var selRiseStr = null;                      // tonight's rise time, formatted, or null
+
+function pad2(n) { n = Math.abs(Math.round(n)); return (n < 10 ? '0' : '') + n; }
+function fmtRa(rad) {            // radians → "HHh MMm SSs"
+  var t = stel.a2tf(rad, 0);
+  return pad2(t.hours) + 'h ' + pad2(t.minutes) + 'm ' + pad2(t.seconds) + 's';
+}
+function fmtDeg(rad) {           // radians → "±DD° MM' SS""
+  var a = stel.a2af(rad, 0);
+  return a.sign + pad2(a.degrees) + '° ' + pad2(a.arcminutes) + "' " + pad2(a.arcseconds) + '"';
+}
+function cleanName(s) { return String(s || '').replace(/^NAME /, '').replace(/^\*\s*/, '').trim(); }
+
+// Pick the friendliest label from an object's designations. The engine usually
+// lists the proper name first ("Vega"), but not always — prefer an explicit
+// "NAME …" common name, then any non-empty designation (a Bayer id like "alf Lyr"
+// or a catalogue id like "HD 172167"). Skips blank/placeholder tokens so the
+// panel never shows an empty name when a star is clicked.
+function bestName(names) {
+  for (var i = 0; i < names.length; i++) {
+    if (/^NAME /.test(names[i])) { var c = cleanName(names[i]); if (c) return c; }
+  }
+  for (var j = 0; j < names.length; j++) { var c2 = cleanName(names[j]); if (c2) return c2; }
+  return '';
+}
+
+function renderInfo(sel) {
+  var el = document.getElementById('info');
+  if (!sel) { el.style.display = 'none'; selRaHours = selDecDeg = selAltDeg = null; selRiseStr = null; return; }
+  selAltDeg = null; selRiseStr = null;
+
+  var names = [];
+  try { names = sel.designations() || []; } catch (e) {}
+  var typeStr = '';
+  try { typeStr = String(sel.getInfo('type') || '').trim(); } catch (e) {}
+  // Never blank: best designation → the type word ("Star") → "Object".
+  document.getElementById('i-name').textContent = bestName(names) || typeStr || 'Object';
+  document.getElementById('i-type').textContent = typeStr;
+
+  var rows = [];
+  function num(attr) { try { var v = sel.getInfo(attr); return (v != null && !isNaN(v)) ? v : null; } catch (e) { return null; } }
+
+  var vmag = num('vmag');
+  if (vmag != null) rows.push(['Mag', vmag.toFixed(1)]);
+
+  // RA/Dec (JNOW) + Az/Alt, from the ICRF position.
+  try {
+    var radec = sel.getInfo('radec');
+    // Frame this object too (J2000), so the framing box follows the selection.
+    var icrf = stel.c2s(radec);
+    setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target');
+    var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
+    var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
+    selRaHours = ra * 12 / Math.PI;
+    selDecDeg = dec * 180 / Math.PI;
+    rows.push(['RA', fmtRa(ra)]);
+    rows.push(['Dec', fmtDeg(dec)]);
+    var azalt = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', radec));
+    selAltDeg = stel.anpm(azalt[1]) * 180 / Math.PI;
+    rows.push(['Az', fmtDeg(stel.anp(azalt[0]))]);
+    rows.push(['Alt', fmtDeg(stel.anpm(azalt[1]))]);
+
+    // Site-visibility gate: an object at declination δ seen from latitude φ
+    // transits at altitude 90° − |φ − δ|. If that's at or below the horizon it
+    // NEVER rises from here (e.g. a deep-southern target from the north), so we
+    // flag it and block GoTo / sequencing — you can look, but you can't image
+    // what your site can't see.
+    var maxAlt = 90 - Math.abs(LAT - selDecDeg);
+    selVisible = maxAlt > 0;
+    // Third element marks a "warn" value cell (styled red via class, not markup),
+    // so the row builder below can stay textContent-only — no HTML interpolation.
+    rows.push(maxAlt > 0
+      ? ['Max alt', maxAlt.toFixed(0) + '°']
+      : ['Max alt', 'never rises here', true]);
+  } catch (e) { selRaHours = selDecDeg = selAltDeg = null; selVisible = false; }
+
+  // Rise/set tonight.
+  try {
+    var vis = sel.computeVisibility();
+    if (vis && vis.length && vis[0].rise != null) {
+      selRiseStr = new Date(unixMsFromMjd(vis[0].rise)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      rows.push(['Rise', selRiseStr]);
+      rows.push(['Set', new Date(unixMsFromMjd(vis[0].set)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+    }
+  } catch (e) {}
+
+  // Build the rows as DOM nodes with textContent — every value is escaped by
+  // construction, so a future row carrying a server-supplied string (object name,
+  // catalog id) can't smuggle markup into the panel.
+  var tbody = document.getElementById('i-rows');
+  tbody.textContent = '';
+  for (var i = 0; i < rows.length; i++) {
+    var tr = document.createElement('tr');
+    var k = document.createElement('td');
+    k.className = 'k';
+    k.textContent = rows[i][0];
+    var v = document.createElement('td');
+    v.className = rows[i][2] ? 'v warn' : 'v';
+    v.textContent = rows[i][1];
+    tr.appendChild(k);
+    tr.appendChild(v);
+    tbody.appendChild(tr);
+  }
+
+  // GoTo needs a connected daemon and a resolved RA/Dec. We DON'T disable it for
+  // below-horizon targets — instead the click handler runs a horizon safety check
+  // and pops a clear "why it's blocked" message, so the user understands the gate
+  // rather than facing a dead greyed-out button. Stop/Home are mount controls,
+  // independent of the selection — available whenever the daemon is reachable.
+  document.getElementById('i-goto').disabled = !(API && selRaHours != null);
+  document.getElementById('i-stop').disabled = !API;
+  document.getElementById('i-home').disabled = !API;
+  el.style.display = 'block';
+}
+
+function unixMsFromMjd(mjd) { return (mjd - 40587.0) * 86400000.0; }
+
+// Is it unsafe to slew the mount to the current selection right now? Returns a
+// human-readable reason if so (target never rises here, or is below the horizon
+// at this moment), or null when it's safe to slew. Drives the GoTo block message.
+function horizonBlockReason() {
+  var nm = (document.getElementById('i-name').textContent || 'This target').trim();
+  if (!selVisible) {
+    return '⚠ ' + nm + ' never rises above the horizon from your site — slew blocked.';
+  }
+  if (selAltDeg != null && selAltDeg <= 0) {
+    var rise = selRiseStr ? ' Rises ~' + selRiseStr + '.' : '';
+    return '⚠ ' + nm + ' is below your horizon now (alt ' + Math.round(selAltDeg) + '°).' + rise
+      + ' Slew blocked — it would point the mount at the ground.';
+  }
+  return null;
+}
+
+// Unpark then slew the mount to a JNOW RA/Dec, reporting a short status string via
+// cb. A parked mount silently ignores slews, so unpark first. Daemon JSON is
+// snake_case (SnakeCaseLower policy). Used by the object panel's GoTo.
+function slewMount(raHours, decDeg, cb) {
+  fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
+    .catch(function () {})
+    .then(function () {
+      return fetch(API + '/api/v1/equipment/telescope/slew', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ right_ascension_hours: raHours, declination_degrees: decDeg, sync: false }),
+      });
+    }).then(function (r) {
+      cb(r.ok ? 'Slew sent ✓' : (r.status === 500 ? 'No mount' : 'Slew failed'));
+    }).catch(function () {
+      cb('No mount');
+    });
+}
+
+// Catalog stars render as filled discs; the engine scales the bright ones up so
+// far that at high zoom they become big "blotchy" blobs over the DSS2 photo
+// (Aladin has no catalog overlay, so its stars are just the survey's crisp
+// photographic points). Shrink the catalog discs to crisp points as you zoom into
+// the survey, but keep the full star-map look wide-field where there's no photo.
+var lastStarScale = -1;
+function updateStarScale() {
+  if (!stel) return;
+  var fovDeg = stel.fov / D2R;
+  var t = Math.max(0, Math.min(1, (fovDeg - 4) / (15 - 4))); // 0 ≤4° … 1 ≥15°
+  if (Math.abs(t - lastStarScale) < 0.02) return;            // avoid per-frame churn
+  lastStarScale = t;
+  stel.core.star_linear_scale = 0.35 + (0.8 - 0.35) * t;
+  stel.core.star_relative_scale = 0.6 + (1.1 - 0.6) * t;
+}
+
+function wireSelection() {
+  var curKey = ' ';
+  function selKey(sel) {
+    if (!sel) return null;
+    // Key on the whole designation list so two different objects whose first
+    // designation happens to be blank still count as distinct (re-render).
+    try { var d = sel.designations(); return (d && d.length) ? d.join('|') : 'obj'; } catch (e) { return 'obj'; }
+  }
+  // Re-render the info panel only when the selection actually differs (cheap key
+  // compare avoids per-frame churn).
+  function syncSelection() {
+    var sel = stel.core.selection || null;
+    var k = selKey(sel);
+    if (k !== curKey) { curKey = k; renderInfo(sel); }
+  }
+  // stel.change fires for JS-side state changes (e.g. selecting via the search bar
+  // sets core.selection in JS) — that path shows the panel fine. But when you CLICK
+  // a star/object the ENGINE sets core.selection internally, which does not reliably
+  // fire this JS callback, so the panel never updated and the name looked "missing".
+  // Poll core.selection as well so a clicked object always populates the panel.
+  stel.change(function () {
+    syncSelection();
+    updateStarScale();
+    followFrame();
+  });
+  setInterval(syncSelection, 150);
+  updateStarScale();
+
+  document.getElementById('i-close').onclick = function () { stel.core.selection = 0; };
+  document.getElementById('i-center').onclick = function () {
+    if (stel.core.selection) stel.pointAndLock(stel.core.selection, 0.5);
+  };
+  document.getElementById('i-goto').onclick = function () {
+    if (!API || selRaHours == null) return;
+    // Safety gate: never slew to a target at or below the horizon — the mount
+    // would swing to point at (or into) the ground, risking a pier/tripod strike.
+    // Block with a clear reason instead of slewing.
+    var block = horizonBlockReason();
+    if (block) { showSearchMsg(block, 6000); return; }
+    var btn = document.getElementById('i-goto');
+    btn.textContent = 'Slewing…'; btn.disabled = true;
+    slewMount(selRaHours, selDecDeg, function (text) {
+      btn.textContent = text;
+      setTimeout(function () { btn.textContent = 'GoTo'; btn.disabled = !(API && selRaHours != null); }, 2200);
+    });
+  };
+
+  // Stop — abort the mount's current slew (halts all axes). Always available when
+  // the daemon is reachable; you want to be able to stop regardless of selection.
+  document.getElementById('i-stop').onclick = function () {
+    if (!API) return;
+    var btn = document.getElementById('i-stop');
+    var label = btn.textContent;
+    btn.textContent = 'Stopping…'; btn.disabled = true;
+    fetch(API + '/api/v1/equipment/telescope/abort', { method: 'POST' })
+      .then(function (r) { btn.textContent = r.ok ? 'Stopped ✓' : 'No mount'; })
+      .catch(function () { btn.textContent = 'No mount'; })
+      .then(function () {
+        setTimeout(function () { btn.textContent = label; btn.disabled = !API; }, 2200);
+      });
+  };
+
+  // Home — send the mount to its home position. Unpark first (a parked mount
+  // ignores the command), then FindHome.
+  document.getElementById('i-home').onclick = function () {
+    if (!API) return;
+    var btn = document.getElementById('i-home');
+    var label = btn.textContent;
+    btn.textContent = 'Homing…'; btn.disabled = true;
+    fetch(API + '/api/v1/equipment/telescope/unpark', { method: 'POST' })
+      .catch(function () {})
+      .then(function () {
+        return fetch(API + '/api/v1/equipment/telescope/home', { method: 'POST' });
+      }).then(function (r) {
+        btn.textContent = r.ok ? 'Homing ✓' : (r.status === 500 ? 'No mount' : 'Not supported');
+      }).catch(function () {
+        btn.textContent = 'No mount';
+      }).then(function () {
+        setTimeout(function () { btn.textContent = label; btn.disabled = !API; }, 2200);
+      });
+  };
+}
+
+// ---- Search + Tonight's Sky ---------------------------------------------
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+}
+var _msgTimer = null;
+function showSearchMsg(msg, ms) {
+  var el = document.getElementById('searchmsg');
+  el.textContent = msg; el.style.display = 'block';
+  clearTimeout(_msgTimer); _msgTimer = setTimeout(function () { el.style.display = 'none'; }, ms || 3500);
+}
+
+// Resolve a typed query to an engine object. Tries the raw text, a "NAME …"
+// form, and a normalised catalog id (M42 → "M 42", NGC7000 → "NGC 7000").
+function resolveQuery(q) {
+  q = (q || '').trim(); if (!q) return null;
+  var tries = [q, 'NAME ' + q];
+  var m = q.match(/^([A-Za-z]{1,4})\s*0*(\d+)$/);
+  if (m) { var id = m[1].toUpperCase() + ' ' + m[2]; tries.push(id, 'NAME ' + id); }
+  for (var i = 0; i < tries.length; i++) {
+    try { var o = stel.getObj(tries[i]); if (o) return o; } catch (e) {}
+  }
+  return null;
+}
+
+// Parse "HH:MM[:SS] ±DD:MM[:SS]" or "ra_deg dec_deg" → {raDeg, decDeg} (J2000).
+function parseRaDec(q) {
+  q = (q || '').trim();
+  var s = q.match(/^(\d{1,2})[:\sh](\d{1,2})(?:[:\sm](\d{1,2}(?:\.\d+)?))?\s+([+\-]?\d{1,2})[:\s°d](\d{1,2})(?:[:\s'](\d{1,2}(?:\.\d+)?))?$/);
+  if (s) {
+    var raH = (+s[1]) + (+s[2]) / 60 + (+(s[3] || 0)) / 3600;
+    var sign = s[4][0] === '-' ? -1 : 1;
+    var decD = Math.abs(+s[4]) + (+s[5]) / 60 + (+(s[6] || 0)) / 3600;
+    return { raDeg: raH * 15, decDeg: sign * decD };
+  }
+  var d = q.match(/^([+\-]?\d+(?:\.\d+)?)[ ,]+([+\-]?\d+(?:\.\d+)?)$/);
+  if (d) return { raDeg: +d[1], decDeg: +d[2] };
+  return null;
+}
+
+// A comfortable framing zoom for a found target — wide enough to see context,
+// tight enough that the DSS2 survey paints in. (Don't gate on the current FOV:
+// stel.fov can read NaN for a frame or two right after load.)
+var FRAME_FOV = 6 * D2R;
+
+// Point the view at a J2000 RA/Dec (no object to select — e.g. raw coordinates).
+function pointRaDec(raDeg, decDeg, name) {
+  var v = stel.s2c(raDeg * D2R, decDeg * D2R);
+  var obs = stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', v);
+  stel.lookAt(obs, 0.6);
+  stel.zoomTo(FRAME_FOV, 0.6);
+  setFrameTarget(raDeg, decDeg, name || '');
+}
+
+function selectObject(o) {
+  stel.core.selection = o;
+  // While framing we centre WITHOUT locking, so the sky stays pannable and the
+  // frame can be nudged off the target to compose.
+  if (frameOn) {
+    try {
+      var obs = stel.convertFrame(stel.core.observer, 'ICRF', 'OBSERVED', o.getInfo('radec'));
+      stel.core.lock = null; stel.lookAt(obs, 0.6);
+    } catch (e) { stel.pointAndLock(o, 0.7); }
+  } else {
+    stel.pointAndLock(o, 0.7);
+  }
+  stel.zoomTo(FRAME_FOV, 0.7);
+}
+
+// Resolve + go to a typed query. Called from the Flutter search bar via the
+// loopback command channel (CEF can't take keyboard text in-page).
+function doSearch(q) {
+  q = (q == null ? '' : String(q));
+  if (!q.trim()) return;
+  var o = resolveQuery(q);
+  if (o) { selectObject(o); return; }
+  var rd = parseRaDec(q);
+  if (rd) {
+    stel.core.selection = 0;
+    pointRaDec(rd.raDeg, rd.decDeg);
+    showSearchMsg('Pointed to RA ' + rd.raDeg.toFixed(2) + '°  Dec ' + rd.decDeg.toFixed(2) + '°');
+    return;
+  }
+  showSearchMsg('Not found: ' + q);
+}
+
+var _tonightLoaded = false;
+function loadTonight() {
+  var list = document.getElementById('tonight-list');
+  if (!API) { list.innerHTML = '<div class="empty">Connect to a server to see Tonight\'s Sky.</div>'; return; }
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  fetch(API + '/api/v1/planning/tonight?limit=20')
+    .then(function (r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+    .then(function (items) {
+      // Mark loaded only now that the fetch succeeded — a failed/disconnected load
+      // (catch arm, or the early !API return) leaves the flag false so the next
+      // panel open retries instead of being stuck on the error forever.
+      _tonightLoaded = true;
+      if (!items || !items.length) { list.innerHTML = '<div class="empty">Nothing well-placed from your site right now.</div>'; return; }
+      list.innerHTML = '';
+      items.forEach(function (it) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        // Build via DOM nodes + textContent (not innerHTML) so server-supplied
+        // strings — name/id/type, and any field added later — are escaped by
+        // construction, matching renderInfo's pattern.
+        var nm = document.createElement('div');
+        nm.className = 'nm';
+        nm.textContent = it.name || it.id;
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        var parts = [];
+        if (it.type) parts.push(it.type);
+        if (it.magnitude != null) parts.push('mag ' + it.magnitude.toFixed(1));
+        parts.push('alt ' + Math.round(it.altitude_deg) + '°');
+        meta.textContent = parts.join('  ·  ');
+        row.appendChild(nm);
+        row.appendChild(meta);
+        row.onclick = function () {
+          var o = resolveQuery(it.name) || resolveQuery(it.id);
+          if (o) { selectObject(o); }
+          // Guard the coordinate fallback: a daemon row missing ra_deg/dec_deg would
+          // otherwise feed NaN into stel.s2c() and throw with no user feedback.
+          else if (it.ra_deg != null && it.dec_deg != null) { pointRaDec(it.ra_deg, it.dec_deg); }
+          else { showSearchMsg('No coordinates for ' + (it.name || it.id || 'this object')); }
+        };
+        list.appendChild(row);
+      });
+    })
+    .catch(function (e) { list.innerHTML = '<div class="empty">Tonight\'s Sky unavailable (' + escapeHtml(String(e)) + ').</div>'; });
+}
+
+function toggleTonight() {
+  var panel = document.getElementById('tonight');
+  var open = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = open ? 'block' : 'none';
+  if (open) { toggleFrame(false); hideCatalogs(); }   // one left drawer at a time
+  if (open && !_tonightLoaded) loadTonight();   // loadTonight sets _tonightLoaded only on success
+}
+
+// ---- Deep-sky controls (native engine) ----------------------------------
+// The engine's own core.dsos layer renders the FULL bundled DSO catalog
+// (NGC / IC / Messier / Caldwell — designations parsed natively) as magnitude-
+// scaled markers + names, GPU-batched — SkySafari-quality, thousands of objects.
+// We do NOT reimplement that with overlays; this panel just shows/hides it. The
+// search bar finds any object by designation (NGC 7000, M31, …) via stel.getObj.
+function dsosOn() { return !!(stel && stel.core.dsos.visible); }
+
+// No lists/overlays — the map just shows the objects the engine offers as
+// markers (core.dsos). This panel only drives the native knobs: show/hide the
+// objects and how dense the markers are.
+function renderCatalogPanel() {
+  var el = document.getElementById('cat-list');
+  el.innerHTML =
+    '<div class="cat-group">Deep sky</div>'
+    + '<div class="cat-row" data-act="dsos"><span>Show objects</span><span class="dot' + (dsosOn() ? ' on' : '') + '"></span></div>'
+    + '<div class="empty">The map shows the objects the engine offers as markers. The search bar jumps to any object — “NGC 7000”, “M31”, “Vega”.</div>';
+  Array.prototype.forEach.call(el.querySelectorAll('[data-act]'), function (n) {
+    n.onclick = function () { dsoAction(n.dataset.act); };
+  });
+}
+
+function dsoAction(act) {
+  if (!stel || act !== 'dsos') return;
+  var d = stel.core.dsos;
+  d.visible = !d.visible;
+  if (d.visible && !d.hints_visible) d.hints_visible = true;
+  var dot = document.querySelector('#cat-list .cat-row[data-act="dsos"] .dot');
+  if (dot) dot.classList.toggle('on', dsosOn());
+}
+
+function hideCatalogs() {
+  document.getElementById('catalogs').style.display = 'none';
+  document.getElementById('cat-btn').classList.remove('on');
+}
+
+function toggleCatPanel() {
+  var p = document.getElementById('catalogs');
+  var open = p.style.display === 'none' || !p.style.display;
+  p.style.display = open ? 'block' : 'none';
+  document.getElementById('cat-btn').classList.toggle('on', open);
+  if (open) {
+    toggleFrame(false);
+    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
+    renderCatalogPanel();
+  }
+}
+
+function wireCatalogs() {
+  document.getElementById('cat-btn').onclick = function () { toggleCatPanel(); };
+  document.getElementById('cat-close').onclick = hideCatalogs;
+}
+
+// ---- Framing overlay (camera FOV box + mosaic) --------------------------
+// Draws the connected camera's field of view as a GeoJSON rectangle on the sky
+// at the framed target, with a position-angle rotation and an N×M mosaic.
+// Optics come from the daemon profile; the box is in J2000 sky coordinates so
+// the engine projects + field-rotates it correctly as you pan/zoom. Every
+// control is a button stepper — CEF can't take in-page keyboard text.
+var frameOn = false;
+var frameRotDeg = 0, frameCols = 1, frameRows = 1, frameOverlap = 10;
+var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
+var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
+var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
+var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
+
+// Apply a freshly-fetched optics payload and, if the field of view actually
+// changed, redraw — so editing optics in Options updates the box live.
+function applyOptics(o) {
+  var prev = (optics && optics.ok) ? optics.fovWDeg + 'x' + optics.fovHDeg : 'none';
+  var fl = o ? +o.focal_length_mm : 0, red = o ? (+o.reducer_factor || 1) : 1;
+  var sw = o ? +o.sensor_width_px : 0, sh = o ? +o.sensor_height_px : 0, ps = o ? +o.pixel_size_um : 0;
+  if (!(fl > 0) || !(sw > 0) || !(sh > 0) || !(ps > 0)) {
+    optics = { ok: false };
+  } else {
+    var arcsec = 206.265 * ps / (fl * red);             // arcsec per pixel
+    optics = { ok: true, fovWDeg: sw * arcsec / 3600, fovHDeg: sh * arcsec / 3600 };
+  }
+  var cur = optics.ok ? optics.fovWDeg + 'x' + optics.fovHDeg : 'none';
+  if (cur !== prev) { frameOn ? updateFrame() : renderFramePanel(); }
+  return optics;
+}
+
+function loadOptics() {
+  if (!API) return Promise.resolve(applyOptics(null));
+  return fetch(API + '/api/v1/profile/optics')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(applyOptics)
+    .catch(function () { return applyOptics(null); });
+}
+
+// Remember the target to frame (J2000). Called on every search / selection so
+// the box snaps to whatever you're looking at; while framing, panning then
+// nudges it from there (see followFrame).
+function setFrameTarget(raDeg, decDeg, name) {
+  frameRaDeg = raDeg; frameDecDeg = decDeg; if (name) frameTargetName = name;
+  if (frameOn) updateFrame();
+}
+
+// The view's centre in J2000 RA/Dec — lets the frame follow the view so you can
+// pan the sky to position the box exactly where you want it.
+function viewCenterRaDec() {
+  var o = stel.core.observer;
+  var v = stel.s2c(o.yaw, o.pitch);                          // OBSERVED-frame direction
+  var s = stel.c2s(stel.convertFrame(o, 'OBSERVED', 'ICRF', v));
+  return [stel.anp(s[0]) / D2R, stel.anpm(s[1]) / D2R];
+}
+
+// While framing, keep the box on the view centre; redraw only when it actually
+// moved (cheap — avoids rebuilding the geojson every animation frame).
+function followFrame() {
+  if (!frameOn || !optics || !optics.ok) return;
+  var c = viewCenterRaDec();
+  if (isNaN(c[0])) return;
+  if (frameRaDeg == null || Math.abs(c[0] - frameRaDeg) > 0.003 || Math.abs(c[1] - frameDecDeg) > 0.003) {
+    frameRaDeg = c[0]; frameDecDeg = c[1];
+    if (_frameGeo) _frameGeo.data = mosaicData();
+  }
+}
+
+// Build the GeoJSON for the box (or mosaic grid) in J2000 RA/Dec. Each panel is
+// a rectangle of the camera FOV, offset on the mosaic grid and rotated by the
+// position angle in the local tangent plane (RA scaled by 1/cos(dec)).
+function mosaicData() {
+  var th = frameRotDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
+  var cosd = Math.cos(frameDecDeg * D2R) || 1e-6;
+  var w = optics.fovWDeg, h = optics.fovHDeg, hw = w / 2, hh = h / 2;
+  var ov = Math.max(0, Math.min(90, frameOverlap)) / 100;
+  var stepW = w * (1 - ov), stepH = h * (1 - ov);
+  var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]];
+  var multi = frameCols * frameRows > 1;
+  var feats = [];
+  for (var iy = 0; iy < frameRows; iy++) {
+    for (var ix = 0; ix < frameCols; ix++) {
+      var gx = (ix - (frameCols - 1) / 2) * stepW;
+      var gy = (iy - (frameRows - 1) / 2) * stepH;
+      var ring = corners.map(function (c) {
+        var lx = c[0] + gx, ly = c[1] + gy;
+        var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
+        return [frameRaDeg + dx / cosd, frameDecDeg + dy];
+      });
+      feats.push({
+        type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: {
+          stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
+          fill: '#4fc3f7', 'fill-opacity': multi ? 0.04 : 0.07,
+        },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features: feats };
+}
+
+function updateFrame() {
+  // A geojson added straight to core never renders — it has to live inside a
+  // `layer` (whose render explicitly draws its children). Setting `.data` runs
+  // the engine's geojson parser, which honours each feature's stroke/fill props.
+  if (!_frameGeo) {
+    _frameLayer = stel.createLayer({ z: 80, visible: true });
+    _frameGeo = stel.createObj('geojson');
+    _frameLayer.add(_frameGeo);
+  }
+  var show = frameOn && optics && optics.ok && frameRaDeg != null;
+  _frameGeo.data = show ? mosaicData() : { type: 'FeatureCollection', features: [] };
+  renderFramePanel();
+}
+
+function fmtFovDeg(x) { return x >= 1 ? x.toFixed(2) + '°' : (x * 60).toFixed(1) + "'"; }
+function renderFramePanel() {
+  document.getElementById('f-rot').textContent = frameRotDeg + '°';
+  var _hand = document.querySelector('#f-dial .dial-hand');
+  if (_hand) _hand.style.transform = 'rotate(' + frameRotDeg + 'deg)';
+  document.getElementById('f-col').textContent = frameCols;
+  document.getElementById('f-row').textContent = frameRows;
+  document.getElementById('f-ov').textContent = frameOverlap + '%';
+  var fovEl = document.getElementById('f-fov');
+  if (optics && optics.ok) {
+    var w = optics.fovWDeg, h = optics.fovHDeg;
+    var base = fmtFovDeg(w) + ' × ' + fmtFovDeg(h);
+    if (frameCols * frameRows > 1) {
+      var ov = frameOverlap / 100;
+      var tw = w * (1 + (frameCols - 1) * (1 - ov)), thh = h * (1 + (frameRows - 1) * (1 - ov));
+      base += '  (' + fmtFovDeg(tw) + ' × ' + fmtFovDeg(thh) + ')';
+    }
+    fovEl.textContent = base;
+  } else { fovEl.textContent = '—'; }
+  var msg = document.getElementById('f-msg');
+  // textContent + a class toggle (not innerHTML) keeps the page's escape invariant —
+  // the warn styling rides on the element's class, so a future dynamic message here
+  // can't become an injection point.
+  if (!optics || !optics.ok) {
+    msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
+    msg.classList.add('warn');
+  } else {
+    msg.textContent = 'Drag the sky to position the frame.';
+    msg.classList.remove('warn');
+  }
+  document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
+}
+
+function toggleFrame(on) {
+  frameOn = (on == null) ? !frameOn : on;
+  document.getElementById('frame-btn').classList.toggle('on', frameOn);
+  // Explicit 'block' — these cards default to display:none in CSS, so clearing
+  // the inline style to '' would just fall back to hidden.
+  document.getElementById('frame').style.display = frameOn ? 'block' : 'none';
+  if (frameOn) {
+    // Only one left drawer at a time; unlock so the sky can be panned to move
+    // the frame, and seed the box on the current view centre.
+    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
+    hideCatalogs();
+    stel.core.lock = null;
+    var c = viewCenterRaDec();
+    if (!isNaN(c[0])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
+  }
+  if (frameOn) loadOptics();   // always refresh from the profile on open
+  updateFrame();
+}
+
+function wireFrame() {
+  document.getElementById('frame-btn').onclick = function () { toggleFrame(); };
+  document.getElementById('f-close').onclick = function () { toggleFrame(false); };
+
+  // Press-and-hold to repeat (accelerating), so 1° rotation steps don't mean a
+  // hundred clicks. One tap = one step.
+  function holdRepeat(id, fn) {
+    var btn = document.getElementById(id), timer = null, delay = 0;
+    function tick() { fn(); delay = Math.max(45, delay * 0.82); timer = setTimeout(tick, delay); }
+    function start(e) { e.preventDefault(); stop(); fn(); delay = 340; timer = setTimeout(tick, delay); }
+    function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+    btn.addEventListener('mousedown', start);
+    ['mouseup', 'mouseleave'].forEach(function (ev) { btn.addEventListener(ev, stop); });
+  }
+
+  // Rotation dial — drag the knob to spin (0° = up); 1° nudges for precision.
+  var dial = document.getElementById('f-dial'), hand = dial.querySelector('.dial-hand'), dialing = false;
+  function setRot(deg) {
+    frameRotDeg = ((Math.round(deg) % 360) + 360) % 360;
+    hand.style.transform = 'rotate(' + frameRotDeg + 'deg)';
+    updateFrame();
+  }
+  function dialAngle(e) {
+    var r = dial.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    return Math.atan2(e.clientX - cx, -(e.clientY - cy)) * 180 / Math.PI;   // 0 = up, clockwise +
+  }
+  dial.addEventListener('mousedown', function (e) { dialing = true; setRot(dialAngle(e)); e.preventDefault(); });
+  window.addEventListener('mousemove', function (e) { if (dialing) setRot(dialAngle(e)); });
+  window.addEventListener('mouseup', function () { dialing = false; });
+  holdRepeat('f-rot-', function () { setRot(frameRotDeg - 1); });
+  holdRepeat('f-rot+', function () { setRot(frameRotDeg + 1); });
+  document.getElementById('f-col-').onclick = function () { frameCols = Math.max(1, frameCols - 1); updateFrame(); };
+  document.getElementById('f-col+').onclick = function () { frameCols = Math.min(8, frameCols + 1); updateFrame(); };
+  document.getElementById('f-row-').onclick = function () { frameRows = Math.max(1, frameRows - 1); updateFrame(); };
+  document.getElementById('f-row+').onclick = function () { frameRows = Math.min(8, frameRows + 1); updateFrame(); };
+  holdRepeat('f-ov-', function () { frameOverlap = Math.max(0, frameOverlap - 1); updateFrame(); });
+  holdRepeat('f-ov+', function () { frameOverlap = Math.min(50, frameOverlap + 1); updateFrame(); });
+  document.getElementById('f-add').onclick = addFrameToSequence;
+  // Pick up optics edited in Options → Imaging → Optics without reopening Frame.
+  setInterval(function () { if (frameOn) loadOptics(); }, 3000);
+}
+
+// Add the framed target to the sequence. The page can't build the daemon's NINA
+// sequence DOM itself, so it hands the target back to Flutter (which owns the
+// sequence builder) through the loopback server's reverse event channel.
+function addFrameToSequence() {
+  if (frameRaDeg == null) return;
+  var btn = document.getElementById('f-add');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  fetch('/araevent', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'addToSequence', raDeg: frameRaDeg, decDeg: frameDecDeg,
+      rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || 'Target',
+    }),
+  }).then(function (r) {
+    btn.textContent = r.ok ? 'Created ✓' : "Couldn't create";
+  }).catch(function () {
+    btn.textContent = "Couldn't create";
+  }).then(function () {
+    setTimeout(function () { btn.textContent = 'Create Run'; renderFramePanel(); }, 1800);
+  });
+}
+
+// Poll the loopback server for Flutter-originated commands (search, Tonight,
+// goto) and dispatch them. ~3/sec is plenty and stays cheap on loopback.
+function pollCmd() {
+  fetch('/aracmd', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (c) {
+      if (!c || !c.type) return;
+      if (c.type === 'search') doSearch(c.q || '');
+      else if (c.type === 'tonight') toggleTonight();
+      else if (c.type === 'goto' && c.ra != null) { stel.core.selection = 0; pointRaDec(c.ra, c.dec); }
+    })
+    .catch(function () {});
+}
+
+function wireCmds() {
+  setInterval(pollCmd, 350);
+}
+
+function wireControls() {
+  ['timebar', 'layers'].forEach(function (id) { document.getElementById(id).style.display = ''; });
+  document.getElementById('status').style.display = 'none';
+
+  var nowBtn = document.getElementById('t-now');
+  function setNow() { pinnedMs = null; nowBtn.classList.add('on'); setObserverTime(); }
+  function pin(ms) { pinnedMs = ms; nowBtn.classList.remove('on'); setObserverTime(); }
+  document.getElementById('t-now').onclick = setNow;
+  document.getElementById('t-1h').onclick = function () { pin((pinnedMs === null ? Date.now() : pinnedMs) - 3600000); };
+  document.getElementById('t+1h').onclick = function () { pin((pinnedMs === null ? Date.now() : pinnedMs) + 3600000); };
+  document.getElementById('t-tonight').onclick = function () {
+    var d = new Date(); d.setHours(22, 0, 0, 0); pin(d.getTime());
+  };
+
+  // Pan + zoom are native (trackpad/mouse) — no on-screen pads.
+
+  Array.prototype.forEach.call(document.querySelectorAll('#layers button[data-layer]'), function (b) {
+    b.onclick = function () { var on = !b.classList.contains('on'); b.classList.toggle('on', on); setLayer(b.dataset.layer, on); };
+  });
+
+  // Live clock tick: while "Now", keep the sky moving with the real time.
+  setInterval(function () { if (pinnedMs === null) setObserverTime(); }, 15000);
+  setInterval(renderClock, 1000);
+}
+
+StelWebEngine({
+  wasmFile: './stellarium-web-engine.wasm',
+  canvas: document.getElementById('stel-canvas'),
+  translateFn: function (d, s) { return s; },
+  onReady: function (s) {
+    stel = s;
+    var core = s.core;
+    var base = './skydata/';
+    core.stars.addDataSource({ url: base + 'stars' });
+    // NOTE: a deep online star survey (Gaia DR2) was trialled here to reach mag 16,
+    // but its high-volume online tiles destabilised the CEF offscreen renderer
+    // (lock-ups / idle freeze). Reverted — deep stars will be done with a bundled
+    // OFFLINE catalogue instead (stable, no online tile churn). The bundled mag-7
+    // stars remain fully clickable via the rebuilt engine.
+    core.skycultures.addDataSource({ url: base + 'skycultures/western', key: 'western' });
+    core.dsos.addDataSource({ url: base + 'dso' });
+    core.landscapes.addDataSource({ url: base + 'landscapes/horizon', key: 'horizon' });
+    core.milkyway.addDataSource({ url: base + 'surveys/milkyway' });
+    core.minor_planets.addDataSource({ url: base + 'mpcorb.dat', key: 'mpc_asteroids' });
+    core.planets.addDataSource({ url: base + 'surveys/sso/moon', key: 'moon' });
+    core.planets.addDataSource({ url: base + 'surveys/sso/sun', key: 'sun' });
+    core.planets.addDataSource({ url: base + 'surveys/sso/moon', key: 'default' });
+    core.comets.addDataSource({ url: base + 'CometEls.txt', key: 'mpc_comets' });
+    core.satellites.addDataSource({ url: base + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
+    // DSS2 colour survey (real photographic sky imagery, shown as you zoom into a
+    // target). This is an online HiPS stream from CDS/STScI — tiles load on demand
+    // and are cached; off-net it simply stays blank and the vector sky is used.
+    // Toggle with the "DSS" layer button; defaults off so off-net users incur no
+    // failed requests until they ask for it.
+    core.dss.addDataSource({ url: 'https://alasky.u-strasbg.fr/DSS/DSSColor' });
+    s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
+    s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
+
+    // Planning defaults: dark sky (targets visible day or night), alt/az grid as a
+    // clean horizon reference, constellation lines + DSOs on.
+    core.atmosphere.visible = false;
+    core.landscapes.visible = false;
+    core.lines.azimuthal.visible = true;
+    core.constellations.lines_visible = true;
+    // The engine's NATIVE deep-sky layer (its built-in DSO catalog — NGC/IC/Messier
+    // etc.), drawn efficiently with magnitude-scaled hint circles + names, exactly
+    // like SkySafari. On by default so the planetarium shows deep-sky targets out of
+    // the box (this is what "used to show all the NGCs"); toggle via "All deep sky".
+    // The engine renders thousands of these batched on the GPU — no per-object
+    // GeoJSON overlay can match it, so this is the right tool for the bulk display.
+    core.dsos.visible = true;
+    core.dsos.hints_visible = true;
+    // Show bright-star NAME labels (SkySafari-style) so you can read what star you're
+    // looking at as you zoom in. The engine labels only the brighter stars (it's
+    // magnitude-gated), so the view stays uncluttered — and showing star hints also
+    // (Star click-selection itself no longer depends on this — the engine was
+    // rebuilt so every rendered star registers a pickable area; this just controls
+    // the on-sky NAME labels for bright stars.)
+    core.stars.hints_visible = true;
+    // (Gaia deep-star cap removed with the online survey above; the bundled
+    // catalogue only reaches mag 7, so no explicit display limit is needed.)
+    // Populate the map with object MARKERS by default so you can see what's out
+    // there to capture — especially in unfamiliar regions (e.g. the southern sky)
+    // where names alone don't help. The engine draws a marker for every DSO down
+    // to (hints_limit + offset) and a NAME only for the brighter subset, so raising
+    // the offset adds mostly markers, not label clutter. Tunable in the panel.
+    core.dsos.hints_mag_offset = 3;
+    // Pristine dark sky (Bortle 1) so the DSS2 survey renders bright and punchy
+    // — the engine dims DSS by the sky-brightness/light-pollution model, which at
+    // the default Bortle 3 washes the photographic imagery out. DSS2 is on by
+    // default and the engine only paints it once you zoom in (FOV < ~20°), so it
+    // appears automatically when you frame a target and costs nothing wide-field.
+    core.bortle_index = 1;
+    core.dss.visible = true;
+    s.zoomTo(90 * D2R, 0);
+
+    // Self-init the observer from the URL params, then start the clock + controls.
+    core.observer.latitude = LAT * D2R;
+    core.observer.longitude = LON * D2R;
+    core.observer.elevation = ELEV;
+    setObserverTime();
+    wireControls();
+    wireSelection();
+    wireCmds();
+    wireFrame();
+    wireCatalogs();
+    loadSite();                              // pull the real site from the daemon
+    setInterval(loadSite, 2000);             // and keep it in sync with Options (near-instant)
+  }
+});
+</script>
+</body>
+</html>

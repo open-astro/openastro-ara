@@ -66,6 +66,14 @@ final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>(
   return controller.stream;
 });
 
+/// True only while the live server link is fully **connected**. Equipment chips
+/// and dots watch this so a killed/unreachable server doesn't keep showing stale
+/// "connected" green — once the link is anything but connected (connecting /
+/// reconnecting / disconnected) the last device statuses can't be trusted.
+final serverLinkUpProvider = Provider.autoDispose<bool>((ref) =>
+    ref.watch(wsConnectionStateProvider).asData?.value ==
+    WsConnectionState.connected);
+
 /// Broadcast of every event from the active server's stream. Feature providers
 /// filter by [WsEvent.type]. An empty stream when no server is saved.
 final wsEventsProvider = StreamProvider.autoDispose<WsEvent>((ref) {

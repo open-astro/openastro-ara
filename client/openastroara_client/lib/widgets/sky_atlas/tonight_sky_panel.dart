@@ -154,9 +154,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                 ),
         ],
       ),
-      // Recentre the atlas on this object. Its catalog id (e.g. "M31") resolves
-      // via Aladin's Sesame lookup just like a typed search.
-      onTap: () => ref.read(skyAtlasSearchProvider.notifier).set(_object.id),
+      // Fly the planetarium to this object (its J2000 RA/Dec — the engine centres
+      // on the coordinates directly, no name lookup needed).
+      onTap: () => ref.read(skyTargetProvider.notifier).set(SkyTarget(
+            raDeg: _object.raDeg,
+            decDeg: _object.decDeg,
+            name: _object.name,
+          )),
     );
   }
 

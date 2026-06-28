@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,9 +22,31 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   final _discovered = <AraServer>{};
   final _manualHostCtrl = TextEditingController();
   final _manualPortCtrl = TextEditingController(text: '5555');
+  Timer? _rescanTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // mDNS lookup is one-shot per provider instance, so a daemon that starts up
+    // after the first scan would never appear. Re-run discovery on a loop while
+    // this screen is shown so freshly-started servers turn up on their own
+    // (deduped into _discovered) — the manual ⟳ button forces an immediate pass.
+    //
+    // This periodic pass is deliberately ADDITIVE (it does not clear _discovered):
+    // re-clearing every 4s would make the live list flicker (empty → repopulate) on
+    // every tick. The trade-off is that a server which moves ports / goes away leaves
+    // a stale entry until the user taps ⟳ Rescan, which DOES clear first (see
+    // [_rescan]). mDNS one-shot lookups don't surface goodbye/departure events, so
+    // pruning the dead entry automatically would need a TTL/liveness probe — out of
+    // scope here; the manual rescan is the clear-stale path.
+    _rescanTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) ref.invalidate(discoveredServersProvider);
+    });
+  }
 
   @override
   void dispose() {
+    _rescanTimer?.cancel();
     _manualHostCtrl.dispose();
     _manualPortCtrl.dispose();
     super.dispose();
@@ -37,7 +61,16 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
     final handshake = ref.watch(serverHandshakeProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Connect to OpenAstro Ara')),
+      appBar: AppBar(
+        title: const Text('Connect to OpenAstro Ara'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Rescan for servers',
+            onPressed: _rescan,
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -48,7 +81,17 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             const SizedBox(height: 8),
             Expanded(
               child: _discovered.isEmpty
-                  ? const Center(child: Text('Scanning… (mDNS broadcasts every few seconds)'))
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Looking for servers… rescanning every few seconds.\n'
+                          'If yours doesn’t appear, tap ⟳ (top right) or add it '
+                          'manually below.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
                   : ListView(
                       children: _discovered
                           .map((s) => ListTile(
@@ -107,6 +150,14 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
         ),
       ),
     );
+  }
+
+  // mDNS discovery is a one-shot lookup per provider instance — a server that
+  // comes up *after* the initial scan won't appear on its own. Rescan clears the
+  // accumulated list and re-runs the lookup so freshly-started daemons show up.
+  void _rescan() {
+    setState(() => _discovered.clear());
+    ref.invalidate(discoveredServersProvider);
   }
 
   void _addManual() {

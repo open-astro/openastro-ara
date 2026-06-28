@@ -7,6 +7,7 @@ import '../../../models/switch_device.dart';
 import '../../../services/equipment_device_api.dart' show isNotFoundEquipmentError;
 import '../../../state/equipment/switch_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/ws/ws_providers.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -54,6 +55,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
   @override
   Widget build(BuildContext context) {
     final switches = ref.watch(switchListProvider);
+    final serverUp = ref.watch(serverLinkUpProvider);
     final connection = ref.watch(equipmentConnectionProvider);
     final connNotifier = ref.read(equipmentConnectionProvider.notifier);
     // Only offer Reconnect while no switch is currently connected/connecting —
@@ -61,12 +63,13 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
     // that's live can tear it down if the daemon's remembered UniqueId differs
     // from the live connection (e.g. its Alpaca host IP changed). An empty list
     // (every() is true) still offers it — that's the post-power-cycle case.
-    final canReconnect = switches.maybeWhen(
-      data: (list) => list.every((d) =>
-          d.connectionState != SwitchConnectionState.connected &&
-          d.connectionState != SwitchConnectionState.connecting),
-      orElse: () => false,
-    );
+    final canReconnect = serverUp &&
+        switches.maybeWhen(
+          data: (list) => list.every((d) =>
+              d.connectionState != SwitchConnectionState.connected &&
+              d.connectionState != SwitchConnectionState.connecting),
+          orElse: () => false,
+        );
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -96,25 +99,45 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
               connNotifier.setAutoConnect(EquipmentDeviceType.switchDevice, v),
         ),
         const SizedBox(height: 4),
-        ...switch (switches) {
-          AsyncData(:final value) => value.isEmpty
-              ? const [_EmptyState()]
-              : [for (final d in value) _SwitchCard(device: d)],
-          AsyncError(:final error) => [
-              _MessageRow(
-                icon: Icons.error_outline,
-                color: AraColors.accentError,
-                text: "Couldn't read the switch list: ${_msg(error)}",
-                onRetry: () => ref.read(switchListProvider.notifier).refresh(),
-              ),
-            ],
-          _ => const [
-              Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ],
-        },
+        // Stale-guard: with the server link down the switch list is stale and
+        // nothing can be reconnected — show a clear offline state.
+        if (!serverUp)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off, color: AraColors.textSecondary, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Server disconnected — switch status is unavailable until the '
+                    'connection is restored.',
+                    style: TextStyle(color: AraColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...switch (switches) {
+            AsyncData(:final value) => value.isEmpty
+                ? const [_EmptyState()]
+                : [for (final d in value) _SwitchCard(device: d)],
+            AsyncError(:final error) => [
+                _MessageRow(
+                  icon: Icons.error_outline,
+                  color: AraColors.accentError,
+                  text: "Couldn't read the switch list: ${_msg(error)}",
+                  onRetry: () => ref.read(switchListProvider.notifier).refresh(),
+                ),
+              ],
+            _ => const [
+                Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ],
+          },
       ],
     );
   }

@@ -42,6 +42,33 @@ final skyAtlasSearchProvider =
     NotifierProvider<SkyAtlasSearchNotifier, String>(
         SkyAtlasSearchNotifier.new);
 
+/// §36 — a chosen sky target (equatorial J2000 coordinates + a display name).
+/// The planetarium (`StellariumView`) flies to it; a connected mount can GoTo it.
+class SkyTarget {
+  final double raDeg;
+  final double decDeg;
+  final String name;
+  const SkyTarget({required this.raDeg, required this.decDeg, required this.name});
+}
+
+/// The currently-selected planetarium target, or null when nothing is selected.
+/// Tonight's Sky (and, later, the search bar) set this; `StellariumView` listens
+/// and centres the view. Like the search notifier it always notifies, so
+/// re-selecting the same object re-centres — consume it with `ref.listen`, not
+/// `ref.watch`.
+class SkyTargetNotifier extends Notifier<SkyTarget?> {
+  @override
+  SkyTarget? build() => null;
+  void set(SkyTarget target) => state = target;
+  void clear() => state = null;
+
+  @override
+  bool updateShouldNotify(SkyTarget? previous, SkyTarget? next) => true;
+}
+
+final skyTargetProvider =
+    NotifierProvider<SkyTargetNotifier, SkyTarget?>(SkyTargetNotifier.new);
+
 /// Whether the active profile has at least one HiPS sky-imagery survey
 /// downloaded. Drives the §36.13 sky-data-missing banner. Phase 12e.1 stubs
 /// this to false (no downloads yet); 12e.2 reads it from the Data Manager

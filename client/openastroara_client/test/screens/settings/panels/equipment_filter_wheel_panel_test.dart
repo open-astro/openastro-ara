@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
@@ -67,6 +68,7 @@ Future<_FakeFwApi> _pump(WidgetTester tester, FilterWheelStatus? status) async {
   final api = _FakeFwApi(status);
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      serverLinkUpProvider.overrideWith((ref) => true),
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       filterWheelApiFactoryProvider.overrideWithValue((_) => api),

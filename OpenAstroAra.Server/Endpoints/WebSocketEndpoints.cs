@@ -136,7 +136,7 @@ public static partial class WebSocketEndpoints {
         // §60.9 resume protocol — give the client a short window to send a
         // JSON resume request as its first frame. Anything else (timeout,
         // non-JSON, missing resume_token) → treat as fresh subscription.
-        var highWaterMark = await HandleResumePhaseAsync(socket, channel, broadcaster, logger, ct);
+        var (highWaterMark, pendingReceive) = await HandleResumePhaseAsync(socket, channel, broadcaster, logger, ct);
 
         // Passive receive loop — after the resume window the receive side
         // just watches for Close frames. Heartbeat (pong handling) and
@@ -144,7 +144,29 @@ public static partial class WebSocketEndpoints {
         var receiveTask = Task.Run(async () => {
             var buffer = new byte[1024];
             try {
-                while (!ct.IsCancellationRequested && socket.State == WebSocketState.Open) {
+                // If the resume phase timed out, it handed us its still-pending
+                // first receive (it can't start a second concurrent ReceiveAsync).
+                // Await that first; if it's the client's Close, skip the loop and
+                // fall through to teardown.
+                var firstWasClose = false;
+                if (pendingReceive is not null) {
+                    var first = await pendingReceive;
+                    // We only inspect MessageType here — the payload this receive wrote
+                    // (into the resume phase's own 4096-byte buffer, not this loop's
+                    // buffer) is intentionally discarded: post-handshake the protocol is
+                    // one-way (server→client) and the loop only watches for the client's
+                    // Close.
+                    // TODO(ws-resume-buffer): the bytes this receive wrote are unrecoverable
+                    // here. Two cases lose data because of it, both acceptable today:
+                    //  (a) a client→server heartbeat/pong added later would be dropped;
+                    //  (b) a slow client whose resume frame lands just *after* the 5s window
+                    //      (delay won the race) is treated as a fresh subscription — it loses
+                    //      the catch-up replay it asked for. Inherent to the time-boxed window;
+                    //      to fix, surface HandleResumePhaseAsync's buffer + parse a late
+                    //      resume frame here before falling through to the fresh path.
+                    firstWasClose = first.MessageType == WebSocketMessageType.Close;
+                }
+                while (!firstWasClose && !ct.IsCancellationRequested && socket.State == WebSocketState.Open) {
                     var result = await socket.ReceiveAsync(buffer, ct);
                     if (result.MessageType == WebSocketMessageType.Close) {
                         break;
@@ -186,8 +208,11 @@ public static partial class WebSocketEndpoints {
         }
 
         // Best-effort close — if the socket is already gone the framework
-        // throws, but there's nothing useful to do at that point.
-        if (socket.State == WebSocketState.Open) {
+        // throws, but there's nothing useful to do at that point. Echo the close
+        // from CloseReceived too (a client Close moves the state to CloseReceived,
+        // not Open): RFC 6455 §5.5.1 wants the close handshake completed, and some
+        // clients wait for the echo before dropping the TCP connection.
+        if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived) {
             try {
                 await socket.CloseAsync(
                     WebSocketCloseStatus.NormalClosure, "server closing", CancellationToken.None);
@@ -207,43 +232,64 @@ public static partial class WebSocketEndpoints {
     /// replayed or already seen by the client. Returns 0 for fresh
     /// subscriptions (no replay, no dedup needed).
     /// </summary>
-    private static async Task<long> HandleResumePhaseAsync(
+    private static async Task<(long HighWaterMark, Task<WebSocketReceiveResult>? PendingReceive)>
+            HandleResumePhaseAsync(
             WebSocket socket,
             IWsEventChannel channel,
             IWsBroadcaster broadcaster,
             ILogger logger,
             CancellationToken ct) {
-        // Read first frame with a bounded timeout so a silent client doesn't
-        // park us in the resume phase forever.
-        using var resumeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        resumeCts.CancelAfter(ResumeWindow);
-
         var buffer = new byte[4096];
-        WebSocketReceiveResult? result;
-        var ms = new MemoryStream();
+        using var ms = new MemoryStream();
+        WebSocketReceiveResult result;
+
+        // Bound the wait for the client's first frame WITHOUT cancelling the
+        // receive: a cancelled WebSocket.ReceiveAsync ABORTS the socket (close
+        // 1006), which would drop every client that stays silent past the window
+        // (e.g. a fresh subscriber). Race the receive against a delay instead; on
+        // timeout, hand the still-pending receive back to the caller's receive loop
+        // so the socket lives on as a fresh subscription.
+        var firstReceive = socket.ReceiveAsync(buffer, ct);
         try {
-            do {
-                result = await socket.ReceiveAsync(buffer, resumeCts.Token);
+            var winner = await Task.WhenAny(firstReceive, Task.Delay(ResumeWindow, ct));
+            if (winner != firstReceive) {
+                // Window elapsed, client silent → fresh subscription. Do NOT cancel
+                // firstReceive (that aborts the socket); pass it to the receive loop.
+                // (If ct cancelled mid-window the delay completes *cancelled*, which
+                // also lands here; the caller awaits firstReceive, it faults on the
+                // same cancellation, and the receive loop's OperationCanceledException
+                // handler tears the socket down cleanly.)
+                return (0, firstReceive);
+            }
+            result = await firstReceive;
+            if (result.MessageType == WebSocketMessageType.Close) {
+                return (0, null);
+            }
+            await ms.WriteAsync(buffer.AsMemory(0, result.Count), ct);
+            // Drain continuation frames of this in-flight message — they arrive
+            // promptly and ct only fires on teardown, so this can't abort spuriously.
+            while (!result.EndOfMessage) {
+                result = await socket.ReceiveAsync(buffer, ct);
                 if (result.MessageType == WebSocketMessageType.Close) {
-                    return 0;
+                    return (0, null);
                 }
-                await ms.WriteAsync(buffer.AsMemory(0, result.Count), resumeCts.Token);
+                await ms.WriteAsync(buffer.AsMemory(0, result.Count), ct);
                 if (ms.Length > 16 * 1024) {
                     // Resume request is small; anything larger isn't one.
-                    return 0;
+                    return (0, null);
                 }
-            } while (!result.EndOfMessage);
-        } catch (OperationCanceledException) when (resumeCts.IsCancellationRequested && !ct.IsCancellationRequested) {
-            // Resume window elapsed — fresh subscription, no replay.
-            return 0;
+            }
+        } catch (OperationCanceledException) {
+            // Connection teardown during the resume read — nothing to resume.
+            return (0, null);
         } catch (WebSocketException ex) {
             LogResumeReceiveFailed(logger, ex);
-            return 0;
+            return (0, null);
         }
 
         if (result.MessageType != WebSocketMessageType.Text) {
             // Binary first frame can't be a resume request — discard.
-            return 0;
+            return (0, null);
         }
 
         WsResumeRequestDto? request;
@@ -252,12 +298,22 @@ public static partial class WebSocketEndpoints {
                 ms.ToArray(), AraJsonSerializerContext.Default.WsResumeRequestDto);
         } catch (JsonException) {
             // Malformed JSON → fresh subscription.
-            return 0;
+            return (0, null);
         }
 
         if (request is null || string.IsNullOrWhiteSpace(request.ResumeToken)) {
-            // First frame wasn't a resume request → fresh subscription.
-            return 0;
+            // Empty token = an explicit fresh subscription (a brand-new client with
+            // nothing to resume). Do NOT replay history — but still answer with a
+            // Resumed:false control frame so the client flips its link to "connected"
+            // immediately, instead of sitting on "connecting" until the first live
+            // event arrives on an otherwise-idle server.
+            await SendResumeResponseAsync(socket, new WsResumeResponseDto(
+                Resumed: false,
+                MissedEvents: null,
+                LastEventId: null,
+                Code: null,
+                Reason: null), ct);
+            return (0, null);
         }
 
         // v0.0.1: resume_token is the base-10 stringified last-seen sequence
@@ -270,21 +326,25 @@ public static partial class WebSocketEndpoints {
                 LastEventId: null,
                 Code: "resume_token_invalid",
                 Reason: "Token must be a non-negative base-10 integer."), ct);
-            return 0;
+            return (0, null);
         }
 
         var currentSeq = broadcaster.CurrentSequence;
-        // If the client's last-seen seq is too far behind, the replay
-        // buffer doesn't cover the gap → token expired.
+        // Token is unusable if it's too far behind the replay buffer, OR ahead of the
+        // server's current seq — the latter means the in-memory counter reset (daemon
+        // restart), so the old token can never be satisfied. Without the `>` guard a
+        // post-restart client (currentSeq small, lastSeenSeq large) slips through, gets
+        // an empty replay with highWaterMark = lastSeenSeq, and the drain loop then
+        // skips every real event ≤ that stale mark → the client goes permanently deaf.
         const int replayWindow = 1000;
-        if (lastSeenSeq < currentSeq - replayWindow) {
+        if (lastSeenSeq > currentSeq || lastSeenSeq < currentSeq - replayWindow) {
             await SendResumeResponseAsync(socket, new WsResumeResponseDto(
                 Resumed: false,
                 MissedEvents: null,
                 LastEventId: null,
                 Code: "resume_token_expired",
                 Reason: $"Last seen seq {lastSeenSeq} is beyond the {replayWindow}-event replay window (current seq: {currentSeq})."), ct);
-            return 0;
+            return (0, null);
         }
 
         var missed = await channel.ResumeFromAsync(lastSeenSeq, ct);
@@ -293,8 +353,11 @@ public static partial class WebSocketEndpoints {
         // can complete out of seq order if one thread pauses between
         // Interlocked.Increment and Enqueue, so the queue's last element
         // isn't guaranteed to be the max. O(N) on N ≤ 1000 envelopes.
-        // Empty snapshot → fall back to lastSeenSeq so dedup-skip is a no-op.
-        var highWaterMark = missed.Count > 0 ? missed.Max(e => e.Seq) : lastSeenSeq;
+        // Empty snapshot → fall back to currentSeq (not lastSeenSeq): the client is
+        // caught up to here, so the drain loop should skip only what's already been
+        // sent and deliver everything newer. Using lastSeenSeq would be wrong if it
+        // ever exceeded currentSeq (the reset case the guard above now rejects).
+        var highWaterMark = missed.Count > 0 ? missed.Max(e => e.Seq) : currentSeq;
         await SendResumeResponseAsync(socket, new WsResumeResponseDto(
             Resumed: true,
             MissedEvents: missed.Count,
@@ -314,7 +377,7 @@ public static partial class WebSocketEndpoints {
                 json, WebSocketMessageType.Text, endOfMessage: true, ct);
         }
 
-        return highWaterMark;
+        return (highWaterMark, null);
     }
 
     private static async Task SendResumeResponseAsync(

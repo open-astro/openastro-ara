@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/flat_panel_status.dart';
@@ -70,6 +71,7 @@ Future<_FakeFlatApi> _pump(WidgetTester tester, FlatPanelStatus? status) async {
   final api = _FakeFlatApi(status);
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      serverLinkUpProvider.overrideWith((ref) => true),
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       flatPanelApiFactoryProvider.overrideWithValue((_) => api),
@@ -138,6 +140,7 @@ void main() {
         _FakeFlatApi(_status(state: EquipmentConnectionState.connecting));
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
         savedServerServiceProvider.overrideWithValue(
             _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
         flatPanelApiFactoryProvider.overrideWithValue((_) => api),

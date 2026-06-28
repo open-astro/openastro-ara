@@ -15,6 +15,7 @@ import '../../state/equipment/safety_monitor_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/settings/settings_nav.dart';
+import '../../state/ws/ws_providers.dart';
 import '../equipment_chip.dart';
 import '../status_indicator.dart';
 import 'guider_chip.dart';
@@ -143,12 +144,19 @@ class EquipmentStatusChip extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => EquipmentChip(
-        icon: icon,
-        label: label,
-        status: watchLevel(ref),
-        onTap: () => openEquipmentPanel(ref, panelId),
-      );
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Stale-guard: while the server link is down the last device status can't be
+    // trusted — show the dot grey (disconnected) instead of a false green.
+    final level = ref.watch(serverLinkUpProvider)
+        ? watchLevel(ref)
+        : StatusLevel.disconnected;
+    return EquipmentChip(
+      icon: icon,
+      label: label,
+      status: level,
+      onTap: () => openEquipmentPanel(ref, panelId),
+    );
+  }
 }
 
 /// Maps the multi-instance Switch list to the chip dot: connected (green) when
@@ -172,7 +180,9 @@ class SwitchStatusChip extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final level = switchChipLevel(ref.watch(switchListProvider));
+    final level = ref.watch(serverLinkUpProvider)
+        ? switchChipLevel(ref.watch(switchListProvider))
+        : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,
       label: label,

@@ -91,6 +91,34 @@ void main() {
       await ws.dispose();
     });
 
+    test('an expired resume token clears _lastSeq so the next reconnect is fresh',
+        () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
+      ws.connect();
+
+      // See an event (so _lastSeq is set), then drop + reconnect resuming from it.
+      conn.legs.first.incoming.add(_envelope('e', 99));
+      await pumpEventQueue();
+      expect(ws.lastSeq, 99);
+      await conn.legs.first.drop();
+      await pumpEventQueue();
+      expect(conn.legs[1].sent, [jsonEncode({'resume_token': '99'})]);
+
+      // Server rejects the token as expired; the client must drop _lastSeq.
+      conn.legs[1].incoming.add(jsonEncode(
+          {'resumed': false, 'code': 'resume_token_expired', 'reason': 'too old'}));
+      await pumpEventQueue();
+      expect(ws.lastSeq, isNull, reason: 'expired token cleared');
+
+      // Next drop → reconnect must send an EMPTY token (fresh subscription), not '99'.
+      await conn.legs[1].drop();
+      await pumpEventQueue();
+      expect(conn.legs[2].sent, [jsonEncode({'resume_token': ''})],
+          reason: 'no longer replays the rejected token');
+      await ws.dispose();
+    });
+
     test('reconnects on drop and resumes from the last-seen seq', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
@@ -267,12 +295,44 @@ void main() {
       expect(ws.connectionState, WsConnectionState.disconnected);
     });
 
-    test('first connect sends no resume token', () async {
+    test('first connect sends an empty resume_token (fresh subscription, no '
+        'historical replay) so the server answers without dumping its backlog', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
       ws.connect();
       await pumpEventQueue();
-      expect(conn.legs.first.sent, isEmpty);
+      expect(conn.legs.first.sent, [jsonEncode({'resume_token': ''})]);
+      await ws.dispose();
+    });
+
+    test('an open socket that never sends a frame flips to connected after the '
+        'connect-grace window (idle/old server safety net)', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server,
+          connect: conn.connect,
+          connectGrace: const Duration(milliseconds: 20));
+      ws.connect();
+      // No frame delivered. Before the grace window: still connecting.
+      expect(ws.connectionState, WsConnectionState.connecting);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // Socket stayed open with no frame → grace fallback marks it connected.
+      expect(ws.connectionState, WsConnectionState.connected);
+      await ws.dispose();
+    });
+
+    test('a socket dropped within the grace window does NOT get marked connected',
+        () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server,
+          connect: conn.connect,
+          connectGrace: const Duration(milliseconds: 50),
+          backoff: const [Duration(seconds: 30)]);
+      ws.connect();
+      await conn.legs.first.drop(); // teardown before the grace timer fires
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      // Grace timer was cancelled on teardown → reconnecting, not connected.
+      expect(ws.connectionState, WsConnectionState.reconnecting);
       await ws.dispose();
     });
 

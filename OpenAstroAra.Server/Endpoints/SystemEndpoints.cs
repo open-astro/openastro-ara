@@ -175,6 +175,33 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetDataManagerCatalog");
 
+        // ─── Catalogs (§36) — toggleable overlay catalogs/type-filters derived from OpenNGC ───
+        var catalogs = app.MapGroup("/api/v1/catalogs").WithTags("Catalogs");
+        // List the catalogs that have data (empty until openngc-dso is installed).
+        catalogs.MapGet("",
+                (ISkyCatalogService svc) => Results.Ok(svc.List()))
+            .Produces<IReadOnlyList<CatalogInfoDto>>(StatusCodes.Status200OK)
+            .WithName("ListCatalogs");
+        // A single catalog's objects ({name, ra°, dec°, mag}) for the planetarium overlay. 404 when the id is
+        // unknown or its source catalog isn't installed; ?limit= caps the overlay payload. With no ?limit= we
+        // apply a brightest-first default cap so a large type-filter (e.g. ~8k galaxies, ~500 KB JSON) can't
+        // spike the server for a caller that forgets one; explicit callers still get exactly what they ask for.
+        const int defaultCatalogLimit = 500;
+        catalogs.MapGet("/{catalogId}",
+                (string catalogId, [FromQuery] int? limit, ISkyCatalogService svc, CancellationToken ct) => {
+                    // limit == 0 is intentionally valid — it returns an empty 200, matching the
+                    // /data-manager/{id}/catalog route's documented contract. Only a negative limit is a 400.
+                    if (limit is < 0) {
+                        return Results.Problem("limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    var objects = svc.GetObjects(catalogId, limit ?? defaultCatalogLimit, ct);
+                    return objects is null ? Results.NotFound() : Results.Ok(objects);
+                })
+            .Produces<IReadOnlyList<CatalogObjectDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetCatalog");
+
         // ─── Planning (§36/§25.5) — Tonight's Sky ───
         var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
         planning.MapGet("/tonight",

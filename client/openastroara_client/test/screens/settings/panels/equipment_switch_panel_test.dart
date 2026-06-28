@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
@@ -56,6 +57,7 @@ Future<_FakeSwitchApi> _pump(WidgetTester tester, List<SwitchDevice> devices) as
   final api = _FakeSwitchApi(devices);
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      serverLinkUpProvider.overrideWith((ref) => true),
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       switchApiFactoryProvider.overrideWithValue((_) => api),
@@ -74,6 +76,7 @@ void main() {
     final api = _FakeSwitchApi([_device(const [], state: SwitchConnectionState.connecting)]);
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
         savedServerServiceProvider.overrideWithValue(
             _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
         switchApiFactoryProvider.overrideWithValue((_) => api),

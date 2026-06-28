@@ -342,6 +342,8 @@ public partial class Program {
                 sp.GetRequiredService<ISkyDataFetcher>(),
                 sp.GetRequiredService<IWsBroadcaster>(),
                 sp.GetRequiredService<ILogger<DataManagerService>>()));
+        // §36 Catalogs — derives Messier/NGC/IC + type-filter overlays from the installed OpenNGC catalog.
+        builder.Services.AddSingleton<ISkyCatalogService>(_ => new SkyCatalogService(skyDataRoot));
 
         // §43-1 backup — real disk-backed ZIP snapshots under {profileDir}/backups (replaces the placeholder).
         // Registered here (not at the §13.11 placeholder site) since it needs the resolved profileDir. The §43-2

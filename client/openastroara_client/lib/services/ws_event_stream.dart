@@ -37,8 +37,9 @@ WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
 /// Link state of a [WsEventStream], for consumers that need a connected /
 /// disconnected indicator (a silent broadcast stream can't tell "no events" from
 /// "link down"). `connecting` is the first attempt; `connected` is set once a
-/// frame actually arrives; `reconnecting` is a drop being retried with backoff;
-/// `disconnected` is the pre-connect and post-dispose terminal state.
+/// frame arrives or the connect-grace window elapses on a still-open socket;
+/// `reconnecting` is a drop being retried with backoff; `disconnected` is the
+/// pre-connect and post-dispose terminal state.
 enum WsConnectionState { connecting, connected, reconnecting, disconnected }
 
 /// §60.9 WebSocket event-stream client. Connects to `ws://host:port/api/v1/ws`,
@@ -66,9 +67,21 @@ class WsEventStream {
   final StreamController<WsConnectionState> _connStates = StreamController<WsConnectionState>.broadcast();
   WsConnectionState _connState = WsConnectionState.disconnected;
 
+  /// Default for [_connectGrace]: how long an open-but-silent socket waits for its
+  /// first frame before we treat it as connected anyway. Normally the server
+  /// answers the resume frame at once (well under this), but an *idle* server with
+  /// no live events — or an older daemon that doesn't reply to an empty resume
+  /// token — would otherwise never deliver a frame, leaving the link wedged on
+  /// `connecting` forever (which pins serverLinkUpProvider down so equipment reads
+  /// "Server disconnected"). The socket being open is itself proof the link is up.
+  static const Duration defaultConnectGrace = Duration(seconds: 3);
+
+  final Duration _connectGrace;
+
   WsSocket? _socket;
   StreamSubscription<dynamic>? _sub;
   Timer? _reconnectTimer;
+  Timer? _connectGraceTimer;
   int _reconnectAttempt = 0;
   int? _lastSeq;
   bool _disposed = false;
@@ -77,8 +90,10 @@ class WsEventStream {
     AraServer server, {
     WsConnector? connect,
     List<Duration>? backoff,
+    Duration? connectGrace,
   })  : assert(backoff == null || backoff.isNotEmpty,
             'backoff must be non-empty — _onClosed indexes into it on every reconnect'),
+        _connectGrace = connectGrace ?? defaultConnectGrace,
         // TODO(wss): plaintext ws:// is fine for the trusted-LAN default, but the
         // §67.4 / web-support follow-up must switch to wss:// for untrusted routes
         // (the resume handshake + payloads would otherwise be in the clear).
@@ -127,15 +142,20 @@ class WsEventStream {
     _reconnectTimer = null;
     final socket = _connect(_url, const {'X-Ara-WS-Version': wsVersion});
     _socket = socket;
-    // On a reconnect (we have a last-seen seq) ask the server to replay what we
-    // missed — it answers with a resume-response frame, then replays the gap.
+    // ALWAYS send a resume frame as the very first message so the server answers
+    // with a resume-response control frame, which flips the link to `connected`
+    // without waiting for the first live event on an idle server.
+    //   - Fresh connect (no _lastSeq): send an EMPTY token. The server reads that
+    //     as "fresh subscription" and replies Resumed:false WITHOUT replaying its
+    //     historical event backlog — a brand-new client should start live, not get
+    //     1..N queued events dumped on it. (Sending "0" would mean "I've seen up to
+    //     seq 0 → replay everything after", i.e. the whole backlog.)
+    //   - Reconnect (_lastSeq set): send the real last-seen seq so the server
+    //     replays only the gap.
     // The send buffers in the sink until the HTTP upgrade completes; if the TCP
-    // connect fails before the upgrade the buffered token is dropped and this
-    // attempt is a cold connect — but _lastSeq is retained, so the next
-    // successful reconnect still resumes from it.
-    if (_lastSeq != null) {
-      socket.send(jsonEncode({'resume_token': _lastSeq.toString()}));
-    }
+    // connect fails first the buffered token is dropped (cold connect) but _lastSeq
+    // is retained for the next successful reconnect.
+    socket.send(jsonEncode({'resume_token': _lastSeq?.toString() ?? ''}));
     // cancelOnError auto-cancels the subscription before onError runs, so the
     // sub.cancel() inside _onClosed is a harmless no-op on the error path (and
     // the real cancel on the onDone path); either way the link is finished.
@@ -145,6 +165,21 @@ class WsEventStream {
       onError: (Object _) => _onClosed(),
       cancelOnError: true,
     );
+    // Fallback: if no frame arrives within the grace window but the socket is
+    // still open (no onDone/onError fired → _socket still set), consider the link
+    // connected. Covers an idle server and an old daemon that ignores an empty
+    // resume token. Cancelled the moment a frame arrives (_onFrame) or the socket
+    // tears down (_onClosed / dispose).
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = Timer(_connectGrace, () {
+      if (!_disposed && _socket != null) {
+        // A stable open socket counts as a successful connect → reset backoff so
+        // the next drop retries from the first slot (matters against an old/idle
+        // server that never sends the resume-response that would otherwise reset it).
+        _reconnectAttempt = 0;
+        _setConnState(WsConnectionState.connected);
+      }
+    });
   }
 
   void _onFrame(dynamic frame) {
@@ -157,10 +192,25 @@ class WsEventStream {
     }
     if (decoded is! Map<String, dynamic>) return;
     // Any decoded frame (event OR the resume-response control frame) proves the
-    // link is live → connected.
+    // link is live → connected; the grace fallback is no longer needed.
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = null;
     _setConnState(WsConnectionState.connected);
     // The resume-response control frame (`{resumed, ...}`) is not an event.
     if (decoded.containsKey('resumed') && !decoded.containsKey('type')) {
+      // A resume-response is a trusted server control frame (not arbitrary
+      // garbage), so resetting backoff on it is safe — and necessary: against an
+      // idle server that emits no events, this is the only signal that a reconnect
+      // succeeded, so without it the backoff counter would ratchet to its 30s
+      // ceiling across drops even though the server is healthy.
+      _reconnectAttempt = 0;
+      // The server rejected our resume token (expired / invalid — `resumed:false`
+      // with a code). Drop _lastSeq so the next reconnect sends an empty token and
+      // falls back to a fresh subscription; otherwise we'd replay the same rejected
+      // token forever and the server would keep rejecting it (infinite loop, no events).
+      if (decoded['resumed'] == false && decoded['code'] != null) {
+        _lastSeq = null;
+      }
       return;
     }
     final WsEvent event;
@@ -187,6 +237,8 @@ class WsEventStream {
     // await), and the stream that triggered it has already closed — so there's
     // nothing left to deliver. dispose() does NOT await this one (it short-
     // circuits on the null _sub below); it only awaits a cancel of a live sub.
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = null;
     final sub = _sub;
     final socket = _socket;
     _sub = null;
@@ -219,6 +271,8 @@ class WsEventStream {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = null;
     final sub = _sub;
     final socket = _socket;
     _sub = null; // drop references so the cancelled sub / closed socket can be GC'd promptly
