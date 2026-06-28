@@ -1,3 +1,0 @@
-[submodule "client/openastroara_client/packages/webview_cef"]
-	path = client/openastroara_client/packages/webview_cef
-	url = https://github.com/open-astro/webview_cef.git
