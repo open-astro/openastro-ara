@@ -183,13 +183,16 @@ public static class SystemEndpoints {
             .Produces<IReadOnlyList<CatalogInfoDto>>(StatusCodes.Status200OK)
             .WithName("ListCatalogs");
         // A single catalog's objects ({name, ra°, dec°, mag}) for the planetarium overlay. 404 when the id is
-        // unknown or its source catalog isn't installed; ?limit= caps the overlay payload.
+        // unknown or its source catalog isn't installed; ?limit= caps the overlay payload. With no ?limit= we
+        // apply a brightest-first default cap so a large type-filter (e.g. ~8k galaxies, ~500 KB JSON) can't
+        // spike the server for a caller that forgets one; explicit callers still get exactly what they ask for.
+        const int defaultCatalogLimit = 500;
         catalogs.MapGet("/{catalogId}",
                 (string catalogId, [FromQuery] int? limit, ISkyCatalogService svc, CancellationToken ct) => {
                     if (limit is < 0) {
                         return Results.Problem("limit must be >= 0", statusCode: StatusCodes.Status400BadRequest);
                     }
-                    var objects = svc.GetObjects(catalogId, limit, ct);
+                    var objects = svc.GetObjects(catalogId, limit ?? defaultCatalogLimit, ct);
                     return objects is null ? Results.NotFound() : Results.Ok(objects);
                 })
             .Produces<IReadOnlyList<CatalogObjectDto>>(StatusCodes.Status200OK)

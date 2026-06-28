@@ -36,8 +36,19 @@ class StellariumServer {
   // can always reach it.
   final List<String> _commands = [];
 
+  /// Hard cap on the unread command backlog. The page drains one per ~350 ms
+  /// poll; commands are normally enqueued only on user interaction, so this stays
+  /// tiny — but bound it so a future loop calling [pushCommand] can't grow it
+  /// without limit. When full, the oldest (most stale) commands are dropped.
+  static const int _maxQueuedCommands = 64;
+
   /// Queue a command (a JSON string) for the page to pick up on its next poll.
-  void pushCommand(String json) => _commands.add(json);
+  void pushCommand(String json) {
+    _commands.add(json);
+    if (_commands.length > _maxQueuedCommands) {
+      _commands.removeRange(0, _commands.length - _maxQueuedCommands);
+    }
+  }
 
   // ── page → Flutter reverse channel ──────────────────────────────────────
   // Some actions originate in the page but must be handled by Flutter (e.g.
@@ -110,10 +121,12 @@ class StellariumServer {
           }
           final bytes = <int>[];
           await for (final chunk in request) {
-            bytes.addAll(chunk);
-            if (bytes.length > maxEventBytes) {
+            // Check BEFORE appending so peak buffering stays at the cap rather than
+            // cap + one chunk.
+            if (bytes.length + chunk.length > maxEventBytes) {
               throw const FormatException('event body too large');
             }
+            bytes.addAll(chunk);
           }
           final decoded = jsonDecode(utf8.decode(bytes));
           if (decoded is Map) {
