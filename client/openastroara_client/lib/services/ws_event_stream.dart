@@ -173,6 +173,10 @@ class WsEventStream {
     _connectGraceTimer?.cancel();
     _connectGraceTimer = Timer(_connectGrace, () {
       if (!_disposed && _socket != null) {
+        // A stable open socket counts as a successful connect → reset backoff so
+        // the next drop retries from the first slot (matters against an old/idle
+        // server that never sends the resume-response that would otherwise reset it).
+        _reconnectAttempt = 0;
         _setConnState(WsConnectionState.connected);
       }
     });
@@ -194,6 +198,12 @@ class WsEventStream {
     _setConnState(WsConnectionState.connected);
     // The resume-response control frame (`{resumed, ...}`) is not an event.
     if (decoded.containsKey('resumed') && !decoded.containsKey('type')) {
+      // A resume-response is a trusted server control frame (not arbitrary
+      // garbage), so resetting backoff on it is safe — and necessary: against an
+      // idle server that emits no events, this is the only signal that a reconnect
+      // succeeded, so without it the backoff counter would ratchet to its 30s
+      // ceiling across drops even though the server is healthy.
+      _reconnectAttempt = 0;
       return;
     }
     final WsEvent event;

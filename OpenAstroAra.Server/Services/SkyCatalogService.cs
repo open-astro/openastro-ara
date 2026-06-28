@@ -109,13 +109,13 @@ namespace OpenAstroAra.Server.Services {
             if (!File.Exists(DsoCsvPath)) {
                 return null;     // source not installed
             }
-            // Parse OUTSIDE any lock. Holding a Monitor across the ~14k-row file read
-            // would make concurrent first-callers block on Monitor.Enter, where they
-            // can't observe their CancellationToken (only the lock winner reaches the
-            // per-row ThrowIfCancellationRequested). The parse is pure + deterministic,
-            // so on the rare concurrent first-access a couple of threads may parse in
-            // parallel and produce equal lists — the first to publish wins and everyone
-            // shares that one instance. ct is honored per row inside ParseDsoCsv.
+            // Lock-free first load: parse without any mutual exclusion, so every
+            // concurrent first-caller runs ParseDsoCsv on its own thread and honors its
+            // own CancellationToken per row (a Monitor would instead make all-but-one
+            // block uncancellably on Monitor.Enter). The parse is pure + deterministic,
+            // so on the rare concurrent first-access a couple of threads parse in
+            // parallel and produce equal lists — CompareExchange publishes the first to
+            // finish and everyone shares that one instance.
             var parsed = ParseDsoCsv(ct);
             return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
         }

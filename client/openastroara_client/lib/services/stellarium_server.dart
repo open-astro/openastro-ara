@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -120,17 +121,20 @@ class StellariumServer {
           if (request.contentLength != -1 && request.contentLength > maxEventBytes) {
             throw const FormatException('event body too large');
           }
-          final bytes = <int>[];
+          // BytesBuilder(copy: false) keeps each chunk by reference instead of the
+          // O(chunks²) re-copy a growing List<int>.addAll would do. Check the size
+          // BEFORE adding so peak buffering stays at the cap, not cap + one chunk.
+          final builder = BytesBuilder(copy: false);
           await for (final chunk in request) {
-            // Check BEFORE appending so peak buffering stays at the cap rather than
-            // cap + one chunk.
-            if (bytes.length + chunk.length > maxEventBytes) {
+            if (builder.length + chunk.length > maxEventBytes) {
               throw const FormatException('event body too large');
             }
-            bytes.addAll(chunk);
+            builder.add(chunk);
           }
-          final decoded = jsonDecode(utf8.decode(bytes));
-          if (decoded is Map) {
+          final decoded = jsonDecode(utf8.decode(builder.takeBytes()));
+          // Guard against a dispose() that closed the controller while this
+          // request was mid-flight — add to a closed StreamController throws.
+          if (decoded is Map && !_events.isClosed) {
             _events.add(Map<String, Object?>.from(decoded));
           }
         } catch (_) {/* ignore malformed or oversized event bodies */}

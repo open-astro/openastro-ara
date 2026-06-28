@@ -151,6 +151,12 @@ public static partial class WebSocketEndpoints {
                 var firstWasClose = false;
                 if (pendingReceive is not null) {
                     var first = await pendingReceive;
+                    // We only inspect MessageType here — the payload this receive wrote
+                    // (into the resume phase's own 4096-byte buffer, not this loop's
+                    // buffer) is intentionally discarded: post-handshake the protocol is
+                    // one-way (server→client) and the loop only watches for the client's
+                    // Close. If a future heartbeat/pong arrives as the first frame, read
+                    // its bytes from that buffer here before they're lost.
                     firstWasClose = first.MessageType == WebSocketMessageType.Close;
                 }
                 while (!firstWasClose && !ct.IsCancellationRequested && socket.State == WebSocketState.Open) {
