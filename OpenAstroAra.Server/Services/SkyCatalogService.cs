@@ -41,8 +41,7 @@ namespace OpenAstroAra.Server.Services {
     public sealed class SkyCatalogService : ISkyCatalogService {
 
         private readonly string _skyDataRoot;
-        private readonly object _gate = new();
-        private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime
+        private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime (published via Interlocked)
 
         public SkyCatalogService(string skyDataRoot) {
             _skyDataRoot = skyDataRoot ?? throw new ArgumentNullException(nameof(skyDataRoot));
@@ -102,50 +101,62 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private List<DsoRow>? LoadDsos(CancellationToken ct) {
-            lock (_gate) {
-                if (_dsos is not null) {
-                    return _dsos;
-                }
-                if (!File.Exists(DsoCsvPath)) {
-                    return null;
-                }
-                var list = new List<DsoRow>();
-                using var reader = new StreamReader(DsoCsvPath);
-                var header = reader.ReadLine();
-                if (header is null) {
-                    return _dsos = list;
-                }
-                var cols = header.Split(';');     // OpenNGC is semicolon-separated
-                int Idx(string n) => Array.IndexOf(cols, n);
-                int iName = Idx("Name"), iType = Idx("Type"), iRa = Idx("RA"), iDec = Idx("Dec"),
-                    iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC"),
-                    iId = Idx("Identifiers");
-                if (iName < 0 || iRa < 0 || iDec < 0) {
-                    return _dsos = list;          // unexpected layout — nothing to place
-                }
-                string? line;
-                while ((line = reader.ReadLine()) is not null) {
-                    ct.ThrowIfCancellationRequested();
-                    var f = line.Split(';');
-                    if (f.Length <= iDec) {
-                        continue;
-                    }
-                    if (!TryRaToDeg(f[iRa], out var ra) || !TryDecToDeg(f[iDec], out var dec)) {
-                        continue;
-                    }
-                    double? mag = null;
-                    if (iV >= 0 && f.Length > iV && TryNum(f[iV], out var v)) {
-                        mag = v;
-                    } else if (iB >= 0 && f.Length > iB && TryNum(f[iB], out var b)) {
-                        mag = b;
-                    }
-                    var type = iType >= 0 && f.Length > iType ? f[iType] : "";
-                    bool Has(int i) => i >= 0 && f.Length > i && !string.IsNullOrWhiteSpace(f[i]);
-                    bool hasCaldwell = iId >= 0 && f.Length > iId && HasCaldwellId(f[iId]);
-                    list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell));
-                }
-                return _dsos = list;
+            // Fast path: the catalog is parsed once and cached for the process lifetime.
+            var cached = Volatile.Read(ref _dsos);
+            if (cached is not null) {
+                return cached;
             }
+            if (!File.Exists(DsoCsvPath)) {
+                return null;     // source not installed
+            }
+            // Parse OUTSIDE any lock. Holding a Monitor across the ~14k-row file read
+            // would make concurrent first-callers block on Monitor.Enter, where they
+            // can't observe their CancellationToken (only the lock winner reaches the
+            // per-row ThrowIfCancellationRequested). The parse is pure + deterministic,
+            // so on the rare concurrent first-access a couple of threads may parse in
+            // parallel and produce equal lists — the first to publish wins and everyone
+            // shares that one instance. ct is honored per row inside ParseDsoCsv.
+            var parsed = ParseDsoCsv(ct);
+            return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
+        }
+
+        private List<DsoRow> ParseDsoCsv(CancellationToken ct) {
+            var list = new List<DsoRow>();
+            using var reader = new StreamReader(DsoCsvPath);
+            var header = reader.ReadLine();
+            if (header is null) {
+                return list;
+            }
+            var cols = header.Split(';');     // OpenNGC is semicolon-separated
+            int Idx(string n) => Array.IndexOf(cols, n);
+            int iName = Idx("Name"), iType = Idx("Type"), iRa = Idx("RA"), iDec = Idx("Dec"),
+                iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC"),
+                iId = Idx("Identifiers");
+            if (iName < 0 || iRa < 0 || iDec < 0) {
+                return list;          // unexpected layout — nothing to place
+            }
+            string? line;
+            while ((line = reader.ReadLine()) is not null) {
+                ct.ThrowIfCancellationRequested();
+                var f = line.Split(';');
+                if (f.Length <= iDec) {
+                    continue;
+                }
+                if (!TryRaToDeg(f[iRa], out var ra) || !TryDecToDeg(f[iDec], out var dec)) {
+                    continue;
+                }
+                double? mag = null;
+                if (iV >= 0 && f.Length > iV && TryNum(f[iV], out var v)) {
+                    mag = v;
+                } else if (iB >= 0 && f.Length > iB && TryNum(f[iB], out var b)) {
+                    mag = b;
+                }
+                var type = iType >= 0 && f.Length > iType ? f[iType] : "";
+                bool Has(int i) => i >= 0 && f.Length > i && !string.IsNullOrWhiteSpace(f[i]);
+                bool hasCaldwell = iId >= 0 && f.Length > iId && HasCaldwellId(f[iId]);
+                list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell));
+            }
+            return list;
         }
 
         private static bool TryNum(string s, out double v) =>

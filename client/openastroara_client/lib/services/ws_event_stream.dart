@@ -127,17 +127,20 @@ class WsEventStream {
     _reconnectTimer = null;
     final socket = _connect(_url, const {'X-Ara-WS-Version': wsVersion});
     _socket = socket;
-    // ALWAYS send a resume request as the very first frame — even on a fresh
-    // connect (token "0"). The server gives the client a 5s window to send one,
-    // and it enforces that window by cancelling its `ReceiveAsync`, which in .NET
-    // ABORTS the WebSocket — so a silent fresh client gets dropped at t=5s and
-    // loops forever as "reconnecting". Sending "0" lands a frame immediately
-    // (no abort) and draws a resume-response back, which flips the link to
-    // `connected`. On a reconnect we send the real last-seen seq to replay the
-    // gap. The send buffers in the sink until the HTTP upgrade completes; if the
-    // TCP connect fails first the buffered token is dropped (cold connect) but
-    // _lastSeq is retained for the next successful reconnect.
-    socket.send(jsonEncode({'resume_token': _lastSeq?.toString() ?? '0'}));
+    // ALWAYS send a resume frame as the very first message so the server answers
+    // with a resume-response control frame, which flips the link to `connected`
+    // without waiting for the first live event on an idle server.
+    //   - Fresh connect (no _lastSeq): send an EMPTY token. The server reads that
+    //     as "fresh subscription" and replies Resumed:false WITHOUT replaying its
+    //     historical event backlog — a brand-new client should start live, not get
+    //     1..N queued events dumped on it. (Sending "0" would mean "I've seen up to
+    //     seq 0 → replay everything after", i.e. the whole backlog.)
+    //   - Reconnect (_lastSeq set): send the real last-seen seq so the server
+    //     replays only the gap.
+    // The send buffers in the sink until the HTTP upgrade completes; if the TCP
+    // connect fails first the buffered token is dropped (cold connect) but _lastSeq
+    // is retained for the next successful reconnect.
+    socket.send(jsonEncode({'resume_token': _lastSeq?.toString() ?? ''}));
     // cancelOnError auto-cancels the subscription before onError runs, so the
     // sub.cancel() inside _onClosed is a harmless no-op on the error path (and
     // the real cancel on the onDone path); either way the link is finished.

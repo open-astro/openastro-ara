@@ -267,13 +267,13 @@ void main() {
       expect(ws.connectionState, WsConnectionState.disconnected);
     });
 
-    test('first connect sends resume_token "0" (fresh) so the server does not '
-        'abort the socket on its resume-window timeout', () async {
+    test('first connect sends an empty resume_token (fresh subscription, no '
+        'historical replay) so the server answers without dumping its backlog', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
       ws.connect();
       await pumpEventQueue();
-      expect(conn.legs.first.sent, [jsonEncode({'resume_token': '0'})]);
+      expect(conn.legs.first.sent, [jsonEncode({'resume_token': ''})]);
       await ws.dispose();
     });
 

@@ -286,7 +286,17 @@ public static partial class WebSocketEndpoints {
         }
 
         if (request is null || string.IsNullOrWhiteSpace(request.ResumeToken)) {
-            // First frame wasn't a resume request → fresh subscription.
+            // Empty token = an explicit fresh subscription (a brand-new client with
+            // nothing to resume). Do NOT replay history — but still answer with a
+            // Resumed:false control frame so the client flips its link to "connected"
+            // immediately, instead of sitting on "connecting" until the first live
+            // event arrives on an otherwise-idle server.
+            await SendResumeResponseAsync(socket, new WsResumeResponseDto(
+                Resumed: false,
+                MissedEvents: null,
+                LastEventId: null,
+                Code: null,
+                Reason: null), ct);
             return (0, null);
         }
 
