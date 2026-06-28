@@ -52,7 +52,16 @@ class StellariumServer {
   static Future<StellariumServer>? _instance;
 
   /// Start (or return the already-running) loopback asset server.
-  static Future<StellariumServer> start() => _instance ??= _start();
+  ///
+  /// A *failed* start (e.g. `HttpServer.bind` losing the port race under
+  /// resource pressure) clears the cached future so the next mount can retry —
+  /// otherwise every later `start()` would replay the same rejected future and
+  /// the planetarium could never recover without an app restart.
+  static Future<StellariumServer> start() =>
+      _instance ??= _start().onError((Object e, StackTrace s) {
+        _instance = null;
+        Error.throwWithStackTrace(e, s);
+      });
 
   static Future<StellariumServer> _start() async {
     // Port 0 → the OS picks a free ephemeral port; loopback-only so nothing off

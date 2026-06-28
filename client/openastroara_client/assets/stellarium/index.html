@@ -366,7 +366,11 @@ function renderInfo(sel) {
     // what your site can't see.
     var maxAlt = 90 - Math.abs(LAT - selDecDeg);
     selVisible = maxAlt > 0;
-    rows.push(['Max alt', (maxAlt > 0 ? maxAlt.toFixed(0) + '°' : '<span class="warn">never rises here</span>')]);
+    // Third element marks a "warn" value cell (styled red via class, not markup),
+    // so the row builder below can stay textContent-only — no HTML interpolation.
+    rows.push(maxAlt > 0
+      ? ['Max alt', maxAlt.toFixed(0) + '°']
+      : ['Max alt', 'never rises here', true]);
   } catch (e) { selRaHours = selDecDeg = selAltDeg = null; selVisible = false; }
 
   // Rise/set tonight.
@@ -379,11 +383,23 @@ function renderInfo(sel) {
     }
   } catch (e) {}
 
-  var html = '';
+  // Build the rows as DOM nodes with textContent — every value is escaped by
+  // construction, so a future row carrying a server-supplied string (object name,
+  // catalog id) can't smuggle markup into the panel.
+  var tbody = document.getElementById('i-rows');
+  tbody.textContent = '';
   for (var i = 0; i < rows.length; i++) {
-    html += '<tr><td class="k">' + rows[i][0] + '</td><td class="v">' + rows[i][1] + '</td></tr>';
+    var tr = document.createElement('tr');
+    var k = document.createElement('td');
+    k.className = 'k';
+    k.textContent = rows[i][0];
+    var v = document.createElement('td');
+    v.className = rows[i][2] ? 'v warn' : 'v';
+    v.textContent = rows[i][1];
+    tr.appendChild(k);
+    tr.appendChild(v);
+    tbody.appendChild(tr);
   }
-  document.getElementById('i-rows').innerHTML = html;
 
   // GoTo needs a connected daemon and a resolved RA/Dec. We DON'T disable it for
   // below-horizon targets — instead the click handler runs a horizon safety check

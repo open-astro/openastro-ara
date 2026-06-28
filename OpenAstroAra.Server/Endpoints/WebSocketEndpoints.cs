@@ -224,7 +224,7 @@ public static partial class WebSocketEndpoints {
             ILogger logger,
             CancellationToken ct) {
         var buffer = new byte[4096];
-        var ms = new MemoryStream();
+        using var ms = new MemoryStream();
         WebSocketReceiveResult result;
 
         // Bound the wait for the client's first frame WITHOUT cancelling the
