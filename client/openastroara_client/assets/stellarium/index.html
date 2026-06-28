@@ -645,10 +645,21 @@ function loadTonight() {
       items.forEach(function (it) {
         var row = document.createElement('div');
         row.className = 'row';
-        var mag = (it.magnitude != null) ? 'mag ' + it.magnitude.toFixed(1) : '';
-        row.innerHTML = '<div class="nm">' + escapeHtml(it.name || it.id) + '</div>'
-          + '<div class="meta">' + escapeHtml(it.type || '') + (mag ? '  ·  ' + mag : '')
-          + '  ·  alt ' + Math.round(it.altitude_deg) + '°</div>';
+        // Build via DOM nodes + textContent (not innerHTML) so server-supplied
+        // strings — name/id/type, and any field added later — are escaped by
+        // construction, matching renderInfo's pattern.
+        var nm = document.createElement('div');
+        nm.className = 'nm';
+        nm.textContent = it.name || it.id;
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        var parts = [];
+        if (it.type) parts.push(it.type);
+        if (it.magnitude != null) parts.push('mag ' + it.magnitude.toFixed(1));
+        parts.push('alt ' + Math.round(it.altitude_deg) + '°');
+        meta.textContent = parts.join('  ·  ');
+        row.appendChild(nm);
+        row.appendChild(meta);
         row.onclick = function () {
           var o = resolveQuery(it.name) || resolveQuery(it.id);
           if (o) selectObject(o); else pointRaDec(it.ra_deg, it.dec_deg);

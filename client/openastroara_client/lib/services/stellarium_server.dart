@@ -113,10 +113,11 @@ class StellariumServer {
         try {
           // The page posts tiny JSON events; cap the body so a buggy or compromised
           // page can't make us buffer an arbitrarily large payload (loopback-only,
-          // but bound the read regardless). Covers both known content-length and
-          // chunked bodies.
+          // but bound the read regardless). A declared Content-Length lets us reject
+          // up front; chunked bodies (contentLength == -1) are bounded by the
+          // per-chunk accumulation check below.
           const maxEventBytes = 64 * 1024;
-          if (request.contentLength > maxEventBytes) {
+          if (request.contentLength != -1 && request.contentLength > maxEventBytes) {
             throw const FormatException('event body too large');
           }
           final bytes = <int>[];

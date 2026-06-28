@@ -277,6 +277,37 @@ void main() {
       await ws.dispose();
     });
 
+    test('an open socket that never sends a frame flips to connected after the '
+        'connect-grace window (idle/old server safety net)', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server,
+          connect: conn.connect,
+          connectGrace: const Duration(milliseconds: 20));
+      ws.connect();
+      // No frame delivered. Before the grace window: still connecting.
+      expect(ws.connectionState, WsConnectionState.connecting);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // Socket stayed open with no frame → grace fallback marks it connected.
+      expect(ws.connectionState, WsConnectionState.connected);
+      await ws.dispose();
+    });
+
+    test('a socket dropped within the grace window does NOT get marked connected',
+        () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server,
+          connect: conn.connect,
+          connectGrace: const Duration(milliseconds: 50),
+          backoff: const [Duration(seconds: 30)]);
+      ws.connect();
+      await conn.legs.first.drop(); // teardown before the grace timer fires
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      // Grace timer was cancelled on teardown → reconnecting, not connected.
+      expect(ws.connectionState, WsConnectionState.reconnecting);
+      await ws.dispose();
+    });
+
     test('dispose stops reconnecting and closes the events stream', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);

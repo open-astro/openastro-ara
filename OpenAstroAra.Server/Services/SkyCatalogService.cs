@@ -191,6 +191,12 @@ namespace OpenAstroAra.Server.Services {
             if (p.Length > 2 && !TryNum(p[2], out sec)) {
                 return false;
             }
+            // Arc-minutes/seconds must be in [0,60): NumberStyles.Float would accept a
+            // stray "-" (e.g. "01:-30:00"), which still passes the degree-range gate but
+            // places the object wrong. Reject the row instead.
+            if (m < 0 || m >= 60 || sec < 0 || sec >= 60) {
+                return false;
+            }
             deg = (h + (m / 60.0) + (sec / 3600.0)) * 15.0;
             return deg >= 0 && deg < 360;
         }
@@ -209,6 +215,11 @@ namespace OpenAstroAra.Server.Services {
             }
             double sec = 0;
             if (p.Length > 2 && !TryNum(p[2], out sec)) {
+                return false;
+            }
+            // Arc-minutes/seconds in [0,60) — the overall sign is carried by `sign`, so a
+            // "-" inside a component (e.g. "30:-15:00") is malformed, not a real value.
+            if (m < 0 || m >= 60 || sec < 0 || sec >= 60) {
                 return false;
             }
             deg = sign * (d + (m / 60.0) + (sec / 3600.0));

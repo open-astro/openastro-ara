@@ -37,8 +37,9 @@ WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
 /// Link state of a [WsEventStream], for consumers that need a connected /
 /// disconnected indicator (a silent broadcast stream can't tell "no events" from
 /// "link down"). `connecting` is the first attempt; `connected` is set once a
-/// frame actually arrives; `reconnecting` is a drop being retried with backoff;
-/// `disconnected` is the pre-connect and post-dispose terminal state.
+/// frame arrives or the connect-grace window elapses on a still-open socket;
+/// `reconnecting` is a drop being retried with backoff; `disconnected` is the
+/// pre-connect and post-dispose terminal state.
 enum WsConnectionState { connecting, connected, reconnecting, disconnected }
 
 /// §60.9 WebSocket event-stream client. Connects to `ws://host:port/api/v1/ws`,
@@ -66,9 +67,21 @@ class WsEventStream {
   final StreamController<WsConnectionState> _connStates = StreamController<WsConnectionState>.broadcast();
   WsConnectionState _connState = WsConnectionState.disconnected;
 
+  /// Default for [_connectGrace]: how long an open-but-silent socket waits for its
+  /// first frame before we treat it as connected anyway. Normally the server
+  /// answers the resume frame at once (well under this), but an *idle* server with
+  /// no live events — or an older daemon that doesn't reply to an empty resume
+  /// token — would otherwise never deliver a frame, leaving the link wedged on
+  /// `connecting` forever (which pins serverLinkUpProvider down so equipment reads
+  /// "Server disconnected"). The socket being open is itself proof the link is up.
+  static const Duration defaultConnectGrace = Duration(seconds: 3);
+
+  final Duration _connectGrace;
+
   WsSocket? _socket;
   StreamSubscription<dynamic>? _sub;
   Timer? _reconnectTimer;
+  Timer? _connectGraceTimer;
   int _reconnectAttempt = 0;
   int? _lastSeq;
   bool _disposed = false;
@@ -77,8 +90,10 @@ class WsEventStream {
     AraServer server, {
     WsConnector? connect,
     List<Duration>? backoff,
+    Duration? connectGrace,
   })  : assert(backoff == null || backoff.isNotEmpty,
             'backoff must be non-empty — _onClosed indexes into it on every reconnect'),
+        _connectGrace = connectGrace ?? defaultConnectGrace,
         // TODO(wss): plaintext ws:// is fine for the trusted-LAN default, but the
         // §67.4 / web-support follow-up must switch to wss:// for untrusted routes
         // (the resume handshake + payloads would otherwise be in the clear).
@@ -150,6 +165,17 @@ class WsEventStream {
       onError: (Object _) => _onClosed(),
       cancelOnError: true,
     );
+    // Fallback: if no frame arrives within the grace window but the socket is
+    // still open (no onDone/onError fired → _socket still set), consider the link
+    // connected. Covers an idle server and an old daemon that ignores an empty
+    // resume token. Cancelled the moment a frame arrives (_onFrame) or the socket
+    // tears down (_onClosed / dispose).
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = Timer(_connectGrace, () {
+      if (!_disposed && _socket != null) {
+        _setConnState(WsConnectionState.connected);
+      }
+    });
   }
 
   void _onFrame(dynamic frame) {
@@ -162,7 +188,9 @@ class WsEventStream {
     }
     if (decoded is! Map<String, dynamic>) return;
     // Any decoded frame (event OR the resume-response control frame) proves the
-    // link is live → connected.
+    // link is live → connected; the grace fallback is no longer needed.
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = null;
     _setConnState(WsConnectionState.connected);
     // The resume-response control frame (`{resumed, ...}`) is not an event.
     if (decoded.containsKey('resumed') && !decoded.containsKey('type')) {
@@ -192,6 +220,8 @@ class WsEventStream {
     // await), and the stream that triggered it has already closed — so there's
     // nothing left to deliver. dispose() does NOT await this one (it short-
     // circuits on the null _sub below); it only awaits a cancel of a live sub.
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = null;
     final sub = _sub;
     final socket = _socket;
     _sub = null;
@@ -224,6 +254,8 @@ class WsEventStream {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _connectGraceTimer?.cancel();
+    _connectGraceTimer = null;
     final sub = _sub;
     final socket = _socket;
     _sub = null; // drop references so the cancelled sub / closed socket can be GC'd promptly
