@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
 import '../../models/sequence/slew_target_body.dart';
@@ -33,6 +35,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
   bool _unavailable = false;
+
+  // Linux only: the URL we open in the system browser instead of embedding.
+  // Flutter's GTK embedder can't give an embedded webview platform view a shared
+  // GL surface (flutter/flutter#88168) — creating the WebKitGTK view poisons the
+  // whole app's Skia GL context and the window goes blank. So on Linux we serve
+  // the same loopback page and launch it in the user's browser (full WebGL2).
+  String? _externalUrl;
 
   @override
   void initState() {
@@ -79,6 +88,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         return;
       }
       if (!mounted) return;
+
+      // Linux: don't embed (see [_externalUrl]). Open the loopback page in the
+      // system browser instead; the Flutter↔page command/event channels are
+      // loopback HTTP, so the search bar + add-to-sequence keep working against
+      // the browser page.
+      if (Platform.isLinux) {
+        setState(() => _externalUrl = url);
+        unawaited(_openInBrowser());
+        return;
+      }
 
       try {
         // Keep this minimal: webview_all notes some setters are unimplemented on
@@ -166,23 +185,93 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     _pushCmd({'type': 'search', 'q': q});
   }
 
+  // Linux: open the loopback planetarium page in the system browser.
+  Future<void> _openInBrowser() async {
+    final url = _externalUrl;
+    if (url == null) return;
+    try {
+      final ok = await launchUrl(Uri.parse(url),
+          mode: LaunchMode.externalApplication);
+      if (!ok) debugPrint('StellariumView: launchUrl returned false for $url');
+    } catch (e, st) {
+      debugPrint('StellariumView: could not open browser: $e\n$st');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_unavailable) return const _Unavailable();
+    final external = _externalUrl;
     final c = _controller;
-    if (c == null) return const _Loading();
+    // Still initialising (server + URL not ready on either path).
+    if (external == null && c == null) return const _Loading();
 
     return ColoredBox(
       color: AraColors.bgPrimary,
       child: Column(
         children: [
+          // The search bar drives the page over the loopback command channel, so
+          // it works for the embedded webview AND the Linux browser page.
           _SearchBar(
             controller: _searchCtrl,
             onSubmit: _submitSearch,
             onTonight: () => _pushCmd({'type': 'tonight'}),
           ),
-          Expanded(child: wva.WebViewWidget(controller: c)),
+          Expanded(
+            child: external != null
+                ? _BrowserLaunchPanel(onOpen: _openInBrowser)
+                : wva.WebViewWidget(controller: c!),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Linux Planning surface. Flutter's GTK embedder can't give an embedded webview
+/// a shared GL rendering surface (flutter/flutter#88168) — the WebKitGTK platform
+/// view blanks the whole app — so on Linux the planetarium opens in the system
+/// browser (full WebGL2) off the same loopback server. The page auto-opens once
+/// on first load; this panel offers a manual reopen.
+class _BrowserLaunchPanel extends StatelessWidget {
+  final Future<void> Function() onOpen;
+
+  const _BrowserLaunchPanel({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AraColors.bgPrimary,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.public, size: 88, color: AraColors.textDisabled),
+            const SizedBox(height: 12),
+            Text('Planetarium opens in your browser',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'On Linux the sky map runs in your web browser for full WebGL2 '
+                'support. The search bar above still controls it. It should have '
+                'opened automatically — use the button if it didn’t.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => onOpen(),
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: const Text('Open planetarium'),
+            ),
+          ],
+        ),
       ),
     );
   }
