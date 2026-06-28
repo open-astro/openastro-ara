@@ -169,6 +169,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     if (raDeg == null || decDeg == null) return;
     final name = (event['name'] as String?)?.trim();
     final targetName = (name == null || name.isEmpty) ? 'Target' : name;
+    // NOTE: the page also sends `rotationDeg` (the framing position angle), but the
+    // sequence target built below is a SlewScopeToRaDec instruction, which has no PA
+    // field — carrying the framing PA into the Run needs a CenterAndRotate / rotator
+    // instruction. Tracked in the NINA sequencer-fidelity epic (design/PORT_TODO.md);
+    // until then the PA is deliberately not applied (the overlay is preview-only).
 
     final api = ref.read(sequenceApiProvider);
     final messenger = ScaffoldMessenger.of(context);

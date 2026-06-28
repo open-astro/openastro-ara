@@ -42,6 +42,7 @@ namespace OpenAstroAra.Server.Services {
 
         private readonly string _skyDataRoot;
         private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime (published via Interlocked)
+        private volatile bool _loadFailed; // a corrupt/unreadable CSV is cached as failed so we don't re-parse per request
 
         public SkyCatalogService(string skyDataRoot) {
             _skyDataRoot = skyDataRoot ?? throw new ArgumentNullException(nameof(skyDataRoot));
@@ -106,8 +107,10 @@ namespace OpenAstroAra.Server.Services {
             if (cached is not null) {
                 return cached;
             }
-            if (!File.Exists(DsoCsvPath)) {
-                return null;     // source not installed
+            // A prior parse failed on a corrupt/unreadable CSV — treat the source as
+            // unavailable (404) rather than re-reading the bad file on every request.
+            if (_loadFailed || !File.Exists(DsoCsvPath)) {
+                return null;
             }
             // Lock-free first load: parse without any mutual exclusion, so every
             // concurrent first-caller runs ParseDsoCsv on its own thread and honors its
@@ -116,7 +119,15 @@ namespace OpenAstroAra.Server.Services {
             // so on the rare concurrent first-access a couple of threads parse in
             // parallel and produce equal lists — CompareExchange publishes the first to
             // finish and everyone shares that one instance.
-            var parsed = ParseDsoCsv(ct);
+            List<DsoRow> parsed;
+            try {
+                parsed = ParseDsoCsv(ct);
+            } catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException) {
+                // Corrupt or unreadable catalog: cache the failure so we don't retry the
+                // full read per request. (Cancellation is NOT a load failure — it bubbles.)
+                _loadFailed = true;
+                return null;
+            }
             return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
         }
 

@@ -21,6 +21,10 @@ void main() {
       expect(StellariumServer.contentTypeFor('/skydata/tle_satellite.jsonl.gz').mimeType,
           'application/gzip');
     });
+    test('serves .webp landscape/art tiles as image/webp', () {
+      expect(StellariumServer.contentTypeFor('/skydata/landscapes/guereins/tile.webp').mimeType,
+          'image/webp');
+    });
     test('unknown / binary sky-data blobs fall back to octet-stream', () {
       expect(StellariumServer.contentTypeFor('/skydata/dso/Norder0/Dir0/Npix0.eph').mimeType,
           'application/octet-stream');

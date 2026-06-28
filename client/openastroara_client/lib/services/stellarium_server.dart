@@ -99,6 +99,12 @@ class StellariumServer {
       // Flutter → page command channel: the page long-polls this; we hand back the
       // oldest queued command (a JSON object) and drop it, or `{}` when idle.
       if (path == '/aracmd') {
+        if (request.method != 'GET') {
+          response.statusCode = HttpStatus.methodNotAllowed;
+          response.headers.set(HttpHeaders.allowHeader, 'GET');
+          await response.close();
+          return;
+        }
         final cmd = _commands.isNotEmpty ? _commands.removeAt(0) : '{}';
         response.headers.contentType =
             ContentType('application', 'json', charset: 'utf-8');
@@ -111,6 +117,12 @@ class StellariumServer {
       // decode it and surface it on [events]. Always answer 200 so the page's
       // fetch resolves; a malformed body is just dropped.
       if (path == '/araevent') {
+        if (request.method != 'POST') {
+          response.statusCode = HttpStatus.methodNotAllowed;
+          response.headers.set(HttpHeaders.allowHeader, 'POST');
+          await response.close();
+          return;
+        }
         try {
           // The page posts tiny JSON events; cap the body so a buggy or compromised
           // page can't make us buffer an arbitrarily large payload (loopback-only,
@@ -253,6 +265,8 @@ class StellariumServer {
         return ContentType('image', 'svg+xml');
       case 'png':
         return ContentType('image', 'png');
+      case 'webp':
+        return ContentType('image', 'webp');
       case 'gz':
         return ContentType('application', 'gzip');
       default:
