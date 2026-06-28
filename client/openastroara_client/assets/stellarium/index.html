@@ -651,6 +651,10 @@ function loadTonight() {
   fetch(API + '/api/v1/planning/tonight?limit=20')
     .then(function (r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
     .then(function (items) {
+      // Mark loaded only now that the fetch succeeded — a failed/disconnected load
+      // (catch arm, or the early !API return) leaves the flag false so the next
+      // panel open retries instead of being stuck on the error forever.
+      _tonightLoaded = true;
       if (!items || !items.length) { list.innerHTML = '<div class="empty">Nothing well-placed from your site right now.</div>'; return; }
       list.innerHTML = '';
       items.forEach(function (it) {
@@ -690,7 +694,7 @@ function toggleTonight() {
   var open = panel.style.display === 'none' || !panel.style.display;
   panel.style.display = open ? 'block' : 'none';
   if (open) { toggleFrame(false); hideCatalogs(); }   // one left drawer at a time
-  if (open && !_tonightLoaded) { _tonightLoaded = true; loadTonight(); }
+  if (open && !_tonightLoaded) loadTonight();   // loadTonight sets _tonightLoaded only on success
 }
 
 // ---- Deep-sky controls (native engine) ----------------------------------
@@ -880,8 +884,16 @@ function renderFramePanel() {
     fovEl.textContent = base;
   } else { fovEl.textContent = '—'; }
   var msg = document.getElementById('f-msg');
-  if (!optics || !optics.ok) msg.innerHTML = '<span class="warn">Set your camera + focal length in Options → Imaging → Optics.</span>';
-  else msg.textContent = 'Drag the sky to position the frame.';
+  // textContent + a class toggle (not innerHTML) keeps the page's escape invariant —
+  // the warn styling rides on the element's class, so a future dynamic message here
+  // can't become an injection point.
+  if (!optics || !optics.ok) {
+    msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
+    msg.classList.add('warn');
+  } else {
+    msg.textContent = 'Drag the sky to position the frame.';
+    msg.classList.remove('warn');
+  }
   document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
 }
 

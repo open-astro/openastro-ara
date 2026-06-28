@@ -156,9 +156,14 @@ public static partial class WebSocketEndpoints {
                     // buffer) is intentionally discarded: post-handshake the protocol is
                     // one-way (server→client) and the loop only watches for the client's
                     // Close.
-                    // TODO(ws-heartbeat): if a client→server heartbeat/pong frame is ever
-                    // added, restructure so HandleResumePhaseAsync surfaces its buffer
-                    // bytes — they're unrecoverable here today and would be silently lost.
+                    // TODO(ws-resume-buffer): the bytes this receive wrote are unrecoverable
+                    // here. Two cases lose data because of it, both acceptable today:
+                    //  (a) a client→server heartbeat/pong added later would be dropped;
+                    //  (b) a slow client whose resume frame lands just *after* the 5s window
+                    //      (delay won the race) is treated as a fresh subscription — it loses
+                    //      the catch-up replay it asked for. Inherent to the time-boxed window;
+                    //      to fix, surface HandleResumePhaseAsync's buffer + parse a late
+                    //      resume frame here before falling through to the fresh path.
                     firstWasClose = first.MessageType == WebSocketMessageType.Close;
                 }
                 while (!firstWasClose && !ct.IsCancellationRequested && socket.State == WebSocketState.Open) {
