@@ -8,6 +8,14 @@ Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope 
 
 ---
 
+## §36 Planning / webview / connection — follow-ups (2026-06-27)
+
+- **Make `webview_all` (native WKWebView) the default on macOS, then retire `webview_cef`.** The CEF OSR path freezes on macOS (lock-up on Frame in dense fields, idle freeze); the `--dart-define=WEBVIEW_ALL=true` spike (native platform view) is solid. Plan: (a) confirm the idle + Frame stress on WKWebView; (b) **Linux WebKitGTK WebGL2 spike** on Ubuntu 24.04 (the one gating unknown — needs a `linux/runner/my_application.cc` GtkOverlay edit per `webview_all`); (c) flip the default + remove the flag; (d) drop `webview_cef` + the CEF download/helper machinery. See PORT_DECISIONS 2026-06-27. (`flutter_inappwebview` rejected — no Linux; `atomic_webview` — separate window.)
+- **Deep offline star catalogue (mag ~12–14) to replace the reverted online Gaia.** Online Gaia DR2 tiles destabilised CEF OSR and were reverted; the bundled catalogue stops at mag 7. Bundle deeper Norder tiles (offline, no tile churn) sized to taste once the webview pivot settles — WKWebView/WebView2 also handle deeper WebGL2 better than CEF OSR did. (`skydata/stars/properties` is the cap; `display_limit_mag` is the runtime knob.)
+- **Remove the dead `SkyCatalogService` + `GET /api/v1/catalogs[/{id}]` (server).** Superseded by the engine's native `core.dsos` (PORT_DECISIONS 2026-06-26) — no consumer remains. Delete the service, endpoints, DTOs, and AOT-JSON context entries.
+- **Add a `flutter build macos` CI leg.** The client CI job (`flutter analyze` + `flutter test`) never compiles the native macOS app, so webview/CEF/WASM regressions only surface on-device. (Carried over from the v0.1.0 Aladin/CEF state.)
+- **Faster WS reconnect after the server returns (optional).** `WsEventStream` backoff caps at 30s, so reconnect-after-restart can lag up to 30s. Consider capping the max backoff lower (5–10s) for a snappier comeback. (Resume-window abort + stale-guard are DONE — see CHANGELOG.)
+
 ## §68 AlpacaBridge integration — version gate REMOVED (2026-06-21)
 
 **The §68.1 AlpacaBridge version gate was removed wholesale** (user decision, 2026-06-21: "Alpaca doesn't have a protection layer — it's supposed to be open by default"). ASCOM Alpaca is open by design and has no version handshake or `/version` endpoint (AlpacaBridge serves none), so the probe always failed and the gate was pure friction. The removal deleted the version probe, handshake service, gate, gate notifier, the 503/warn-band WS event (`equipment.alpaca_bridge_outdated_warn`), the client `AlpacaBridgeWarningBanner` + `alpaca_bridge_warning_state`, the gate wiring on every REST `/connect` handler + the boot auto-connect path, and all four server gate test files + both client banner/state tests. Equipment connects now go straight to the Alpaca client.
