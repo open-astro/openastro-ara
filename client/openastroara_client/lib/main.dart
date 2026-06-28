@@ -7,6 +7,7 @@ import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'state/saved_server_state.dart';
 import 'theme/ara_theme.dart';
+import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
 
 void main() {
   runApp(const ProviderScope(child: OpenAstroAraApp()));
@@ -26,6 +27,9 @@ class OpenAstroAraApp extends StatelessWidget {
       // The diagonal DEBUG ribbon overlaps top-right app-bar actions (e.g. the
       // first-run Rescan button); it adds nothing for users, so hide it.
       debugShowCheckedModeBanner: false,
+      // The Linux planetarium overlay subscribes to this so the native GTK
+      // webview hides when a route is pushed over the shell (no-op elsewhere).
+      navigatorObservers: [planetariumRouteObserver],
       home: const _RootRouter(),
     );
   }
