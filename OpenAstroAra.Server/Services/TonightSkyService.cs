@@ -146,11 +146,10 @@ public sealed class TonightSkyService : ITonightSkyService {
 
         // Precompute the night sample grid ONCE (it's object-independent): local sidereal time and
         // whether the sun is below the twilight threshold at each 5-min sample across ±12 h. Per object
-        // we then only need its altitude at each sample. centerIdx is the sample at exactly atUtc.
+        // we then only need its altitude at each sample (index stepsPerSide is exactly atUtc).
         var twilight = TwilightSunAltitudeDeg(site.TwilightDefinition);
         var stepsPerSide = WindowHalfSpanMinutes / WindowStepMinutes;
         var sampleCount = stepsPerSide * 2 + 1;
-        var centerIdx = stepsPerSide;
         var sampleUtc = new DateTimeOffset[sampleCount];
         var sampleLstDeg = new double[sampleCount];
         var sunIsDown = new bool[sampleCount];   // true = sun below the twilight threshold (dark enough)
@@ -173,24 +172,22 @@ public sealed class TonightSkyService : ITonightSkyService {
                 up[i] = objAlt >= horizon && sunIsDown[i];
             }
 
-            // Window tonight: if the object is up at atUtc, take the contiguous run bracketing atUtc;
-            // otherwise (atUtc in daylight / object down right now) take the longest qualifying run in
-            // the span — i.e. tonight's dark window even though it hasn't started yet.
-            int start, end;
-            if (up[centerIdx]) {
-                start = centerIdx;
-                end = centerIdx;
-                while (start > 0 && up[start - 1]) start--;
-                while (end < sampleCount - 1 && up[end + 1]) end++;
-            } else {
-                (start, end) = LongestRun(up);
-            }
+            // Window tonight = the LONGEST qualifying dark run in the span, always — not the run that
+            // merely brackets atUtc. An object that sets and re-rises (e.g. up 10pm–midnight then
+            // 2am–6am) must report its best 4 h window even when the query falls in the shorter early
+            // run; "max integration hours tonight" is the headline figure. (Bracketing-from-atUtc bought
+            // no speed — the loop above already filled up[] for every sample.)
+            var (start, end) = LongestRun(up);
 
             DateTimeOffset? windowStart = null, windowEnd = null;
             double integrationHours = 0;
             if (start >= 0) {
                 windowStart = sampleUtc[start];
-                windowEnd = sampleUtc[end];
+                // Each "up" sample stands for its WindowStepMinutes slot, so the window's exclusive upper
+                // bound is one step past the last up-sample. Without the +step the duration would count
+                // only the gaps BETWEEN samples — short by one step — and a single-sample window would
+                // report 0 h despite the object being up for at least that slot.
+                windowEnd = sampleUtc[end].AddMinutes(WindowStepMinutes);
                 integrationHours = (windowEnd.Value - windowStart.Value).TotalHours;
             }
 

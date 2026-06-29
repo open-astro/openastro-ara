@@ -47,6 +47,7 @@ namespace OpenAstroAra.Server.Services {
 
         private readonly string _skyDataRoot;
         private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime (published via Interlocked)
+        private IReadOnlyList<DsoEntryDto>? _dsoEntries; // the GetAllDsos projection, cached so each request doesn't re-allocate it
         private volatile bool _loadFailed; // a corrupt/unreadable CSV is cached as failed so we don't re-parse per request
 
         public SkyCatalogService(string skyDataRoot) {
@@ -109,13 +110,22 @@ namespace OpenAstroAra.Server.Services {
         }
 
         public IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct) {
+            // The projection is immutable once built, so cache it: GetAllDsos is hit on every
+            // /planning/tonight request and re-Select(...).ToList()-ing the ~13k-row catalog each time
+            // is pure waste. Published via Interlocked like _dsos (a rare concurrent first-build just
+            // produces equal lists; the first to publish wins and everyone shares it).
+            var cached = Volatile.Read(ref _dsoEntries);
+            if (cached is not null) {
+                return cached;
+            }
             var rows = LoadDsos(ct);
             if (rows is null) {
                 return null;   // source not installed
             }
-            return rows.Select(r => new DsoEntryDto(
+            var projected = (IReadOnlyList<DsoEntryDto>)rows.Select(r => new DsoEntryDto(
                 r.Name, r.CommonName, r.Type, r.RaDeg, r.DecDeg, r.Mag,
                 r.MajAxArcmin, r.MinAxArcmin, r.PosAngleDeg, r.SurfaceBrightness)).ToList();
+            return Interlocked.CompareExchange(ref _dsoEntries, projected, null) ?? projected;
         }
 
         private List<DsoRow>? LoadDsos(CancellationToken ct) {
