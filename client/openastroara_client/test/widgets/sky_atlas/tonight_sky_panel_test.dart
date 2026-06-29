@@ -76,7 +76,10 @@ class _RecordingClient implements SequenceClient {
   void close() {}
 }
 
-const _m31 = TonightSkyObject(
+// A high-scoring, well-framed target with a full timing payload. Window times
+// are UTC; the panel renders them in local tz, so the test asserts on the
+// score / framing / type rather than on a tz-sensitive clock string.
+final _m31 = TonightSkyObject(
   id: 'M31',
   name: 'Andromeda Galaxy',
   type: 'galaxy',
@@ -85,11 +88,36 @@ const _m31 = TonightSkyObject(
   decDeg: 41.269,
   altitudeDeg: 55,
   maxAltitudeDeg: 60,
+  windowStartUtc: DateTime.utc(2026, 6, 29, 20, 14),
+  windowEndUtc: DateTime.utc(2026, 6, 30, 4, 32),
+  transitUtc: DateTime.utc(2026, 6, 30, 1, 10),
+  integrationHours: 6.3,
+  remainingHours: 3.2,
+  framing: TonightFraming.good,
+  score: 88,
+  scoreReasons: const ['fills the frame (+35)', '6 h dark window (+25)'],
 );
 
-Widget _host(_RecordingClient client) => ProviderScope(
+// A low-scoring, oversized target — must still appear (advise, don't dictate).
+const _ngc = TonightSkyObject(
+  id: 'NGC1976',
+  name: 'Orion Nebula',
+  type: 'nebula',
+  magnitude: 4.0,
+  raDeg: 83.8,
+  decDeg: -5.4,
+  altitudeDeg: 11,
+  maxAltitudeDeg: 40,
+  integrationHours: 2.0,
+  framing: TonightFraming.tooBig,
+  score: 32,
+);
+
+Widget _host(_RecordingClient client,
+        {List<TonightSkyObject>? objects}) =>
+    ProviderScope(
       overrides: [
-        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        tonightSkyProvider.overrideWith((ref) async => objects ?? [_m31]),
         sequenceApiProvider.overrideWith((ref) => client),
       ],
       child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
@@ -123,5 +151,43 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining("Couldn't add to a sequence"), findsOneWidget);
+  });
+
+  testWidgets('renders the score badge, framing chip and timing line',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+
+    expect(find.text('88'), findsOneWidget); // score badge
+    expect(find.text('Fills frame'), findsOneWidget); // framing chip (good)
+    // Timing line: tz-agnostic substrings (the clock part is localised).
+    expect(find.textContaining('6.3 h dark'), findsOneWidget);
+    expect(find.textContaining('3.2 h left'), findsOneWidget);
+    expect(find.textContaining('transit'), findsOneWidget);
+  });
+
+  testWidgets('the "why" reasons stay collapsed until tapped', (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+
+    expect(find.text('• fills the frame (+35)'), findsNothing);
+    await tester.tap(find.text('Why?'));
+    await tester.pump();
+    expect(find.text('• fills the frame (+35)'), findsOneWidget);
+    expect(find.text('• 6 h dark window (+25)'), findsOneWidget);
+  });
+
+  testWidgets('low-scoring rows are still shown, ranked below', (tester) async {
+    // Server ranks descending; the panel must render every row it's given,
+    // including the low-score oversized target (advise, don't dictate).
+    await tester.pumpWidget(
+      _host(_RecordingClient(), objects: [_m31, _ngc]),
+    );
+    await tester.pump();
+
+    expect(find.text('Andromeda Galaxy'), findsOneWidget);
+    expect(find.text('Orion Nebula'), findsOneWidget);
+    expect(find.text('32'), findsOneWidget); // low score still rendered
+    expect(find.text('Too big'), findsOneWidget); // framing advice shown
   });
 }

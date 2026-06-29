@@ -5,19 +5,24 @@ import '../../models/sequence/slew_target_body.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
-import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 
-/// §36/§25.5 Tonight's Sky — a ranked side list of the best-placed curated
-/// objects for the active profile's site right now. Tapping one recentres the
-/// embedded Aladin atlas on it (via [skyAtlasSearchProvider], which the
-/// `AladinView` listens to). Shown in the Planning tab when the view mode is
-/// Tonight's Sky.
+/// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
+/// active profile's site and optical train, by the server's transparent 0–100
+/// "worth shooting tonight" score (§36.8). Each row shows the score, the framing
+/// fit against your rig, tonight's dark window/transit/hours, a "why" score
+/// breakdown on expand, and an add-to-sequence action. Recentre-the-planetarium is
+/// deferred to slice 3b: the planetarium recentres via an in-page `search` command
+/// over the `StellariumServer` loopback (since the §36 native-webview migration), so
+/// it needs that bridge wired alongside the panel's Planning-tab mount.
 class TonightSkyPanel extends ConsumerWidget {
   const TonightSkyPanel({super.key});
 
-  static const double width = 300;
+  // Wider than the old 300 px: the equipment-aware row carries a score badge, a
+  // framing chip and a timing line, and the design explicitly allows a bigger
+  // panel ("It's ok if the screen is bigger").
+  static const double width = 340;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,9 +36,8 @@ class TonightSkyPanel extends ConsumerWidget {
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     final theme = Theme.of(context);
 
-    // Material (not a bare Container colour) so the rows' ListTile ink splashes
-    // have a Material ancestor to paint on — a ColoredBox between ListTile and
-    // Material would hide them.
+    // Material (not a bare Container colour) so the rows' ink splashes have a
+    // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
       color: AraColors.bgPanel,
       child: SizedBox(
@@ -72,15 +76,23 @@ class TonightSkyPanel extends ConsumerWidget {
                     // "connected, but nothing's up / no site set" — the advice differs.
                     return _Message(
                       message: hasServer
-                          ? 'Nothing well-placed right now. Set your site location in '
+                          ? 'Nothing well-placed tonight. Set your site location in '
                                 'Settings → Safety → Site, then refresh.'
                           : 'Connect to a server to see Tonight\'s Sky.',
                     );
                   }
-                  return ListView.builder(
+                  return ListView.separated(
                     padding: const EdgeInsets.only(bottom: 12),
                     itemCount: objects.length,
-                    itemBuilder: (_, i) => _ObjectRow(object: objects[i]),
+                    separatorBuilder: (_, _) => const Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: AraColors.border,
+                    ),
+                    // Key by object id so the row's expand/collapse state follows the
+                    // object, not the list slot, when the ranking reorders on refresh.
+                    itemBuilder: (_, i) =>
+                        _ObjectRow(key: ValueKey(objects[i].id), object: objects[i]),
                   );
                 },
               ),
@@ -94,7 +106,7 @@ class TonightSkyPanel extends ConsumerWidget {
 
 class _ObjectRow extends ConsumerStatefulWidget {
   final TonightSkyObject object;
-  const _ObjectRow({required this.object});
+  const _ObjectRow({super.key, required this.object});
 
   @override
   ConsumerState<_ObjectRow> createState() => _ObjectRowState();
@@ -102,6 +114,7 @@ class _ObjectRow extends ConsumerStatefulWidget {
 
 class _ObjectRowState extends ConsumerState<_ObjectRow> {
   bool _busy = false;
+  bool _showReasons = false;
 
   TonightSkyObject get _object => widget.object;
 
@@ -110,57 +123,125 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final theme = Theme.of(context);
     final mag = _object.magnitude;
     final magText = mag == null ? 'mag —' : 'mag ${mag.toStringAsFixed(1)}';
-    // Max altitude moves into the subtitle so the trailing column has room for
-    // the "add to sequence" action alongside the current-altitude readout.
-    final subtitle =
-        '${_typeLabel(_object.type)} · $magText · '
+    final subtitle = '${_typeLabel(_object.type)} · $magText · '
         'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°';
+    final timing = _timingLine(_object);
+    final framingLabel = _framingLabel(_object.framing);
+    final reasons = _object.scoreReasons;
+    final hasReasons = reasons != null && reasons.isNotEmpty;
     // Watch (not read) so the autoDispose sequence API stays alive while the
     // panel is shown — a bare read would let it dispose (closing its Dio) before
     // an in-flight create() resolves.
     final canAdd = ref.watch(sequenceApiProvider) != null;
-    return ListTile(
-      dense: true,
-      title: Text(_object.name, style: theme.textTheme.bodyMedium),
-      subtitle: Text(
-        subtitle,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: AraColors.textSecondary,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${_object.altitudeDeg.toStringAsFixed(0)}°',
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(width: 4),
-          _busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: Padding(
-                    padding: EdgeInsets.all(2),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : IconButton(
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Add to a new sequence',
-                  icon: const Icon(Icons.playlist_add),
-                  onPressed: canAdd ? _addToSequence : null,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // No badge for a scoreless object (a pre-§36.8 server) — better a
+              // missing badge than a misleading "0".
+              if (_object.score != null) ...[
+                _ScoreBadge(score: _object.score!),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_object.name, style: theme.textTheme.bodyMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AraColors.textSecondary),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${_object.altitudeDeg.toStringAsFixed(0)}°',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          if (framingLabel != null || timing != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (framingLabel != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _FramingChip(framing: _object.framing),
+                  ),
+                if (timing != null)
+                  Expanded(
+                    child: Text(
+                      timing,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          Row(
+            children: [
+              _busy
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton(
+                      iconSize: 18,
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Add to a new sequence',
+                      icon: const Icon(Icons.playlist_add),
+                      onPressed: canAdd ? _addToSequence : null,
+                    ),
+              const Spacer(),
+              if (hasReasons)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AraColors.textSecondary,
+                  ),
+                  onPressed: () =>
+                      setState(() => _showReasons = !_showReasons),
+                  child: Text(_showReasons ? 'Hide' : 'Why?'),
+                ),
+            ],
+          ),
+          if (hasReasons && _showReasons)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final r in reasons)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '• $r',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
         ],
       ),
-      // Fly the planetarium to this object (its J2000 RA/Dec — the engine centres
-      // on the coordinates directly, no name lookup needed).
-      onTap: () => ref.read(skyTargetProvider.notifier).set(SkyTarget(
-            raDeg: _object.raDeg,
-            decDeg: _object.decDeg,
-            name: _object.name,
-          )),
     );
   }
 
@@ -208,12 +289,125 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   }
 
   static String _typeLabel(String t) => switch (t) {
-    'galaxy' => 'Galaxy',
-    'nebula' => 'Nebula',
-    'cluster' => 'Cluster',
-    '' => 'Object',
-    _ => t[0].toUpperCase() + t.substring(1),
-  };
+        'galaxy' => 'Galaxy',
+        'nebula' => 'Nebula',
+        'cluster' => 'Cluster',
+        '' => 'Object',
+        _ => t[0].toUpperCase() + t.substring(1),
+      };
+
+  /// Compact local-time timing summary, e.g. "20:14–04:32 · 6.0 h dark ·
+  /// 3.2 h left · transit 01:10". Null when the server sent no timing at all,
+  /// so the row drops the line rather than showing an empty one.
+  static String? _timingLine(TonightSkyObject o) {
+    final parts = <String>[];
+    final start = o.windowStartUtc;
+    final end = o.windowEndUtc;
+    if (start != null && end != null) {
+      parts.add('${_hhmm(start)}–${_hhmm(end)}');
+    }
+    if (o.integrationHours > 0) {
+      parts.add('${o.integrationHours.toStringAsFixed(1)} h dark');
+    }
+    if (o.remainingHours > 0) {
+      parts.add('${o.remainingHours.toStringAsFixed(1)} h left');
+    }
+    final transit = o.transitUtc;
+    if (transit != null) parts.add('transit ${_hhmm(transit)}');
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// HH:mm in the user's local timezone (the wire instants are UTC).
+  static String _hhmm(DateTime utc) {
+    final t = utc.toLocal();
+    return '${t.hour.toString().padLeft(2, '0')}:'
+        '${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Short chip label for the framing fit; null for `unknown` (no chip — we
+  /// don't clutter the row with a non-signal). Shares one source of truth with
+  /// the chip's colour via [_FramingChip.styleFor].
+  static String? _framingLabel(TonightFraming f) => _FramingChip.styleFor(f).$1;
+}
+
+/// 0–100 worth-score badge, colour-graded so the eye can triage at a glance:
+/// green (strong), blue (decent), muted (low — still shown, just ranked down,
+/// per the advise-don't-dictate intent).
+class _ScoreBadge extends StatelessWidget {
+  final double score;
+  const _ScoreBadge({required this.score});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = score.clamp(0, 100).round();
+    // Colour off the SAME rounded value the badge shows, so e.g. 69.6 doesn't
+    // render "70" yet paint with the sub-70 colour.
+    final color = s >= 70
+        ? AraColors.accentConnected
+        : s >= 40
+            ? AraColors.accentInfo
+            : AraColors.textSecondary;
+    return Container(
+      width: 38,
+      height: 38,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        // A tinted fill keyed to the score colour, with a matching border —
+        // legible on the dark panel without shouting.
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
+      ),
+      child: Text(
+        '$s',
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(color: color, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+/// Framing-fit chip. `good` reads as a positive accent; `tooSmall`/`tooBig` are
+/// a warn/muted amber — they're advice, not a hard "no".
+class _FramingChip extends StatelessWidget {
+  final TonightFraming framing;
+  const _FramingChip({required this.framing});
+
+  /// The single source of truth for both label and colour. `unknown` yields a
+  /// null label — the parent gates on that to render no chip — so the label is
+  /// defined exactly once and the chip + the row's gate can't drift apart.
+  static (String?, Color) styleFor(TonightFraming f) => switch (f) {
+        TonightFraming.good => ('Fills frame', AraColors.accentConnected),
+        TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
+        TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
+        TonightFraming.unknown => (null, AraColors.textSecondary),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = styleFor(framing);
+    // The parent only builds a chip when styleFor's label is non-null (not `unknown`).
+    // Self-guard anyway — release-safe (an assert is stripped) — so a future call site
+    // that bypasses the gate renders nothing rather than a styled-but-blank chip.
+    if (label == null) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        label,   // non-null: the early return above bails on a null label
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: color, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
 }
 
 class _Message extends StatelessWidget {
