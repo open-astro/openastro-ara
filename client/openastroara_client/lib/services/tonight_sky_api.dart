@@ -130,7 +130,9 @@ class TonightSkyObject {
       integrationHours: _optDouble(json['integration_hours']) ?? 0,
       remainingHours: _optDouble(json['remaining_hours']) ?? 0,
       framing: TonightFraming.fromWire(json['framing']),
-      score: _optDouble(json['score']) ?? 0,
+      // Clamp at the data layer so the 0–100 invariant holds for every consumer
+      // (comparators, tests, analytics), not just the display badge.
+      score: (_optDouble(json['score']) ?? 0).clamp(0.0, 100.0).toDouble(),
       scoreReasons: _optStringList(json['score_reasons']),
     );
   }

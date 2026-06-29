@@ -395,6 +395,10 @@ class _FramingChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = styleFor(framing);
+    // The parent only builds a chip when styleFor's label is non-null (i.e. not
+    // `unknown`); assert it so a future gate change fails loudly instead of
+    // silently painting a blank chip.
+    assert(label != null, 'a chip should not be built for unknown framing');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
