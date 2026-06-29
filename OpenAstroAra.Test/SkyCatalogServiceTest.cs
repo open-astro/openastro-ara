@@ -65,6 +65,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void GetAllDsos_maps_a_leading_comma_common_name_to_null_not_empty() {
+            // A leading comma (",Messier 31") would make Split(',')[0] an empty string; it must become
+            // null so the `CommonName ?? Name` fallback fires instead of showing a blank display name.
+            WriteCatalog("NGC0224;G;00:42:44.3;+41:16:09;3.4;;031;0224;;;199.5;70.8;35;22.1;,Messier 31\n");
+            var svc = new SkyCatalogService(_root);
+
+            var o = svc.GetAllDsos(CancellationToken.None)!.Single(d => d.Name == "NGC0224");
+            Assert.That(o.CommonName, Is.Null);
+        }
+
+        [Test]
         public void GetAllDsos_is_null_when_the_catalog_is_not_installed() {
             // No catalog.csv written → not installed → null (the planner falls back to its starter list).
             Assert.That(new SkyCatalogService(_root).GetAllDsos(CancellationToken.None), Is.Null);

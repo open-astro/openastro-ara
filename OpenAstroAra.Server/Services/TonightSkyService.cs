@@ -182,7 +182,7 @@ public sealed class TonightSkyService : ITonightSkyService {
             var sunAlt = AltitudeFromHourAngleDeg(sunDec, lat, Mod360(lst - sunRa));
             sampleUtc[i] = t;
             sampleLstDeg[i] = lst;
-            sunIsDown[i] = sunAlt <= twilight;
+            sunIsDown[i] = sunAlt < twilight;   // strictly below the twilight threshold = dark (photometric convention)
         }
 
         // Site terms are constant across every object and sample — compute the latitude trig and the
