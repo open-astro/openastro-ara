@@ -3,11 +3,32 @@ import 'package:flutter/foundation.dart';
 
 import '../models/server.dart';
 
+/// §36.8 framing fit of an object against the active optical train: does it
+/// sit comfortably in the sensor's field of view? Wire values are all-lowercase
+/// (§60.6); anything unrecognised maps to [unknown] so a new server enum can't
+/// crash an older client.
+enum TonightFraming {
+  unknown,
+  tooSmall,
+  good,
+  tooBig;
+
+  static TonightFraming fromWire(Object? raw) => switch (raw) {
+        'toosmall' => TonightFraming.tooSmall,
+        'good' => TonightFraming.good,
+        'toobig' => TonightFraming.tooBig,
+        _ => TonightFraming.unknown,
+      };
+}
+
 /// §36/§25.5 — one Tonight's Sky entry from `GET /api/v1/planning/tonight`:
-/// a curated deep-sky object ranked by its current altitude above the site
-/// horizon. [altitudeDeg] is the ranking key; [maxAltitudeDeg] is its highest
-/// possible (transit) altitude from this latitude; [raDeg]/[decDeg] (J2000) let
-/// the atlas recentre on it.
+/// a deep-sky object ranked by its equipment-aware [score] (0–100, server-ranked
+/// descending). [altitudeDeg] is its current altitude above the site horizon;
+/// [maxAltitudeDeg] is its highest possible (transit) altitude from this
+/// latitude; [raDeg]/[decDeg] (J2000) let the atlas recentre on it. The §36.8
+/// planner fields ([framing], the window/transit times, the hours, the size and
+/// surface-brightness measurements, [scoreReasons]) are optional on the wire —
+/// older servers omit them, so they are nullable / defaulted, never required.
 class TonightSkyObject {
   final String id;
   final String name;
@@ -21,6 +42,31 @@ class TonightSkyObject {
   final double altitudeDeg;
   final double maxAltitudeDeg;
 
+  // §36.8 catalog measurements (nullable — not every object records a size).
+  final double? sizeMajArcmin;
+  final double? sizeMinArcmin;
+  final double? posAngleDeg;
+  final double? surfaceBrightness;
+
+  // §36.8 tonight's longest dark window, its transit, and the hours. The times
+  // are UTC instants (parse to local for display); the hours default to 0 when
+  // a pre-§36.8 server omits them so the UI can simply hide a zero.
+  final DateTime? windowStartUtc;
+  final DateTime? windowEndUtc;
+  final DateTime? transitUtc;
+  final double integrationHours;
+  final double remainingHours;
+
+  /// Equipment-aware fit against the active optical train ([TonightFraming]).
+  final TonightFraming framing;
+
+  /// Transparent 0–100 "worth shooting tonight" blend — the ranking key.
+  final double score;
+
+  /// Short component tags ("fills the frame (+35)", "5 h dark window (+21)")
+  /// that explain the score; null when the server omits them.
+  final List<String>? scoreReasons;
+
   const TonightSkyObject({
     required this.id,
     required this.name,
@@ -30,6 +76,18 @@ class TonightSkyObject {
     required this.decDeg,
     required this.altitudeDeg,
     required this.maxAltitudeDeg,
+    this.sizeMajArcmin,
+    this.sizeMinArcmin,
+    this.posAngleDeg,
+    this.surfaceBrightness,
+    this.windowStartUtc,
+    this.windowEndUtc,
+    this.transitUtc,
+    this.integrationHours = 0,
+    this.remainingHours = 0,
+    this.framing = TonightFraming.unknown,
+    this.score = 0,
+    this.scoreReasons,
   });
 
   /// Parse one wire object, or null when a required field is missing/wrong-typed
@@ -38,7 +96,9 @@ class TonightSkyObject {
   /// (0,0) sky spot), and the altitudes (a bad value would render as a misleading
   /// "0°" on the horizon, and altitude is the ranking key) are all required;
   /// only `magnitude` is optional — left null rather than defaulting to the real
-  /// value 0 (≈ Vega).
+  /// value 0 (≈ Vega). The §36.8 planner fields are parsed defensively: a
+  /// missing/wrong-typed value falls back to null (measurements/times) or a
+  /// sensible default (hours 0, framing unknown, score 0), never throwing.
   static TonightSkyObject? fromJson(Map<String, dynamic> json) {
     final id = json['id'];
     final name = json['name'];
@@ -60,7 +120,37 @@ class TonightSkyObject {
       decDeg: dec.toDouble(),
       altitudeDeg: alt.toDouble(),
       maxAltitudeDeg: maxAlt.toDouble(),
+      sizeMajArcmin: _optDouble(json['size_maj_arcmin']),
+      sizeMinArcmin: _optDouble(json['size_min_arcmin']),
+      posAngleDeg: _optDouble(json['pos_angle_deg']),
+      surfaceBrightness: _optDouble(json['surface_brightness']),
+      windowStartUtc: _optUtc(json['window_start_utc']),
+      windowEndUtc: _optUtc(json['window_end_utc']),
+      transitUtc: _optUtc(json['transit_utc']),
+      integrationHours: _optDouble(json['integration_hours']) ?? 0,
+      remainingHours: _optDouble(json['remaining_hours']) ?? 0,
+      framing: TonightFraming.fromWire(json['framing']),
+      score: _optDouble(json['score']) ?? 0,
+      scoreReasons: _optStringList(json['score_reasons']),
     );
+  }
+
+  static double? _optDouble(Object? v) => v is num ? v.toDouble() : null;
+
+  /// Parse an ISO-8601 instant, normalised to UTC; null on absent/garbage so a
+  /// bad timestamp simply drops out of the UI rather than rendering nonsense.
+  static DateTime? _optUtc(Object? v) {
+    if (v is! String) return null;
+    final parsed = DateTime.tryParse(v);
+    return parsed?.toUtc();
+  }
+
+  /// Keep only the string entries — a non-list or a list with stray non-strings
+  /// shouldn't blow up the "why this score" expansion.
+  static List<String>? _optStringList(Object? v) {
+    if (v is! List) return null;
+    final out = <String>[for (final e in v) if (e is String) e];
+    return out.isEmpty ? null : out;
   }
 }
 
