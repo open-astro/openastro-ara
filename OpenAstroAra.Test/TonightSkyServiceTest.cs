@@ -484,6 +484,69 @@ namespace OpenAstroAra.Test {
             Assert.That(overridden.Score, Is.LessThan(profileFramed.Score), "worse framing → lower worth");
         }
 
+        // ─── slice 4a: BuildOpticsOverride validation (the endpoint guard, unit-testable) ───
+
+        [Test]
+        public void BuildOpticsOverride_rejects_NaN_and_infinity_doubles() {
+            // NaN <= 0 and +∞ <= 0 are both false in C#, so a bare relational guard would let them slip
+            // into FovArcmin and silently frame everything Unknown. The finite check must reject them.
+            var (nanOv, nanErr) = TonightSkyService.BuildOpticsOverride(
+                Optics(), focalLengthMm: double.NaN, reducer: null, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(nanOv, Is.Null);
+            Assert.That(nanErr, Does.Contain("focalLengthMm"));
+
+            var (infOv, infErr) = TonightSkyService.BuildOpticsOverride(
+                Optics(), focalLengthMm: double.PositiveInfinity, reducer: null,
+                sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(infOv, Is.Null);
+            Assert.That(infErr, Does.Contain("focalLengthMm"));
+        }
+
+        [Test]
+        public void BuildOpticsOverride_bounds_the_reducer() {
+            // A reducer multiplies the focal length, so an absurd value collapses the FOV. The cap rejects
+            // it; the boundary value (== cap) is accepted.
+            var (tooBig, err) = TonightSkyService.BuildOpticsOverride(
+                Optics(), focalLengthMm: null, reducer: TonightSkyService.MaxReducerFactor + 0.1,
+                sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(tooBig, Is.Null);
+            Assert.That(err, Does.Contain("reducer"));
+
+            var (zero, zeroErr) = TonightSkyService.BuildOpticsOverride(
+                Optics(), focalLengthMm: null, reducer: 0, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(zero, Is.Null);
+            Assert.That(zeroErr, Does.Contain("reducer"));
+
+            var (atCap, atCapErr) = TonightSkyService.BuildOpticsOverride(
+                Optics(), focalLengthMm: null, reducer: TonightSkyService.MaxReducerFactor,
+                sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(atCapErr, Is.Null);
+            Assert.That(atCap!.ReducerFactor, Is.EqualTo(TonightSkyService.MaxReducerFactor));
+        }
+
+        [Test]
+        public void BuildOpticsOverride_rejects_one_field_merged_onto_an_unconfigured_profile() {
+            // Supplying just the focal length on a fresh profile (all-zero optics) would merge zero sensor/
+            // pixel fields → a NaN FOV → a silent 200 with everything Unknown. The assembled-train check
+            // turns that into an explicit 400 so the caller learns the override was meaningless.
+            var blankProfile = new OpticsSettingsDto(0, 0, 0, 0, 0);
+            var (ov, err) = TonightSkyService.BuildOpticsOverride(
+                blankProfile, focalLengthMm: 500, reducer: null, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(ov, Is.Null);
+            Assert.That(err, Does.Contain("incomplete"));
+        }
+
+        [Test]
+        public void BuildOpticsOverride_merges_unsupplied_fields_from_the_profile() {
+            // A caller tweaking only the reducer on a fully-configured profile gets that profile's focal/
+            // sensor/pixel back, with just the reducer replaced — and no error.
+            var profile = Optics(focalLengthMm: 530, reducer: 1.0, wPx: 6000, hPx: 4000, pixelUm: 3.76);
+            var (ov, err) = TonightSkyService.BuildOpticsOverride(
+                profile, focalLengthMm: null, reducer: 0.8, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(err, Is.Null);
+            Assert.That(ov, Is.EqualTo(new OpticsSettingsDto(530, 0.8, 6000, 4000, 3.76)));
+        }
+
         /// <summary>Minimal <see cref="ISkyCatalogService"/> test double — only GetAllDsos is exercised.</summary>
         private sealed class FakeCatalog : ISkyCatalogService {
             private readonly IReadOnlyList<DsoEntryDto>? _dsos;

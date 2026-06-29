@@ -306,6 +306,60 @@ public sealed class TonightSkyService : ITonightSkyService {
     private const double SbFloorQ = 0.15;              // faint-under-bright keeps this fraction, never zeroed
     private const double MagFaintFloor = 12.0;         // integrated magnitude at/above which the mag term is 0
 
+    // Per-request reducer override ceiling. A focal reducer shrinks the effective focal length (≈0.5×),
+    // a barlow extends it (up to ≈5×); 10× is a generous physical cap. Bounding it matters because the
+    // reducer multiplies the focal length — an absurd value (typo/fuzz) collapses the pixel-scale FOV to
+    // sub-arcsecond and frames every object TooSmall/Unknown, a useless 200 with no diagnostic.
+    internal const double MaxReducerFactor = 10.0;
+
+    /// <summary>Validate + assemble a per-request optics override (slice 4a). Each <em>supplied</em>
+    /// field must be finite and &gt; 0 (the reducer additionally ≤ <see cref="MaxReducerFactor"/>);
+    /// un-supplied fields are merged from <paramref name="profile"/>. The fully-assembled train is then
+    /// re-checked so a single field merged onto an unconfigured (all-zero) profile is rejected rather than
+    /// silently yielding a NaN FOV → all-<see cref="FramingFit.Unknown"/> 200. Returns the merged override
+    /// on success, or a human-readable 400 message in <c>Error</c> (then <c>Override</c> is null). Callers
+    /// invoke this only when at least one field is supplied, so a success always carries a non-null DTO.
+    /// <para>NB the per-field guards use <see cref="double.IsFinite(double)"/>, not a bare <c>&gt; 0</c>:
+    /// <c>NaN &lt;= 0</c> and <c>+∞ &lt;= 0</c> are both <c>false</c> in C#, so a relational guard alone
+    /// lets NaN/∞ through into <see cref="FovArcmin"/>.</para></summary>
+    internal static (OpticsSettingsDto? Override, string? Error) BuildOpticsOverride(
+            OpticsSettingsDto profile, double? focalLengthMm, double? reducer,
+            int? sensorW, int? sensorH, double? pixelUm) {
+        if (focalLengthMm is { } fl && !(double.IsFinite(fl) && fl > 0)) {
+            return (null, "Query parameter 'focalLengthMm' must be a finite value > 0.");
+        }
+        if (reducer is { } r && !(double.IsFinite(r) && r > 0 && r <= MaxReducerFactor)) {
+            return (null, $"Query parameter 'reducer' must be a finite value in (0, {MaxReducerFactor}].");
+        }
+        if (pixelUm is { } pu && !(double.IsFinite(pu) && pu > 0)) {
+            return (null, "Query parameter 'pixelUm' must be a finite value > 0.");
+        }
+        if (sensorW is { } sw && sw <= 0) {
+            return (null, "Query parameter 'sensorW' must be > 0.");
+        }
+        if (sensorH is { } sh && sh <= 0) {
+            return (null, "Query parameter 'sensorH' must be > 0.");
+        }
+
+        var merged = new OpticsSettingsDto(
+            focalLengthMm ?? profile.FocalLengthMm,
+            reducer ?? profile.ReducerFactor,
+            sensorW ?? profile.SensorWidthPx,
+            sensorH ?? profile.SensorHeightPx,
+            pixelUm ?? profile.PixelSizeUm);
+
+        if (!(double.IsFinite(merged.FocalLengthMm) && merged.FocalLengthMm > 0
+              && double.IsFinite(merged.ReducerFactor) && merged.ReducerFactor > 0
+              && double.IsFinite(merged.PixelSizeUm) && merged.PixelSizeUm > 0
+              && merged.SensorWidthPx > 0 && merged.SensorHeightPx > 0)) {
+            return (null, "The optics override is incomplete — the active profile has no optical train "
+                + "configured, so supply focalLengthMm, sensorW, sensorH, and pixelUm together "
+                + "(reducer is optional).");
+        }
+
+        return (merged, null);
+    }
+
     /// <summary>The active optical train's field of view in arcminutes (width, height). Pixel scale =
     /// 206.265·pixelµm ÷ (focalMm·reducer) arcsec/px; FOV = sensorPx·scale ÷ 60, times the mosaic tile
     /// count per axis. Returns (NaN, NaN) when the train is unconfigured (any non-positive term) so the
