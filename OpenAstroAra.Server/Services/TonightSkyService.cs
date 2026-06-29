@@ -245,16 +245,19 @@ public sealed class TonightSkyService : ITonightSkyService {
     private static (int Start, int End) LongestRun(bool[] flags) {
         int bestStart = -1, bestEnd = -1, curStart = -1;
         for (var i = 0; i < flags.Length; i++) {
-            if (flags[i]) {
-                if (curStart < 0) curStart = i;
-                var curEnd = i;
-                // Strict `>` keeps the EARLIEST of equal-length runs by design — given two windows of the
-                // same length tonight, prefer the earlier one so the user can start sooner.
+            if (flags[i] && curStart < 0) {
+                curStart = i;   // a run begins
+            }
+            // Evaluate a run only when it ENDS (a false sample, or the final index) — one comparison per
+            // run, not per element. Strict `>` keeps the EARLIEST of equal-length runs by design, so a
+            // user can start sooner.
+            var runEnds = curStart >= 0 && (!flags[i] || i == flags.Length - 1);
+            if (runEnds) {
+                var curEnd = flags[i] ? i : i - 1;
                 if (bestStart < 0 || curEnd - curStart > bestEnd - bestStart) {
                     bestStart = curStart;
                     bestEnd = curEnd;
                 }
-            } else {
                 curStart = -1;
             }
         }

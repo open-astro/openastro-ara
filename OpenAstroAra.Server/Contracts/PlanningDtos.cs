@@ -28,6 +28,12 @@ namespace OpenAstroAra.Server.Contracts;
 /// (sun below the profile's twilight threshold); both null when there's no qualifying window tonight.
 /// <see cref="TransitUtc"/> is its upper culmination nearest the query instant, and
 /// <see cref="IntegrationHours"/> is the window length in hours (0 when there's no window).</para>
+/// <para><b>Window semantics:</b> the window is tonight's <i>longest</i> dark stretch for the object,
+/// a whole-night planning figure — NOT "time remaining from now". So for an object that has already
+/// passed its best window but is still up, <see cref="WindowStartUtc"/> (and even
+/// <see cref="WindowEndUtc"/>) can be earlier than the query instant, and <see cref="IntegrationHours"/>
+/// counts the full stretch, not what's left. A "remaining from now" figure is a later slice (it pairs
+/// with the slice-2 scoring that also lists not-yet-risen targets).</para>
 /// </summary>
 public sealed record TonightSkyObjectDto(
     string Id,
