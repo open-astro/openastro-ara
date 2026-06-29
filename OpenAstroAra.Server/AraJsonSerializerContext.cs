@@ -248,6 +248,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<MosaicPanelDto>))]
 [JsonSerializable(typeof(TonightSkyObjectDto))]
 [JsonSerializable(typeof(IReadOnlyList<TonightSkyObjectDto>))]
+[JsonSerializable(typeof(FramingFit))]
 [JsonSerializable(typeof(HorizonDto))]
 [JsonSerializable(typeof(HorizonPointDto))]
 [JsonSerializable(typeof(CardinalPointDto))]

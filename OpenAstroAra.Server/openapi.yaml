@@ -1096,20 +1096,39 @@ components:
     TonightSkyObject:
       type: object
       description: |
-        §36/§25.5 one Tonight's Sky entry. `altitude_deg` is the object's current
-        altitude above the site horizon (the ranking key); `max_altitude_deg` is
-        its transit (highest-possible) altitude from this latitude. `ra_deg`/`dec_deg`
-        are J2000, for recentring the atlas.
+        §36/§25.5 one Tonight's Sky entry. `score` (0–100) is the ranking key — a
+        transparent equipment-aware "worth shooting tonight" blend, with `score_reasons`
+        the short component tags that explain it. `altitude_deg` is the object's current
+        altitude above the site horizon; `max_altitude_deg` is its transit (highest-
+        possible) altitude from this latitude. `ra_deg`/`dec_deg` are J2000, for recentring
+        the atlas. §36.8 planner fields are optional (older clients ignore them):
+        `size_maj_arcmin`/`size_min_arcmin`/`pos_angle_deg`/`surface_brightness` are the
+        catalog measurements; `window_start_utc`/`window_end_utc` bracket the object's
+        longest dark window tonight, `transit_utc` is its upper culmination nearest the
+        query, `integration_hours` the window length, `remaining_hours` the dark time still
+        ahead of the query instant; `framing` is the fit against the active optical train.
       required: [id, name, type, magnitude, ra_deg, dec_deg, altitude_deg, max_altitude_deg]
       properties:
-        id:               { type: string }
-        name:             { type: string }
-        type:             { type: string }
-        magnitude:        { type: number, format: double }
-        ra_deg:           { type: number, format: double }
-        dec_deg:          { type: number, format: double }
-        altitude_deg:     { type: number, format: double }
-        max_altitude_deg: { type: number, format: double }
+        id:                 { type: string }
+        name:               { type: string }
+        type:               { type: string }
+        magnitude:          { type: number, format: double }
+        ra_deg:             { type: number, format: double }
+        dec_deg:            { type: number, format: double }
+        altitude_deg:       { type: number, format: double }
+        max_altitude_deg:   { type: number, format: double }
+        size_maj_arcmin:    { type: number, format: double, nullable: true }
+        size_min_arcmin:    { type: number, format: double, nullable: true }
+        pos_angle_deg:      { type: number, format: double, nullable: true }
+        surface_brightness: { type: number, format: double, nullable: true }
+        window_start_utc:   { type: string, format: date-time, nullable: true }
+        window_end_utc:     { type: string, format: date-time, nullable: true }
+        transit_utc:        { type: string, format: date-time, nullable: true }
+        integration_hours:  { type: number, format: double }
+        framing:            { type: string, enum: [unknown, toosmall, good, toobig] }
+        score:              { type: number, format: double }
+        score_reasons:      { type: array, items: { type: string }, nullable: true }
+        remaining_hours:    { type: number, format: double }
 
     PlateSolveSettings:
       type: object
