@@ -154,8 +154,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_object_below_the_horizon_now_is_excluded() {
-            // Far-southern object from a northern site never clears the horizon → not in the list at all.
+        public void An_object_that_never_clears_the_horizon_is_excluded() {
+            // Far-southern object from a northern site never clears the horizon (peak alt −30°) → dropped by
+            // the MaxAltitude pre-filter (slice-2 gate is window-based, not "above the horizon right now").
             var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
             var site = Site(lat: 50, lon: 0, horizon: 0);
             var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
