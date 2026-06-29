@@ -298,7 +298,9 @@ public sealed class TonightSkyService : ITonightSkyService {
         // Julian Date of the instant (Unix epoch JD = 2440587.5).
         var jd = atUtc.ToUnixTimeMilliseconds() / 86400000.0 + 2440587.5;
         var d = jd - 2451545.0; // days from J2000.0
-        var gmst = 280.46061837 + 360.98564736629 * d;
+        // Reduce GMST to [0,360) before combining, matching SunEquatorialDeg's L0 handling — the raw
+        // value grows ~361°/day, so keep the same range-reduction discipline across the file.
+        var gmst = Mod360(280.46061837 + 360.98564736629 * d);
         return Mod360(gmst + longitudeDeg);
     }
 
