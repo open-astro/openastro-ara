@@ -37,6 +37,34 @@ void main() {
     });
   });
 
+  group('PlanetariumCommandNotifier', () {
+    late ProviderContainer container;
+    setUp(() => container = ProviderContainer());
+    tearDown(() => container.dispose());
+
+    test('starts null', () {
+      expect(container.read(planetariumCommandProvider), isNull);
+    });
+
+    test('send stores the command map', () {
+      container
+          .read(planetariumCommandProvider.notifier)
+          .send({'type': 'goto', 'ra': 10.6847, 'dec': 41.269});
+      expect(container.read(planetariumCommandProvider),
+          {'type': 'goto', 'ra': 10.6847, 'dec': 41.269});
+    });
+
+    test('always notifies so re-sending an identical command re-fires', () {
+      var notifications = 0;
+      container.listen<Map<String, Object?>?>(
+          planetariumCommandProvider, (_, _) => notifications++);
+      final n = container.read(planetariumCommandProvider.notifier);
+      n.send({'type': 'goto', 'ra': 1.0, 'dec': 2.0});
+      n.send({'type': 'goto', 'ra': 1.0, 'dec': 2.0}); // identical
+      expect(notifications, 2);
+    });
+  });
+
   group('skyImageryAvailableProvider', () {
     test('Phase 12e.1 stub returns false', () {
       final container = ProviderContainer();

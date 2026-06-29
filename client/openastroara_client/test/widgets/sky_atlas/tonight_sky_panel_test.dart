@@ -7,6 +7,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
@@ -175,6 +176,32 @@ void main() {
     await tester.pump();
     expect(find.text('• fills the frame (+35)'), findsOneWidget);
     expect(find.text('• 6 h dark window (+25)'), findsOneWidget);
+  });
+
+  testWidgets(
+      'the recentre action sends a goto with the object ra/dec to the '
+      'planetarium command provider', (tester) async {
+    // Own container so we can read the provider seam after the tap.
+    final container = ProviderContainer(overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+    ));
+    await tester.pump(); // resolve the tonightSky future
+
+    expect(container.read(planetariumCommandProvider), isNull);
+    await tester.tap(find.byIcon(Icons.my_location));
+    await tester.pump();
+
+    expect(container.read(planetariumCommandProvider), {
+      'type': 'goto',
+      'ra': _m31.raDeg,
+      'dec': _m31.decDeg,
+    });
   });
 
   testWidgets('low-scoring rows are still shown, ranked below', (tester) async {

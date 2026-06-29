@@ -69,6 +69,31 @@ class SkyTargetNotifier extends Notifier<SkyTarget?> {
 final skyTargetProvider =
     NotifierProvider<SkyTargetNotifier, SkyTarget?>(SkyTargetNotifier.new);
 
+/// §36 slice 3b — a one-shot command for the self-driven planetarium page.
+/// Flutter chrome (e.g. the Tonight's Sky panel's recentre button) writes a
+/// command map here; [StellariumView] `ref.listen`s it and forwards the value
+/// over the loopback `StellariumServer` to the page's `/aracmd` handler. The
+/// native webview has no Dart→page JS bridge, so panel→page actions must ride
+/// this loopback seam — writing `skyTargetProvider` does NOT move the view (the
+/// planetarium never reads it). The recentre action sends
+/// `{'type':'goto','ra':<deg>,'dec':<deg>}` (the page centres directly on the
+/// coordinates, no name lookup). Always notifies so re-issuing the same goto
+/// re-centres — consume it with `ref.listen` (a side-effect), never `ref.watch`.
+class PlanetariumCommandNotifier extends Notifier<Map<String, Object?>?> {
+  @override
+  Map<String, Object?>? build() => null;
+  void send(Map<String, Object?> cmd) => state = cmd;
+
+  @override
+  bool updateShouldNotify(
+          Map<String, Object?>? previous, Map<String, Object?>? next) =>
+      true;
+}
+
+final planetariumCommandProvider =
+    NotifierProvider<PlanetariumCommandNotifier, Map<String, Object?>?>(
+        PlanetariumCommandNotifier.new);
+
 /// Whether the active profile has at least one HiPS sky-imagery survey
 /// downloaded. Drives the §36.13 sky-data-missing banner. Phase 12e.1 stubs
 /// this to false (no downloads yet); 12e.2 reads it from the Data Manager

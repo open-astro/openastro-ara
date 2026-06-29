@@ -12,8 +12,10 @@ import '../../services/stellarium_server.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
+import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 import 'linux_planetarium_overlay.dart';
+import 'tonight_sky_panel.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
 /// `assets/stellarium/LICENSE-AGPL-3.0.txt`), rendered in the platform's **native
@@ -26,6 +28,17 @@ import 'linux_planetarium_overlay.dart';
 /// in the URL query, and the page does everything else (sets its observer, runs its
 /// own on-screen controls, talks to the daemon API). There is deliberately no
 /// Dart→page JS bridge — Flutter↔page traffic goes over the loopback server.
+///
+/// Two pieces of Flutter chrome wrap the renderer: a top search bar, and the
+/// docked **Tonight's Sky** panel (§36.8). The "Tonight's Sky" button toggles
+/// `skyAtlasModeProvider`; in `tonightsSky` mode the [TonightSkyPanel] docks on
+/// the right while the planetarium stays in an `Expanded` (its rect shrinks and
+/// the native-overlay bounds recompute through the existing bounds logic). The
+/// panel occupies its own rect beside the webview — never overlaid on it —
+/// because the native webview composites ABOVE Flutter, so an overlaid panel
+/// wouldn't reliably paint (platform-view occlusion). Panel→page actions (the
+/// recentre button) ride [planetariumCommandProvider] over the loopback server,
+/// since there is no Dart→page JS bridge.
 class StellariumView extends ConsumerStatefulWidget {
   const StellariumView({super.key});
 
@@ -210,6 +223,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     _pushCmd({'type': 'search', 'q': q});
   }
 
+  // Show/hide the docked Tonight's Sky panel by flipping the shared mode. We do
+  // NOT also fire the in-page `{'type':'tonight'}` command: that opens the page's
+  // OWN Tonight drawer, which would duplicate the Flutter panel — the docked
+  // panel is now the Tonight's Sky UI on every platform.
+  void _toggleTonight() {
+    final notifier = ref.read(skyAtlasModeProvider.notifier);
+    notifier.set(ref.read(skyAtlasModeProvider) == SkyAtlasMode.tonightsSky
+        ? SkyAtlasMode.catalogView
+        : SkyAtlasMode.tonightsSky);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_unavailable) return const _Unavailable();
@@ -217,6 +241,21 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final c = _controller;
     // Still initialising (server + URL not ready on either path).
     if (linuxUrl == null && c == null) return const _Loading();
+
+    // Forward panel→page commands (e.g. the recentre button's `goto`) over the
+    // loopback server — the only Dart→page channel the native webview has.
+    ref.listen<Map<String, Object?>?>(planetariumCommandProvider, (_, cmd) {
+      if (cmd != null) _pushCmd(cmd);
+    });
+
+    final tonightOpen =
+        ref.watch(skyAtlasModeProvider) == SkyAtlasMode.tonightsSky;
+
+    final planetarium = Expanded(
+      child: linuxUrl != null
+          ? LinuxPlanetariumOverlay(url: linuxUrl)
+          : wva.WebViewWidget(controller: c!),
+    );
 
     return ColoredBox(
       color: AraColors.bgPrimary,
@@ -227,12 +266,26 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           _SearchBar(
             controller: _searchCtrl,
             onSubmit: _submitSearch,
-            onTonight: () => _pushCmd({'type': 'tonight'}),
+            onTonight: _toggleTonight,
+            tonightOpen: tonightOpen,
           ),
+          // Side-by-side: the planetarium keeps its Expanded (so its bounds
+          // shrink and the native overlay recomputes) and the panel docks at a
+          // fixed width on the right — its own rect, occlusion-safe.
           Expanded(
-            child: linuxUrl != null
-                ? LinuxPlanetariumOverlay(url: linuxUrl)
-                : wva.WebViewWidget(controller: c!),
+            child: Row(
+              children: [
+                planetarium,
+                if (tonightOpen)
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      border:
+                          Border(left: BorderSide(color: AraColors.border)),
+                    ),
+                    child: TonightSkyPanel(),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -247,11 +300,14 @@ class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSubmit;
   final VoidCallback onTonight;
+  // Highlights the toggle while the docked panel is open.
+  final bool tonightOpen;
 
   const _SearchBar({
     required this.controller,
     required this.onSubmit,
     required this.onTonight,
+    required this.tonightOpen,
   });
 
   @override
@@ -295,11 +351,19 @@ class _SearchBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: onTonight,
-            icon: const Icon(Icons.nights_stay_outlined, size: 16),
-            label: const Text("Tonight's Sky"),
-          ),
+          // A filled (vs outlined) button when the panel is open, so the toggle
+          // reads its own state at a glance.
+          tonightOpen
+              ? FilledButton.icon(
+                  onPressed: onTonight,
+                  icon: const Icon(Icons.nights_stay, size: 16),
+                  label: const Text("Tonight's Sky"),
+                )
+              : OutlinedButton.icon(
+                  onPressed: onTonight,
+                  icon: const Icon(Icons.nights_stay_outlined, size: 16),
+                  label: const Text("Tonight's Sky"),
+                ),
         ],
       ),
     );

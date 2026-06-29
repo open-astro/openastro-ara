@@ -138,27 +138,30 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
 - **Slice 3 (client panel)** — richer Tonight's Sky list: per-object window/transit,
   hours, framing-fit chip, score with the "why" breakdown, recenter-atlas + add-to-
   sequence. ✅ panel + model + tests built (PR #614).
-  - **STILL TO WIRE (3b, needs a UX call):** the panel has no mount in the Planning
-    tab — `planning_tab.dart` renders only `StellariumView` since the full-bleed
-    planetarium landed (#610/#611 dropped the old mount from #475). It can't simply
-    overlay the planetarium: the planetarium is a native webview composited ABOVE
-    Flutter (platform-view occlusion — see project_planetarium_webview_pivot), so a
-    Flutter panel drawn over it won't reliably show, especially the Linux GTK overlay.
-    Occlusion-safe options: (a) **mode-swap** — `skyAtlasModeProvider` toggles the
-    Planning tab between `StellariumView` and `TonightSkyPanel`; (b) **side-by-side** —
-    shrink the planetarium (its `setBounds` already resizes) with the 340px panel
-    beside it. Either needs a toggle affordance in non-occluded chrome. **User to pick
-    the layout** ("feel like Apple").
-  - FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
-  - **Profile the slice-2 window scan against the real installed OpenNGC catalog** —
-    slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
-    slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude
-    pre-filter, expected <100ms, but confirm on-device.
-  - **Recentre-the-planetarium** also lands in 3b: the §36 native-webview migration
-    moved recentring to an in-page `search` command over the `StellariumServer`
-    loopback (`StellariumView._pushCmd`), so writing `skyTargetProvider` no longer
-    moves the view (the panel's recentre button was a no-op and was removed from 3a).
-    3b plumbs the panel → loopback bridge alongside the mount.
+  - **Planning-tab mount (3b) — DONE (2026-06-29).** User picked **side-by-side**
+    ("like the other panels"). In `tonightsSky` mode `StellariumView` lays the
+    planetarium (kept in its `Expanded`, so its rect shrinks and the native overlay
+    bounds recompute via the existing bounds logic) and `TonightSkyPanel` (fixed
+    340px, left-divider) in a `Row` — the panel gets its own rect, never overlaid on
+    the webview (occlusion-safe; the native webview composites ABOVE Flutter, so an
+    overlaid panel wouldn't reliably paint, esp. the Linux GTK overlay). The search
+    bar's "Tonight's Sky" button toggles `skyAtlasModeProvider` (filled when open,
+    outlined when closed); `catalogView` renders the planetarium full-bleed as before.
+    The in-page `{'type':'tonight'}` command is **no longer sent** — it would open the
+    page's own duplicate Tonight drawer; the docked Flutter panel is the Tonight UI now.
+  - **Recentre-the-planetarium (3b) — DONE (2026-06-29).** Re-added the per-row
+    `Icons.my_location` button. It writes `{'type':'goto','ra':<deg>,'dec':<deg>}` to
+    the new `planetariumCommandProvider` (a `Notifier<Map<String,Object?>?>` seam,
+    always-notifies); `StellariumView` `ref.listen`s it and forwards over the
+    `StellariumServer` loopback to the page's `/aracmd` `goto` handler (which centres
+    directly on the coordinates via `pointRaDec`, no name lookup). `skyTargetProvider`
+    is deliberately NOT used — the planetarium doesn't read it.
+  - **STILL OPEN (3b follow-ups / fold into slice 4):**
+    - FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
+    - **Profile the slice-2 window scan against the real installed OpenNGC catalog** —
+      slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
+      slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude
+      pre-filter, expected <100ms, but confirm on-device.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
 
