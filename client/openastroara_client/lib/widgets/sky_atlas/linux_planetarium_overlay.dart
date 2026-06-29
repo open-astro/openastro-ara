@@ -89,11 +89,19 @@ class _LinuxPlanetariumOverlayState
   }
 
   // A route was pushed over the app shell — hide the overlay so it doesn't show
-  // through the route on top.
+  // through the route on top. Hide SYNCHRONOUSLY here, not via the post-frame path:
+  // the GTK webview is composited above Flutter's GL surface at the X11 level, so a
+  // one-frame deferral would flash the sky map through the covering route. (Hiding
+  // is always safe; re-show stays deferred so it honours the isPlanning gate.)
   @override
-  void didPushNext() => setState(() => _routeOnTop = true);
+  void didPushNext() {
+    _applyVisibility(false);   // immediate hide + keeps _lastVisible in sync
+    setState(() => _routeOnTop = true);
+  }
 
-  // The covering route was popped — the app shell is frontmost again.
+  // The covering route was popped — the app shell is frontmost again. The deferred
+  // re-show in build() reapplies the correct visibility (isPlanning && !_routeOnTop);
+  // a one-frame delay on *show* is invisible, so no synchronous call is needed.
   @override
   void didPopNext() => setState(() => _routeOnTop = false);
 

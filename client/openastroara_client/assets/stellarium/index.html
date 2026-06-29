@@ -752,10 +752,11 @@ var DISPLAY_LAYERS = ['dsos', 'constellationLines', 'constellationArt',
 function postDisplayPrefs() {
   var layers = {};
   DISPLAY_LAYERS.forEach(function (k) { layers[k] = dispState(k); });
-  try {
-    fetch('/araevent', { method: 'POST', keepalive: true,
-      body: JSON.stringify({ type: 'displayPref', layers: layers }) });
-  } catch (e) {}
+  // .catch (not try/catch): fetch reports network failures — loopback not yet
+  // listening, connection refused — as a rejected promise, not a synchronous throw.
+  // Best-effort: a dropped prefs post just means it saves on the next toggle.
+  fetch('/araevent', { method: 'POST', keepalive: true,
+    body: JSON.stringify({ type: 'displayPref', layers: layers }) }).catch(function () {});
 }
 
 function dispToggle(name) {
@@ -1025,7 +1026,10 @@ function toggleFrame(on) {
     hideDisplay();
     stel.core.lock = null;
     var c = viewCenterRaDec();
-    if (!isNaN(c[0])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
+    // isFinite (not !isNaN): a not-yet-initialised engine can return Infinity, and
+    // Infinity passing through here permanently wedges followFrame's `moved` test
+    // (Infinity arithmetic → NaN → never > 0.003), so the box would stop following.
+    if (isFinite(c[0]) && isFinite(c[1])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
     // Freeze the sky's diurnal motion while framing. The alt-az view is fixed, so as
     // time flows the centre maps to a drifting RA/Dec and the target would slide off
     // the box. Stop the engine's time flow (and the live re-sync is gated on
