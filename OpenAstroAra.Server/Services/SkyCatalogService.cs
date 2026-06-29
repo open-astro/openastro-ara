@@ -48,7 +48,11 @@ namespace OpenAstroAra.Server.Services {
         private readonly string _skyDataRoot;
         private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime (published via Interlocked)
         private IReadOnlyList<DsoEntryDto>? _dsoEntries; // the GetAllDsos projection, cached so each request doesn't re-allocate it
-        private volatile bool _loadFailed; // a corrupt/unreadable CSV is cached as failed so we don't re-parse per request
+        // LastWriteTimeUtc.Ticks of the catalog file whose parse last failed, so we don't re-parse a
+        // known-bad file every request — but DO retry once the file changes on disk (corrupt → fixed
+        // recovers without a daemon restart). NoFailureTicks = no failure recorded.
+        private const long NoFailureTicks = long.MinValue;
+        private long _loadFailedWriteTicks = NoFailureTicks;
 
         public SkyCatalogService(string skyDataRoot) {
             _skyDataRoot = skyDataRoot ?? throw new ArgumentNullException(nameof(skyDataRoot));
@@ -134,9 +138,14 @@ namespace OpenAstroAra.Server.Services {
             if (cached is not null) {
                 return cached;
             }
-            // A prior parse failed on a corrupt/unreadable CSV — treat the source as
-            // unavailable (404) rather than re-reading the bad file on every request.
-            if (_loadFailed || !File.Exists(DsoCsvPath)) {
+            if (!File.Exists(DsoCsvPath)) {
+                return null;
+            }
+            // A prior parse failed on a corrupt/unreadable CSV — skip the re-read rather than re-parsing
+            // the bad file every request, UNLESS the file has since changed on disk (the user replaced a
+            // corrupt catalog with a good one), in which case retry so it recovers without a restart.
+            var writeTicks = File.GetLastWriteTimeUtc(DsoCsvPath).Ticks;
+            if (Volatile.Read(ref _loadFailedWriteTicks) == writeTicks) {
                 return null;
             }
             // Lock-free first load: parse without any mutual exclusion, so every
@@ -150,9 +159,10 @@ namespace OpenAstroAra.Server.Services {
             try {
                 parsed = ParseDsoCsv(ct);
             } catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException) {
-                // Corrupt or unreadable catalog: cache the failure so we don't retry the
-                // full read per request. (Cancellation is NOT a load failure — it bubbles.)
-                _loadFailed = true;
+                // Corrupt or unreadable catalog: remember THIS file version as bad so we don't retry the
+                // full read per request, but a later replacement (different write-time) re-parses.
+                // (Cancellation is NOT a load failure — it bubbles.)
+                Volatile.Write(ref _loadFailedWriteTicks, writeTicks);
                 return null;
             }
             return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
