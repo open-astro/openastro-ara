@@ -234,14 +234,15 @@ public static class SystemEndpoints {
                     // Build an optics override only when AT LEAST ONE optic field is supplied; the
                     // un-supplied fields are sourced per-field from the active profile so a caller can tweak
                     // just (say) the reducer. When NO optic field is supplied we pass null and the service
-                    // uses the profile directly — no profile read on the common path. BuildOpticsOverride
+                    // uses the profile directly — no profile read on the common path. TonightSkyOverrides.Build
                     // validates every supplied field (finite, positive, reducer ≤ cap) AND the assembled
-                    // train (so one field merged onto an unconfigured profile is a 400, not a silent 200).
+                    // train (so a field merged onto an un/partly-configured profile is a 400, not a silent
+                    // 200); the profile read is lazy (skipped when all five fields are supplied).
                     OpticsSettingsDto? opticsOverride = null;
                     if (focalLengthMm is not null || reducer is not null || sensorW is not null
                             || sensorH is not null || pixelUm is not null) {
-                        var (built, error) = TonightSkyService.BuildOpticsOverride(
-                            profiles.GetOpticsSettings(),
+                        var (built, error) = TonightSkyOverrides.Build(
+                            profiles.GetOpticsSettings,
                             focalLengthMm, reducer, sensorW, sensorH, pixelUm);
                         if (error is not null) {
                             return Results.Problem(error, statusCode: StatusCodes.Status400BadRequest);
