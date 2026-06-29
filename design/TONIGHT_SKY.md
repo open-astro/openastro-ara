@@ -53,8 +53,10 @@ For each catalog object, at the active site for tonight's dark window:
    altitude ≥ a usable floor, e.g. 30° for high-airmass quality). This is the "10 h vs
    1 h" signal the user asked for.
 3. **Framing fit** — object size (`MajAx`×`MinAx`, with `PosAng`) vs the FOV (incl.
-   mosaic). A ratio: `tooSmall` (≪ frame — galaxy at 448 mm), `good` (fills a healthy
-   fraction), `tooBig` (overflows — Orion at 3000 mm; mosaic may rescue it).
+   mosaic) as the fill fraction `r = major ÷ short FOV side`. Four honest bands:
+   `tooSmall` (≪ frame — a 20′ cluster at 448 mm), `framesWell` (comfortable, with margin),
+   `fillsFrame` (genuinely fills), `tooBig` (overflows — Orion at 3000 mm; mosaic may rescue it).
+   See the revised band thresholds under slice 2 below.
 4. **Worth score (0–100, transparent)** — a documented weighted blend, NOT hidden:
    framing fit (dominant — the equipment-aware part), integration hours available,
    peak altitude / airmass, surface brightness vs `BortleClass` (faint targets penalised
@@ -106,7 +108,7 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   **Score weights (0–100, tunable — `TonightSkyService` constants):**
   | Component | Weight | Quality factor `q∈[0,1]` |
   |---|---|---|
-  | Framing fit | **35** | Good → 1.0; Unknown → 0.5 (neutral); off-band graded by how far out (`ratio/0.10` for too-small, `0.80/ratio` for too-big) with a floor of **0.15** so it's never zeroed |
+  | Framing fit | **35** | `q(r)` from the fill fraction `r = majorAxis ÷ shortFovSide`: ramps linearly to a plateau of **1.0** across the fill band (`r/0.50`, capped at 1 for `0.50 ≤ r ≤ 1.0`) then tapers `1.0/r` past full frame; Unknown → 0.5 (neutral); floored at **0.15** so it's never zeroed. Rewards *real* fill, so a target that fills the frame outranks a small one that merely fits |
   | Integration hours | **25** | `min(hours / 6, 1)` — linear, saturates at 6 dark hours |
   | Peak altitude / airmass | **20** | `max(0, sin(peakAlt))` — `sin(alt) ≈ 1/airmass` (1 overhead, ~0.5 at 30°, 0 at horizon) |
   | Surface brightness vs Bortle | **12** | `clamp((skyMag − SB + 4) / 4, 0.15, 1)`; `skyMag ≈ 22 − (Bortle−1)·0.5` mag/arcsec². Faint-under-bright penalised, floored at 0.15, never zeroed |
@@ -116,10 +118,16 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   its rounded point contribution (e.g. `"fills the frame (+35)"`, `"5 h dark window (+21)"`)
   so the UI can explain *why 90 / why 40*.
 
-  **Framing thresholds** — object major-axis ÷ the FOV's smaller dimension: `< 0.10` →
-  `TooSmall` (a ~10′ galaxy in a ~3° field at 448 mm), `0.10–0.80` → `Good`, `> 0.80` →
-  `TooBig` (Orion's ~85′ in a ~27′ field at 3000 mm; the 0.80 cap leaves an edge margin).
-  No recorded size → `Unknown`.
+  **Framing bands (revised 2026-06-29 — `r = majorAxis ÷ short FOV side`):** four states keyed to how
+  much of the frame the object actually spans, so the label is honest for the rig (the original
+  `0.10/0.80` two-band split wrongly called a ~20′ cluster in a 120′ frame "fills the frame"):
+  `r < 0.33` → `TooSmall` (lost in the frame — a 20′ cluster at 448 mm), `0.33 ≤ r < 0.50` →
+  `FramesWell` (a comfortable subject with margin), `0.50 ≤ r ≤ 1.00` → `FillsFrame` (genuinely fills —
+  the NA Nebula's ~120′ at 448 mm), `r > 1.00` → `TooBig` (overflows the short side — a mosaic can rescue
+  it). No recorded size → `Unknown`. Wire values (all-lowercase, §60.6): `toosmall`/`frameswell`/
+  `fillsframe`/`toobig`/`unknown`. The **"fills" cutoff (0.50) and "small" cutoff (0.33) are tunable** —
+  on-device review at 448 mm (2026-06-29) confirmed these feel right (NA Nebula leads, 14–25′ clusters
+  drop to "Small").
 
   **`RemainingHours`** — dark time still ahead of the query instant in the object's window
   tonight: `max(0, windowEnd − max(atUtc, windowStart))`. A past window → 0; a not-yet-

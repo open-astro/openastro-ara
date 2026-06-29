@@ -94,7 +94,7 @@ final _m31 = TonightSkyObject(
   transitUtc: DateTime.utc(2026, 6, 30, 1, 10),
   integrationHours: 6.3,
   remainingHours: 3.2,
-  framing: TonightFraming.good,
+  framing: TonightFraming.fillsFrame,
   score: 88,
   scoreReasons: const ['fills the frame (+35)', '6 h dark window (+25)'],
 );
@@ -160,7 +160,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('88'), findsOneWidget); // score badge
-    expect(find.text('Fills frame'), findsOneWidget); // framing chip (good)
+    expect(find.text('Fills frame'), findsOneWidget); // framing chip (fillsFrame)
     // Timing line: tz-agnostic substrings (the clock part is localised).
     expect(find.textContaining('6.3 h dark'), findsOneWidget);
     expect(find.textContaining('3.2 h left'), findsOneWidget);

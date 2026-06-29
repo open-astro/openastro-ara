@@ -11,12 +11,17 @@ import '../models/stats/stats_time.dart';
 enum TonightFraming {
   unknown,
   tooSmall,
-  good,
+  framesWell,
+  fillsFrame,
   tooBig;
 
   static TonightFraming fromWire(Object? raw) => switch (raw) {
         'toosmall' => TonightFraming.tooSmall,
-        'good' => TonightFraming.good,
+        'frameswell' => TonightFraming.framesWell,
+        'fillsframe' => TonightFraming.fillsFrame,
+        // 'good' was the pre-4-band server value (≈ a healthy fill) — map it to
+        // framesWell so an older daemon still renders sensibly.
+        'good' => TonightFraming.framesWell,
         'toobig' => TonightFraming.tooBig,
         _ => TonightFraming.unknown,
       };

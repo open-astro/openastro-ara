@@ -56,7 +56,7 @@ void main() {
           'transit_utc': '2026-06-30T01:10:00Z',
           'integration_hours': 6.3,
           'remaining_hours': 3.2,
-          'framing': 'good',
+          'framing': 'fillsframe',
           'score': 88.0,
           'score_reasons': ['fills the frame (+35)', '6 h dark window (+25)'],
         };
@@ -87,7 +87,7 @@ void main() {
       expect(o.transitUtc, DateTime.utc(2026, 6, 30, 1, 10));
       expect(o.integrationHours, 6.3);
       expect(o.remainingHours, 3.2);
-      expect(o.framing, TonightFraming.good);
+      expect(o.framing, TonightFraming.fillsFrame);
       expect(o.score, 88.0);
       expect(o.scoreReasons, [
         'fills the frame (+35)',
@@ -99,7 +99,9 @@ void main() {
       TonightFraming f(Object? v) =>
           TonightSkyObject.fromJson(body()..['framing'] = v)!.framing;
       expect(f('toosmall'), TonightFraming.tooSmall);
-      expect(f('good'), TonightFraming.good);
+      expect(f('frameswell'), TonightFraming.framesWell);
+      expect(f('fillsframe'), TonightFraming.fillsFrame);
+      expect(f('good'), TonightFraming.framesWell); // legacy pre-4-band value
       expect(f('toobig'), TonightFraming.tooBig);
       expect(f('unknown'), TonightFraming.unknown);
       expect(f('TOO_BIG'), TonightFraming.unknown); // unexpected casing/shape

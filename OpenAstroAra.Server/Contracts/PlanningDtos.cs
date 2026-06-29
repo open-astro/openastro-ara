@@ -61,16 +61,19 @@ public sealed record TonightSkyObjectDto(
     IReadOnlyList<string>? ScoreReasons = null,
     double RemainingHours = 0);
 
-/// <summary>§36.8 framing fit — how an object's apparent size sits against the active optical train's
-/// field of view, the equipment-aware heart of the Tonight's Sky score. <see cref="TooSmall"/> = lost in
-/// the frame (a small galaxy at a short focal length), <see cref="Good"/> = fills a healthy fraction,
-/// <see cref="TooBig"/> = overflows (Orion at a long focal length; a mosaic could rescue it),
-/// <see cref="Unknown"/> = the catalog recorded no size. Serialized all-lowercase per the §60.6 enum
-/// convention (<c>unknown</c>/<c>toosmall</c>/<c>good</c>/<c>toobig</c>).</summary>
+/// <summary>§36.8 framing fit — how an object's apparent major axis sits against the active optical
+/// train's field of view (short side), the equipment-aware heart of the Tonight's Sky score. Graded by
+/// the fraction <c>r = majorAxis ÷ shortFovSide</c>: <see cref="TooSmall"/> = lost in the frame
+/// (r &lt; ~⅓ — a small galaxy at a short focal length), <see cref="FramesWell"/> = a comfortable subject
+/// with margin (~⅓–½), <see cref="FillsFrame"/> = genuinely fills the frame (~½–full), <see cref="TooBig"/>
+/// = overflows (r &gt; 1 — Orion at a long focal length; a mosaic could rescue it), <see cref="Unknown"/> =
+/// the catalog recorded no size. Serialized all-lowercase per the §60.6 enum convention
+/// (<c>unknown</c>/<c>toosmall</c>/<c>frameswell</c>/<c>fillsframe</c>/<c>toobig</c>).</summary>
 public enum FramingFit {
     Unknown,
     TooSmall,
-    Good,
+    FramesWell,
+    FillsFrame,
     TooBig,
 }
 

@@ -293,12 +293,21 @@ public sealed class TonightSkyService : ITonightSkyService {
     private const double SurfaceBrightnessWeight = 12.0;
     private const double MagnitudeWeight = 8.0;
 
-    // Framing thresholds: object major-axis ÷ the FOV's SMALLER dimension. < 0.10 is lost in the frame
-    // (a ~10′ galaxy in a ~3° field at 448 mm); 0.10–0.80 fills a healthy fraction; > 0.80 overflows
-    // (Orion's ~85′ in a ~27′ field at 3000 mm). The 0.80 cap leaves a margin so a "good" target isn't
-    // cropped at the edges. Off-band targets keep a floor of worth (advise-don't-dictate), not zero.
-    private const double FramingTooSmallRatio = 0.10;
-    private const double FramingTooBigRatio = 0.80;
+    // Framing thresholds: object major-axis ÷ the FOV's SMALLER (short) dimension `r`. The bands answer
+    // "does this target actually fit the frame for THIS rig":
+    //   r < 0.33            → TooSmall  — lost in the frame, lots of empty sky (a 20′ cluster in a 120′
+    //                                     field at 448 mm); kept in the list, just ranked + labelled honestly.
+    //   0.33 ≤ r < 0.50     → FramesWell — a comfortable subject with composition margin.
+    //   0.50 ≤ r ≤ 1.00     → FillsFrame — genuinely fills the frame (the NA Nebula's ~120′ exactly fills a
+    //                                     120′ short side at 448 mm). r = 1 means the major axis spans the
+    //                                     whole short side.
+    //   r > 1.00            → TooBig    — overflows the frame (a mosaic could rescue it).
+    // The framing SCORE (not the label) ramps with `r` to a plateau across the fill band and tapers past it,
+    // so a target that truly fills the frame outranks a small one that merely "fits" — but nothing is zeroed
+    // (advise-don't-dictate keeps a floor of worth).
+    private const double FramingTooSmallRatio = 0.33;   // below → TooSmall
+    private const double FramingFillStartRatio = 0.50;  // at/above (and ≤ 1) → FillsFrame; the score plateau start
+    private const double FramingTooBigRatio = 1.00;     // above → TooBig (object spans more than the short side)
     private const double FramingFloorQ = 0.15;   // worst framing still keeps this fraction of the weight
 
     private const double HoursSaturationHours = 6.0;   // ≥ this many dark hours scores the full hours weight
@@ -336,8 +345,21 @@ public sealed class TonightSkyService : ITonightSkyService {
         if (ratio < FramingTooSmallRatio) {
             return FramingFit.TooSmall;
         }
-        return ratio > FramingTooBigRatio ? FramingFit.TooBig : FramingFit.Good;
+        if (ratio > FramingTooBigRatio) {
+            return FramingFit.TooBig;
+        }
+        return ratio >= FramingFillStartRatio ? FramingFit.FillsFrame : FramingFit.FramesWell;
     }
+
+    /// <summary>The framing score quality factor q∈[floor,1] from the fill fraction <c>r = majorAxis ÷
+    /// shortFovSide</c>. It ramps linearly up to a plateau of 1.0 across the fill band
+    /// (<see cref="FramingFillStartRatio"/>…<see cref="FramingTooBigRatio"/>) then tapers as the object
+    /// overflows — so a target that genuinely fills the frame outranks a small one that merely fits, while
+    /// nothing is zeroed (a floor of <see cref="FramingFloorQ"/> keeps low/short bangers in contention).</summary>
+    internal static double FramingQuality(double ratio) =>
+        ratio <= FramingTooBigRatio
+            ? Math.Clamp(ratio / FramingFillStartRatio, FramingFloorQ, 1.0)
+            : Math.Max(FramingFloorQ, FramingTooBigRatio / ratio);
 
     /// <summary>The transparent 0–100 worth score, its framing classification, and the short component
     /// reason tags (each carries its rounded point contribution so the UI/tests can explain "why 90 / why
@@ -347,8 +369,9 @@ public sealed class TonightSkyService : ITonightSkyService {
             double peakAltDeg, double integrationHours, int bortleClass) {
         var reasons = new List<string>(5);
 
-        // 1. Framing fit (dominant). Good = full; off-band targets are graded down by how far out of band
-        //    they are but kept above FramingFloorQ so a well-but-not-perfectly-framed target still ranks.
+        // 1. Framing fit (dominant). The score quality ramps with the fill fraction to a plateau across the
+        //    fill band and tapers past full frame (FramingQuality), so a target that truly fills the frame
+        //    outranks one that merely fits; everything stays above FramingFloorQ (advise-don't-dictate).
         var framing = ClassifyFraming(o.SizeMajArcmin, fovWidthArcmin, fovHeightArcmin);
         double framingQ;
         string framingTag;
@@ -357,20 +380,13 @@ public sealed class TonightSkyService : ITonightSkyService {
             framingTag = "size unknown";
         } else {
             var ratio = o.SizeMajArcmin!.Value / Math.Min(fovWidthArcmin, fovHeightArcmin);
-            switch (framing) {
-                case FramingFit.Good:
-                    framingQ = 1.0;
-                    framingTag = "fills the frame";
-                    break;
-                case FramingFit.TooSmall:
-                    framingQ = Math.Max(FramingFloorQ, ratio / FramingTooSmallRatio);   // → 1 as it approaches the band
-                    framingTag = "small in frame";
-                    break;
-                default:   // TooBig
-                    framingQ = Math.Max(FramingFloorQ, FramingTooBigRatio / ratio);     // → 1 as it approaches the band
-                    framingTag = "overflows the frame";
-                    break;
-            }
+            framingQ = FramingQuality(ratio);
+            framingTag = framing switch {
+                FramingFit.FillsFrame => "fills the frame",
+                FramingFit.FramesWell => "frames well",
+                FramingFit.TooSmall => "small in frame",
+                _ => "overflows the frame",   // TooBig
+            };
         }
         var framingScore = FramingWeight * framingQ;
         reasons.Add($"{framingTag} (+{framingScore:0})");

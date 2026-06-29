@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed
+- **§36.8 — Tonight's Sky framing is now honest about how much of *your* frame a target fills.** The framing chip has four states keyed to your actual field of view — **Small** (lost in the frame), **Frames well** (a comfortable subject with margin), **Fills frame** (genuinely fills it), and **Too big** (overflows) — instead of calling anything from ~10% of the frame upward "Fills frame." The worth score now rewards real fill (it peaks for targets that fill the frame and tapers for small or overflowing ones), so at a wide field like 448 mm the big nebulae that actually suit your rig — e.g. the North America Nebula — rise to the top, while small clusters drop down the list with an honest "Small" label (still shown, never hidden).
+
 ### Added
 - **§36.8 — Tonight's Sky can now be planned for a different rig or a mosaic without editing your profile.** `GET /api/v1/planning/tonight` accepts optional optical-train overrides (`focalLengthMm`, `reducer`, `sensorW`, `sensorH`, `pixelUm` — each replaces just that one field of your active profile's optics for the request) and a mosaic tile count (`mosaicX`/`mosaicY`, default 1, up to 20 per axis) that enlarges the framing field of view. Absent overrides behave exactly as before (your profile's optics, single frame), so "what's worth shooting if I add a reducer / shoot a 2×2?" no longer means changing your gear settings.
 - **§36.8 — Tonight's Sky now docks beside the planetarium, with a working recentre.** The Planning tab's **"Tonight's Sky"** button opens the ranked panel side-by-side with the planetarium (the sky view shrinks to make room, rather than the panel covering it); tap it again to go back to the full-screen sky. Each target now has a **recentre** button (the location pin) that flies the planetarium straight to that object. (FOV/mosaic controls still to come.)

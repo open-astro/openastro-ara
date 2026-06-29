@@ -294,8 +294,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_wide_nebula_frames_good_at_short_focal_length_too_big_at_long() {
-            // The same 60′ nebula: a healthy fraction of the frame at 448 mm, but it overflows at 3000 mm.
+        public void A_wide_nebula_fills_the_frame_at_short_focal_length_too_big_at_long() {
+            // The same 60′ nebula: at 448 mm the short side is ~115′ so r≈0.52 → it fills the frame; at
+            // 3000 mm the short side is ~17′ so r≈3.5 → it overflows.
             var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
             var site = Site(lat: 40, lon: 0, horizon: 0);
             var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
@@ -304,10 +305,42 @@ namespace OpenAstroAra.Test {
             var atShort = TonightSkyService.Rank(neb, site, Optics(focalLengthMm: 448), at, limit: 10).Single();
             var atLong = TonightSkyService.Rank(neb, site, Optics(focalLengthMm: 3000), at, limit: 10).Single();
 
-            Assert.That(atShort.Framing, Is.EqualTo(FramingFit.Good));
+            Assert.That(atShort.Framing, Is.EqualTo(FramingFit.FillsFrame));
             Assert.That(atLong.Framing, Is.EqualTo(FramingFit.TooBig));
             // Better framing → a higher worth at the same timing/altitude.
             Assert.That(atShort.Score, Is.GreaterThan(atLong.Score));
+        }
+
+        [Test]
+        public void Framing_bands_grade_by_fraction_of_the_short_side() {
+            // At 448 mm the short side is ~115′. Classify a spread of object sizes across the four bands:
+            //   <33% → TooSmall, 33–50% → FramesWell, 50–100% → FillsFrame, >100% → TooBig.
+            // (The earlier model wrongly called a ~20′ cluster — 17% of the frame — "fills the frame".)
+            const double minFov = 115.0;   // ≈ short side at 448 mm with the test sensor
+            FramingFit Classify(double majArcmin) =>
+                TonightSkyService.ClassifyFraming(majArcmin, minFov * 1.5, minFov);
+
+            Assert.That(Classify(20), Is.EqualTo(FramingFit.TooSmall), "20′ in 115′ ≈ 17% → small, not a fill");
+            Assert.That(Classify(46), Is.EqualTo(FramingFit.FramesWell), "≈40% → frames well with margin");
+            Assert.That(Classify(70), Is.EqualTo(FramingFit.FillsFrame), "≈61% → genuinely fills");
+            Assert.That(Classify(150), Is.EqualTo(FramingFit.TooBig), "spans more than the short side → overflows");
+        }
+
+        [Test]
+        public void Framing_quality_peaks_across_the_fill_band_and_tapers_outside_it() {
+            // The score quality rewards real fill: a tiny target scores far below one that fills the frame,
+            // the fill band (0.50–1.0) is the plateau, and an overflow tapers but never zeroes (floored).
+            var tiny = TonightSkyService.FramingQuality(0.10);
+            var framesWell = TonightSkyService.FramingQuality(0.40);
+            var fills = TonightSkyService.FramingQuality(0.70);
+            var full = TonightSkyService.FramingQuality(1.00);
+            var overflow = TonightSkyService.FramingQuality(2.00);
+
+            Assert.That(fills, Is.EqualTo(1.0).Within(1e-9), "mid-fill is the plateau");
+            Assert.That(full, Is.EqualTo(1.0).Within(1e-9), "exactly filling the short side is still ideal");
+            Assert.That(framesWell, Is.LessThan(fills), "frames-well scores below a true fill");
+            Assert.That(tiny, Is.LessThan(framesWell), "tiny scores below frames-well");
+            Assert.That(overflow, Is.GreaterThan(0).And.LessThan(full), "overflow tapers but is never zeroed");
         }
 
         [Test]
@@ -345,7 +378,8 @@ namespace OpenAstroAra.Test {
             var o = TonightSkyService.Rank(new[] { lowBright }, site, Optics(), at, limit: 10).Single();
 
             Assert.That(o.MaxAltitudeDeg, Is.EqualTo(11.0).Within(0.5), "genuinely a low target");
-            Assert.That(o.Framing, Is.EqualTo(FramingFit.Good));
+            // 40′ in the default 530 mm frame (short side ~97′) → r≈0.41 → frames well with margin.
+            Assert.That(o.Framing, Is.EqualTo(FramingFit.FramesWell));
             Assert.That(o.WindowStartUtc, Is.Not.Null, "it has a real (if short) dark window → listed");
             Assert.That(o.Score, Is.GreaterThan(40.0), "advise-don't-dictate: well-framed + bright still scores well");
         }
@@ -447,8 +481,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_larger_mosaic_enlarges_the_fov_and_reframes_a_too_big_target() {
             // A 60′ nebula overflows a single 3000 mm frame (min FOV ≈ 17′ → TooBig), but a 5×5 mosaic
-            // quintuples the FOV per axis (min FOV ≈ 86′) so it now fits — the framing classification flips
-            // from TooBig to Good and the worth rises with it.
+            // quintuples the FOV per axis (min FOV ≈ 86′ → r≈0.70) so it now fits — the framing classification
+            // flips from TooBig to FillsFrame and the worth rises with it.
             var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
             var site = Site(lat: 40, lon: 0, horizon: 0);
             var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
@@ -459,15 +493,15 @@ namespace OpenAstroAra.Test {
                 mosaicTilesX: 5, mosaicTilesY: 5).Single();
 
             Assert.That(single.Framing, Is.EqualTo(FramingFit.TooBig), "overflows a single long-focal frame");
-            Assert.That(mosaic.Framing, Is.EqualTo(FramingFit.Good), "a 5×5 mosaic enlarges the FOV → fits");
+            Assert.That(mosaic.Framing, Is.EqualTo(FramingFit.FillsFrame), "a 5×5 mosaic enlarges the FOV → fills");
             Assert.That(mosaic.Score, Is.GreaterThan(single.Score), "better framing → higher worth");
         }
 
         [Test]
         public void Optics_override_drives_framing_through_GetTonight() {
             // GetTonight normally reads the profile optics; a per-request override must take precedence. The
-            // profile is a SHORT 448 mm train (frames the 60′ nebula Good), but a LONG 3000 mm override must
-            // make the same object overflow — proving the override path (not the profile) is what's used.
+            // profile is a SHORT 448 mm train (the 60′ nebula fills the frame), but a LONG 3000 mm override
+            // must make the same object overflow — proving the override path (not the profile) is what's used.
             var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
             var site = Site(lat: 40, lon: 0, horizon: 0);
             var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
@@ -479,7 +513,7 @@ namespace OpenAstroAra.Test {
             var overridden = svc.GetTonight(at, limit: 10,
                 opticsOverride: Optics(focalLengthMm: 3000)).Single(o => o.Id == "NGC9999");
 
-            Assert.That(profileFramed.Framing, Is.EqualTo(FramingFit.Good), "profile 448 mm frames the 60′ nebula well");
+            Assert.That(profileFramed.Framing, Is.EqualTo(FramingFit.FillsFrame), "profile 448 mm: the 60′ nebula fills the frame");
             Assert.That(overridden.Framing, Is.EqualTo(FramingFit.TooBig), "the 3000 mm override overflows it");
             Assert.That(overridden.Score, Is.LessThan(profileFramed.Score), "worse framing → lower worth");
         }

@@ -400,7 +400,8 @@ class _FramingChip extends StatelessWidget {
   /// null label — the parent gates on that to render no chip — so the label is
   /// defined exactly once and the chip + the row's gate can't drift apart.
   static (String?, Color) styleFor(TonightFraming f) => switch (f) {
-        TonightFraming.good => ('Fills frame', AraColors.accentConnected),
+        TonightFraming.fillsFrame => ('Fills frame', AraColors.accentConnected),
+        TonightFraming.framesWell => ('Frames well', AraColors.accentInfo),
         TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
         TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
         TonightFraming.unknown => (null, AraColors.textSecondary),
