@@ -227,12 +227,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // NOT also fire the in-page `{'type':'tonight'}` command: that opens the page's
   // OWN Tonight drawer, which would duplicate the Flutter panel — the docked
   // panel is now the Tonight's Sky UI on every platform.
-  void _toggleTonight() {
-    final notifier = ref.read(skyAtlasModeProvider.notifier);
-    notifier.set(ref.read(skyAtlasModeProvider) == SkyAtlasMode.tonightsSky
-        ? SkyAtlasMode.catalogView
-        : SkyAtlasMode.tonightsSky);
-  }
+  void _toggleTonight() => ref.read(skyAtlasModeProvider.notifier).toggle();
 
   @override
   Widget build(BuildContext context) {

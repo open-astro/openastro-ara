@@ -16,6 +16,11 @@ class SkyAtlasModeNotifier extends Notifier<SkyAtlasMode> {
   @override
   SkyAtlasMode build() => SkyAtlasMode.catalogView;
   void set(SkyAtlasMode m) => state = m;
+
+  /// Flip between the full-bleed planetarium and the docked Tonight's Sky panel.
+  void toggle() => state = state == SkyAtlasMode.tonightsSky
+      ? SkyAtlasMode.catalogView
+      : SkyAtlasMode.tonightsSky;
 }
 
 final skyAtlasModeProvider =

@@ -19,6 +19,14 @@ void main() {
       n.set(SkyAtlasMode.catalogView);
       expect(container.read(skyAtlasModeProvider), SkyAtlasMode.catalogView);
     });
+
+    test('toggle flips between catalog and tonight', () {
+      final n = container.read(skyAtlasModeProvider.notifier);
+      n.toggle();
+      expect(container.read(skyAtlasModeProvider), SkyAtlasMode.tonightsSky);
+      n.toggle();
+      expect(container.read(skyAtlasModeProvider), SkyAtlasMode.catalogView);
+    });
   });
 
   group('SkyAtlasSearchNotifier', () {
