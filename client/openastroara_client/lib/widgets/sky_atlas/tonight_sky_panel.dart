@@ -332,13 +332,9 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   }
 
   /// Short chip label for the framing fit; null for `unknown` (no chip — we
-  /// don't clutter the row with a non-signal).
-  static String? _framingLabel(TonightFraming f) => switch (f) {
-        TonightFraming.good => 'Fills frame',
-        TonightFraming.tooSmall => 'Small',
-        TonightFraming.tooBig => 'Too big',
-        TonightFraming.unknown => null,
-      };
+  /// don't clutter the row with a non-signal). Shares one source of truth with
+  /// the chip's colour via [_FramingChip.styleFor].
+  static String? _framingLabel(TonightFraming f) => _FramingChip.styleFor(f).$1;
 }
 
 /// 0–100 worth-score badge, colour-graded so the eye can triage at a glance:
@@ -351,9 +347,11 @@ class _ScoreBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = score.clamp(0, 100).round();
-    final color = score >= 70
+    // Colour off the SAME rounded value the badge shows, so e.g. 69.6 doesn't
+    // render "70" yet paint with the sub-70 colour.
+    final color = s >= 70
         ? AraColors.accentConnected
-        : score >= 40
+        : s >= 40
             ? AraColors.accentInfo
             : AraColors.textSecondary;
     return Container(
@@ -384,16 +382,19 @@ class _FramingChip extends StatelessWidget {
   final TonightFraming framing;
   const _FramingChip({required this.framing});
 
+  /// The single source of truth for both label and colour. `unknown` yields a
+  /// null label — the parent gates on that to render no chip — so the label is
+  /// defined exactly once and the chip + the row's gate can't drift apart.
+  static (String?, Color) styleFor(TonightFraming f) => switch (f) {
+        TonightFraming.good => ('Fills frame', AraColors.accentConnected),
+        TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
+        TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
+        TonightFraming.unknown => (null, AraColors.textSecondary),
+      };
+
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (framing) {
-      TonightFraming.good => ('Fills frame', AraColors.accentConnected),
-      TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
-      TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
-      // Built but never shown — the parent gates on a non-null label so an
-      // unknown framing renders no chip at all.
-      TonightFraming.unknown => ('', AraColors.textSecondary),
-    };
+    final (label, color) = styleFor(framing);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -402,7 +403,7 @@ class _FramingChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
-        label,
+        label ?? '',   // never empty in practice — the parent only builds a chip when label != null
         style: Theme.of(context)
             .textTheme
             .labelSmall
