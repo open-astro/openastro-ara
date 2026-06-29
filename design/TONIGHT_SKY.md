@@ -1,0 +1,106 @@
+# Tonight's Sky — equipment-aware target planner (§36.8 / §55.1)
+
+Status: design locked (2026-06-29). Supersedes the placeholder `TonightSkyService`
+(20 hardcoded objects ranked by current altitude). Points/gamification are
+**explicitly out of scope** (back-burnered by the user).
+
+## Intent
+
+Tell the user *what is worth shooting tonight, with their rig, from their site* —
+and **advise, don't dictate**. The list is ranked by a transparent "worth" score,
+but nothing that clears a low visibility bar is hidden. The guiding anecdote: a
+nebula at 11° altitude with only a 3-hour window can still be the best image of the
+night ("Dragons"), so a naive altitude/duration sort that buries it is wrong. We
+surface the trade-off (low, short, but spectacular at this focal length) rather than
+discarding it.
+
+Equipment-awareness is the core differentiator:
+- At **448 mm** a big bright galaxy may be too small to be worth it, but a wide
+  nebula frames beautifully — so galaxies are de-emphasised unless they actually fill
+  enough of the frame to look good.
+- At **3000 mm** Orion is absurdly oversized — don't lead with it; surface faint,
+  small targets that fit the frame.
+
+So the same sky produces a different ranked list per optical train. We **advise** by
+score; we **never silently discount** a target the user might want — low-scoring ones
+sort to the bottom with their reason shown, not removed.
+
+## Inputs (all already in the daemon)
+
+- **Site** — `SiteSettingsDto`: `LatitudeDeg`, `LongitudeDeg`, `ElevationM`,
+  `DefaultHorizonAltitudeDeg`, `BortleClass`, `TypicalSeeingArcsec`,
+  `TwilightDefinition` (civil/nautical/astronomical).
+- **Optics** — `OpticsSettingsDto`: `FocalLengthMm`, `ReducerFactor`,
+  `SensorWidthPx`/`SensorHeightPx`, `PixelSizeUm`. Pixel scale =
+  `206.265 × PixelSizeUm ÷ (FocalLengthMm × ReducerFactor)`; FOV (arcmin) =
+  `sensor_px × pixel_scale ÷ 60`. Mosaic: caller-supplied tile grid (e.g. 2×2)
+  multiplies the effective FOV.
+- **Catalog** — OpenNGC via `SkyCatalogService`/`SkyCatalogReader` (semicolon CSV,
+  installed by `SkyDataInstaller`/`DataManagerService` to `{dataRoot}/{id}/catalog.csv`).
+  Columns we use: `Name`, `Type`, `RA`/`Dec` (J2000), `V-Mag`/`B-Mag`, `MajAx`/`MinAx`
+  (arcmin), `PosAng`, `SurfBr` (mag/arcsec²), common name. ~13k objects → the smart
+  cull replaces the hardcoded 20.
+
+## Per-object computed fields
+
+For each catalog object, at the active site for tonight's dark window:
+
+1. **Visibility window tonight** — the contiguous interval the object is above
+   `DefaultHorizonAltitudeDeg` *and* the sun is below the twilight threshold. Empty →
+   not up tonight (dropped). Uses `AltitudeFromHourAngleDeg` + a sun-altitude model;
+   transit time/alt from `MaxAltitudeDeg` and LST.
+2. **Max integration hours** — the length of that window (optionally clipped to where
+   altitude ≥ a usable floor, e.g. 30° for high-airmass quality). This is the "10 h vs
+   1 h" signal the user asked for.
+3. **Framing fit** — object size (`MajAx`×`MinAx`, with `PosAng`) vs the FOV (incl.
+   mosaic). A ratio: `tooSmall` (≪ frame — galaxy at 448 mm), `good` (fills a healthy
+   fraction), `tooBig` (overflows — Orion at 3000 mm; mosaic may rescue it).
+4. **Worth score (0–100, transparent)** — a documented weighted blend, NOT hidden:
+   framing fit (dominant — the equipment-aware part), integration hours available,
+   peak altitude / airmass, surface brightness vs `BortleClass` (faint targets penalised
+   under bright skies, but not zeroed), magnitude. Each object carries its score
+   **and the component breakdown** so the UI can explain "why 90 / why 40".
+5. **Reasons** — short tags ("fills frame", "10 h tonight", "low — 11°, short window
+   but bright") so the client advises rather than dictates.
+
+## Ranking philosophy
+
+- Sort by `Score` descending — the recommendation.
+- **Do not hard-filter on altitude or window length.** Anything with a non-empty
+  window above the site horizon stays in the list; low/short ones fall to the bottom
+  *with their reason visible*. The only drops are "never up tonight" and (optionally) a
+  user-set magnitude floor.
+- A bigger panel is fine (user: "It's ok if the screen is bigger"). Default surfaces a
+  generous N; the rest are one scroll away, not gone.
+
+## Wire shape
+
+Expand `TonightSkyObjectDto` (additive — keep existing fields for the current client):
+add `SizeMajArcmin`, `SizeMinArcmin`, `PosAngleDeg`, `SurfaceBrightness`,
+`WindowStartUtc`, `WindowEndUtc`, `TransitUtc`, `IntegrationHours`, `FramingFit`
+(enum: `too_small`/`good`/`too_big`), `Score`, and `ScoreReasons` (string list).
+Request gains optional `focalLengthMm`/`sensor`/`mosaic` overrides (else use the active
+profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonight`.
+
+## Slice plan (each a sub-PR, driven to bot ✅)
+
+- **Slice 1 (server, catalog+timing)** — replace the hardcoded `Catalog` with an
+  OpenNGC-backed cull via `SkyCatalogService`; compute the visibility window, transit,
+  and integration hours; expand the DTO with size/timing/hours. Sun-altitude model +
+  twilight. Tests: window math, transit, hours, twilight gating, no-catalog fallback.
+- **Slice 2 (server, equipment-aware scoring)** — FOV/framing fit from the optical
+  train + mosaic; the transparent `Score` + `ScoreReasons`; ranking that advises-not-
+  hides. Tests: 448 mm vs 3000 mm produce different orderings; the "low but bright"
+  target is present (not dropped); score breakdown sums correctly.
+- **Slice 3 (client panel)** — richer Tonight's Sky list: per-object window/transit,
+  hours, framing-fit chip, score with the "why" breakdown, recenter-atlas + add-to-
+  sequence. FOV/mosaic controls.
+- **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
+  moon avoidance / separation as a score input; per-target "best window" highlight.
+
+## Explicitly deferred
+
+Points / achievements / gamification (the "Dragons = 90, Orion = 40, points for hours
+and not blowing out cores" idea) — back-burnered by the user 2026-06-28. The
+**transparent 0–100 score** above is the non-gamified core; a points layer could later
+build on it without schema churn.
