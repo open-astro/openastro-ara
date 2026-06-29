@@ -157,7 +157,14 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
     directly on the coordinates via `pointRaDec`, no name lookup). `skyTargetProvider`
     is deliberately NOT used — the planetarium doesn't read it.
   - **STILL OPEN (3b follow-ups / fold into slice 4):**
-    - FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
+    - **Per-request optics + mosaic overrides — server DONE (slice 4a, 2026-06-29).**
+      `GET /api/v1/planning/tonight` now takes optional `focalLengthMm`/`reducer`/
+      `sensorW`/`sensorH`/`pixelUm` (each per-field-merged over the active profile's optics;
+      any supplied must be > 0) and `mosaicX`/`mosaicY` (default 1, range [1,20], enlarge the
+      framing FOV per axis). Absent → profile optics at 1×1 (no behaviour change; no profile
+      read on the common path). `GetTonight`/`Rank` gained optional `opticsOverride`/
+      `mosaicTilesX`/`mosaicTilesY` params (default to profile/1×1). **Client FOV/mosaic
+      controls (a picker that sends these params) — still TODO (slice 4b).**
     - **Profile the slice-2 window scan against the real installed OpenNGC catalog** —
       slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
       slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude

@@ -419,6 +419,150 @@ namespace OpenAstroAra.Test {
             Assert.That(past.RemainingHours, Is.EqualTo(0));
         }
 
+        // ─── §36.8 slice 4a: per-request optics + mosaic overrides ───
+
+        [Test]
+        public void Mosaic_one_by_one_equals_the_baseline() {
+            // The new mosaic params default to 1×1, which must reproduce the existing single-frame ranking
+            // exactly — additive change, no behaviour drift when no override is supplied.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var candidates = new[] {
+                SizedObj("WIDE", ra, 40, majArcmin: 60),
+                SizedObj("SMALL", ra, 40, majArcmin: 8),
+            };
+
+            var baseline = TonightSkyService.Rank(candidates, site, Optics(), at, limit: 10);
+            var explicit1x1 = TonightSkyService.Rank(candidates, site, Optics(), at, limit: 10,
+                mosaicTilesX: 1, mosaicTilesY: 1);
+
+            Assert.That(explicit1x1.Select(o => o.Id), Is.EqualTo(baseline.Select(o => o.Id)));
+            for (var i = 0; i < baseline.Count; i++) {
+                Assert.That(explicit1x1[i].Score, Is.EqualTo(baseline[i].Score));
+                Assert.That(explicit1x1[i].Framing, Is.EqualTo(baseline[i].Framing));
+            }
+        }
+
+        [Test]
+        public void A_larger_mosaic_enlarges_the_fov_and_reframes_a_too_big_target() {
+            // A 60′ nebula overflows a single 3000 mm frame (min FOV ≈ 17′ → TooBig), but a 5×5 mosaic
+            // quintuples the FOV per axis (min FOV ≈ 86′) so it now fits — the framing classification flips
+            // from TooBig to Good and the worth rises with it.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var neb = new[] { SizedObj("NEB", ra, 40, majArcmin: 60) };
+
+            var single = TonightSkyService.Rank(neb, site, Optics(focalLengthMm: 3000), at, limit: 10).Single();
+            var mosaic = TonightSkyService.Rank(neb, site, Optics(focalLengthMm: 3000), at, limit: 10,
+                mosaicTilesX: 5, mosaicTilesY: 5).Single();
+
+            Assert.That(single.Framing, Is.EqualTo(FramingFit.TooBig), "overflows a single long-focal frame");
+            Assert.That(mosaic.Framing, Is.EqualTo(FramingFit.Good), "a 5×5 mosaic enlarges the FOV → fits");
+            Assert.That(mosaic.Score, Is.GreaterThan(single.Score), "better framing → higher worth");
+        }
+
+        [Test]
+        public void Optics_override_drives_framing_through_GetTonight() {
+            // GetTonight normally reads the profile optics; a per-request override must take precedence. The
+            // profile is a SHORT 448 mm train (frames the 60′ nebula Good), but a LONG 3000 mm override must
+            // make the same object overflow — proving the override path (not the profile) is what's used.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var dso = new DsoEntryDto("NGC9999", "Wide Nebula", "Neb", ra, 40, 6.0, 60.0, 60.0, 0, 20.0);
+            var svc = new TonightSkyService(
+                ProfileStore(site, Optics(focalLengthMm: 448)), new FakeCatalog(new[] { dso }));
+
+            var profileFramed = svc.GetTonight(at, limit: 10).Single(o => o.Id == "NGC9999");
+            var overridden = svc.GetTonight(at, limit: 10,
+                opticsOverride: Optics(focalLengthMm: 3000)).Single(o => o.Id == "NGC9999");
+
+            Assert.That(profileFramed.Framing, Is.EqualTo(FramingFit.Good), "profile 448 mm frames the 60′ nebula well");
+            Assert.That(overridden.Framing, Is.EqualTo(FramingFit.TooBig), "the 3000 mm override overflows it");
+            Assert.That(overridden.Score, Is.LessThan(profileFramed.Score), "worse framing → lower worth");
+        }
+
+        // ─── slice 4a: TonightSkyOverrides.Build validation (the endpoint guard, unit-testable) ───
+
+        [Test]
+        public void TonightSkyOverrides_Build_rejects_NaN_and_infinity_doubles() {
+            // NaN <= 0 and +∞ <= 0 are both false in C#, so a bare relational guard would let them slip
+            // into FovArcmin and silently frame everything Unknown. The finite check must reject them.
+            var (nanOv, nanErr) = TonightSkyOverrides.Build(() => Optics(), focalLengthMm: double.NaN, reducer: null, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(nanOv, Is.Null);
+            Assert.That(nanErr, Does.Contain("focalLengthMm"));
+
+            var (infOv, infErr) = TonightSkyOverrides.Build(() => Optics(), focalLengthMm: double.PositiveInfinity, reducer: null,
+                sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(infOv, Is.Null);
+            Assert.That(infErr, Does.Contain("focalLengthMm"));
+        }
+
+        [Test]
+        public void TonightSkyOverrides_Build_bounds_the_reducer() {
+            // A reducer multiplies the focal length, so an absurd value collapses the FOV. The cap rejects
+            // it; the boundary value (== cap) is accepted.
+            var (tooBig, err) = TonightSkyOverrides.Build(() => Optics(), focalLengthMm: null, reducer: TonightSkyOverrides.MaxReducerFactor + 0.1,
+                sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(tooBig, Is.Null);
+            Assert.That(err, Does.Contain("reducer"));
+
+            var (zero, zeroErr) = TonightSkyOverrides.Build(() => Optics(), focalLengthMm: null, reducer: 0, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(zero, Is.Null);
+            Assert.That(zeroErr, Does.Contain("reducer"));
+
+            var (atCap, atCapErr) = TonightSkyOverrides.Build(() => Optics(), focalLengthMm: null, reducer: TonightSkyOverrides.MaxReducerFactor,
+                sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(atCapErr, Is.Null);
+            Assert.That(atCap!.ReducerFactor, Is.EqualTo(TonightSkyOverrides.MaxReducerFactor));
+        }
+
+        [Test]
+        public void TonightSkyOverrides_Build_rejects_one_field_merged_onto_an_unconfigured_profile() {
+            // Supplying just the focal length on a fresh profile (all-zero optics) would merge zero sensor/
+            // pixel fields → a NaN FOV → a silent 200 with everything Unknown. The assembled-train check
+            // turns that into an explicit 400 so the caller learns the override was meaningless.
+            var blankProfile = new OpticsSettingsDto(0, 0, 0, 0, 0);
+            var (ov, err) = TonightSkyOverrides.Build(() => blankProfile, focalLengthMm: 500, reducer: null, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(ov, Is.Null);
+            Assert.That(err, Does.Contain("incomplete"));
+        }
+
+        [Test]
+        public void TonightSkyOverrides_Build_merges_unsupplied_fields_from_the_profile() {
+            // A caller tweaking only the reducer on a fully-configured profile gets that profile's focal/
+            // sensor/pixel back, with just the reducer replaced — and no error.
+            var profile = Optics(focalLengthMm: 530, reducer: 1.0, wPx: 6000, hPx: 4000, pixelUm: 3.76);
+            var (ov, err) = TonightSkyOverrides.Build(() => profile, focalLengthMm: null, reducer: 0.8, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(err, Is.Null);
+            Assert.That(ov, Is.EqualTo(new OpticsSettingsDto(530, 0.8, 6000, 4000, 3.76)));
+        }
+
+        [Test]
+        public void TonightSkyOverrides_Build_caps_a_reducer_merged_from_the_profile() {
+            // The per-field cap only runs on a SUPPLIED reducer; an out-of-range reducer carried in from the
+            // profile (direct edit / pre-cap migration) must still be rejected by the assembled-train check.
+            var profile = Optics(reducer: TonightSkyOverrides.MaxReducerFactor + 5);
+            var (ov, err) = TonightSkyOverrides.Build(() => profile,
+                focalLengthMm: 500, reducer: null, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(ov, Is.Null);
+            Assert.That(err, Does.Contain("reducer"));
+        }
+
+        [Test]
+        public void TonightSkyOverrides_Build_rejects_a_zero_reducer_with_a_reducer_specific_message() {
+            // A fresh profile (geometry set, ReducerFactor still 0) where the caller supplies the four
+            // geometry fields and omits reducer must fail with a reducer-range message — NOT the generic
+            // "reducer is optional" completeness text, which would be misleading.
+            var freshProfile = new OpticsSettingsDto(0, 0, 0, 0, 0);
+            var (ov, err) = TonightSkyOverrides.Build(() => freshProfile,
+                focalLengthMm: 500, reducer: null, sensorW: 6000, sensorH: 4000, pixelUm: 3.76);
+            Assert.That(ov, Is.Null);
+            Assert.That(err, Does.Contain("reducer factor"));
+        }
+
         /// <summary>Minimal <see cref="ISkyCatalogService"/> test double — only GetAllDsos is exercised.</summary>
         private sealed class FakeCatalog : ISkyCatalogService {
             private readonly IReadOnlyList<DsoEntryDto>? _dsos;

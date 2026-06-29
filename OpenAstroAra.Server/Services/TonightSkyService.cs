@@ -32,8 +32,14 @@ public interface ITonightSkyService {
     /// <paramref name="atUtc"/>, NOT merely when it is already up at the query instant. So a not-yet-risen
     /// target with a real window later tonight is surfaced (ranked, never silently dropped); the only
     /// drops are "never up in the dark tonight". Ranking advises rather than dictates: a low/short but
-    /// well-framed bright target still scores respectably and appears.</para></summary>
-    IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit);
+    /// well-framed bright target still scores respectably and appears.</para>
+    /// <para><b>Per-request overrides (slice 4a):</b> <paramref name="opticsOverride"/> swaps in a
+    /// different optical train (e.g. "what if I add a reducer / use another scope") instead of the
+    /// active profile's — when null the profile's optics are used, so the default behaviour is
+    /// unchanged. <paramref name="mosaicTilesX"/>/<paramref name="mosaicTilesY"/> enlarge the framing
+    /// FOV by that tile count per axis (clamped to ≥ 1); the default 1×1 is a single frame.</para></summary>
+    IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit,
+        OpticsSettingsDto? opticsOverride = null, int mosaicTilesX = 1, int mosaicTilesY = 1);
 }
 
 public sealed class TonightSkyService : ITonightSkyService {
@@ -50,8 +56,10 @@ public sealed class TonightSkyService : ITonightSkyService {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     }
 
-    public IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit) =>
-        Rank(BuildCandidates(), _profileStore.GetSiteSettings(), _profileStore.GetOpticsSettings(), atUtc, limit);
+    public IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit,
+            OpticsSettingsDto? opticsOverride = null, int mosaicTilesX = 1, int mosaicTilesY = 1) =>
+        Rank(BuildCandidates(), _profileStore.GetSiteSettings(),
+            opticsOverride ?? _profileStore.GetOpticsSettings(), atUtc, limit, mosaicTilesX, mosaicTilesY);
 
     /// <summary>The candidate set: the installed OpenNGC catalog culled to the realistically-shootable
     /// objects, or the hardcoded starter <see cref="Catalog"/> when openngc-dso isn't installed (or the
@@ -156,15 +164,17 @@ public sealed class TonightSkyService : ITonightSkyService {
     /// window tonight are therefore surfaced; objects never up in the dark are the only drops.</para></summary>
     internal static IReadOnlyList<TonightSkyObjectDto> Rank(
             IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, OpticsSettingsDto optics,
-            DateTimeOffset atUtc, int limit) {
+            DateTimeOffset atUtc, int limit, int mosaicTilesX = 1, int mosaicTilesY = 1) {
         var horizon = site.DefaultHorizonAltitudeDeg;
         var lat = site.LatitudeDeg;
         var lon = site.LongitudeDeg;
         var lst0 = LocalSiderealTimeDeg(atUtc, lon);
 
-        // The active optical train's field of view (arcmin). Mosaic overrides are a slice-3 concern, so a
-        // single 1×1 tile here; an unconfigured train yields a NaN FOV → every object frames Unknown.
-        var (fovWidthArcmin, fovHeightArcmin) = FovArcmin(optics, mosaicTilesX: 1, mosaicTilesY: 1);
+        // The active (or per-request overridden) optical train's field of view (arcmin), enlarged by the
+        // mosaic tile count per axis (clamped ≥ 1 defensively; FovArcmin also clamps). The default 1×1 is a
+        // single frame; an unconfigured train yields a NaN FOV → every object frames Unknown.
+        var (fovWidthArcmin, fovHeightArcmin) =
+            FovArcmin(optics, Math.Max(1, mosaicTilesX), Math.Max(1, mosaicTilesY));
 
         // Precompute the night sample grid ONCE (it's object-independent): local sidereal time and
         // whether the sun is below the twilight threshold at each 5-min sample across ±12 h. Per object

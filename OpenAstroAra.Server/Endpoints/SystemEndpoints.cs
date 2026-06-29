@@ -205,7 +205,11 @@ public static class SystemEndpoints {
         // ─── Planning (§36/§25.5) — Tonight's Sky ───
         var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
         planning.MapGet("/tonight",
-                (ITonightSkyService svc, [FromQuery] int? limit, [FromQuery(Name = "at")] string? at) => {
+                (ITonightSkyService svc, IProfileStore profiles, [FromQuery] int? limit,
+                        [FromQuery(Name = "at")] string? at,
+                        [FromQuery] double? focalLengthMm, [FromQuery] double? reducer,
+                        [FromQuery] int? sensorW, [FromQuery] int? sensorH, [FromQuery] double? pixelUm,
+                        [FromQuery] int? mosaicX, [FromQuery] int? mosaicY) => {
                     if (TryParseAt(at, out var atUtc) is { } atError) {
                         return atError;
                     }
@@ -215,13 +219,51 @@ public static class SystemEndpoints {
                         return Results.Problem("Query parameter 'limit' must be >= 1.",
                             statusCode: StatusCodes.Status400BadRequest);
                     }
-                    return Results.Ok(svc.GetTonight(atUtc, limit ?? 10));
+
+                    // Mosaic tiles cap at 20 per axis — the FOV (and so the per-object framing scan cost)
+                    // scales with the tile count, so an unbounded value would be a cheap way to blow it up.
+                    if (mosaicX is < 1 or > 20) {
+                        return Results.Problem("Query parameter 'mosaicX' must be in [1, 20].",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (mosaicY is < 1 or > 20) {
+                        return Results.Problem("Query parameter 'mosaicY' must be in [1, 20].",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+
+                    // Build an optics override only when AT LEAST ONE optic field is supplied; the
+                    // un-supplied fields are sourced per-field from the active profile so a caller can tweak
+                    // just (say) the reducer. When NO optic field is supplied we pass null and the service
+                    // uses the profile directly — no profile read on the common path. TonightSkyOverrides.Build
+                    // validates every supplied field (finite, positive, reducer ≤ cap) AND the assembled
+                    // train (so a field merged onto an un/partly-configured profile is a 400, not a silent
+                    // 200); the profile read is lazy (skipped when all five fields are supplied).
+                    OpticsSettingsDto? opticsOverride = null;
+                    if (focalLengthMm is not null || reducer is not null || sensorW is not null
+                            || sensorH is not null || pixelUm is not null) {
+                        var (built, error) = TonightSkyOverrides.Build(
+                            profiles.GetOpticsSettings,
+                            focalLengthMm, reducer, sensorW, sensorH, pixelUm);
+                        if (error is not null) {
+                            return Results.Problem(error, statusCode: StatusCodes.Status400BadRequest);
+                        }
+                        opticsOverride = built;
+                    }
+
+                    return Results.Ok(svc.GetTonight(atUtc, limit ?? 10, opticsOverride,
+                        mosaicX ?? 1, mosaicY ?? 1));
                 })
             .Produces<IReadOnlyList<TonightSkyObjectDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("GetTonightSky")
             .WithDescription("Optional 'at' is an ISO-8601 instant; include a 'Z' or offset — a " +
-                "timezone-naive value is interpreted as UTC. Absent → now.");
+                "timezone-naive value is interpreted as UTC. Absent → now. Optional optical-train overrides " +
+                "(focalLengthMm, reducer, sensorW, sensorH, pixelUm) each replace one field of the active " +
+                "profile's optics for this request (each supplied value must be finite and > 0; reducer ≤ " +
+                "10; unsupplied fields fall back to the profile, and the assembled train must be complete — " +
+                "supplying one field on an unconfigured profile is rejected); mosaicX/mosaicY (default 1, " +
+                "range [1, 20]) enlarge the framing FOV by that tile count per axis. Absent overrides → the " +
+                "profile's optics at 1×1.");
 
         planning.MapGet("/horizon",
                 (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
