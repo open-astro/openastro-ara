@@ -199,7 +199,9 @@ namespace OpenAstroAra.Server.Services {
                 // Optional measured columns — null when blank/absent (a row may carry size but no
                 // surface brightness, etc.), so a missing field is "unknown", not zero.
                 double? Num(int i) => i >= 0 && f.Length > i && TryNum(f[i], out var v) ? v : null;
-                string? common = Has(iCommon) ? f[iCommon] : null;
+                // OpenNGC "Common names" is a comma-separated list (e.g. "Andromeda Galaxy,Messier 31");
+                // take the first as the display name rather than showing the whole joined string.
+                string? common = Has(iCommon) ? f[iCommon].Split(',')[0].Trim() : null;
                 list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell,
                     Num(iMaj), Num(iMin), Num(iPa), Num(iSb), common));
             }
