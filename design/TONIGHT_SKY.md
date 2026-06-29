@@ -94,13 +94,54 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   The per-object window/transit/hours are computed for the listed (currently-up) objects.
   Surfacing not-yet-risen targets — the design's "include anything with a window tonight,
   rank by worth" — lands with slice 2's scoring, which replaces the altitude gate.
-- **Slice 2 (server, equipment-aware scoring)** — FOV/framing fit from the optical
-  train + mosaic; the transparent `Score` + `ScoreReasons`; ranking that advises-not-
-  hides. Tests: 448 mm vs 3000 mm produce different orderings; the "low but bright"
-  target is present (not dropped); score breakdown sums correctly.
+- **Slice 2 (server, equipment-aware scoring)** — DONE (2026-06-29). FOV/framing fit
+  from the optical train; the transparent `Score` + `ScoreReasons`; the inclusion gate
+  replaced (window-based, not altitude-now); `RemainingHours`. Chosen weights/thresholds
+  recorded below. Tests: 448 mm vs 3000 mm produce different orderings; the "low but
+  bright" target is present (not dropped); a not-yet-risen target with a window is
+  included; score is bounded + explained by its component tags. (Mosaic + per-request
+  optics/mosaic overrides deferred to slice 3 — slice 2 always uses the active profile's
+  train, a single 1×1 tile.)
+
+  **Score weights (0–100, tunable — `TonightSkyService` constants):**
+  | Component | Weight | Quality factor `q∈[0,1]` |
+  |---|---|---|
+  | Framing fit | **35** | Good → 1.0; Unknown → 0.5 (neutral); off-band graded by how far out (`ratio/0.10` for too-small, `0.80/ratio` for too-big) with a floor of **0.15** so it's never zeroed |
+  | Integration hours | **25** | `min(hours / 6, 1)` — linear, saturates at 6 dark hours |
+  | Peak altitude / airmass | **20** | `max(0, sin(peakAlt))` — `sin(alt) ≈ 1/airmass` (1 overhead, ~0.5 at 30°, 0 at horizon) |
+  | Surface brightness vs Bortle | **12** | `clamp((skyMag − SB + 4) / 4, 0.15, 1)`; `skyMag ≈ 22 − (Bortle−1)·0.5` mag/arcsec². Faint-under-bright penalised, floored at 0.15, never zeroed |
+  | Magnitude | **8** | `clamp((12 − mag) / 12, 0, 1)` — brighter a touch higher |
+
+  Score = Σ(weight · q), clamped to [0,100]. Each component emits a short reason tag with
+  its rounded point contribution (e.g. `"fills the frame (+35)"`, `"5 h dark window (+21)"`)
+  so the UI can explain *why 90 / why 40*.
+
+  **Framing thresholds** — object major-axis ÷ the FOV's smaller dimension: `< 0.10` →
+  `TooSmall` (a ~10′ galaxy in a ~3° field at 448 mm), `0.10–0.80` → `Good`, `> 0.80` →
+  `TooBig` (Orion's ~85′ in a ~27′ field at 3000 mm; the 0.80 cap leaves an edge margin).
+  No recorded size → `Unknown`.
+
+  **`RemainingHours`** — dark time still ahead of the query instant in the object's window
+  tonight: `max(0, windowEnd − max(atUtc, windowStart))`. A past window → 0; a not-yet-
+  started window → its full length (all ahead); an in-progress window → from now to its
+  end. Always ≤ `IntegrationHours`.
+
+  **Inclusion gate** — an object is listed iff it has a non-empty dark window anywhere in
+  the ±12 h span (NOT merely "above the horizon at `atUtc`"), so not-yet-risen targets are
+  surfaced. A cheap pre-filter drops objects whose geometric upper culmination never clears
+  the horizon (`MaxAltitudeDeg < horizon`) before the costly ±12 h scan; the precomputed-
+  once sun/LST sample grid is unchanged from slice 1.
+
+  **Enum wire shape** — `FramingFit` serializes all-lowercase per the §60.6 convention
+  (`unknown`/`toosmall`/`good`/`toobig`), not the illustrative `too_small` snake_case in
+  the "Wire shape" section above.
 - **Slice 3 (client panel)** — richer Tonight's Sky list: per-object window/transit,
   hours, framing-fit chip, score with the "why" breakdown, recenter-atlas + add-to-
-  sequence. FOV/mosaic controls.
+  sequence. FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
+  Also: **profile the slice-2 window scan against the real installed OpenNGC catalog**
+  — slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
+  slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude pre-filter,
+  expected <100ms, but confirm on-device.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
 

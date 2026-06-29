@@ -86,6 +86,7 @@ public partial class Program {
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<NotificationCategory>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticHealth>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticsMode>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FramingFit>(policy));
             opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         });
 

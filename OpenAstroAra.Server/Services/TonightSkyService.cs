@@ -19,20 +19,20 @@ using System.Threading;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>§36/§25.5 Tonight's Sky — ranks a curated deep-sky list by how high each object
-/// sits above the active profile's site horizon at a given instant.</summary>
+/// <summary>§36/§25.5 Tonight's Sky — ranks a deep-sky list by a transparent, equipment-aware
+/// "worth shooting tonight" score for the active profile's site and optical train.</summary>
 public interface ITonightSkyService {
-    /// <summary>The curated objects above the site horizon at <paramref name="atUtc"/>, highest
-    /// first, capped at <paramref name="limit"/>. As an internal convenience a non-positive
+    /// <summary>The objects with a visibility window tonight, ranked by <see cref="TonightSkyObjectDto.Score"/>
+    /// descending, capped at <paramref name="limit"/>. As an internal convenience a non-positive
     /// <paramref name="limit"/> returns all of them — but the public <c>GET /planning/tonight</c>
     /// endpoint rejects <c>limit &lt; 1</c> with a 400, so that path only applies to direct callers.
-    /// Reads the site lat/long + horizon from the active profile.
-    /// <para><b>Slice-1 inclusion boundary:</b> only objects already above the horizon AT
-    /// <paramref name="atUtc"/> are listed (the altitude-ranking gate). A target that hasn't risen yet —
-    /// e.g. at a sunset query — is omitted even though its <c>WindowStartUtc</c>/<c>IntegrationHours</c>
-    /// would describe a fine night. Surfacing not-yet-risen targets is the equipment-aware scoring pass
-    /// (slice 2, see <c>design/TONIGHT_SKY.md</c>); until then a planner run reflects "up right now",
-    /// and the per-object window/transit/hours describe tonight's dark window for those objects.</para></summary>
+    /// Reads the site (lat/long/horizon/twilight/Bortle) and optical train from the active profile.
+    /// <para><b>Inclusion gate (slice 2):</b> an object is listed when it has a non-empty dark window
+    /// tonight — above the site horizon AND the sky dark enough — anywhere in the ±12 h around
+    /// <paramref name="atUtc"/>, NOT merely when it is already up at the query instant. So a not-yet-risen
+    /// target with a real window later tonight is surfaced (ranked, never silently dropped); the only
+    /// drops are "never up in the dark tonight". Ranking advises rather than dictates: a low/short but
+    /// well-framed bright target still scores respectably and appears.</para></summary>
     IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit);
 }
 
@@ -51,7 +51,7 @@ public sealed class TonightSkyService : ITonightSkyService {
     }
 
     public IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit) =>
-        Rank(BuildCandidates(), _profileStore.GetSiteSettings(), atUtc, limit);
+        Rank(BuildCandidates(), _profileStore.GetSiteSettings(), _profileStore.GetOpticsSettings(), atUtc, limit);
 
     /// <summary>The candidate set: the installed OpenNGC catalog culled to the realistically-shootable
     /// objects, or the hardcoded starter <see cref="Catalog"/> when openngc-dso isn't installed (or the
@@ -127,6 +127,17 @@ public sealed class TonightSkyService : ITonightSkyService {
     internal static IReadOnlyList<TonightSkyObjectDto> Rank(SiteSettingsDto site, DateTimeOffset atUtc, int limit) =>
         Rank(Catalog, site, atUtc, limit);
 
+    /// <summary>Ranking with no optical train supplied — framing is <see cref="FramingFit.Unknown"/> for
+    /// every object (neutral framing weight), so the order is driven by the timing/altitude/sky terms.
+    /// Convenience for callers/tests that don't exercise the equipment-aware framing path.</summary>
+    internal static IReadOnlyList<TonightSkyObjectDto> Rank(
+            IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, DateTimeOffset atUtc, int limit) =>
+        Rank(catalog, site, NoOptics, atUtc, limit);
+
+    // An optical train with no usable values → FOV is NaN → framing classifies Unknown for everything.
+    // Lets the no-optics overload share the one scoring path instead of branching the FOV math.
+    private static readonly OpticsSettingsDto NoOptics = new(0, 0, 0, 0, 0);
+
     // Window scan resolution: sample altitude + sun-altitude every 5 minutes across ±12 h of atUtc.
     // 5 min is finer than the ~1-minute-per-degree-of-altitude rate near the horizon matters for an
     // "hours tonight" figure, and ±12 h always spans one whole night either side of any instant.
@@ -136,35 +147,24 @@ public sealed class TonightSkyService : ITonightSkyService {
     // term; reused to solve for the transit instant analytically (hour angle = 0).
     private const double SiderealDegPerDay = 360.98564736629;
 
-    /// <summary>Ranks <paramref name="catalog"/> for <paramref name="site"/> at <paramref name="atUtc"/>:
-    /// objects above the site horizon right then, altitude-descending, capped at <paramref name="limit"/>.
-    /// Each returned object also carries its visibility window tonight, transit, and integration hours.
-    /// (Scoring / framing-fit are a later slice — ranking stays altitude-descending here.)</summary>
+    /// <summary>Ranks <paramref name="catalog"/> for <paramref name="site"/> + <paramref name="optics"/>
+    /// at <paramref name="atUtc"/> by a transparent equipment-aware <see cref="TonightSkyObjectDto.Score"/>
+    /// (descending, capped at <paramref name="limit"/>; catalog id breaks ties). Each returned object also
+    /// carries its visibility window tonight, transit, integration + remaining hours, and framing fit.
+    /// <para><b>Inclusion gate:</b> an object is listed iff it has a non-empty dark window in the ±12 h span
+    /// — NOT merely "above the horizon at <paramref name="atUtc"/>". Not-yet-risen targets with a real
+    /// window tonight are therefore surfaced; objects never up in the dark are the only drops.</para></summary>
     internal static IReadOnlyList<TonightSkyObjectDto> Rank(
-            IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, DateTimeOffset atUtc, int limit) {
+            IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, OpticsSettingsDto optics,
+            DateTimeOffset atUtc, int limit) {
         var horizon = site.DefaultHorizonAltitudeDeg;
         var lat = site.LatitudeDeg;
         var lon = site.LongitudeDeg;
         var lst0 = LocalSiderealTimeDeg(atUtc, lon);
 
-        // Pass 1 (cheap): everything above the horizon right now, keyed by its TRUE (unrounded) altitude
-        // so the sort can't lose real order to rounding; only this set gets the costly window math.
-        var visible = new List<(double Alt, CatalogObject Obj)>(catalog.Count);
-        foreach (var o in catalog) {
-            var alt = AltitudeFromHourAngleDeg(o.DecDeg, lat, Mod360(lst0 - o.RaDeg));
-            if (alt >= horizon) {
-                visible.Add((alt, o));
-            }
-        }
-        // Highest first; the catalog id is a stable tie-break for a genuine exact tie.
-        visible.Sort((a, b) => {
-            var c = b.Alt.CompareTo(a.Alt);
-            return c != 0 ? c : string.CompareOrdinal(a.Obj.Id, b.Obj.Id);
-        });
-        var capped = limit > 0 && visible.Count > limit ? visible.GetRange(0, limit) : visible;
-        if (capped.Count == 0) {
-            return Array.Empty<TonightSkyObjectDto>();
-        }
+        // The active optical train's field of view (arcmin). Mosaic overrides are a slice-3 concern, so a
+        // single 1×1 tile here; an unconfigured train yields a NaN FOV → every object frames Unknown.
+        var (fovWidthArcmin, fovHeightArcmin) = FovArcmin(optics, mosaicTilesX: 1, mosaicTilesY: 1);
 
         // Precompute the night sample grid ONCE (it's object-independent): local sidereal time and
         // whether the sun is below the twilight threshold at each 5-min sample across ±12 h. Per object
@@ -192,9 +192,17 @@ public sealed class TonightSkyService : ITonightSkyService {
         var cosLat = Math.Cos(Deg2Rad(lat));
         var sinHorizon = Math.Sin(Deg2Rad(horizon));
 
-        var result = new List<TonightSkyObjectDto>(capped.Count);
+        // Score (the sort key) is the unrounded worth; id is the stable tie-break for an exact tie.
+        var scored = new List<(double Score, TonightSkyObjectDto Dto)>(catalog.Count);
         var up = new bool[sampleCount];
-        foreach (var (alt, o) in capped) {
+        foreach (var o in catalog) {
+            // Cheap pre-filter: an object whose geometric upper culmination never clears the site horizon
+            // can never be up, so skip the costly ±12 h scan for it entirely.
+            var peakAltDeg = MaxAltitudeDeg(o.DecDeg, lat);
+            if (peakAltDeg < horizon) {
+                continue;
+            }
+
             // "Up" at a sample = object above the site horizon AND the sky dark enough (sun below twilight).
             // The object's dec trig is constant across all samples, so hoist it out; only cos(hour angle)
             // varies per sample. sin(alt) = sinδ·sinφ + cosδ·cosφ·cos H (same formula as AltitudeFromHourAngleDeg).
@@ -208,22 +216,24 @@ public sealed class TonightSkyService : ITonightSkyService {
 
             // Window tonight = the LONGEST qualifying dark run in the span, always — not the run that
             // merely brackets atUtc. An object that sets and re-rises (e.g. up 10pm–midnight then
-            // 2am–6am) must report its best 4 h window even when the query falls in the shorter early
-            // run; "max integration hours tonight" is the headline figure. (Bracketing-from-atUtc bought
-            // no speed — the loop above already filled up[] for every sample.)
+            // 2am–6am) must report its best 4 h window even when the query falls in the shorter early run.
             var (start, end) = LongestRun(up);
-
-            DateTimeOffset? windowStart = null, windowEnd = null;
-            double integrationHours = 0;
-            if (start >= 0) {
-                windowStart = sampleUtc[start];
-                // Each "up" sample stands for its WindowStepMinutes slot, so the window's exclusive upper
-                // bound is one step past the last up-sample. Without the +step the duration would count
-                // only the gaps BETWEEN samples — short by one step — and a single-sample window would
-                // report 0 h despite the object being up for at least that slot.
-                windowEnd = sampleUtc[end].AddMinutes(WindowStepMinutes);
-                integrationHours = (windowEnd.Value - windowStart.Value).TotalHours;
+            if (start < 0) {
+                continue;   // no dark window tonight → never up in the dark → the only inclusion drop
             }
+
+            var windowStart = sampleUtc[start];
+            // Each "up" sample stands for its WindowStepMinutes slot, so the window's exclusive upper bound
+            // is one step past the last up-sample. Without the +step the duration would count only the gaps
+            // BETWEEN samples — short by one step — and a single-sample window would report 0 h.
+            var windowEnd = sampleUtc[end].AddMinutes(WindowStepMinutes);
+            var integrationHours = (windowEnd - windowStart).TotalHours;
+
+            // RemainingHours = dark time still AHEAD of atUtc in this window. A window entirely in the past
+            // → 0; one that hasn't started yet → its full length (all of it is ahead); one in progress →
+            // from atUtc to its end. Equivalent: clamp(windowEnd − max(atUtc, windowStart)). Always ≤ the
+            // integration hours, since it can at most span the whole window.
+            var remainingHours = Math.Max(0.0, (windowEnd - (atUtc > windowStart ? atUtc : windowStart)).TotalHours);
 
             // Transit (upper culmination) nearest atUtc: hour angle H = LST − RA reaches 0. H grows at the
             // sidereal rate, so the nearest H=0 is H0 degrees in the past (if H0 ≤ 180) or 360−H0 ahead.
@@ -231,14 +241,168 @@ public sealed class TonightSkyService : ITonightSkyService {
             var signedDeg = h0 <= 180.0 ? -h0 : 360.0 - h0;
             var transitUtc = atUtc.AddHours(signedDeg / SiderealDegPerDay * 24.0);
 
-            result.Add(new TonightSkyObjectDto(
+            var altNow = AltitudeFromHourAngleDeg(o.DecDeg, lat, h0);
+            var (score, framing, reasons) = ScoreObject(
+                o, fovWidthArcmin, fovHeightArcmin, peakAltDeg, integrationHours, site.BortleClass);
+
+            scored.Add((score, new TonightSkyObjectDto(
                 o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
-                Math.Round(alt, 1), Math.Round(MaxAltitudeDeg(o.DecDeg, lat), 1),
+                Math.Round(altNow, 1), Math.Round(peakAltDeg, 1),
                 o.SizeMajArcmin, o.SizeMinArcmin, o.PosAngleDeg, o.SurfaceBrightness,
-                windowStart, windowEnd, transitUtc, Math.Round(integrationHours, 2)));
+                windowStart, windowEnd, transitUtc, Math.Round(integrationHours, 2),
+                framing, Math.Round(score, 1), reasons, Math.Round(remainingHours, 2))));
+        }
+        if (scored.Count == 0) {
+            return Array.Empty<TonightSkyObjectDto>();
+        }
+        // Highest worth first; catalog id is a stable tie-break for a genuine exact tie.
+        scored.Sort((a, b) => {
+            var c = b.Score.CompareTo(a.Score);
+            return c != 0 ? c : string.CompareOrdinal(a.Dto.Id, b.Dto.Id);
+        });
+        var capped = limit > 0 && scored.Count > limit ? scored.GetRange(0, limit) : scored;
+        var result = new List<TonightSkyObjectDto>(capped.Count);
+        foreach (var (_, dto) in capped) {
+            result.Add(dto);
         }
         return result;
     }
+
+    // ─── §36.8 slice 2: field-of-view, framing fit, and the transparent worth score ───
+    //
+    // Score weights (0–100, tunable starting values — documented in design/TONIGHT_SKY.md):
+    //   Framing fit ........ 35  (dominant — the equipment-aware differentiator)
+    //   Integration hours .. 25  (dark hours the window allows; saturates at 6 h)
+    //   Peak altitude ...... 20  (low airmass; sin(peak alt) ≈ 1/airmass)
+    //   Surface brightness . 12  (faint targets penalised under bright skies, never zeroed)
+    //   Magnitude ..........  8  (brighter a touch higher)
+    // Each component is graded onto a quality factor q∈[0,1] then weighted; the sum is clamped to [0,100].
+    private const double FramingWeight = 35.0;
+    private const double HoursWeight = 25.0;
+    private const double AltitudeWeight = 20.0;
+    private const double SurfaceBrightnessWeight = 12.0;
+    private const double MagnitudeWeight = 8.0;
+
+    // Framing thresholds: object major-axis ÷ the FOV's SMALLER dimension. < 0.10 is lost in the frame
+    // (a ~10′ galaxy in a ~3° field at 448 mm); 0.10–0.80 fills a healthy fraction; > 0.80 overflows
+    // (Orion's ~85′ in a ~27′ field at 3000 mm). The 0.80 cap leaves a margin so a "good" target isn't
+    // cropped at the edges. Off-band targets keep a floor of worth (advise-don't-dictate), not zero.
+    private const double FramingTooSmallRatio = 0.10;
+    private const double FramingTooBigRatio = 0.80;
+    private const double FramingFloorQ = 0.15;   // worst framing still keeps this fraction of the weight
+
+    private const double HoursSaturationHours = 6.0;   // ≥ this many dark hours scores the full hours weight
+    private const double SbContrastSpanMag = 4.0;      // a target this many mag fainter than sky → the SB floor
+    private const double SbFloorQ = 0.15;              // faint-under-bright keeps this fraction, never zeroed
+    private const double MagFaintFloor = 12.0;         // integrated magnitude at/above which the mag term is 0
+
+    /// <summary>The active optical train's field of view in arcminutes (width, height). Pixel scale =
+    /// 206.265·pixelµm ÷ (focalMm·reducer) arcsec/px; FOV = sensorPx·scale ÷ 60, times the mosaic tile
+    /// count per axis. Returns (NaN, NaN) when the train is unconfigured (any non-positive term) so the
+    /// framing classifier reports <see cref="FramingFit.Unknown"/> rather than dividing by zero.</summary>
+    internal static (double WidthArcmin, double HeightArcmin) FovArcmin(
+            OpticsSettingsDto optics, int mosaicTilesX, int mosaicTilesY) {
+        var effectiveFocalMm = optics.FocalLengthMm * optics.ReducerFactor;
+        if (effectiveFocalMm <= 0 || optics.PixelSizeUm <= 0 || optics.SensorWidthPx <= 0 || optics.SensorHeightPx <= 0) {
+            return (double.NaN, double.NaN);
+        }
+        var pixelScaleArcsec = 206.265 * optics.PixelSizeUm / effectiveFocalMm;
+        var width = optics.SensorWidthPx * pixelScaleArcsec / 60.0 * Math.Max(1, mosaicTilesX);
+        var height = optics.SensorHeightPx * pixelScaleArcsec / 60.0 * Math.Max(1, mosaicTilesY);
+        return (width, height);
+    }
+
+    /// <summary>Classifies an object's apparent major axis against the FOV's smaller dimension into a
+    /// <see cref="FramingFit"/>. Unknown when the object has no recorded size or the FOV is unavailable.</summary>
+    internal static FramingFit ClassifyFraming(double? sizeMajArcmin, double fovWidthArcmin, double fovHeightArcmin) {
+        if (sizeMajArcmin is not { } maj || maj <= 0 || double.IsNaN(fovWidthArcmin) || double.IsNaN(fovHeightArcmin)) {
+            return FramingFit.Unknown;
+        }
+        var minFov = Math.Min(fovWidthArcmin, fovHeightArcmin);
+        if (minFov <= 0) {
+            return FramingFit.Unknown;
+        }
+        var ratio = maj / minFov;
+        if (ratio < FramingTooSmallRatio) {
+            return FramingFit.TooSmall;
+        }
+        return ratio > FramingTooBigRatio ? FramingFit.TooBig : FramingFit.Good;
+    }
+
+    /// <summary>The transparent 0–100 worth score, its framing classification, and the short component
+    /// reason tags (each carries its rounded point contribution so the UI/tests can explain "why 90 / why
+    /// 40"). See the weight/threshold constants above and <c>design/TONIGHT_SKY.md</c>.</summary>
+    private static (double Score, FramingFit Framing, IReadOnlyList<string> Reasons) ScoreObject(
+            CatalogObject o, double fovWidthArcmin, double fovHeightArcmin,
+            double peakAltDeg, double integrationHours, int bortleClass) {
+        var reasons = new List<string>(5);
+
+        // 1. Framing fit (dominant). Good = full; off-band targets are graded down by how far out of band
+        //    they are but kept above FramingFloorQ so a well-but-not-perfectly-framed target still ranks.
+        var framing = ClassifyFraming(o.SizeMajArcmin, fovWidthArcmin, fovHeightArcmin);
+        double framingQ;
+        string framingTag;
+        if (framing == FramingFit.Unknown) {
+            framingQ = 0.5;                       // neutral — no size to judge, neither rewarded nor punished
+            framingTag = "size unknown";
+        } else {
+            var ratio = o.SizeMajArcmin!.Value / Math.Min(fovWidthArcmin, fovHeightArcmin);
+            switch (framing) {
+                case FramingFit.Good:
+                    framingQ = 1.0;
+                    framingTag = "fills the frame";
+                    break;
+                case FramingFit.TooSmall:
+                    framingQ = Math.Max(FramingFloorQ, ratio / FramingTooSmallRatio);   // → 1 as it approaches the band
+                    framingTag = "small in frame";
+                    break;
+                default:   // TooBig
+                    framingQ = Math.Max(FramingFloorQ, FramingTooBigRatio / ratio);     // → 1 as it approaches the band
+                    framingTag = "overflows the frame";
+                    break;
+            }
+        }
+        var framingScore = FramingWeight * framingQ;
+        reasons.Add($"{framingTag} (+{framingScore:0})");
+
+        // 2. Integration hours — linear ramp, saturating at HoursSaturationHours.
+        var hoursScore = HoursWeight * Math.Clamp(integrationHours / HoursSaturationHours, 0.0, 1.0);
+        reasons.Add($"{integrationHours:0.#} h dark window (+{hoursScore:0})");
+
+        // 3. Peak altitude / airmass — sin(peak alt) tracks 1/airmass (full overhead, ~0.5 at 30°, 0 at the
+        //    horizon). Uses the geometric transit altitude, the best the object reaches from this latitude.
+        var altScore = AltitudeWeight * Math.Max(0.0, Math.Sin(Deg2Rad(peakAltDeg)));
+        reasons.Add($"peak {peakAltDeg:0}° (+{altScore:0})");
+
+        // 4. Surface brightness vs sky — a faint diffuse target loses contrast under a bright (high-Bortle)
+        //    sky. Compare the object's mag/arcsec² to an approximate Bortle zenith sky brightness; a target
+        //    brighter than the sky is full, fainter ramps down to a floor (penalised, never zeroed).
+        double sbQ;
+        string sbTag;
+        if (o.SurfaceBrightness is { } sb) {
+            var contrastMag = BortleZenithSkyMag(bortleClass) - sb;   // > 0 → target surface brighter than sky
+            sbQ = Math.Clamp((contrastMag + SbContrastSpanMag) / SbContrastSpanMag, SbFloorQ, 1.0);
+            sbTag = contrastMag >= 0 ? $"bright for Bortle {bortleClass} sky" : $"faint for Bortle {bortleClass} sky";
+        } else {
+            sbQ = 0.5;
+            sbTag = "surface brightness unknown";
+        }
+        var sbScore = SurfaceBrightnessWeight * sbQ;
+        reasons.Add($"{sbTag} (+{sbScore:0})");
+
+        // 5. Integrated magnitude — brighter objects nudged up; saturates dark at MagFaintFloor.
+        var magScore = MagnitudeWeight * Math.Clamp((MagFaintFloor - o.Magnitude) / MagFaintFloor, 0.0, 1.0);
+        reasons.Add($"mag {o.Magnitude:0.#} (+{magScore:0})");
+
+        var score = Math.Clamp(framingScore + hoursScore + altScore + sbScore + magScore, 0.0, 100.0);
+        return (score, framing, reasons);
+    }
+
+    /// <summary>An approximate zenith sky surface brightness (mag/arcsec²) for a Bortle class: ~22.0 at
+    /// the darkest (Bortle 1) falling ~0.5 mag per class to ~18.0 at inner-city (Bortle 9). A coarse
+    /// scoring input, not a photometric model; class is clamped to the canonical 1–9 range.</summary>
+    private static double BortleZenithSkyMag(int bortleClass) =>
+        22.0 - (Math.Clamp(bortleClass, 1, 9) - 1) * 0.5;
 
     /// <summary>The longest contiguous run of <c>true</c> in <paramref name="flags"/> as inclusive
     /// (start, end) sample indices, or (−1, −1) when none is set.</summary>

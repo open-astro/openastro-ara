@@ -32,8 +32,12 @@ namespace OpenAstroAra.Server.Contracts;
 /// a whole-night planning figure — NOT "time remaining from now". So for an object that has already
 /// passed its best window but is still up, <see cref="WindowStartUtc"/> (and even
 /// <see cref="WindowEndUtc"/>) can be earlier than the query instant, and <see cref="IntegrationHours"/>
-/// counts the full stretch, not what's left. A "remaining from now" figure is a later slice (it pairs
-/// with the slice-2 scoring that also lists not-yet-risen targets).</para>
+/// counts the full stretch, not what's left. <see cref="RemainingHours"/> is the "from now" figure.</para>
+/// <para>§36.8 slice-2 equipment-aware fields (appended): <see cref="Framing"/> classifies the object's
+/// apparent size against the active optical train's field of view; <see cref="Score"/> is a transparent
+/// 0–100 "worth shooting tonight" rank and <see cref="ScoreReasons"/> the short component tags that
+/// explain it; <see cref="RemainingHours"/> is the dark time still ahead of the query instant in the
+/// object's window tonight (a not-yet-started window contributes its full length, a past window 0).</para>
 /// </summary>
 public sealed record TonightSkyObjectDto(
     string Id,
@@ -51,7 +55,24 @@ public sealed record TonightSkyObjectDto(
     DateTimeOffset? WindowStartUtc = null,
     DateTimeOffset? WindowEndUtc = null,
     DateTimeOffset? TransitUtc = null,
-    double IntegrationHours = 0);
+    double IntegrationHours = 0,
+    FramingFit Framing = FramingFit.Unknown,
+    double Score = 0,
+    IReadOnlyList<string>? ScoreReasons = null,
+    double RemainingHours = 0);
+
+/// <summary>§36.8 framing fit — how an object's apparent size sits against the active optical train's
+/// field of view, the equipment-aware heart of the Tonight's Sky score. <see cref="TooSmall"/> = lost in
+/// the frame (a small galaxy at a short focal length), <see cref="Good"/> = fills a healthy fraction,
+/// <see cref="TooBig"/> = overflows (Orion at a long focal length; a mosaic could rescue it),
+/// <see cref="Unknown"/> = the catalog recorded no size. Serialized all-lowercase per the §60.6 enum
+/// convention (<c>unknown</c>/<c>toosmall</c>/<c>good</c>/<c>toobig</c>).</summary>
+public enum FramingFit {
+    Unknown,
+    TooSmall,
+    Good,
+    TooBig,
+}
 
 /// <summary>
 /// §36 Planning horizon — the observer's local horizon projected onto the equatorial
