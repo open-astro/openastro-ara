@@ -145,7 +145,9 @@ namespace OpenAstroAra.Server.Services {
             // the bad file every request, UNLESS the file has since changed on disk (the user replaced a
             // corrupt catalog with a good one), in which case retry so it recovers without a restart.
             var writeTicks = File.GetLastWriteTimeUtc(DsoCsvPath).Ticks;
-            if (Volatile.Read(ref _loadFailedWriteTicks) == writeTicks) {
+            // Interlocked (not Volatile) for the 64-bit field: a torn read of a long is possible on a
+            // 32-bit CLR; Interlocked.Read is atomic on every platform and carries the same ordering.
+            if (Interlocked.Read(ref _loadFailedWriteTicks) == writeTicks) {
                 return null;
             }
             // Lock-free first load: parse without any mutual exclusion, so every
@@ -162,7 +164,7 @@ namespace OpenAstroAra.Server.Services {
                 // Corrupt or unreadable catalog: remember THIS file version as bad so we don't retry the
                 // full read per request, but a later replacement (different write-time) re-parses.
                 // (Cancellation is NOT a load failure — it bubbles.)
-                Volatile.Write(ref _loadFailedWriteTicks, writeTicks);
+                Interlocked.Exchange(ref _loadFailedWriteTicks, writeTicks);
                 return null;
             }
             return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
