@@ -764,9 +764,10 @@ function dispToggle(name) {
   if (!stel) return;
   var on = !dispState(name);
   if (name === 'dsos') {
-    // Turning the native deep-sky layer on also enables its name hints.
+    // Keep the name hints in lockstep with the deep-sky layer — on when shown,
+    // off when hidden — so labels never linger after the layer is toggled off.
     stel.core.dsos.visible = on;
-    if (on && !stel.core.dsos.hints_visible) stel.core.dsos.hints_visible = true;
+    stel.core.dsos.hints_visible = on;
   } else {
     setLayer(name, on);
   }
@@ -1227,7 +1228,7 @@ StelWebEngine({
       var savedPrefs = JSON.parse(qp('prefs', '{}'));
       Object.keys(savedPrefs).forEach(function (k) {
         var on = !!savedPrefs[k];
-        if (k === 'dsos') { core.dsos.visible = on; if (on) core.dsos.hints_visible = true; }
+        if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
         else setLayer(k, on);
       });
     } catch (e) {}

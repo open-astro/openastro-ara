@@ -32,6 +32,10 @@ struct OverlayState {
   GdkRectangle rect = {0, 0, 0, 0};
   bool has_rect = false;
   bool visible = false;
+  // The exact origin (`http://127.0.0.1:<port>/`) of the loopback asset server,
+  // captured from the first setUrl. Navigations are locked to this — not merely
+  // "any 127.0.0.1 port" — so the page can't be steered onto another local service.
+  gchar* allowed_origin = nullptr;
 };
 
 // Read a numeric arg that Dart may encode as float or int.
@@ -92,7 +96,7 @@ gboolean decide_policy_cb(WebKitWebView* web_view,
                           WebKitPolicyDecisionType type,
                           gpointer user_data) {
   (void)web_view;
-  (void)user_data;
+  OverlayState* state = static_cast<OverlayState*>(user_data);
   if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION &&
       type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
     return FALSE;  // resource-load decisions etc. — use the default policy.
@@ -103,7 +107,10 @@ gboolean decide_policy_cb(WebKitWebView* web_view,
       webkit_navigation_policy_decision_get_navigation_action(nav);
   WebKitURIRequest* request = webkit_navigation_action_get_request(action);
   const gchar* uri = webkit_uri_request_get_uri(request);
-  if (uri != nullptr && g_str_has_prefix(uri, "http://127.0.0.1:")) {
+  // Lock to the asset server's exact origin (scheme+host+port), not any loopback
+  // port. allowed_origin is set on the first setUrl, before any page can navigate.
+  if (uri != nullptr && state->allowed_origin != nullptr &&
+      g_str_has_prefix(uri, state->allowed_origin)) {
     webkit_policy_decision_use(decision);
   } else {
     g_warning("planetarium_overlay: blocking navigation to '%s'",
@@ -117,7 +124,7 @@ void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
   g_signal_connect(state->webview, "decide-policy",
-                   G_CALLBACK(decide_policy_cb), nullptr);
+                   G_CALLBACK(decide_policy_cb), state);
 
   // Wrap the webview in a windowed GtkEventBox: the event box owns a GdkWindow
   // we can promote to a native X11 subwindow (the webview itself is windowless
@@ -179,6 +186,14 @@ void method_call_cb(FlMethodChannel* channel,
       // http://127.0.0.1:<port>/… URL; reject anything else rather than trust the
       // channel, so a future bug or compromised caller can't render external content.
       if (g_str_has_prefix(url_str, "http://127.0.0.1:")) {
+        // Capture this server's exact origin (up to and including the path's
+        // leading '/') so decide_policy_cb can lock navigations to it. The path
+        // always starts at the first '/' after the "http://" scheme marker.
+        const gchar* path = strchr(url_str + strlen("http://"), '/');
+        g_free(state->allowed_origin);
+        state->allowed_origin =
+            path != nullptr ? g_strndup(url_str, (path - url_str) + 1)
+                            : g_strconcat(url_str, "/", nullptr);
         webkit_web_view_load_uri(state->webview, url_str);
       } else {
         g_warning("planetarium_overlay: refusing non-loopback URL '%s'", url_str);

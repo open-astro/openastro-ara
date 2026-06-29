@@ -63,6 +63,11 @@ class _LinuxPlanetariumOverlayState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Unsubscribe before re-subscribing: didChangeDependencies can fire with a
+    // different ModalRoute instance, and RouteObserver keys subscriptions by route.
+    // Without this, `this` could stay bound to a stale route and fire didPushNext/
+    // didPopNext (or setState-after-dispose) spuriously.
+    planetariumRouteObserver.unsubscribe(this);
     final route = ModalRoute.of(context);
     if (route != null) planetariumRouteObserver.subscribe(this, route);
   }
