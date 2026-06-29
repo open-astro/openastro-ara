@@ -137,7 +137,11 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   the "Wire shape" section above.
 - **Slice 3 (client panel)** — richer Tonight's Sky list: per-object window/transit,
   hours, framing-fit chip, score with the "why" breakdown, recenter-atlas + add-to-
-  sequence. FOV/mosaic controls.
+  sequence. FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
+  Also: **profile the slice-2 window scan against the real installed OpenNGC catalog**
+  — slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
+  slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude pre-filter,
+  expected <100ms, but confirm on-device.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
 
