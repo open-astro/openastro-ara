@@ -76,12 +76,23 @@ public static class TonightSkyOverrides {
                 pixelUm ?? profile.PixelSizeUm);
         }
 
+        // Geometry fields (focal/pixel/sensor) must be finite-positive whether supplied or merged — a field
+        // left to a zero/unset profile yields a NaN FOV → all-Unknown silent 200.
         if (!(double.IsFinite(merged.FocalLengthMm) && merged.FocalLengthMm > 0
-              && double.IsFinite(merged.ReducerFactor) && merged.ReducerFactor > 0
               && double.IsFinite(merged.PixelSizeUm) && merged.PixelSizeUm > 0
               && merged.SensorWidthPx > 0 && merged.SensorHeightPx > 0)) {
             return (null, "The assembled optics are incomplete — supply the fields your active profile does "
-                + "not already have set (focalLengthMm, sensorW, sensorH, pixelUm; reducer is optional).");
+                + "not already have set (focalLengthMm, sensorW, sensorH, pixelUm; reducer is optional only "
+                + "when your profile already has a valid one).");
+        }
+
+        // The reducer cap is re-applied to the ASSEMBLED value, not just a supplied one: a profile carrying
+        // an out-of-range ReducerFactor (direct edit / pre-cap migration / unset 0) merged in when the
+        // caller omits 'reducer' would otherwise pass with no error and collapse/NaN the FOV silently.
+        if (!(double.IsFinite(merged.ReducerFactor) && merged.ReducerFactor > 0
+              && merged.ReducerFactor <= MaxReducerFactor)) {
+            return (null, $"The assembled reducer factor ({merged.ReducerFactor}) is out of range — supply "
+                + $"'reducer' in (0, {MaxReducerFactor}] (your active profile's reducer is unset or invalid).");
         }
 
         return (merged, null);

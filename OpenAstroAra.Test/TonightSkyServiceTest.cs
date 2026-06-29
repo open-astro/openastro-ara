@@ -540,6 +540,29 @@ namespace OpenAstroAra.Test {
             Assert.That(ov, Is.EqualTo(new OpticsSettingsDto(530, 0.8, 6000, 4000, 3.76)));
         }
 
+        [Test]
+        public void TonightSkyOverrides_Build_caps_a_reducer_merged_from_the_profile() {
+            // The per-field cap only runs on a SUPPLIED reducer; an out-of-range reducer carried in from the
+            // profile (direct edit / pre-cap migration) must still be rejected by the assembled-train check.
+            var profile = Optics(reducer: TonightSkyOverrides.MaxReducerFactor + 5);
+            var (ov, err) = TonightSkyOverrides.Build(() => profile,
+                focalLengthMm: 500, reducer: null, sensorW: null, sensorH: null, pixelUm: null);
+            Assert.That(ov, Is.Null);
+            Assert.That(err, Does.Contain("reducer"));
+        }
+
+        [Test]
+        public void TonightSkyOverrides_Build_rejects_a_zero_reducer_with_a_reducer_specific_message() {
+            // A fresh profile (geometry set, ReducerFactor still 0) where the caller supplies the four
+            // geometry fields and omits reducer must fail with a reducer-range message — NOT the generic
+            // "reducer is optional" completeness text, which would be misleading.
+            var freshProfile = new OpticsSettingsDto(0, 0, 0, 0, 0);
+            var (ov, err) = TonightSkyOverrides.Build(() => freshProfile,
+                focalLengthMm: 500, reducer: null, sensorW: 6000, sensorH: 4000, pixelUm: 3.76);
+            Assert.That(ov, Is.Null);
+            Assert.That(err, Does.Contain("reducer factor"));
+        }
+
         /// <summary>Minimal <see cref="ISkyCatalogService"/> test double — only GetAllDsos is exercised.</summary>
         private sealed class FakeCatalog : ISkyCatalogService {
             private readonly IReadOnlyList<DsoEntryDto>? _dsos;
