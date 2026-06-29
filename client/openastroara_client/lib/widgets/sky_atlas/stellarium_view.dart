@@ -243,8 +243,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       if (cmd == null) return;
       _pushCmd(cmd);
       // Consume it: clear the bus so a later reader can't mistake this already-
-      // forwarded command for a fresh one. (Sets state=null → fires this listener
-      // once more with null, which the guard above drops — no re-send.)
+      // forwarded command for a fresh one. (updateShouldNotify ignores the null,
+      // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
     });
 

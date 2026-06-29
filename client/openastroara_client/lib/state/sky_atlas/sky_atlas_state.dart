@@ -18,9 +18,12 @@ class SkyAtlasModeNotifier extends Notifier<SkyAtlasMode> {
   void set(SkyAtlasMode m) => state = m;
 
   /// Flip between the full-bleed planetarium and the docked Tonight's Sky panel.
-  void toggle() => state = state == SkyAtlasMode.tonightsSky
-      ? SkyAtlasMode.catalogView
-      : SkyAtlasMode.tonightsSky;
+  /// A switch expression (not a ternary) so a future `SkyAtlasMode` value is a
+  /// compile error here rather than silently folding into `tonightsSky`.
+  void toggle() => state = switch (state) {
+        SkyAtlasMode.tonightsSky => SkyAtlasMode.catalogView,
+        SkyAtlasMode.catalogView => SkyAtlasMode.tonightsSky,
+      };
 }
 
 final skyAtlasModeProvider =
@@ -94,10 +97,14 @@ class PlanetariumCommandNotifier extends Notifier<Map<String, Object?>?> {
   /// future reader could mistake it for a fresh one.
   void clear() => state = null;
 
+  // Notify on every non-null command (so two identical consecutive sends each
+  // re-fire — a re-tapped recentre must re-issue the goto), but stay silent when
+  // `next` is null. That keeps `clear()` from waking the listener with a consumed
+  // command — the listener never sees null, so it needs no null guard.
   @override
   bool updateShouldNotify(
           Map<String, Object?>? previous, Map<String, Object?>? next) =>
-      true;
+      next != null;
 }
 
 final planetariumCommandProvider =
