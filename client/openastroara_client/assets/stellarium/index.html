@@ -230,6 +230,7 @@
 <script>
 'use strict';
 var D2R = Math.PI / 180.0;
+
 function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
 function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
 
@@ -805,30 +806,73 @@ function viewCenterRaDec() {
   return [stel.anp(s[0]) / D2R, stel.anpm(s[1]) / D2R];
 }
 
-// While framing, keep the box on the view centre; redraw only when it actually
-// moved (cheap — avoids rebuilding the geojson every animation frame).
+// While framing, keep the box on the view centre. Two safeguards keep dragging the
+// frame around — especially near the zenith/pole, in a dense field — from stalling
+// the renderer:
+//   1. Don't follow within ~3° of a celestial pole: there RA is ill-defined and the
+//      view-centre solve swings/returns non-finite values, so following would
+//      rebuild degenerate geometry every frame. The frame just stays put there.
+//   2. Throttle the actual geojson rebuild (~60 ms, with a trailing rebuild) so a
+//      fast pan can't re-tessellate the mosaic on every animation frame.
+var _frameBuildTimer = null;
+function rebuildFrameGeo() {
+  if (_frameGeo && frameOn) _frameGeo.data = mosaicData();
+}
 function followFrame() {
   if (!frameOn || !optics || !optics.ok) return;
   var c = viewCenterRaDec();
-  if (isNaN(c[0])) return;
-  if (frameRaDeg == null || Math.abs(c[0] - frameRaDeg) > 0.003 || Math.abs(c[1] - frameDecDeg) > 0.003) {
-    frameRaDeg = c[0]; frameDecDeg = c[1];
-    if (_frameGeo) _frameGeo.data = mosaicData();
-  }
+  if (!isFinite(c[0]) || !isFinite(c[1]) || Math.abs(c[1]) > 87) return;
+  // Shortest-angle RA delta so the 0h/24h wrap doesn't read as a huge jump.
+  var moved = frameRaDeg == null ||
+      Math.abs(((c[0] - frameRaDeg + 540) % 360) - 180) > 0.003 ||
+      Math.abs(c[1] - frameDecDeg) > 0.003;
+  if (!moved) return;
+  frameRaDeg = c[0]; frameDecDeg = c[1];
+  // Debounce the rebuild: only redraw once the view has SETTLED (~180 ms idle),
+  // instead of rebuilding the geojson layer on every frame while panning. The
+  // continuous ~16×/s churn was needless overhead and, on large grids, accumulated
+  // until it jammed the engine's input handling (render kept running at 60 fps but
+  // panning stopped responding). The frame now snaps to the new centre when you
+  // pause — imperceptible for positioning, and the renderer never churns.
+  if (_frameBuildTimer) clearTimeout(_frameBuildTimer);
+  _frameBuildTimer = setTimeout(function () {
+    _frameBuildTimer = null;
+    rebuildFrameGeo();
+  }, 180);
 }
 
-// Build the GeoJSON for the box (or mosaic grid) in J2000 RA/Dec. Each panel is
-// a rectangle of the camera FOV, offset on the mosaic grid and rotated by the
-// position angle in the local tangent plane (RA scaled by 1/cos(dec)).
+// Deproject a tangent-plane offset (xi = east/RA+, eta = north/Dec+, in DEGREES)
+// about the mosaic centre (ra0, dec0) to [raDeg, decDeg] via the gnomonic (TAN)
+// inverse — the projection a flat camera sensor actually images, so a panel
+// outline lands on the sky exactly where the sensor would. This replaces the old
+// linear `RA + dx/cos(centreDec)` approximation, which sheared tiles away from
+// centre (cos was evaluated only at the mosaic centre, not each tile's own dec).
+function tanToRaDec(xiDeg, etaDeg, ra0Deg, dec0Deg) {
+  var xi = xiDeg * D2R, eta = etaDeg * D2R;
+  var rho = Math.sqrt(xi * xi + eta * eta);
+  if (rho < 1e-12) return [ra0Deg, dec0Deg];
+  var c = Math.atan(rho), sinC = Math.sin(c), cosC = Math.cos(c);
+  var d0 = dec0Deg * D2R, sin0 = Math.sin(d0), cos0 = Math.cos(d0);
+  var dec = Math.asin(cosC * sin0 + (eta * sinC * cos0) / rho);
+  var ra = ra0Deg * D2R +
+      Math.atan2(xi * sinC, rho * cos0 * cosC - eta * sin0 * sinC);
+  return [ra / D2R, dec / D2R];
+}
+
+// Build the GeoJSON for the box (or mosaic grid). Each panel is a rectangle of the
+// camera FOV, offset on the mosaic grid and rotated by the position angle in the
+// local tangent plane, then deprojected onto the sky with the gnomonic inverse
+// (`tanToRaDec`) — that per-point projection (vs the old centre-only cos(dec)) is
+// what keeps off-centre tiles aligned instead of shearing. Kept at 4 corners per
+// panel (same vertex count as before) so `followFrame` can rebuild it every frame
+// while panning without stalling the renderer.
 function mosaicData() {
   var th = frameRotDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
-  var cosd = Math.cos(frameDecDeg * D2R) || 1e-6;
   var w = optics.fovWDeg, h = optics.fovHDeg, hw = w / 2, hh = h / 2;
   var ov = Math.max(0, Math.min(90, frameOverlap)) / 100;
   var stepW = w * (1 - ov), stepH = h * (1 - ov);
   var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]];
-  var multi = frameCols * frameRows > 1;
-  var feats = [];
+  var polys = [];
   for (var iy = 0; iy < frameRows; iy++) {
     for (var ix = 0; ix < frameCols; ix++) {
       var gx = (ix - (frameCols - 1) / 2) * stepW;
@@ -836,18 +880,25 @@ function mosaicData() {
       var ring = corners.map(function (c) {
         var lx = c[0] + gx, ly = c[1] + gy;
         var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
-        return [frameRaDeg + dx / cosd, frameDecDeg + dy];
+        return tanToRaDec(dx, dy, frameRaDeg, frameDecDeg);
       });
-      feats.push({
-        type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] },
-        properties: {
-          stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
-          fill: '#4fc3f7', 'fill-opacity': multi ? 0.04 : 0.07,
-        },
-      });
+      polys.push([ring]); // a polygon = [exterior ring]
     }
   }
-  return { type: 'FeatureCollection', features: feats };
+  // ONE MultiPolygon feature for the WHOLE mosaic, not N separate features. The
+  // engine's per-feature work is what bogged down and eventually wedged large grids
+  // (dozens of tiles), even though building the data is free — so collapse every
+  // panel into a single feature the renderer treats as one object. `fill-opacity: 0`
+  // makes the renderer skip the fill pass entirely (geojson.c renders nothing when
+  // fill alpha is 0), so this is stroke-only outlines with no per-panel fill
+  // tessellation — the same clean look, a fraction of the cost.
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: polys },
+    properties: {
+      stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
+      fill: '#4fc3f7', 'fill-opacity': 0,
+    },
+  }] };
 }
 
 function updateFrame() {
