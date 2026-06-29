@@ -351,9 +351,13 @@ public partial class Program {
         builder.Services.AddSingleton<IBackupService>(sp =>
             new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>()));
 
-        // §36/§25.5 Tonight's Sky — ranks a curated DSO list by altitude for the active profile's site.
+        // §36/§25.5 Tonight's Sky — ranks the OpenNGC catalog by altitude (with visibility window,
+        // transit, and integration hours) for the active profile's site; falls back to a starter list
+        // when openngc-dso isn't installed.
         builder.Services.AddSingleton<ITonightSkyService>(sp =>
-            new TonightSkyService(sp.GetRequiredService<IProfileStore>()));
+            new TonightSkyService(
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetRequiredService<ISkyCatalogService>()));
 
         // §36 Planning horizon — projects the site's local horizon onto the equatorial sky for the Aladin overlay.
         builder.Services.AddSingleton<IHorizonService>(sp =>

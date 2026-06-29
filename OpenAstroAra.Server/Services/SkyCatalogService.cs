@@ -36,13 +36,23 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>Objects for one catalog id, or null when the id is unknown / its source isn't installed.</summary>
         IReadOnlyList<CatalogObjectDto>? GetObjects(string catalogId, int? limit, CancellationToken ct);
+
+        /// <summary>Every installed DSO with the full field set (size / position angle / surface
+        /// brightness) the §36.8 Tonight's Sky planner ranks on; null when openngc-dso isn't installed
+        /// (mirrors <see cref="GetObjects"/>'s null-when-absent contract).</summary>
+        IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct);
     }
 
     public sealed class SkyCatalogService : ISkyCatalogService {
 
         private readonly string _skyDataRoot;
         private List<DsoRow>? _dsos;     // parsed once, then cached for the process lifetime (published via Interlocked)
-        private volatile bool _loadFailed; // a corrupt/unreadable CSV is cached as failed so we don't re-parse per request
+        private IReadOnlyList<DsoEntryDto>? _dsoEntries; // the GetAllDsos projection, cached so each request doesn't re-allocate it
+        // LastWriteTimeUtc.Ticks of the catalog file whose parse last failed, so we don't re-parse a
+        // known-bad file every request — but DO retry once the file changes on disk (corrupt → fixed
+        // recovers without a daemon restart). NoFailureTicks = no failure recorded.
+        private const long NoFailureTicks = long.MinValue;
+        private long _loadFailedWriteTicks = NoFailureTicks;
 
         public SkyCatalogService(string skyDataRoot) {
             _skyDataRoot = skyDataRoot ?? throw new ArgumentNullException(nameof(skyDataRoot));
@@ -52,7 +62,9 @@ namespace OpenAstroAra.Server.Services {
 
         private sealed record DsoRow(
             string Name, double RaDeg, double DecDeg, double? Mag, string Type,
-            bool HasM, bool HasNgc, bool HasIc, bool HasCaldwell);
+            bool HasM, bool HasNgc, bool HasIc, bool HasCaldwell,
+            double? MajAxArcmin, double? MinAxArcmin, double? PosAngleDeg, double? SurfaceBrightness,
+            string? CommonName);
 
         private sealed record CatalogDef(string Id, string Name, string Group, Func<DsoRow, bool> Match);
 
@@ -101,15 +113,41 @@ namespace OpenAstroAra.Server.Services {
             return q.Select(r => new CatalogObjectDto(r.Name, r.RaDeg, r.DecDeg, r.Mag)).ToList();
         }
 
+        public IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct) {
+            // The projection is immutable once built, so cache it: GetAllDsos is hit on every
+            // /planning/tonight request and re-Select(...).ToList()-ing the ~13k-row catalog each time
+            // is pure waste. Published via Interlocked like _dsos (a rare concurrent first-build just
+            // produces equal lists; the first to publish wins and everyone shares it).
+            var cached = Volatile.Read(ref _dsoEntries);
+            if (cached is not null) {
+                return cached;
+            }
+            var rows = LoadDsos(ct);
+            if (rows is null) {
+                return null;   // source not installed
+            }
+            var projected = (IReadOnlyList<DsoEntryDto>)rows.Select(r => new DsoEntryDto(
+                r.Name, r.CommonName, r.Type, r.RaDeg, r.DecDeg, r.Mag,
+                r.MajAxArcmin, r.MinAxArcmin, r.PosAngleDeg, r.SurfaceBrightness)).ToList();
+            return Interlocked.CompareExchange(ref _dsoEntries, projected, null) ?? projected;
+        }
+
         private List<DsoRow>? LoadDsos(CancellationToken ct) {
             // Fast path: the catalog is parsed once and cached for the process lifetime.
             var cached = Volatile.Read(ref _dsos);
             if (cached is not null) {
                 return cached;
             }
-            // A prior parse failed on a corrupt/unreadable CSV — treat the source as
-            // unavailable (404) rather than re-reading the bad file on every request.
-            if (_loadFailed || !File.Exists(DsoCsvPath)) {
+            if (!File.Exists(DsoCsvPath)) {
+                return null;
+            }
+            // A prior parse failed on a corrupt/unreadable CSV — skip the re-read rather than re-parsing
+            // the bad file every request, UNLESS the file has since changed on disk (the user replaced a
+            // corrupt catalog with a good one), in which case retry so it recovers without a restart.
+            var writeTicks = File.GetLastWriteTimeUtc(DsoCsvPath).Ticks;
+            // Interlocked (not Volatile) for the 64-bit field: a torn read of a long is possible on a
+            // 32-bit CLR; Interlocked.Read is atomic on every platform and carries the same ordering.
+            if (Interlocked.Read(ref _loadFailedWriteTicks) == writeTicks) {
                 return null;
             }
             // Lock-free first load: parse without any mutual exclusion, so every
@@ -123,9 +161,10 @@ namespace OpenAstroAra.Server.Services {
             try {
                 parsed = ParseDsoCsv(ct);
             } catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException) {
-                // Corrupt or unreadable catalog: cache the failure so we don't retry the
-                // full read per request. (Cancellation is NOT a load failure — it bubbles.)
-                _loadFailed = true;
+                // Corrupt or unreadable catalog: remember THIS file version as bad so we don't retry the
+                // full read per request, but a later replacement (different write-time) re-parses.
+                // (Cancellation is NOT a load failure — it bubbles.)
+                Interlocked.Exchange(ref _loadFailedWriteTicks, writeTicks);
                 return null;
             }
             return Interlocked.CompareExchange(ref _dsos, parsed, null) ?? parsed;
@@ -142,7 +181,9 @@ namespace OpenAstroAra.Server.Services {
             int Idx(string n) => Array.IndexOf(cols, n);
             int iName = Idx("Name"), iType = Idx("Type"), iRa = Idx("RA"), iDec = Idx("Dec"),
                 iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC"),
-                iId = Idx("Identifiers");
+                iId = Idx("Identifiers"),
+                iMaj = Idx("MajAx"), iMin = Idx("MinAx"), iPa = Idx("PosAng"), iSb = Idx("SurfBr"),
+                iCommon = Idx("Common names");
             if (iName < 0 || iRa < 0 || iDec < 0) {
                 return list;          // unexpected layout — nothing to place
             }
@@ -167,7 +208,17 @@ namespace OpenAstroAra.Server.Services {
                 var type = iType >= 0 && f.Length > iType ? f[iType] : "";
                 bool Has(int i) => i >= 0 && f.Length > i && !string.IsNullOrWhiteSpace(f[i]);
                 bool hasCaldwell = iId >= 0 && f.Length > iId && HasCaldwellId(f[iId]);
-                list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell));
+                // Optional measured columns — null when blank/absent (a row may carry size but no
+                // surface brightness, etc.), so a missing field is "unknown", not zero.
+                double? Num(int i) => i >= 0 && f.Length > i && TryNum(f[i], out var v) ? v : null;
+                // OpenNGC "Common names" is a comma-separated list (e.g. "Andromeda Galaxy,Messier 31");
+                // take the first as the display name rather than showing the whole joined string. Guard the
+                // leading-comma case (",Alt Name") so the first token isn't an empty string — null, not "",
+                // so the `CommonName ?? Name` fallback actually kicks in (?? only tests null).
+                var firstCommon = Has(iCommon) ? f[iCommon].Split(',')[0].Trim() : "";
+                string? common = firstCommon.Length > 0 ? firstCommon : null;
+                list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell,
+                    Num(iMaj), Num(iMin), Num(iPa), Num(iSb), common));
             }
             return list;
         }
