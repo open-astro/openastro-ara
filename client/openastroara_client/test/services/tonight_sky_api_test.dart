@@ -107,6 +107,15 @@ void main() {
       expect(f(42), TonightFraming.unknown);
     });
 
+    test('a suffix-less timestamp is read as UTC wall-clock, not shifted', () {
+      // A naive (no Z/offset) instant must be treated as UTC as-is, not run through
+      // .toUtc() (which would shift it by the client's local offset). 01:10 stays 01:10.
+      final o = TonightSkyObject.fromJson(
+          body()..['transit_utc'] = '2026-06-30T01:10:00')!;
+      expect(o.transitUtc!.isUtc, isTrue);
+      expect(o.transitUtc, DateTime.utc(2026, 6, 30, 1, 10));
+    });
+
     test('§36.8 fields tolerate missing/wrong types without throwing', () {
       // A pre-§36.8 server omits all of them — the required fields still parse.
       final bare = TonightSkyObject.fromJson(body()

@@ -89,7 +89,10 @@ class TonightSkyPanel extends ConsumerWidget {
                       thickness: 1,
                       color: AraColors.border,
                     ),
-                    itemBuilder: (_, i) => _ObjectRow(object: objects[i]),
+                    // Key by object id so the row's expand/collapse state follows the
+                    // object, not the list slot, when the ranking reorders on refresh.
+                    itemBuilder: (_, i) =>
+                        _ObjectRow(key: ValueKey(objects[i].id), object: objects[i]),
                   );
                 },
               ),
@@ -103,7 +106,7 @@ class TonightSkyPanel extends ConsumerWidget {
 
 class _ObjectRow extends ConsumerStatefulWidget {
   final TonightSkyObject object;
-  const _ObjectRow({required this.object});
+  const _ObjectRow({super.key, required this.object});
 
   @override
   ConsumerState<_ObjectRow> createState() => _ObjectRowState();

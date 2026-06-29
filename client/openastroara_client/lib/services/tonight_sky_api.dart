@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/server.dart';
+import '../models/stats/stats_time.dart';
 
 /// §36.8 framing fit of an object against the active optical train: does it
 /// sit comfortably in the sensor's field of view? Wire values are all-lowercase
@@ -100,7 +101,7 @@ class TonightSkyObject {
   /// only `magnitude` is optional — left null rather than defaulting to the real
   /// value 0 (≈ Vega). The §36.8 planner fields are parsed defensively: a
   /// missing/wrong-typed value falls back to null (measurements/times) or a
-  /// sensible default (hours 0, framing unknown, score 0), never throwing.
+  /// sensible default (hours 0, framing unknown, score null), never throwing.
   static TonightSkyObject? fromJson(Map<String, dynamic> json) {
     final id = json['id'];
     final name = json['name'];
@@ -142,12 +143,10 @@ class TonightSkyObject {
   static double? _optDouble(Object? v) => v is num ? v.toDouble() : null;
 
   /// Parse an ISO-8601 instant, normalised to UTC; null on absent/garbage so a
-  /// bad timestamp simply drops out of the UI rather than rendering nonsense.
-  static DateTime? _optUtc(Object? v) {
-    if (v is! String) return null;
-    final parsed = DateTime.tryParse(v);
-    return parsed?.toUtc();
-  }
+  /// bad timestamp simply drops out of the UI. Delegates to [parseStatsUtc], which
+  /// treats a suffix-less ("naive") timestamp as wall-clock UTC rather than calling
+  /// `.toUtc()` on it (which would shift it by the client's local offset).
+  static DateTime? _optUtc(Object? v) => parseStatsUtc(v);
 
   /// Keep only the string entries — a non-list or a list with stray non-strings
   /// shouldn't blow up the "why this score" expansion.
