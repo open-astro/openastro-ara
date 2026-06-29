@@ -154,6 +154,11 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
     slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
     slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude
     pre-filter, expected <100ms, but confirm on-device.
+  - **Recentre-the-planetarium** also lands in 3b: the §36 native-webview migration
+    moved recentring to an in-page `search` command over the `StellariumServer`
+    loopback (`StellariumView._pushCmd`), so writing `skyTargetProvider` no longer
+    moves the view (the panel's recentre button was a no-op and was removed from 3a).
+    3b plumbs the panel → loopback bridge alongside the mount.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
 

@@ -5,17 +5,17 @@ import '../../models/sequence/slew_target_body.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
-import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
 /// active profile's site and optical train, by the server's transparent 0–100
 /// "worth shooting tonight" score (§36.8). Each row shows the score, the framing
-/// fit against your rig, tonight's dark window/transit/hours, and a "why" score
-/// breakdown on expand. Recentre the embedded Aladin atlas via the recentre
-/// action (sets [skyTargetProvider], which the `AladinView` listens to), or add
-/// a slew sequence. Shown in the Planning tab when the view mode is Tonight's Sky.
+/// fit against your rig, tonight's dark window/transit/hours, a "why" score
+/// breakdown on expand, and an add-to-sequence action. Recentre-the-planetarium is
+/// deferred to slice 3b: the planetarium recentres via an in-page `search` command
+/// over the `StellariumServer` loopback (since the §36 native-webview migration), so
+/// it needs that bridge wired alongside the panel's Planning-tab mount.
 class TonightSkyPanel extends ConsumerWidget {
   const TonightSkyPanel({super.key});
 
@@ -191,13 +191,6 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
           ],
           Row(
             children: [
-              IconButton(
-                iconSize: 18,
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Recentre the atlas on this object',
-                icon: const Icon(Icons.my_location),
-                onPressed: _recenter,
-              ),
               _busy
                   ? const Padding(
                       padding: EdgeInsets.all(10),
@@ -250,14 +243,6 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       ),
     );
   }
-
-  /// Fly the planetarium/atlas to this object (its J2000 RA/Dec — the engine
-  /// centres on the coordinates directly, no name lookup needed).
-  void _recenter() => ref.read(skyTargetProvider.notifier).set(SkyTarget(
-        raDeg: _object.raDeg,
-        decDeg: _object.decDeg,
-        name: _object.name,
-      ));
 
   /// Create a new sequence named after this object containing a single slew to
   /// its coordinates, then surface the outcome via a SnackBar. Mirrors the
@@ -402,10 +387,10 @@ class _FramingChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = styleFor(framing);
-    // The parent only builds a chip when styleFor's label is non-null (i.e. not
-    // `unknown`); assert it so a future gate change fails loudly instead of
-    // silently painting a blank chip.
-    assert(label != null, 'a chip should not be built for unknown framing');
+    // The parent only builds a chip when styleFor's label is non-null (not `unknown`).
+    // Self-guard anyway — release-safe (an assert is stripped) — so a future call site
+    // that bypasses the gate renders nothing rather than a styled-but-blank chip.
+    if (label == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -414,7 +399,7 @@ class _FramingChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
-        label ?? '',   // never empty in practice — the parent only builds a chip when label != null
+        label,   // non-null: the early return above bails on a null label
         style: Theme.of(context)
             .textTheme
             .labelSmall
