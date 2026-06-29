@@ -93,13 +93,13 @@ class StellariumServer {
   /// True when the request's `Host` header names our own loopback origin.
   /// Defeats DNS-rebinding: a rebinding page can resolve a hostname to 127.0.0.1
   /// and POST here, but its browser still sends that attacker hostname in `Host`.
-  /// Our page is served from `127.0.0.1:<port>`, so legitimate posts carry
-  /// exactly that. A missing/garbage Host (no `:` → port null) is rejected.
+  /// The server binds `InternetAddress.loopbackIPv4` and the page URL is always
+  /// `http://127.0.0.1:<port>/…`, so every legitimate post carries exactly
+  /// `Host: 127.0.0.1:<port>`. Anything else (a rebinding hostname, a missing or
+  /// garbage Host with no port) is rejected.
   bool _isLoopbackHost(HttpRequest request) {
-    final host = request.headers.host;
-    final port = request.headers.port;
-    final hostOk = host == '127.0.0.1' || host == 'localhost' || host == '::1';
-    return hostOk && port == _server.port;
+    return request.headers.host == '127.0.0.1' &&
+        request.headers.port == _server.port;
   }
 
   Future<void> _handle(HttpRequest request) async {

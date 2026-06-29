@@ -113,7 +113,14 @@ void ensure_webview(OverlayState* state) {
   // work: hiding the child before it kept Planning hidden races the realize.
   gtk_widget_realize(event_box);
   GdkWindow* window = gtk_widget_get_window(event_box);
-  if (window != nullptr) gdk_window_ensure_native(window);
+  // If the GdkWindow can't be promoted to a native subsurface (some Wayland /
+  // XWayland backends), the webview renders into the same client-side surface as
+  // Flutter, which overpaints it — the overlay goes permanently invisible with no
+  // other symptom. Warn so that failure mode is at least diagnosable in logs.
+  if (window != nullptr && !gdk_window_ensure_native(window)) {
+    g_warning("planetarium_overlay: gdk_window_ensure_native failed — "
+              "overlay may be invisible on this display backend");
+  }
   // Keep it unmapped until Dart pushes bounds and Planning is the active tab.
   apply_visibility(state);
 }
@@ -134,7 +141,16 @@ void method_call_cb(FlMethodChannel* channel,
                        ? fl_value_lookup_string(args, "url")
                        : nullptr;
     if (url != nullptr && fl_value_get_type(url) == FL_VALUE_TYPE_STRING) {
-      webkit_web_view_load_uri(state->webview, fl_value_get_string(url));
+      const gchar* url_str = fl_value_get_string(url);
+      // Defense-in-depth: this native WebKit process runs JS with no sandbox, so
+      // only ever load our own loopback page. The Dart side always hands a
+      // http://127.0.0.1:<port>/… URL; reject anything else rather than trust the
+      // channel, so a future bug or compromised caller can't render external content.
+      if (g_str_has_prefix(url_str, "http://127.0.0.1:")) {
+        webkit_web_view_load_uri(state->webview, url_str);
+      } else {
+        g_warning("planetarium_overlay: refusing non-loopback URL '%s'", url_str);
+      }
     }
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else if (strcmp(method, "setBounds") == 0) {
