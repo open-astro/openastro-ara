@@ -88,6 +88,12 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   OpenNGC-backed cull via `SkyCatalogService`; compute the visibility window, transit,
   and integration hours; expand the DTO with size/timing/hours. Sun-altitude model +
   twilight. Tests: window math, transit, hours, twilight gating, no-catalog fallback.
+  **Known slice-1 boundary:** the inclusion gate is still "above the horizon at the query
+  instant" (altitude ranking carried over from the placeholder), so a not-yet-risen target
+  at a sunset query is omitted even though its window fields would describe a fine night.
+  The per-object window/transit/hours are computed for the listed (currently-up) objects.
+  Surfacing not-yet-risen targets — the design's "include anything with a window tonight,
+  rank by worth" — lands with slice 2's scoring, which replaces the altitude gate.
 - **Slice 2 (server, equipment-aware scoring)** — FOV/framing fit from the optical
   train + mosaic; the transparent `Score` + `ScoreReasons`; ranking that advises-not-
   hides. Tests: 448 mm vs 3000 mm produce different orderings; the "low but bright"

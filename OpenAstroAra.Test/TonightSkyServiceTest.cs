@@ -193,6 +193,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Southern_site_transit_and_window_are_correct() {
+            // Negative-latitude end-to-end: the transit solve, MaxAltitudeDeg (90−|φ−δ|), and the
+            // window/sun math must all hold below the equator, not just for the northern fixtures.
+            var at = new DateTimeOffset(2026, 6, 21, 0, 0, 0, TimeSpan.Zero); // ~local midnight at lon 0 → dark
+            var site = Site(lat: -33, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            // dec −20 from lat −33 → transit altitude 90 − |−33 − (−20)| = 77°, clear of the zenith asin singularity.
+            var ranked = TonightSkyService.Rank(new[] { Obj("S", ra, -20) }, site, at, limit: 10);
+
+            Assert.That(ranked, Has.Count.EqualTo(1));
+            var o = ranked[0];
+            Assert.That(o.MaxAltitudeDeg, Is.EqualTo(77.0).Within(0.05));
+            Assert.That(o.TransitUtc, Is.Not.Null);
+            var lstAtTransit = TonightSkyService.LocalSiderealTimeDeg(o.TransitUtc!.Value, site.LongitudeDeg);
+            var altAtTransit = TonightSkyService.AltitudeFromHourAngleDeg(
+                decDeg: -20, latDeg: -33, hourAngleDeg: lstAtTransit - ra);
+            Assert.That(altAtTransit, Is.EqualTo(o.MaxAltitudeDeg).Within(0.05));
+            // On the meridian in deep southern night → a real dark window.
+            Assert.That(o.WindowStartUtc, Is.Not.Null);
+            Assert.That(o.IntegrationHours, Is.GreaterThan(0));
+        }
+
+        [Test]
         public void New_size_fields_are_echoed_from_the_catalog() {
             var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
             var site = Site(lat: 40, lon: 0, horizon: 0);

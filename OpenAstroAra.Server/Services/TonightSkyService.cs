@@ -26,7 +26,13 @@ public interface ITonightSkyService {
     /// first, capped at <paramref name="limit"/>. As an internal convenience a non-positive
     /// <paramref name="limit"/> returns all of them — but the public <c>GET /planning/tonight</c>
     /// endpoint rejects <c>limit &lt; 1</c> with a 400, so that path only applies to direct callers.
-    /// Reads the site lat/long + horizon from the active profile.</summary>
+    /// Reads the site lat/long + horizon from the active profile.
+    /// <para><b>Slice-1 inclusion boundary:</b> only objects already above the horizon AT
+    /// <paramref name="atUtc"/> are listed (the altitude-ranking gate). A target that hasn't risen yet —
+    /// e.g. at a sunset query — is omitted even though its <c>WindowStartUtc</c>/<c>IntegrationHours</c>
+    /// would describe a fine night. Surfacing not-yet-risen targets is the equipment-aware scoring pass
+    /// (slice 2, see <c>design/TONIGHT_SKY.md</c>); until then a planner run reflects "up right now",
+    /// and the per-object window/transit/hours describe tonight's dark window for those objects.</para></summary>
     IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit);
 }
 
@@ -214,6 +220,8 @@ public sealed class TonightSkyService : ITonightSkyService {
             if (flags[i]) {
                 if (curStart < 0) curStart = i;
                 var curEnd = i;
+                // Strict `>` keeps the EARLIEST of equal-length runs by design — given two windows of the
+                // same length tonight, prefer the earlier one so the user can start sooner.
                 if (bestStart < 0 || curEnd - curStart > bestEnd - bestStart) {
                     bestStart = curStart;
                     bestEnd = curEnd;
