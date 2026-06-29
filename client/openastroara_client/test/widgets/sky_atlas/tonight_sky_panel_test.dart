@@ -7,6 +7,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
@@ -164,6 +165,23 @@ void main() {
     expect(find.textContaining('6.3 h dark'), findsOneWidget);
     expect(find.textContaining('3.2 h left'), findsOneWidget);
     expect(find.textContaining('transit'), findsOneWidget);
+  });
+
+  testWidgets('the recentre button sets the sky target to the object', (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(TonightSkyPanel)));
+    expect(container.read(skyTargetProvider), isNull);
+
+    await tester.tap(find.byIcon(Icons.my_location));
+    await tester.pump();
+
+    final target = container.read(skyTargetProvider);
+    expect(target, isNotNull);
+    expect(target!.name, 'Andromeda Galaxy');
+    expect(target.raDeg, 10.6847);
+    expect(target.decDeg, 41.269);
   });
 
   testWidgets('the "why" reasons stay collapsed until tapped', (tester) async {
