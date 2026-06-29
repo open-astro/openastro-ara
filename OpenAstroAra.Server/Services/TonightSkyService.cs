@@ -39,6 +39,7 @@ public interface ITonightSkyService {
 public sealed class TonightSkyService : ITonightSkyService {
     private readonly IProfileStore _profileStore;
     private readonly ISkyCatalogService _catalog;
+    private IReadOnlyList<CatalogObject>? _candidates; // the culled candidate set, cached once the real catalog loads
 
     // Cull bound: OpenNGC carries ~13k objects, most far too faint to image. A magnitude floor keeps
     // the candidate set to the realistically-shootable ones (and the per-object window math affordable).
@@ -56,6 +57,14 @@ public sealed class TonightSkyService : ITonightSkyService {
     /// objects, or the hardcoded starter <see cref="Catalog"/> when openngc-dso isn't installed (or the
     /// cull leaves nothing) — so the endpoint still returns something useful with no sky-data.</summary>
     private IReadOnlyList<CatalogObject> BuildCandidates() {
+        // Cache the culled set: the magnitude floor is static, so once the real catalog is loaded the
+        // filtered list never changes. The hardcoded fallback is deliberately NOT cached — openngc-dso
+        // can be installed at runtime (DataManager) and SkyCatalogService re-checks the file each call,
+        // so staying uncached on the fallback lets a later install take effect without a daemon restart.
+        var cached = Volatile.Read(ref _candidates);
+        if (cached is not null) {
+            return cached;
+        }
         var dsos = _catalog.GetAllDsos(CancellationToken.None);
         if (dsos is null || dsos.Count == 0) {
             return Catalog;
@@ -71,7 +80,11 @@ public sealed class TonightSkyService : ITonightSkyService {
                 d.Name, d.CommonName ?? d.Name, d.Type, mag, d.RaDeg, d.DecDeg,
                 d.MajAxArcmin, d.MinAxArcmin, d.PosAngleDeg, d.SurfaceBrightness));
         }
-        return list.Count == 0 ? Catalog : list;
+        if (list.Count == 0) {
+            return Catalog;   // catalog present but cull empty (unexpected) — fall back, don't cache
+        }
+        IReadOnlyList<CatalogObject> result = list;
+        return Interlocked.CompareExchange(ref _candidates, result, null) ?? result;
     }
 
     /// <summary>One deep-sky object: catalog id + common name, type, magnitude, J2000 RA/Dec (deg), and
@@ -169,13 +182,25 @@ public sealed class TonightSkyService : ITonightSkyService {
             sunIsDown[i] = sunAlt <= twilight;
         }
 
+        // Site terms are constant across every object and sample — compute the latitude trig and the
+        // horizon threshold once. Comparing sin(alt) ≥ sin(horizon) is equivalent to alt ≥ horizon (asin
+        // is monotonic over [−90,90]) and lets the per-sample loop skip the asin entirely.
+        var sinLat = Math.Sin(Deg2Rad(lat));
+        var cosLat = Math.Cos(Deg2Rad(lat));
+        var sinHorizon = Math.Sin(Deg2Rad(horizon));
+
         var result = new List<TonightSkyObjectDto>(capped.Count);
         var up = new bool[sampleCount];
         foreach (var (alt, o) in capped) {
             // "Up" at a sample = object above the site horizon AND the sky dark enough (sun below twilight).
+            // The object's dec trig is constant across all samples, so hoist it out; only cos(hour angle)
+            // varies per sample. sin(alt) = sinδ·sinφ + cosδ·cosφ·cos H (same formula as AltitudeFromHourAngleDeg).
+            var sinDec = Math.Sin(Deg2Rad(o.DecDeg));
+            var cosDec = Math.Cos(Deg2Rad(o.DecDeg));
             for (var i = 0; i < sampleCount; i++) {
-                var objAlt = AltitudeFromHourAngleDeg(o.DecDeg, lat, Mod360(sampleLstDeg[i] - o.RaDeg));
-                up[i] = objAlt >= horizon && sunIsDown[i];
+                var cosH = Math.Cos(Deg2Rad(sampleLstDeg[i] - o.RaDeg));
+                var sinAlt = sinDec * sinLat + cosDec * cosLat * cosH;
+                up[i] = sinAlt >= sinHorizon && sunIsDown[i];
             }
 
             // Window tonight = the LONGEST qualifying dark run in the span, always — not the run that
@@ -252,7 +277,10 @@ public sealed class TonightSkyService : ITonightSkyService {
     internal static (double RaDeg, double DecDeg) SunEquatorialDeg(DateTimeOffset atUtc) {
         var jd = atUtc.ToUnixTimeMilliseconds() / 86400000.0 + 2440587.5;
         var t = (jd - 2451545.0) / 36525.0;                               // Julian centuries since J2000.0
-        var l0 = 280.46646 + 36000.76983 * t + 0.0003032 * t * t;         // geometric mean longitude (deg)
+        // Reduce L0 to [0,360) per Meeus §25 before the trig: L0 grows ~36000°/century, and runtimes
+        // with weaker range reduction than glibc (Windows' Cody–Waite, WASM) lose precision on the raw
+        // large argument far from J2000.
+        var l0 = Mod360(280.46646 + 36000.76983 * t + 0.0003032 * t * t); // geometric mean longitude (deg)
         var m = Deg2Rad(357.52911 + 35999.05029 * t - 0.0001537 * t * t); // mean anomaly (rad)
         var c = (1.914602 - 0.004817 * t - 0.000014 * t * t) * Math.Sin(m)
               + (0.019993 - 0.000101 * t) * Math.Sin(2 * m)
