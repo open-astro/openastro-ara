@@ -15,6 +15,7 @@
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -31,17 +32,48 @@ public interface ITonightSkyService {
 
 public sealed class TonightSkyService : ITonightSkyService {
     private readonly IProfileStore _profileStore;
+    private readonly ISkyCatalogService _catalog;
 
-    public TonightSkyService(IProfileStore profileStore) {
+    // Cull bound: OpenNGC carries ~13k objects, most far too faint to image. A magnitude floor keeps
+    // the candidate set to the realistically-shootable ones (and the per-object window math affordable).
+    private const double MaxCandidateMagnitude = 12.0;
+
+    public TonightSkyService(IProfileStore profileStore, ISkyCatalogService catalog) {
         _profileStore = profileStore ?? throw new ArgumentNullException(nameof(profileStore));
+        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     }
 
     public IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit) =>
-        Rank(_profileStore.GetSiteSettings(), atUtc, limit);
+        Rank(BuildCandidates(), _profileStore.GetSiteSettings(), atUtc, limit);
 
-    /// <summary>One curated deep-sky object: catalog id + common name, type, magnitude, J2000 RA/Dec (deg).</summary>
+    /// <summary>The candidate set: the installed OpenNGC catalog culled to the realistically-shootable
+    /// objects, or the hardcoded starter <see cref="Catalog"/> when openngc-dso isn't installed (or the
+    /// cull leaves nothing) — so the endpoint still returns something useful with no sky-data.</summary>
+    private IReadOnlyList<CatalogObject> BuildCandidates() {
+        var dsos = _catalog.GetAllDsos(CancellationToken.None);
+        if (dsos is null || dsos.Count == 0) {
+            return Catalog;
+        }
+        var list = new List<CatalogObject>(dsos.Count);
+        foreach (var d in dsos) {
+            // Keep it simple (slice 1): a magnitude floor. Objects with no recorded magnitude are
+            // dropped here — size-based inclusion is a later slice's framing-fit concern.
+            if (d.Magnitude is not { } mag || mag > MaxCandidateMagnitude) {
+                continue;
+            }
+            list.Add(new CatalogObject(
+                d.Name, d.CommonName ?? d.Name, d.Type, mag, d.RaDeg, d.DecDeg,
+                d.MajAxArcmin, d.MinAxArcmin, d.PosAngleDeg, d.SurfaceBrightness));
+        }
+        return list.Count == 0 ? Catalog : list;
+    }
+
+    /// <summary>One deep-sky object: catalog id + common name, type, magnitude, J2000 RA/Dec (deg), and
+    /// the optional apparent size / position angle / surface brightness when the catalog carried them.</summary>
     internal readonly record struct CatalogObject(
-        string Id, string Name, string Type, double Magnitude, double RaDeg, double DecDeg);
+        string Id, string Name, string Type, double Magnitude, double RaDeg, double DecDeg,
+        double? SizeMajArcmin = null, double? SizeMinArcmin = null,
+        double? PosAngleDeg = null, double? SurfaceBrightness = null);
 
     // A small spread-across-the-sky starter set so something worthwhile is always up. J2000 positions.
     // The full smart-culled catalog (§36.8 / §55.1) supersedes this hardcoded list later.
@@ -68,36 +100,163 @@ public sealed class TonightSkyService : ITonightSkyService {
         new CatalogObject("NGC7000", "North America Nebula", "nebula", 4.0, 314.750, 44.330),
     };
 
-    /// <summary>Pure ranking: the catalog objects above the site horizon at <paramref name="atUtc"/>,
-    /// altitude-descending, capped at <paramref name="limit"/>.</summary>
-    internal static IReadOnlyList<TonightSkyObjectDto> Rank(SiteSettingsDto site, DateTimeOffset atUtc, int limit) {
+    /// <summary>Pure ranking over the hardcoded starter <see cref="Catalog"/>. Retained for the no-data
+    /// path and the existing unit tests; <see cref="GetTonight"/> ranks the OpenNGC candidates instead.</summary>
+    internal static IReadOnlyList<TonightSkyObjectDto> Rank(SiteSettingsDto site, DateTimeOffset atUtc, int limit) =>
+        Rank(Catalog, site, atUtc, limit);
+
+    // Window scan resolution: sample altitude + sun-altitude every 5 minutes across ±12 h of atUtc.
+    // 5 min is finer than the ~1-minute-per-degree-of-altitude rate near the horizon matters for an
+    // "hours tonight" figure, and ±12 h always spans one whole night either side of any instant.
+    private const int WindowStepMinutes = 5;
+    private const int WindowHalfSpanMinutes = 12 * 60;
+    // LST advances at this many degrees per solar day — the rate baked into LocalSiderealTimeDeg's GMST
+    // term; reused to solve for the transit instant analytically (hour angle = 0).
+    private const double SiderealDegPerDay = 360.98564736629;
+
+    /// <summary>Ranks <paramref name="catalog"/> for <paramref name="site"/> at <paramref name="atUtc"/>:
+    /// objects above the site horizon right then, altitude-descending, capped at <paramref name="limit"/>.
+    /// Each returned object also carries its visibility window tonight, transit, and integration hours.
+    /// (Scoring / framing-fit are a later slice — ranking stays altitude-descending here.)</summary>
+    internal static IReadOnlyList<TonightSkyObjectDto> Rank(
+            IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, DateTimeOffset atUtc, int limit) {
         var horizon = site.DefaultHorizonAltitudeDeg;
-        var lst = LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
-        // Keep the unrounded altitude alongside the DTO so the sort orders by the TRUE altitude — the
-        // displayed value is only rounded when the DTO is built, so two objects that round to the same
-        // 0.1° don't lose their real order to the id tie-break.
-        var visible = new List<(double Alt, TonightSkyObjectDto Dto)>(Catalog.Count);
-        foreach (var o in Catalog) {
-            var alt = AltitudeFromHourAngleDeg(o.DecDeg, site.LatitudeDeg, Mod360(lst - o.RaDeg));
-            if (alt < horizon) {
-                continue;
+        var lat = site.LatitudeDeg;
+        var lon = site.LongitudeDeg;
+        var lst0 = LocalSiderealTimeDeg(atUtc, lon);
+
+        // Pass 1 (cheap): everything above the horizon right now, keyed by its TRUE (unrounded) altitude
+        // so the sort can't lose real order to rounding; only this set gets the costly window math.
+        var visible = new List<(double Alt, CatalogObject Obj)>(catalog.Count);
+        foreach (var o in catalog) {
+            var alt = AltitudeFromHourAngleDeg(o.DecDeg, lat, Mod360(lst0 - o.RaDeg));
+            if (alt >= horizon) {
+                visible.Add((alt, o));
             }
-            var maxAlt = MaxAltitudeDeg(o.DecDeg, site.LatitudeDeg);
-            visible.Add((alt, new TonightSkyObjectDto(
-                o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
-                Math.Round(alt, 1), Math.Round(maxAlt, 1))));
         }
-        // Highest (true altitude) first; the catalog id is a stable tie-break for a genuine exact tie.
+        // Highest first; the catalog id is a stable tie-break for a genuine exact tie.
         visible.Sort((a, b) => {
             var c = b.Alt.CompareTo(a.Alt);
-            return c != 0 ? c : string.CompareOrdinal(a.Dto.Id, b.Dto.Id);
+            return c != 0 ? c : string.CompareOrdinal(a.Obj.Id, b.Obj.Id);
         });
         var capped = limit > 0 && visible.Count > limit ? visible.GetRange(0, limit) : visible;
+        if (capped.Count == 0) {
+            return Array.Empty<TonightSkyObjectDto>();
+        }
+
+        // Precompute the night sample grid ONCE (it's object-independent): local sidereal time and
+        // whether the sun is below the twilight threshold at each 5-min sample across ±12 h. Per object
+        // we then only need its altitude at each sample. centerIdx is the sample at exactly atUtc.
+        var twilight = TwilightSunAltitudeDeg(site.TwilightDefinition);
+        var stepsPerSide = WindowHalfSpanMinutes / WindowStepMinutes;
+        var sampleCount = stepsPerSide * 2 + 1;
+        var centerIdx = stepsPerSide;
+        var sampleUtc = new DateTimeOffset[sampleCount];
+        var sampleLstDeg = new double[sampleCount];
+        var sunIsDown = new bool[sampleCount];   // true = sun below the twilight threshold (dark enough)
+        for (var i = 0; i < sampleCount; i++) {
+            var t = atUtc.AddMinutes((i - stepsPerSide) * WindowStepMinutes);
+            var lst = LocalSiderealTimeDeg(t, lon);
+            var (sunRa, sunDec) = SunEquatorialDeg(t);
+            var sunAlt = AltitudeFromHourAngleDeg(sunDec, lat, Mod360(lst - sunRa));
+            sampleUtc[i] = t;
+            sampleLstDeg[i] = lst;
+            sunIsDown[i] = sunAlt <= twilight;
+        }
+
         var result = new List<TonightSkyObjectDto>(capped.Count);
-        foreach (var v in capped) {
-            result.Add(v.Dto);
+        var up = new bool[sampleCount];
+        foreach (var (alt, o) in capped) {
+            // "Up" at a sample = object above the site horizon AND the sky dark enough (sun below twilight).
+            for (var i = 0; i < sampleCount; i++) {
+                var objAlt = AltitudeFromHourAngleDeg(o.DecDeg, lat, Mod360(sampleLstDeg[i] - o.RaDeg));
+                up[i] = objAlt >= horizon && sunIsDown[i];
+            }
+
+            // Window tonight: if the object is up at atUtc, take the contiguous run bracketing atUtc;
+            // otherwise (atUtc in daylight / object down right now) take the longest qualifying run in
+            // the span — i.e. tonight's dark window even though it hasn't started yet.
+            int start, end;
+            if (up[centerIdx]) {
+                start = centerIdx;
+                end = centerIdx;
+                while (start > 0 && up[start - 1]) start--;
+                while (end < sampleCount - 1 && up[end + 1]) end++;
+            } else {
+                (start, end) = LongestRun(up);
+            }
+
+            DateTimeOffset? windowStart = null, windowEnd = null;
+            double integrationHours = 0;
+            if (start >= 0) {
+                windowStart = sampleUtc[start];
+                windowEnd = sampleUtc[end];
+                integrationHours = (windowEnd.Value - windowStart.Value).TotalHours;
+            }
+
+            // Transit (upper culmination) nearest atUtc: hour angle H = LST − RA reaches 0. H grows at the
+            // sidereal rate, so the nearest H=0 is H0 degrees in the past (if H0 ≤ 180) or 360−H0 ahead.
+            var h0 = Mod360(lst0 - o.RaDeg);
+            var signedDeg = h0 <= 180.0 ? -h0 : 360.0 - h0;
+            var transitUtc = atUtc.AddHours(signedDeg / SiderealDegPerDay * 24.0);
+
+            result.Add(new TonightSkyObjectDto(
+                o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
+                Math.Round(alt, 1), Math.Round(MaxAltitudeDeg(o.DecDeg, lat), 1),
+                o.SizeMajArcmin, o.SizeMinArcmin, o.PosAngleDeg, o.SurfaceBrightness,
+                windowStart, windowEnd, transitUtc, Math.Round(integrationHours, 2)));
         }
         return result;
+    }
+
+    /// <summary>The longest contiguous run of <c>true</c> in <paramref name="flags"/> as inclusive
+    /// (start, end) sample indices, or (−1, −1) when none is set.</summary>
+    private static (int Start, int End) LongestRun(bool[] flags) {
+        int bestStart = -1, bestEnd = -1, curStart = -1;
+        for (var i = 0; i < flags.Length; i++) {
+            if (flags[i]) {
+                if (curStart < 0) curStart = i;
+                var curEnd = i;
+                if (bestStart < 0 || curEnd - curStart > bestEnd - bestStart) {
+                    bestStart = curStart;
+                    bestEnd = curEnd;
+                }
+            } else {
+                curStart = -1;
+            }
+        }
+        return (bestStart, bestEnd);
+    }
+
+    /// <summary>Sun altitude below which the sky is "dark" for the given twilight definition:
+    /// civil −6°, nautical −12°, astronomical −18°. Unrecognised → astronomical (the darkest, safest
+    /// default for imaging).</summary>
+    private static double TwilightSunAltitudeDeg(string? twilightDefinition) =>
+        (twilightDefinition?.Trim().ToLowerInvariant()) switch {
+            "civil" => -6.0,
+            "nautical" => -12.0,
+            "astronomical" => -18.0,
+            _ => -18.0,
+        };
+
+    /// <summary>The sun's apparent equatorial coordinates (RA/Dec, degrees) at <paramref name="atUtc"/>,
+    /// via Meeus, <i>Astronomical Algorithms</i> ch. 25 "low accuracy" solar position (≈0.01° — far finer
+    /// than a twilight threshold needs): geometric mean longitude + equation of centre → true ecliptic
+    /// longitude, then rotate by the obliquity of the ecliptic to equatorial. The sun's ecliptic latitude
+    /// is taken as 0.</summary>
+    internal static (double RaDeg, double DecDeg) SunEquatorialDeg(DateTimeOffset atUtc) {
+        var jd = atUtc.ToUnixTimeMilliseconds() / 86400000.0 + 2440587.5;
+        var t = (jd - 2451545.0) / 36525.0;                               // Julian centuries since J2000.0
+        var l0 = 280.46646 + 36000.76983 * t + 0.0003032 * t * t;         // geometric mean longitude (deg)
+        var m = Deg2Rad(357.52911 + 35999.05029 * t - 0.0001537 * t * t); // mean anomaly (rad)
+        var c = (1.914602 - 0.004817 * t - 0.000014 * t * t) * Math.Sin(m)
+              + (0.019993 - 0.000101 * t) * Math.Sin(2 * m)
+              + 0.000289 * Math.Sin(3 * m);                               // equation of centre (deg)
+        var lambda = Deg2Rad(l0 + c);                                     // true ecliptic longitude (rad)
+        var eps = Deg2Rad(23.439);                                        // mean obliquity (low-precision)
+        var ra = Math.Atan2(Math.Cos(eps) * Math.Sin(lambda), Math.Cos(lambda));
+        var dec = Math.Asin(Math.Clamp(Math.Sin(eps) * Math.Sin(lambda), -1.0, 1.0));
+        return (Mod360(Rad2Deg(ra)), Rad2Deg(dec));
     }
 
     /// <summary>Local apparent sidereal time in degrees (Meeus low-precision GMST + east-positive

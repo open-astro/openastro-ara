@@ -15,12 +15,19 @@
 namespace OpenAstroAra.Server.Contracts;
 
 /// <summary>
-/// §36/§25.5 Tonight's Sky — one curated deep-sky object ranked for the active
-/// profile's site at a given instant. <see cref="AltitudeDeg"/> is the object's
-/// altitude above the horizon right then (the ranking key); <see cref="MaxAltitudeDeg"/>
-/// is its highest possible altitude from this latitude (transit), a "how well it
-/// suits your sky" hint. <see cref="RaDeg"/>/<see cref="DecDeg"/> (J2000) let the
-/// client recentre the atlas on it.
+/// §36/§25.5 Tonight's Sky — one deep-sky object ranked for the active profile's site at a
+/// given instant. <see cref="AltitudeDeg"/> is the object's altitude above the horizon right
+/// then (the ranking key); <see cref="MaxAltitudeDeg"/> is its highest possible altitude from
+/// this latitude (transit), a "how well it suits your sky" hint. <see cref="RaDeg"/>/
+/// <see cref="DecDeg"/> (J2000) let the client recentre the atlas on it.
+/// <para>§36.8 planner fields (appended, all optional so the existing client keeps working):
+/// <see cref="SizeMajArcmin"/>/<see cref="SizeMinArcmin"/> are the apparent axes (arcmin),
+/// <see cref="PosAngleDeg"/> the position angle, and <see cref="SurfaceBrightness"/> mag/arcsec²
+/// (null when the catalog didn't record them). <see cref="WindowStartUtc"/>/<see cref="WindowEndUtc"/>
+/// bracket the object's visibility window tonight — above the site horizon AND the sky dark enough
+/// (sun below the profile's twilight threshold); both null when there's no qualifying window tonight.
+/// <see cref="TransitUtc"/> is its upper culmination nearest the query instant, and
+/// <see cref="IntegrationHours"/> is the window length in hours (0 when there's no window).</para>
 /// </summary>
 public sealed record TonightSkyObjectDto(
     string Id,
@@ -30,7 +37,15 @@ public sealed record TonightSkyObjectDto(
     double RaDeg,
     double DecDeg,
     double AltitudeDeg,
-    double MaxAltitudeDeg);
+    double MaxAltitudeDeg,
+    double? SizeMajArcmin = null,
+    double? SizeMinArcmin = null,
+    double? PosAngleDeg = null,
+    double? SurfaceBrightness = null,
+    DateTimeOffset? WindowStartUtc = null,
+    DateTimeOffset? WindowEndUtc = null,
+    DateTimeOffset? TransitUtc = null,
+    double IntegrationHours = 0);
 
 /// <summary>
 /// §36 Planning horizon — the observer's local horizon projected onto the equatorial

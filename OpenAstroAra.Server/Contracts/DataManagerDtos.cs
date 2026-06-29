@@ -72,6 +72,28 @@ public sealed record CatalogInfoDto(
     string Name,
     string Group);
 
+/// <summary>
+/// §36.8 / §55.1 Tonight's Sky — one OpenNGC deep-sky object with the full set of fields the
+/// planner needs (size, position angle, surface brightness) beyond the slim overlay
+/// <see cref="CatalogObjectDto"/>. <see cref="Name"/> is the catalog id (e.g. "NGC0224");
+/// <see cref="CommonName"/> is the friendly name when OpenNGC carries one. <see cref="RaDeg"/>/
+/// <see cref="DecDeg"/> are decimal degrees (J2000). All measured fields are null when the source
+/// row didn't record them: <see cref="MajAxArcmin"/>/<see cref="MinAxArcmin"/> are the major/minor
+/// axes in arcminutes, <see cref="PosAngleDeg"/> the position angle (deg), and
+/// <see cref="SurfaceBrightness"/> is mag/arcsec².
+/// </summary>
+public sealed record DsoEntryDto(
+    string Name,
+    string? CommonName,
+    string Type,
+    double RaDeg,
+    double DecDeg,
+    double? Magnitude,
+    double? MajAxArcmin,
+    double? MinAxArcmin,
+    double? PosAngleDeg,
+    double? SurfaceBrightness);
+
 // ─── Bug report (§54) ───────────────────────────────────────────────────────
 
 public sealed record BugReportPreparationDto(

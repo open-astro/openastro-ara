@@ -36,6 +36,11 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>Objects for one catalog id, or null when the id is unknown / its source isn't installed.</summary>
         IReadOnlyList<CatalogObjectDto>? GetObjects(string catalogId, int? limit, CancellationToken ct);
+
+        /// <summary>Every installed DSO with the full field set (size / position angle / surface
+        /// brightness) the §36.8 Tonight's Sky planner ranks on; null when openngc-dso isn't installed
+        /// (mirrors <see cref="GetObjects"/>'s null-when-absent contract).</summary>
+        IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct);
     }
 
     public sealed class SkyCatalogService : ISkyCatalogService {
@@ -52,7 +57,9 @@ namespace OpenAstroAra.Server.Services {
 
         private sealed record DsoRow(
             string Name, double RaDeg, double DecDeg, double? Mag, string Type,
-            bool HasM, bool HasNgc, bool HasIc, bool HasCaldwell);
+            bool HasM, bool HasNgc, bool HasIc, bool HasCaldwell,
+            double? MajAxArcmin, double? MinAxArcmin, double? PosAngleDeg, double? SurfaceBrightness,
+            string? CommonName);
 
         private sealed record CatalogDef(string Id, string Name, string Group, Func<DsoRow, bool> Match);
 
@@ -101,6 +108,16 @@ namespace OpenAstroAra.Server.Services {
             return q.Select(r => new CatalogObjectDto(r.Name, r.RaDeg, r.DecDeg, r.Mag)).ToList();
         }
 
+        public IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct) {
+            var rows = LoadDsos(ct);
+            if (rows is null) {
+                return null;   // source not installed
+            }
+            return rows.Select(r => new DsoEntryDto(
+                r.Name, r.CommonName, r.Type, r.RaDeg, r.DecDeg, r.Mag,
+                r.MajAxArcmin, r.MinAxArcmin, r.PosAngleDeg, r.SurfaceBrightness)).ToList();
+        }
+
         private List<DsoRow>? LoadDsos(CancellationToken ct) {
             // Fast path: the catalog is parsed once and cached for the process lifetime.
             var cached = Volatile.Read(ref _dsos);
@@ -142,7 +159,9 @@ namespace OpenAstroAra.Server.Services {
             int Idx(string n) => Array.IndexOf(cols, n);
             int iName = Idx("Name"), iType = Idx("Type"), iRa = Idx("RA"), iDec = Idx("Dec"),
                 iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC"),
-                iId = Idx("Identifiers");
+                iId = Idx("Identifiers"),
+                iMaj = Idx("MajAx"), iMin = Idx("MinAx"), iPa = Idx("PosAng"), iSb = Idx("SurfBr"),
+                iCommon = Idx("Common names");
             if (iName < 0 || iRa < 0 || iDec < 0) {
                 return list;          // unexpected layout — nothing to place
             }
@@ -167,7 +186,12 @@ namespace OpenAstroAra.Server.Services {
                 var type = iType >= 0 && f.Length > iType ? f[iType] : "";
                 bool Has(int i) => i >= 0 && f.Length > i && !string.IsNullOrWhiteSpace(f[i]);
                 bool hasCaldwell = iId >= 0 && f.Length > iId && HasCaldwellId(f[iId]);
-                list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell));
+                // Optional measured columns — null when blank/absent (a row may carry size but no
+                // surface brightness, etc.), so a missing field is "unknown", not zero.
+                double? Num(int i) => i >= 0 && f.Length > i && TryNum(f[i], out var v) ? v : null;
+                string? common = Has(iCommon) ? f[iCommon] : null;
+                list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell,
+                    Num(iMaj), Num(iMin), Num(iPa), Num(iSb), common));
             }
             return list;
         }
