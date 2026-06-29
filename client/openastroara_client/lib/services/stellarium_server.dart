@@ -111,6 +111,15 @@ class StellariumServer {
       // Flutter → page command channel: the page long-polls this; we hand back the
       // oldest queued command (a JSON object) and drop it, or `{}` when idle.
       if (path == '/aracmd') {
+        // Same DNS-rebinding guard as /araevent: a rebinding page could otherwise
+        // poll this queue, draining goto commands the real page never sees and
+        // reading any queued target. Lower stakes than the POST path (read-only,
+        // no mount slew) but it's the same one-liner.
+        if (!_isLoopbackHost(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
         if (request.method != 'GET') {
           response.statusCode = HttpStatus.methodNotAllowed;
           response.headers.set(HttpHeaders.allowHeader, 'GET');

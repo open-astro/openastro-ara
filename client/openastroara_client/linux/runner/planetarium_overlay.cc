@@ -83,9 +83,41 @@ void apply_visibility(OverlayState* state) {
   }
 }
 
+// Only ever let the webview navigate to our own loopback page. The setUrl method
+// guard covers Dart-originated loads; this covers navigations the page itself
+// initiates (window.location, a link, a redirect) so a page-side bug or XSS can't
+// pull the unsandboxed native WebKit process onto external content.
+gboolean decide_policy_cb(WebKitWebView* web_view,
+                          WebKitPolicyDecision* decision,
+                          WebKitPolicyDecisionType type,
+                          gpointer user_data) {
+  (void)web_view;
+  (void)user_data;
+  if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION &&
+      type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
+    return FALSE;  // resource-load decisions etc. — use the default policy.
+  }
+  WebKitNavigationPolicyDecision* nav =
+      WEBKIT_NAVIGATION_POLICY_DECISION(decision);
+  WebKitNavigationAction* action =
+      webkit_navigation_policy_decision_get_navigation_action(nav);
+  WebKitURIRequest* request = webkit_navigation_action_get_request(action);
+  const gchar* uri = webkit_uri_request_get_uri(request);
+  if (uri != nullptr && g_str_has_prefix(uri, "http://127.0.0.1:")) {
+    webkit_policy_decision_use(decision);
+  } else {
+    g_warning("planetarium_overlay: blocking navigation to '%s'",
+              uri != nullptr ? uri : "(null)");
+    webkit_policy_decision_ignore(decision);
+  }
+  return TRUE;  // handled.
+}
+
 void ensure_webview(OverlayState* state) {
   if (state->webview != nullptr) return;
   state->webview = WEBKIT_WEB_VIEW(webkit_web_view_new());
+  g_signal_connect(state->webview, "decide-policy",
+                   G_CALLBACK(decide_policy_cb), nullptr);
 
   // Wrap the webview in a windowed GtkEventBox: the event box owns a GdkWindow
   // we can promote to a native X11 subwindow (the webview itself is windowless
