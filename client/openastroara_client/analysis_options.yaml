@@ -9,13 +9,6 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
-analyzer:
-  exclude:
-    # Vendored third-party plugin (git submodule). It's analyzed/built by its
-    # own repo's CI — `flutter analyze` here must not descend into its lib/test
-    # (its example-app test references + lint baseline aren't ours to fix).
-    - packages/webview_cef/**
-
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

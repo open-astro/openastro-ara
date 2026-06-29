@@ -1,31 +1,29 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webview_cef/webview_cef.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
 import '../../models/sequence/slew_target_body.dart';
+import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../theme/ara_colors.dart';
-
-/// SPIKE FLAG (macOS A/B). When built with `--dart-define=WEBVIEW_ALL=true`, the
-/// planetarium renders in a native-engine webview (`webview_all` → WKWebView on
-/// macOS) instead of the CEF OSR webview. Default builds stay on CEF. This lets
-/// us compare stability (the CEF offscreen-render path stalls under sustained GPU
-/// load) without disturbing the shipping path. The page, the loopback asset
-/// server, the search-command channel and the event channel are identical either
-/// way — only the rendering widget differs.
-const bool kUseWebViewAll = bool.fromEnvironment('WEBVIEW_ALL');
+import 'linux_planetarium_overlay.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
-/// `assets/stellarium/LICENSE-AGPL-3.0.txt`). The page is **self-driven**: this
-/// widget just loads it with the observer location and the daemon's API base in
-/// the URL query, and the page does everything else (sets its observer, runs its
+/// `assets/stellarium/LICENSE-AGPL-3.0.txt`), rendered in the platform's **native
+/// webview**. macOS/iOS (WKWebView) and Windows (WebView2) embed via `webview_all`.
+/// Linux uses a **native GTK overlay** instead (`LinuxPlanetariumOverlay` +
+/// `linux/runner/planetarium_overlay.cc`): a real `WebKitWebView` composited over
+/// `FlView`, because `webview_all`'s texture-based platform view blanks the whole
+/// app on Flutter's GTK embedder (flutter/flutter#88168). The page is **self-driven**:
+/// this widget just loads it with the observer location and the daemon's API base
+/// in the URL query, and the page does everything else (sets its observer, runs its
 /// own on-screen controls, talks to the daemon API). There is deliberately no
 /// Dart→page JS bridge — Flutter↔page traffic goes over the loopback server.
 class StellariumView extends ConsumerStatefulWidget {
@@ -35,19 +33,21 @@ class StellariumView extends ConsumerStatefulWidget {
   ConsumerState<StellariumView> createState() => _StellariumViewState();
 }
 
-// CEF's manager is a process-wide singleton; initialize it at most once. A FAILED
-// init is not cached so a later mount can retry.
-Future<void>? _managerInit;
-Future<void> _ensureManagerInitialized() =>
-    _managerInit ??= WebviewManager().initialize();
-
 class _StellariumViewState extends ConsumerState<StellariumView> {
-  WebViewController? _controller; // CEF (default path)
-  wva.WebViewController? _wvaController; // native webview (spike path)
+  wva.WebViewController? _controller;
   StellariumServer? _server;
   StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
+  final _prefsService = PlanetariumPrefsService();
   bool _unavailable = false;
+
+  // Linux only: the loopback URL handed to the native GTK overlay
+  // ([LinuxPlanetariumOverlay]). Flutter's GTK embedder can't give an embedded
+  // webview platform view a shared GL surface (flutter/flutter#88168) — creating
+  // the texture-based WebKitGTK view poisons the whole app's Skia GL context and
+  // the window goes blank. So on Linux we composite a native WebKitWebView over
+  // FlView in its own GTK surface instead of going through a Flutter platform view.
+  String? _linuxOverlayUrl;
 
   @override
   void initState() {
@@ -59,12 +59,12 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // Pin the autoDispose site/server providers for the duration of init. Without
     // this, awaiting `siteLocationProvider.future` across the async gaps below
     // races the provider's autodisposal ("Cannot use the Ref … after it has been
-    // disposed"); the old CEF-first ordering only masked it by delaying the read.
+    // disposed").
     final keepSite = ref.listenManual(siteLocationProvider, (_, _) {});
     final keepServers = ref.listenManual(savedServersProvider, (_, _) {});
     try {
-      // Start the shared loopback asset server + build the page URL. Both renderers
-      // load the same self-driven page; all Flutter↔page comms go through this
+      // Start the shared loopback asset server + build the page URL. The native
+      // webview loads the self-driven page; all Flutter↔page comms go through this
       // server's loopback channels, not a webview JS bridge.
       final String url;
       try {
@@ -81,11 +81,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final servers = await ref.read(savedServersProvider.future);
         if (!mounted) return;
         final api = servers.isNotEmpty ? servers.last.baseUrl : '';
+        // Saved Display-panel toggles (empty on first run → the page keeps its
+        // defaults). The page applies these on load and posts changes back via
+        // _onPageEvent, so a user's layer choices survive relaunch.
+        final savedPrefs = await _prefsService.load();
+        if (!mounted) return;
         final query = {
           'lat': (site?.latitudeDeg ?? 0).toString(),
           'lon': (site?.longitudeDeg ?? 0).toString(),
           'elev': (site?.elevationM ?? 0).toString(),
           'api': api,
+          'prefs': jsonEncode(savedPrefs),
         }.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
         url = '${server.baseUrl}/index.html?$query';
       } catch (e, st) {
@@ -95,10 +101,26 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       }
       if (!mounted) return;
 
-      if (kUseWebViewAll) {
-        await _initWebViewAll(url);
-      } else {
-        await _initCef(url);
+      // Linux: don't go through a Flutter platform view (see [_linuxOverlayUrl]).
+      // Hand the loopback URL to the native GTK overlay, which composites a real
+      // WebKitWebView over FlView in-window. The Flutter↔page command/event
+      // channels are loopback HTTP, so the search bar + add-to-sequence keep
+      // working against the overlay page exactly as on mac/Windows.
+      if (Platform.isLinux) {
+        setState(() => _linuxOverlayUrl = url);
+        return;
+      }
+
+      try {
+        // Keep this minimal: webview_all notes some setters are unimplemented on
+        // certain platforms, and calling one would abort the whole init. JS is on
+        // by default in the native webviews; we only strictly need to load the URL.
+        final controller = wva.WebViewController()..loadRequest(Uri.parse(url));
+        if (!mounted) return;
+        setState(() => _controller = controller);
+      } catch (e, st) {
+        debugPrint('StellariumView: webview init failed: $e\n$st');
+        if (mounted) setState(() => _unavailable = true);
       }
     } finally {
       keepSite.close();
@@ -106,52 +128,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     }
   }
 
-  // Default path: CEF OSR webview rendered into a Flutter texture.
-  Future<void> _initCef(String url) async {
-    try {
-      await _ensureManagerInitialized();
-    } catch (e, st) {
-      _managerInit = null;
-      debugPrint('StellariumView: CEF manager init failed: $e\n$st');
-      if (mounted) setState(() => _unavailable = true);
-      return;
-    }
-    if (!mounted) return;
-    try {
-      final controller = WebviewManager().createWebView(loading: const _Loading());
-      await controller.initialize(url);
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-      setState(() => _controller = controller);
-    } catch (e, st) {
-      debugPrint('StellariumView: browser init failed: $e\n$st');
-      if (mounted) setState(() => _unavailable = true);
-    }
-  }
-
-  // Spike path: native-engine webview (WKWebView on macOS) embedded as a platform
-  // view. No OSR/IOSurface texture handoff, so it doesn't hit the CEF stall.
-  Future<void> _initWebViewAll(String url) async {
-    try {
-      // Keep this minimal: webview_all notes some APIs are unimplemented on macOS
-      // WKWebView, and an unimplemented setter would abort the whole init. JS is on
-      // by default in WKWebView; we only strictly need to load the URL.
-      final controller = wva.WebViewController()..loadRequest(Uri.parse(url));
-      if (!mounted) return;
-      setState(() => _wvaController = controller);
-    } catch (e, st) {
-      debugPrint('StellariumView(webview_all): init failed: $e\n$st');
-      if (mounted) setState(() => _unavailable = true);
-    }
-  }
-
   @override
   void dispose() {
     unawaited(_eventSub?.cancel());
     _searchCtrl.dispose();
-    unawaited(_controller?.dispose());
     // wva.WebViewController has no dispose() in the webview_flutter API; its
     // platform view is torn down with the widget.
     super.dispose();
@@ -163,6 +143,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // NINA sequence DOM, so it hands the target's coordinates here and we build +
   // create the sequence with the shared Dart builder.
   Future<void> _onPageEvent(Map<String, Object?> event) async {
+    // The page posts its Display-panel toggle state here on every change; persist it
+    // so it's restored (via the load URL) next launch.
+    if (event['type'] == 'displayPref') {
+      final layers = event['layers'];
+      if (layers is Map) {
+        final prefs = <String, bool>{};
+        layers.forEach((k, v) {
+          if (k is String && v is bool) prefs[k] = v;
+        });
+        unawaited(_prefsService.save(prefs));
+      }
+      return;
+    }
     if (event['type'] != 'addToSequence') return;
     final raDeg = (event['raDeg'] as num?)?.toDouble();
     final decDeg = (event['decDeg'] as num?)?.toDouble();
@@ -220,29 +213,27 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   @override
   Widget build(BuildContext context) {
     if (_unavailable) return const _Unavailable();
-
-    final Widget renderer;
-    if (kUseWebViewAll) {
-      final c = _wvaController;
-      if (c == null) return const _Loading();
-      renderer = wva.WebViewWidget(controller: c);
-    } else {
-      final c = _controller;
-      if (c == null) return const _Loading();
-      renderer = c.webviewWidget;
-    }
+    final linuxUrl = _linuxOverlayUrl;
+    final c = _controller;
+    // Still initialising (server + URL not ready on either path).
+    if (linuxUrl == null && c == null) return const _Loading();
 
     return ColoredBox(
       color: AraColors.bgPrimary,
       child: Column(
         children: [
+          // The search bar drives the page over the loopback command channel, so
+          // it works for the embedded webview AND the Linux native overlay page.
           _SearchBar(
             controller: _searchCtrl,
             onSubmit: _submitSearch,
             onTonight: () => _pushCmd({'type': 'tonight'}),
-            spike: kUseWebViewAll,
           ),
-          Expanded(child: renderer),
+          Expanded(
+            child: linuxUrl != null
+                ? LinuxPlanetariumOverlay(url: linuxUrl)
+                : wva.WebViewWidget(controller: c!),
+          ),
         ],
       ),
     );
@@ -251,19 +242,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
 
 /// Thin top bar over the planetarium: a universal search field + a Tonight's Sky
 /// toggle. The field is Flutter (so the keyboard works); submitting it hands the
-/// query to the page via the loopback command channel. When the [spike] renderer
-/// is active a small badge marks it, so the A/B test is unambiguous.
+/// query to the page via the loopback command channel.
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSubmit;
   final VoidCallback onTonight;
-  final bool spike;
 
   const _SearchBar({
     required this.controller,
     required this.onSubmit,
     required this.onTonight,
-    this.spike = false,
   });
 
   @override
@@ -306,22 +294,6 @@ class _SearchBar extends StatelessWidget {
               ),
             ),
           ),
-          if (spike) ...[
-            const SizedBox(width: 8),
-            Tooltip(
-              message: 'Spike renderer: native WKWebView (webview_all)',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AraColors.accentInfo.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AraColors.accentInfo),
-                ),
-                child: const Text('WKWebView',
-                    style: TextStyle(fontSize: 11, color: AraColors.accentInfo)),
-              ),
-            ),
-          ],
           const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: onTonight,
@@ -363,7 +335,7 @@ class _Unavailable extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Text(
                   'The embedded planetarium renderer could not start on this host. '
-                  'A Chromium runtime is required — install it, then reopen the app.',
+                  'Reopen the app; if it persists, check that a system WebView is available.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context)
                       .textTheme

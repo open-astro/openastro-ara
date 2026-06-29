@@ -31,19 +31,13 @@ dependencies:
   fl_chart: ^1.1.1
   collection: ^1.19.1
   url_launcher: ^6.3.1
+  path_provider: ^2.1.5
   package_info_plus: ^10.1.0
-  # open-astro fork of webview_cef (CEF 130 + Swift Package Manager support),
-  # vendored as a git submodule at packages/webview_cef and pinned by that
-  # submodule's commit. The CEF binaries are git-ignored in the fork — run
-  # `packages/webview_cef/macos/setup_cef.sh` once before a macOS build to stage
-  # them. See PORT_DECISIONS.md.
-  webview_cef:
-    path: packages/webview_cef
-  # SPIKE (macOS A/B): native-engine webview (WKWebView on macOS, WebView2 on
-  # Windows, WebKitGTK on Linux) embedded as a platform view. Used to evaluate
-  # replacing the CEF OSR path, which stalls under sustained GPU offscreen render.
-  # Selected at build time with --dart-define=WEBVIEW_ALL=true; default build is
-  # still CEF. See lib/widgets/sky_atlas/stellarium_view.dart.
+  # §36 Planetarium renderer: the platform's native webview embedded as a platform
+  # view — WKWebView (macOS/iOS), WebView2 (Windows), WebKitGTK (Linux), System
+  # WebView (Android). Replaced the CEF OSR path, which stalled under sustained GPU
+  # offscreen render on macOS and broke Flutter's GL context on Linux. See
+  # lib/widgets/sky_atlas/stellarium_view.dart and design/PORT_DECISIONS.md.
   webview_all: ^1.0.3
 dev_dependencies:
   flutter_test:
@@ -70,12 +64,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # The vendored Aladin Lite v3 (GPL v3) sky-atlas renderer, bundled so §36
-  # works without a runtime dependency on the CDS CDN (per §36.1). Inlined into
-  # the CEF bootstrap page at load time — see lib/widgets/sky_atlas/aladin_view.dart
-  # and assets/aladin/ALADIN_LICENSE.md for provenance.
   assets:
-    - assets/aladin/aladin.js
     # §36 Planetarium — the Stellarium Web Engine (AGPL, built from pristine
     # source: github.com/Stellarium/stellarium-web-engine; see
     # assets/stellarium/LICENSE-AGPL-3.0.txt) plus the offline sky data served to

@@ -32,6 +32,15 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# The webview_all_windows plugin's C++/WinRT code includes <experimental/coroutine>
+# (the C++17 WinRT coroutine fallback). Recent MSVC toolchains (VS 2022 17.10+ /
+# VS 18, MSVC 14.5x) promote that header's deprecation to a HARD error (STL1011),
+# which breaks the plugin build. Define the documented opt-out at directory scope
+# so it's inherited by the plugin subdirectories added below via
+# `include(flutter/generated_plugins.cmake)`. Microsoft's own remedy; remove once
+# the plugin moves to C++20 <coroutine>.
+add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

@@ -90,6 +90,18 @@ class StellariumServer {
     }
   }
 
+  /// True when the request's `Host` header names our own loopback origin.
+  /// Defeats DNS-rebinding: a rebinding page can resolve a hostname to 127.0.0.1
+  /// and POST here, but its browser still sends that attacker hostname in `Host`.
+  /// The server binds `InternetAddress.loopbackIPv4` and the page URL is always
+  /// `http://127.0.0.1:<port>/…`, so every legitimate post carries exactly
+  /// `Host: 127.0.0.1:<port>`. Anything else (a rebinding hostname, a missing or
+  /// garbage Host with no port) is rejected.
+  bool _isLoopbackHost(HttpRequest request) {
+    return request.headers.host == '127.0.0.1' &&
+        request.headers.port == _server.port;
+  }
+
   Future<void> _handle(HttpRequest request) async {
     final response = request.response;
     try {
@@ -99,6 +111,15 @@ class StellariumServer {
       // Flutter → page command channel: the page long-polls this; we hand back the
       // oldest queued command (a JSON object) and drop it, or `{}` when idle.
       if (path == '/aracmd') {
+        // Same DNS-rebinding guard as /araevent: a rebinding page could otherwise
+        // poll this queue, draining goto commands the real page never sees and
+        // reading any queued target. Lower stakes than the POST path (read-only,
+        // no mount slew) but it's the same one-liner.
+        if (!_isLoopbackHost(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
         if (request.method != 'GET') {
           response.statusCode = HttpStatus.methodNotAllowed;
           response.headers.set(HttpHeaders.allowHeader, 'GET');
@@ -117,6 +138,15 @@ class StellariumServer {
       // decode it and surface it on [events]. Always answer 200 so the page's
       // fetch resolves; a malformed body is just dropped.
       if (path == '/araevent') {
+        // DNS-rebinding guard: this channel can carry mount-slewing events
+        // (addToSequence), so only accept POSTs whose Host header is our own
+        // loopback origin. A rebinding attack reaches us with the attacker's
+        // hostname in Host; our own page always sends 127.0.0.1:<port>.
+        if (!_isLoopbackHost(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
         if (request.method != 'POST') {
           response.statusCode = HttpStatus.methodNotAllowed;
           response.headers.set(HttpHeaders.allowHeader, 'POST');

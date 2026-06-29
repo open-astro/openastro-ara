@@ -2,35 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- App Sandbox is OFF. CEF/Chromium runs multi-process: the browser process
-	     registers a global Mach bootstrap service
-	     (org.openastro.openastroara.MachPortRendezvousServer.<pid>) so the
-	     "openastroara Helper.app" subprocess can rendezvous and exchange ports.
-	     Under the App Sandbox, bootstrap_check_in for that name is denied
-	     ("Permission denied (1100)"), aborting CefInitialize with a FATAL in
-	     base/apple/mach_port_rendezvous_mac.cc:159. The service name is PID-suffixed,
-	     so a static com.apple.security.temporary-exception.mach-register.global-name
-	     cannot cover it — the sandbox has to be off. Acceptable here: a
-	     Developer-ID-distributed desktop control app (not Mac App Store) that already
-	     needs broad local LAN + equipment access. See macos/CEF_HELPER.md. -->
+	<!-- App Sandbox is OFF: this is a Developer-ID-distributed desktop control app
+	     (not Mac App Store) that needs unrestricted local LAN + equipment access
+	     (the daemon connection, mDNS discovery, the loopback planetarium asset
+	     server) and local file access. Re-enabling the sandbox is a possible future
+	     tightening now that CEF — which required it off for its Mach rendezvous — is
+	     gone; that needs on-device verification of LAN/mDNS/file access first. -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
-	<!-- §36 embedded CEF (Aladin webview). These three cs.* keys are the standard
-	     CEF-on-macOS host entitlements (the plugin's authoritative template,
-	     packages/webview_cef/macos/webview_cef/helper/app.entitlements, prescribes
-	     all three): allow-jit + allow-unsigned-executable-memory for V8, which CEF's
-	     browser process also runs, and disable-library-validation so the host can
-	     load the separately-signed CEF framework. Required at runtime — dropping
-	     any of them risks an on-device JIT/exec-memory abort. (kept even with the
-	     sandbox off: the hardened runtime still applies and notarization needs them.)
-	     network.* and files.user-selected.read-write below are pre-existing (§54).
-	     DebugProfile and Release are kept byte-identical. -->
-	<key>com.apple.security.cs.allow-jit</key>
-	<true/>
-	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-	<true/>
-	<key>com.apple.security.cs.disable-library-validation</key>
-	<true/>
+	<!-- LAN: connect to the daemon (client) + mDNS discovery / loopback asset
+	     server (server). files.user-selected for §54 log/bug-report export. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.network.server</key>

@@ -129,24 +129,35 @@
   #frame #f-add:disabled { opacity: .4; cursor: default; background: rgba(255,255,255,0.12); color: var(--dim); }
   #frame #f-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
   #frame .warn { color: #ffb74d; }
+  /* Framing centre reticle — marks the mosaic centre (the RA/Dec sent to the Run).
+     It's pinned to screen centre, which is where the frame/mosaic is centred, so it
+     stays dead-centre as you add rows/columns (the mosaic grows symmetrically). */
+  #f-crosshair { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 22px; height: 22px; border: 1.5px solid var(--accent); border-radius: 50%; pointer-events: none;
+    display: none; box-shadow: 0 0 6px rgba(79,195,247,0.5), inset 0 0 4px rgba(79,195,247,0.22); }
+  #f-crosshair.on { display: block; }
+  #f-crosshair::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
+    margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 4px rgba(79,195,247,0.85); }
 
-  /* Catalogs drawer */
-  #catalogs { left: 14px; top: 64px; width: 230px; max-height: 68%; overflow-y: auto; padding: 13px 14px 14px; display: none;
+  /* Display drawer — sky-layer toggles */
+  #display { left: 14px; top: 64px; width: 234px; max-height: 70%; overflow-y: auto; padding: 12px 13px 14px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
-  #catalogs .empty { color: var(--dim); font-size: 12px; padding: 6px 2px; line-height: 1.4; }
-  #catalogs .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
-    letter-spacing: .05em; margin: 11px 2px 4px; }
-  #catalogs .cat-group:first-of-type { margin-top: 2px; }
-  #catalogs .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px;
-    border-radius: 9px; cursor: pointer; font-size: 13px; }
-  #catalogs .cat-row:hover { background: rgba(255,255,255,0.07); }
-  #catalogs .cat-row .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto; }
-  #catalogs .cat-row .dot.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px rgba(79,195,247,0.7); }
+  #display .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .05em; margin: 13px 3px 3px; }
+  #display .cat-group:first-of-type { margin-top: 2px; }
+  #display .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 9px;
+    border-radius: 9px; cursor: pointer; font-size: 13px; transition: background .15s ease; }
+  #display .cat-row:hover { background: rgba(255,255,255,0.07); }
+  #display .cat-row:active { background: rgba(255,255,255,0.12); }
+  #display .cat-row .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto;
+    transition: background .18s ease, border-color .18s ease, box-shadow .18s ease; }
+  #display .cat-row .dot.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px rgba(79,195,247,0.7); }
 </style>
 </head>
 <body>
 <canvas id="stel-canvas"></canvas>
+<div id="f-crosshair"></div>
 
 <div id="status" class="ui">Loading planetarium…</div>
 
@@ -166,21 +177,24 @@
 </div>
 
 <div id="layers" class="ui" style="display:none">
-  <button data-layer="atmosphere">Atmosphere</button>
-  <button data-layer="landscape">Landscape</button>
-  <button data-layer="constellationLines" class="on">Lines</button>
-  <button data-layer="constellationArt">Art</button>
-  <button data-layer="dss" class="on">DSS2</button>
-  <button data-layer="equatorialGrid">Eq grid</button>
+  <button id="display-btn" title="Sky layers">Display</button>
   <button id="frame-btn" title="Camera framing overlay">Frame</button>
-  <button id="cat-btn" title="Catalog overlays">Catalogs</button>
 </div>
 
-<!-- Catalog overlays: toggle Messier / NGC / IC and object-type filters, drawn as
-     labelled markers from the daemon's OpenNGC-derived catalogs. -->
-<div id="catalogs" class="ui">
-  <div class="card-title">Catalogs<button class="close" id="cat-close" title="Hide">✕</button></div>
-  <div id="cat-list"><div class="empty">Loading…</div></div>
+<!-- Display: one tidy popout of on/off dots for the sky layers, instead of a row of
+     pills stuck in the toolbar. Dots reflect live engine state when opened. -->
+<div id="display" class="ui">
+  <div class="card-title">Display<button class="close" id="disp-close" title="Hide">✕</button></div>
+  <div class="cat-group">Sky</div>
+  <div class="cat-row" data-disp="dsos"><span>Deep-sky objects</span><span class="dot"></span></div>
+  <div class="cat-row" data-disp="constellationLines"><span>Constellation lines</span><span class="dot"></span></div>
+  <div class="cat-row" data-disp="constellationArt"><span>Constellation art</span><span class="dot"></span></div>
+  <div class="cat-row" data-disp="equatorialGrid"><span>Equatorial grid</span><span class="dot"></span></div>
+  <div class="cat-row" data-disp="azimuthalGrid"><span>Azimuthal grid</span><span class="dot"></span></div>
+  <div class="cat-group">Imagery &amp; horizon</div>
+  <div class="cat-row" data-disp="dss"><span>DSS2 sky survey</span><span class="dot"></span></div>
+  <div class="cat-row" data-disp="atmosphere"><span>Atmosphere</span><span class="dot"></span></div>
+  <div class="cat-row" data-disp="landscape"><span>Landscape</span><span class="dot"></span></div>
 </div>
 
 <!-- Framing overlay controls: draws the connected camera's field of view (from
@@ -188,6 +202,8 @@
      and an N×M mosaic, then adds it to the sequence. -->
 <div id="frame" class="ui">
   <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
+  <div class="frow"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
+  <div class="frow"><span class="k">Dec</span><span class="val" id="f-dec">—</span></div>
   <div class="frow"><span class="k">Rotation</span><span class="val" id="f-rot">0°</span></div>
   <div class="frot">
     <button id="f-rot-" title="−1°">−</button>
@@ -230,6 +246,7 @@
 <script>
 'use strict';
 var D2R = Math.PI / 180.0;
+
 function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
 function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
 
@@ -298,6 +315,7 @@ function setLayer(name, on) {
     case 'constellationArt': c.constellations.images_visible = on; break;
     case 'dss': c.dss.visible = on; break;
     case 'equatorialGrid': c.lines.equatorial.visible = on; break;
+    case 'azimuthalGrid': c.lines.azimuthal.visible = on; break;
   }
 }
 
@@ -693,61 +711,93 @@ function toggleTonight() {
   var panel = document.getElementById('tonight');
   var open = panel.style.display === 'none' || !panel.style.display;
   panel.style.display = open ? 'block' : 'none';
-  if (open) { toggleFrame(false); hideCatalogs(); }   // one left drawer at a time
+  if (open) { toggleFrame(false); hideDisplay(); }   // one left drawer at a time
   if (open && !_tonightLoaded) loadTonight();   // loadTonight sets _tonightLoaded only on success
 }
 
-// ---- Deep-sky controls (native engine) ----------------------------------
-// The engine's own core.dsos layer renders the FULL bundled DSO catalog
-// (NGC / IC / Messier / Caldwell — designations parsed natively) as magnitude-
-// scaled markers + names, GPU-batched — SkySafari-quality, thousands of objects.
-// We do NOT reimplement that with overlays; this panel just shows/hides it. The
-// search bar finds any object by designation (NGC 7000, M31, …) via stel.getObj.
-function dsosOn() { return !!(stel && stel.core.dsos.visible); }
+// ---- Display panel — sky-layer toggles ----------------------------------
+// One popout of on/off dots for the engine's layers (deep-sky objects,
+// constellation lines/art, equatorial grid, DSS2 survey, atmosphere, landscape),
+// replacing the old row of pills wedged in the toolbar. Dots mirror live engine
+// state each time the panel opens. The deep-sky layer (core.dsos) is the engine's
+// native NGC/IC/Messier catalog, GPU-batched; the search bar still jumps to any
+// object by designation via stel.getObj.
+function dispState(name) {
+  if (!stel) return false;
+  var c = stel.core;
+  switch (name) {
+    case 'dsos': return !!c.dsos.visible;
+    case 'constellationLines': return !!c.constellations.lines_visible;
+    case 'constellationArt': return !!c.constellations.images_visible;
+    case 'equatorialGrid': return !!c.lines.equatorial.visible;
+    case 'azimuthalGrid': return !!c.lines.azimuthal.visible;
+    case 'dss': return !!c.dss.visible;
+    case 'atmosphere': return !!c.atmosphere.visible;
+    case 'landscape': return !!c.landscapes.visible;
+  }
+  return false;
+}
 
-// No lists/overlays — the map just shows the objects the engine offers as
-// markers (core.dsos). This panel only drives the native knobs: show/hide the
-// objects and how dense the markers are.
-function renderCatalogPanel() {
-  var el = document.getElementById('cat-list');
-  el.innerHTML =
-    '<div class="cat-group">Deep sky</div>'
-    + '<div class="cat-row" data-act="dsos"><span>Show objects</span><span class="dot' + (dsosOn() ? ' on' : '') + '"></span></div>'
-    + '<div class="empty">The map shows the objects the engine offers as markers. The search bar jumps to any object — “NGC 7000”, “M31”, “Vega”.</div>';
-  Array.prototype.forEach.call(el.querySelectorAll('[data-act]'), function (n) {
-    n.onclick = function () { dsoAction(n.dataset.act); };
+function renderDisplayPanel() {
+  Array.prototype.forEach.call(document.querySelectorAll('#display .cat-row'), function (row) {
+    row.querySelector('.dot').classList.toggle('on', dispState(row.dataset.disp));
   });
 }
 
-function dsoAction(act) {
-  if (!stel || act !== 'dsos') return;
-  var d = stel.core.dsos;
-  d.visible = !d.visible;
-  if (d.visible && !d.hints_visible) d.hints_visible = true;
-  var dot = document.querySelector('#cat-list .cat-row[data-act="dsos"] .dot');
-  if (dot) dot.classList.toggle('on', dsosOn());
+// Report the full Display state to Flutter, which stores it (keyed locally, not in
+// the page's per-origin localStorage — the loopback port changes each run) so the
+// toggles are restored via the load URL next launch.
+var DISPLAY_LAYERS = ['dsos', 'constellationLines', 'constellationArt',
+  'equatorialGrid', 'azimuthalGrid', 'dss', 'atmosphere', 'landscape'];
+function postDisplayPrefs() {
+  var layers = {};
+  DISPLAY_LAYERS.forEach(function (k) { layers[k] = dispState(k); });
+  // .catch (not try/catch): fetch reports network failures — loopback not yet
+  // listening, connection refused — as a rejected promise, not a synchronous throw.
+  // Best-effort: a dropped prefs post just means it saves on the next toggle.
+  fetch('/araevent', { method: 'POST', keepalive: true,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'displayPref', layers: layers }) }).catch(function () {});
 }
 
-function hideCatalogs() {
-  document.getElementById('catalogs').style.display = 'none';
-  document.getElementById('cat-btn').classList.remove('on');
+function dispToggle(name) {
+  if (!stel) return;
+  var on = !dispState(name);
+  if (name === 'dsos') {
+    // Keep the name hints in lockstep with the deep-sky layer — on when shown,
+    // off when hidden — so labels never linger after the layer is toggled off.
+    stel.core.dsos.visible = on;
+    stel.core.dsos.hints_visible = on;
+  } else {
+    setLayer(name, on);
+  }
+  renderDisplayPanel();
+  postDisplayPrefs();
 }
 
-function toggleCatPanel() {
-  var p = document.getElementById('catalogs');
+function hideDisplay() {
+  document.getElementById('display').style.display = 'none';
+  document.getElementById('display-btn').classList.remove('on');
+}
+
+function toggleDisplayPanel() {
+  var p = document.getElementById('display');
   var open = p.style.display === 'none' || !p.style.display;
   p.style.display = open ? 'block' : 'none';
-  document.getElementById('cat-btn').classList.toggle('on', open);
-  if (open) {
+  document.getElementById('display-btn').classList.toggle('on', open);
+  if (open) {   // one left drawer at a time
     toggleFrame(false);
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
-    renderCatalogPanel();
+    renderDisplayPanel();
   }
 }
 
-function wireCatalogs() {
-  document.getElementById('cat-btn').onclick = function () { toggleCatPanel(); };
-  document.getElementById('cat-close').onclick = hideCatalogs;
+function wireDisplay() {
+  document.getElementById('display-btn').onclick = function () { toggleDisplayPanel(); };
+  document.getElementById('disp-close').onclick = hideDisplay;
+  Array.prototype.forEach.call(document.querySelectorAll('#display .cat-row'), function (row) {
+    row.onclick = function () { dispToggle(row.dataset.disp); };
+  });
 }
 
 // ---- Framing overlay (camera FOV box + mosaic) --------------------------
@@ -762,6 +812,7 @@ var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
 var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
 var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
+var _savedTimeSpeed = null; // engine time_speed saved while framing freezes the sky
 
 // Apply a freshly-fetched optics payload and, if the field of view actually
 // changed, redraw — so editing optics in Options updates the box live.
@@ -805,30 +856,74 @@ function viewCenterRaDec() {
   return [stel.anp(s[0]) / D2R, stel.anpm(s[1]) / D2R];
 }
 
-// While framing, keep the box on the view centre; redraw only when it actually
-// moved (cheap — avoids rebuilding the geojson every animation frame).
+// While framing, keep the box on the view centre. Two safeguards keep dragging the
+// frame around — especially near the zenith/pole, in a dense field — from stalling
+// the renderer:
+//   1. Don't follow within ~3° of a celestial pole: there RA is ill-defined and the
+//      view-centre solve swings/returns non-finite values, so following would
+//      rebuild degenerate geometry every frame. The frame just stays put there.
+//   2. Throttle the actual geojson rebuild (~60 ms, with a trailing rebuild) so a
+//      fast pan can't re-tessellate the mosaic on every animation frame.
+var _frameBuildTimer = null;
+function rebuildFrameGeo() {
+  if (_frameGeo && frameOn) _frameGeo.data = mosaicData();
+}
 function followFrame() {
   if (!frameOn || !optics || !optics.ok) return;
   var c = viewCenterRaDec();
-  if (isNaN(c[0])) return;
-  if (frameRaDeg == null || Math.abs(c[0] - frameRaDeg) > 0.003 || Math.abs(c[1] - frameDecDeg) > 0.003) {
-    frameRaDeg = c[0]; frameDecDeg = c[1];
-    if (_frameGeo) _frameGeo.data = mosaicData();
-  }
+  if (!isFinite(c[0]) || !isFinite(c[1]) || Math.abs(c[1]) > 87) return;
+  // Shortest-angle RA delta so the 0h/24h wrap doesn't read as a huge jump.
+  var moved = frameRaDeg == null ||
+      Math.abs(((c[0] - frameRaDeg + 540) % 360) - 180) > 0.003 ||
+      Math.abs(c[1] - frameDecDeg) > 0.003;
+  if (!moved) return;
+  frameRaDeg = c[0]; frameDecDeg = c[1];
+  setFrameCoordText();   // cheap text update — keep the RA/Dec readout live while panning
+  // Debounce the rebuild: only redraw once the view has SETTLED (~180 ms idle),
+  // instead of rebuilding the geojson layer on every frame while panning. The
+  // continuous ~16×/s churn was needless overhead and, on large grids, accumulated
+  // until it jammed the engine's input handling (render kept running at 60 fps but
+  // panning stopped responding). The frame now snaps to the new centre when you
+  // pause — imperceptible for positioning, and the renderer never churns.
+  if (_frameBuildTimer) clearTimeout(_frameBuildTimer);
+  _frameBuildTimer = setTimeout(function () {
+    _frameBuildTimer = null;
+    rebuildFrameGeo();
+  }, 180);
 }
 
-// Build the GeoJSON for the box (or mosaic grid) in J2000 RA/Dec. Each panel is
-// a rectangle of the camera FOV, offset on the mosaic grid and rotated by the
-// position angle in the local tangent plane (RA scaled by 1/cos(dec)).
+// Deproject a tangent-plane offset (xi = east/RA+, eta = north/Dec+, in DEGREES)
+// about the mosaic centre (ra0, dec0) to [raDeg, decDeg] via the gnomonic (TAN)
+// inverse — the projection a flat camera sensor actually images, so a panel
+// outline lands on the sky exactly where the sensor would. This replaces the old
+// linear `RA + dx/cos(centreDec)` approximation, which sheared tiles away from
+// centre (cos was evaluated only at the mosaic centre, not each tile's own dec).
+function tanToRaDec(xiDeg, etaDeg, ra0Deg, dec0Deg) {
+  var xi = xiDeg * D2R, eta = etaDeg * D2R;
+  var rho = Math.sqrt(xi * xi + eta * eta);
+  if (rho < 1e-12) return [ra0Deg, dec0Deg];
+  var c = Math.atan(rho), sinC = Math.sin(c), cosC = Math.cos(c);
+  var d0 = dec0Deg * D2R, sin0 = Math.sin(d0), cos0 = Math.cos(d0);
+  var dec = Math.asin(cosC * sin0 + (eta * sinC * cos0) / rho);
+  var ra = ra0Deg * D2R +
+      Math.atan2(xi * sinC, rho * cos0 * cosC - eta * sin0 * sinC);
+  return [ra / D2R, dec / D2R];
+}
+
+// Build the GeoJSON for the box (or mosaic grid). Each panel is a rectangle of the
+// camera FOV, offset on the mosaic grid and rotated by the position angle in the
+// local tangent plane, then deprojected onto the sky with the gnomonic inverse
+// (`tanToRaDec`) — that per-point projection (vs the old centre-only cos(dec)) is
+// what keeps off-centre tiles aligned instead of shearing. Kept at 4 corners per
+// panel (same vertex count as before) so `followFrame` can rebuild it every frame
+// while panning without stalling the renderer.
 function mosaicData() {
   var th = frameRotDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
-  var cosd = Math.cos(frameDecDeg * D2R) || 1e-6;
   var w = optics.fovWDeg, h = optics.fovHDeg, hw = w / 2, hh = h / 2;
   var ov = Math.max(0, Math.min(90, frameOverlap)) / 100;
   var stepW = w * (1 - ov), stepH = h * (1 - ov);
   var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]];
-  var multi = frameCols * frameRows > 1;
-  var feats = [];
+  var polys = [];
   for (var iy = 0; iy < frameRows; iy++) {
     for (var ix = 0; ix < frameCols; ix++) {
       var gx = (ix - (frameCols - 1) / 2) * stepW;
@@ -836,18 +931,25 @@ function mosaicData() {
       var ring = corners.map(function (c) {
         var lx = c[0] + gx, ly = c[1] + gy;
         var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
-        return [frameRaDeg + dx / cosd, frameDecDeg + dy];
+        return tanToRaDec(dx, dy, frameRaDeg, frameDecDeg);
       });
-      feats.push({
-        type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] },
-        properties: {
-          stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
-          fill: '#4fc3f7', 'fill-opacity': multi ? 0.04 : 0.07,
-        },
-      });
+      polys.push([ring]); // a polygon = [exterior ring]
     }
   }
-  return { type: 'FeatureCollection', features: feats };
+  // ONE MultiPolygon feature for the WHOLE mosaic, not N separate features. The
+  // engine's per-feature work is what bogged down and eventually wedged large grids
+  // (dozens of tiles), even though building the data is free — so collapse every
+  // panel into a single feature the renderer treats as one object. `fill-opacity: 0`
+  // makes the renderer skip the fill pass entirely (geojson.c renders nothing when
+  // fill alpha is 0), so this is stroke-only outlines with no per-panel fill
+  // tessellation — the same clean look, a fraction of the cost.
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: polys },
+    properties: {
+      stroke: '#4fc3f7', 'stroke-width': 1.6, 'stroke-opacity': 0.95,
+      fill: '#4fc3f7', 'fill-opacity': 0,
+    },
+  }] };
 }
 
 function updateFrame() {
@@ -865,6 +967,17 @@ function updateFrame() {
 }
 
 function fmtFovDeg(x) { return x >= 1 ? x.toFixed(2) + '°' : (x * 60).toFixed(1) + "'"; }
+// Show the frame centre's RA/Dec (J2000 — exactly what Create Run sends), reusing
+// the info-card formatters. Called live as the frame follows the view, and on any
+// panel re-render.
+function setFrameCoordText() {
+  var raEl = document.getElementById('f-ra'), decEl = document.getElementById('f-dec');
+  if (!raEl || !decEl) return;
+  if (frameRaDeg == null) { raEl.textContent = decEl.textContent = '—'; return; }
+  raEl.textContent = fmtRa(frameRaDeg * D2R);
+  decEl.textContent = fmtDeg(frameDecDeg * D2R);
+}
+
 function renderFramePanel() {
   document.getElementById('f-rot').textContent = frameRotDeg + '°';
   var _hand = document.querySelector('#f-dial .dial-hand');
@@ -890,16 +1003,21 @@ function renderFramePanel() {
   if (!optics || !optics.ok) {
     msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
     msg.classList.add('warn');
+  } else if (!API) {
+    msg.textContent = 'Connect to a server to create a Run from this frame.';
+    msg.classList.add('warn');
   } else {
-    msg.textContent = 'Drag the sky to position the frame.';
+    msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
   document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
+  setFrameCoordText();
 }
 
 function toggleFrame(on) {
   frameOn = (on == null) ? !frameOn : on;
   document.getElementById('frame-btn').classList.toggle('on', frameOn);
+  document.getElementById('f-crosshair').classList.toggle('on', frameOn);
   // Explicit 'block' — these cards default to display:none in CSS, so clearing
   // the inline style to '' would just fall back to hidden.
   document.getElementById('frame').style.display = frameOn ? 'block' : 'none';
@@ -907,10 +1025,23 @@ function toggleFrame(on) {
     // Only one left drawer at a time; unlock so the sky can be panned to move
     // the frame, and seed the box on the current view centre.
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
-    hideCatalogs();
+    hideDisplay();
     stel.core.lock = null;
     var c = viewCenterRaDec();
-    if (!isNaN(c[0])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
+    // isFinite (not !isNaN): a not-yet-initialised engine can return Infinity, and
+    // Infinity passing through here permanently wedges followFrame's `moved` test
+    // (Infinity arithmetic → NaN → never > 0.003), so the box would stop following.
+    if (isFinite(c[0]) && isFinite(c[1])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
+    // Freeze the sky's diurnal motion while framing. The alt-az view is fixed, so as
+    // time flows the centre maps to a drifting RA/Dec and the target would slide off
+    // the box. Stop the engine's time flow (and the live re-sync is gated on
+    // !frameOn below); the time-bar buttons still jump to a chosen instant.
+    if (_savedTimeSpeed === null) _savedTimeSpeed = stel.core.time_speed;
+    stel.core.time_speed = 0;
+  } else if (_savedTimeSpeed !== null) {
+    stel.core.time_speed = _savedTimeSpeed;     // resume real-time flow
+    _savedTimeSpeed = null;
+    if (pinnedMs === null) setObserverTime();   // snap back to "now" if live
   }
   if (frameOn) loadOptics();   // always refresh from the profile on open
   updateFrame();
@@ -1014,12 +1145,8 @@ function wireControls() {
 
   // Pan + zoom are native (trackpad/mouse) — no on-screen pads.
 
-  Array.prototype.forEach.call(document.querySelectorAll('#layers button[data-layer]'), function (b) {
-    b.onclick = function () { var on = !b.classList.contains('on'); b.classList.toggle('on', on); setLayer(b.dataset.layer, on); };
-  });
-
   // Live clock tick: while "Now", keep the sky moving with the real time.
-  setInterval(function () { if (pinnedMs === null) setObserverTime(); }, 15000);
+  setInterval(function () { if (pinnedMs === null && !frameOn) setObserverTime(); }, 15000);
   setInterval(renderClock, 1000);
 }
 
@@ -1056,10 +1183,12 @@ StelWebEngine({
     s.setFont('regular', './static/fonts/Roboto-Regular.ttf', 1.38);
     s.setFont('bold', './static/fonts/Roboto-Bold.ttf', 1.38);
 
-    // Planning defaults: dark sky (targets visible day or night), alt/az grid as a
-    // clean horizon reference, constellation lines + DSOs on.
+    // Planning defaults: dark sky (targets visible day or night, so atmosphere off),
+    // alt/az grid + the ground landscape on as an immediate horizon / which-way-is-
+    // -down orientation cue, constellation lines + DSOs on. Landscape is one tap off
+    // in the Display panel for anyone who wants to see below the horizon.
     core.atmosphere.visible = false;
-    core.landscapes.visible = false;
+    core.landscapes.visible = true;
     core.lines.azimuthal.visible = true;
     core.constellations.lines_visible = true;
     // The engine's NATIVE deep-sky layer (its built-in DSO catalog — NGC/IC/Messier
@@ -1092,6 +1221,17 @@ StelWebEngine({
     // appears automatically when you frame a target and costs nothing wide-field.
     core.bortle_index = 1;
     core.dss.visible = true;
+    // Apply the user's saved Display-panel toggles (from the `prefs` URL param) over
+    // the defaults above; absent keys keep the default. Each change is reported back
+    // to Flutter (postDisplayPrefs) and restored here on the next launch.
+    try {
+      var savedPrefs = JSON.parse(qp('prefs', '{}'));
+      Object.keys(savedPrefs).forEach(function (k) {
+        var on = !!savedPrefs[k];
+        if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
+        else setLayer(k, on);
+      });
+    } catch (e) {}
     s.zoomTo(90 * D2R, 0);
 
     // Self-init the observer from the URL params, then start the clock + controls.
@@ -1103,7 +1243,7 @@ StelWebEngine({
     wireSelection();
     wireCmds();
     wireFrame();
-    wireCatalogs();
+    wireDisplay();
     loadSite();                              // pull the real site from the daemon
     setInterval(loadSite, 2000);             // and keep it in sync with Options (near-instant)
   }
