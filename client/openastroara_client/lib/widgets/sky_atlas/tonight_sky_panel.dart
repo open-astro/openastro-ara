@@ -126,6 +126,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final subtitle = '${_typeLabel(_object.type)} · $magText · '
         'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°';
     final timing = _timingLine(_object);
+    final framingLabel = _framingLabel(_object.framing);
     final reasons = _object.scoreReasons;
     final hasReasons = reasons != null && reasons.isNotEmpty;
     // Watch (not read) so the autoDispose sequence API stays alive while the
@@ -168,11 +169,11 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
               ),
             ],
           ),
-          if (_framingLabel(_object.framing) != null || timing != null) ...[
+          if (framingLabel != null || timing != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
-                if (_framingLabel(_object.framing) != null)
+                if (framingLabel != null)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _FramingChip(framing: _object.framing),
