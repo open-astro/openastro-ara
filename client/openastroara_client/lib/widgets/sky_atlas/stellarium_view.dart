@@ -240,7 +240,12 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // Forward panel→page commands (e.g. the recentre button's `goto`) over the
     // loopback server — the only Dart→page channel the native webview has.
     ref.listen<Map<String, Object?>?>(planetariumCommandProvider, (_, cmd) {
-      if (cmd != null) _pushCmd(cmd);
+      if (cmd == null) return;
+      _pushCmd(cmd);
+      // Consume it: clear the bus so a later reader can't mistake this already-
+      // forwarded command for a fresh one. (Sets state=null → fires this listener
+      // once more with null, which the guard above drops — no re-send.)
+      ref.read(planetariumCommandProvider.notifier).clear();
     });
 
     final tonightOpen =

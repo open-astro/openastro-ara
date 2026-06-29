@@ -62,6 +62,13 @@ void main() {
           {'type': 'goto', 'ra': 10.6847, 'dec': 41.269});
     });
 
+    test('clear resets the bus to null after a command is consumed', () {
+      final n = container.read(planetariumCommandProvider.notifier);
+      n.send({'type': 'goto', 'ra': 1.0, 'dec': 2.0});
+      n.clear();
+      expect(container.read(planetariumCommandProvider), isNull);
+    });
+
     test('always notifies so re-sending an identical command re-fires', () {
       var notifications = 0;
       container.listen<Map<String, Object?>?>(

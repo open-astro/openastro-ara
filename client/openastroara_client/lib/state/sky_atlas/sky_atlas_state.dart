@@ -89,6 +89,11 @@ class PlanetariumCommandNotifier extends Notifier<Map<String, Object?>?> {
   Map<String, Object?>? build() => null;
   void send(Map<String, Object?> cmd) => state = cmd;
 
+  /// Reset to null once the command has been forwarded to the page — this is a
+  /// fire-and-forget bus, so a consumed command shouldn't linger in state where a
+  /// future reader could mistake it for a fresh one.
+  void clear() => state = null;
+
   @override
   bool updateShouldNotify(
           Map<String, Object?>? previous, Map<String, Object?>? next) =>
