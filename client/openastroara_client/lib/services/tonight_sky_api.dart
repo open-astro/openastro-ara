@@ -60,8 +60,10 @@ class TonightSkyObject {
   /// Equipment-aware fit against the active optical train ([TonightFraming]).
   final TonightFraming framing;
 
-  /// Transparent 0–100 "worth shooting tonight" blend — the ranking key.
-  final double score;
+  /// Transparent 0–100 "worth shooting tonight" blend (the server's ranking key),
+  /// or null when the server omits it (a pre-§36.8 daemon) — kept nullable, like
+  /// [magnitude], so a missing score can't masquerade as a genuine, misleading `0`.
+  final double? score;
 
   /// Short component tags ("fills the frame (+35)", "5 h dark window (+21)")
   /// that explain the score; null when the server omits them.
@@ -86,7 +88,7 @@ class TonightSkyObject {
     this.integrationHours = 0,
     this.remainingHours = 0,
     this.framing = TonightFraming.unknown,
-    this.score = 0,
+    this.score,
     this.scoreReasons,
   });
 
@@ -130,9 +132,9 @@ class TonightSkyObject {
       integrationHours: _optDouble(json['integration_hours']) ?? 0,
       remainingHours: _optDouble(json['remaining_hours']) ?? 0,
       framing: TonightFraming.fromWire(json['framing']),
-      // Clamp at the data layer so the 0–100 invariant holds for every consumer
-      // (comparators, tests, analytics), not just the display badge.
-      score: (_optDouble(json['score']) ?? 0).clamp(0.0, 100.0).toDouble(),
+      // Null when omitted (so it can't pose as a real 0); clamped to the 0–100
+      // invariant at the data layer when present, for every consumer not just the badge.
+      score: _optDouble(json['score'])?.clamp(0.0, 100.0).toDouble(),
       scoreReasons: _optStringList(json['score_reasons']),
     );
   }

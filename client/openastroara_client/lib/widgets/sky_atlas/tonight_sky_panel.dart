@@ -138,8 +138,12 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ScoreBadge(score: _object.score),
-              const SizedBox(width: 10),
+              // No badge for a scoreless object (a pre-§36.8 server) — better a
+              // missing badge than a misleading "0".
+              if (_object.score != null) ...[
+                _ScoreBadge(score: _object.score!),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

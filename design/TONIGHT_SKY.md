@@ -137,11 +137,23 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
   the "Wire shape" section above.
 - **Slice 3 (client panel)** — richer Tonight's Sky list: per-object window/transit,
   hours, framing-fit chip, score with the "why" breakdown, recenter-atlas + add-to-
-  sequence. FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
-  Also: **profile the slice-2 window scan against the real installed OpenNGC catalog**
-  — slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
-  slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude pre-filter,
-  expected <100ms, but confirm on-device.
+  sequence. ✅ panel + model + tests built (PR #614).
+  - **STILL TO WIRE (3b, needs a UX call):** the panel has no mount in the Planning
+    tab — `planning_tab.dart` renders only `StellariumView` since the full-bleed
+    planetarium landed (#610/#611 dropped the old mount from #475). It can't simply
+    overlay the planetarium: the planetarium is a native webview composited ABOVE
+    Flutter (platform-view occlusion — see project_planetarium_webview_pivot), so a
+    Flutter panel drawn over it won't reliably show, especially the Linux GTK overlay.
+    Occlusion-safe options: (a) **mode-swap** — `skyAtlasModeProvider` toggles the
+    Planning tab between `StellariumView` and `TonightSkyPanel`; (b) **side-by-side** —
+    shrink the planetarium (its `setBounds` already resizes) with the 340px panel
+    beside it. Either needs a toggle affordance in non-occluded chrome. **User to pick
+    the layout** ("feel like Apple").
+  - FOV/mosaic controls + per-request optics overrides (deferred from slice 2).
+  - **Profile the slice-2 window scan against the real installed OpenNGC catalog** —
+    slice 2 runs the ±12h 288-sample scan over all geometrically-up candidates (vs
+    slice 1's currently-visible only); bounded by the mag≤12 cull + MaxAltitude
+    pre-filter, expected <100ms, but confirm on-device.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
 

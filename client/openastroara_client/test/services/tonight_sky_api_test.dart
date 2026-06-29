@@ -126,7 +126,7 @@ void main() {
       expect(bare.integrationHours, 0); // default, never null
       expect(bare.remainingHours, 0);
       expect(bare.framing, TonightFraming.unknown);
-      expect(bare.score, 0);
+      expect(bare.score, isNull); // omitted → null, not a misleading 0
       expect(bare.scoreReasons, isNull);
 
       // Wrong-typed values fall back to null/default rather than crashing.
@@ -140,7 +140,7 @@ void main() {
       expect(junk!.sizeMajArcmin, isNull);
       expect(junk.windowStartUtc, isNull);
       expect(junk.integrationHours, 0);
-      expect(junk.score, 0);
+      expect(junk.score, isNull); // wrong-typed → null, not 0
       expect(junk.scoreReasons, isNull);
     });
 
