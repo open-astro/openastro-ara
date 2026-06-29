@@ -61,6 +61,9 @@ public sealed class TonightSkyService : ITonightSkyService {
         // filtered list never changes. The hardcoded fallback is deliberately NOT cached — openngc-dso
         // can be installed at runtime (DataManager) and SkyCatalogService re-checks the file each call,
         // so staying uncached on the fallback lets a later install take effect without a daemon restart.
+        // NOTE: a catalog *update* (re-downloading a newer openngc-dso over an installed one) is NOT
+        // picked up live — both this cache and SkyCatalogService._dsoEntries are process-lifetime; a
+        // re-cull on sky-data change is a later DataManager-integration slice.
         var cached = Volatile.Read(ref _candidates);
         if (cached is not null) {
             return cached;
@@ -281,7 +284,7 @@ public sealed class TonightSkyService : ITonightSkyService {
         // with weaker range reduction than glibc (Windows' Cody–Waite, WASM) lose precision on the raw
         // large argument far from J2000.
         var l0 = Mod360(280.46646 + 36000.76983 * t + 0.0003032 * t * t); // geometric mean longitude (deg)
-        var m = Deg2Rad(357.52911 + 35999.05029 * t - 0.0001537 * t * t); // mean anomaly (rad)
+        var m = Deg2Rad(Mod360(357.52911 + 35999.05029 * t - 0.0001537 * t * t)); // mean anomaly (rad)
         var c = (1.914602 - 0.004817 * t - 0.000014 * t * t) * Math.Sin(m)
               + (0.019993 - 0.000101 * t) * Math.Sin(2 * m)
               + 0.000289 * Math.Sin(3 * m);                               // equation of centre (deg)
