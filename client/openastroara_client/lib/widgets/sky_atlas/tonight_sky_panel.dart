@@ -5,6 +5,7 @@ import '../../models/sequence/slew_target_body.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -12,10 +13,12 @@ import '../../theme/ara_colors.dart';
 /// active profile's site and optical train, by the server's transparent 0–100
 /// "worth shooting tonight" score (§36.8). Each row shows the score, the framing
 /// fit against your rig, tonight's dark window/transit/hours, a "why" score
-/// breakdown on expand, and an add-to-sequence action. Recentre-the-planetarium is
-/// deferred to slice 3b: the planetarium recentres via an in-page `search` command
-/// over the `StellariumServer` loopback (since the §36 native-webview migration), so
-/// it needs that bridge wired alongside the panel's Planning-tab mount.
+/// breakdown on expand, a recentre-the-planetarium action, and an add-to-sequence
+/// action. Recentre drives the planetarium over the `StellariumServer` loopback:
+/// it writes a `goto` command to [planetariumCommandProvider], which
+/// `StellariumView` forwards to the page's `/aracmd` handler (the §36 native
+/// webview has no Dart→page JS bridge, and `skyTargetProvider` isn't read by the
+/// planetarium). The panel docks beside the planetarium in `tonightsSky` mode.
 class TonightSkyPanel extends ConsumerWidget {
   const TonightSkyPanel({super.key});
 
@@ -208,6 +211,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                       icon: const Icon(Icons.playlist_add),
                       onPressed: canAdd ? _addToSequence : null,
                     ),
+              IconButton(
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Centre the planetarium on this object',
+                icon: const Icon(Icons.my_location),
+                onPressed: _recentre,
+              ),
               const Spacer(),
               if (hasReasons)
                 TextButton(
@@ -244,6 +254,17 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       ),
     );
   }
+
+  /// Centre the planetarium on this object. Writes a `goto` command (J2000
+  /// RA/Dec in degrees) to [planetariumCommandProvider]; `StellariumView`
+  /// forwards it over the loopback server to the page's `/aracmd` handler, which
+  /// points the view at the coordinates directly (no name lookup). The provider
+  /// always notifies, so recentring the same object twice still re-centres.
+  void _recentre() => ref.read(planetariumCommandProvider.notifier).send({
+        'type': 'goto',
+        'ra': _object.raDeg,
+        'dec': _object.decDeg,
+      });
 
   /// Create a new sequence named after this object containing a single slew to
   /// its coordinates, then surface the outcome via a SnackBar. Mirrors the

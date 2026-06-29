@@ -16,6 +16,14 @@ class SkyAtlasModeNotifier extends Notifier<SkyAtlasMode> {
   @override
   SkyAtlasMode build() => SkyAtlasMode.catalogView;
   void set(SkyAtlasMode m) => state = m;
+
+  /// Flip between the full-bleed planetarium and the docked Tonight's Sky panel.
+  /// A switch expression (not a ternary) so a future `SkyAtlasMode` value is a
+  /// compile error here rather than silently folding into `tonightsSky`.
+  void toggle() => state = switch (state) {
+        SkyAtlasMode.tonightsSky => SkyAtlasMode.catalogView,
+        SkyAtlasMode.catalogView => SkyAtlasMode.tonightsSky,
+      };
 }
 
 final skyAtlasModeProvider =
@@ -68,6 +76,40 @@ class SkyTargetNotifier extends Notifier<SkyTarget?> {
 
 final skyTargetProvider =
     NotifierProvider<SkyTargetNotifier, SkyTarget?>(SkyTargetNotifier.new);
+
+/// §36 slice 3b — a one-shot command for the self-driven planetarium page.
+/// Flutter chrome (e.g. the Tonight's Sky panel's recentre button) writes a
+/// command map here; [StellariumView] `ref.listen`s it and forwards the value
+/// over the loopback `StellariumServer` to the page's `/aracmd` handler. The
+/// native webview has no Dart→page JS bridge, so panel→page actions must ride
+/// this loopback seam — writing `skyTargetProvider` does NOT move the view (the
+/// planetarium never reads it). The recentre action sends
+/// `{'type':'goto','ra':<deg>,'dec':<deg>}` (the page centres directly on the
+/// coordinates, no name lookup). Always notifies so re-issuing the same goto
+/// re-centres — consume it with `ref.listen` (a side-effect), never `ref.watch`.
+class PlanetariumCommandNotifier extends Notifier<Map<String, Object?>?> {
+  @override
+  Map<String, Object?>? build() => null;
+  void send(Map<String, Object?> cmd) => state = cmd;
+
+  /// Reset to null once the command has been forwarded to the page — this is a
+  /// fire-and-forget bus, so a consumed command shouldn't linger in state where a
+  /// future reader could mistake it for a fresh one.
+  void clear() => state = null;
+
+  // Notify on every non-null command (so two identical consecutive sends each
+  // re-fire — a re-tapped recentre must re-issue the goto), but stay silent when
+  // `next` is null. That keeps `clear()` from waking the listener with a consumed
+  // command — the listener never sees null, so it needs no null guard.
+  @override
+  bool updateShouldNotify(
+          Map<String, Object?>? previous, Map<String, Object?>? next) =>
+      next != null;
+}
+
+final planetariumCommandProvider =
+    NotifierProvider<PlanetariumCommandNotifier, Map<String, Object?>?>(
+        PlanetariumCommandNotifier.new);
 
 /// Whether the active profile has at least one HiPS sky-imagery survey
 /// downloaded. Drives the §36.13 sky-data-missing banner. Phase 12e.1 stubs
