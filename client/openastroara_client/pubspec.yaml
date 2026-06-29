@@ -31,6 +31,7 @@ dependencies:
   fl_chart: ^1.1.1
   collection: ^1.19.1
   url_launcher: ^6.3.1
+  path_provider: ^2.1.5
   package_info_plus: ^10.1.0
   # §36 Planetarium renderer: the platform's native webview embedded as a platform
   # view — WKWebView (macOS/iOS), WebView2 (Windows), WebKitGTK (Linux), System

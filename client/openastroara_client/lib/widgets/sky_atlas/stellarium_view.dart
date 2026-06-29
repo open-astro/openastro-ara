@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
 import '../../models/sequence/slew_target_body.dart';
+import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -37,6 +38,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   StellariumServer? _server;
   StreamSubscription<Map<String, Object?>>? _eventSub;
   final _searchCtrl = TextEditingController();
+  final _prefsService = PlanetariumPrefsService();
   bool _unavailable = false;
 
   // Linux only: the loopback URL handed to the native GTK overlay
@@ -79,11 +81,17 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final servers = await ref.read(savedServersProvider.future);
         if (!mounted) return;
         final api = servers.isNotEmpty ? servers.last.baseUrl : '';
+        // Saved Display-panel toggles (empty on first run → the page keeps its
+        // defaults). The page applies these on load and posts changes back via
+        // _onPageEvent, so a user's layer choices survive relaunch.
+        final savedPrefs = await _prefsService.load();
+        if (!mounted) return;
         final query = {
           'lat': (site?.latitudeDeg ?? 0).toString(),
           'lon': (site?.longitudeDeg ?? 0).toString(),
           'elev': (site?.elevationM ?? 0).toString(),
           'api': api,
+          'prefs': jsonEncode(savedPrefs),
         }.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
         url = '${server.baseUrl}/index.html?$query';
       } catch (e, st) {
@@ -135,6 +143,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
   // NINA sequence DOM, so it hands the target's coordinates here and we build +
   // create the sequence with the shared Dart builder.
   Future<void> _onPageEvent(Map<String, Object?> event) async {
+    // The page posts its Display-panel toggle state here on every change; persist it
+    // so it's restored (via the load URL) next launch.
+    if (event['type'] == 'displayPref') {
+      final layers = event['layers'];
+      if (layers is Map) {
+        final prefs = <String, bool>{};
+        layers.forEach((k, v) {
+          if (k is String && v is bool) prefs[k] = v;
+        });
+        unawaited(_prefsService.save(prefs));
+      }
+      return;
+    }
     if (event['type'] != 'addToSequence') return;
     final raDeg = (event['raDeg'] as num?)?.toDouble();
     final decDeg = (event['decDeg'] as num?)?.toDouble();
