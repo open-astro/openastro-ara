@@ -90,6 +90,18 @@ class StellariumServer {
     }
   }
 
+  /// True when the request's `Host` header names our own loopback origin.
+  /// Defeats DNS-rebinding: a rebinding page can resolve a hostname to 127.0.0.1
+  /// and POST here, but its browser still sends that attacker hostname in `Host`.
+  /// Our page is served from `127.0.0.1:<port>`, so legitimate posts carry
+  /// exactly that. A missing/garbage Host (no `:` → port null) is rejected.
+  bool _isLoopbackHost(HttpRequest request) {
+    final host = request.headers.host;
+    final port = request.headers.port;
+    final hostOk = host == '127.0.0.1' || host == 'localhost' || host == '::1';
+    return hostOk && port == _server.port;
+  }
+
   Future<void> _handle(HttpRequest request) async {
     final response = request.response;
     try {
@@ -117,6 +129,15 @@ class StellariumServer {
       // decode it and surface it on [events]. Always answer 200 so the page's
       // fetch resolves; a malformed body is just dropped.
       if (path == '/araevent') {
+        // DNS-rebinding guard: this channel can carry mount-slewing events
+        // (addToSequence), so only accept POSTs whose Host header is our own
+        // loopback origin. A rebinding attack reaches us with the attacker's
+        // hostname in Host; our own page always sends 127.0.0.1:<port>.
+        if (!_isLoopbackHost(request)) {
+          response.statusCode = HttpStatus.forbidden;
+          await response.close();
+          return;
+        }
         if (request.method != 'POST') {
           response.statusCode = HttpStatus.methodNotAllowed;
           response.headers.set(HttpHeaders.allowHeader, 'POST');

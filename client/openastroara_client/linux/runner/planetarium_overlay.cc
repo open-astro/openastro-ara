@@ -68,11 +68,16 @@ gboolean on_get_child_position(GtkOverlay* overlay,
 void apply_visibility(OverlayState* state) {
   if (state->webview_widget == nullptr) return;
   if (state->visible && state->has_rect) {
+    // Only raise on a genuine hidden→visible transition. setBounds() calls this
+    // on every resize/DPI tick; raising the subwindow each time flickers the
+    // overlay on compositing WMs. Raise once when it reappears (e.g. returning to
+    // Planning after another tab redrew the view), not on every geometry update.
+    gboolean was_visible = gtk_widget_get_visible(state->webview_widget);
     gtk_widget_show(state->webview_widget);
-    // Keep the native subwindow on top of the Flutter surface every time it
-    // reappears (e.g. returning to Planning after another tab redrew the view).
-    GdkWindow* window = gtk_widget_get_window(state->webview_widget);
-    if (window != nullptr) gdk_window_raise(window);
+    if (!was_visible) {
+      GdkWindow* window = gtk_widget_get_window(state->webview_widget);
+      if (window != nullptr) gdk_window_raise(window);
+    }
   } else {
     gtk_widget_hide(state->webview_widget);
   }

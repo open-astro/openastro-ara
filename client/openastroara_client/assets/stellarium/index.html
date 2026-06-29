@@ -756,6 +756,7 @@ function postDisplayPrefs() {
   // listening, connection refused — as a rejected promise, not a synchronous throw.
   // Best-effort: a dropped prefs post just means it saves on the next toggle.
   fetch('/araevent', { method: 'POST', keepalive: true,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'displayPref', layers: layers }) }).catch(function () {});
 }
 

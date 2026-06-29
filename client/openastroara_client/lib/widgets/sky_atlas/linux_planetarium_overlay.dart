@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -75,8 +77,9 @@ class _LinuxPlanetariumOverlayState
   void dispose() {
     planetariumRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    // Don't leave the native webview floating once Planning is gone.
-    _overlay.setVisible(false);
+    // Don't leave the native webview floating once Planning is gone. Fire-and-
+    // forget: dispose() can't be async, and the MethodChannel hop is best-effort.
+    unawaited(_overlay.setVisible(false));
     super.dispose();
   }
 
