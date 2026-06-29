@@ -129,6 +129,15 @@
   #frame #f-add:disabled { opacity: .4; cursor: default; background: rgba(255,255,255,0.12); color: var(--dim); }
   #frame #f-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; min-height: 14px; line-height: 1.35; }
   #frame .warn { color: #ffb74d; }
+  /* Framing centre reticle — marks the mosaic centre (the RA/Dec sent to the Run).
+     It's pinned to screen centre, which is where the frame/mosaic is centred, so it
+     stays dead-centre as you add rows/columns (the mosaic grows symmetrically). */
+  #f-crosshair { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 22px; height: 22px; border: 1.5px solid var(--accent); border-radius: 50%; pointer-events: none;
+    display: none; box-shadow: 0 0 6px rgba(79,195,247,0.5), inset 0 0 4px rgba(79,195,247,0.22); }
+  #f-crosshair.on { display: block; }
+  #f-crosshair::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
+    margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 4px rgba(79,195,247,0.85); }
 
   /* Display drawer — sky-layer toggles */
   #display { left: 14px; top: 64px; width: 234px; max-height: 70%; overflow-y: auto; padding: 12px 13px 14px; display: none;
@@ -148,6 +157,7 @@
 </head>
 <body>
 <canvas id="stel-canvas"></canvas>
+<div id="f-crosshair"></div>
 
 <div id="status" class="ui">Loading planetarium…</div>
 
@@ -192,6 +202,8 @@
      and an N×M mosaic, then adds it to the sequence. -->
 <div id="frame" class="ui">
   <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
+  <div class="frow"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
+  <div class="frow"><span class="k">Dec</span><span class="val" id="f-dec">—</span></div>
   <div class="frow"><span class="k">Rotation</span><span class="val" id="f-rot">0°</span></div>
   <div class="frot">
     <button id="f-rot-" title="−1°">−</button>
@@ -797,6 +809,7 @@ var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
 var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
 var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
+var _savedTimeSpeed = null; // engine time_speed saved while framing freezes the sky
 
 // Apply a freshly-fetched optics payload and, if the field of view actually
 // changed, redraw — so editing optics in Options updates the box live.
@@ -862,6 +875,7 @@ function followFrame() {
       Math.abs(c[1] - frameDecDeg) > 0.003;
   if (!moved) return;
   frameRaDeg = c[0]; frameDecDeg = c[1];
+  setFrameCoordText();   // cheap text update — keep the RA/Dec readout live while panning
   // Debounce the rebuild: only redraw once the view has SETTLED (~180 ms idle),
   // instead of rebuilding the geojson layer on every frame while panning. The
   // continuous ~16×/s churn was needless overhead and, on large grids, accumulated
@@ -950,6 +964,17 @@ function updateFrame() {
 }
 
 function fmtFovDeg(x) { return x >= 1 ? x.toFixed(2) + '°' : (x * 60).toFixed(1) + "'"; }
+// Show the frame centre's RA/Dec (J2000 — exactly what Create Run sends), reusing
+// the info-card formatters. Called live as the frame follows the view, and on any
+// panel re-render.
+function setFrameCoordText() {
+  var raEl = document.getElementById('f-ra'), decEl = document.getElementById('f-dec');
+  if (!raEl || !decEl) return;
+  if (frameRaDeg == null) { raEl.textContent = decEl.textContent = '—'; return; }
+  raEl.textContent = fmtRa(frameRaDeg * D2R);
+  decEl.textContent = fmtDeg(frameDecDeg * D2R);
+}
+
 function renderFramePanel() {
   document.getElementById('f-rot').textContent = frameRotDeg + '°';
   var _hand = document.querySelector('#f-dial .dial-hand');
@@ -975,16 +1000,21 @@ function renderFramePanel() {
   if (!optics || !optics.ok) {
     msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
     msg.classList.add('warn');
+  } else if (!API) {
+    msg.textContent = 'Connect to a server to create a Run from this frame.';
+    msg.classList.add('warn');
   } else {
-    msg.textContent = 'Drag the sky to position the frame.';
+    msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
   document.getElementById('f-add').disabled = !(API && frameRaDeg != null && optics && optics.ok);
+  setFrameCoordText();
 }
 
 function toggleFrame(on) {
   frameOn = (on == null) ? !frameOn : on;
   document.getElementById('frame-btn').classList.toggle('on', frameOn);
+  document.getElementById('f-crosshair').classList.toggle('on', frameOn);
   // Explicit 'block' — these cards default to display:none in CSS, so clearing
   // the inline style to '' would just fall back to hidden.
   document.getElementById('frame').style.display = frameOn ? 'block' : 'none';
@@ -996,6 +1026,16 @@ function toggleFrame(on) {
     stel.core.lock = null;
     var c = viewCenterRaDec();
     if (!isNaN(c[0])) { frameRaDeg = c[0]; frameDecDeg = c[1]; }
+    // Freeze the sky's diurnal motion while framing. The alt-az view is fixed, so as
+    // time flows the centre maps to a drifting RA/Dec and the target would slide off
+    // the box. Stop the engine's time flow (and the live re-sync is gated on
+    // !frameOn below); the time-bar buttons still jump to a chosen instant.
+    if (_savedTimeSpeed === null) _savedTimeSpeed = stel.core.time_speed;
+    stel.core.time_speed = 0;
+  } else if (_savedTimeSpeed !== null) {
+    stel.core.time_speed = _savedTimeSpeed;     // resume real-time flow
+    _savedTimeSpeed = null;
+    if (pinnedMs === null) setObserverTime();   // snap back to "now" if live
   }
   if (frameOn) loadOptics();   // always refresh from the profile on open
   updateFrame();
@@ -1100,7 +1140,7 @@ function wireControls() {
   // Pan + zoom are native (trackpad/mouse) — no on-screen pads.
 
   // Live clock tick: while "Now", keep the sky moving with the real time.
-  setInterval(function () { if (pinnedMs === null) setObserverTime(); }, 15000);
+  setInterval(function () { if (pinnedMs === null && !frameOn) setObserverTime(); }, 15000);
   setInterval(renderClock, 1000);
 }
 
