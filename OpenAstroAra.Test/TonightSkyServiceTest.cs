@@ -419,6 +419,71 @@ namespace OpenAstroAra.Test {
             Assert.That(past.RemainingHours, Is.EqualTo(0));
         }
 
+        // ─── §36.8 slice 4a: per-request optics + mosaic overrides ───
+
+        [Test]
+        public void Mosaic_one_by_one_equals_the_baseline() {
+            // The new mosaic params default to 1×1, which must reproduce the existing single-frame ranking
+            // exactly — additive change, no behaviour drift when no override is supplied.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var candidates = new[] {
+                SizedObj("WIDE", ra, 40, majArcmin: 60),
+                SizedObj("SMALL", ra, 40, majArcmin: 8),
+            };
+
+            var baseline = TonightSkyService.Rank(candidates, site, Optics(), at, limit: 10);
+            var explicit1x1 = TonightSkyService.Rank(candidates, site, Optics(), at, limit: 10,
+                mosaicTilesX: 1, mosaicTilesY: 1);
+
+            Assert.That(explicit1x1.Select(o => o.Id), Is.EqualTo(baseline.Select(o => o.Id)));
+            for (var i = 0; i < baseline.Count; i++) {
+                Assert.That(explicit1x1[i].Score, Is.EqualTo(baseline[i].Score));
+                Assert.That(explicit1x1[i].Framing, Is.EqualTo(baseline[i].Framing));
+            }
+        }
+
+        [Test]
+        public void A_larger_mosaic_enlarges_the_fov_and_reframes_a_too_big_target() {
+            // A 60′ nebula overflows a single 3000 mm frame (min FOV ≈ 17′ → TooBig), but a 5×5 mosaic
+            // quintuples the FOV per axis (min FOV ≈ 86′) so it now fits — the framing classification flips
+            // from TooBig to Good and the worth rises with it.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var neb = new[] { SizedObj("NEB", ra, 40, majArcmin: 60) };
+
+            var single = TonightSkyService.Rank(neb, site, Optics(focalLengthMm: 3000), at, limit: 10).Single();
+            var mosaic = TonightSkyService.Rank(neb, site, Optics(focalLengthMm: 3000), at, limit: 10,
+                mosaicTilesX: 5, mosaicTilesY: 5).Single();
+
+            Assert.That(single.Framing, Is.EqualTo(FramingFit.TooBig), "overflows a single long-focal frame");
+            Assert.That(mosaic.Framing, Is.EqualTo(FramingFit.Good), "a 5×5 mosaic enlarges the FOV → fits");
+            Assert.That(mosaic.Score, Is.GreaterThan(single.Score), "better framing → higher worth");
+        }
+
+        [Test]
+        public void Optics_override_drives_framing_through_GetTonight() {
+            // GetTonight normally reads the profile optics; a per-request override must take precedence. The
+            // profile is a SHORT 448 mm train (frames the 60′ nebula Good), but a LONG 3000 mm override must
+            // make the same object overflow — proving the override path (not the profile) is what's used.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var dso = new DsoEntryDto("NGC9999", "Wide Nebula", "Neb", ra, 40, 6.0, 60.0, 60.0, 0, 20.0);
+            var svc = new TonightSkyService(
+                ProfileStore(site, Optics(focalLengthMm: 448)), new FakeCatalog(new[] { dso }));
+
+            var profileFramed = svc.GetTonight(at, limit: 10).Single(o => o.Id == "NGC9999");
+            var overridden = svc.GetTonight(at, limit: 10,
+                opticsOverride: Optics(focalLengthMm: 3000)).Single(o => o.Id == "NGC9999");
+
+            Assert.That(profileFramed.Framing, Is.EqualTo(FramingFit.Good), "profile 448 mm frames the 60′ nebula well");
+            Assert.That(overridden.Framing, Is.EqualTo(FramingFit.TooBig), "the 3000 mm override overflows it");
+            Assert.That(overridden.Score, Is.LessThan(profileFramed.Score), "worse framing → lower worth");
+        }
+
         /// <summary>Minimal <see cref="ISkyCatalogService"/> test double — only GetAllDsos is exercised.</summary>
         private sealed class FakeCatalog : ISkyCatalogService {
             private readonly IReadOnlyList<DsoEntryDto>? _dsos;

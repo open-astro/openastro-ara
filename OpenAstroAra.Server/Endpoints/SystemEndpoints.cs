@@ -205,7 +205,11 @@ public static class SystemEndpoints {
         // ─── Planning (§36/§25.5) — Tonight's Sky ───
         var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
         planning.MapGet("/tonight",
-                (ITonightSkyService svc, [FromQuery] int? limit, [FromQuery(Name = "at")] string? at) => {
+                (ITonightSkyService svc, IProfileStore profiles, [FromQuery] int? limit,
+                        [FromQuery(Name = "at")] string? at,
+                        [FromQuery] double? focalLengthMm, [FromQuery] double? reducer,
+                        [FromQuery] int? sensorW, [FromQuery] int? sensorH, [FromQuery] double? pixelUm,
+                        [FromQuery] int? mosaicX, [FromQuery] int? mosaicY) => {
                     if (TryParseAt(at, out var atUtc) is { } atError) {
                         return atError;
                     }
@@ -215,13 +219,69 @@ public static class SystemEndpoints {
                         return Results.Problem("Query parameter 'limit' must be >= 1.",
                             statusCode: StatusCodes.Status400BadRequest);
                     }
-                    return Results.Ok(svc.GetTonight(atUtc, limit ?? 10));
+
+                    // Optical-train overrides — every positive-real / pixel-count field, when supplied, must
+                    // be > 0 (a non-positive optic can't form a usable FOV; the service would treat it as
+                    // unconfigured and silently frame everything Unknown, which would hide the bad input).
+                    if (focalLengthMm is <= 0) {
+                        return Results.Problem("Query parameter 'focalLengthMm' must be > 0.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (reducer is <= 0) {
+                        return Results.Problem("Query parameter 'reducer' must be > 0.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (pixelUm is <= 0) {
+                        return Results.Problem("Query parameter 'pixelUm' must be > 0.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (sensorW is <= 0) {
+                        return Results.Problem("Query parameter 'sensorW' must be > 0.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (sensorH is <= 0) {
+                        return Results.Problem("Query parameter 'sensorH' must be > 0.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    // Mosaic tiles cap at 20 per axis — the FOV (and so the per-object framing scan cost)
+                    // scales with the tile count, so an unbounded value would be a cheap way to blow it up.
+                    if (mosaicX is < 1 or > 20) {
+                        return Results.Problem("Query parameter 'mosaicX' must be in [1, 20].",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (mosaicY is < 1 or > 20) {
+                        return Results.Problem("Query parameter 'mosaicY' must be in [1, 20].",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+
+                    // Build an optics override only when AT LEAST ONE optic field is supplied; the
+                    // un-supplied fields are sourced per-field from the active profile so a caller can tweak
+                    // just (say) the reducer. When NO optic field is supplied we pass null and the service
+                    // uses the profile directly — no profile read on the common path.
+                    OpticsSettingsDto? opticsOverride = null;
+                    if (focalLengthMm is not null || reducer is not null || sensorW is not null
+                            || sensorH is not null || pixelUm is not null) {
+                        var baseOptics = profiles.GetOpticsSettings();
+                        opticsOverride = new OpticsSettingsDto(
+                            focalLengthMm ?? baseOptics.FocalLengthMm,
+                            reducer ?? baseOptics.ReducerFactor,
+                            sensorW ?? baseOptics.SensorWidthPx,
+                            sensorH ?? baseOptics.SensorHeightPx,
+                            pixelUm ?? baseOptics.PixelSizeUm);
+                    }
+
+                    return Results.Ok(svc.GetTonight(atUtc, limit ?? 10, opticsOverride,
+                        mosaicX ?? 1, mosaicY ?? 1));
                 })
             .Produces<IReadOnlyList<TonightSkyObjectDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("GetTonightSky")
             .WithDescription("Optional 'at' is an ISO-8601 instant; include a 'Z' or offset — a " +
-                "timezone-naive value is interpreted as UTC. Absent → now.");
+                "timezone-naive value is interpreted as UTC. Absent → now. Optional optical-train overrides " +
+                "(focalLengthMm, reducer, sensorW, sensorH, pixelUm) each replace one field of the active " +
+                "profile's optics for this request (any supplied must be > 0; unsupplied fields fall back to " +
+                "the profile); mosaicX/mosaicY (default 1, range [1, 20]) enlarge the framing FOV by that " +
+                "tile count per axis. Absent overrides → the profile's optics at 1×1.");
 
         planning.MapGet("/horizon",
                 (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
