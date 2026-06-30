@@ -152,3 +152,23 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **Decision:** delete `webview_cef`/CEF from the client entirely; the §36 Stellarium planetarium renders only through the platform-native webview via `webview_all` (WKWebView macOS/iOS, WebView2 Windows, WebKitGTK Linux, System WebView Android). The `WEBVIEW_ALL` build flag, the CEF code paths, the dead Aladin atlas widget, the git submodule, and the macOS multi-process helper scaffolding (5 helper targets + JIT/exec-memory entitlements) are all gone. Executes the native-webview pivot recorded above.
 - **Why now:** CEF was registered on every platform regardless of the flag, and on Linux its `libGL`/CEF init broke Flutter's GTK GL context at startup — the app couldn't render at all (a stock Flutter app on the same box renders fine), so Linux *forced* the removal earlier than the planned "validate then drop" sequence. macOS already froze under sustained OSR load. One renderer is simpler, lighter (no Chromium download), and is the only path that works on mobile.
 - **Verified:** macOS builds + launches + renders via WKWebView with the trimmed entitlements (commit on `feat-planning-webview-default`); Linux/Windows pending on-device confirmation.
+
+## 2026-06-29 — Next-gen planning features deferred; ship cross-platform release first
+
+### Priority: release before next-generation features (user, 2026-06-29)
+
+- **Decision:** the current priority is getting to a **releasable cross-platform build so users can break free of Windows**. The next-generation planning/exposure intelligence discussed this session (filter/emission-aware planning, Glover optimal sub-exposure `t = 10·R²/P`, camera-aware exposure feasibility, sub-exposure windows) is **bookmarked as future work**, not scheduled for v1. Full design captured in `design/NEXTGEN_PLANNING.md`.
+- **Why:** *"I don't want to rebuild this project completely … trying to get to a point we can release and let users break free of windows. This will be a next generation add."* Tonight's Sky (§36.8, shipped #612–#616) is a good foundation to grow on incrementally; ship first, add later.
+
+### Glover exposure intelligence is future work, NOT NINA's "Smart Exposure"
+
+- **Clarification (factual):** NINA's *Smart Exposure* is a **sequencer convenience** (filter switch → N exposures → dither/AF on trigger), with a plain user-typed exposure time — it is **not** noise-optimised. Glover's `t = 10·R²/P` optimal-sub method lives in **SharpCap's Smart Histogram**, not NINA. If/when ARA adds it, Glover is an **advisor that fills NINA's `T` field** (keeps NINA import/export fidelity — the import-fidelity epic), named **"Optimal Sub"** to avoid overloading "smart". Adaptive/runtime Glover (measure live sky background) is a later ARA-native, non-NINA-round-trippable option. See `design/NEXTGEN_PLANNING.md` §2/§5.
+
+### Smarter native sequence model — deferred, do NOT rebuild now
+
+- **Decision:** the idea of replacing the NINA-shaped sequence format with an **ARA-native sequence model** (own the model; NINA JSON becomes an import adapter; ARA-native nodes like multi-switch targeting + Optimal-Sub become first-class) is recorded but **explicitly deferred post-release**. The current NINA-compatible sequencer stays for v1.
+- **If picked up later (recorded so the call is deliberate):** own the *model + format + editor/UX* but **keep NINA's proven execution engine under the hood** (most value, least risk; native runner only if ever); decide one-way NINA import vs. lossy round-trip export; use a `schemaVersion`'d forward-compatible schema (drop NINA's `$type`/.NET-class coupling). Do it incrementally — native model behind the existing §38 editor, NINA import green throughout, version-stamped migration. See `design/NEXTGEN_PLANNING.md` §6.
+
+### Tonight's Sky framing-fit refinement parked
+
+- **State:** the 4-state framing-fit change (Small / Frames well / Fills frame / Too big, keyed to real frame fill; PR #618) was built, on-device verified at 448 mm, then **closed at the user's request** to hold. The work is intact on branch `feat-tonight-sky-framing-fit` (not merged; master untouched). Reopen / re-PR when the user confirms the cutoffs (fills = 0.50, small = 0.33 of the short side). See `design/TONIGHT_SKY.md` framing section + CHANGELOG draft on that branch.

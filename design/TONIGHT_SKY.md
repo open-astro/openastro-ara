@@ -178,3 +178,18 @@ Points / achievements / gamification (the "Dragons = 90, Orion = 40, points for 
 and not blowing out cores" idea) — back-burnered by the user 2026-06-28. The
 **transparent 0–100 score** above is the non-gamified core; a points layer could later
 build on it without schema churn.
+
+## Next-generation extensions (bookmarked, post-release)
+
+A future pass would make Tonight's Sky **rig- and time-aware**: filter/emission-aware
+planning (narrowband vs broadband by target type × the user's filters × Bortle), Glover
+optimal sub-exposure (`t = 10·R²/P`), and camera-aware exposure feasibility (the Glover
+floor + full-well saturation ceiling → a usable sub *window*). Full design + the deferral
+rationale: **`design/NEXTGEN_PLANNING.md`** and `design/PORT_DECISIONS.md` (2026-06-29).
+Deferred behind the v1 cross-platform release.
+
+**Framing-fit refinement (parked):** a 4-state framing chip (Small / Frames well / Fills
+frame / Too big) keyed to the real frame fill — built + on-device verified at 448 mm,
+shipped as PR #618 then closed at the user's request to hold. Intact on branch
+`feat-tonight-sky-framing-fit`; reopen when the cutoffs (fills = 0.50, small = 0.33 of
+the short side) are confirmed.
