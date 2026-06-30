@@ -47,8 +47,20 @@ nudge, never a hard filter).
 
 ## 2. Glover optimal sub-exposure (`t = 10·R² / P`)
 
-Dr. Robin Glover's (SharpCap author) criterion for the **sub-exposure length** where read noise
-stops mattering:
+> **Attribution & permission (2026-06-30).** The read-noise-limited sub-exposure criterion was
+> *popularised* by **Dr. Robin Glover** (author of SharpCap) in his "How to Get Perfect Subexposures"
+> talk; Glover notes the approximation itself likely predates him, so we credit it as the criterion he
+> popularised, not one he invented. He gave **explicit permission** to use the equation in Open Astro
+> (email, 2026-06-30) and offered the engineering caveats folded into §3 below. He also endorsed the
+> project's mission — he welcomed *"an open source implementation rather than the manufacturer lock-in"*
+> of closed competitors. (His fuller remark named a specific commercial product; that clause is
+> intentionally omitted here to avoid embedding a named legal allegation in a public doc.) Attribute him
+> in any user-facing "Optimal Sub" UI.
+> The **original permission email is retained by the maintainer** for independent verification (kept out
+> of the repo to avoid publishing personal contact details); a redacted copy can be attached to an issue
+> on request.
+
+The criterion for the **sub-exposure length** where read noise stops mattering:
 
 - `R` = camera read noise (e⁻), `P` = sky-background flux (e⁻/s/pixel).
 - The `10` encodes "let read noise add ≤ ~5% to total noise": `e_sky = R²/((1.05)²−1) ≈ 10·R²`,
@@ -67,16 +79,42 @@ ARA implementing this would be giving users something NINA core lacks. See §5 f
 I spend the whole night on" is the *total-integration-to-target-SNR* question — the same noise model,
 one step further, also using the target's surface brightness (which Tonight's Sky already carries).
 
+**Glover's caveat (2026-06-30) — the read-noise limit is only ONE bound, and it's the *subtle* one.**
+He stresses that the read-noise criterion sits inside a set of *other* practical limits, and that the
+others are *obvious when they happen* whereas the read-noise problem is invisible (you can't see when
+a sub is too short to swamp read noise, and — Glover's own wording — going *past* the floor yields no
+further read-noise gain yet quietly costs dynamic range / extra trail exposure; this is diminishing
+returns, NOT a read-noise-derived ceiling). So the tool's unique
+value is surfacing the **subtle read-noise sweet spot inside the obvious bounds** — see §3.
+
 ---
 
 ## 3. Camera-aware exposure feasibility (the sub-exposure *window*)
 
-Glover gives the floor; **full-well capacity gives the ceiling** — the longest sub before bright
-cores/stars **clip**. So feasibility on a target is a *window*:
+Glover gives the *read-noise* floor; **full-well capacity gives the obvious ceiling** — the longest
+sub before bright cores/stars **clip**. But per Glover's own caveat (§2, 2026-06-30) the read-noise
+limit is only one of several bounds. The **practical usable window** is the read-noise sweet spot
+*intersected* with the obvious practical limits:
 
 ```
-usable sub window = [ t_floor (Glover: read noise vs sky) … t_ceiling (full well vs object brightness) ]
+usable sub window =
+  [ MAX( read-noise floor (Glover t=10R²/P),      // subtle — invisible when violated
+         star-detectability floor,                 // enough stars per sub to register/align/plate-solve
+         data-volume floor )                        // min sub length to keep sub count storable/processable
+    …
+    MIN( star/core saturation ceiling (full well vs object brightness),
+         sky-background saturation ceiling,         // the BACKGROUND itself clipping under heavy LP
+         satellite-trail-tolerance ceiling ) ]      // longer subs catch more trails → more rejected data
 ```
+
+**The read-noise floor is the only *subtle* bound** (you can't see a sub too short to swamp read noise,
+nor — per Glover — that going past the floor buys no further read-noise gain while quietly costing
+dynamic range; that's diminishing returns, not a read-noise ceiling). The other bounds announce
+themselves (blown cores, trailed or rejected frames, no stars to solve, a full disk). So the tool computes the precise read-noise sweet
+spot and presents it *within* the obvious bounds, flagging when an obvious bound is the real
+constraint. v1 can implement the read-noise floor + the full-well/background saturation ceiling
+(all derivable from the sky + camera model); star-detectability and satellite-trail bounds are
+refinements.
 
 - Faint emission target in narrowband under a dark-ish sky → `P` tiny → long Glover floor, full well
   rarely the limit → wide window.
