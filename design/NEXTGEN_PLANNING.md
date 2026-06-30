@@ -52,8 +52,10 @@ nudge, never a hard filter).
 > talk; Glover notes the approximation itself likely predates him, so we credit it as the criterion he
 > popularised, not one he invented. He gave **explicit permission** to use the equation in Open Astro
 > (email, 2026-06-30) and offered the engineering caveats folded into §3 below. He also endorsed the
-> project's mission: *"good to get an open source implementation rather than the manufacturer lock-in /
-> GPL license violations of the likes of ASI Air."* Attribute him in any user-facing "Optimal Sub" UI.
+> project's mission — he welcomed *"an open source implementation rather than the manufacturer lock-in"*
+> of closed competitors. (His fuller remark named a specific commercial product; that clause is
+> intentionally omitted here to avoid embedding a named legal allegation in a public doc.) Attribute him
+> in any user-facing "Optimal Sub" UI.
 > The **original permission email is retained by the maintainer** for independent verification (kept out
 > of the repo to avoid publishing personal contact details); a redacted copy can be attached to an issue
 > on request.
