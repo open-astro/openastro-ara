@@ -54,6 +54,9 @@ nudge, never a hard filter).
 > (email, 2026-06-30) and offered the engineering caveats folded into §3 below. He also endorsed the
 > project's mission: *"good to get an open source implementation rather than the manufacturer lock-in /
 > GPL license violations of the likes of ASI Air."* Attribute him in any user-facing "Optimal Sub" UI.
+> The **original permission email is retained by the maintainer** for independent verification (kept out
+> of the repo to avoid publishing personal contact details); a redacted copy can be attached to an issue
+> on request.
 
 The criterion for the **sub-exposure length** where read noise stops mattering:
 
@@ -93,7 +96,7 @@ limit is only one of several bounds. The **practical usable window** is the read
 usable sub window =
   [ MAX( read-noise floor (Glover t=10R²/P),      // subtle — invisible when violated
          star-detectability floor,                 // enough stars per sub to register/align/plate-solve
-         data-volume floor )                        // not so many subs they're impractical to store/process
+         data-volume floor )                        // min sub length to keep sub count storable/processable
     …
     MIN( star/core saturation ceiling (full well vs object brightness),
          sky-background saturation ceiling,         // the BACKGROUND itself clipping under heavy LP
