@@ -1,0 +1,197 @@
+# Next-generation planning & exposure intelligence — design backlog
+
+> **Status: BOOKMARKED FUTURE WORK — not scheduled for the v1 cross-platform release.**
+> Captured 2026-06-29 from a design conversation. The current priority is shipping a
+> releasable cross-platform build so users can break free of Windows; everything here is
+> deliberately deferred to a *next-generation* pass and recorded so the thinking isn't lost.
+> Nothing in this document has been built. See `design/PORT_DECISIONS.md` (2026-06-29) for the
+> decision to defer.
+
+This is the design record for turning Tonight's Sky (§36.8, shipped: `design/TONIGHT_SKY.md`)
+from "what's worth shooting tonight" into "what's worth shooting tonight **with your rig and your
+time budget**" — adding filter intelligence, Glover sub-exposure optimisation, and camera-aware
+exposure feasibility. It also records a strategic direction for the sequencer format.
+
+The guiding principle stays **advise, don't dictate** (the existing Tonight's Sky philosophy):
+surface the trade-off and the recommended number, never hide a target or hard-gate the user.
+
+---
+
+## 1. Filter-type / emission-aware planning
+
+**Goal: be thoughtful of the user's time.** Shooting an emission target like the Veil (SNR) in
+broadband LRGB is possible but needs *far* more integration than narrowband Hα/OIII — narrowband
+emits in narrow lines, so it punches through light pollution. Broadband-continuum targets
+(galaxies, star clusters, reflection nebulae) gain little from narrowband. So the planner should
+weigh **target emission character × the user's filters × their sky (Bortle)**.
+
+- **Target emission class** — derive from the OpenNGC `Type` column: emission-line
+  (HII regions, supernova remnants, planetary nebulae) → narrowband-responsive; continuum
+  (galaxies, open/globular clusters, reflection nebulae) → broadband.
+- **User's filters** — a **new profile field** (does not exist today; the profile's filter config
+  is empty). Declared once at setup: broadband (mono L/R/G/B, or OSC/DSLR) and/or narrowband
+  (Hα, OIII, SII, or dual/tri-band like L-eXtreme / L-eNhance). Planning runs offline, so this is
+  a profile setting, *not* read from the connected filter wheel at plan time.
+- **Sky** — `site.BortleClass` already exists and already feeds the worth score (surface-brightness
+  term). The gap is **capturing Bortle (or an SQM mag/arcsec² value) in the setup wizard** and using
+  it in the *filter* advice (the broadband penalty on emission targets is worst under bright skies —
+  exactly when narrowband earns its keep).
+
+**Output (advice, optional soft score nudge):** per target, a recommended filter approach
+("Narrowband — efficient even under your sky", "Broadband LRGB", "OSC + dual-band") plus a
+time-efficiency signal ("broadband only: expect many hours; narrowband would cut this
+dramatically"). Open call: advice-only vs. a soft score nudge (lean: both — a tag plus a gentle
+nudge, never a hard filter).
+
+---
+
+## 2. Glover optimal sub-exposure (`t = 10·R² / P`)
+
+Dr. Robin Glover's (SharpCap author) criterion for the **sub-exposure length** where read noise
+stops mattering:
+
+- `R` = camera read noise (e⁻), `P` = sky-background flux (e⁻/s/pixel).
+- The `10` encodes "let read noise add ≤ ~5% to total noise": `e_sky = R²/((1.05)²−1) ≈ 10·R²`,
+  then `t = e_sky / P`. The acceptable-noise-increase is a **tunable knob** (3% → ≈ `16·R²/P`).
+- **`P` model:** `P ∝ 10^(−0.4·skyMag) × aperture_area × pixel_solid_angle × QE × filter_passband`
+  — i.e. it ties together Bortle/SQM (skyMag), f-ratio + pixel scale (optics), QE (sensor), and the
+  filter bandwidth (narrowband collapses `P` by roughly the bandwidth ratio; a 3 nm Hα vs a ~100 nm
+  L ≈ 30× less sky flux).
+
+**Note — NINA "Smart Exposure" is NOT Glover.** NINA's Smart Exposure is a *sequencer convenience*
+(switch filter → take N exposures → dither/AF on trigger); its exposure time is a plain
+user-typed number, noise-blind. Glover's method lives in **SharpCap's Smart Histogram / "Brain"**.
+ARA implementing this would be giving users something NINA core lacks. See §5 for how the two relate.
+
+**`t = 10·R²/P` is the floor, not the whole story.** It sets the *minimum* useful sub. "What should
+I spend the whole night on" is the *total-integration-to-target-SNR* question — the same noise model,
+one step further, also using the target's surface brightness (which Tonight's Sky already carries).
+
+---
+
+## 3. Camera-aware exposure feasibility (the sub-exposure *window*)
+
+Glover gives the floor; **full-well capacity gives the ceiling** — the longest sub before bright
+cores/stars **clip**. So feasibility on a target is a *window*:
+
+```
+usable sub window = [ t_floor (Glover: read noise vs sky) … t_ceiling (full well vs object brightness) ]
+```
+
+- Faint emission target in narrowband under a dark-ish sky → `P` tiny → long Glover floor, full well
+  rarely the limit → wide window.
+- Bright target / rich starfield → saturation ceiling drops; full well decides whether you can even
+  *reach* the Glover-optimal sub without clipping. This is where extended full-well modes matter.
+
+**Critical correction (user, 2026-06-29): the camera electronics matter, not just the sensor.** The
+same sensor behaves differently per camera: e.g. ZWO ASI2600MM ≈ 50 ke⁻ full well vs ToupTek 2600
+up to **100 ke⁻ in High Full Well mode** — same IMX571 sensor, different readout electronics. So the
+spec model splits along a real seam:
+
+| From the **sensor** (shared, stable) | From the **camera electronics** (per-model, per-mode) |
+|---|---|
+| pixel size, QE curve | **full well**, read noise, e⁻/ADU, gain & HFW modes |
+| small ~20-entry sensor library | **varies even on the same sensor** |
+
+**Data strategy — never curate hundreds of cameras:**
+1. **Read electronics from the connected camera (primary).** ASCOM/Alpaca exposes
+   `Camera.FullWellCapacity` (e⁻, reported *for the current readout mode* — so HFW vs standard falls
+   out automatically), `Camera.ElectronsPerADU`, `Camera.Gain`/`Gains`. Capture once on connect,
+   cache into the profile for offline planning. The 50-vs-100 ke⁻ difference comes for free.
+2. **Sensor → QE + pixel** from a small ~15–20-row sensor library (IMX571, IMX455, IMX533, IMX294,
+   IMX585, …), keyed off `Camera.SensorName`, or a generic "modern CMOS" default.
+3. **Read noise** is the one spec **not** in standard ASCOM — default it by gain regime (the model is
+   forgiving: the read-noise-contribution curve is flat near the optimum), user-editable from the
+   manufacturer's gain/read-noise chart, or import a SharpCap sensor-analysis row.
+
+| Tier | Source | Effort | Covers |
+|---|---|---|---|
+| 0 | generic CMOS defaults | none | everyone, instantly |
+| 1 | ~20-row **sensor** library (QE + pixel) | small, one-time | most modern cams |
+| 2 | auto-captured electronics from connected camera | none (runtime) | exact, your gear |
+| 3 | manual / SharpCap-analysis paste | user | perfectionists |
+
+Net: **zero camera database required.** Ship Tier 0 day one; the rest is self-populating or optional.
+
+---
+
+## 4. Profile-setup additions implied by §1–§3
+
+To feed the above, profile setup (the wizard) needs to capture:
+- **Bortle class (or SQM mag/arcsec²)** — already stored in `site.BortleClass`; add/confirm a
+  setup step with a plain-language scale.
+- **Filter set** — the missing field (broadband L/R/G/B, OSC/DSLR; narrowband Hα/OIII/SII; dual/tri-band).
+- **Camera electronics** — read noise, full well, e⁻/ADU, gain/mode (auto-captured on connect where
+  possible; defaults + manual override otherwise) + **aperture / f-ratio** (profile has focal length
+  + reducer but not aperture, which the `P` flux term needs).
+
+---
+
+## 5. NINA "Smart Exposure" vs Glover — how they coexist
+
+They are **different layers**, not competitors:
+- **NINA Smart Exposure = the container** (workflow: filter → N exposures of length `T` → dither/AF).
+  Owns *how* to run; `T` is a plain noise-blind number.
+- **Glover = the number that should go in `T`** (the optimal sub for that filter + sky + camera).
+
+**Hard constraint:** ARA must import/export NINA sequences faithfully (the import-fidelity epic;
+Smart Exposure is the most common real-world instruction). So Glover **cannot replace** Smart
+Exposure — it must be an **advisor that fills the standard `T`**, keeping the sequence NINA-valid:
+- Tonight's Sky advice ("shoot the Veil in Hα — ~600 s subs").
+- Sequence editor: a per-filter **"Optimal Sub"** suggestion the user can one-click *apply* (writes a
+  plain number into the normal field → still exports as valid NINA).
+- A standalone calculator.
+
+**Naming:** don't overload "smart" — NINA's stays **"Smart Exposure"**; ARA's Glover number is
+**"Optimal Sub"** / "Suggested exposure".
+
+**The real fork in the road (decide later):**
+- **Static/advisory Glover** — compute `T`, drop it into Smart Exposure's fixed field. NINA-compatible,
+  predictable, exports clean. **Recommended first step (≈90% of the value, keeps fidelity).**
+- **Adaptive/runtime Glover** — SharpCap-Brain-style: measure the *actual* sky background from frames
+  during the run and set the sub live (tracks moon, transparency, twilight). More correct, but a
+  **new ARA-only execution behavior with no NINA equivalent** → would not round-trip to NINA. A later
+  ARA-native option for users who don't care about NINA export.
+
+---
+
+## 6. Strategic direction — own the sequence model, keep NINA as an importer (DEFERRED)
+
+ARA has diverged substantially from NINA (bug fixes, multi-switch, conformance, the §38 native editor,
+the `.araseq.json` share format). A future direction worth recording:
+
+**ARA should own its sequence *model*, and NINA JSON becomes one *supported import format* — an adapter
+at the edge, not the master shape.**
+
+- **Canonical ARA model** — a clean, `schemaVersion`'d format designed for ARA's features. Drop NINA's
+  `$type` / .NET-class-name coupling (brittle; leaks NINA internals + plugin assembly names into data).
+  ARA-native nodes (multi-switch targeting, Optimal-Sub/Glover, filter-aware exposure) become
+  first-class instead of being crammed into NINA's shape. This also dissolves the §5 tension — Glover
+  is just a node type the NINA importer maps into.
+- **NINA import = adapter** — the import-fidelity epic *becomes* the NINA→ARA translation layer; users
+  keep their JSON.
+
+**Decisions to make deliberately if/when this is picked up:**
+1. **Engine vs. format** — strong lean: own the *model + format + editor + UX* but keep NINA's proven
+   **execution engine** (containers/triggers/conditions) under the hood. Most value, least risk; a
+   native runner can come later if ever.
+2. **Export** — one-way NINA import only (simplest, honest) vs. best-effort **lossy** NINA export that
+   warns when an ARA-native node has no NINA equivalent.
+3. **Schema** — versioned, stable discriminators, forward-compatible (the thing NINA serialization is
+   bad at).
+
+**Why deferred (2026-06-29):** the priority is shipping the cross-platform release, not a sequencer
+rebuild. This is explicitly a *next-generation* effort, done incrementally (native model behind the
+existing editor, NINA import green throughout, version-stamped migration) — **not now**.
+
+---
+
+## Suggested slice order (when this epic is picked up, post-release)
+
+1. **Optimal-Sub calculator** — pure `t = 10·R²/P` floor + full-well ceiling → the sub *window* per
+   filter/gain. Standalone, unit-testable against known SharpCap numbers. No planner/sequencer changes.
+2. **Profile/equipment setup** — Bortle/SQM, filter set, camera electronics (auto-capture + defaults),
+   aperture/f-ratio.
+3. **Filter/emission-aware advice** in Tonight's Sky — recommended filter approach + efficiency signal.
+4. **Optimal-Sub advisor in the sequence editor** — per-filter suggestion that fills NINA's `T`.
+5. (Later, ARA-native) adaptive runtime exposure; native sequence model per §6.
