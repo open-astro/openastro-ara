@@ -82,7 +82,9 @@ one step further, also using the target's surface brightness (which Tonight's Sk
 **Glover's caveat (2026-06-30) — the read-noise limit is only ONE bound, and it's the *subtle* one.**
 He stresses that the read-noise criterion sits inside a set of *other* practical limits, and that the
 others are *obvious when they happen* whereas the read-noise problem is invisible (you can't see when
-a sub is too short to swamp read noise, **or** too long for any further gain). So the tool's unique
+a sub is too short to swamp read noise, and — Glover's own wording — going *past* the floor yields no
+further read-noise gain yet quietly costs dynamic range / extra trail exposure; this is diminishing
+returns, NOT a read-noise-derived ceiling). So the tool's unique
 value is surfacing the **subtle read-noise sweet spot inside the obvious bounds** — see §3.
 
 ---
@@ -105,9 +107,10 @@ usable sub window =
          satellite-trail-tolerance ceiling ) ]      // longer subs catch more trails → more rejected data
 ```
 
-**The read-noise bound is the only *subtle* one** (you can't see a sub that's too short to swamp read
-noise, or too long for any further gain) — the others announce themselves (blown cores, trailed or
-rejected frames, no stars to solve, a full disk). So the tool computes the precise read-noise sweet
+**The read-noise floor is the only *subtle* bound** (you can't see a sub too short to swamp read noise,
+nor — per Glover — that going past the floor buys no further read-noise gain while quietly costing
+dynamic range; that's diminishing returns, not a read-noise ceiling). The other bounds announce
+themselves (blown cores, trailed or rejected frames, no stars to solve, a full disk). So the tool computes the precise read-noise sweet
 spot and presents it *within* the obvious bounds, flagging when an obvious bound is the real
 constraint. v1 can implement the read-noise floor + the full-well/background saturation ceiling
 (all derivable from the sky + camera model); star-detectability and satellite-trail bounds are
