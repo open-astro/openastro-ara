@@ -78,7 +78,10 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel> {
     // Prefer the connected wheel's live slot names; fall back to the §37.4
     // filter-wheel label settings (which carry sensible defaults) so the
     // button works offline too.
-    final wheel = ref.read(filterWheelProvider).valueOrNull;
+    final wheel = ref.read(filterWheelProvider).maybeWhen(
+          data: (v) => v,
+          orElse: () => null,
+        );
     final live = wheel?.slots.map((s) => s.name).toList() ?? const <String>[];
     final labels = live.any((s) => s.trim().isNotEmpty)
         ? live
