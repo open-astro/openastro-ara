@@ -93,6 +93,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_partially_supporting_driver_never_clobbers_stored_values_with_unset() {
+            // The driver implements FullWellCapacity + SensorName but throws on ElectronsPerADU
+            // (caps report 0) and Gain (caps report -1). The stored e⁻/ADU — user-entered or
+            // captured from a previous driver — must survive the merge; only reported fields update.
+            var current = new CameraElectronicsDto(
+                SensorName: "IMX571", FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100,
+                ReadNoiseE: 3.3, AutoCaptured: true);
+            var result = CameraService.AutoPopulatedElectronics(
+                current, Caps(fullWell: 100_000, sensorName: "IMX571"));
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.FullWellE, Is.EqualTo(100_000), "the reported field updates");
+            Assert.That(result.ElectronsPerAdu, Is.EqualTo(0.78), "the unreported field keeps its stored value");
+            Assert.That(result.Gain, Is.EqualTo(100), "unreported gain keeps its stored value");
+            Assert.That(result.ReadNoiseE, Is.EqualTo(3.3), "user-owned field untouched");
+
+            // When the reported fields already match, the unreported ones can't force a write.
+            Assert.That(CameraService.AutoPopulatedElectronics(
+                    result, Caps(fullWell: 100_000, sensorName: "IMX571")),
+                Is.Null, "partial reports matching the stored values are a no-op");
+        }
+
+        [Test]
         public void A_sensor_name_alone_is_still_captured() {
             // Partial data is still provenance worth recording (the sensor library keys off it).
             var result = CameraService.AutoPopulatedElectronics(new CameraElectronicsDto(), Caps(sensorName: "IMX571"));

@@ -717,34 +717,33 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     /// <summary>
     /// NEXTGEN §3/§4 — the camera electronics to persist given the connected camera's caps, or null
-    /// when no change is warranted: the camera reports nothing usable (no full well AND no e⁻/ADU AND
-    /// no sensor name), or the ASCOM-sourced fields already match. Updates only the ASCOM-sourced
-    /// fields (sensor name, full well, e⁻/ADU, gain) — <c>ReadNoiseE</c> and
-    /// <c>QuantumEfficiencyPeak</c> are never in ASCOM and always user-owned, so they're preserved.
-    /// ASCOM reports full well / e⁻/ADU for the CURRENT readout mode, so reconnecting in e.g. High
-    /// Full Well mode re-captures the bigger well automatically (that's the "differs → re-cache" case).
+    /// when no change is warranted. Merges PER FIELD: a property the driver didn't expose
+    /// (<c>ReadCapabilities</c> reports 0 / null / −1 for it) keeps the stored value — a driver with
+    /// partial support (say full well but no e⁻/ADU) must not clobber a user-entered or previously
+    /// captured value with a zero. <c>ReadNoiseE</c> and <c>QuantumEfficiencyPeak</c> are never in
+    /// ASCOM and always user-owned, so they're preserved outright. ASCOM reports full well / e⁻/ADU
+    /// for the CURRENT readout mode, so reconnecting in e.g. High Full Well mode re-captures the
+    /// bigger well automatically (the "differs → re-cache" case). Reported doubles are epsilon-compared
+    /// against the stored ones (they round-trip through profile.json) so a serialization artefact
+    /// doesn't re-write + raise Changed on every reconnect; returns null when nothing changes.
     /// </summary>
     internal static CameraElectronicsDto? AutoPopulatedElectronics(CameraElectronicsDto current, CameraCapabilitiesDto caps) {
         var hasAny = caps.FullWellCapacityE > 0 || caps.ElectronsPerAdu > 0 || !string.IsNullOrEmpty(caps.SensorName);
         if (!hasAny) {
             return null;
         }
-        // Doubles round-trip through profile.json — epsilon-compare like the optics populate so a
-        // serialization artefact doesn't re-write + raise Changed on every reconnect.
-        if (current.SensorName == (caps.SensorName ?? "")
-            && Math.Abs(current.FullWellE - caps.FullWellCapacityE) < 1e-9
-            && Math.Abs(current.ElectronsPerAdu - caps.ElectronsPerAdu) < 1e-9
-            && current.Gain == caps.CurrentGain
-            && current.AutoCaptured) {
-            return null;
-        }
-        return current with {
-            SensorName = caps.SensorName ?? "",
-            FullWellE = caps.FullWellCapacityE,
-            ElectronsPerAdu = caps.ElectronsPerAdu,
-            Gain = caps.CurrentGain,
+        var next = current with {
+            SensorName = string.IsNullOrEmpty(caps.SensorName) ? current.SensorName : caps.SensorName,
+            FullWellE = caps.FullWellCapacityE > 0 && Math.Abs(caps.FullWellCapacityE - current.FullWellE) >= 1e-9
+                ? caps.FullWellCapacityE
+                : current.FullWellE,
+            ElectronsPerAdu = caps.ElectronsPerAdu > 0 && Math.Abs(caps.ElectronsPerAdu - current.ElectronsPerAdu) >= 1e-9
+                ? caps.ElectronsPerAdu
+                : current.ElectronsPerAdu,
+            Gain = caps.CurrentGain >= 0 ? caps.CurrentGain : current.Gain,
             AutoCaptured = true,
         };
+        return next == current ? null : next;
     }
 
     /// <summary>
