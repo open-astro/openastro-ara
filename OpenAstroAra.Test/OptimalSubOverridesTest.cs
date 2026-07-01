@@ -171,6 +171,9 @@ namespace OpenAstroAra.Test {
             Assert.That(Build(reducer: 11).Error, Does.Contain("reducer"));
             Assert.That(Build(pixelUm: 0).Error, Does.Contain("pixelUm"));
             Assert.That(Build(skyMag: double.NaN).Error, Does.Contain("skyMag"));
+            Assert.That(Build(skyMag: 1000).Error, Does.Contain("skyMag"),
+                "an absurd sky mag would underflow P to 0 → Infinity seconds on the wire");
+            Assert.That(Build(skyMag: 5).Error, Does.Contain("skyMag"));
             Assert.That(Build(bortle: 0).Error, Does.Contain("bortle"));
             Assert.That(Build(bandwidthNm: 0).Error, Does.Contain("bandwidthNm"));
             Assert.That(Build(noiseTolerancePct: 101).Error, Does.Contain("noiseTolerancePct"));

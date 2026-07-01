@@ -77,8 +77,12 @@ public static class OptimalSubOverrides {
         if (pixelUm is { } pu && !(double.IsFinite(pu) && pu > 0)) {
             return Fail("Query parameter 'pixelUm' must be a finite value > 0.");
         }
-        if (skyMag is { } sm && !double.IsFinite(sm)) {
-            return Fail("Query parameter 'skyMag' must be a finite value (mag/arcsec²).");
+        // Bounded to a generous physical range, not just finite: an extreme value (say 1000)
+        // underflows the sky flux to 0 and the floor/ceiling to Infinity — which the JSON
+        // response can't carry. Real skies run ~16 (inner city) to ~22 (pristine); [10, 30]
+        // is roomy. The bortle path below is inherently bounded (1..9 → 18.0–22.0).
+        if (skyMag is { } sm && !(double.IsFinite(sm) && sm is >= 10 and <= 30)) {
+            return Fail("Query parameter 'skyMag' must be in [10, 30] mag/arcsec² (typical skies: ~16 inner-city to ~22 pristine).");
         }
         if (bortle is { } b && b is < 1 or > 9) {
             return Fail("Query parameter 'bortle' must be in 1..9.");
