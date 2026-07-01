@@ -20,6 +20,8 @@ import 'panels/generic_placeholder_panel.dart';
 import 'panels/imaging_autofocus_panel.dart';
 import 'panels/imaging_defaults_panel.dart';
 import 'panels/imaging_plate_solve_panel.dart';
+import 'panels/camera_electronics_panel.dart';
+import 'panels/filter_set_panel.dart';
 import 'panels/optics_panel.dart';
 import 'panels/profile_active_panel.dart';
 import 'panels/profile_wizard_panel.dart';
@@ -205,6 +207,8 @@ class _PanelBody extends StatelessWidget {
       'eq.switch' => const EquipmentSwitchPanel(),
       'img.defaults' => const ImagingDefaultsPanel(),
       'img.optics' => const OpticsPanel(),
+      'img.electronics' => const CameraElectronicsPanel(),
+      'img.filterset' => const FilterSetPanel(),
       'img.autofocus' => const ImagingAutofocusPanel(),
       'img.platesolve' => const ImagingPlateSolvePanel(),
       'session.storage' => const StoragePanel(),

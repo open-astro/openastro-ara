@@ -53,6 +53,8 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
     panels: <SettingsPanelInfo>[
       SettingsPanelInfo(id: 'img.defaults', label: 'Defaults', groupId: 'imaging'),
       SettingsPanelInfo(id: 'img.optics', label: 'Optics (FOV)', groupId: 'imaging'),
+      SettingsPanelInfo(id: 'img.electronics', label: 'Camera electronics', groupId: 'imaging'),
+      SettingsPanelInfo(id: 'img.filterset', label: 'Filter set', groupId: 'imaging'),
       SettingsPanelInfo(id: 'img.autofocus', label: 'Autofocus', groupId: 'imaging'),
       SettingsPanelInfo(id: 'img.platesolve', label: 'Plate Solving', groupId: 'imaging'),
     ],

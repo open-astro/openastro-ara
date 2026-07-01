@@ -49,9 +49,13 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
 
 OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
   final fl = d.telescope.focalLengthMm;
+  final ap = d.telescope.apertureMm;
   final px = d.camera.pixelSizeMicrons;
   return base.copyWith(
     focalLengthMm: (fl != null && fl > 0) ? fl : null,
+    // NEXTGEN §4: the telescope screen has always asked for the aperture; the
+    // optics section can now store it (it feeds the Optimal-Sub sky-flux term).
+    apertureMm: (ap != null && ap > 0) ? ap : null,
     pixelSizeUm: (px != null && px > 0) ? px : null,
   );
 }

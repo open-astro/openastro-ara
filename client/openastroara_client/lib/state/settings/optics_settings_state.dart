@@ -28,12 +28,19 @@ class OpticsSettings {
   /// Sensor pixel pitch in microns. 0 = unset.
   final double pixelSizeUm;
 
+  /// Telescope objective diameter in mm (NEXTGEN §4). Feeds the Optimal-Sub
+  /// sky-flux aperture-area term — NOT the FOV box, so it deliberately does
+  /// not participate in [isConfigured]. 0 = unset (exposure advice is simply
+  /// unavailable until it's set; framing keeps working without it).
+  final double apertureMm;
+
   const OpticsSettings({
     this.focalLengthMm = 0,
     this.reducerFactor = 1.0,
     this.sensorWidthPx = 0,
     this.sensorHeightPx = 0,
     this.pixelSizeUm = 0,
+    this.apertureMm = 0,
   });
 
   /// True once every input the FOV box needs is a usable positive value. The
@@ -45,6 +52,11 @@ class OpticsSettings {
       sensorWidthPx > 0 &&
       sensorHeightPx > 0 &&
       pixelSizeUm > 0;
+
+  /// True once the aperture is set — the extra gate the Optimal-Sub exposure
+  /// advice needs on top of [isConfigured] (kept separate so an aperture-less
+  /// profile still frames normally).
+  bool get hasAperture => apertureMm > 0;
 
   /// Effective focal length after the reducer/barlow, in mm — or null when the
   /// rig isn't fully configured. Nullable (not 0-when-unset) so a caller can't
@@ -77,6 +89,7 @@ class OpticsSettings {
     int? sensorWidthPx,
     int? sensorHeightPx,
     double? pixelSizeUm,
+    double? apertureMm,
   }) =>
       OpticsSettings(
         focalLengthMm: focalLengthMm ?? this.focalLengthMm,
@@ -84,6 +97,7 @@ class OpticsSettings {
         sensorWidthPx: sensorWidthPx ?? this.sensorWidthPx,
         sensorHeightPx: sensorHeightPx ?? this.sensorHeightPx,
         pixelSizeUm: pixelSizeUm ?? this.pixelSizeUm,
+        apertureMm: apertureMm ?? this.apertureMm,
       );
 }
 
@@ -120,6 +134,11 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings> {
   void setPixelSizeUm(double v) {
     if (v < 0) return;
     state = state.copyWith(pixelSizeUm: v);
+  }
+
+  void setApertureMm(double v) {
+    if (v < 0) return;
+    state = state.copyWith(apertureMm: v);
   }
 
   /// Replace local state with what the daemon currently holds. Called when the

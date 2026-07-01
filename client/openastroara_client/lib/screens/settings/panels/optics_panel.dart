@@ -159,6 +159,15 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
           },
         ),
         EditableNumberRow(
+          label: 'Aperture (mm)',
+          currentValue: _fmt(o.apertureMm),
+          getCanonical: () => _fmt(ref.read(opticsSettingsProvider).apertureMm),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) n.setApertureMm(v);
+          },
+        ),
+        EditableNumberRow(
           label: 'Sensor width (px)',
           currentValue: o.sensorWidthPx.toString(),
           getCanonical: () => ref.read(opticsSettingsProvider).sensorWidthPx.toString(),
