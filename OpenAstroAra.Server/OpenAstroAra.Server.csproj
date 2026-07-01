@@ -60,6 +60,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <!-- GHSA-v5pm-xwqc-g5wc: pin the patched Microsoft.OpenApi (≥ 2.7.5 fixes the
+         circular-schema-reference parsing DoS) over the transitive 2.0.0 that
+         Microsoft.AspNetCore.OpenApi 10.0.0 pulls; NU1903 is warning-as-error here.
+         Remove when Microsoft.AspNetCore.OpenApi ships on the patched lib. -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
