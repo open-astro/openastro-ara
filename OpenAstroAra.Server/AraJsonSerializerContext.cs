@@ -249,6 +249,11 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(TonightSkyObjectDto))]
 [JsonSerializable(typeof(IReadOnlyList<TonightSkyObjectDto>))]
 [JsonSerializable(typeof(FramingFit))]
+// NEXTGEN §2/§3 Optimal-Sub calculator — DTOs land with the pure math (slice 1);
+// the /api/v1/planning/optimal-sub endpoint consumes them in slice 2.
+[JsonSerializable(typeof(OptimalSubInputDto))]
+[JsonSerializable(typeof(OptimalSubResultDto))]
+[JsonSerializable(typeof(OptimalSubBound))]
 [JsonSerializable(typeof(HorizonDto))]
 [JsonSerializable(typeof(HorizonPointDto))]
 [JsonSerializable(typeof(CardinalPointDto))]

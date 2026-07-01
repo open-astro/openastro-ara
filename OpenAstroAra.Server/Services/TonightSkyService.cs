@@ -408,11 +408,11 @@ public sealed class TonightSkyService : ITonightSkyService {
         return (score, framing, reasons);
     }
 
-    /// <summary>An approximate zenith sky surface brightness (mag/arcsec²) for a Bortle class: ~22.0 at
-    /// the darkest (Bortle 1) falling ~0.5 mag per class to ~18.0 at inner-city (Bortle 9). A coarse
-    /// scoring input, not a photometric model; class is clamped to the canonical 1–9 range.</summary>
+    /// <summary>An approximate zenith sky surface brightness (mag/arcsec²) for a Bortle class —
+    /// delegates to <see cref="OptimalSubCalculator.SkyMagFromBortle"/> so scoring and exposure
+    /// planning share one sky model.</summary>
     private static double BortleZenithSkyMag(int bortleClass) =>
-        22.0 - (Math.Clamp(bortleClass, 1, 9) - 1) * 0.5;
+        OptimalSubCalculator.SkyMagFromBortle(bortleClass);
 
     /// <summary>The longest contiguous run of <c>true</c> in <paramref name="flags"/> as inclusive
     /// (start, end) sample indices, or (−1, −1) when none is set.</summary>
