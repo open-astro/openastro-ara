@@ -96,7 +96,14 @@ public class ProfileShareServiceTest {
             LinearClipPercentilesHigh: 0.995),
         Optics: new(
             FocalLengthMm: 2032, ReducerFactor: 0.8,
-            SensorWidthPx: 6248, SensorHeightPx: 4176, PixelSizeUm: 3.76));
+            SensorWidthPx: 6248, SensorHeightPx: 4176, PixelSizeUm: 3.76,
+            ApertureMm: 203),
+        CameraElectronics: new(
+            SensorName: "IMX571-DONOR-DO-NOT-LEAK", ReadNoiseE: 3.3, FullWellE: 50_000,
+            ElectronsPerAdu: 0.78, Gain: 100, QuantumEfficiencyPeak: 0.85, AutoCaptured: true),
+        FilterSet: new(Filters: [
+            new PlanningFilterDto(Name: "Donor L-eXtreme", Kind: FilterKind.Duo, BandwidthNm: 7),
+        ]));
 
     [Test]
     public async Task Export_strips_paths_secrets_location_and_network() {
@@ -137,6 +144,17 @@ public class ProfileShareServiceTest {
         optics.GetProperty("sensor_width_px").GetInt32().Should().Be(0);
         optics.GetProperty("sensor_height_px").GetInt32().Should().Be(0);
         optics.GetProperty("reducer_factor").GetDouble().Should().Be(1.0, "stripped optics resets the reducer to the neutral 1.0 multiplier");
+        optics.GetProperty("aperture_mm").GetDouble().Should().Be(0, "aperture is rig geometry — stripped with the rest of the optics");
+
+        // NEXTGEN §4 sections: donor camera hardware + filter list are stripped whole.
+        var electronics = settings.GetProperty("camera_electronics");
+        electronics.GetProperty("sensor_name").GetString().Should().BeEmpty();
+        electronics.GetProperty("read_noise_e").GetDouble().Should().Be(0);
+        electronics.GetProperty("full_well_e").GetDouble().Should().Be(0);
+        electronics.GetProperty("electrons_per_adu").GetDouble().Should().Be(0);
+        electronics.GetProperty("gain").GetInt32().Should().Be(-1);
+        electronics.GetProperty("quantum_efficiency_peak").GetDouble().Should().Be(0);
+        settings.GetProperty("filter_set").GetProperty("filters").GetArrayLength().Should().Be(0);
     }
 
     [Test]

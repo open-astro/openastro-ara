@@ -265,6 +265,51 @@ public static class SystemEndpoints {
                 "range [1, 20]) enlarge the framing FOV by that tile count per axis. Absent overrides → the " +
                 "profile's optics at 1×1.");
 
+        // NEXTGEN §2/§3 — the Optimal-Sub calculator: the Glover read-noise floor (t = C(ε)·R²/P,
+        // criterion popularised by Dr. Robin Glover of SharpCap, used with permission) intersected
+        // with the sky-background saturation ceiling. Every parameter is optional; unsupplied
+        // fields merge from the active profile (camera-electronics / optics / site Bortle /
+        // filter-set) and finally from Tier-0 generic-CMOS defaults, with every defaulted field
+        // named in the response's assumed_defaults for transparency.
+        planning.MapGet("/optimal-sub",
+                (IProfileStore profiles,
+                        [FromQuery] string? filter, [FromQuery] double? bandwidthNm,
+                        [FromQuery] double? readNoise, [FromQuery] double? fullWell,
+                        [FromQuery] double? ePerAdu, [FromQuery] int? gain, [FromQuery] double? qe,
+                        [FromQuery] double? apertureMm, [FromQuery] double? focalLengthMm,
+                        [FromQuery] double? reducer, [FromQuery] double? pixelUm,
+                        [FromQuery] double? skyMag, [FromQuery] int? bortle,
+                        [FromQuery] double? noiseTolerancePct, [FromQuery] double? headroom) => {
+                    var (input, assumedDefaults, error) = OptimalSubOverrides.Build(
+                        profiles.GetOpticsSettings, profiles.GetCameraElectronics,
+                        profiles.GetSiteSettings, profiles.GetFilterSet,
+                        filter, bandwidthNm,
+                        readNoise, fullWell, ePerAdu, gain, qe,
+                        apertureMm, focalLengthMm, reducer, pixelUm,
+                        skyMag, bortle, noiseTolerancePct, headroom);
+                    if (error is not null) {
+                        return Results.Problem(error, statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    var result = OptimalSubCalculator.Compute(input!);
+                    return Results.Ok(result with {
+                        AssumedDefaults = assumedDefaults.Count > 0 ? assumedDefaults : null,
+                    });
+                })
+            .Produces<OptimalSubResultDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("GetOptimalSub")
+            .WithDescription("Optimal sub-exposure window: the read-noise floor (criterion popularised " +
+                "by Dr. Robin Glover, SharpCap — 'noiseTolerancePct' is the knob, default 5% ≈ the " +
+                "popular t = 10·R²/P) intersected with the sky-background saturation ceiling " +
+                "('headroom' × effective full well, default 0.8). Filter passband: 'filter' (a planning " +
+                "filter-set name) XOR 'bandwidthNm'; absent → the 100 nm effective-broadband default. " +
+                "Sky: 'skyMag' (mag/arcsec²) XOR 'bortle' (1..9); absent → the profile site's Bortle. " +
+                "Electronics ('readNoise', 'fullWell', 'ePerAdu', 'gain', 'qe') fall back to the " +
+                "profile's camera-electronics section, then to generic-CMOS defaults; geometry " +
+                "('apertureMm', 'focalLengthMm', 'reducer', 'pixelUm') falls back to the profile's " +
+                "optics and has no further default — an incomplete train is a 400. Fields that landed " +
+                "on a generic default are named in the response's assumed_defaults.");
+
         planning.MapGet("/horizon",
                 (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
                     if (TryParseAt(at, out var atUtc) is { } atError) {

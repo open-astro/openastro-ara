@@ -211,13 +211,78 @@ public sealed record Phd2SettingsDto(
 /// disconnected/offline; the user can override in Settings. NOTE: the
 /// on-first-connect auto-population is a FUTURE slice — this section is the
 /// storage + API foundation only.
+/// <para>NEXTGEN §4 — <c>ApertureMm</c> (objective diameter) feeds the Optimal-Sub
+/// sky-flux term (aperture area); it is telescope-owned like focal length, so camera
+/// auto-population never touches it. 0 = unset (optional ctor default keeps a
+/// profile.json predating this field deserializing; exposure advice is simply
+/// unavailable until it's set).</para>
 /// </summary>
 public sealed record OpticsSettingsDto(
     double FocalLengthMm,
     double ReducerFactor,
     int SensorWidthPx,
     int SensorHeightPx,
-    double PixelSizeUm);
+    double PixelSizeUm,
+    double ApertureMm = 0);
+
+/// <summary>
+/// NEXTGEN §3/§4 — camera electronics for exposure planning. Per-camera, per-mode
+/// values: full well differs across cameras sharing a sensor (ASI2600 ≈ 50 ke⁻ vs
+/// ToupTek 2600 up to 100 ke⁻ in High Full Well mode — same IMX571), so these are
+/// auto-captured from the connected camera where ASCOM exposes them
+/// (<c>FullWellCapacity</c>, <c>ElectronsPerADU</c>, <c>Gain</c>, <c>SensorName</c> —
+/// all reported for the CURRENT readout mode; reconnecting in HFW mode re-captures
+/// the bigger well automatically). Read noise is NOT in standard ASCOM and is always
+/// user-entered (manufacturer gain chart / SharpCap sensor analysis), as is the QE
+/// peak. 0 / −1 / "" mean unset → planning falls back to the Tier-0 generic-CMOS
+/// defaults in <c>OptimalSubCalculator</c> and says so via <c>assumed_defaults</c>.
+/// <c>AutoCaptured</c> records provenance of the ASCOM-sourced fields (display-only).
+/// </summary>
+public sealed record CameraElectronicsDto(
+    string SensorName = "",
+    double ReadNoiseE = 0,
+    double FullWellE = 0,
+    double ElectronsPerAdu = 0,
+    int Gain = -1,
+    double QuantumEfficiencyPeak = 0,
+    bool AutoCaptured = false);
+
+/// <summary>
+/// NEXTGEN §1/§4 — one filter in the user's planning filter set. Deliberately separate
+/// from the equipment <c>FilterInfo</c> (NINA-shaped, no bandwidth, must round-trip
+/// imports untouched); matched to sequences by <c>Name</c> (case-insensitive).
+/// <c>BandwidthNm</c> 0 → the kind's default effective bandwidth
+/// (<c>OptimalSubCalculator.DefaultBandwidthNm</c>). Dual/tri-band kinds use the
+/// per-pixel single-line width (each OSC Bayer channel sees only the line that lands
+/// in it) — the conservative choice for the read-noise floor.
+/// </summary>
+public sealed record PlanningFilterDto(
+    string Name,
+    FilterKind Kind,
+    double BandwidthNm = 0);
+
+/// <summary>NEXTGEN §1/§4 — the user's declared planning filter set (captured at setup,
+/// NOT read from the connected wheel at plan time — planning runs offline).</summary>
+public sealed record FilterSetDto(IReadOnlyList<PlanningFilterDto> Filters);
+
+/// <summary>Planning filter kind. Broadband: <see cref="L"/>/<see cref="R"/>/<see cref="G"/>/
+/// <see cref="B"/> mono, <see cref="Osc"/> (one-shot color / DSLR, no filter). Narrowband:
+/// <see cref="Ha"/>/<see cref="Oiii"/>/<see cref="Sii"/> mono line filters. <see cref="Duo"/>/
+/// <see cref="Tri"/> = OSC dual/tri-band (L-eXtreme, L-eNhance …). Serialized all-lowercase
+/// per §60.6 (<c>l</c>/<c>r</c>/<c>g</c>/<c>b</c>/<c>osc</c>/<c>ha</c>/<c>oiii</c>/<c>sii</c>/
+/// <c>duo</c>/<c>tri</c>).</summary>
+public enum FilterKind {
+    L,
+    R,
+    G,
+    B,
+    Osc,
+    Ha,
+    Oiii,
+    Sii,
+    Duo,
+    Tri,
+}
 
 /// <summary>
 /// §52.1 connection-lifecycle defaults — which equipment device types

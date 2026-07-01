@@ -212,9 +212,9 @@ public static class ProfileEndpoints {
             // The remaining geometry fields use 0 = "unset"; negatives are
             // meaningless (and produce garbage FOV math) — reject rather than store.
             if (body.FocalLengthMm < 0 || body.PixelSizeUm < 0 ||
-                body.SensorWidthPx < 0 || body.SensorHeightPx < 0) {
+                body.SensorWidthPx < 0 || body.SensorHeightPx < 0 || body.ApertureMm < 0) {
                 return Results.Problem(
-                    detail: "focal_length_mm, pixel_size_um and sensor dimensions must be >= 0 (0 = unset).",
+                    detail: "focal_length_mm, pixel_size_um, aperture_mm and sensor dimensions must be >= 0 (0 = unset).",
                     statusCode: StatusCodes.Status400BadRequest);
             }
             store.PutOpticsSettings(body);
@@ -225,6 +225,87 @@ public static class ProfileEndpoints {
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("PutOpticsSettings")
             .WithSummary("Replace the active profile's optics settings.");
+
+        // NEXTGEN §4 camera electronics — exposure-planning inputs (read noise,
+        // full well, e⁻/ADU, gain, QE peak). ASCOM-sourced fields auto-capture on
+        // camera connect; this pair is the manual read/override path.
+        profile.MapGet("/camera-electronics", (IProfileStore store) =>
+                Results.Ok(store.GetCameraElectronics()))
+            .Produces<CameraElectronicsDto>(StatusCodes.Status200OK)
+            .WithName("GetCameraElectronics")
+            .WithSummary("Get the active profile's camera electronics (exposure-planning inputs).");
+
+        profile.MapPut("/camera-electronics", (CameraElectronicsDto body, IProfileStore store) => {
+            // 0 = unset for the physical values; negatives are meaningless. Gain uses
+            // -1 = unset (0 is a real gain on many cameras). QE peak is a fraction.
+            if (!(double.IsFinite(body.ReadNoiseE) && body.ReadNoiseE >= 0) ||
+                !(double.IsFinite(body.FullWellE) && body.FullWellE >= 0) ||
+                !(double.IsFinite(body.ElectronsPerAdu) && body.ElectronsPerAdu >= 0)) {
+                return Results.Problem(
+                    detail: "read_noise_e, full_well_e and electrons_per_adu must be finite and >= 0 (0 = unset).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            if (body.Gain < -1) {
+                return Results.Problem(
+                    detail: "gain must be >= -1 (-1 = unset).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            if (!(double.IsFinite(body.QuantumEfficiencyPeak) &&
+                  body.QuantumEfficiencyPeak is >= 0 and <= 1)) {
+                return Results.Problem(
+                    detail: "quantum_efficiency_peak must be in [0, 1] (0 = unset).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            store.PutCameraElectronics(body);
+            return Results.Ok(body);
+        })
+            .Accepts<CameraElectronicsDto>("application/json")
+            .Produces<CameraElectronicsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutCameraElectronics")
+            .WithSummary("Replace the active profile's camera electronics.");
+
+        // NEXTGEN §4 planning filter set — the user's declared filters (kind +
+        // effective bandwidth), matched to sequences by name. Separate from the
+        // equipment FilterInfo, which must round-trip NINA imports untouched.
+        profile.MapGet("/filter-set", (IProfileStore store) =>
+                Results.Ok(store.GetFilterSet()))
+            .Produces<FilterSetDto>(StatusCodes.Status200OK)
+            .WithName("GetFilterSet")
+            .WithSummary("Get the active profile's planning filter set.");
+
+        profile.MapPut("/filter-set", (FilterSetDto body, IProfileStore store) => {
+            if ((System.Collections.Generic.IReadOnlyList<PlanningFilterDto>?)body.Filters is null) {
+                return Results.Problem(
+                    detail: "filters must be a list (may be empty).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (var f in body.Filters) {
+                if (string.IsNullOrWhiteSpace(f.Name)) {
+                    return Results.Problem(
+                        detail: "every filter needs a non-empty name (it's the key sequences match on).",
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                if (!seen.Add(f.Name.Trim())) {
+                    return Results.Problem(
+                        detail: $"duplicate filter name '{f.Name.Trim()}' (names are case-insensitive keys).",
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                if (!(double.IsFinite(f.BandwidthNm) && f.BandwidthNm >= 0)) {
+                    return Results.Problem(
+                        detail: "bandwidth_nm must be finite and >= 0 (0 = use the kind's default).",
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+            }
+            store.PutFilterSet(body);
+            return Results.Ok(body);
+        })
+            .Accepts<FilterSetDto>("application/json")
+            .Produces<FilterSetDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutFilterSet")
+            .WithSummary("Replace the active profile's planning filter set.");
 
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))

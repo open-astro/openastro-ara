@@ -1,11 +1,15 @@
 # Next-generation planning & exposure intelligence — design backlog
 
-> **Status: BOOKMARKED FUTURE WORK — not scheduled for the v1 cross-platform release.**
-> Captured 2026-06-29 from a design conversation. The current priority is shipping a
-> releasable cross-platform build so users can break free of Windows; everything here is
-> deliberately deferred to a *next-generation* pass and recorded so the thinking isn't lost.
-> Nothing in this document has been built. See `design/PORT_DECISIONS.md` (2026-06-29) for the
-> decision to defer.
+> **Status: IN PROGRESS — the epic was picked up 2026-07-01 (maintainer decision), full scope,
+> in the suggested slice order.** Shipped so far: **slice 1** (the Optimal-Sub calculator —
+> Glover floor + saturation ceiling, `OptimalSubCalculator`, PR #624) and **slice 2** (profile
+> setup: `camera_electronics` + `filter_set` sections + `optics.aperture_mm`, connect-time
+> electronics auto-capture, `GET /api/v1/planning/optimal-sub`, Settings panels + registry —
+> the `feature/exposure-profile-setup` PR). Slices 3 (Tonight's Sky filter advice) and 4
+> (sequence-editor Optimal-Sub advisor) are next. §6 (native sequence model) and
+> adaptive/runtime Glover remain deferred.
+> Originally captured 2026-06-29 and bookmarked behind the v1 cross-platform release; see
+> `design/PORT_DECISIONS.md` (2026-06-29) for that context.
 
 This is the design record for turning Tonight's Sky (§36.8, shipped: `design/TONIGHT_SKY.md`)
 from "what's worth shooting tonight" into "what's worth shooting tonight **with your rig and your

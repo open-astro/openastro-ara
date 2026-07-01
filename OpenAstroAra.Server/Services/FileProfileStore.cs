@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -124,6 +125,29 @@ public sealed partial class FileProfileStore : IProfileStore {
         return next;
     }
 
+    public CameraElectronicsDto GetCameraElectronics() { lock (_lock) { return _snapshot.CameraElectronics; } }
+    public void PutCameraElectronics(CameraElectronicsDto value) => UpdateAndPersist(s => s with { CameraElectronics = value });
+
+    public CameraElectronicsDto UpdateCameraElectronics(Func<CameraElectronicsDto, CameraElectronicsDto?> update) {
+        CameraElectronicsDto next;
+        lock (_lock) {
+            var current = _snapshot.CameraElectronics;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no persist, no event
+            }
+            next = candidate;
+            _snapshot = _snapshot with { CameraElectronics = next };
+            Persist(_snapshot);
+        }
+        // Outside _lock, mirroring UpdateAndPersist, so a Changed subscriber that reads back can't deadlock.
+        Changed?.Invoke(this, EventArgs.Empty);
+        return next;
+    }
+
+    public FilterSetDto GetFilterSet() { lock (_lock) { return _snapshot.FilterSet; } }
+    public void PutFilterSet(FilterSetDto value) => UpdateAndPersist(s => s with { FilterSet = value });
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
@@ -176,7 +200,14 @@ public sealed partial class FileProfileStore : IProfileStore {
             // cast sidesteps the "left operand is never null" NRT warning — the
             // runtime value genuinely can be null here.
             var optics = (OpticsSettingsDto?)loaded.Optics ?? defaults.Optics;
-            return loaded with { Optics = optics };
+            // NEXTGEN §4 sections (camera electronics + filter set) — same back-fill.
+            var electronics = (CameraElectronicsDto?)loaded.CameraElectronics ?? defaults.CameraElectronics;
+            var filterSet = (FilterSetDto?)loaded.FilterSet ?? defaults.FilterSet;
+            // FilterSetDto's list itself can be null from a hand-edited "filter_set": {} — normalize.
+            if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
+                filterSet = defaults.FilterSet;
+            }
+            return loaded with { Optics = optics, CameraElectronics = electronics, FilterSet = filterSet };
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             LogParseFailed(ex, _profilePath);
             return defaults;
@@ -251,7 +282,11 @@ public sealed partial class FileProfileStore : IProfileStore {
         // it's never a zero multiplier in the framing math.
         Optics: new(
             FocalLengthMm: 0, ReducerFactor: 1.0,
-            SensorWidthPx: 0, SensorHeightPx: 0, PixelSizeUm: 0));
+            SensorWidthPx: 0, SensorHeightPx: 0, PixelSizeUm: 0),
+        // NEXTGEN §4 — unset until the user enters values / a camera connect
+        // auto-captures; planning falls back to Tier-0 defaults and says so.
+        CameraElectronics: new(),
+        FilterSet: new(Filters: []));
 
     #region LoggerMessage delegates (CA1848)
 

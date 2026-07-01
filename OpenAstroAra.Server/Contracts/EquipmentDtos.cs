@@ -82,7 +82,15 @@ public sealed record CameraCapabilitiesDto(
     double MinExposureSec, double MaxExposureSec,
     // Bayer color-filter pattern at the image origin (RGGB/BGGR/GRBG/GBRG) for an OSC sensor;
     // null for a monochrome sensor. Drives the §65 debayered color preview + the FITS BAYERPAT header.
-    string? BayerPattern = null);
+    string? BayerPattern = null,
+    // NEXTGEN §3/§4 exposure-planning electronics, reported by ASCOM for the CURRENT readout
+    // mode (an HFW-mode reconnect re-reads the bigger well). 0 / null / -1 = the driver didn't
+    // expose it. Feed the profile's camera-electronics auto-capture; optional ctor defaults keep
+    // every existing constructor call compiling unchanged.
+    double FullWellCapacityE = 0,
+    double ElectronsPerAdu = 0,
+    string? SensorName = null,
+    int CurrentGain = -1);
 
 public sealed record CameraStateDto(
     string State,   // "idle" | "exposing" | "downloading" | "error"

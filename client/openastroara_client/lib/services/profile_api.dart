@@ -7,9 +7,11 @@ import '../models/profile_share_import_preview.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
+import '../state/settings/camera_electronics_state.dart';
 import '../state/settings/diagnostics_mode_state.dart';
 import '../state/settings/equipment_connection_state.dart';
 import '../state/settings/filenames_settings_state.dart';
+import '../state/settings/filter_set_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
 import '../state/settings/optics_settings_state.dart';
@@ -168,6 +170,43 @@ class ProfileApi {
       data: _opticsToJson(value),
     );
     return _opticsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's camera-electronics section (NEXTGEN §3/§4 —
+  /// exposure-planning inputs).
+  Future<CameraElectronics> getCameraElectronics() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/camera-electronics',
+    );
+    return _cameraElectronicsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's camera-electronics section. Returns the daemon's
+  /// echo (it validates ranges — e.g. QE peak must be in [0, 1]).
+  Future<CameraElectronics> putCameraElectronics(CameraElectronics value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/camera-electronics',
+      data: _cameraElectronicsToJson(value),
+    );
+    return _cameraElectronicsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's planning filter set (NEXTGEN §1/§4).
+  Future<FilterSetSettings> getFilterSet() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/filter-set',
+    );
+    return _filterSetFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's planning filter set. Returns the daemon's echo
+  /// (it rejects empty or duplicate case-insensitive names).
+  Future<FilterSetSettings> putFilterSet(FilterSetSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/filter-set',
+      data: _filterSetToJson(value),
+    );
+    return _filterSetFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's storage-settings section.
@@ -400,6 +439,7 @@ class ProfileApi {
       sensorWidthPx: (j['sensor_width_px'] as num?)?.toInt() ?? 0,
       sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
       pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
+      apertureMm: (j['aperture_mm'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -409,6 +449,55 @@ class ProfileApi {
         'sensor_width_px': v.sensorWidthPx,
         'sensor_height_px': v.sensorHeightPx,
         'pixel_size_um': v.pixelSizeUm,
+        'aperture_mm': v.apertureMm,
+      };
+
+  // ── Camera electronics + filter set JSON mapping (NEXTGEN §4) ──────────
+
+  static CameraElectronics _cameraElectronicsFromJson(Map<String, dynamic> j) =>
+      CameraElectronics(
+        sensorName: (j['sensor_name'] as String?) ?? '',
+        readNoiseE: (j['read_noise_e'] as num?)?.toDouble() ?? 0,
+        fullWellE: (j['full_well_e'] as num?)?.toDouble() ?? 0,
+        electronsPerAdu: (j['electrons_per_adu'] as num?)?.toDouble() ?? 0,
+        gain: (j['gain'] as num?)?.toInt() ?? -1,
+        quantumEfficiencyPeak:
+            (j['quantum_efficiency_peak'] as num?)?.toDouble() ?? 0,
+        autoCaptured: (j['auto_captured'] as bool?) ?? false,
+      );
+
+  static Map<String, dynamic> _cameraElectronicsToJson(CameraElectronics v) => {
+        'sensor_name': v.sensorName,
+        'read_noise_e': v.readNoiseE,
+        'full_well_e': v.fullWellE,
+        'electrons_per_adu': v.electronsPerAdu,
+        'gain': v.gain,
+        'quantum_efficiency_peak': v.quantumEfficiencyPeak,
+        'auto_captured': v.autoCaptured,
+      };
+
+  static FilterSetSettings _filterSetFromJson(Map<String, dynamic> j) =>
+      FilterSetSettings(
+        filters: ((j['filters'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map((f) => PlanningFilter(
+                  name: (f['name'] as String?) ?? '',
+                  kind: FilterKind.fromWire(f['kind'] as String?),
+                  bandwidthNm: (f['bandwidth_nm'] as num?)?.toDouble() ?? 0,
+                ))
+            .where((f) => f.name.isNotEmpty)
+            .toList(),
+      );
+
+  static Map<String, dynamic> _filterSetToJson(FilterSetSettings v) => {
+        'filters': [
+          for (final f in v.filters)
+            {
+              'name': f.name,
+              'kind': f.kind.wire,
+              'bandwidth_nm': f.bandwidthNm,
+            },
+        ],
       };
 
   static StorageSettings _storageSettingsFromJson(Map<String, dynamic> j) =>

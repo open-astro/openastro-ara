@@ -138,7 +138,9 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>Phd2 — STRIP host/port/profile (network) + guide geometry (→ rig desc); keep dither/settle/aggressiveness</item>
     ///   <item>EquipmentConnection — KEEP (auto-connect bools per device type, no PII)</item>
     ///   <item>StretchDefaults — KEEP (display judgement)</item>
-    ///   <item>Optics — STRIP all (rig geometry → rig description)</item>
+    ///   <item>Optics — STRIP all (rig geometry → rig description; includes aperture_mm)</item>
+    ///   <item>CameraElectronics — STRIP all (donor's camera hardware, incl. sensor_name; recipient's camera differs and auto-captures on connect)</item>
+    ///   <item>FilterSet — STRIP all (donor's physical filters; recipient declares their own)</item>
     /// </list>
     /// </remarks>
     internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) => s with {
@@ -175,7 +177,13 @@ public sealed class ProfileShareService : IProfileShareService {
             SensorWidthPx = 0,
             SensorHeightPx = 0,
             PixelSizeUm = 0,
+            ApertureMm = 0,
         },
+        // Strip the donor's camera hardware — the recipient's camera differs and
+        // its ASCOM-sourced fields auto-capture on their first connect anyway.
+        CameraElectronics = new CameraElectronicsDto(),
+        // Strip the donor's physical filter list — the recipient declares their own.
+        FilterSet = new FilterSetDto(Filters: []),
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>

@@ -311,6 +311,45 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // NEXTGEN §4 camera electronics — unset until user entry / auto-capture.
+    private CameraElectronicsDto _cameraElectronics = new();
+
+    public CameraElectronicsDto GetCameraElectronics() {
+        lock (_lock) { return _cameraElectronics; }
+    }
+
+    public void PutCameraElectronics(CameraElectronicsDto value) {
+        lock (_lock) { _cameraElectronics = value; }
+        RaiseChanged();
+    }
+
+    public CameraElectronicsDto UpdateCameraElectronics(Func<CameraElectronicsDto, CameraElectronicsDto?> update) {
+        CameraElectronicsDto next;
+        lock (_lock) {
+            var current = _cameraElectronics;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no event
+            }
+            next = candidate;
+            _cameraElectronics = next;
+        }
+        RaiseChanged();
+        return next;
+    }
+
+    // NEXTGEN §4 planning filter set — empty until the user declares filters.
+    private FilterSetDto _filterSet = new(Filters: []);
+
+    public FilterSetDto GetFilterSet() {
+        lock (_lock) { return _filterSet; }
+    }
+
+    public void PutFilterSet(FilterSetDto value) {
+        lock (_lock) { _filterSet = value; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(
