@@ -58,7 +58,13 @@ public static class OptimalSubCalculator {
     public const double DefaultBroadbandBandwidthNm = 100;
 
     /// <summary>Bit depth assumed for the ADC-clip bound on the effective well:
-    /// <c>ElectronsPerAdu × (2¹⁶ − 1)</c>.</summary>
+    /// <c>ElectronsPerAdu × (2¹⁶ − 1)</c>. FIXED 16-BIT ASSUMPTION — deliberate for v1:
+    /// astro cameras overwhelmingly deliver 16-bit output (native 12/14-bit ADCs pad up,
+    /// and their e⁻/ADU is reported against the padded scale, so the clip stays correct).
+    /// A camera whose driver reports e⁻/ADU against a genuinely lower ADC range would have
+    /// its effective well overstated here → ceiling too long → clipped subs. If such a
+    /// device shows up, add a bit-depth input to <see cref="OptimalSubInputDto"/> rather
+    /// than changing this constant.</summary>
     private const double AdcMaxAdu = 65_535;
 
     /// <summary>An approximate zenith sky surface brightness (mag/arcsec²) for a Bortle class:
