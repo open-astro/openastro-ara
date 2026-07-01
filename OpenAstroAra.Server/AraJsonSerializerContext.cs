@@ -151,6 +151,12 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(ParkRequestDto))]
 [JsonSerializable(typeof(PendingRestartDto))]
 [JsonSerializable(typeof(OpticsSettingsDto))]
+// NEXTGEN §4 exposure-planning profile sections.
+[JsonSerializable(typeof(CameraElectronicsDto))]
+[JsonSerializable(typeof(PlanningFilterDto))]
+[JsonSerializable(typeof(IReadOnlyList<PlanningFilterDto>))]
+[JsonSerializable(typeof(FilterSetDto))]
+[JsonSerializable(typeof(FilterKind))]
 [JsonSerializable(typeof(Phd2SettingsDto))]
 [JsonSerializable(typeof(PlateSolveSettingsDto))]
 [JsonSerializable(typeof(PolarAlignFrameDto))]

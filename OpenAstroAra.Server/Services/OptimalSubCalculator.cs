@@ -67,6 +67,21 @@ public static class OptimalSubCalculator {
     /// than changing this constant.</summary>
     private const double AdcMaxAdu = 65_535;
 
+    /// <summary>NEXTGEN §4 — the default <i>effective</i> passband (nm) for a planning filter
+    /// kind, used when the profile entry leaves <c>BandwidthNm</c> at 0. Broadband kinds use the
+    /// V-referenced effective width (see the class remarks — deliberately not the physical
+    /// passband); mono narrowband kinds use a typical 7 nm line filter. Duo/Tri use the
+    /// <i>per-pixel single-line</i> width — on an OSC each Bayer channel sees only the line that
+    /// lands in it — the conservative choice for the read-noise floor (Tri slightly wider for the
+    /// Hα+SII red-channel overlap).</summary>
+    public static double DefaultBandwidthNm(FilterKind kind) => kind switch {
+        FilterKind.L or FilterKind.Osc => 100,
+        FilterKind.R or FilterKind.G or FilterKind.B => 80,
+        FilterKind.Ha or FilterKind.Oiii or FilterKind.Sii or FilterKind.Duo => 7,
+        FilterKind.Tri => 8,
+        _ => DefaultBroadbandBandwidthNm,
+    };
+
     /// <summary>An approximate zenith sky surface brightness (mag/arcsec²) for a Bortle class:
     /// ~22.0 at the darkest (Bortle 1) falling ~0.5 mag per class to ~18.0 at inner-city
     /// (Bortle 9). A coarse planning input, not a photometric model; class is clamped to the

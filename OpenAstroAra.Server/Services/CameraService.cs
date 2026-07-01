@@ -660,6 +660,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // user typing it (and re-cache on a swapped camera). Outside the lock: it does profile IO.
             if (capsCommitted && caps is not null) {
                 MaybeAutoPopulateOptics(caps);
+                MaybeAutoPopulateElectronics(caps);
             }
         } catch (Exception ex) {
             LogRuntimeReadFailed(ex);
@@ -688,6 +689,62 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         } catch (Exception ex) {
             LogOpticsAutoPopulateFailed(ex);
         }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Runs on the status-refresh timer: a profile read/write failure (IO/serialization) must not crash the timer or fail the camera connect — log and skip; the user can still set electronics manually. CA1031's log-and-recover boundary applies.")]
+    private void MaybeAutoPopulateElectronics(CameraCapabilitiesDto caps) {
+        if (_profileStore is null) {
+            return;
+        }
+        try {
+            // Same atomic read-modify-write as the optics populate: the decision runs under the
+            // store lock against the live value so a concurrent PUT /camera-electronics can't be
+            // lost to a stale-snapshot overwrite.
+            var populated = false;
+            _profileStore.UpdateCameraElectronics(current => {
+                var next = AutoPopulatedElectronics(current, caps);
+                populated = next is not null;
+                return next;
+            });
+            if (populated) {
+                LogElectronicsAutoPopulated(caps.SensorName ?? "", caps.FullWellCapacityE, caps.ElectronsPerAdu, caps.CurrentGain);
+            }
+        } catch (Exception ex) {
+            LogElectronicsAutoPopulateFailed(ex);
+        }
+    }
+
+    /// <summary>
+    /// NEXTGEN §3/§4 — the camera electronics to persist given the connected camera's caps, or null
+    /// when no change is warranted: the camera reports nothing usable (no full well AND no e⁻/ADU AND
+    /// no sensor name), or the ASCOM-sourced fields already match. Updates only the ASCOM-sourced
+    /// fields (sensor name, full well, e⁻/ADU, gain) — <c>ReadNoiseE</c> and
+    /// <c>QuantumEfficiencyPeak</c> are never in ASCOM and always user-owned, so they're preserved.
+    /// ASCOM reports full well / e⁻/ADU for the CURRENT readout mode, so reconnecting in e.g. High
+    /// Full Well mode re-captures the bigger well automatically (that's the "differs → re-cache" case).
+    /// </summary>
+    internal static CameraElectronicsDto? AutoPopulatedElectronics(CameraElectronicsDto current, CameraCapabilitiesDto caps) {
+        var hasAny = caps.FullWellCapacityE > 0 || caps.ElectronsPerAdu > 0 || !string.IsNullOrEmpty(caps.SensorName);
+        if (!hasAny) {
+            return null;
+        }
+        // Doubles round-trip through profile.json — epsilon-compare like the optics populate so a
+        // serialization artefact doesn't re-write + raise Changed on every reconnect.
+        if (current.SensorName == (caps.SensorName ?? "")
+            && Math.Abs(current.FullWellE - caps.FullWellCapacityE) < 1e-9
+            && Math.Abs(current.ElectronsPerAdu - caps.ElectronsPerAdu) < 1e-9
+            && current.Gain == caps.CurrentGain
+            && current.AutoCaptured) {
+            return null;
+        }
+        return current with {
+            SensorName = caps.SensorName ?? "",
+            FullWellE = caps.FullWellCapacityE,
+            ElectronsPerAdu = caps.ElectronsPerAdu,
+            Gain = caps.CurrentGain,
+            AutoCaptured = true,
+        };
     }
 
     /// <summary>
@@ -774,6 +831,17 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 bayerPattern = EffectiveBayerPattern(ox, oy);
             }
         } catch (Exception) { }
+        // NEXTGEN §3/§4 exposure-planning electronics — ASCOM reports these for the CURRENT
+        // readout mode; optional properties on many drivers, so each read falls back to
+        // "unset" (0 / null / -1) rather than failing the caps read.
+        double fullWell = 0;
+        try { fullWell = c.FullWellCapacity; } catch (Exception) { }
+        double ePerAdu = 0;
+        try { ePerAdu = c.ElectronsPerADU; } catch (Exception) { }
+        string? sensorName = null;
+        try { sensorName = c.SensorName; } catch (Exception) { }
+        int currentGain = -1;
+        try { currentGain = c.Gain; } catch (Exception) { }
         return new CameraCapabilitiesDto(
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
@@ -781,7 +849,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             MinOffset: minOffset, MaxOffset: maxOffset,
             MinBinX: 1, MaxBinX: maxBinX, MinBinY: 1, MaxBinY: maxBinY,
             MinExposureSec: minExp, MaxExposureSec: maxExp,
-            BayerPattern: bayerPattern);
+            BayerPattern: bayerPattern,
+            FullWellCapacityE: fullWell,
+            ElectronsPerAdu: ePerAdu,
+            SensorName: sensorName,
+            CurrentGain: currentGain);
     }
 
     // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,
@@ -940,6 +1012,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not auto-populate optics from the camera; set them manually in Settings → Optics")]
     private partial void LogOpticsAutoPopulateFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-captured camera electronics from the connected camera: sensor '{SensorName}', full well {FullWellE} e⁻, {ElectronsPerAdu} e⁻/ADU at gain {Gain} (current readout mode)")]
+    private partial void LogElectronicsAutoPopulated(string sensorName, double fullWellE, double electronsPerAdu, int gain);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not auto-capture camera electronics from the camera; set them manually in Settings → Camera electronics")]
+    private partial void LogElectronicsAutoPopulateFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
     private partial void LogFocuserSnapshotFailed(Exception ex);
