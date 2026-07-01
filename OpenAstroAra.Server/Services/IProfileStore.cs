@@ -83,4 +83,18 @@ public interface IProfileStore {
 
     StretchDefaultsDto GetStretchDefaults();
     void PutStretchDefaults(StretchDefaultsDto value);
+
+    CameraElectronicsDto GetCameraElectronics();
+    void PutCameraElectronics(CameraElectronicsDto value);
+
+    /// <summary>
+    /// Atomically read-modify-write the camera-electronics section — same contract as
+    /// <see cref="UpdateOpticsSettings"/> (null from <paramref name="update"/> = no write, no
+    /// change event; the transform runs under the store lock so keep it pure and fast). Used by
+    /// the camera-connect auto-capture so a concurrent user edit can't be lost.
+    /// </summary>
+    CameraElectronicsDto UpdateCameraElectronics(Func<CameraElectronicsDto, CameraElectronicsDto?> update);
+
+    FilterSetDto GetFilterSet();
+    void PutFilterSet(FilterSetDto value);
 }

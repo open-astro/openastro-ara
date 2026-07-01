@@ -37,11 +37,13 @@ public static class ProfileStoreSnapshot {
         Phd2: s.GetPhd2Settings(),
         EquipmentConnection: s.GetEquipmentConnection(),
         StretchDefaults: s.GetStretchDefaults(),
-        Optics: s.GetOpticsSettings());
+        Optics: s.GetOpticsSettings(),
+        CameraElectronics: s.GetCameraElectronics(),
+        FilterSet: s.GetFilterSet());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
-    /// 13 change notifications (e.g. profile-select) should suppress their own handler
+    /// 15 change notifications (e.g. profile-select) should suppress their own handler
     /// for the duration.</summary>
     public static void Apply(IProfileStore s, ProfileSnapshotDto snap) {
         s.PutImagingDefaults(snap.ImagingDefaults);
@@ -57,5 +59,7 @@ public static class ProfileStoreSnapshot {
         s.PutEquipmentConnection(snap.EquipmentConnection);
         s.PutStretchDefaults(snap.StretchDefaults);
         s.PutOpticsSettings(snap.Optics);
+        s.PutCameraElectronics(snap.CameraElectronics);
+        s.PutFilterSet(snap.FilterSet);
     }
 }
