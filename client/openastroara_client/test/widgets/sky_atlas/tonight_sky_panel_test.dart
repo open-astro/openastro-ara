@@ -179,6 +179,52 @@ void main() {
   });
 
   testWidgets(
+      'filter advice renders a chip, and the Why? breakdown carries the '
+      'reason + Optimal Sub + Glover attribution', (tester) async {
+    final advised = TonightSkyObject(
+      id: 'NGC6960',
+      name: 'Veil Nebula (West)',
+      type: 'SNR',
+      magnitude: 7.0,
+      raDeg: 311.9,
+      decDeg: 30.7,
+      altitudeDeg: 48,
+      maxAltitudeDeg: 80,
+      integrationHours: 5.0,
+      framing: TonightFraming.good,
+      score: 75,
+      scoreReasons: const ['narrowband recommended (+0)'],
+      filterAdvice: TonightFilterAdvice.narrowband,
+      adviceReason:
+          'Emission-line target — narrowband (Ha 7nm) sees ~14× less sky glow.',
+      optimalSubS: 300,
+    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [advised]));
+    await tester.pump();
+
+    expect(find.text('Narrowband'), findsOneWidget); // the advice chip
+    // Reason + figure + attribution live in the collapsed Why? breakdown.
+    expect(find.textContaining('~14×'), findsNothing);
+    await tester.tap(find.text('Why?'));
+    await tester.pump();
+    expect(find.textContaining('~14× less sky glow'), findsOneWidget);
+    expect(find.textContaining('Optimal sub ≈ 5.0 min'), findsOneWidget);
+    expect(find.textContaining('Dr. Robin Glover'), findsOneWidget,
+        reason: 'the attribution is a condition of the permission');
+  });
+
+  testWidgets('no advice fields → no chip and no advice lines', (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+    expect(find.text('Narrowband'), findsNothing);
+    expect(find.text('Broadband'), findsNothing);
+    await tester.tap(find.text('Why?'));
+    await tester.pump();
+    expect(find.textContaining('Optimal sub'), findsNothing);
+    expect(find.textContaining('Glover'), findsNothing);
+  });
+
+  testWidgets(
       'the recentre action sends a goto with the object ra/dec to the '
       'planetarium command provider', (tester) async {
     // Own container so we can read the provider seam after the tap.

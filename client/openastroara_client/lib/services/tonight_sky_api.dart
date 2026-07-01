@@ -4,6 +4,28 @@ import 'package:flutter/foundation.dart';
 import '../models/server.dart';
 import '../models/stats/stats_time.dart';
 
+/// NEXTGEN §1 — the daemon's recommended filter approach for a target. Wire
+/// tokens are the §60.6 all-lowercase enum values; an unknown/absent token
+/// parses to null (advice simply doesn't render), so a newer daemon can add
+/// approaches without breaking older clients.
+enum TonightFilterAdvice {
+  narrowband('Narrowband'),
+  duoband('OSC + dual-band'),
+  broadband('Broadband');
+
+  const TonightFilterAdvice(this.label);
+
+  /// Chip label.
+  final String label;
+
+  static TonightFilterAdvice? fromWire(Object? raw) => switch (raw) {
+        'narrowband' => TonightFilterAdvice.narrowband,
+        'duoband' => TonightFilterAdvice.duoband,
+        'broadband' => TonightFilterAdvice.broadband,
+        _ => null,
+      };
+}
+
 /// §36.8 framing fit of an object against the active optical train: does it
 /// sit comfortably in the sensor's field of view? Wire values are all-lowercase
 /// (§60.6); anything unrecognised maps to [unknown] so a new server enum can't
@@ -70,6 +92,19 @@ class TonightSkyObject {
   /// that explain the score; null when the server omits them.
   final List<String>? scoreReasons;
 
+  /// NEXTGEN §1 — the recommended filter approach for this target (the user's
+  /// declared filter set × the target's emission character × Bortle); null when
+  /// no filter set is declared, the emission character is unknown, or the daemon
+  /// predates the field. Advice only — never a gate.
+  final TonightFilterAdvice? filterAdvice;
+
+  /// One-line human explanation of [filterAdvice]; null alongside it.
+  final String? adviceReason;
+
+  /// The Glover read-noise-floor sub length (seconds) for the advised approach,
+  /// or null until the camera electronics + aperture are configured server-side.
+  final double? optimalSubS;
+
   const TonightSkyObject({
     required this.id,
     required this.name,
@@ -91,6 +126,9 @@ class TonightSkyObject {
     this.framing = TonightFraming.unknown,
     this.score,
     this.scoreReasons,
+    this.filterAdvice,
+    this.adviceReason,
+    this.optimalSubS,
   });
 
   /// Parse one wire object, or null when a required field is missing/wrong-typed
@@ -137,6 +175,9 @@ class TonightSkyObject {
       // invariant at the data layer when present, for every consumer not just the badge.
       score: _optDouble(json['score'])?.clamp(0.0, 100.0).toDouble(),
       scoreReasons: _optStringList(json['score_reasons']),
+      filterAdvice: TonightFilterAdvice.fromWire(json['filter_advice']),
+      adviceReason: json['advice_reason'] is String ? json['advice_reason'] as String : null,
+      optimalSubS: _optDouble(json['optimal_sub_s']),
     );
   }
 

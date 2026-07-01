@@ -172,7 +172,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
               ),
             ],
           ),
-          if (framingLabel != null || timing != null) ...[
+          if (framingLabel != null || timing != null || _object.filterAdvice != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
@@ -180,6 +180,11 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _FramingChip(framing: _object.framing),
+                  ),
+                if (_object.filterAdvice != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _FilterAdviceChip(advice: _object.filterAdvice!),
                   ),
                 if (timing != null)
                   Expanded(
@@ -247,6 +252,36 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                         ),
                       ),
                     ),
+                  // NEXTGEN §1 — the filter-advice explanation + the per-filter
+                  // Optimal Sub, tucked into the Why? breakdown so the row stays
+                  // one-glance. The attribution is a design-doc requirement of
+                  // the permission to use the criterion.
+                  if (_object.adviceReason != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 2),
+                      child: Text(
+                        _object.adviceReason!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  if (_object.optimalSubS != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                    Text(
+                      'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AraColors.textDisabled,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -349,6 +384,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   /// don't clutter the row with a non-signal). Shares one source of truth with
   /// the chip's colour via [_FramingChip.styleFor].
   static String? _framingLabel(TonightFraming f) => _FramingChip.styleFor(f).$1;
+
+  /// Format the Optimal-Sub seconds figure the way imagers say it: whole
+  /// seconds below 2 minutes ("90 s"), minutes above ("10 min") — narrowband
+  /// floors under a dark sky routinely run to many minutes.
+  static String _formatSub(double seconds) => seconds < 120
+      ? '${seconds.round()} s'
+      : '${(seconds / 60).toStringAsFixed(seconds >= 600 ? 0 : 1)} min';
 }
 
 /// 0–100 worth-score badge, colour-graded so the eye can triage at a glance:
@@ -422,6 +464,38 @@ class _FramingChip extends StatelessWidget {
       ),
       child: Text(
         label,   // non-null: the early return above bails on a null label
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: color, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+}
+
+/// NEXTGEN §1 — the recommended-filter-approach chip ("Narrowband" /
+/// "OSC + dual-band" / "Broadband"), rendered beside the framing chip.
+/// Narrowband/duoband get the info accent (they're the time-savers worth
+/// noticing); broadband stays neutral. The one-line why lives in the
+/// Why? breakdown, not a tooltip, so it works on touch too.
+class _FilterAdviceChip extends StatelessWidget {
+  final TonightFilterAdvice advice;
+  const _FilterAdviceChip({required this.advice});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = advice == TonightFilterAdvice.broadband
+        ? AraColors.textSecondary
+        : AraColors.accentInfo;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        advice.label,
         style: Theme.of(context)
             .textTheme
             .labelSmall
