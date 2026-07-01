@@ -98,14 +98,18 @@ void main() {
 
     test('guessKind maps common wheel labels', () {
       expect(FilterSetNotifier.guessKind('Ha 3nm'), FilterKind.ha);
+      expect(FilterSetNotifier.guessKind('Hα'), FilterKind.ha);
       expect(FilterSetNotifier.guessKind('OIII'), FilterKind.oiii);
       expect(FilterSetNotifier.guessKind('SII'), FilterKind.sii);
       expect(FilterSetNotifier.guessKind('L-eXtreme'), FilterKind.duo);
+      // 'enHAnce' contains "ha" — the multi-band check must win over Hα.
       expect(FilterSetNotifier.guessKind('L-eNhance'), FilterKind.tri);
       expect(FilterSetNotifier.guessKind('Red'), FilterKind.r);
       expect(FilterSetNotifier.guessKind('Green'), FilterKind.g);
       expect(FilterSetNotifier.guessKind('Blue'), FilterKind.b);
       expect(FilterSetNotifier.guessKind('Luminance'), FilterKind.l);
+      // Token matching: substrings inside ordinary words don't trigger lines.
+      expect(FilterSetNotifier.guessKind('Chandra'), FilterKind.l);
     });
   });
 }

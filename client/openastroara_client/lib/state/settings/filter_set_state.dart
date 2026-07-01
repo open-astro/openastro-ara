@@ -138,22 +138,27 @@ class FilterSetNotifier extends Notifier<FilterSetSettings> {
   /// correct the dropdown.
   static FilterKind guessKind(String label) {
     final l = label.toLowerCase();
-    if (l.contains('ha') || l.contains('h-a') || l.contains('hα')) {
-      return FilterKind.ha;
-    }
-    if (l.contains('oiii') || l.contains('o3') || l.contains('o-iii')) {
-      return FilterKind.oiii;
-    }
-    if (l.contains('sii') || l.contains('s2') || l.contains('s-ii')) {
-      return FilterKind.sii;
-    }
+    // Multi-band product names first — they embed line-filter substrings
+    // ('l-enhance' contains "ha", 'l-extreme' contains "tre"), so a naive
+    // contains('ha') check would misfile them as Hα.
     if (l.contains('extreme') || l.contains('duo') || l.contains('dual')) {
       return FilterKind.duo;
     }
     if (l.contains('enhance') || l.contains('tri')) return FilterKind.tri;
-    if (l == 'r' || l.startsWith('red')) return FilterKind.r;
-    if (l == 'g' || l.startsWith('green')) return FilterKind.g;
-    if (l == 'b' || l.startsWith('blue')) return FilterKind.b;
+    // Line filters match whole label tokens (split on non-alphanumerics) so
+    // substrings inside ordinary words can't trigger them.
+    final tokens = l
+        .split(RegExp('[^a-z0-9α]+'))
+        .where((t) => t.isNotEmpty)
+        .toSet();
+    if (tokens.contains('ha') || tokens.contains('hα') || tokens.contains('halpha')) {
+      return FilterKind.ha;
+    }
+    if (tokens.contains('oiii') || tokens.contains('o3')) return FilterKind.oiii;
+    if (tokens.contains('sii') || tokens.contains('s2')) return FilterKind.sii;
+    if (tokens.contains('r') || l.startsWith('red')) return FilterKind.r;
+    if (tokens.contains('g') || l.startsWith('green')) return FilterKind.g;
+    if (tokens.contains('b') || l.startsWith('blue')) return FilterKind.b;
     if (l.contains('osc') || l.contains('color') || l.contains('colour')) {
       return FilterKind.osc;
     }
