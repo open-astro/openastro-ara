@@ -168,8 +168,12 @@ namespace OpenAstroAra.Test {
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(focalMm: 0)));
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(reducer: 0)));
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(qe: 0)));
+            Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(qe: 1.2)),
+                "QE > 1 is non-physical and would silently inflate the sky-flux estimate");
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(bandwidthNm: 0)));
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(tolerancePct: 0)));
+            Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(tolerancePct: 101)),
+                "tolerating more added noise than the shot noise itself is meaningless");
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(headroom: 0)));
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(headroom: 1.1)));
             Assert.Throws<ArgumentException>(() => OptimalSubCalculator.Compute(Rig(ePerAdu: -0.1)));

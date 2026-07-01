@@ -124,6 +124,11 @@ public static class OptimalSubCalculator {
         RequirePositive(input.FocalLengthMm, nameof(input.FocalLengthMm));
         RequirePositive(input.ReducerFactor, nameof(input.ReducerFactor));
         RequirePositive(input.QuantumEfficiency, nameof(input.QuantumEfficiency));
+        if (input.QuantumEfficiency > 1.0) {
+            throw new ArgumentException(
+                "Quantum efficiency must be in (0, 1] — above 1 is non-physical and would silently inflate the sky-flux estimate.",
+                nameof(input));
+        }
         RequirePositive(input.FilterBandwidthNm, nameof(input.FilterBandwidthNm));
         if (!double.IsFinite(input.SkyMagPerArcsec2)) {
             throw new ArgumentException("Sky brightness (mag/arcsec²) must be finite.", nameof(input));
@@ -134,6 +139,11 @@ public static class OptimalSubCalculator {
         RequirePositive(input.ReadNoiseE, nameof(input.ReadNoiseE));
         RequirePositive(input.FullWellE, nameof(input.FullWellE));
         RequirePositive(input.NoiseTolerancePct, nameof(input.NoiseTolerancePct));
+        if (input.NoiseTolerancePct > 100.0) {
+            throw new ArgumentException(
+                "Noise tolerance must be in (0, 100] % — tolerating more added noise than the shot noise itself is meaningless.",
+                nameof(input));
+        }
         if (input.ElectronsPerAdu < 0 || !double.IsFinite(input.ElectronsPerAdu)) {
             throw new ArgumentException("Electrons/ADU must be ≥ 0 (0 = unknown).", nameof(input));
         }

@@ -45,7 +45,9 @@ public sealed record OptimalSubInputDto(
 /// Glover floor is reachable and is the recommendation (the subtle bound: too short is invisible;
 /// longer buys no further read-noise gain). <see cref="SaturationCeiling"/> — the sky-background
 /// saturation ceiling sits <i>below</i> the floor, so the window is collapsed and the ceiling is
-/// the best available. Serialized all-lowercase per the §60.6 enum convention
+/// the best available. <see cref="None"/> is the unset/default sentinel only (a default-constructed
+/// DTO) — <c>OptimalSubCalculator.Compute</c> never returns it; downstream switches need not treat
+/// it as a computed outcome. Serialized all-lowercase per the §60.6 enum convention
 /// (<c>none</c>/<c>readnoisefloor</c>/<c>saturationceiling</c>).</summary>
 public enum OptimalSubBound {
     None,
