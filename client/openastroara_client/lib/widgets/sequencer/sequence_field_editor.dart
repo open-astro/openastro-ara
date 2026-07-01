@@ -22,6 +22,7 @@ import '../../models/sequence/trigger_catalog.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
+import 'optimal_sub_advisor.dart';
 
 class SequenceFieldEditor extends ConsumerWidget {
   const SequenceFieldEditor({super.key});
@@ -82,6 +83,16 @@ class SequenceFieldEditor extends ConsumerWidget {
             enabled: field.enabledWhen?.call(node) ?? true,
             onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
           ),
+        ),
+      // NEXTGEN §5 — the per-filter "Optimal Sub" advisor under a TakeExposure's
+      // fields. It only ever writes a plain number into the standard
+      // ExposureTime field, so the sequence stays NINA-round-trippable.
+      if (type == takeExposureType)
+        OptimalSubAdvisor(
+          // Fresh fetch when the selection changes.
+          key: ValueKey('${selectedPath.join(".")}/__optimalsub'),
+          path: selectedPath,
+          filterName: filterNameForExposure(editor!.body, selectedPath),
         ),
     ];
 
