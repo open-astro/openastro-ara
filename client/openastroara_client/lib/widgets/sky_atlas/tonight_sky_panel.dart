@@ -344,10 +344,22 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     );
   }
 
+  // Friendly names for both the starter catalog's plain types and the OpenNGC
+  // codes the real catalog (and now the starter's emission targets) carry.
   static String _typeLabel(String t) => switch (t) {
-        'galaxy' => 'Galaxy',
-        'nebula' => 'Nebula',
+        'galaxy' || 'G' => 'Galaxy',
+        'GPair' => 'Galaxy pair',
+        'GTrpl' => 'Galaxy triplet',
+        'GGroup' => 'Galaxy group',
+        'nebula' || 'Neb' => 'Nebula',
+        'HII' || 'EmN' => 'Emission nebula',
+        'RfN' => 'Reflection nebula',
+        'PN' => 'Planetary nebula',
+        'SNR' => 'Supernova remnant',
         'cluster' => 'Cluster',
+        'OCl' => 'Open cluster',
+        'GCl' => 'Globular cluster',
+        'Cl+N' => 'Cluster + nebula',
         '' => 'Object',
         _ => t[0].toUpperCase() + t.substring(1),
       };

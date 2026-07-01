@@ -111,27 +111,32 @@ public sealed class TonightSkyService : ITonightSkyService {
 
     // A small spread-across-the-sky starter set so something worthwhile is always up. J2000 positions.
     // The full smart-culled catalog (§36.8 / §55.1) supersedes this hardcoded list later.
+    // Types use the OpenNGC codes (HII/PN/SNR/…) where the object has a definite class — the NEXTGEN §1
+    // emission classifier reads them, and the generic "nebula" would file textbook narrowband targets
+    // (the Crab, the Ring, the Owl) as merely Mixed. "galaxy"/"cluster" stay as friendly plain names
+    // (they classify as Continuum either way); the Trifid keeps generic "nebula" honestly — it's a real
+    // emission + reflection mix.
     internal static readonly IReadOnlyList<CatalogObject> Catalog = new[] {
         new CatalogObject("M31", "Andromeda Galaxy", "galaxy", 3.4, 10.685, 41.269),
         new CatalogObject("M33", "Triangulum Galaxy", "galaxy", 5.7, 23.462, 30.660),
         new CatalogObject("M45", "Pleiades", "cluster", 1.6, 56.750, 24.117),
-        new CatalogObject("M1", "Crab Nebula", "nebula", 8.4, 83.633, 22.014),
-        new CatalogObject("M42", "Orion Nebula", "nebula", 4.0, 83.822, -5.391),
-        new CatalogObject("NGC2237", "Rosette Nebula", "nebula", 9.0, 97.950, 5.050),
+        new CatalogObject("M1", "Crab Nebula", "SNR", 8.4, 83.633, 22.014),
+        new CatalogObject("M42", "Orion Nebula", "HII", 4.0, 83.822, -5.391),
+        new CatalogObject("NGC2237", "Rosette Nebula", "HII", 9.0, 97.950, 5.050),
         new CatalogObject("M81", "Bode's Galaxy", "galaxy", 6.9, 148.888, 69.065),
-        new CatalogObject("M97", "Owl Nebula", "nebula", 9.9, 168.699, 55.019),
+        new CatalogObject("M97", "Owl Nebula", "PN", 9.9, 168.699, 55.019),
         new CatalogObject("M104", "Sombrero Galaxy", "galaxy", 8.0, 189.998, -11.623),
         new CatalogObject("M63", "Sunflower Galaxy", "galaxy", 8.6, 198.955, 42.029),
         new CatalogObject("M51", "Whirlpool Galaxy", "galaxy", 8.4, 202.470, 47.195),
         new CatalogObject("M101", "Pinwheel Galaxy", "galaxy", 7.9, 210.802, 54.349),
         new CatalogObject("M13", "Hercules Cluster", "cluster", 5.8, 250.423, 36.461),
         new CatalogObject("M20", "Trifid Nebula", "nebula", 6.3, 270.600, -23.030),
-        new CatalogObject("M8", "Lagoon Nebula", "nebula", 6.0, 270.904, -24.387),
-        new CatalogObject("M16", "Eagle Nebula", "nebula", 6.0, 274.700, -13.807),
-        new CatalogObject("M17", "Omega Nebula", "nebula", 6.0, 275.196, -16.171),
-        new CatalogObject("M57", "Ring Nebula", "nebula", 8.8, 283.396, 33.029),
-        new CatalogObject("M27", "Dumbbell Nebula", "nebula", 7.4, 299.901, 22.721),
-        new CatalogObject("NGC7000", "North America Nebula", "nebula", 4.0, 314.750, 44.330),
+        new CatalogObject("M8", "Lagoon Nebula", "HII", 6.0, 270.904, -24.387),
+        new CatalogObject("M16", "Eagle Nebula", "HII", 6.0, 274.700, -13.807),
+        new CatalogObject("M17", "Omega Nebula", "HII", 6.0, 275.196, -16.171),
+        new CatalogObject("M57", "Ring Nebula", "PN", 8.8, 283.396, 33.029),
+        new CatalogObject("M27", "Dumbbell Nebula", "PN", 7.4, 299.901, 22.721),
+        new CatalogObject("NGC7000", "North America Nebula", "HII", 4.0, 314.750, 44.330),
     };
 
     /// <summary>Pure ranking over the hardcoded starter <see cref="Catalog"/>. Retained for the no-data

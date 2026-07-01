@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.Linq;
 
 namespace OpenAstroAra.Test {
 
@@ -56,6 +57,23 @@ namespace OpenAstroAra.Test {
             foreach (var t in new[] { "Star", "Dup", "Other", "", "   ", null }) {
                 Assert.That(FilterAdvice.ClassifyEmission(t), Is.EqualTo(EmissionClass.Unknown), t ?? "<null>");
             }
+        }
+
+        [Test]
+        public void The_starter_catalog_classifies_its_textbook_narrowband_targets_as_emission_line() {
+            // #626 review: the Crab (SNR), the Ring/Dumbbell/Owl (PN) and the big HII regions must
+            // classify EmissionLine even from the pre-OpenNGC starter catalog — under a dark sky a
+            // Mixed classification would demote them to a broadband recommendation, likely a new
+            // user's first impression of the feature.
+            var starter = TonightSkyService.Catalog.ToDictionary(o => o.Id, o => o.Type);
+            foreach (var id in new[] { "M1", "M42", "NGC2237", "M97", "M8", "M16", "M17", "M57", "M27", "NGC7000" }) {
+                Assert.That(FilterAdvice.ClassifyEmission(starter[id]),
+                    Is.EqualTo(EmissionClass.EmissionLine), $"{id} ({starter[id]})");
+            }
+            // Galaxies/clusters stay continuum; the Trifid is honestly Mixed (emission + reflection).
+            Assert.That(FilterAdvice.ClassifyEmission(starter["M31"]), Is.EqualTo(EmissionClass.Continuum));
+            Assert.That(FilterAdvice.ClassifyEmission(starter["M45"]), Is.EqualTo(EmissionClass.Continuum));
+            Assert.That(FilterAdvice.ClassifyEmission(starter["M20"]), Is.EqualTo(EmissionClass.Mixed));
         }
 
         [Test]
