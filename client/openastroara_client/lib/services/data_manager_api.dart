@@ -25,10 +25,16 @@ abstract interface class DataManagerClient {
   Future<bool> delete(String packageId);
 
   /// Read an installed catalog package's objects (normalized {name, ra°, dec°,
-  /// mag}) for the Aladin overlay. Returns null when the package isn't a known
-  /// catalog, isn't installed, or has no catalog file (the daemon answers 404) —
-  /// null is "no overlay", not an error. [maxMag] drops fainter objects; [limit]
-  /// caps the count (the daemon also hard-caps at 50k).
+  /// mag}). Returns null when the package isn't a known catalog, isn't
+  /// installed, or has no catalog file (the daemon answers 404) — null is "no
+  /// overlay", not an error. [maxMag] drops fainter objects; [limit] caps the
+  /// count (the daemon also hard-caps at 50k).
+  ///
+  /// Currently unconsumed by design, NOT dead code: its Aladin-era consumer
+  /// was pruned with AladinView, and this method + [CatalogObject] are the
+  /// retained wire contract for the §36 Catalogs-overlay panel against the
+  /// Stellarium planetarium (see design/PORT_TODO.md "OBSOLETE ... do NOT
+  /// remove SkyCatalogService" entry before sweeping it).
   Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit});
 
   void close();
