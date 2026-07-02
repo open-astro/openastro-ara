@@ -145,7 +145,11 @@ public static class SystemEndpoints {
                         PackageDeleteResult.Blocked => Results.Problem(
                             "The package's files are in use or protected — close anything using them and try again.",
                             statusCode: StatusCodes.Status409Conflict),
-                        _ => Results.NotFound(),
+                        PackageDeleteResult.NotInstalled => Results.NotFound(),
+                        // No catch-all 404: a new enum member added without updating this map should
+                        // fail loudly, not silently read as "already gone" (Debayer.CellOffsets precedent).
+                        var other => throw new System.Diagnostics.UnreachableException(
+                            $"Unhandled PackageDeleteResult: {other}"),
                     })
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
