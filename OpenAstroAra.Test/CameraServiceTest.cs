@@ -46,6 +46,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void CaptureForAnalysisAsync_when_not_connected_throws_InvalidOperation() {
+            // §59 — a probe capture on a disconnected camera must fail loudly (a silent
+            // gap in the sweep's measurements would corrupt the focus curve).
+            using var svc = new CameraService();
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.CaptureForAnalysisAsync(1.0, binning: 1, CancellationToken.None));
+        }
+
+        [Test]
+        public void CaptureForAnalysisAsync_rejects_nonpositive_exposure_before_connected_check() {
+            using var svc = new CameraService();
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.CaptureForAnalysisAsync(0, binning: 1, CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.CaptureForAnalysisAsync(-1, binning: 1, CancellationToken.None));
+        }
+
+        [Test]
         public void StartExposureAsync_rejects_nonpositive_exposure_before_connected_check() {
             using var svc = new CameraService();
             // Argument range validates BEFORE the connected check (services-wide ordering), so a

@@ -400,6 +400,9 @@ public partial class Program {
                 // FITS FOCUSPOS header + catalog column feed the §50.4 view.
                 focuser: sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
+        // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
+        // path + same in-flight capture gate as real captures; probes are never persisted).
+        builder.Services.AddSingleton<IAnalysisFrameSource>(sp => sp.GetRequiredService<CameraService>());
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder

@@ -290,9 +290,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// gate and the exception boundary; genuine cancellation (the sequencer token) aborts the
     /// exposure best-effort and propagates. Returns true only when the frame landed in the catalog.
     /// </summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+    /// <summary>
+    /// The device half of a capture — settings → expose → poll ImageReady → download → pixel
+    /// conversion — extracted from <see cref="CaptureCoreAsync"/> so the §59 autofocus sweep can
+    /// capture analysis frames through the IDENTICAL device path without the persistence half
+    /// (no §72 FITS write, no §28 catalog row — AF probe frames are throwaway measurements, not
+    /// data). Returns null on the abandoned (disconnect/supersede) and not-ready paths, which are
+    /// logged here exactly as before; cancellation aborts the exposure and propagates.
+    /// </summary>
+    private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
+            AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
         // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
@@ -317,11 +324,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         if (ready is null) {
             LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
-            return false;
+            return null;
         }
         if (ready == false) {
             LogCaptureFailedNotReady(frameId, request.ExposureSec);
-            return false;
+            return null;
         }
 
         // The exposure is complete (ImageReady), but the download below is a synchronous 10-30s
@@ -340,6 +347,17 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         var (pixels, width, height) = ConvertImageArray(imageArray);
         RefreshCacheOnce();
+        return (pixels, width, height, capturedAt);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+        var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
+        if (exposed is null) {
+            return false; // abandoned (disconnect/supersede) or not-ready — already logged
+        }
+        var (pixels, width, height, capturedAt) = exposed.Value;
 
         // Read back what the driver ACTUALLY applied for the header write: a driver can
         // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
