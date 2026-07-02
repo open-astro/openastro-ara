@@ -21,7 +21,10 @@ abstract interface class DataManagerClient {
 
   /// Delete an installed package's files. Returns true if files were freed, false
   /// if there was nothing to delete (the package wasn't present / already gone) —
-  /// false is NOT a failure (a real error throws). Idempotent.
+  /// false is NOT a failure (a real error throws). Throws
+  /// [PackageDeleteBlockedException] when the daemon answers 409: the files are
+  /// still on disk but locked/permission-denied, so the user should retry — the
+  /// package must NOT be treated as removed. Idempotent.
   Future<bool> delete(String packageId);
 
   /// Read an installed catalog package's objects (normalized {name, ra°, dec°,
@@ -40,6 +43,17 @@ abstract interface class DataManagerClient {
   void close();
 }
 
+/// §36 — a package delete the daemon refused with 409: the files are locked or
+/// permission-denied, still on disk. Surfaced as its own type (with a message
+/// fit for a SnackBar) so the UI reads "retry later", never "already removed".
+class PackageDeleteBlockedException implements Exception {
+  const PackageDeleteBlockedException();
+
+  @override
+  String toString() =>
+      'the files are in use or protected — close anything using them and try again';
+}
+
 /// Dio wrapper over `/api/v1/data-manager/*`. Download/cancel are 202-Accepted
 /// (the daemon runs the fetch+extract in the background and reports progress
 /// over the `data_manager.download.*` WS stream), so they return when the
@@ -47,13 +61,16 @@ abstract interface class DataManagerClient {
 class DataManagerApi implements DataManagerClient {
   final Dio _dio;
 
-  DataManagerApi(AraServer server)
-      : _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          sendTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 12),
-        ));
+  /// [dio] is injectable so tests can stub the transport with a fake adapter;
+  /// production callers pass only the server and get a configured one-shot Dio.
+  DataManagerApi(AraServer server, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 12),
+            ));
 
   @override
   Future<List<DataPackage>> listPackages() async {
@@ -119,8 +136,11 @@ class DataManagerApi implements DataManagerClient {
       return true;
     } on DioException catch (e) {
       // 404 → already gone (another client removed it). Idempotent: report "nothing
-      // freed" (false), not an error; anything else propagates.
+      // freed" (false), not an error. 409 → the files are locked/permission-denied
+      // and STILL ON DISK — a typed throw so the UI says "retry", never treating a
+      // blocked delete as removed. Anything else propagates.
       if (e.response?.statusCode == 404) return false;
+      if (e.response?.statusCode == 409) throw const PackageDeleteBlockedException();
       rethrow;
     }
   }

@@ -146,18 +146,40 @@ namespace OpenAstroAra.Test {
 
             var deleted = await _svc.DeleteAsync("hyg-stars", CancellationToken.None);
 
-            Assert.That(deleted, Is.True);
+            Assert.That(deleted, Is.EqualTo(PackageDeleteResult.Deleted));
             Assert.That(Directory.Exists(Path.Combine(_root, "hyg-stars")), Is.False);
             var after = await _svc.ListPackagesAsync(CancellationToken.None);
             Assert.That(after.Single(p => p.Id == "hyg-stars").IsInstalled, Is.False);
         }
 
         [Test]
-        public async Task Delete_returns_false_for_an_uninstalled_or_unknown_package() {
-            Assert.That(await _svc.DeleteAsync("openngc-dso", CancellationToken.None), Is.False,
+        public async Task Delete_reports_NotInstalled_for_an_uninstalled_or_unknown_package() {
+            Assert.That(await _svc.DeleteAsync("openngc-dso", CancellationToken.None),
+                Is.EqualTo(PackageDeleteResult.NotInstalled),
                 "a catalog package that isn't installed has nothing to delete");
-            Assert.That(await _svc.DeleteAsync("not-a-real-package", CancellationToken.None), Is.False,
+            Assert.That(await _svc.DeleteAsync("not-a-real-package", CancellationToken.None),
+                Is.EqualTo(PackageDeleteResult.NotInstalled),
                 "an unknown id deletes nothing");
+        }
+
+        [Test]
+        public async Task Delete_reports_Blocked_when_the_files_cannot_be_removed() {
+            // POSIX-only: a read-only PARENT denies removing the child dir (that's a write to the
+            // parent), which is exactly the locked/permission-denied shape DeleteAsync must report
+            // as Blocked — never NotInstalled (the caller would treat still-present files as clear).
+            Assume.That(!OperatingSystem.IsWindows(), "read-only-parent semantics are POSIX");
+            Assume.That(!Environment.IsPrivilegedProcess, "root bypasses file permissions");
+            InstallPackage("hyg-stars", 1024);
+            var original = File.GetUnixFileMode(_root);
+            File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            try {
+                Assert.That(await _svc.DeleteAsync("hyg-stars", CancellationToken.None),
+                    Is.EqualTo(PackageDeleteResult.Blocked));
+                Assert.That(Directory.Exists(Path.Combine(_root, "hyg-stars")), Is.True,
+                    "the blocked package must still be on disk");
+            } finally {
+                File.SetUnixFileMode(_root, original);
+            }
         }
 
         [Test]
@@ -185,7 +207,8 @@ namespace OpenAstroAra.Test {
             Directory.CreateDirectory(outside);
             try {
                 var deleted = await _svc.DeleteAsync("../" + Path.GetFileName(outside), CancellationToken.None);
-                Assert.That(deleted, Is.False, "a non-catalog (traversal) id must not map to any directory");
+                Assert.That(deleted, Is.EqualTo(PackageDeleteResult.NotInstalled),
+                    "a non-catalog (traversal) id must not map to any directory");
                 Assert.That(Directory.Exists(outside), Is.True, "nothing outside the data root may be deleted");
             } finally {
                 if (Directory.Exists(outside)) {

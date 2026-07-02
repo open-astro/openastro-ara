@@ -220,22 +220,25 @@ namespace OpenAstroAra.Server.Services {
             }, ct);
         }
 
-        public Task<bool> DeleteAsync(string packageId, CancellationToken ct) {
+        public Task<PackageDeleteResult> DeleteAsync(string packageId, CancellationToken ct) {
             var dir = PackageDir(packageId);
             if (dir is null || !Directory.Exists(dir)) {
-                return Task.FromResult(false); // unknown id or not installed — nothing to free.
+                // Unknown id or not installed — nothing to free.
+                return Task.FromResult(PackageDeleteResult.NotInstalled);
             }
             try {
                 Directory.Delete(dir, recursive: true);
                 LogDeleted(packageId);
-                return Task.FromResult(true);
+                return Task.FromResult(PackageDeleteResult.Deleted);
             } catch (DirectoryNotFoundException) {
-                return Task.FromResult(false); // raced with another delete — already gone.
+                // Raced with another delete — already gone.
+                return Task.FromResult(PackageDeleteResult.NotInstalled);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                // A locked/permission-denied delete is reported as "not deleted" rather than thrown —
-                // the client retries; the daemon must not 500 on a best-effort disk reclaim.
+                // A locked/permission-denied delete is reported as Blocked rather than thrown (the
+                // daemon must not 500 on a best-effort disk reclaim) — and distinctly from
+                // NotInstalled, so the caller retries instead of treating a locked dir as clear.
                 LogDeleteFailed(packageId, ex);
-                return Task.FromResult(false);
+                return Task.FromResult(PackageDeleteResult.Blocked);
             }
         }
 

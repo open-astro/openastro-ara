@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+- **§36 — a blocked sky-data delete no longer looks like it worked.** Removing a downloaded catalog whose files were locked or permission-denied used to answer exactly like "already removed" (404), so the UI treated still-present files as freed. The daemon now answers 409 with the reason, and the Data Manager shows "the files are in use or protected — close anything using them and try again" so you know to retry.
+
 ### Added
 - **§25.5.5 — cameras with a simple on/off cooler get a cooler switch.** A camera whose cooler has no temperature regulation (ASCOM `CanSetCCDTemperature=false` but `CoolerOn` implemented) used to show no cooler controls at all; the daemon now probes for the cooler itself at connect (`has_cooler`) and the camera panel shows the on/off switch for it — the set-point field still appears only with real TEC regulation. Older daemons keep the previous behaviour.
 - **§64 — Live View renders colour for OSC (colour) cameras.** A one-shot-colour camera's live view used to show the raw sensor mosaic as a grey cross-hatch; it now debayers each live frame into a real colour image (at bin 1×1 — binned readouts aren't a colour mosaic and stay greyscale, as does mono). Uses the same super-pixel debayer + per-channel auto-stretch recipe as capture previews, so live view and previews can't disagree about colour; the live frame's reported dimensions halve accordingly.
