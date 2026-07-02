@@ -132,6 +132,28 @@ void main() {
     expect(find.text('Continuing with the address override.'), findsOneWidget);
   });
 
+  testWidgets('§68.2 clearing the address override revokes a granted skip '
+      '(r1 fix)', (tester) async {
+    final api = _FakeDiscoveryApi(failing: true);
+    final container = await _pump(tester, api);
+
+    await tester.enterText(_addressField(), '10.0.0.5:11111');
+    await tester.pump();
+    final skip = find.widgetWithText(
+        TextButton, 'Skip — I\'m using a non-standard bridge address');
+    await tester.ensureVisible(skip);
+    await tester.pump();
+    await tester.tap(skip);
+    await tester.pump();
+    expect(container.read(wizardStepValidProvider), isTrue);
+
+    // The skip was granted FOR that override — clearing it re-gates Next.
+    await tester.enterText(_addressField(), '');
+    await tester.pump();
+    expect(container.read(wizardStepValidProvider), isFalse,
+        reason: 'no handshake and no override left to skip to');
+  });
+
   testWidgets('no active server: gated with the failure panel, no crash',
       (tester) async {
     final api = _FakeDiscoveryApi();

@@ -230,9 +230,12 @@ class _BottomNavBar extends StatelessWidget {
   final VoidCallback onNext;
   final bool isLast;
 
-  /// False when the current screen has a blocking inline validation error —
-  /// disables Next / Save Profile (Back + Skip stay available so the user can
-  /// always leave the screen).
+  /// False when the current screen has a blocking inline validation error or an
+  /// unmet advance-gate (§68.2 bridge detection) — disables Next / Save Profile
+  /// AND Skip: both advance the wizard, so a gate one of them ignored would be
+  /// no gate at all (and on field-validation screens the invalid value is
+  /// already in the draft — skipping wouldn't discard it). Back always works,
+  /// so the user is never trapped.
   final bool canAdvance;
 
   const _BottomNavBar({
@@ -266,10 +269,20 @@ class _BottomNavBar extends StatelessWidget {
             label: const Text('Back'),
           ),
           const SizedBox(width: 8),
-          TextButton(
-            onPressed: onSkip,
-            child: const Text('Skip — use defaults'),
-          ),
+          // Gated like Next (see canAdvance) — a skippable gate is no gate.
+          if (canAdvance)
+            TextButton(
+              onPressed: onSkip,
+              child: const Text('Skip — use defaults'),
+            )
+          else
+            Tooltip(
+              message: 'Resolve the issue on this screen to continue.',
+              child: const TextButton(
+                onPressed: null,
+                child: Text('Skip — use defaults'),
+              ),
+            ),
           const Spacer(),
           Text(stageLabel,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(

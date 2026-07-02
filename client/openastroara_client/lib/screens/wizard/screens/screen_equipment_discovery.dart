@@ -53,7 +53,10 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
     _draft = ref.read(wizardControllerProvider).draft;
     // Gate Next until the handshake (or the skip) succeeds, and auto-run the
     // probe so the happy path unblocks with zero clicks. Both touch providers,
-    // so they run post-frame — a provider can't be modified mid-build.
+    // so they run post-frame — a provider can't be modified mid-build. Accepted
+    // consequence: the very first frame renders with Next enabled (the shell's
+    // navigation reset marks steps valid synchronously); a human can't click
+    // within that frame, and the probe re-gates immediately after it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(wizardStepValidProvider.notifier).setValid(false);
@@ -137,8 +140,16 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
           initialValue: _draft.alpacaBridgeAddress,
           hint: 'auto-discover (UDP 32227) — or host:port to override',
           // setState so the skip button's enablement tracks the override text.
-          onChanged: (v) => setState(() =>
-              _draft.alpacaBridgeAddress = v.trim().isEmpty ? null : v.trim()),
+          onChanged: (v) => setState(() {
+            _draft.alpacaBridgeAddress = v.trim().isEmpty ? null : v.trim();
+            // A granted skip is contingent on the override it skipped TO —
+            // clearing the address revokes it and re-gates Next (unless the
+            // handshake itself has succeeded, which stands on its own).
+            if (_skipped && !_hasAddressOverride) {
+              _skipped = false;
+              _setValid(_ok);
+            }
+          }),
         ),
         Align(
           alignment: Alignment.centerLeft,

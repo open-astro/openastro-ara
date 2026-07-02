@@ -10,6 +10,7 @@ import 'package:openastroara/screens/wizard/wizard_shell.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/wizard_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
@@ -186,5 +187,38 @@ void main() {
 
     expect(api.listCalls, 2,
         reason: 'a successful save invalidates + re-fetches the profile list');
+  });
+
+  testWidgets('the bottom-nav Skip is gated like Next while the step is invalid',
+      (tester) async {
+    // A skippable gate is no gate: §68.2 (and the field-validation screens,
+    // whose invalid values are already in the draft) must block BOTH advance
+    // buttons. Back stays available.
+    final api = _FakeProfileApi();
+    final container = ProviderContainer(overrides: [
+      activeServerProvider.overrideWithValue(
+        const AraServer(hostname: 'daemon', port: 5555),
+      ),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: WizardShell(createApi: (_) => api, onComplete: (_) {}),
+      ),
+    ));
+
+    final skip = find.widgetWithText(TextButton, 'Skip — use defaults');
+    expect(tester.widget<TextButton>(skip).onPressed, isNotNull,
+        reason: 'a valid step skips normally');
+
+    container.read(wizardStepValidProvider.notifier).setValid(false);
+    await tester.pump();
+    expect(tester.widget<TextButton>(skip).onPressed, isNull,
+        reason: 'an invalid/gated step blocks Skip exactly like Next');
+    final next = find.widgetWithText(FilledButton, 'Next');
+    expect(tester.widget<FilledButton>(next).onPressed, isNull);
+    // (Back is null here only because step 1 has nothing to go back to —
+    // the gate itself never disables it.)
   });
 }
