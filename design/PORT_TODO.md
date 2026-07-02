@@ -609,7 +609,7 @@ helper (and flip the entitlements-test guard back); (b) enable Chromium's own re
 + a sandboxed helper variant — independent of (a). See `client/.../macos/CEF_HELPER.md`. Surfaced 2026-06-24 by the
 CEF-149 OSR review; nothing tracks the migration except this entry + the entitlement comments.
 
-**§36 Data Manager — DeleteAsync conflates "not installed" and "permission denied" (§36-1 review note).** Both an
+**DONE (2026-07-02) — §36 Data Manager DeleteAsync no longer conflates "not installed" and "permission denied".** `DeleteAsync` now returns `PackageDeleteResult` (Deleted / NotInstalled / Blocked — the delete-raced `DirectoryNotFoundException` maps to NotInstalled, the locked/permission-denied `IOException`/`UnauthorizedAccessException` family to Blocked), the endpoint maps Blocked to a 409 problem ("files are in use or protected — retry"), and the client `delete()` turns the 409 into a typed `PackageDeleteBlockedException` whose message surfaces in the modal SnackBar — so a locked dir reads "retry later", never "already clear". POSIX-gated read-only-parent test covers the Blocked path. Original entry: Both an
 unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locked or permission-denied dir) return
 `false` from `DeleteAsync`, so the caller can't tell "give up, it's gone" from "retry later, it's locked". Fine for the
 §36-1 inventory layer (the endpoint maps `false` → 404 either way), but the §36-2 download engine should surface a

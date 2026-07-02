@@ -136,12 +136,20 @@ public static class SystemEndpoints {
             .WithName("CancelDataPackageDownload");
 
         data.MapDelete("/{packageId}",
-                async (string packageId, IDataManagerService svc, CancellationToken ct) => {
-                    var ok = await svc.DeleteAsync(packageId, ct);
-                    return ok ? Results.NoContent() : Results.NotFound();
-                })
+                async (string packageId, IDataManagerService svc, CancellationToken ct) =>
+                    await svc.DeleteAsync(packageId, ct) switch {
+                        PackageDeleteResult.Deleted => Results.NoContent(),
+                        // Locked files / permission denied: 409 tells the client "still there, retry
+                        // later" — distinctly from 404's "already gone" (treating a locked dir as
+                        // clear would strand the disk space with no way to notice).
+                        PackageDeleteResult.Blocked => Results.Problem(
+                            "The package's files are in use or protected — close anything using them and try again.",
+                            statusCode: StatusCodes.Status409Conflict),
+                        _ => Results.NotFound(),
+                    })
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("DeleteDataPackage");
 
         data.MapGet("/state",

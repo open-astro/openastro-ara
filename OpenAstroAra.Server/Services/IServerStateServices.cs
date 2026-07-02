@@ -75,11 +75,21 @@ public interface IBugReportService {
 }
 
 /// <summary>Data Manager (§36.2).</summary>
+/// <summary>§36 — outcome of a sky-data package delete. Split (not a bool) so callers can tell
+/// "give up, it's gone" (<see cref="NotInstalled"/>) from "retry later, the files are locked or
+/// permission was denied" (<see cref="Blocked"/>) — a locked directory must not be treated as
+/// already-clear.</summary>
+public enum PackageDeleteResult {
+    Deleted,
+    NotInstalled,
+    Blocked,
+}
+
 public interface IDataManagerService {
     Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct);
     Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct);
-    Task<bool> DeleteAsync(string packageId, CancellationToken ct);
+    Task<PackageDeleteResult> DeleteAsync(string packageId, CancellationToken ct);
     Task<DataManagerStateDto> GetStateAsync(CancellationToken ct);
 
     /// <summary>§36 — read an installed catalog package's objects for the Sky Atlas overlay, normalized to
