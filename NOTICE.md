@@ -44,10 +44,10 @@ See `3rd-party-licenses.txt` (added at first release) for the bundled-dependency
 
 ## Downloadable sky-data catalogs
 
-The §36 Data Manager can download optional star/deep-sky catalogs for the Sky Atlas overlay. These are **not** bundled or redistributed with ARA — they are fetched on demand from their upstream sources at the user's request — but are credited here per their share-alike terms:
+The §36 Data Manager can download optional star/deep-sky catalogs for the Sky Atlas overlay. These are **not** bundled with ARA binaries — they are fetched on demand at the user's request — but since 2026-07-01 the org **redistributes unmodified snapshots** of them (from [`open-astro/sky-data`](https://github.com/open-astro/sky-data), commit-pinned, so the downloads survive upstream repo deletion; that repo's README carries the full attribution + provenance pins). Credited here per their share-alike terms:
 
-- **HYG star database** ([Astronomy Nexus / David Nash](https://www.astronexus.com/hyg), **CC BY-SA**) — the named-star catalog (Hipparcos + Yale Bright Star + Gliese). Downloaded from the project's archived GitHub repository, commit-pinned.
-- **OpenNGC** ([Mattia Verga](https://github.com/mattiaverga/OpenNGC), **CC BY-SA 4.0**) — the NGC/IC deep-sky object catalog. Downloaded commit-pinned from its GitHub repository.
+- **HYG star database** ([Astronomy Nexus / David Nash](https://www.astronexus.com/hyg), **CC BY-SA**) — the named-star catalog (Hipparcos + Yale Bright Star + Gliese). Snapshot byte-identical to the archived upstream GitHub repository's `hygdata_v40.csv.gz`.
+- **OpenNGC** ([Mattia Verga](https://github.com/mattiaverga/OpenNGC), **CC BY-SA 4.0**) — the NGC/IC deep-sky object catalog. Snapshot byte-identical to the upstream repository's commit-pinned `NGC.csv`.
 
 ## Trademarks
 
