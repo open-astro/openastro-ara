@@ -10,6 +10,7 @@ import '../../services/profile_api.dart';
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/camera_electronics_state.dart';
+import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -59,6 +60,25 @@ CameraElectronics applyDraftToCameraElectronics(CameraElectronics base, ProfileD
     readNoiseE: (rn != null && rn > 0) ? rn : null,
     quantumEfficiencyPeak: (qe != null && qe > 0 && qe <= 100) ? qe / 100.0 : null,
   );
+}
+
+/// NEXTGEN §4 — the wizard's screen-6 filters become the planning filter set
+/// (feeds the emission-aware Tonight's Sky advice + the per-filter Optimal Sub
+/// advisor). Each named filter's kind is guessed from its label via the SAME
+/// inference the Settings panel's "seed from wheel labels" button uses, so the
+/// two entry paths agree; the user can refine kinds later in Settings →
+/// Imaging → Filter set. An empty/unnamed draft list preserves the base —
+/// until this mapper, the wizard's filter entries were saved nowhere at all.
+FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) {
+  final named = d.filterWheel.filters
+      .map((f) => f.name?.trim() ?? '')
+      .where((n) => n.isNotEmpty)
+      .toList(growable: false);
+  if (named.isEmpty) return base;
+  return FilterSetSettings(filters: [
+    for (final name in named)
+      PlanningFilter(name: name, kind: FilterSetNotifier.guessKind(name)),
+  ]);
 }
 
 OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
@@ -247,6 +267,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
     _trySave(() async => api.putCameraElectronics(
         applyDraftToCameraElectronics(await api.getCameraElectronics(), d))),
+    _trySave(() async =>
+        api.putFilterSet(applyDraftToFilterSet(await api.getFilterSet(), d))),
     _trySave(() async => api.putStorageSettings(
         applyDraftToStorage(await api.getStorageSettings(), d))),
     _trySave(() async => api.putSafetyPolicies(

@@ -7,6 +7,7 @@ import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -161,6 +162,29 @@ void main() {
       expect(out.indexDownloadPath, '/keep/db');
       expect(out.searchRadiusDeg, 12);
       expect(out.downsampleFactor, 4);
+    });
+
+    test('applyDraftToFilterSet builds planning filters from named draft filters', () {
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()..name = 'Ha',
+        FilterDef()..name = '  OIII ',
+        FilterDef()..name = '', // unnamed rows are skipped
+        FilterDef()..name = 'Red',
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters.map((f) => f.name), ['Ha', 'OIII', 'Red']);
+      expect(out.filters[0].kind, FilterKind.ha, reason: 'same inference as the Settings seed');
+      expect(out.filters[1].kind, FilterKind.oiii);
+      expect(out.filters[2].kind, FilterKind.r);
+    });
+
+    test('applyDraftToFilterSet preserves the base when the draft has no named filters', () {
+      const base = FilterSetSettings(
+          filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]);
+      expect(applyDraftToFilterSet(base, ProfileDraft()).filters, base.filters);
+      final unnamedOnly = ProfileDraft()..filterWheel.filters.add(FilterDef());
+      expect(applyDraftToFilterSet(base, unnamedOnly).filters, base.filters);
     });
 
     test('applyDraftToCameraElectronics converts QE percent and preserves ASCOM fields', () {
