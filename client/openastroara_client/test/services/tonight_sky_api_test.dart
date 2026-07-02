@@ -95,6 +95,44 @@ void main() {
       ]);
     });
 
+    test('parses the NEXTGEN §1 filter-advice fields when present', () {
+      final o = TonightSkyObject.fromJson({
+        ...body(),
+        'filter_advice': 'narrowband',
+        'advice_reason': 'Emission-line target — narrowband sees ~14× less sky glow.',
+        'optimal_sub_s': 300.0,
+      })!;
+      expect(o.filterAdvice, TonightFilterAdvice.narrowband);
+      expect(o.adviceReason, contains('~14×'));
+      expect(o.optimalSubS, 300.0);
+    });
+
+    test('filter-advice fields are null when absent or unrecognised', () {
+      // A pre-slice-3 daemon omits them entirely.
+      final absent = TonightSkyObject.fromJson(body())!;
+      expect(absent.filterAdvice, isNull);
+      expect(absent.adviceReason, isNull);
+      expect(absent.optimalSubS, isNull);
+      // A newer daemon adding an approach token must not break this client.
+      final unknown = TonightSkyObject.fromJson({
+        ...body(),
+        'filter_advice': 'quadband',
+        'advice_reason': 42,
+        'optimal_sub_s': 'soon',
+      })!;
+      expect(unknown.filterAdvice, isNull);
+      expect(unknown.adviceReason, isNull, reason: 'wrong-typed reason drops');
+      expect(unknown.optimalSubS, isNull, reason: 'wrong-typed figure drops');
+    });
+
+    test('advice enum maps each wire value', () {
+      expect(TonightFilterAdvice.fromWire('narrowband'), TonightFilterAdvice.narrowband);
+      expect(TonightFilterAdvice.fromWire('duoband'), TonightFilterAdvice.duoband);
+      expect(TonightFilterAdvice.fromWire('broadband'), TonightFilterAdvice.broadband);
+      expect(TonightFilterAdvice.fromWire(null), isNull);
+      expect(TonightFilterAdvice.fromWire(1), isNull);
+    });
+
     test('framing enum maps each wire value, unknown for anything else', () {
       TonightFraming f(Object? v) =>
           TonightSkyObject.fromJson(body()..['framing'] = v)!.framing;

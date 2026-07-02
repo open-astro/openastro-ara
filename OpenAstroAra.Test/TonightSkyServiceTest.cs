@@ -563,6 +563,84 @@ namespace OpenAstroAra.Test {
             Assert.That(err, Does.Contain("reducer factor"));
         }
 
+        // ─── NEXTGEN §1: filter/emission-aware advice (advice-only — the score must not move) ───
+
+        private static FilterSetDto NbFilterSet() => new([
+            new PlanningFilterDto(Name: "Ha 7nm", Kind: FilterKind.Ha),
+            new PlanningFilterDto(Name: "L", Kind: FilterKind.L)]);
+
+        private static (DateTimeOffset At, SiteSettingsDto Site, double Ra) MidnightMeridian() {
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            return (at, site, TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg));
+        }
+
+        [Test]
+        public void An_emission_target_with_an_nb_filter_set_gets_narrowband_advice_without_moving_the_score() {
+            var (at, site, ra) = MidnightMeridian();
+            var snr = new[] { Obj("SNR1", ra, 40, type: "SNR") };
+
+            var without = TonightSkyService.Rank(snr, site, NoOpticsForTest, at, limit: 10);
+            var with = TonightSkyService.Rank(snr, site, NoOpticsForTest, at, limit: 10,
+                filterSet: NbFilterSet());
+
+            Assert.That(with[0].FilterAdvice, Is.EqualTo(FilterApproach.Narrowband));
+            Assert.That(with[0].AdviceReason, Does.Contain("Ha 7nm"));
+            Assert.That(with[0].ScoreReasons, Has.Some.Contains("narrowband recommended (+0)"),
+                "the Why? breakdown carries the advice as a zero-point tag");
+            Assert.That(with[0].Score, Is.EqualTo(without[0].Score),
+                "advice-only: declaring filters must not change any score");
+            Assert.That(without[0].FilterAdvice, Is.Null, "no filter set → no advice");
+            Assert.That(without[0].AdviceReason, Is.Null);
+        }
+
+        [Test]
+        public void A_galaxy_gets_broadband_advice_and_an_unknown_type_gets_none() {
+            var (at, site, ra) = MidnightMeridian();
+            var ranked = TonightSkyService.Rank(
+                new[] { Obj("GX", ra, 40, type: "G"), Obj("STAR", ra + 1, 40, type: "Star") },
+                site, NoOpticsForTest, at, limit: 10, filterSet: NbFilterSet());
+
+            var galaxy = ranked.Single(o => o.Id == "GX");
+            var unknown = ranked.Single(o => o.Id == "STAR");
+            Assert.That(galaxy.FilterAdvice, Is.EqualTo(FilterApproach.Broadband));
+            Assert.That(unknown.FilterAdvice, Is.Null, "unknown emission character → never guess");
+        }
+
+        [Test]
+        public void Optimal_sub_appears_only_when_electronics_and_aperture_are_configured() {
+            var (at, site, ra) = MidnightMeridian();
+            var snr = new[] { Obj("SNR1", ra, 40, type: "SNR") };
+            var rig = new OpticsSettingsDto(
+                FocalLengthMm: 400, ReducerFactor: 1.0, SensorWidthPx: 6248,
+                SensorHeightPx: 4176, PixelSizeUm: 3.76, ApertureMm: 80);
+            var electronics = new CameraElectronicsDto(
+                ReadNoiseE: 3.3, FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100);
+
+            // Unconfigured electronics → advice flows, figure doesn't.
+            var advisedOnly = TonightSkyService.Rank(snr, site, rig, at, limit: 10,
+                filterSet: NbFilterSet());
+            Assert.That(advisedOnly[0].FilterAdvice, Is.EqualTo(FilterApproach.Narrowband));
+            Assert.That(advisedOnly[0].OptimalSubS, Is.Null,
+                "the tonight list never guesses electronics — no Tier-0 fallback here");
+
+            // Fully configured → the figure equals the slice-1 calculator's recommendation for the
+            // advised approach's representative filter (Hα, kind-default 7 nm), rounded.
+            var advised = TonightSkyService.Rank(snr, site, rig, at, limit: 10,
+                filterSet: NbFilterSet(), electronics: electronics);
+            var expected = OptimalSubCalculator.Compute(new OptimalSubInputDto(
+                ReadNoiseE: 3.3, FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100,
+                PixelSizeUm: 3.76, ApertureMm: 80, FocalLengthMm: 400, ReducerFactor: 1.0,
+                QuantumEfficiency: OptimalSubCalculator.DefaultQuantumEfficiency,
+                SkyMagPerArcsec2: OptimalSubCalculator.SkyMagFromBortle(site.BortleClass),
+                FilterBandwidthNm: OptimalSubCalculator.DefaultBandwidthNm(FilterKind.Ha)));
+            Assert.That(advised[0].OptimalSubS, Is.EqualTo(Math.Round(expected.RecommendedSec)));
+        }
+
+        // The no-optics train the advice tests use (framing Unknown for every object) — mirrors the
+        // private TonightSkyService.NoOptics so the advice tests don't entangle framing.
+        private static readonly OpticsSettingsDto NoOpticsForTest = new(0, 0, 0, 0, 0);
+
         /// <summary>Minimal <see cref="ISkyCatalogService"/> test double — only GetAllDsos is exercised.</summary>
         private sealed class FakeCatalog : ISkyCatalogService {
             private readonly IReadOnlyList<DsoEntryDto>? _dsos;

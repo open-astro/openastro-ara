@@ -59,7 +59,11 @@ public sealed class TonightSkyService : ITonightSkyService {
     public IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit,
             OpticsSettingsDto? opticsOverride = null, int mosaicTilesX = 1, int mosaicTilesY = 1) =>
         Rank(BuildCandidates(), _profileStore.GetSiteSettings(),
-            opticsOverride ?? _profileStore.GetOpticsSettings(), atUtc, limit, mosaicTilesX, mosaicTilesY);
+            opticsOverride ?? _profileStore.GetOpticsSettings(), atUtc, limit, mosaicTilesX, mosaicTilesY,
+            // NEXTGEN §1 filter advice inputs — fetched once per request. Advice degrades
+            // gracefully: an empty filter set → no advice; unset electronics/aperture → no
+            // optimal-sub figure (the advice string still flows).
+            _profileStore.GetFilterSet(), _profileStore.GetCameraElectronics());
 
     /// <summary>The candidate set: the installed OpenNGC catalog culled to the realistically-shootable
     /// objects, or the hardcoded starter <see cref="Catalog"/> when openngc-dso isn't installed (or the
@@ -107,27 +111,32 @@ public sealed class TonightSkyService : ITonightSkyService {
 
     // A small spread-across-the-sky starter set so something worthwhile is always up. J2000 positions.
     // The full smart-culled catalog (§36.8 / §55.1) supersedes this hardcoded list later.
+    // Types use the OpenNGC codes (HII/PN/SNR/…) where the object has a definite class — the NEXTGEN §1
+    // emission classifier reads them, and the generic "nebula" would file textbook narrowband targets
+    // (the Crab, the Ring, the Owl) as merely Mixed. "galaxy"/"cluster" stay as friendly plain names
+    // (they classify as Continuum either way); the Trifid keeps generic "nebula" honestly — it's a real
+    // emission + reflection mix.
     internal static readonly IReadOnlyList<CatalogObject> Catalog = new[] {
         new CatalogObject("M31", "Andromeda Galaxy", "galaxy", 3.4, 10.685, 41.269),
         new CatalogObject("M33", "Triangulum Galaxy", "galaxy", 5.7, 23.462, 30.660),
         new CatalogObject("M45", "Pleiades", "cluster", 1.6, 56.750, 24.117),
-        new CatalogObject("M1", "Crab Nebula", "nebula", 8.4, 83.633, 22.014),
-        new CatalogObject("M42", "Orion Nebula", "nebula", 4.0, 83.822, -5.391),
-        new CatalogObject("NGC2237", "Rosette Nebula", "nebula", 9.0, 97.950, 5.050),
+        new CatalogObject("M1", "Crab Nebula", "SNR", 8.4, 83.633, 22.014),
+        new CatalogObject("M42", "Orion Nebula", "HII", 4.0, 83.822, -5.391),
+        new CatalogObject("NGC2237", "Rosette Nebula", "HII", 9.0, 97.950, 5.050),
         new CatalogObject("M81", "Bode's Galaxy", "galaxy", 6.9, 148.888, 69.065),
-        new CatalogObject("M97", "Owl Nebula", "nebula", 9.9, 168.699, 55.019),
+        new CatalogObject("M97", "Owl Nebula", "PN", 9.9, 168.699, 55.019),
         new CatalogObject("M104", "Sombrero Galaxy", "galaxy", 8.0, 189.998, -11.623),
         new CatalogObject("M63", "Sunflower Galaxy", "galaxy", 8.6, 198.955, 42.029),
         new CatalogObject("M51", "Whirlpool Galaxy", "galaxy", 8.4, 202.470, 47.195),
         new CatalogObject("M101", "Pinwheel Galaxy", "galaxy", 7.9, 210.802, 54.349),
         new CatalogObject("M13", "Hercules Cluster", "cluster", 5.8, 250.423, 36.461),
         new CatalogObject("M20", "Trifid Nebula", "nebula", 6.3, 270.600, -23.030),
-        new CatalogObject("M8", "Lagoon Nebula", "nebula", 6.0, 270.904, -24.387),
-        new CatalogObject("M16", "Eagle Nebula", "nebula", 6.0, 274.700, -13.807),
-        new CatalogObject("M17", "Omega Nebula", "nebula", 6.0, 275.196, -16.171),
-        new CatalogObject("M57", "Ring Nebula", "nebula", 8.8, 283.396, 33.029),
-        new CatalogObject("M27", "Dumbbell Nebula", "nebula", 7.4, 299.901, 22.721),
-        new CatalogObject("NGC7000", "North America Nebula", "nebula", 4.0, 314.750, 44.330),
+        new CatalogObject("M8", "Lagoon Nebula", "HII", 6.0, 270.904, -24.387),
+        new CatalogObject("M16", "Eagle Nebula", "HII", 6.0, 274.700, -13.807),
+        new CatalogObject("M17", "Omega Nebula", "HII", 6.0, 275.196, -16.171),
+        new CatalogObject("M57", "Ring Nebula", "PN", 8.8, 283.396, 33.029),
+        new CatalogObject("M27", "Dumbbell Nebula", "PN", 7.4, 299.901, 22.721),
+        new CatalogObject("NGC7000", "North America Nebula", "HII", 4.0, 314.750, 44.330),
     };
 
     /// <summary>Pure ranking over the hardcoded starter <see cref="Catalog"/>. Retained for the no-data
@@ -164,7 +173,8 @@ public sealed class TonightSkyService : ITonightSkyService {
     /// window tonight are therefore surfaced; objects never up in the dark are the only drops.</para></summary>
     internal static IReadOnlyList<TonightSkyObjectDto> Rank(
             IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, OpticsSettingsDto optics,
-            DateTimeOffset atUtc, int limit, int mosaicTilesX = 1, int mosaicTilesY = 1) {
+            DateTimeOffset atUtc, int limit, int mosaicTilesX = 1, int mosaicTilesY = 1,
+            FilterSetDto? filterSet = null, CameraElectronicsDto? electronics = null) {
         var horizon = site.DefaultHorizonAltitudeDeg;
         var lat = site.LatitudeDeg;
         var lon = site.LongitudeDeg;
@@ -201,6 +211,43 @@ public sealed class TonightSkyService : ITonightSkyService {
         var sinLat = Math.Sin(Deg2Rad(lat));
         var cosLat = Math.Cos(Deg2Rad(lat));
         var sinHorizon = Math.Sin(Deg2Rad(horizon));
+
+        // NEXTGEN §1 — the per-approach Optimal-Sub floor (seconds) is object-independent (it's a
+        // rig + sky + filter figure), so compute it at most once per approach across the whole
+        // request. Null (no figure) unless the exposure-critical inputs are genuinely configured:
+        // aperture + focal + pixel geometry AND user-entered read noise + full well — the tonight
+        // list deliberately does NOT fall back to Tier-0 guesses the way /planning/optimal-sub
+        // (which can *say* it assumed defaults) does. QE alone falls back to the calibrated 0.8.
+        var adviceSet = filterSet ?? new FilterSetDto([]);
+        var exposureConfigured = electronics is { ReadNoiseE: > 0, FullWellE: > 0 }
+            && optics is { ApertureMm: > 0, FocalLengthMm: > 0, PixelSizeUm: > 0, ReducerFactor: > 0 };
+        var skyMag = BortleZenithSkyMag(site.BortleClass);
+        var floorByApproach = new Dictionary<FilterApproach, double?>();
+        double? FloorFor(FilterApproach approach) {
+            if (floorByApproach.TryGetValue(approach, out var cached)) {
+                return cached;
+            }
+            double? floor = null;
+            if (exposureConfigured && FilterAdvice.RepresentativeFilter(adviceSet, approach) is { } filter) {
+                var result = OptimalSubCalculator.Compute(new OptimalSubInputDto(
+                    ReadNoiseE: electronics!.ReadNoiseE,
+                    FullWellE: electronics.FullWellE,
+                    ElectronsPerAdu: Math.Max(0, electronics.ElectronsPerAdu),
+                    Gain: electronics.Gain,
+                    PixelSizeUm: optics.PixelSizeUm,
+                    ApertureMm: optics.ApertureMm,
+                    FocalLengthMm: optics.FocalLengthMm,
+                    ReducerFactor: optics.ReducerFactor,
+                    QuantumEfficiency: electronics.QuantumEfficiencyPeak > 0
+                        ? electronics.QuantumEfficiencyPeak
+                        : OptimalSubCalculator.DefaultQuantumEfficiency,
+                    SkyMagPerArcsec2: skyMag,
+                    FilterBandwidthNm: FilterAdvice.EffectiveBandwidthNm(filter)));
+                floor = Math.Round(result.RecommendedSec);
+            }
+            floorByApproach[approach] = floor;
+            return floor;
+        }
 
         // Score (the sort key) is the unrounded worth; id is the stable tie-break for an exact tie.
         var scored = new List<(double Score, TonightSkyObjectDto Dto)>(catalog.Count);
@@ -255,12 +302,30 @@ public sealed class TonightSkyService : ITonightSkyService {
             var (score, framing, reasons) = ScoreObject(
                 o, fovWidthArcmin, fovHeightArcmin, peakAltDeg, integrationHours, site.BortleClass);
 
+            // NEXTGEN §1 — filter advice: a tag + reason only, deliberately NOT a score input
+            // (the ±nudge is a recorded follow-up; existing scores must stay byte-identical).
+            // The zero-point ScoreReasons tag makes the advice show in the "Why?" breakdown.
+            FilterApproach? advice = null;
+            string? adviceReason = null;
+            double? optimalSubS = null;
+            if (FilterAdvice.Advise(FilterAdvice.ClassifyEmission(o.Type), adviceSet, site.BortleClass)
+                    is { } advised) {
+                advice = advised.Approach;
+                adviceReason = advised.Reason;
+                optimalSubS = FloorFor(advised.Approach);
+                var reasonList = new List<string>(reasons) {
+                    $"{AdviceTag(advised.Approach)} recommended (+0)",
+                };
+                reasons = reasonList;
+            }
+
             scored.Add((score, new TonightSkyObjectDto(
                 o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
                 Math.Round(altNow, 1), Math.Round(peakAltDeg, 1),
                 o.SizeMajArcmin, o.SizeMinArcmin, o.PosAngleDeg, o.SurfaceBrightness,
                 windowStart, windowEnd, transitUtc, Math.Round(integrationHours, 2),
-                framing, Math.Round(score, 1), reasons, Math.Round(remainingHours, 2))));
+                framing, Math.Round(score, 1), reasons, Math.Round(remainingHours, 2),
+                advice, adviceReason, optimalSubS)));
         }
         if (scored.Count == 0) {
             return Array.Empty<TonightSkyObjectDto>();
@@ -413,6 +478,13 @@ public sealed class TonightSkyService : ITonightSkyService {
     /// planning share one sky model.</summary>
     private static double BortleZenithSkyMag(int bortleClass) =>
         OptimalSubCalculator.SkyMagFromBortle(bortleClass);
+
+    /// <summary>The short "Why?"-breakdown label for a filter approach.</summary>
+    private static string AdviceTag(FilterApproach approach) => approach switch {
+        FilterApproach.Narrowband => "narrowband",
+        FilterApproach.Duoband => "OSC + dual-band",
+        _ => "broadband",
+    };
 
     /// <summary>The longest contiguous run of <c>true</c> in <paramref name="flags"/> as inclusive
     /// (start, end) sample indices, or (−1, −1) when none is set.</summary>
