@@ -179,6 +179,36 @@ void main() {
       expect(out.filters[2].kind, FilterKind.r);
     });
 
+    test('applyDraftToFilterSet lets an explicit wavelength rescue an ambiguous name', () {
+      // "Filter 1" + 656 nm must land on Hα, not silently become broadband L —
+      // the user's explicit entries beat the name fallback. An informative
+      // name still wins over a contradictory wavelength.
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()
+          ..name = 'Filter 1'
+          ..wavelengthNm = 656,
+        FilterDef()
+          ..name = 'Filter 2'
+          ..wavelengthNm = 501,
+        FilterDef()
+          ..name = 'Filter 3'
+          ..wavelengthNm = 672,
+        FilterDef()
+          ..name = 'Red'
+          ..wavelengthNm = 656, // informative name wins
+        FilterDef()..name = 'Filter 5', // no wavelength → the L fallback stands
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters.map((f) => f.kind), [
+        FilterKind.ha,
+        FilterKind.oiii,
+        FilterKind.sii,
+        FilterKind.r,
+        FilterKind.l,
+      ]);
+    });
+
     test('applyDraftToFilterSet dedupes names case-insensitively (keep-first)', () {
       // The daemon 400s the whole filter-set PUT on a duplicate name; the
       // Settings paths dedupe, so the wizard must too — a repeated wheel label
