@@ -20,10 +20,15 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
+using OpenAstroAra.Server.Contracts;
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+// Both the server contracts and the equipment interfaces define a DeviceType; the reconnector
+// speaks the server-contract one.
+using DeviceType = OpenAstroAra.Server.Contracts.DeviceType;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -61,6 +66,24 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     private readonly ICenteringService centeringService;
     private readonly IDomeMediator domeMediator;
     private readonly IDomeFollower domeFollower;
+    // §58.9 collaborators — nullable so the pre-§58.9 ctor (kept for the existing tests + any
+    // direct construction) still works; DI always supplies them. With any of them absent the
+    // corresponding safety behaviour degrades to the §58.4/§58.5 baseline.
+    private readonly IProfileStore? profileStore;
+    private readonly INotificationService? notifications;
+    private readonly IEquipmentReconnector? reconnector;
+    private readonly ICameraMediator? cameraMediator;
+    private readonly IFocuserMediator? focuserMediator;
+
+    // §58.9 timing knobs — spec values by default; internal so the unit tests can shrink them
+    // (a 5 s watchdog sample would make every watchdog test take wall-clock seconds).
+    internal TimeSpan WatchdogSampleInterval { get; set; } = TimeSpan.FromSeconds(5);
+    internal TimeSpan WatchdogStallWindow { get; set; } = TimeSpan.FromSeconds(15);
+    internal TimeSpan WatchdogHardCap { get; set; } = TimeSpan.FromMinutes(5);
+    internal TimeSpan ReconnectPollInterval { get; set; } = TimeSpan.FromSeconds(2);
+    internal TimeSpan ReconnectWait { get; set; } = TimeSpan.FromSeconds(30);
+    // Injectable clock for the Layer-1 altitude prediction (tests pin the instant).
+    internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
     public MeridianFlipExecutor(
             IProfileService profileService,
@@ -68,13 +91,34 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             IGuiderMediator guiderMediator,
             ICenteringService centeringService,
             IDomeMediator domeMediator,
-            IDomeFollower domeFollower) {
+            IDomeFollower domeFollower)
+        : this(profileService, telescopeMediator, guiderMediator, centeringService, domeMediator,
+            domeFollower, null, null, null, null, null) {
+    }
+
+    public MeridianFlipExecutor(
+            IProfileService profileService,
+            ITelescopeMediator telescopeMediator,
+            IGuiderMediator guiderMediator,
+            ICenteringService centeringService,
+            IDomeMediator domeMediator,
+            IDomeFollower domeFollower,
+            IProfileStore? profileStore,
+            INotificationService? notifications,
+            IEquipmentReconnector? reconnector,
+            ICameraMediator? cameraMediator,
+            IFocuserMediator? focuserMediator) {
         this.profileService = profileService;
         this.telescopeMediator = telescopeMediator;
         this.guiderMediator = guiderMediator;
         this.centeringService = centeringService;
         this.domeMediator = domeMediator;
         this.domeFollower = domeFollower;
+        this.profileStore = profileStore;
+        this.notifications = notifications;
+        this.reconnector = reconnector;
+        this.cameraMediator = cameraMediator;
+        this.focuserMediator = focuserMediator;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -93,6 +137,21 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             $"Meridian Flip - Initializing. Target RA: {targetCoordinates.RAString} Dec: {targetCoordinates.DecString} Epoch: {targetCoordinates.Epoch}. " +
             $"Remaining wait: {timeToFlip}. Recenter: {settings.Recenter}. AutoFocusAfterFlip: {settings.AutoFocusAfterFlip}. " +
             $"SettleTime: {settings.SettleTime}s. GuiderConnected: {guiderConnected}.");
+
+        // §58.9 Layer 1 — the pre-flip flight check runs BEFORE any state is touched: on a failed
+        // check the flip never starts, the mount stays in its known-safe pre-flip state (tracking
+        // sidereal, guider running) and a critical notification fires. Only active when the safety
+        // config is available (server DI) and enabled in the profile.
+        var safety = profileStore?.GetSafetyPolicies();
+        if (safety is { FlipSafetyEnabled: true }) {
+            var failReason = await PreFlipFlightCheck(targetCoordinates, settings, token);
+            if (failReason is not null) {
+                Logger.Error($"Meridian Flip - Pre-flip flight check failed: {failReason}. The flip will not start; the mount stays in its pre-flip state.");
+                await NotifyCritical("Meridian flip aborted before it started",
+                    $"Pre-flip flight check failed: {failReason} The mount was left tracking in its pre-flip state and the sequence has been halted.");
+                return false;
+            }
+        }
 
         // Track what we actually touched so the catch blocks only undo real state changes: don't resume a
         // guider we never stopped, don't "restore" tracking we never disabled (either would log a misleading
@@ -114,7 +173,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // mount that reports the same (non-unknown) pier side after the slew likely didn't flip.
             var pierSideBeforeFlip = telescopeMediator.GetInfo().SideOfPier;
 
-            await DoFlip(targetCoordinates, settings.SettleTime, progress, token);
+            await DoFlip(targetCoordinates, settings.SettleTime, safety, progress, token);
 
             // §58.4 step 3 — re-focus is conditional. The live AF V-curve sweep is focuser-gated and unbuilt,
             // so honour the policy by logging the skip rather than aborting (re-focus failures must not abort
@@ -137,7 +196,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // resumes. Both use the same SettleTime (matching NINA's two-settle DoMeridianFlip).
             await Settle(settings.SettleTime, progress, token);
 
-            VerifySideOfPier(pierSideBeforeFlip);
+            VerifySideOfPier(pierSideBeforeFlip, safety);
 
             Logger.Info("Meridian Flip - Completed successfully.");
             return true;
@@ -158,8 +217,12 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         } catch (Exception ex) {
             // A failed flip halts the sequence (the trigger throws on our false return). Best-effort restore:
             // resume guiding + re-enable tracking so the mount keeps the target rather than drifting. §58.9's
-            // park-on-failure safe-rest state is the enhanced unattended layer (follow-up, PORT_TODO).
+            // park-on-failure safe-rest state (Layer 4) is the follow-up PR.
             Logger.Error("Meridian Flip - Failed.", ex);
+            if (safety is { FlipSafetyEnabled: true }) {
+                await NotifyCritical("Meridian flip failed",
+                    $"{ex.Message} Tracking was restored where possible and the sequence has been halted.");
+            }
             // Only resume a guider we actually stopped: if StopAutoguider itself threw, guiding was never
             // stopped, so a resume would be spurious (and log a misleading "resume also failed").
             if (guidingStopped) {
@@ -203,10 +266,15 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         telescopeMediator.SetTrackingEnabled(true);
     }
 
-    private async Task DoFlip(Coordinates target, int settleSeconds, IProgress<ApplicationStatus> progress, CancellationToken token) {
+    private async Task DoFlip(Coordinates target, int settleSeconds, SafetyPoliciesDto? safety,
+            IProgress<ApplicationStatus> progress, CancellationToken token) {
         progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
         Logger.Info($"Meridian Flip - Flipping to RA: {target.RAString} Dec: {target.DecString} Epoch: {target.Epoch}");
-        var flipSuccess = await telescopeMediator.MeridianFlip(target, token);
+        // §58.9 Layer 2 — with the safety layers on, the flip slew runs under the watchdog (stall
+        // detection + hard timeout + mid-slew fault detection); otherwise the plain awaited call.
+        var flipSuccess = safety is { FlipSafetyEnabled: true }
+            ? await FlipWithWatchdog(target, safety.ExpectedFlipSlewSeconds, token)
+            : await telescopeMediator.MeridianFlip(target, token);
         if (!flipSuccess) {
             // The mount itself reported the flip slew did not succeed — fail loudly; resuming imaging on a
             // possibly-still-on-the-wrong-side mount risks an OTA collision (§58.9 Layer 2 intent).
@@ -287,18 +355,219 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     }
 
     // §58.5 — verify the flip via side-of-pier by comparing the post-flip pier side against the snapshot taken
-    // before the slew. An unchanged (but known) pier side means the mount likely didn't actually flip; an
-    // unknown pier side can't be used to verify. Both cases warn but CONTINUE — some Alpaca drivers lie about
-    // pier side (no brand-quirk database, per §52 Alpaca-only). The HARD fail-on-unchanged is §58.9 Layer 2
-    // (deferred — see PORT_TODO).
-    private void VerifySideOfPier(PierSide pierSideBeforeFlip) {
+    // before the slew. An unknown pier side (before or after) can't verify anything and always just warns.
+    // An unchanged KNOWN pier side means the mount likely didn't actually flip: with the §58.9 safety layers
+    // ON this is the Layer-2 HARD fail (never resume imaging on a possibly-still-on-the-wrong-side mount);
+    // with them off it stays the §58.5 warn-and-continue (some Alpaca drivers lie about pier side — the
+    // toggle exists exactly for those rigs).
+    private void VerifySideOfPier(PierSide pierSideBeforeFlip, SafetyPoliciesDto? safety) {
         var sideOfPier = telescopeMediator.GetInfo().SideOfPier;
-        if (sideOfPier == PierSide.pierUnknown) {
-            Logger.Warning("Meridian Flip - The mount reports an unknown pier side after the flip; cannot verify the flip via side-of-pier. Continuing.");
+        if (sideOfPier == PierSide.pierUnknown || pierSideBeforeFlip == PierSide.pierUnknown) {
+            Logger.Warning("Meridian Flip - The mount reports an unknown pier side; cannot verify the flip via side-of-pier. Continuing.");
         } else if (sideOfPier == pierSideBeforeFlip) {
+            if (safety is { FlipSafetyEnabled: true }) {
+                throw new InvalidOperationException(
+                    $"The mount reports the same pier side ({sideOfPier}) after the flip as before it — the flip likely did not happen. " +
+                    "Imaging will not resume on a possibly-unflipped mount (disable flip safety if this mount misreports pier side).");
+            }
             Logger.Warning($"Meridian Flip - The mount reports the same pier side ({sideOfPier}) after the flip as before it; the flip may not have actually happened. Continuing (some drivers misreport pier side).");
         } else {
             Logger.Info($"Meridian Flip - Side-of-pier verified: {pierSideBeforeFlip} → {sideOfPier}.");
+        }
+    }
+
+    // ─── §58.9 Layer 1 — pre-flip flight check ─────────────────────────────────────────────────
+
+    /// <summary>The Layer-1 flight check. Returns null when every gate passes, or a human-readable
+    /// reason when the flip must not start. Checks, per the §58.9 spec: the predicted post-flip
+    /// target altitude clears the site horizon floor; the mount is healthy (connected, not parked,
+    /// tracking, not already slewing); and the required equipment is connected (camera always;
+    /// guider when re-cal after flip is configured; focuser when AutoFocusAfterFlip is set) — with
+    /// one §42.3 hot-reconnect attempt before giving up on a disconnected device. The spec's
+    /// "predicted slew duration sane" gate has no Alpaca API to read an estimate from, so the
+    /// profile's ExpectedFlipSlewSeconds stands in for it in the Layer-2 watchdog instead.</summary>
+    private async Task<string?> PreFlipFlightCheck(Coordinates target, IMeridianFlipSettings settings, CancellationToken token) {
+        Logger.Info("Meridian Flip - Running the §58.9 pre-flip flight check.");
+
+        // Endpoint prediction: the flip re-points at the same target from the other pier side, so
+        // the question is simply "is the target still above the hard floor right now". The site
+        // horizon altitude is the profile's floor (§35/§36 semantics).
+        var site = profileStore!.GetSiteSettings();
+        var predictedAlt = PredictedTargetAltitudeDeg(target, site.LatitudeDeg, site.LongitudeDeg, UtcNow());
+        if (predictedAlt < site.DefaultHorizonAltitudeDeg) {
+            return $"the predicted post-flip target altitude ({predictedAlt:0.#}°) is below the site's horizon floor ({site.DefaultHorizonAltitudeDeg:0.#}°) — the target should be skipped, not flipped to.";
+        }
+
+        var mount = telescopeMediator.GetInfo();
+        if (!mount.Connected) {
+            return "the mount is not connected.";
+        }
+        if (mount.AtPark) {
+            return "the mount reports it is parked.";
+        }
+        if (mount.Slewing) {
+            return "the mount reports it is already slewing.";
+        }
+        if (!mount.TrackingEnabled) {
+            return "the mount is not tracking — a flip from an untracked state would slew to a stale position.";
+        }
+
+        // Required equipment, each with one §42.3 hot-reconnect attempt. Camera is always required
+        // (imaging resumes after the flip); guider/focuser only when the flip flow will use them.
+        var recalGuider = profileStore.GetSafetyPolicies().MeridianRecalGuider;
+        if (await EnsureConnected(DeviceType.Camera, () => cameraMediator?.GetInfo().Connected ?? false, token) is { } cameraFail) {
+            return cameraFail;
+        }
+        if (recalGuider && await EnsureConnected(DeviceType.Guider, () => guiderMediator.GetInfo().Connected, token) is { } guiderFail) {
+            return guiderFail;
+        }
+        if (settings.AutoFocusAfterFlip && await EnsureConnected(DeviceType.Focuser, () => focuserMediator?.GetInfo().Connected ?? false, token) is { } focuserFail) {
+            return focuserFail;
+        }
+
+        Logger.Info($"Meridian Flip - Pre-flip flight check passed (predicted target altitude {predictedAlt:0.#}°).");
+        return null;
+    }
+
+    /// <summary>Connected-or-reconnect gate for one required device: already connected → ok;
+    /// otherwise dispatch a §42.3 hot-reconnect and poll until <see cref="ReconnectWait"/> runs
+    /// out. Returns null when the device is (or comes back) connected, else the failure reason.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The reconnect dispatch is best-effort inside a pre-flight gate: a reconnector fault must yield a clean 'still disconnected' verdict (flip aborts safely), not an unhandled escape. CA1031's log-and-recover boundary applies.")]
+    private async Task<string?> EnsureConnected(DeviceType type, Func<bool> isConnected, CancellationToken token) {
+        if (isConnected()) {
+            return null;
+        }
+        Logger.Warning($"Meridian Flip - Required device {type} is disconnected; attempting a §42.3 hot-reconnect before the flip.");
+        try {
+            var outcome = reconnector is null
+                ? default
+                : await reconnector.ReconnectAsync(type, token);
+            if (outcome.Dispatched > 0) {
+                var waited = TimeSpan.Zero;
+                while (waited < ReconnectWait) {
+                    await Task.Delay(ReconnectPollInterval, token);
+                    waited += ReconnectPollInterval;
+                    if (isConnected()) {
+                        Logger.Info($"Meridian Flip - {type} reconnected after {waited.TotalSeconds:0}s.");
+                        return null;
+                    }
+                }
+            }
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            Logger.Error($"Meridian Flip - Hot-reconnect attempt for {type} failed.", ex);
+        }
+        return $"required device {type} is disconnected and could not be reconnected.";
+    }
+
+    /// <summary>The target's altitude (degrees) at <paramref name="atUtc"/> from the site — the
+    /// Layer-1 endpoint prediction. Same spherical-trig path Tonight's Sky uses (one sky model).</summary>
+    internal static double PredictedTargetAltitudeDeg(Coordinates target, double latDeg, double lonDeg, DateTimeOffset atUtc) {
+        var lst = TonightSkyService.LocalSiderealTimeDeg(atUtc, lonDeg);
+        var hourAngle = (lst - target.RADegrees % 360.0 + 360.0) % 360.0;
+        return TonightSkyService.AltitudeFromHourAngleDeg(target.Dec, latDeg, hourAngle);
+    }
+
+    // ─── §58.9 Layer 2 — in-slew watchdog ──────────────────────────────────────────────────────
+
+    /// <summary>Runs the flip slew under the Layer-2 watchdog: samples mount state every
+    /// <see cref="WatchdogSampleInterval"/> while the slew is in flight, and aborts the slew
+    /// (StopSlew + cancel) on a position stall (&#8805; <see cref="WatchdogStallWindow"/> with no
+    /// RA/Dec movement), a mid-slew fault (mount drops Connected), or the hard timeout
+    /// (min(3 × expected, <see cref="WatchdogHardCap"/>)). The pier-side-changed assertion runs
+    /// separately in <see cref="VerifySideOfPier"/> after the settle.</summary>
+    private async Task<bool> FlipWithWatchdog(Coordinates target, int expectedSlewSeconds, CancellationToken token) {
+        var expected = TimeSpan.FromSeconds(Math.Max(1, expectedSlewSeconds));
+        var hardTimeout = TimeSpan.FromTicks(Math.Min(expected.Ticks * 3, WatchdogHardCap.Ticks));
+        Logger.Info($"Meridian Flip - Watchdog armed: sample {WatchdogSampleInterval.TotalSeconds:0}s, stall window {WatchdogStallWindow.TotalSeconds:0}s, hard timeout {hardTimeout.TotalSeconds:0}s.");
+
+        using var slewCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var flipTask = telescopeMediator.MeridianFlip(target, slewCts.Token);
+
+        var elapsed = Stopwatch.StartNew();
+        var lastMovementAt = TimeSpan.Zero;
+        double lastRa = double.NaN, lastDec = double.NaN;
+
+        while (!flipTask.IsCompleted) {
+            var finished = await Task.WhenAny(flipTask, Task.Delay(WatchdogSampleInterval, token));
+            if (finished == flipTask) {
+                break;
+            }
+            token.ThrowIfCancellationRequested();
+
+            var info = telescopeMediator.GetInfo();
+            if (!info.Connected) {
+                return await AbortWatchedSlew(flipTask, slewCts, "the mount dropped its connection mid-slew");
+            }
+            // Position progressing? Any RA/Dec change counts (the epsilon absorbs driver jitter in
+            // the last decimals of an unmoving report).
+            var moved = double.IsNaN(lastRa)
+                || Math.Abs(info.RightAscension - lastRa) > 1e-4
+                || Math.Abs(info.Declination - lastDec) > 1e-4;
+            if (moved) {
+                lastRa = info.RightAscension;
+                lastDec = info.Declination;
+                lastMovementAt = elapsed.Elapsed;
+            } else if (elapsed.Elapsed - lastMovementAt >= WatchdogStallWindow) {
+                return await AbortWatchedSlew(flipTask, slewCts,
+                    $"the mount position has not changed for {WatchdogStallWindow.TotalSeconds:0}s (stalled slew)");
+            }
+            if (elapsed.Elapsed >= hardTimeout) {
+                return await AbortWatchedSlew(flipTask, slewCts,
+                    $"the flip slew exceeded its hard timeout of {hardTimeout.TotalSeconds:0}s");
+            }
+        }
+
+        return await flipTask;
+    }
+
+    /// <summary>Watchdog abort path: stop the slew, cancel the flip call, observe its outcome so
+    /// nothing goes unobserved, then throw the watchdog's reason (the flip failure).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Draining the cancelled flip task: it may end with OCE or any driver exception — all superseded by the watchdog's own diagnosis, which is thrown instead. CA1031's fail-safe boundary applies.")]
+    private async Task<bool> AbortWatchedSlew(Task<bool> flipTask, CancellationTokenSource slewCts, string reason) {
+        Logger.Error($"Meridian Flip - Watchdog abort: {reason}. Issuing StopSlew.");
+        try {
+            telescopeMediator.StopSlew();
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - StopSlew during the watchdog abort also failed.", ex);
+        }
+        await slewCts.CancelAsync();
+        try {
+            await flipTask;
+        } catch (Exception) {
+            // Expected: the cancelled/aborted flip call unwinds however the driver ends it. The
+            // watchdog's diagnosis below is the truth worth reporting.
+        }
+        throw new InvalidOperationException($"Meridian flip aborted by the §58.9 watchdog: {reason}.");
+    }
+
+    /// <summary>Best-effort critical notification (§58.9 → §35.5 alarm on connected WILMA
+    /// devices). Swallows its own failure — alerting must never mask the flip fault itself.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification publish is best-effort from failure paths: a notification-store fault must not mask the flip failure being reported. CA1031's log-and-recover boundary applies.")]
+    private async Task NotifyCritical(string title, string message) {
+        if (notifications is null) {
+            return;
+        }
+        try {
+            await notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: UtcNow(),
+                Severity: NotificationSeverity.Critical,
+                Category: NotificationCategory.Safety,
+                Title: title,
+                Message: message,
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: "meridian_flip",
+                RelatedEntityId: null), CancellationToken.None);
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Publishing the critical flip-safety notification failed.", ex);
         }
     }
 

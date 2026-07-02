@@ -124,7 +124,17 @@ public sealed record SafetyPoliciesDto(
     // §29 — action when the §29 disk-space monitor hits the critical threshold: "warn" (default — the diagnostic
     // + notification only) or "abort" (also halt any running sequence so it doesn't capture into a full disk).
     // Optional ctor default so a profile.json predating this field still deserializes.
-    string OnDiskSpaceCritical = "warn");
+    string OnDiskSpaceCritical = "warn",
+    // §58.9 unattended flip safety — the pre-flip flight check (endpoint-altitude / mount-health /
+    // required-equipment gates) + the in-slew watchdog (stall / timeout / pier-side-unchanged hard
+    // fail). Default ON: the layers protect a sleeping user and cost nothing when everything is
+    // healthy; a rig whose driver misreports pier side can turn it off. Optional ctor defaults keep
+    // an older profile.json deserializing.
+    bool FlipSafetyEnabled = true,
+    // §58.9 — the expected flip-slew duration (seconds). Alpaca has no slew-duration estimate API,
+    // so this profile figure stands in for the spec's "mount estimate": the Layer-2 watchdog's hard
+    // timeout is min(3 × this, 5 minutes).
+    int ExpectedFlipSlewSeconds = 90);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

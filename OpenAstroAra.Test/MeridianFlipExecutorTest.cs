@@ -22,9 +22,15 @@ using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+// Both the server contracts and the equipment interfaces define a DeviceType; the §58.9
+// reconnector tests speak the server-contract one (same alias as the executor itself).
+using DeviceType = OpenAstroAra.Server.Contracts.DeviceType;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -102,6 +108,66 @@ namespace OpenAstroAra.Test {
 
         private MeridianFlipExecutor CreateSUT() =>
             new(profileService.Object, telescope.Object, guider.Object, centering.Object, dome.Object, domeFollower.Object);
+
+        // ─── §58.9 harness — the safety-collaborator overload with test-speed timing knobs ───
+
+        private Mock<IProfileStore> profileStore = null!;
+        private Mock<INotificationService> notifications = null!;
+        private Mock<IEquipmentReconnector> reconnector = null!;
+        private Mock<ICameraMediator> camera = null!;
+        private Mock<IFocuserMediator> focuser = null!;
+        private List<NotificationDto> published = null!;
+
+        /// <summary>A safety-policies DTO with §58.9 enabled and everything else at inert values.</summary>
+        private static SafetyPoliciesDto Safety(bool enabled = true, int expectedSlewSeconds = 90, bool recalGuider = false) =>
+            new(OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 5, MeridianRecenter: true,
+                MeridianRecalGuider: recalGuider, OnAltitudeLimit: "skip_target",
+                ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true,
+                FlipSafetyEnabled: enabled, ExpectedFlipSlewSeconds: expectedSlewSeconds);
+
+        /// <summary>Site at lat 40 N with a 20° horizon floor. The default <see cref="SafeTarget"/>
+        /// (dec 89°) is circumpolar with min altitude ≈ 39° — above the floor at ANY sidereal time,
+        /// so flight-check-passing tests never depend on the clock. <see cref="LowTarget"/> (dec
+        /// −40°) peaks at 10° — below the floor at any time.</summary>
+        private static SiteSettingsDto Site(double horizon = 20) =>
+            new(SiteName: "Test", LatitudeDeg: 40, LongitudeDeg: 0, ElevationM: 0, TimeZone: "UTC",
+                UseCustomHorizon: false, DefaultHorizonAltitudeDeg: horizon, BortleClass: 4,
+                TypicalSeeingArcsec: 2.5, TwilightDefinition: "astronomical");
+
+        private static readonly Coordinates SafeTarget = new(Angle.ByHours(5), Angle.ByDegree(89), Epoch.J2000);
+        private static readonly Coordinates LowTarget = new(Angle.ByHours(5), Angle.ByDegree(-40), Epoch.J2000);
+
+        private void SetupSafety(SafetyPoliciesDto safety) {
+            profileStore = new Mock<IProfileStore>();
+            profileStore.Setup(p => p.GetSafetyPolicies()).Returns(safety);
+            profileStore.Setup(p => p.GetSiteSettings()).Returns(Site());
+
+            published = new List<NotificationDto>();
+            notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Callback<NotificationDto, CancellationToken>((dto, _) => published.Add(dto))
+                .Returns(Task.CompletedTask);
+
+            reconnector = new Mock<IEquipmentReconnector>();
+            camera = new Mock<ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new CameraInfo { Connected = true });
+            focuser = new Mock<IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(new FocuserInfo { Connected = true });
+        }
+
+        private MeridianFlipExecutor CreateSafetySUT() =>
+            new(profileService.Object, telescope.Object, guider.Object, centering.Object, dome.Object,
+                domeFollower.Object, profileStore.Object, notifications.Object, reconnector.Object,
+                camera.Object, focuser.Object) {
+                // Spec timings shrunk so the watchdog/reconnect tests run in milliseconds.
+                WatchdogSampleInterval = TimeSpan.FromMilliseconds(20),
+                WatchdogStallWindow = TimeSpan.FromMilliseconds(60),
+                WatchdogHardCap = TimeSpan.FromSeconds(30),
+                ReconnectPollInterval = TimeSpan.FromMilliseconds(10),
+                ReconnectWait = TimeSpan.FromMilliseconds(60),
+            };
 
         private static IProgress<ApplicationStatus> Progress => new Progress<ApplicationStatus>();
 
@@ -277,6 +343,172 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.True);
             domeFollower.Verify(d => d.WaitForDomeSynchronization(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        // ─── §58.9 Layer 1 — pre-flip flight check ───
+
+        [Test]
+        public void Predicted_altitude_matches_the_transit_geometry() {
+            // dec −40 from lat 40: peak altitude 90 − |40 − (−40)| = 10°, at ANY time ≤ 10°.
+            var alt = MeridianFlipExecutor.PredictedTargetAltitudeDeg(LowTarget, 40, 0, DateTimeOffset.UtcNow);
+            Assert.That(alt, Is.LessThanOrEqualTo(10.0 + 1e-6));
+            // dec 89 from lat 40 is circumpolar: min altitude = 40 + 89 − 90 = 39°.
+            var safe = MeridianFlipExecutor.PredictedTargetAltitudeDeg(SafeTarget, 40, 0, DateTimeOffset.UtcNow);
+            Assert.That(safe, Is.GreaterThanOrEqualTo(39.0 - 1e-6));
+        }
+
+        [Test]
+        public async Task Flight_check_blocks_a_flip_to_a_target_below_the_horizon_floor() {
+            SetupProfile();
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(LowTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never,
+                "the flip must never start on a failed flight check");
+            telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never,
+                "the mount stays untouched in its known-safe pre-flip state");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(published, Has.Count.EqualTo(1));
+            Assert.That(published[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
+            Assert.That(published[0].Message, Does.Contain("horizon floor"));
+        }
+
+        [Test]
+        public async Task Flight_check_blocks_on_a_parked_or_untracked_or_slewing_mount() {
+            SetupProfile();
+            SetupSafety(Safety());
+            var sut = CreateSafetySUT();
+
+            foreach (var (info, expected) in new (TelescopeInfo, string)[] {
+                (new TelescopeInfo { Connected = false }, "not connected"),
+                (new TelescopeInfo { Connected = true, AtPark = true }, "parked"),
+                (new TelescopeInfo { Connected = true, Slewing = true }, "already slewing"),
+                (new TelescopeInfo { Connected = true, TrackingEnabled = false }, "not tracking"),
+            }) {
+                published.Clear();
+                telescope.Setup(t => t.GetInfo()).Returns(info);
+                var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+                Assert.That(ok, Is.False, expected);
+                Assert.That(published.Single().Message, Does.Contain(expected));
+            }
+            telescope.Verify(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task A_disconnected_camera_that_hot_reconnects_lets_the_flip_proceed() {
+            SetupProfile(recenter: false);
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            var connected = false;
+            camera.Setup(c => c.GetInfo()).Returns(() => new CameraInfo { Connected = connected });
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .Callback(() => connected = true)   // the background reconnect "lands" immediately
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_camera_that_stays_disconnected_blocks_the_flip() {
+            SetupProfile();
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            camera.Setup(c => c.GetInfo()).Returns(new CameraInfo { Connected = false });
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(published.Single().Message, Does.Contain("Camera"));
+            telescope.Verify(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        // ─── §58.9 Layer 2 — in-slew watchdog + hard pier-side gate ───
+
+        [Test]
+        public async Task Watchdog_aborts_a_stalled_slew_and_fails_the_flip() {
+            SetupProfile();
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount(); // fixed RA/Dec → the position never progresses
+            var neverCompletes = new TaskCompletionSource<bool>();
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Returns(neverCompletes.Task);
+            // StopSlew is how the real driver ends an aborted slew — unwind the flip call then.
+            telescope.Setup(t => t.StopSlew()).Callback(() => neverCompletes.TrySetCanceled());
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.StopSlew(), Times.Once);
+            Assert.That(published.Single().Message, Does.Contain("stalled"));
+        }
+
+        [Test]
+        public async Task Watchdog_aborts_on_the_hard_timeout_even_while_the_mount_is_moving() {
+            SetupProfile();
+            SetupSafety(Safety(expectedSlewSeconds: 1)); // hard timeout = 3 s… shrunk below
+            var ra = 0.0;
+            telescope.Setup(t => t.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = PierSide.pierEast,
+                RightAscension = ra += 0.1, Declination = 0,   // always progressing — only the timeout can fire
+            });
+            var neverCompletes = new TaskCompletionSource<bool>();
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Returns(neverCompletes.Task);
+            telescope.Setup(t => t.StopSlew()).Callback(() => neverCompletes.TrySetCanceled());
+            var sut = CreateSafetySUT();
+            sut.WatchdogHardCap = TimeSpan.FromMilliseconds(80); // min(3 s, 80 ms) → 80 ms
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.StopSlew(), Times.Once);
+            Assert.That(published.Single().Message, Does.Contain("timeout"));
+        }
+
+        [Test]
+        public async Task An_unchanged_known_pier_side_hard_fails_with_safety_on_but_only_warns_with_it_off() {
+            // A healthy tracking mount whose pier side stays pierEast through the "flip".
+            SetupProfile(recenter: false);
+            SetupSafety(Safety());
+            telescope.Setup(t => t.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = PierSide.pierEast,
+                RightAscension = 5, Declination = 20,
+            });
+            var sut = CreateSafetySUT();
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+            Assert.That(ok, Is.False, "safety ON → an unflipped pier side must fail the flip");
+            Assert.That(published.Single().Message, Does.Contain("pier side"));
+
+            // Same rig with the §58.9 toggle off → the §58.5 warn-and-continue baseline.
+            SetupSafety(Safety(enabled: false));
+            var relaxed = CreateSafetySUT();
+            var okRelaxed = await relaxed.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+            Assert.That(okRelaxed, Is.True, "safety OFF → misreporting drivers keep working");
+        }
+
+        /// <summary>A healthy tracking mount whose pier side flips east→west when MeridianFlip is
+        /// called — so safety tests that should PASS the pier-side gate do.</summary>
+        private void SetupHealthyTrackingMount() {
+            var side = PierSide.pierEast;
+            telescope.Setup(t => t.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, AtPark = false, Slewing = false,
+                SideOfPier = side, RightAscension = 5, Declination = 20,
+            });
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { callLog.Add("Flip"); side = PierSide.pierWest; })
+                .ReturnsAsync(true);
         }
     }
 }
