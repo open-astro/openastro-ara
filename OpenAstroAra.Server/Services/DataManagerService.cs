@@ -64,8 +64,12 @@ namespace OpenAstroAra.Server.Services {
                 Name: "HYG star catalog (named stars)",
                 // ~120k stars with proper names (Hipparcos + Yale + Gliese), the source for the §36 Sky Atlas
                 // star-label overlay. Downloaded as a 13.6 MB .csv.gz; SizeBytes is the uncompressed on-disk footprint
-                // (the extraction cap is taken from it). Commit-pinned to the archived upstream repo so the URL is
-                // immutable. License: CC BY-SA (Astronomy Nexus) — see NOTICE.md.
+                // (the extraction cap is taken from it). Served commit-pinned from the org's own snapshot repo
+                // (open-astro/sky-data @ 712bf93, byte-identical to astronexus/HYG-Database @ c7f7f88 — see that
+                // repo's README for provenance) so the URL survives upstream deletion. Deliberately a
+                // raw.githubusercontent URL, NOT a release asset: release-asset downloads 302-redirect and the
+                // sky-data HttpClient refuses redirects (HTTPS-downgrade guard in Program.cs); raw serves 200
+                // directly. License: CC BY-SA (Astronomy Nexus) — see NOTICE.md.
                 // DELIMITER: comma-separated. NOTE for the future catalog consumer: delimiters differ per package —
                 // this is a real CSV, but OpenNGC below is SEMICOLON-separated, so don't assume one delimiter.
                 Description: "≈120,000 stars with proper names (Hipparcos/Yale/Gliese) — the Sky Atlas star overlay.",
@@ -76,19 +80,21 @@ namespace OpenAstroAra.Server.Services {
                 Version: "v40",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://raw.githubusercontent.com/astronexus/HYG-Database/c7f7f883fe678cc7680169a50ccd7dcc49b060ce/hyg/CURRENT/hygdata_v40.csv.gz")),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/hygdata_v40.csv.gz")),
             new DataPackageDto(
                 Id: "openngc-dso",
                 Name: "OpenNGC deep-sky objects",
                 // The NGC/IC deep-sky catalog (galaxies, nebulae, clusters) for the §36 DSO overlay. A bare semicolon-
-                // separated CSV (no archive). Commit-pinned upstream URL. License: CC BY-SA 4.0 — see NOTICE.md.
+                // separated CSV (no archive). Served commit-pinned from the org's snapshot repo (open-astro/sky-data
+                // @ 712bf93, byte-identical to mattiaverga/OpenNGC @ 36cb178; raw URL — no redirect, see the
+                // hyg-stars note). License: CC BY-SA 4.0 — see NOTICE.md.
                 Description: "NGC/IC deep-sky catalog — galaxies, nebulae, clusters (the Sky Atlas DSO overlay).",
                 Category: "catalog",
                 SizeBytes: 3_876_288,
                 Version: "git-36cb178",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://raw.githubusercontent.com/mattiaverga/OpenNGC/36cb178a0f69dba8bfc03a99c10512831edf1c6b/database_files/NGC.csv")),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/NGC.csv")),
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
             // the §36 Tonight's-Sky overlay, not fetched via the Data Manager; the real horizon feature re-adds it
