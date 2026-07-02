@@ -282,7 +282,20 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
           }
           continue; // transient blip — keep tracking
         }
-        if (polled == null) break; // evicted after finishing — treat as done
+        if (polled == null) {
+          // The daemon no longer knows the job. Its in-memory store never
+          // evicts, so this means the daemon LOST STATE mid-sweep (a restart)
+          // — the sweep was never confirmed terminal and the focuser may sit
+          // at an arbitrary probe position. Say so; never report "finished".
+          if (!mounted) return;
+          setState(() {
+            _running = false;
+            _lastFailed = true;
+            _result =
+                'Lost track of the sweep — the server may have restarted mid-autofocus. Check the focuser position before imaging.';
+          });
+          return;
+        }
         job = polled;
       }
       if (!mounted) return;

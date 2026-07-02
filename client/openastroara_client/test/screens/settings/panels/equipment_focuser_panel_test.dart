@@ -29,6 +29,7 @@ class _FakeAutofocusApi implements AutofocusApi {
   final String terminalState;
   final String? errorMessage;
   final int failFirstPolls; // simulate transient poll blips before answering
+  bool vanish = false; // simulate the daemon losing the job (restart mid-sweep)
   int startCalls = 0;
   int polls = 0;
   @override
@@ -41,6 +42,7 @@ class _FakeAutofocusApi implements AutofocusApi {
   Future<AutofocusJob?> job(String jobId) async {
     polls++;
     if (polls <= failFirstPolls) throw Exception('transient blip');
+    if (vanish) return null;
     return AutofocusJob(jobId: jobId, state: terminalState, errorMessage: errorMessage);
   }
 
@@ -220,6 +222,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Autofocus complete'), findsOneWidget);
     expect(af.polls, greaterThanOrEqualTo(3));
+  });
+
+  testWidgets('a vanished job reads as lost-track, never as finished', (tester) async {
+    // The daemon's job store never evicts — a 404 means it LOST STATE (restart
+    // mid-sweep) and the focuser may sit at a probe position. The row must warn,
+    // not report success.
+    final af = _FakeAutofocusApi()..vanish = true;
+    await _pump(tester, _status(), autofocus: af);
+    await tester.tap(find.widgetWithText(FilledButton, 'Run autofocus'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Lost track of the sweep'), findsOneWidget);
+    expect(find.textContaining('finished'), findsNothing);
   });
 
   testWidgets('Run autofocus disabled without a connected focuser', (tester) async {

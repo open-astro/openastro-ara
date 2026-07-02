@@ -32,7 +32,9 @@ abstract interface class AutofocusApi {
   /// Start (or join) a sweep; returns the job to poll.
   Future<AutofocusJob> start();
 
-  /// The job's current state, or `null` when the daemon no longer knows the id.
+  /// The job's current state, or `null` when the daemon no longer knows the id
+  /// (its in-memory job store never evicts, so a null means the daemon lost
+  /// state — e.g. a restart mid-sweep — NOT that the job finished).
   Future<AutofocusJob?> job(String jobId);
 
   void close();
@@ -59,7 +61,9 @@ class DioAutofocusApi implements AutofocusApi {
     return AutofocusJob.fromJson(data);
   }
 
-  // A finished job the daemon has evicted is a legitimate 404 — null, not a throw.
+  // A 404 means the daemon no longer knows the job id. The job store is
+  // in-memory and never evicts, so in practice this means the daemon RESTARTED
+  // mid-sweep — the caller must treat it as "lost track", not as success.
   static final Options _jobOptions = Options(
     validateStatus: (status) => status != null && (status < 400 || status == 404),
   );
