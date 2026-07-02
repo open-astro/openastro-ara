@@ -64,6 +64,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void CaptureForAnalysisAsync_rejects_nan_and_infinite_exposures() {
+            // NaN comparisons are always false, so a bare `<= 0` guard lets NaN through to the
+            // device call — and the §59 sweep feeds COMPUTED exposures into this seam.
+            using var svc = new CameraService();
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.CaptureForAnalysisAsync(double.NaN, binning: 1, CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.CaptureForAnalysisAsync(double.PositiveInfinity, binning: 1, CancellationToken.None));
+        }
+
+        [Test]
         public void StartExposureAsync_rejects_nonpositive_exposure_before_connected_check() {
             using var svc = new CameraService();
             // Argument range validates BEFORE the connected check (services-wide ordering), so a

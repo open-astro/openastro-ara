@@ -49,8 +49,12 @@ public sealed partial class CameraService : IAnalysisFrameSource {
 
     /// <inheritdoc/>
     public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
-        if (exposureSec <= 0) {
-            throw new ArgumentOutOfRangeException(nameof(exposureSec), exposureSec, "analysis exposure must be positive");
+        // NaN sails past a bare `<= 0` (NaN comparisons are always false) and +Infinity would
+        // reach the device call before TimeSpan.FromSeconds threw — guard both explicitly, same
+        // as the REST path's exposure validation. The §59 sweep feeds COMPUTED exposure values
+        // through this seam, exactly the kind of caller that can produce NaN from bad math.
+        if (exposureSec <= 0 || double.IsNaN(exposureSec) || double.IsInfinity(exposureSec)) {
+            throw new ArgumentOutOfRangeException(nameof(exposureSec), exposureSec, "analysis exposure must be a positive, finite number of seconds");
         }
         var bin = Math.Max(1, binning);
         AlpacaCamera? client;
