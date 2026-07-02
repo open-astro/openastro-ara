@@ -202,12 +202,26 @@ but the night's data won't integrate. Two ingredients:
      only trusted because the test proves it against real data in the range we CAN check, and
      the extrapolation beyond mag 9 is labelled as such in the "Why?" reason string. If the
      validation shows >2× error anywhere on the grid, the model is wrong and doesn't ship.
+     **Grid + trigger, pinned (r1):** validate `N(< 9)` per deg² at galactic latitudes
+     `|b| ∈ {0°, 10°, 20°, 30°, 50°, 70°, 90°}`, HYG counts pooled over all longitudes in a
+     ±5° band around each latitude (longitude pooling averages out spiral-arm/cluster
+     clumping the smooth model can't and shouldn't capture); go/no-go = the model within a
+     factor of 2 of the pooled HYG count at EVERY grid point. Seven points, one dataset,
+     no tunable escape hatch.
 
 **Presentation (advise-don't-dictate, as everywhere):** `t_stars` joins the window as a floor
 bound with a reason tag ("~12 stars/sub at 30 s — thin for registration (+0)"); it never gates.
 When `t_stars` exceeds the Glover floor, the window message flags that stars, not read noise,
 are the binding constraint (the design's "flagging when an obvious bound is the real
 constraint").
+
+**Snapshot semantics (r1):** `m_lim(t)` computes from the PROFILE values at computation time
+(seeing = `TypicalSeeingArcsec`, pixel scale from the unbinned optics train) — the advisory is
+a planning figure, not a live-recomputed one, same as every other §3 bound. Binning cancels to
+first order (the seeing-disc footprint `n_pix` shrinks as binned-pixel area grows while per-pixel
+sky+read terms grow with it), so no per-binning variant is computed; a seeing value that differs
+badly from tonight's reality shifts `m_lim` like it shifts everything else seeing-derived —
+garbage-in is the profile's problem, stated once in the reason string's assumptions.
 
 **Slice plan (post-sign-off):** 1) `m_lim(t)` solver + tests against hand-computed cases;
 2) the count model + the HYG-validation test (the go/no-go gate for the whole feature);
