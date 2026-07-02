@@ -203,15 +203,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run)) {
-            // Disarm + release first so the engine can proceed the moment the
-            // state says Running again. The CAS keeps this from resurrecting a
-            // run that an Abort/Stop moved past Paused (their unconditional state
-            // write + token cancel still win; a released gate is then harmless).
-            run.Gate.Resume();
+            // CAS BEFORE releasing the gate: while the engine is suspended it
+            // cannot advance, so a successful Paused→Running here always gets its
+            // sequence.resumed out — the resumed run can't race to Completed/
+            // Stopped and starve the event (it only moves once Resume() below
+            // releases it). The CAS still keeps this from resurrecting a run an
+            // Abort/Stop moved past Paused (their unconditional state write +
+            // token cancel win; a released gate is then harmless).
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
             }
+            // Always disarm — this also cancels a pause that was requested but
+            // never reached a boundary (state still Running, CAS above failed),
+            // and is harmless on terminal runs.
+            run.Gate.Resume();
         }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
     }
