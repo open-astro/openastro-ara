@@ -12,16 +12,24 @@ final switchApiFactoryProvider = Provider<SwitchClient Function(AraServer)>(
   (ref) => SwitchApi.new,
 );
 
+/// The **active** server (`savedServers.last`, null when none saved), deduped by
+/// AraServer value equality so a same-content re-emit of savedServers doesn't
+/// re-trigger dependents. The single change-trigger [switchApiProvider] and
+/// [SwitchActingNotifier] both key off — factored so the two selectors can't
+/// drift: the §25.3 acting reset only works because it fires on exactly the
+/// change that rebuilds the API (abandoning any in-flight action).
+final _activeSwitchServerProvider = Provider<AraServer?>(
+    (ref) => ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+          data: (list) => list.isEmpty ? null : list.last,
+          orElse: () => null,
+        ))));
+
 /// [SwitchClient] bound to the **active** server (`savedServers.last`), or `null`
 /// when no server is saved.
 final switchApiProvider = Provider<SwitchClient?>((ref) {
-  // Select only the active server (deduped by AraServer value equality) so a
-  // same-content re-emit of savedServers doesn't rebuild this and force-close a
-  // Dio mid-request.
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  // The value-deduped active-server watch also keeps a same-content re-emit
+  // from rebuilding this and force-closing a Dio mid-request.
+  final server = ref.watch(_activeSwitchServerProvider);
   if (server == null) return null;
   final api = ref.watch(switchApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -46,15 +54,12 @@ final switchApiProvider = Provider<SwitchClient?>((ref) {
 class SwitchActingNotifier extends Notifier<bool> {
   @override
   bool build() {
-    // Reset on an active-server change (the same value-select [switchApiProvider]
-    // rebuilds on). This is load-bearing, not hygiene: an action abandoned against
-    // the OLD server has its clear deliberately generation-guarded away in _act's
-    // finally (so it can't stomp a newer action's signal) — without this rebuild
-    // the chip would stick amber forever after a mid-action server switch.
-    ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-          data: (list) => list.isEmpty ? null : list.last,
-          orElse: () => null,
-        )));
+    // Reset on an active-server change — the SAME shared trigger that rebuilds
+    // [switchApiProvider]. This is load-bearing, not hygiene: an action abandoned
+    // against the OLD server has its clear deliberately generation-guarded away in
+    // _act's finally (so it can't stomp a newer action's signal) — without this
+    // rebuild the chip would stick amber forever after a mid-action server switch.
+    ref.watch(_activeSwitchServerProvider);
     return false;
   }
 
