@@ -43,6 +43,10 @@ class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
     }
     return const <DiscoveredDevice>[];
   }
+
+  int closes = 0;
+  @override
+  void close() => closes++;
 }
 
 const _server = AraServer(hostname: 'h', port: 5555);
@@ -82,6 +86,7 @@ void main() {
     final container = await _pump(tester, api);
 
     expect(api.scans, 1, reason: 'the probe runs automatically on entry');
+    expect(api.closes, 1, reason: 'the one-shot probe client is closed (r3)');
     expect(container.read(wizardStepValidProvider), isTrue);
     expect(find.textContaining('AlpacaBridge reachable'), findsOneWidget);
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
@@ -179,5 +184,8 @@ void main() {
     expect(api.scans, 0, reason: 'no server → nothing to probe');
     expect(container.read(wizardStepValidProvider), isFalse);
     expect(find.textContaining('No active server'), findsOneWidget);
+    // r3: not a bridge problem — the install command would be a red herring.
+    expect(find.text('AlpacaBridge not detected.'), findsNothing);
+    expect(find.text('sudo apt install alpaca-bridge'), findsNothing);
   });
 }

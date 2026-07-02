@@ -37,4 +37,9 @@ class EquipmentDiscoveryApi {
         .map(DiscoveredDevice.fromJson)
         .toList();
   }
+
+  /// Release the underlying connection pool. Callers that construct a one-shot
+  /// instance (the wizard probe, the discovery sheet) must close it — each
+  /// instance owns its own Dio, and an unclosed one leaks its pool.
+  void close() => _dio.close(force: true);
 }

@@ -46,6 +46,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   bool _ok = false;
   bool _testing = false;
   bool _skipped = false;
+  // True when the last probe couldn't even start (no daemon connection) — a
+  // different problem than "bridge unreachable", so it gets a plain banner,
+  // not the install-command panel (installing a bridge wouldn't help).
+  bool _noServer = false;
+
 
   @override
   void initState() {
@@ -75,6 +80,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
     if (servers.isEmpty) {
       setState(() {
         _ok = false;
+        _noServer = true;
         _result = 'No active server — connect to a daemon first.';
       });
       // Same re-gate as the failure paths below (a retry can land here after
@@ -84,12 +90,15 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
     }
     setState(() {
       _testing = true;
+      _noServer = false;
       _result = null;
     });
+    // One-shot client per probe — close it (each instance owns its own Dio;
+    // the auto-run-on-entry + retry cadence would otherwise stack leaked pools).
+    final api = ref.read(equipmentDiscoveryApiFactoryProvider)(servers.last);
     try {
       // Probe the daemon's discovery path with a single type; a clean response
       // (even an empty list) means the AlpacaBridge path is reachable.
-      final api = ref.read(equipmentDiscoveryApiFactoryProvider)(servers.last);
       final devices =
           await api.discover(EquipmentDeviceType.camera, forceRefresh: true);
       if (!mounted) return;
@@ -119,6 +128,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       });
       _setValid(_skipped);
     } finally {
+      api.close();
       if (mounted) setState(() => _testing = false);
     }
   }
@@ -136,7 +146,8 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
 
   @override
   Widget build(BuildContext context) {
-    final failed = _result != null && !_ok && !_testing;
+    final failed = _result != null && !_ok && !_testing && !_noServer;
+    final noServer = _result != null && !_testing && _noServer;
     return WizardScreenScaffold(
       step: 2,
       intro: 'ARA speaks ASCOM Alpaca only. INDI/INDIGO users connect through '
@@ -187,6 +198,31 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
               children: [
                 const Icon(Icons.check_circle,
                     size: 18, color: AraColors.accentConnected),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_result!,
+                      style: Theme.of(context).textTheme.bodySmall),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (noServer) ...[
+          const SizedBox(height: 16),
+          // Not a bridge problem — no daemon connection at all, so the install
+          // command would be a red herring. Plain banner, no skip.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AraColors.accentError.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AraColors.accentError),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline,
+                    size: 18, color: AraColors.accentError),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(_result!,
@@ -355,6 +391,9 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
           data: (list) => list,
           orElse: () => const [],
         );
+    // One-shot client for the sheet's scans — closed when the sheet is done
+    // (same leak avoidance as the Screen-2 probe).
+    final api = servers.isEmpty ? null : EquipmentDiscoveryApi(servers.last);
     final picked = await showModalBottomSheet<_Choice>(
       context: context,
       backgroundColor: AraColors.bgPanel,
@@ -362,9 +401,10 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
       builder: (_) => _DiscoverySheet(
         slotLabel: slot.label,
         type: type,
-        api: servers.isEmpty ? null : EquipmentDiscoveryApi(servers.last),
+        api: api,
       ),
     );
+    api?.close();
     if (picked == null) return; // dismissed without choosing
     setState(() {
       slot.set(_draft, picked.device?.uniqueId);
