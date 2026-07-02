@@ -88,8 +88,9 @@ public sealed class CoalescingAsyncPublisher {
         // reorder ahead of this seal-store, or a racing poke could slip past both
         // sides' checks.
         Interlocked.Exchange(ref _sealed, 1);
-        // The pump may tail-restart once (release-recheck), so loop over snapshots
-        // of the live pump task until the machine is quiescent.
+        // The pump may tail-restart (release-recheck; each restart can itself
+        // restart, so not bounded to one), so loop over snapshots of the live
+        // pump task until the machine is quiescent.
         while (Volatile.Read(ref _publishing) == 1 || Volatile.Read(ref _pending) == 1) {
             var t = _pumpTask;
             if (t is not null) {
