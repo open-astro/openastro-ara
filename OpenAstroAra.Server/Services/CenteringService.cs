@@ -29,7 +29,7 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>§28 centering — see <see cref="ICenteringService"/>. Builds the capture sequence + center-solve
 /// parameters from the active profile and drives the ported centering loop over the live equipment.</summary>
-public sealed class CenteringService : ICenteringService, IDisposable {
+public sealed partial class CenteringService : ICenteringService, IDisposable {
     // Serialize centering ops: each one slews/syncs the mount, so two concurrent calls (e.g. the §58.4 flip
     // recenter racing a REST caller) must not run at once. A second caller waits for the first to finish.
     private readonly SemaphoreSlim _centeringGate = new(1, 1);
