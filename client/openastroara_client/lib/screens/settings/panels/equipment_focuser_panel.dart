@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/focuser_status.dart';
+import '../../../services/autofocus_api.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -48,6 +49,13 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
         ),
         const SettingsSectionHeader('Autofocus'),
+        // §59 — trigger one V-curve sweep with the profile's autofocus settings.
+        // Runs as a daemon background job; the row polls it to a terminal state.
+        // Enabled only while a focuser is connected (the sweep also needs the
+        // camera, but the daemon fail-louds that — the job row shows the reason).
+        _RunAutofocusRow(
+          focuserConnected: status.asData?.value?.isConnected ?? false,
+        ),
         // The editable autofocus settings (temp compensation, AF-after-filter-change,
         // trigger temp delta — saved per profile) live in their own panel; link there
         // rather than duplicate them here.
@@ -209,5 +217,146 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         backgroundColor: AraColors.accentError,
       ));
     }
+  }
+}
+
+
+/// §59 — the "Run autofocus" control: starts the daemon's V-curve sweep as a
+/// background job and polls it to a terminal state, surfacing progress and the
+/// failure reason inline. A duplicate tap while a sweep runs joins the running
+/// job (daemon single-job-per-type), so the button simply disables while busy.
+class _RunAutofocusRow extends ConsumerStatefulWidget {
+  final bool focuserConnected;
+  const _RunAutofocusRow({required this.focuserConnected});
+
+  @override
+  ConsumerState<_RunAutofocusRow> createState() => _RunAutofocusRowState();
+}
+
+class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
+  bool _running = false;
+  String? _result; // last terminal outcome, shown under the button
+  bool _lastFailed = false;
+
+  Future<void> _run() async {
+    final api = ref.read(autofocusApiProvider);
+    if (api == null) return;
+    setState(() {
+      _running = true;
+      _result = null;
+      _lastFailed = false;
+    });
+    try {
+      final started = await api.start();
+      var job = started;
+      // Poll to terminal. A sweep is minutes of moves + probe exposures; 2s is
+      // plenty responsive without hammering the daemon. Stop polling if this
+      // panel is disposed mid-sweep — the daemon job keeps running regardless.
+      //
+      // Transient poll errors must NOT end the tracking (matching the device
+      // liveness-poll convention): the daemon job keeps running through a
+      // dropped request, and declaring failure on one blip would mislead the
+      // user about a sweep that may complete moments later. Only a sustained
+      // outage (~30s of consecutive failures) gives up — on the TRACKING, with
+      // a message that says exactly that.
+      var consecutivePollFailures = 0;
+      const maxConsecutivePollFailures = 15;
+      while (!job.isTerminal) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        AutofocusJob? polled;
+        try {
+          polled = await api.job(job.jobId);
+          consecutivePollFailures = 0;
+        } catch (e) {
+          if (++consecutivePollFailures >= maxConsecutivePollFailures) {
+            if (!mounted) return;
+            setState(() {
+              _running = false;
+              _lastFailed = true;
+              _result =
+                  'Lost contact with the server while autofocusing — the sweep may still be running on the daemon; check the Focuser panel or the daemon log.';
+            });
+            debugPrint('[autofocus] poll gave up after $consecutivePollFailures consecutive failures: $e');
+            return;
+          }
+          continue; // transient blip — keep tracking
+        }
+        if (polled == null) {
+          // The daemon no longer knows the job. Its in-memory store never
+          // evicts, so this means the daemon LOST STATE mid-sweep (a restart)
+          // — the sweep was never confirmed terminal and the focuser may sit
+          // at an arbitrary probe position. Say so; never report "finished".
+          if (!mounted) return;
+          setState(() {
+            _running = false;
+            _lastFailed = true;
+            _result =
+                'Lost track of the sweep — the server may have restarted mid-autofocus. Check the focuser position before imaging.';
+          });
+          return;
+        }
+        job = polled;
+      }
+      if (!mounted) return;
+      setState(() {
+        _running = false;
+        _lastFailed = job.state == 'failed';
+        _result = switch (job.state) {
+          'complete' => 'Autofocus complete — focuser is at the fitted best position.',
+          'failed' => job.errorMessage ?? 'Autofocus failed — see the daemon log.',
+          'cancelled' => 'Autofocus was cancelled.',
+          _ => 'Autofocus finished.',
+        };
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _running = false;
+        _lastFailed = true;
+        _result = 'Could not run autofocus: check the connection and try again.';
+      });
+      debugPrint('[autofocus] run failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canRun =
+        widget.focuserConnected && !_running && ref.watch(autofocusApiProvider) != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.tonalIcon(
+            onPressed: canRun ? _run : null,
+            icon: _running
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.center_focus_strong, size: 16),
+            label: Text(_running ? 'Autofocusing…' : 'Run autofocus'),
+          ),
+        ),
+        if (!widget.focuserConnected)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text('Connect a focuser to run autofocus.',
+                style: TextStyle(fontSize: 12, color: AraColors.textSecondary)),
+          ),
+        if (_result != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              _result!,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: _lastFailed ? AraColors.accentError : AraColors.textSecondary),
+            ),
+          ),
+      ],
+    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/focuser_status.dart';
 import '../../models/server.dart';
+import '../../services/autofocus_api.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
 import 'equipment_device_state.dart';
@@ -16,6 +17,23 @@ final focuserApiFactoryProvider =
         fromJson: FocuserStatus.fromJson,
       ),
 );
+
+/// Builds the §59 manual-autofocus client. Overridable in tests.
+final autofocusApiFactoryProvider = Provider<AutofocusApi Function(AraServer)>(
+  (ref) => (server) => DioAutofocusApi(server),
+);
+
+/// Autofocus client bound to the **active** server, or `null` when none is saved.
+final autofocusApiProvider = Provider<AutofocusApi?>((ref) {
+  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+        data: (list) => list.isEmpty ? null : list.last,
+        orElse: () => null,
+      )));
+  if (server == null) return null;
+  final api = ref.watch(autofocusApiFactoryProvider)(server);
+  ref.onDispose(api.close);
+  return api;
+});
 
 /// Focuser client bound to the **active** server, or `null` when none is saved.
 final focuserApiProvider =
