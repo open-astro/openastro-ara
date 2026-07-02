@@ -149,6 +149,54 @@ void main() {
         reason: 'both switches present after connecting two');
   });
 
+  test('§25.3 switchActingProvider is true exactly while an action is in flight',
+      () async {
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+    expect(c.read(switchActingProvider), isFalse, reason: 'idle before any action');
+
+    final action = c.read(switchListProvider.notifier).connect(_discovered(0));
+    expect(c.read(switchActingProvider), isTrue,
+        reason: 'amber signal raised while the action holds the gate');
+
+    api.connectGate!.complete();
+    await action;
+    expect(c.read(switchActingProvider), isFalse,
+        reason: 'cleared when the action unwinds');
+  });
+
+  test('§25.3 the acting signal resets on a mid-action server change (r1 fix)',
+      () async {
+    // The abandoned action's finally deliberately SKIPS the clear when the
+    // generation has moved on (it must not stomp a newer action's signal), so
+    // without the notifier's own server-change reset the chip would stick
+    // amber forever. Mutable server list → we can change the active server.
+    final servers = [server];
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(servers, api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+
+    final action = c.read(switchListProvider.notifier).connect(_discovered(0));
+    expect(c.read(switchActingProvider), isTrue, reason: 'action in flight');
+
+    // Active server changes while the action is still holding the gate.
+    servers.add(const AraServer(hostname: 'h2', port: 5556));
+    c.invalidate(savedServersProvider);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+    expect(c.read(switchActingProvider), isFalse,
+        reason: 'server change must reset the signal — nothing else ever will');
+
+    // The abandoned action unwinding later must not re-raise the signal.
+    api.connectGate!.complete();
+    await action;
+    expect(c.read(switchActingProvider), isFalse,
+        reason: 'the stale generation must not clear-or-set anything');
+  });
+
   test('an action while another is in flight is dropped (returns false)', () async {
     final api = _FakeSwitchApi()..connectGate = Completer<void>();
     final c = _container(const [server], api);

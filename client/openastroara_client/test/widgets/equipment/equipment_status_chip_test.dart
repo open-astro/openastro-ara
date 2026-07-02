@@ -70,6 +70,24 @@ void main() {
       expect(switchChipLevel(const AsyncLoading()), StatusLevel.info);
       expect(switchChipLevel(AsyncError('x', StackTrace.empty)), StatusLevel.error);
     });
+
+    test('§25.3 amber while an action is in flight, whatever the list says', () {
+      // A port write on a connected switch...
+      expect(
+          switchChipLevel(AsyncData([dev(SwitchConnectionState.connected)]),
+              acting: true),
+          StatusLevel.busy);
+      // ...and a connect still in flight (nothing connected yet) both read busy.
+      expect(
+          switchChipLevel(AsyncData([dev(SwitchConnectionState.disconnected)]),
+              acting: true),
+          StatusLevel.busy);
+      // Loading/error outrank the acting signal (an unreadable list is the
+      // stronger fact — same precedence as the other chips).
+      expect(switchChipLevel(const AsyncLoading(), acting: true), StatusLevel.info);
+      expect(switchChipLevel(AsyncError('x', StackTrace.empty), acting: true),
+          StatusLevel.error);
+    });
   });
 
   testWidgets('tapping a chip routes to its device Settings panel (Options tab)',

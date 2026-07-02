@@ -12,16 +12,24 @@ final switchApiFactoryProvider = Provider<SwitchClient Function(AraServer)>(
   (ref) => SwitchApi.new,
 );
 
+/// The **active** server (`savedServers.last`, null when none saved), deduped by
+/// AraServer value equality so a same-content re-emit of savedServers doesn't
+/// re-trigger dependents. The single change-trigger [switchApiProvider] and
+/// [SwitchActingNotifier] both key off — factored so the two selectors can't
+/// drift: the §25.3 acting reset only works because it fires on exactly the
+/// change that rebuilds the API (abandoning any in-flight action).
+final _activeSwitchServerProvider = Provider<AraServer?>(
+    (ref) => ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+          data: (list) => list.isEmpty ? null : list.last,
+          orElse: () => null,
+        ))));
+
 /// [SwitchClient] bound to the **active** server (`savedServers.last`), or `null`
 /// when no server is saved.
 final switchApiProvider = Provider<SwitchClient?>((ref) {
-  // Select only the active server (deduped by AraServer value equality) so a
-  // same-content re-emit of savedServers doesn't rebuild this and force-close a
-  // Dio mid-request.
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  // The value-deduped active-server watch also keeps a same-content re-emit
+  // from rebuilding this and force-closing a Dio mid-request.
+  final server = ref.watch(_activeSwitchServerProvider);
   if (server == null) return null;
   final api = ref.watch(switchApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -38,6 +46,29 @@ final switchApiProvider = Provider<SwitchClient?>((ref) {
 /// a daemon-side change NOT triggered here (another client connects a switch, a
 /// switch drops) is invisible until the next read. Periodic/live (WS) refresh is a
 /// later slice; the UI can call `refresh()` on a cadence if needed.
+/// §25.3 — true while a switch action (connect / disconnect / port write) is in
+/// flight. The daemon reports no per-port actuation state, so `SwitchDevice`
+/// can't carry busy; this is the "derive it from an in-flight set-value op"
+/// signal the top-bar chip watches to show amber during actuation. Set by
+/// [SwitchListNotifier._act]'s try/finally.
+class SwitchActingNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    // Reset on an active-server change — the SAME shared trigger that rebuilds
+    // [switchApiProvider]. This is load-bearing, not hygiene: an action abandoned
+    // against the OLD server has its clear deliberately generation-guarded away in
+    // _act's finally (so it can't stomp a newer action's signal) — without this
+    // rebuild the chip would stick amber forever after a mid-action server switch.
+    ref.watch(_activeSwitchServerProvider);
+    return false;
+  }
+
+  void set(bool v) => state = v;
+}
+
+final switchActingProvider =
+    NotifierProvider<SwitchActingNotifier, bool>(SwitchActingNotifier.new);
+
 class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // Serializes manual refresh() so rapid taps don't stack concurrent getAll()s;
   // the post-action refresh from connect/etc. passes a pinned client and always
@@ -103,6 +134,8 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     final api = ref.read(switchApiProvider);
     if (api == null) return false; // no active server — dropped
     _acting = true;
+    // §25.3 — mirror the guard onto the chip's busy signal (amber while actuating).
+    ref.read(switchActingProvider.notifier).set(true);
     final gen = _generation;
     try {
       // The action throws on failure — propagate to the caller (the list stays as
@@ -117,7 +150,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       // — and a fresh action there may have set it true again; an unconditional clear
       // here would wipe that newer action's guard, letting two control actions fly at
       // once against the new server.
-      if (gen == _generation) _acting = false;
+      if (gen == _generation) {
+        _acting = false;
+        if (ref.mounted) ref.read(switchActingProvider.notifier).set(false);
+      }
     }
   }
 
