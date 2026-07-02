@@ -154,6 +154,23 @@ void main() {
         reason: 'no handshake and no override left to skip to');
   });
 
+  testWidgets('§68.2 a failed retry AFTER a success re-gates Next (r2 fix)',
+      (tester) async {
+    final api = _FakeDiscoveryApi();
+    final container = await _pump(tester, api);
+    expect(container.read(wizardStepValidProvider), isTrue,
+        reason: 'auto-probe succeeded');
+
+    // The bridge goes down; the user retries — Next must re-lock.
+    api.failing = true;
+    await tester.tap(find.text('Retry detection'));
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(wizardStepValidProvider), isFalse,
+        reason: 'a failed retry must not inherit the earlier success');
+    expect(find.text('AlpacaBridge not detected.'), findsOneWidget);
+  });
+
   testWidgets('no active server: gated with the failure panel, no crash',
       (tester) async {
     final api = _FakeDiscoveryApi();

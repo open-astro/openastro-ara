@@ -77,6 +77,9 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
         _ok = false;
         _result = 'No active server — connect to a daemon first.';
       });
+      // Same re-gate as the failure paths below (a retry can land here after
+      // an earlier success if the active server was removed meanwhile).
+      _setValid(_skipped);
       return;
     }
     setState(() {
@@ -104,12 +107,17 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
             '${e.message ?? 'network error'} '
             '(${e.response?.statusCode ?? 'no response'})';
       });
+      // Re-gate on EVERY failure, not just the initial one: a retry that fails
+      // after an earlier success (bridge power-cycled) must re-lock Next — a
+      // still-granted non-standard-bridge skip stands on its own.
+      _setValid(_skipped);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _ok = false;
         _result = '$e';
       });
+      _setValid(_skipped);
     } finally {
       if (mounted) setState(() => _testing = false);
     }
