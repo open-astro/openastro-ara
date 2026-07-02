@@ -172,6 +172,12 @@ public static class EquipmentEndpoints {
             // Real progress: the job's total is the sweep's probe count (from the
             // profile's §37.11 settings), and the sweep reports structured
             // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
+            // Read once at enqueue time. The sweep re-reads the profile when the job
+            // body actually RUNS, so a settings change in that narrow window can make
+            // this total disagree with the sweep's real probe count — accepted: done
+            // may briefly overshoot and the bar resyncs at the final settle tick;
+            // threading one settings read through the executor seam isn't worth it
+            // for a cosmetic progress denominator.
             var af = profiles.GetAutofocusSettings();
             var totalProbes = af.Steps >= 1 ? af.Steps * 2 + 1 : 1;
             var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
