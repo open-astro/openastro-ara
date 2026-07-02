@@ -339,6 +339,26 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
           ),
         ),
         WizardDerivedValue(label: 'Image scale', value: _imageScale),
+        // NEXTGEN §4 — the two electronics values a camera never reports over
+        // ASCOM. Optional: leaving them blank just means the Optimal Sub
+        // advisor waits for them (Settings → Imaging → Camera electronics).
+        WizardTextField(
+          label: 'Read noise (e⁻, optional)',
+          initialValue: _c.readNoiseE?.toString(),
+          helperText:
+              "From the sensor's spec sheet at your imaging gain — never reported by the camera. Feeds the Optimal Sub advisor.",
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          onChanged: (v) => _assignDouble(v, (d) => _c.readNoiseE = d),
+        ),
+        WizardTextField(
+          label: 'Peak quantum efficiency (%, optional)',
+          initialValue: _c.qePeakPct?.toString(),
+          helperText: 'Spec-sheet peak QE, e.g. 80 for 80%.',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          onChanged: (v) => _assignDouble(v, (d) => _c.qePeakPct = d),
+        ),
       ],
     );
   }

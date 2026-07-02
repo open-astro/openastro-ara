@@ -258,6 +258,8 @@ class ScreenReview extends ConsumerWidget {
               '${reviewValue(c.defaultOffset)}'),
           ('Binning', reviewValue(c.defaultBin)),
           ('Pixel size', _unit(c.pixelSizeMicrons, 'µm')),
+          ('Read noise', _unit(c.readNoiseE, 'e⁻')),
+          ('Peak QE', _unit(c.qePeakPct, '%')),
         ]),
         _ReviewSection(title: 'Filter wheel', step: 6, onEdit: edit, rows: [
           ('Filters', draft.filterWheel.filters.isEmpty

@@ -85,6 +85,11 @@ class CameraSettings {
   int? defaultOffset;
   int? defaultBin;
   double? pixelSizeMicrons;
+  // NEXTGEN §4 — the two electronics values ASCOM never reports (spec-sheet
+  // numbers), so a fresh setup ends exposure-planning-ready without a Settings
+  // detour. QE is entered as a percent (0–100); the profile stores a fraction.
+  double? readNoiseE;
+  double? qePeakPct;
 }
 
 enum CoolerWarmupMode { off, ramp, immediate }

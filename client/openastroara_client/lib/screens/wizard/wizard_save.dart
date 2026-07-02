@@ -9,6 +9,7 @@ import '../../models/profile_draft.dart'
 import '../../services/profile_api.dart';
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
+import '../../state/settings/camera_electronics_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -44,6 +45,19 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
       TwilightOption.astronomical => TwilightDefinition.astronomical,
       null => null,
     },
+  );
+}
+
+/// NEXTGEN §4 — the wizard's two user-owned electronics fields. Preserve-on-null
+/// like every mapper here, which also keeps the ASCOM-auto-captured fields
+/// (sensor name, full well, e-/ADU, gain) exactly as the camera connect wrote
+/// them; QE converts from the entered percent to the stored fraction.
+CameraElectronics applyDraftToCameraElectronics(CameraElectronics base, ProfileDraft d) {
+  final rn = d.camera.readNoiseE;
+  final qe = d.camera.qePeakPct;
+  return base.copyWith(
+    readNoiseE: (rn != null && rn > 0) ? rn : null,
+    quantumEfficiencyPeak: (qe != null && qe > 0 && qe <= 100) ? qe / 100.0 : null,
   );
 }
 
@@ -218,7 +232,7 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   // run them concurrently rather than serially (4 round-trips → ~1 round-trip of
   // latency). Collect every failure (rather than letting Future.wait drop all but
   // the first) so a partial save reports exactly which sections didn't apply.
-  // The four sections are disjoint (no section's GET reads another's PUT target),
+  // The sections are disjoint (no section's GET reads another's PUT target),
   // and the caller (_saveAndExit) runs this under a non-dismissible spinner that
   // blocks a second Save, so there is no GET-after-PUT overlap to worry about.
   final errors = (await Future.wait([
@@ -231,6 +245,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToPlateSolve(await api.getPlateSolveSettings(), d))),
     _trySave(() async => api.putAutofocusSettings(
         applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
+    _trySave(() async => api.putCameraElectronics(
+        applyDraftToCameraElectronics(await api.getCameraElectronics(), d))),
     _trySave(() async => api.putStorageSettings(
         applyDraftToStorage(await api.getStorageSettings(), d))),
     _trySave(() async => api.putSafetyPolicies(

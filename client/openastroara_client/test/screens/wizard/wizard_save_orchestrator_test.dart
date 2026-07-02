@@ -8,6 +8,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -68,6 +69,11 @@ class _FakeProfileApi extends ProfileApi {
   Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) =>
       _put('autofocus', v);
   @override
+  Future<CameraElectronics> getCameraElectronics() async => const CameraElectronics();
+  @override
+  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) =>
+      _put('electronics', v);
+  @override
   Future<StorageSettings> getStorageSettings() async => const StorageSettings();
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) =>
@@ -96,6 +102,7 @@ void main() {
             'phd2',
             'platesolve',
             'autofocus',
+            'electronics',
             'storage',
             'safety'
           ]));
