@@ -134,6 +134,37 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task SealAndDrain_waits_out_the_inflight_and_trailing_publishes_then_blocks_new_pokes() {
+            var count = 0;
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var firstStarted = new SemaphoreSlim(0);
+            var pump = new CoalescingAsyncPublisher(async () => {
+                var n = Interlocked.Increment(ref count);
+                if (n == 1) {
+                    firstStarted.Release();
+                    await gate.Task; // hold the first publish
+                }
+            });
+
+            pump.Poke();
+            Assert.That(await firstStarted.WaitAsync(TimeSpan.FromSeconds(5)), Is.True);
+            pump.Poke(); // a trailing publish is now owed
+
+            var drain = pump.SealAndDrainAsync();
+            Assert.That(drain.IsCompleted, Is.False,
+                "drain must wait for the held publish + its trailing follow-up");
+            gate.SetResult();
+            await drain.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(count, Is.EqualTo(2), "in-flight + owed trailing publish both completed");
+
+            // r1/#648: a LATE poke (a queued Progress<T> callback landing after the
+            // run ended) must be a no-op — nothing may publish past the seal.
+            pump.Poke();
+            await Task.Delay(100);
+            Assert.That(count, Is.EqualTo(2), "sealed: the late poke published nothing");
+        }
+
+        [Test]
         public void A_null_delegate_throws_up_front() {
             Assert.Throws<ArgumentNullException>(() => _ = new CoalescingAsyncPublisher(null!));
         }

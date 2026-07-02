@@ -479,6 +479,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Top-level sequence-run boundary: arbitrary instruction code executes here, so any escaped exception must be caught, logged, surfaced as a Failed run via WS, and contained — letting it propagate would fault the background worker and take down the daemon. CA1031's 'boundary that logs and recovers' exception applies.")]
     private async Task RunWorkerAsync(Guid sequenceId, RunState run, ISequenceRootContainer root) {
+        // Declared ahead of the try so the catch blocks can seal+drain it before
+        // their terminal emits; null until the run body constructs it.
+        CoalescingAsyncPublisher? progressPublisher = null;
         try {
             // If an abort/stop landed before this worker started (in the window
             // between StartAsync spawning it and it running), skip both the
@@ -499,7 +502,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // single-flight pump keeps at most ONE sequence.progress publish in flight
                 // and collapses a burst into one trailing publish carrying the freshest run
                 // state (read at publish time). Lifecycle events stay unthrottled.
-                var progressPublisher = new CoalescingAsyncPublisher(
+                progressPublisher = new CoalescingAsyncPublisher(
                     () => EmitAsync("sequence.progress", sequenceId, run));
                 var progress = new Progress<ApplicationStatus>(status => {
                     run.SetDescription(status.Status);
@@ -517,6 +520,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Final snapshot — fast instructions may finish without firing a
                 // progress tick, so settle the completed count after the run.
                 run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), runningIndex: null);
+
+                // r1 ordering: seal (late queued Progress<T> ticks become no-ops — the
+                // #648 lesson) and drain any in-flight/trailing progress publish BEFORE
+                // the terminal event below, so sequence.progress can never arrive after
+                // sequence.complete/stopped/aborted for this run.
+                await progressPublisher.SealAndDrainAsync();
             }
 
             // Terminal transition is driven by the state Abort/Stop set before
@@ -547,10 +556,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // the terminal block above handles abort/stop. This guard keeps the
             // engine correct if a Sequencer subclass / future NINA version ever
             // lets OCE escape — a cancelled run is reported Stopped, not Failed.
+            if (progressPublisher is not null) {
+                await progressPublisher.SealAndDrainAsync();
+            }
             run.State = SequenceRunState.Stopped;
             await EmitAsync("sequence.stopped", sequenceId, run);
         } catch (Exception ex) {
             LogRunFailed(ex, sequenceId);
+            if (progressPublisher is not null) {
+                await progressPublisher.SealAndDrainAsync();
+            }
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
         } finally {

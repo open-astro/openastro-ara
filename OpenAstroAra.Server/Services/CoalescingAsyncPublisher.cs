@@ -37,8 +37,10 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed class CoalescingAsyncPublisher {
     private readonly Func<Task> _publish;
-    private int _publishing; // 1 = a pump owns the publish loop
-    private int _pending;    // 1 = a poke arrived that no publish has consumed yet
+    private int _publishing;          // 1 = a pump owns the publish loop
+    private int _pending;             // 1 = a poke arrived that no publish has consumed yet
+    private int _sealed;              // 1 = no further publishes accepted (terminal ordering)
+    private volatile Task? _pumpTask; // the live pump, for DrainAsync to await
 
     public CoalescingAsyncPublisher(Func<Task> publish) {
         _publish = publish ?? throw new ArgumentNullException(nameof(publish));
@@ -47,12 +49,36 @@ public sealed class CoalescingAsyncPublisher {
     /// <summary>Request a publish. Returns immediately; the publish runs on the
     /// thread pool. Safe from any thread.</summary>
     public void Poke() {
+        if (Volatile.Read(ref _sealed) == 1) {
+            // Sealed: a late tick (Progress<T> queues callbacks to the thread pool,
+            // so ticks can land after the run has ended — the #648 lesson) must not
+            // race a publish past the terminal event.
+            return;
+        }
         // Pending FIRST, then try to acquire: a concurrent pump that just consumed
         // pending will either see this one in its loop check, or the release-recheck
         // below restarts it — a poke can never be lost between the two flags.
         Volatile.Write(ref _pending, 1);
         if (Interlocked.CompareExchange(ref _publishing, 1, 0) == 0) {
-            _ = PumpAsync();
+            _pumpTask = PumpAsync();
+        }
+    }
+
+    /// <summary>Stop accepting pokes, then wait until any in-flight/trailing publish
+    /// has fully completed. Call before emitting an ordered terminal event so a
+    /// coalesced progress publish can never arrive after it. Late pokes (queued
+    /// Progress&lt;T&gt; callbacks landing post-run) become no-ops.</summary>
+    public async Task SealAndDrainAsync() {
+        Volatile.Write(ref _sealed, 1);
+        // The pump may tail-restart once (release-recheck), so loop over snapshots
+        // of the live pump task until the machine is quiescent.
+        while (Volatile.Read(ref _publishing) == 1 || Volatile.Read(ref _pending) == 1) {
+            var t = _pumpTask;
+            if (t is not null) {
+                await t.ConfigureAwait(false);
+            } else {
+                await Task.Yield();
+            }
         }
     }
 
@@ -75,7 +101,7 @@ public sealed class CoalescingAsyncPublisher {
             // and didn't start a pump, so restart one here if we can re-acquire.
             if (Volatile.Read(ref _pending) == 1
                     && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0) {
-                _ = PumpAsync();
+                _pumpTask = PumpAsync();
             }
         }
     }
