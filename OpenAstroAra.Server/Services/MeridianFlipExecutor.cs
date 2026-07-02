@@ -625,6 +625,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             return "the mount state could not be read — no park or tracking change was possible.";
         }
 
+        // Distinguish "this mount has no park capability" from "the park ATTEMPT failed" — the
+        // returned line lands in the Critical notification an operator reads to diagnose an
+        // unattended incident, so it must say which one actually happened.
+        var parkAttemptFailed = false;
         if (mount.CanPark && !mount.AtPark) {
             try {
                 Logger.Info("Meridian Flip - Safe rest: parking the mount.");
@@ -633,16 +637,21 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 if (await telescopeMediator.ParkTelescope(progress, parkCts.Token)) {
                     return "the mount was parked.";
                 }
+                parkAttemptFailed = true;
                 Logger.Error("Meridian Flip - Safe rest: the park command reported failure; stopping tracking instead.");
             } catch (Exception ex) {
+                parkAttemptFailed = true;
                 Logger.Error("Meridian Flip - Safe rest: parking failed; stopping tracking instead.", ex);
             }
         }
 
         try {
             telescopeMediator.SetTrackingEnabled(false);
-            return mount.AtPark
-                ? "the mount was already parked."
+            if (mount.AtPark) {
+                return "the mount was already parked.";
+            }
+            return parkAttemptFailed
+                ? "the park attempt failed — tracking was stopped instead; check the mount."
                 : "the mount cannot park — tracking was stopped where the abort caught it.";
         } catch (Exception ex) {
             Logger.Error("Meridian Flip - Safe rest: stopping tracking also failed.", ex);

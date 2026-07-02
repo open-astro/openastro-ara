@@ -604,6 +604,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_park_attempt_reports_itself_honestly_not_as_cannot_park() {
+            // #630 review: CanPark=true but the attempt fails → the notification must say the
+            // ATTEMPT failed (an operator diagnostic), not misreport "the mount cannot park".
+            SetupProfile(recenter: true);
+            SetupSafety(Safety());
+            var side = PierSide.pierEast;
+            telescope.Setup(t => t.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = side,
+                RightAscension = 5, Declination = 20, CanPark = true,
+            });
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => side = PierSide.pierWest).ReturnsAsync(true);
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);   // parkable, but this attempt fails
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(callLog.Last(), Is.EqualTo("SetTracking(False)"), "fallback action still runs");
+            Assert.That(published.Single().Message, Does.Contain("park attempt failed"));
+            Assert.That(published.Single().Message, Does.Not.Contain("cannot park"));
+        }
+
+        [Test]
         public async Task A_failed_flip_on_an_unparkable_mount_stops_tracking_instead() {
             SetupProfile(recenter: true);
             SetupSafety(Safety());
