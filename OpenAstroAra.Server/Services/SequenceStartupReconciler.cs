@@ -77,7 +77,7 @@ public sealed partial class SequenceStartupReconciler {
 
         var previous = _checkpoint.TryRead();
         if (previous is not null) {
-            LogCheckpointInterrupted(previous.SequenceId, previous.State, previous.FramesCompleted, previous.FramesTotal);
+            LogCheckpointInterrupted(previous.SequenceId, previous.State, previous.InstructionsCompleted, previous.InstructionsTotal);
             // Clear the file — §28.2 policy is no auto-resume, the user
             // explicitly re-starts via REST. Keeping the file would
             // re-trigger on every subsequent startup.

@@ -356,8 +356,8 @@ String _statusLine(bool connected, String? selectedId, String? selectedName,
   final name = selectedName ?? selectedId;
   final state = runInfo?.state;
   if (state == null) return 'Selected: $name';
-  final frames = runInfo!.framesTotal > 0
-      ? ' — ${runInfo.framesCompleted}/${runInfo.framesTotal} frames'
+  final frames = runInfo!.instructionsTotal > 0
+      ? ' — ${runInfo.instructionsCompleted}/${runInfo.instructionsTotal} frames'
       : '';
   return '$name — ${_runStateLabel(state)}$frames';
 }

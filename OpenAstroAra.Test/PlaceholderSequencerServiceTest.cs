@@ -52,7 +52,7 @@ namespace OpenAstroAra.Test {
 
             var state = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(state, Is.Not.Null);
-            Assert.That(state!.FramesTotal, Is.EqualTo(5));  // DefaultMockInstructionCount
+            Assert.That(state!.InstructionsTotal, Is.EqualTo(5));  // DefaultMockInstructionCount
         }
 
         [Test]
@@ -70,7 +70,7 @@ namespace OpenAstroAra.Test {
 
             var state = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(state, Is.Not.Null);
-            Assert.That(state!.FramesTotal, Is.EqualTo(12));
+            Assert.That(state!.InstructionsTotal, Is.EqualTo(12));
         }
 
         [Test]
@@ -87,7 +87,7 @@ namespace OpenAstroAra.Test {
                 idempotencyKey: null, CancellationToken.None);
 
             var state = await svc.GetRunStateAsync(id, CancellationToken.None);
-            Assert.That(state!.FramesTotal, Is.EqualTo(5));
+            Assert.That(state!.InstructionsTotal, Is.EqualTo(5));
         }
 
         [Test]

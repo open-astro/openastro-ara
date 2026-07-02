@@ -80,8 +80,8 @@ namespace OpenAstroAra.Test {
                             CurrentTargetName: null,
                             StartedUtc: DateTimeOffset.UtcNow,
                             CompletedUtc: null,
-                            FramesCompleted: 0,
-                            FramesTotal: 5,
+                            InstructionsCompleted: 0,
+                            InstructionsTotal: 5,
                             CurrentInstructionDescription: null));
                     }
                     return Task.FromResult<SequenceRunStateDto?>(null);

@@ -108,7 +108,7 @@ public static class StartupNotificationFactory {
         if (previous is null) {
             return "A sequence was running when the daemon stopped. It was not auto-resumed; re-start it from the Sequencer panel if needed.";
         }
-        return $"Sequence {previous.SequenceId:D} was at frame {previous.FramesCompleted}/{previous.FramesTotal} when the daemon stopped. It was not auto-resumed per the §28.2 safety policy; re-start it from the Sequencer panel if needed.";
+        return $"Sequence {previous.SequenceId:D} was at instruction {previous.InstructionsCompleted}/{previous.InstructionsTotal} when the daemon stopped. It was not auto-resumed per the §28.2 safety policy; re-start it from the Sequencer panel if needed.";
     }
 
     private static string BuildCorruptMessage(string? quarantinedPath) {

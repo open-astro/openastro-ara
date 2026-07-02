@@ -328,8 +328,8 @@ class SequenceRunStateInfo {
   final String? currentTargetName;
   final DateTime? startedUtc;
   final DateTime? completedUtc;
-  final int framesCompleted;
-  final int framesTotal;
+  final int instructionsCompleted;
+  final int instructionsTotal;
   final String? currentInstructionDescription;
 
   const SequenceRunStateInfo({
@@ -340,8 +340,8 @@ class SequenceRunStateInfo {
     this.currentTargetName,
     this.startedUtc,
     this.completedUtc,
-    this.framesCompleted = 0,
-    this.framesTotal = 0,
+    this.instructionsCompleted = 0,
+    this.instructionsTotal = 0,
     this.currentInstructionDescription,
   });
 
@@ -354,8 +354,8 @@ class SequenceRunStateInfo {
       currentTargetName: _str(json['current_target_name']),
       startedUtc: _dt(json['started_utc']),
       completedUtc: _dt(json['completed_utc']),
-      framesCompleted: _int(json['frames_completed']),
-      framesTotal: _int(json['frames_total']),
+      instructionsCompleted: _int(json['instructions_completed']),
+      instructionsTotal: _int(json['instructions_total']),
       currentInstructionDescription: _str(json['current_instruction_description']),
     );
   }
@@ -379,9 +379,9 @@ class SequenceRunStateInfo {
       currentTargetName: currentTargetName,
       startedUtc: startedUtc,
       completedUtc: completedUtc,
-      framesCompleted:
-          _intOrNull(payload['frames_completed']) ?? framesCompleted,
-      framesTotal: _intOrNull(payload['frames_total']) ?? framesTotal,
+      instructionsCompleted:
+          _intOrNull(payload['instructions_completed']) ?? instructionsCompleted,
+      instructionsTotal: _intOrNull(payload['instructions_total']) ?? instructionsTotal,
       currentInstructionDescription: currentInstructionDescription,
     );
   }
@@ -398,8 +398,8 @@ class SequenceRunStateInfo {
       other.currentTargetName == currentTargetName &&
       other.startedUtc == startedUtc &&
       other.completedUtc == completedUtc &&
-      other.framesCompleted == framesCompleted &&
-      other.framesTotal == framesTotal &&
+      other.instructionsCompleted == instructionsCompleted &&
+      other.instructionsTotal == instructionsTotal &&
       other.currentInstructionDescription == currentInstructionDescription;
 
   @override
@@ -411,8 +411,8 @@ class SequenceRunStateInfo {
       currentTargetName,
       startedUtc,
       completedUtc,
-      framesCompleted,
-      framesTotal,
+      instructionsCompleted,
+      instructionsTotal,
       currentInstructionDescription);
 }
 

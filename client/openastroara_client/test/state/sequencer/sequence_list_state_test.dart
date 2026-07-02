@@ -146,15 +146,15 @@ void main() {
         'run_id': 'run-9',
         'state': 'running',
         'current_instruction_index': 3,
-        'frames_completed': 12,
-        'frames_total': 60,
+        'instructions_completed': 12,
+        'instructions_total': 60,
       }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
       expect(info?.state, SequenceRunState.running);
-      expect(info?.framesCompleted, 12);
-      expect(info?.framesTotal, 60);
+      expect(info?.instructionsCompleted, 12);
+      expect(info?.instructionsTotal, 60);
       expect(info?.currentInstructionIndex, 3);
     });
 
@@ -163,7 +163,7 @@ void main() {
       controller.add(event(SequenceWsEvents.progress, const {
         'sequence_id': 'other',
         'state': 'running',
-        'frames_completed': 7,
+        'instructions_completed': 7,
       }));
       await pumpEventQueue();
 
@@ -192,7 +192,7 @@ void main() {
       controller.add(event(SequenceWsEvents.progress, const {
         'sequence_id': 'seq-1',
         'state': 'running',
-        'frames_completed': 5,
+        'instructions_completed': 5,
       }));
       await pumpEventQueue();
       expect(container.read(sequenceRunStateProvider).isLoading, isTrue);
@@ -203,15 +203,15 @@ void main() {
       controller.add(event(SequenceWsEvents.progress, const {
         'sequence_id': 'seq-1',
         'state': 'running',
-        'frames_completed': 9,
-        'frames_total': 30,
+        'instructions_completed': 9,
+        'instructions_total': 30,
       }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
       expect(info?.state, SequenceRunState.running);
-      expect(info?.framesCompleted, 9);
-      expect(info?.framesTotal, 30);
+      expect(info?.instructionsCompleted, 9);
+      expect(info?.instructionsTotal, 30);
     });
 
     test('a terminal frame re-reads to backfill REST-only fields', () async {
@@ -224,14 +224,14 @@ void main() {
         state: SequenceRunState.completed,
         currentTargetName: 'M31',
         completedUtc: DateTime.utc(2026, 6, 18, 10),
-        framesCompleted: 60,
-        framesTotal: 60,
+        instructionsCompleted: 60,
+        instructionsTotal: 60,
       );
       controller.add(event(SequenceWsEvents.complete, const {
         'sequence_id': 'seq-1',
         'state': 'completed',
-        'frames_completed': 60,
-        'frames_total': 60,
+        'instructions_completed': 60,
+        'instructions_total': 60,
       }));
       await pumpEventQueue();
 
@@ -252,13 +252,13 @@ void main() {
         state: SequenceRunState.running,
         currentTargetName: 'M31',
         startedUtc: DateTime.utc(2026, 6, 18, 9),
-        framesTotal: 60,
+        instructionsTotal: 60,
       );
       controller.add(event(SequenceWsEvents.started, const {
         'sequence_id': 'seq-1',
         'state': 'running',
-        'frames_completed': 0,
-        'frames_total': 60,
+        'instructions_completed': 0,
+        'instructions_total': 60,
       }));
       await pumpEventQueue();
 
@@ -304,14 +304,14 @@ void main() {
       controller.add(event(SequenceWsEvents.progress, const {
         'sequence_id': 'seq-1',
         'state': 'running',
-        'frames_completed': 21,
-        'frames_total': 60,
+        'instructions_completed': 21,
+        'instructions_total': 60,
       }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
       expect(info?.state, SequenceRunState.running);
-      expect(info?.framesCompleted, 21);
+      expect(info?.instructionsCompleted, 21);
     });
   });
 }

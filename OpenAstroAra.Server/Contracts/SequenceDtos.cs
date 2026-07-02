@@ -94,8 +94,8 @@ public sealed record SequenceRunStateDto(
     string? CurrentTargetName,
     DateTimeOffset StartedUtc,
     DateTimeOffset? CompletedUtc,
-    int FramesCompleted,
-    int FramesTotal,
+    int InstructionsCompleted,
+    int InstructionsTotal,
     string? CurrentInstructionDescription);
 
 /// <summary>Per-instruction progress payload (WS sequence.instruction_started / _complete / _failed).</summary>

@@ -352,8 +352,8 @@ void main() {
         currentInstructionIndex: 2,
         currentTargetName: 'M31',
         startedUtc: DateTime.utc(2026, 6, 18, 9),
-        framesCompleted: 5,
-        framesTotal: 60,
+        instructionsCompleted: 5,
+        instructionsTotal: 60,
         currentInstructionDescription: 'Take exposure',
       );
       final next = base.applyWsProgress(const {
@@ -361,13 +361,13 @@ void main() {
         'run_id': 'run-1',
         'state': 'paused',
         'current_instruction_index': 4,
-        'frames_completed': 18,
-        'frames_total': 60,
+        'instructions_completed': 18,
+        'instructions_total': 60,
       });
       // Fast fields updated from the WS frame…
       expect(next.state, SequenceRunState.paused);
       expect(next.currentInstructionIndex, 4);
-      expect(next.framesCompleted, 18);
+      expect(next.instructionsCompleted, 18);
       // …slower fields the WS frame doesn't carry are preserved.
       expect(next.currentTargetName, 'M31');
       expect(next.startedUtc, DateTime.utc(2026, 6, 18, 9));
@@ -376,7 +376,7 @@ void main() {
 
     test('an absent/unknown state keeps the current state, not null', () {
       const base = SequenceRunStateInfo(state: SequenceRunState.running);
-      expect(base.applyWsProgress(const {'frames_completed': 1}).state,
+      expect(base.applyWsProgress(const {'instructions_completed': 1}).state,
           SequenceRunState.running);
       expect(base.applyWsProgress(const {'state': 'warp_speed'}).state,
           SequenceRunState.running);
@@ -546,8 +546,8 @@ void main() {
             'current_target_name': 'M31',
             'started_utc': '2026-06-18T09:00:00Z',
             'completed_utc': null,
-            'frames_completed': 12,
-            'frames_total': 60,
+            'instructions_completed': 12,
+            'instructions_total': 60,
             'current_instruction_description': 'Take exposure',
           });
       final info = await api.getRunState('seq-1');
@@ -557,8 +557,8 @@ void main() {
       expect(info.currentTargetName, 'M31');
       expect(info.startedUtc, DateTime.utc(2026, 6, 18, 9));
       expect(info.completedUtc, isNull);
-      expect(info.framesCompleted, 12);
-      expect(info.framesTotal, 60);
+      expect(info.instructionsCompleted, 12);
+      expect(info.instructionsTotal, 60);
     });
 
     test('an unknown/absent state surfaces as null (not idle)', () async {

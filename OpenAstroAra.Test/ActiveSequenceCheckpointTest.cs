@@ -44,8 +44,8 @@ namespace OpenAstroAra.Test {
             CurrentTargetName: null,
             StartedUtc: DateTimeOffset.UtcNow,
             CompletedUtc: null,
-            FramesCompleted: 2,
-            FramesTotal: 5,
+            InstructionsCompleted: 2,
+            InstructionsTotal: 5,
             CurrentInstructionDescription: "capture #3");
 
         [Test]
@@ -66,8 +66,8 @@ namespace OpenAstroAra.Test {
             Assert.That(roundTripped, Is.Not.Null);
             Assert.That(roundTripped!.SequenceId, Is.EqualTo(id));
             Assert.That(roundTripped.State, Is.EqualTo(SequenceRunState.Running));
-            Assert.That(roundTripped.FramesCompleted, Is.EqualTo(2));
-            Assert.That(roundTripped.FramesTotal, Is.EqualTo(5));
+            Assert.That(roundTripped.InstructionsCompleted, Is.EqualTo(2));
+            Assert.That(roundTripped.InstructionsTotal, Is.EqualTo(5));
         }
 
         [Test]

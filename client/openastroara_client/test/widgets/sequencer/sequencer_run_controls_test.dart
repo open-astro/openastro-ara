@@ -76,7 +76,7 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
 }
 
 SequenceRunStateInfo _info(SequenceRunState s, {int done = 0, int total = 0}) =>
-    SequenceRunStateInfo(state: s, framesCompleted: done, framesTotal: total);
+    SequenceRunStateInfo(state: s, instructionsCompleted: done, instructionsTotal: total);
 
 void main() {
   group('run-state provider', () {
@@ -97,7 +97,7 @@ void main() {
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       final info = await container.read(sequenceRunStateProvider.future);
       expect(info!.state, SequenceRunState.running);
-      expect(info.framesCompleted, 3);
+      expect(info.instructionsCompleted, 3);
     });
   });
 
