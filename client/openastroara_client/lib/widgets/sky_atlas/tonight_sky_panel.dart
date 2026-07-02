@@ -172,7 +172,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
               ),
             ],
           ),
-          if (framingLabel != null || timing != null || _object.filterAdvice != null) ...[
+          if (framingLabel != null ||
+              timing != null ||
+              _object.filterAdvice != null ||
+              _object.moonUpFraction != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
@@ -185,6 +188,11 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _FilterAdviceChip(advice: _object.filterAdvice!),
+                  ),
+                if (_object.moonUpFraction != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _MoonChip(object: _object),
                   ),
                 if (timing != null)
                   Expanded(
@@ -508,6 +516,53 @@ class _FilterAdviceChip extends StatelessWidget {
       ),
       child: Text(
         advice.label,
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: color, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+}
+
+/// §36.8 slice-4 — at-a-glance moon context for the object's dark window.
+/// **Moonless** (the best news on the panel, green) when the moon stays below
+/// the true horizon for the whole window; otherwise the separation and the
+/// disc illumination, tinted amber only when the moon is both close (<30°)
+/// and bright (>40% lit). Advisory only — an objectionable moon never hides
+/// or down-ranks the object (advise-don't-dictate).
+class _MoonChip extends StatelessWidget {
+  final TonightSkyObject object;
+  const _MoonChip({required this.object});
+
+  @override
+  Widget build(BuildContext context) {
+    final moonless = (object.moonUpFraction ?? 0) <= 0;
+    final sep = object.moonSeparationDeg;
+    final illum = object.moonIlluminationPct;
+    final String label;
+    final Color color;
+    if (moonless) {
+      label = 'Moonless';
+      color = AraColors.accentConnected;
+    } else {
+      // Either measurement can be absent independently (defensive parse) —
+      // show what we have rather than dropping the chip.
+      label = '☾'
+          '${sep == null ? '' : ' ${sep.toStringAsFixed(0)}°'}'
+          '${illum == null ? '' : ' · ${illum.toStringAsFixed(0)}%'}';
+      final harsh = (sep ?? 180) < 30 && (illum ?? 0) > 40;
+      color = harsh ? AraColors.accentBusy : AraColors.textSecondary;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        label,
         style: Theme.of(context)
             .textTheme
             .labelSmall

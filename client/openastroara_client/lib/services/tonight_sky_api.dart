@@ -105,6 +105,19 @@ class TonightSkyObject {
   /// or null until the camera electronics + aperture are configured server-side.
   final double? optimalSubS;
 
+  /// §36.8 slice-4 moon advisory (all three null on a pre-slice-4 daemon).
+  /// Great-circle distance (degrees) from the target to the moon at the
+  /// object's window midpoint. Display context only — never a gate or a score
+  /// input.
+  final double? moonSeparationDeg;
+
+  /// The moon's illuminated disc fraction tonight, 0–100.
+  final double? moonIlluminationPct;
+
+  /// How much of the object's dark window has the moon above the true horizon:
+  /// 0 = a genuinely moonless window, 1 = moon up throughout.
+  final double? moonUpFraction;
+
   const TonightSkyObject({
     required this.id,
     required this.name,
@@ -129,6 +142,9 @@ class TonightSkyObject {
     this.filterAdvice,
     this.adviceReason,
     this.optimalSubS,
+    this.moonSeparationDeg,
+    this.moonIlluminationPct,
+    this.moonUpFraction,
   });
 
   /// Parse one wire object, or null when a required field is missing/wrong-typed
@@ -178,6 +194,13 @@ class TonightSkyObject {
       filterAdvice: TonightFilterAdvice.fromWire(json['filter_advice']),
       adviceReason: json['advice_reason'] is String ? json['advice_reason'] as String : null,
       optimalSubS: _optDouble(json['optimal_sub_s']),
+      // Moon advisory (slice 4) — clamped to their invariants at the data layer,
+      // like `score`, so a mangled value can't render as "430° away".
+      moonSeparationDeg:
+          _optDouble(json['moon_separation_deg'])?.clamp(0.0, 180.0).toDouble(),
+      moonIlluminationPct:
+          _optDouble(json['moon_illumination_pct'])?.clamp(0.0, 100.0).toDouble(),
+      moonUpFraction: _optDouble(json['moon_up_fraction'])?.clamp(0.0, 1.0).toDouble(),
     );
   }
 

@@ -125,6 +125,37 @@ void main() {
       expect(unknown.optimalSubS, isNull, reason: 'wrong-typed figure drops');
     });
 
+    test('parses the §36.8 slice-4 moon advisory fields when present', () {
+      final o = TonightSkyObject.fromJson({
+        ...body(),
+        'moon_separation_deg': 42.3,
+        'moon_illumination_pct': 78.0,
+        'moon_up_fraction': 0.65,
+      })!;
+      expect(o.moonSeparationDeg, 42.3);
+      expect(o.moonIlluminationPct, 78.0);
+      expect(o.moonUpFraction, 0.65);
+    });
+
+    test('moon fields are null when absent, clamped when out of range', () {
+      // A pre-slice-4 daemon omits them entirely.
+      final absent = TonightSkyObject.fromJson(body())!;
+      expect(absent.moonSeparationDeg, isNull);
+      expect(absent.moonIlluminationPct, isNull);
+      expect(absent.moonUpFraction, isNull);
+      // Mangled values clamp to their invariants (like score) instead of
+      // rendering a "430° away" chip; wrong types drop to null.
+      final mangled = TonightSkyObject.fromJson({
+        ...body(),
+        'moon_separation_deg': 430.0,
+        'moon_illumination_pct': -5,
+        'moon_up_fraction': 'yes',
+      })!;
+      expect(mangled.moonSeparationDeg, 180.0);
+      expect(mangled.moonIlluminationPct, 0.0);
+      expect(mangled.moonUpFraction, isNull);
+    });
+
     test('advice enum maps each wire value', () {
       expect(TonightFilterAdvice.fromWire('narrowband'), TonightFilterAdvice.narrowband);
       expect(TonightFilterAdvice.fromWire('duoband'), TonightFilterAdvice.duoband);

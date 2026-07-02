@@ -224,6 +224,42 @@ void main() {
     expect(find.textContaining('Glover'), findsNothing);
   });
 
+  testWidgets('a moon-up window renders the separation/illumination chip',
+      (tester) async {
+    final moonlit = TonightSkyObject(
+      id: _m31.id, name: _m31.name, type: _m31.type,
+      magnitude: _m31.magnitude, raDeg: _m31.raDeg, decDeg: _m31.decDeg,
+      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
+      moonSeparationDeg: 42.3, moonIlluminationPct: 78, moonUpFraction: 0.65,
+    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [moonlit]));
+    await tester.pump();
+    expect(find.text('☾ 42° · 78%'), findsOneWidget);
+    expect(find.text('Moonless'), findsNothing);
+  });
+
+  testWidgets('a moonless window renders the Moonless chip', (tester) async {
+    final moonless = TonightSkyObject(
+      id: _m31.id, name: _m31.name, type: _m31.type,
+      magnitude: _m31.magnitude, raDeg: _m31.raDeg, decDeg: _m31.decDeg,
+      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
+      moonSeparationDeg: 120, moonIlluminationPct: 78, moonUpFraction: 0,
+    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [moonless]));
+    await tester.pump();
+    expect(find.text('Moonless'), findsOneWidget);
+    expect(find.textContaining('☾'), findsNothing);
+  });
+
+  testWidgets('a pre-slice-4 daemon (no moon fields) renders no moon chip',
+      (tester) async {
+    // _m31 carries no moon fields at all.
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+    expect(find.text('Moonless'), findsNothing);
+    expect(find.textContaining('☾'), findsNothing);
+  });
+
   testWidgets(
       'the recentre action sends a goto with the object ra/dec to the '
       'planetarium command provider', (tester) async {

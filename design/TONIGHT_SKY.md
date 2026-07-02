@@ -171,6 +171,14 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
       pre-filter, expected <100ms, but confirm on-device.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
+  - Moon **advisory display** SHIPPED (2026-07-02): per-object separation at the
+    window midpoint + disc illumination + moon-up fraction over the window
+    (`moon_separation_deg` / `moon_illumination_pct` / `moon_up_fraction`,
+    additive), a zero-point "moon … (+0)" / "moonless window (+0)" reason tag,
+    and a panel chip (green **Moonless** / amber when <30° and >40% lit).
+    Low-precision Almanac lunar series (≈0.3°, geocentric) validated against
+    Meeus ex. 47.a/48.a. Making it a **score input** (the weighting) remains
+    future work — it needs the user's call on weights, per advise-don't-dictate.
 
 ## Explicitly deferred
 
