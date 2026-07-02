@@ -94,9 +94,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         final servers = await ref.read(savedServersProvider.future);
         if (!mounted) return;
         final api = servers.isNotEmpty ? servers.last.baseUrl : '';
-        // Saved Display-panel toggles (empty on first run → the page keeps its
-        // defaults). The page applies these on load and posts changes back via
-        // _onPageEvent, so a user's layer choices survive relaunch.
+        // Saved Display-panel toggles + `cat:`-namespaced Catalogs overlays
+        // (empty on first run → the page keeps its defaults). The page applies
+        // these on load and posts changes back via _onPageEvent, so a user's
+        // layer + catalog choices survive relaunch.
         final savedPrefs = await _prefsService.load();
         if (!mounted) return;
         final query = {

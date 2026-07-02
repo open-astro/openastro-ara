@@ -797,12 +797,14 @@ function catToggle(id) {
     _catOn[id] = false;
     catEnsureObj(id).data = EMPTY_FC;
     renderCatPanel();
+    postDisplayPrefs();
     return;
   }
   if (_catData[id]) {          // cached from an earlier toggle
     _catOn[id] = true;
     catEnsureObj(id).data = _catData[id];
     renderCatPanel();
+    postDisplayPrefs();
     return;
   }
   _catBusy[id] = true;
@@ -813,6 +815,7 @@ function catToggle(id) {
       _catData[id] = catCircles(objs || [], catColor(id));
       _catOn[id] = true;
       catEnsureObj(id).data = _catData[id];
+      postDisplayPrefs();
     })
     .catch(function () { /* transient daemon error — row simply stays off */ })
     .then(function () { _catBusy[id] = false; renderCatPanel(); });
@@ -925,6 +928,10 @@ var DISPLAY_LAYERS = ['dsos', 'constellationLines', 'constellationArt',
 function postDisplayPrefs() {
   var layers = {};
   DISPLAY_LAYERS.forEach(function (k) { layers[k] = dispState(k); });
+  // Catalogs-panel overlays ride the same prefs map under a `cat:` namespace —
+  // every catalog the user has ever toggled this session posts its state, so
+  // turning one off persists too (restore only re-enables saved-on ones).
+  Object.keys(_catOn).forEach(function (id) { layers['cat:' + id] = !!_catOn[id]; });
   // .catch (not try/catch): fetch reports network failures — loopback not yet
   // listening, connection refused — as a rejected promise, not a synchronous throw.
   // Best-effort: a dropped prefs post just means it saves on the next toggle.
@@ -1398,12 +1405,16 @@ StelWebEngine({
     core.dss.visible = true;
     // Apply the user's saved Display-panel toggles (from the `prefs` URL param) over
     // the defaults above; absent keys keep the default. Each change is reported back
-    // to Flutter (postDisplayPrefs) and restored here on the next launch.
+    // to Flutter (postDisplayPrefs) and restored here on the next launch. Keys with
+    // a `cat:` prefix are Catalogs-panel overlays (namespaced so they ride the same
+    // generic map): a saved-on catalog re-toggles here, which re-fetches its objects
+    // from the daemon and redraws — a saved-off (or absent) one keeps the default off.
     try {
       var savedPrefs = JSON.parse(qp('prefs', '{}'));
       Object.keys(savedPrefs).forEach(function (k) {
         var on = !!savedPrefs[k];
-        if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
+        if (k.indexOf('cat:') === 0) { if (on) catToggle(k.slice(4)); }
+        else if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
         else setLayer(k, on);
       });
     } catch (e) {}
