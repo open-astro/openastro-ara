@@ -10,6 +10,7 @@ import '../../services/profile_api.dart';
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/camera_electronics_state.dart';
+import '../../state/settings/filter_set_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -59,6 +60,53 @@ CameraElectronics applyDraftToCameraElectronics(CameraElectronics base, ProfileD
     readNoiseE: (rn != null && rn > 0) ? rn : null,
     quantumEfficiencyPeak: (qe != null && qe > 0 && qe <= 100) ? qe / 100.0 : null,
   );
+}
+
+/// NEXTGEN §4 — the wizard's screen-6 filters become the planning filter set
+/// (feeds the emission-aware Tonight's Sky advice + the per-filter Optimal Sub
+/// advisor). Each named filter's kind is guessed from its label via the SAME
+/// inference the Settings panel's "seed from wheel labels" button uses, so the
+/// two entry paths agree; the user can refine kinds later in Settings →
+/// Imaging → Filter set. An empty/unnamed draft list preserves the base —
+/// until this mapper, the wizard's filter entries were saved nowhere at all.
+FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) {
+  // Dedupe case-insensitively (keep-first), mirroring the daemon's PUT
+  // validation and the Settings notifier's addFilter/seedFromWheelLabels —
+  // duplicate wheel labels (multiple unset slots, case variants) must degrade
+  // to one planning filter, not 400 the ENTIRE wizard save.
+  final seen = <String>{};
+  final named = <(String, FilterDef)>[
+    for (final f in d.filterWheel.filters)
+      if ((f.name?.trim().isNotEmpty ?? false) &&
+          seen.add(f.name!.trim().toLowerCase()))
+        (f.name!.trim(), f),
+  ];
+  if (named.isEmpty) return base;
+  return FilterSetSettings(filters: [
+    for (final (name, def) in named)
+      PlanningFilter(name: name, kind: _kindForDraftFilter(name, def)),
+  ]);
+}
+
+/// Kind inference for one wizard filter: the name heuristic first (identical to
+/// the Settings seed), then — ONLY when the name told us nothing (guessKind's
+/// `l` is its no-match fallback) — the screen's explicit wavelength entry
+/// disambiguates the classic emission lines, so "Filter 1" + 656 nm lands on Hα
+/// instead of silently becoming broadband L. The coarse Type dropdown has no
+/// finer mapping than this (its narrowband/broadband split carries no line
+/// identity), and the wavelength is a CENTER, not a bandwidth, so
+/// PlanningFilter.bandwidthNm stays at its kind default — both refinable in
+/// Settings → Imaging → Filter set.
+FilterKind _kindForDraftFilter(String name, FilterDef f) {
+  final byName = FilterSetNotifier.guessKind(name);
+  if (byName != FilterKind.l) return byName; // the name was informative
+  final nm = f.wavelengthNm;
+  if (nm != null) {
+    if (nm >= 650 && nm <= 662) return FilterKind.ha; //  Hα 656.3
+    if (nm >= 495 && nm <= 506) return FilterKind.oiii; // OIII 500.7
+    if (nm >= 668 && nm <= 677) return FilterKind.sii; //  SII 672.4
+  }
+  return byName;
 }
 
 OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
@@ -247,6 +295,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
     _trySave(() async => api.putCameraElectronics(
         applyDraftToCameraElectronics(await api.getCameraElectronics(), d))),
+    _trySave(() async =>
+        api.putFilterSet(applyDraftToFilterSet(await api.getFilterSet(), d))),
     _trySave(() async => api.putStorageSettings(
         applyDraftToStorage(await api.getStorageSettings(), d))),
     _trySave(() async => api.putSafetyPolicies(

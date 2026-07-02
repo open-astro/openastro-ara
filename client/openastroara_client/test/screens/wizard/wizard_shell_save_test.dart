@@ -12,6 +12,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -76,6 +77,10 @@ class _FakeProfileApi extends ProfileApi {
   Future<CameraElectronics> getCameraElectronics() async => const CameraElectronics();
   @override
   Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async => v;
+  @override
+  Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
+  @override
+  Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
   @override
   Future<StorageSettings> getStorageSettings() async => const StorageSettings();
   @override

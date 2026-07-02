@@ -7,6 +7,7 @@ import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -161,6 +162,74 @@ void main() {
       expect(out.indexDownloadPath, '/keep/db');
       expect(out.searchRadiusDeg, 12);
       expect(out.downsampleFactor, 4);
+    });
+
+    test('applyDraftToFilterSet builds planning filters from named draft filters', () {
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()..name = 'Ha',
+        FilterDef()..name = '  OIII ',
+        FilterDef()..name = '', // unnamed rows are skipped
+        FilterDef()..name = 'Red',
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters.map((f) => f.name), ['Ha', 'OIII', 'Red']);
+      expect(out.filters[0].kind, FilterKind.ha, reason: 'same inference as the Settings seed');
+      expect(out.filters[1].kind, FilterKind.oiii);
+      expect(out.filters[2].kind, FilterKind.r);
+    });
+
+    test('applyDraftToFilterSet lets an explicit wavelength rescue an ambiguous name', () {
+      // "Filter 1" + 656 nm must land on Hα, not silently become broadband L —
+      // the user's explicit entries beat the name fallback. An informative
+      // name still wins over a contradictory wavelength.
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()
+          ..name = 'Filter 1'
+          ..wavelengthNm = 656,
+        FilterDef()
+          ..name = 'Filter 2'
+          ..wavelengthNm = 501,
+        FilterDef()
+          ..name = 'Filter 3'
+          ..wavelengthNm = 672,
+        FilterDef()
+          ..name = 'Red'
+          ..wavelengthNm = 656, // informative name wins
+        FilterDef()..name = 'Filter 5', // no wavelength → the L fallback stands
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters.map((f) => f.kind), [
+        FilterKind.ha,
+        FilterKind.oiii,
+        FilterKind.sii,
+        FilterKind.r,
+        FilterKind.l,
+      ]);
+    });
+
+    test('applyDraftToFilterSet dedupes names case-insensitively (keep-first)', () {
+      // The daemon 400s the whole filter-set PUT on a duplicate name; the
+      // Settings paths dedupe, so the wizard must too — a repeated wheel label
+      // must not fail the entire wizard save.
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()..name = 'Ha',
+        FilterDef()..name = 'ha ',
+        FilterDef()..name = 'HA',
+        FilterDef()..name = 'OIII',
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters.map((f) => f.name), ['Ha', 'OIII']);
+    });
+
+    test('applyDraftToFilterSet preserves the base when the draft has no named filters', () {
+      const base = FilterSetSettings(
+          filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]);
+      expect(applyDraftToFilterSet(base, ProfileDraft()).filters, base.filters);
+      final unnamedOnly = ProfileDraft()..filterWheel.filters.add(FilterDef());
+      expect(applyDraftToFilterSet(base, unnamedOnly).filters, base.filters);
     });
 
     test('applyDraftToCameraElectronics converts QE percent and preserves ASCOM fields', () {
