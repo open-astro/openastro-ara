@@ -179,14 +179,17 @@ and not blowing out cores" idea) — back-burnered by the user 2026-06-28. The
 **transparent 0–100 score** above is the non-gamified core; a points layer could later
 build on it without schema churn.
 
-## Next-generation extensions (bookmarked, post-release)
+## Next-generation extensions (IN PROGRESS as of 2026-07-01)
 
-A future pass would make Tonight's Sky **rig- and time-aware**: filter/emission-aware
-planning (narrowband vs broadband by target type × the user's filters × Bortle), Glover
-optimal sub-exposure (`t = 10·R²/P`), and camera-aware exposure feasibility (the Glover
-floor + full-well saturation ceiling → a usable sub *window*). Full design + the deferral
-rationale: **`design/NEXTGEN_PLANNING.md`** and `design/PORT_DECISIONS.md` (2026-06-29).
-Deferred behind the v1 cross-platform release.
+The rig- and time-aware pass is landing: the Glover optimal sub-exposure calculator +
+sub *window* (`OptimalSubCalculator`, PR #624), the profile inputs + `GET
+/api/v1/planning/optimal-sub` (PR #625), and **filter/emission-aware advice in this
+panel** (the `feature/tonight-filter-advice` slice): per-target recommended approach
+chip (narrowband / OSC+dual-band / broadband from OpenNGC type × declared filter set ×
+Bortle) + a Why?-breakdown reason and per-approach Optimal-Sub figure. **Advice-only by
+decision** — the 0–100 score is untouched; the ±3 nudge idea is recorded in
+`design/PORT_TODO.md`. Full design: **`design/NEXTGEN_PLANNING.md`** (status header
+tracks slices).
 
 **Framing-fit refinement (parked):** a 4-state framing chip (Small / Frames well / Fills
 frame / Too big) keyed to the real frame fill — built + on-device verified at 448 mm,

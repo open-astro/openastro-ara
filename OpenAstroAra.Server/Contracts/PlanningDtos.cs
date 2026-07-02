@@ -38,6 +38,13 @@ namespace OpenAstroAra.Server.Contracts;
 /// 0–100 "worth shooting tonight" rank and <see cref="ScoreReasons"/> the short component tags that
 /// explain it; <see cref="RemainingHours"/> is the dark time still ahead of the query instant in the
 /// object's window tonight (a not-yet-started window contributes its full length, a past window 0).</para>
+/// <para>NEXTGEN §1 filter-advice fields (appended, all optional — advice only, never a gate):
+/// <see cref="FilterAdvice"/> is the recommended filter approach for this target given the user's
+/// declared planning filter set × the target's emission character × the site's Bortle, with
+/// <see cref="AdviceReason"/> the one-line human explanation; both null when no filter set is declared
+/// or the target's emission character is unknown (never guess). <see cref="OptimalSubS"/> is the
+/// Glover read-noise-floor sub length (seconds) for the advised approach's representative filter —
+/// null until the camera electronics + aperture are configured (the advice string still flows).</para>
 /// </summary>
 public sealed record TonightSkyObjectDto(
     string Id,
@@ -59,7 +66,19 @@ public sealed record TonightSkyObjectDto(
     FramingFit Framing = FramingFit.Unknown,
     double Score = 0,
     IReadOnlyList<string>? ScoreReasons = null,
-    double RemainingHours = 0);
+    double RemainingHours = 0,
+    FilterApproach? FilterAdvice = null,
+    string? AdviceReason = null,
+    double? OptimalSubS = null);
+
+/// <summary>NEXTGEN §1 — the recommended filter approach for a target: <see cref="Narrowband"/> mono
+/// line filters (Hα/OIII/SII), <see cref="Duoband"/> OSC + dual/tri-band, <see cref="Broadband"/>
+/// L/RGB/OSC. Serialized all-lowercase per §60.6 (<c>narrowband</c>/<c>duoband</c>/<c>broadband</c>).</summary>
+public enum FilterApproach {
+    Narrowband,
+    Duoband,
+    Broadband,
+}
 
 /// <summary>§36.8 framing fit — how an object's apparent size sits against the active optical train's
 /// field of view, the equipment-aware heart of the Tonight's Sky score. <see cref="TooSmall"/> = lost in
