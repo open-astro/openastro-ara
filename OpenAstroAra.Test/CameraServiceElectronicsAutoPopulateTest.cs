@@ -57,9 +57,11 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Matching_electronics_yield_no_change() {
+            // QE at the Tier-1 library value = the post-first-connect steady state; a
+            // reconnect with identical caps must be a genuine no-op.
             var current = new CameraElectronicsDto(
                 SensorName: "IMX571", FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100,
-                ReadNoiseE: 3.3, AutoCaptured: true);
+                ReadNoiseE: 3.3, QuantumEfficiencyPeak: 0.8, AutoCaptured: true);
             Assert.That(CameraService.AutoPopulatedElectronics(current, Caps(50_000, 0.78, "IMX571", 100)), Is.Null);
         }
 
@@ -80,7 +82,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_sub_epsilon_difference_is_treated_as_no_change() {
             var current = new CameraElectronicsDto(
-                SensorName: "IMX571", FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100, AutoCaptured: true);
+                SensorName: "IMX571", FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100,
+                QuantumEfficiencyPeak: 0.8, AutoCaptured: true);
             Assert.That(CameraService.AutoPopulatedElectronics(current, Caps(50_000 + 1e-12, 0.78 + 1e-12, "IMX571", 100)),
                 Is.Null, "a float round-trip epsilon must not spuriously re-cache on every reconnect");
         }
@@ -121,6 +124,59 @@ namespace OpenAstroAra.Test {
             Assert.That(result, Is.Not.Null);
             Assert.That(result!.SensorName, Is.EqualTo("IMX571"));
             Assert.That(result.AutoCaptured, Is.True);
+        }
+
+        // ── NEXTGEN §5 Tier 1 — the sensor→QE library fill ──
+
+        [Test]
+        public void An_unset_qe_fills_from_the_sensor_library() {
+            var result = CameraService.AutoPopulatedElectronics(
+                new CameraElectronicsDto(), Caps(50_000, 0.78, "Sony IMX571 (mono)", 100));
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.QuantumEfficiencyPeak, Is.EqualTo(0.80),
+                "unset QE fills from the Tier-1 library, matched inside the driver's free-form name");
+        }
+
+        [Test]
+        public void A_user_entered_qe_is_never_overwritten_by_the_library() {
+            var current = new CameraElectronicsDto(QuantumEfficiencyPeak: 0.72);
+            var result = CameraService.AutoPopulatedElectronics(current, Caps(50_000, 0.78, "IMX571", 100));
+            Assert.That(result!.QuantumEfficiencyPeak, Is.EqualTo(0.72),
+                "a non-zero stored QE — user-entered or previously filled — always wins");
+        }
+
+        [Test]
+        public void An_unknown_sensor_leaves_qe_unset() {
+            var result = CameraService.AutoPopulatedElectronics(
+                new CameraElectronicsDto(), Caps(50_000, 0.78, "ACME FictionCam 9000", 100));
+            Assert.That(result!.QuantumEfficiencyPeak, Is.Zero,
+                "no guessing: an unknown sensor keeps QE unset (the calculator's documented default applies)");
+        }
+
+        [Test]
+        public void The_qe_fill_alone_is_a_change_worth_writing() {
+            // Everything else already matches; the library fill is the only delta — it must
+            // still persist (a pre-Tier-1 profile gains its QE on the next reconnect).
+            var current = new CameraElectronicsDto(
+                SensorName: "IMX571", FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 100,
+                ReadNoiseE: 3.3, AutoCaptured: true);
+            var result = CameraService.AutoPopulatedElectronics(current, Caps(50_000, 0.78, "IMX571", 100));
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.QuantumEfficiencyPeak, Is.EqualTo(0.80));
+        }
+
+        [Test]
+        public void Sensor_library_lookup_semantics() {
+            Assert.That(SensorQeLibrary.LookupPeakQe("IMX571"), Is.EqualTo(0.80));
+            Assert.That(SensorQeLibrary.LookupPeakQe("sony imx455"), Is.EqualTo(0.80),
+                "case-insensitive");
+            Assert.That(SensorQeLibrary.LookupPeakQe("KAF-8300"), Is.EqualTo(0.55),
+                "legacy CCDs are distinctly lower than modern BSI CMOS");
+            Assert.That(SensorQeLibrary.LookupPeakQe("ZWO ASI585MC (IMX585)"), Is.EqualTo(0.90),
+                "matched anywhere inside the reported designation");
+            Assert.That(SensorQeLibrary.LookupPeakQe("ACME FictionCam"), Is.Null);
+            Assert.That(SensorQeLibrary.LookupPeakQe(""), Is.Null);
+            Assert.That(SensorQeLibrary.LookupPeakQe(null), Is.Null);
         }
 
         // The atomic read-modify-write the auto-capture uses (closes the TOCTOU vs a concurrent PUT).
