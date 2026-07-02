@@ -56,8 +56,11 @@ void main() {
     // Pre-seed the focal length the camera screen reads from the shared draft.
     container.read(wizardControllerProvider).draft.telescope.focalLengthMm = 714;
 
-    // Pixel size is the last field on the camera screen.
-    await tester.enterText(find.byType(TextField).last, '3.76');
+    // Target the pixel-size field by its label — the NEXTGEN electronics
+    // fields (read noise / QE) now sit after it, so `.last` no longer works.
+    final pixelField = find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Pixel size (µm)');
+    await tester.enterText(pixelField, '3.76');
     await tester.pump();
 
     // 206.265 * 3.76 / 714 ≈ 1.09 arcsec/pixel.

@@ -6,6 +6,7 @@ import 'package:openastroara/models/profile_draft.dart'
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -160,6 +161,43 @@ void main() {
       expect(out.indexDownloadPath, '/keep/db');
       expect(out.searchRadiusDeg, 12);
       expect(out.downsampleFactor, 4);
+    });
+
+    test('applyDraftToCameraElectronics converts QE percent and preserves ASCOM fields', () {
+      // The wizard collects the two user-owned values; the ASCOM-auto-captured
+      // fields (sensor, full well, e-/ADU, gain) must survive the merge.
+      const base = CameraElectronics(
+        sensorName: 'IMX571',
+        fullWellE: 51000,
+        electronsPerAdu: 0.78,
+        gain: 100,
+        autoCaptured: true,
+      );
+      final d = ProfileDraft()
+        ..camera.readNoiseE = 1.5
+        ..camera.qePeakPct = 80;
+      final out = applyDraftToCameraElectronics(base, d);
+      expect(out.readNoiseE, 1.5);
+      expect(out.quantumEfficiencyPeak, closeTo(0.80, 1e-9));
+      expect(out.sensorName, 'IMX571');
+      expect(out.fullWellE, 51000);
+      expect(out.electronsPerAdu, 0.78);
+      expect(out.gain, 100);
+      expect(out.autoCaptured, isTrue);
+    });
+
+    test('applyDraftToCameraElectronics preserves base on a blank draft', () {
+      const base = CameraElectronics(readNoiseE: 2.2, quantumEfficiencyPeak: 0.6);
+      final out = applyDraftToCameraElectronics(base, ProfileDraft());
+      expect(out.readNoiseE, 2.2);
+      expect(out.quantumEfficiencyPeak, 0.6);
+    });
+
+    test('applyDraftToCameraElectronics rejects an out-of-range QE percent', () {
+      const base = CameraElectronics(quantumEfficiencyPeak: 0.6);
+      final d = ProfileDraft()..camera.qePeakPct = 250; // typo'd fraction-vs-percent
+      final out = applyDraftToCameraElectronics(base, d);
+      expect(out.quantumEfficiencyPeak, 0.6, reason: 'implausible % keeps the stored value');
     });
 
     test('applyDraftToAutofocus maps the wizard subset', () {
