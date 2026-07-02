@@ -39,6 +39,12 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             ISequenceItem? next = null;
             bool canContinue = true;
             var root = ItemUtility.GetRootContainer(context);
+            // §38 headless pause: the run's gate hangs off the root container (null
+            // when pause isn't wired, e.g. standalone container tests). Awaited at
+            // every instruction boundary BEFORE the pre-item triggers, so a trigger
+            // whose condition ripened during a long pause (meridian flip!) is
+            // evaluated fresh on resume rather than with pre-pause state.
+            var pauseGate = (root as IPauseGateHost)?.PauseGate;
 
             context.Iterations = 0;
             InitializeBlock(context);
@@ -50,6 +56,9 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                     (next, canContinue) = GetNextItem(context, previous);
                     while (next != null && canContinue) {
                         token.ThrowIfCancellationRequested();
+                        if (pauseGate != null) {
+                            await pauseGate.WaitWhilePausedAsync(token);
+                        }
                         await RunTriggers(context, previous, next, progress, token);
                         await next.Run(progress, token);
                         previous = next;

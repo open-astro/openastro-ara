@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,7 +31,16 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             return new ParallelStrategy();
         }
 
-        public Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        public async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
+            // §38 headless pause: a parallel block suspends at its entry boundary
+            // only — once the branches are running they execute to completion (a
+            // nested sequential container inside a branch still pauses at its own
+            // boundaries via the shared root gate).
+            var pauseGate = (ItemUtility.GetRootContainer(context) as IPauseGateHost)?.PauseGate;
+            if (pauseGate != null) {
+                await pauseGate.WaitWhilePausedAsync(token);
+            }
+
             progress?.Report(new ApplicationStatus() {
                 Status = Loc.Instance["LblExecutingItemsInParallel"]
             });
@@ -46,7 +56,7 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                     tasks.Add(item.Run(itemProgress, token));
                 }
             }
-            return Task.WhenAll(tasks);
+            await Task.WhenAll(tasks);
         }
     }
 }

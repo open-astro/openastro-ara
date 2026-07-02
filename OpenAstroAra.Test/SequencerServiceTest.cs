@@ -277,6 +277,113 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
+            // §38 pause: the current instruction (a 2s wait) always finishes; the
+            // run then suspends BETWEEN instructions, reports Paused, and emits
+            // sequence.paused. Resume releases the gate, emits sequence.resumed,
+            // and the run completes.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new Annotation { Name = "after-pause" });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            // The 2s wait must finish first — Paused is reported only when the
+            // engine actually suspends at the boundary, never on the mere request.
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(paused!.State, Is.EqualTo(SequenceRunState.Paused));
+            Assert.That(paused.FramesCompleted, Is.EqualTo(1), "the in-flight wait ran to completion before the suspension");
+            Assert.That(ws.Events, Does.Contain("sequence.paused"));
+
+            // Suspended means suspended: the run must still be Paused after a beat.
+            await Task.Delay(200);
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State, Is.EqualTo(SequenceRunState.Paused));
+
+            await svc.ResumeAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(state.FramesCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
+            Assert.That(ws.Events, Does.Contain("sequence.resumed"));
+        }
+
+        [Test]
+        public async Task Abort_wins_over_an_active_pause() {
+            // Abort while suspended at the gate must cancel the wait and end the
+            // run as Stopped (aborted event) — never leave it wedged in Paused.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new WaitForTimeSpan { Time = 30 });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+            Assert.That(ws.Events, Does.Contain("sequence.aborted"));
+        }
+
+        [Test]
+        public async Task Pause_racing_completion_is_a_harmless_accepted_noop() {
+            // A pause request that never reaches another instruction boundary
+            // (the run completes first) must not wedge or mislabel the run.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "only" })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed).Or.EqualTo(SequenceRunState.Paused));
+            if (state.State == SequenceRunState.Paused) {
+                // The request landed before the last boundary — resume finishes it.
+                await svc.ResumeAsync(id, null, CancellationToken.None);
+                state = await WaitForTerminalAsync(svc, id);
+                Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            }
+        }
+
+        [Test]
+        public async Task Pause_and_resume_on_unknown_or_finished_runs_are_accepted_noops() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody());
+            // Unknown run — accepted, nothing to do.
+            Assert.That(await svc.PauseAsync(id, null, CancellationToken.None), Is.Not.Null);
+            Assert.That(await svc.ResumeAsync(id, null, CancellationToken.None), Is.Not.Null);
+            // Finished run — still accepted no-ops.
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(await svc.PauseAsync(id, null, CancellationToken.None), Is.Not.Null);
+            Assert.That(await svc.ResumeAsync(id, null, CancellationToken.None), Is.Not.Null);
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public async Task Host_shutdown_stops_a_paused_run() {
+            // Daemon shutdown must not hang on a suspended gate — the cancelled
+            // token aborts the wait and the run ends Stopped.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new WaitForTimeSpan { Time = 30 });
+            }));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            await ((IHostedService)svc).StopAsync(CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
+        [Test]
         public async Task Abort_during_body_load_reports_stopped_not_failed() {
             // GetAsync blocks (honoring the token) so abort lands while the body is
             // still loading; the run must end Stopped, not Failed.
