@@ -139,20 +139,23 @@
   #f-crosshair::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
     margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 4px rgba(79,195,247,0.85); }
 
-  /* Display drawer — sky-layer toggles */
-  #display { left: 14px; top: 64px; width: 234px; max-height: 70%; overflow-y: auto; padding: 12px 13px 14px; display: none;
+  /* Display + Catalogs drawers — shared on/off dot-row styling */
+  #display, #catpanel { left: 14px; top: 64px; width: 234px; max-height: 70%; overflow-y: auto; padding: 12px 13px 14px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
-  #display .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
+  #display .cat-group, #catpanel .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
     letter-spacing: .05em; margin: 13px 3px 3px; }
-  #display .cat-group:first-of-type { margin-top: 2px; }
-  #display .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 9px;
+  #display .cat-group:first-of-type, #catpanel .cat-group:first-of-type { margin-top: 2px; }
+  #display .cat-row, #catpanel .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 9px;
     border-radius: 9px; cursor: pointer; font-size: 13px; transition: background .15s ease; }
-  #display .cat-row:hover { background: rgba(255,255,255,0.07); }
-  #display .cat-row:active { background: rgba(255,255,255,0.12); }
-  #display .cat-row .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto;
+  #display .cat-row:hover, #catpanel .cat-row:hover { background: rgba(255,255,255,0.07); }
+  #display .cat-row:active, #catpanel .cat-row:active { background: rgba(255,255,255,0.12); }
+  #display .cat-row .dot, #catpanel .cat-row .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto;
     transition: background .18s ease, border-color .18s ease, box-shadow .18s ease; }
-  #display .cat-row .dot.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px rgba(79,195,247,0.7); }
+  #display .cat-row .dot.on, #catpanel .cat-row .dot.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px rgba(79,195,247,0.7); }
+  /* Per-catalog swatch: the dot takes the catalog's overlay colour when on */
+  #catpanel .cat-row .dot.on { box-shadow: 0 0 7px rgba(255,255,255,0.35); }
+  #catpanel .empty { color: var(--dim); font-size: 12.5px; padding: 8px 3px; }
 </style>
 </head>
 <body>
@@ -178,6 +181,7 @@
 
 <div id="layers" class="ui" style="display:none">
   <button id="display-btn" title="Sky layers">Display</button>
+  <button id="cat-btn" title="Catalog overlays">Catalogs</button>
   <button id="frame-btn" title="Camera framing overlay">Frame</button>
 </div>
 
@@ -195,6 +199,15 @@
   <div class="cat-row" data-disp="dss"><span>DSS2 sky survey</span><span class="dot"></span></div>
   <div class="cat-row" data-disp="atmosphere"><span>Atmosphere</span><span class="dot"></span></div>
   <div class="cat-row" data-disp="landscape"><span>Landscape</span><span class="dot"></span></div>
+</div>
+
+<!-- Catalogs: daemon-derived overlay catalogs (Messier/Caldwell/NGC/IC) and OpenNGC
+     type filters (galaxies, clusters, nebulae, ...), drawn as colour-coded circle
+     markers on their own engine layer. Rows load from GET /api/v1/catalogs, which
+     is empty until the openngc-dso package is installed via the Data Manager. -->
+<div id="catpanel" class="ui">
+  <div class="card-title">Catalogs<button class="close" id="cat-close" title="Hide">✕</button></div>
+  <div id="cat-list"><div class="empty">Loading…</div></div>
 </div>
 
 <!-- Framing overlay controls: draws the connected camera's field of view (from
@@ -715,6 +728,166 @@ function toggleTonight() {
   if (open && !_tonightLoaded) loadTonight();   // loadTonight sets _tonightLoaded only on success
 }
 
+// ---- Catalogs panel — daemon catalog overlays (§36) ----------------------
+// Colour-coded circle markers for the daemon's derived catalogs (Messier /
+// Caldwell / NGC / IC) and OpenNGC type filters. Rows come from
+// GET /api/v1/catalogs (empty until openngc-dso is installed); toggling a row
+// fetches GET /api/v1/catalogs/{id} (the daemon applies a brightest-first
+// default cap) and draws ONE MultiPolygon feature of small circles on a shared
+// engine layer. One feature per catalog is deliberate: the engine's per-feature
+// render work is what wedged large mosaics (see mosaicData), so N objects
+// collapse into a single feature; stroke-only (fill-opacity 0) skips the fill
+// tessellation pass entirely.
+var _catLayer = null;   // shared engine layer for every catalog overlay
+var _catObjs = {};      // catalog id -> geojson engine object
+var _catData = {};      // catalog id -> built FeatureCollection (fetch cache)
+var _catOn = {};        // catalog id -> currently drawn
+var _catBusy = {};      // catalog id -> fetch in flight (ignore re-taps)
+var _catList = null;    // [{id, name, group}] from the daemon, null until loaded
+var EMPTY_FC = { type: 'FeatureCollection', features: [] };
+// Fixed per-catalog palette so an overlay's colour is stable across sessions.
+var CAT_COLORS = {
+  'messier': '#ffd54f', 'caldwell': '#ff8a65', 'ngc': '#81c784', 'ic': '#4dd0e1',
+  'galaxies': '#ba68c8', 'open-clusters': '#aed581', 'globular-clusters': '#ffb74d',
+  'planetary-nebulae': '#4fc3f7', 'emission-nebulae': '#e57373',
+  'reflection-nebulae': '#9fa8da', 'nebulae': '#f06292', 'supernova-remnants': '#ff7043',
+};
+function catColor(id) { return CAT_COLORS[id] || '#90caf9'; }
+
+// All object circles of one catalog as ONE MultiPolygon: an octagon of fixed
+// angular radius per object (cheap, and the stroke renderer handles thousands of
+// vertices in a single feature fine). cos(dec) guards the RA stretch near the
+// poles; dec is clamped so a pole object still yields a sane ring.
+function catCircles(objs, color) {
+  var R = 0.18, N = 8, polys = [];
+  for (var i = 0; i < objs.length; i++) {
+    // Guard malformed rows (same precedent as the search-result handler): a
+    // missing/non-finite coordinate would put NaN vertices INSIDE the single
+    // shared MultiPolygon and could break the native parse of the whole
+    // catalog, not just one marker — skip the bad object instead.
+    if (!isFinite(objs[i].ra_deg) || !isFinite(objs[i].dec_deg)) continue;
+    var ra = objs[i].ra_deg, dec = Math.max(-89.5, Math.min(89.5, objs[i].dec_deg));
+    var cosD = Math.max(0.02, Math.cos(dec * D2R));
+    var ring = [];
+    for (var k = 0; k <= N; k++) {
+      var a = (k % N) / N * 2 * Math.PI;
+      ring.push([ra + R * Math.cos(a) / cosD, dec + R * Math.sin(a)]);
+    }
+    polys.push([ring]);
+  }
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: polys },
+    properties: { stroke: color, 'stroke-width': 1.4, 'stroke-opacity': 0.9,
+                  fill: color, 'fill-opacity': 0 },
+  }] };
+}
+
+function catEnsureObj(id) {
+  if (!_catLayer) _catLayer = stel.createLayer({ z: 78, visible: true });
+  if (!_catObjs[id]) {
+    _catObjs[id] = stel.createObj('geojson');
+    _catLayer.add(_catObjs[id]);
+  }
+  return _catObjs[id];
+}
+
+function catToggle(id) {
+  if (!stel || _catBusy[id]) return;
+  if (_catOn[id]) {
+    _catOn[id] = false;
+    catEnsureObj(id).data = EMPTY_FC;
+    renderCatPanel();
+    return;
+  }
+  if (_catData[id]) {          // cached from an earlier toggle
+    _catOn[id] = true;
+    catEnsureObj(id).data = _catData[id];
+    renderCatPanel();
+    return;
+  }
+  _catBusy[id] = true;
+  renderCatPanel();
+  fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id))
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (objs) {
+      _catData[id] = catCircles(objs || [], catColor(id));
+      _catOn[id] = true;
+      catEnsureObj(id).data = _catData[id];
+    })
+    .catch(function () { /* transient daemon error — row simply stays off */ })
+    .then(function () { _catBusy[id] = false; renderCatPanel(); });
+}
+
+function renderCatPanel() {
+  var host = document.getElementById('cat-list');
+  if (!host) return;
+  if (_catList === null) { host.innerHTML = '<div class="empty">Loading…</div>'; return; }
+  if (!_catList.length) {
+    host.innerHTML = '<div class="empty">No catalog data — install the OpenNGC deep-sky package in the Data Manager, then reopen this panel.</div>';
+    return;
+  }
+  host.textContent = '';
+  var lastGroup = null;
+  _catList.forEach(function (c) {
+    if (c.group !== lastGroup) {
+      lastGroup = c.group;
+      var g = document.createElement('div');
+      g.className = 'cat-group'; g.textContent = c.group;
+      host.appendChild(g);
+    }
+    var row = document.createElement('div');
+    row.className = 'cat-row';
+    var label = document.createElement('span');
+    label.textContent = _catBusy[c.id] ? c.name + '…' : c.name;
+    var dot = document.createElement('span');
+    dot.className = 'dot' + (_catOn[c.id] ? ' on' : '');
+    if (_catOn[c.id]) { dot.style.background = catColor(c.id); dot.style.borderColor = catColor(c.id); }
+    row.appendChild(label); row.appendChild(dot);
+    row.onclick = function () { catToggle(c.id); };
+    host.appendChild(row);
+  });
+}
+
+function loadCatList() {
+  fetch(API + '/api/v1/catalogs')
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (list) {
+      // An empty list (openngc-dso not installed) or a failed fetch shows the
+      // actionable hint and keeps _catList null, so the next panel open
+      // re-fetches — the user may have just installed the package.
+      _catList = (list && list.length) ? list : null;
+      if (_catList) renderCatPanel(); else renderCatPanelEmptyHint();
+    })
+    .catch(function () { _catList = null; renderCatPanelEmptyHint(); });
+}
+function renderCatPanelEmptyHint() {
+  var host = document.getElementById('cat-list');
+  if (host) host.innerHTML = '<div class="empty">No catalog data — install the OpenNGC deep-sky package in the Data Manager, then reopen this panel.</div>';
+}
+
+function hideCats() {
+  document.getElementById('catpanel').style.display = 'none';
+  document.getElementById('cat-btn').classList.remove('on');
+}
+
+function toggleCatPanel() {
+  var pnl = document.getElementById('catpanel');
+  var open = pnl.style.display === 'none' || !pnl.style.display;
+  pnl.style.display = open ? 'block' : 'none';
+  document.getElementById('cat-btn').classList.toggle('on', open);
+  if (open) {   // one left drawer at a time
+    toggleFrame(false);
+    hideDisplay();
+    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
+    if (_catList === null) loadCatList(); else renderCatPanel();
+  }
+}
+
+function wireCats() {
+  document.getElementById('cat-btn').onclick = function () { toggleCatPanel(); };
+  document.getElementById('cat-close').onclick = hideCats;
+}
+
 // ---- Display panel — sky-layer toggles ----------------------------------
 // One popout of on/off dots for the engine's layers (deep-sky objects,
 // constellation lines/art, equatorial grid, DSS2 survey, atmosphere, landscape),
@@ -787,6 +960,7 @@ function toggleDisplayPanel() {
   document.getElementById('display-btn').classList.toggle('on', open);
   if (open) {   // one left drawer at a time
     toggleFrame(false);
+    hideCats();
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     renderDisplayPanel();
   }
@@ -1024,8 +1198,9 @@ function toggleFrame(on) {
   if (frameOn) {
     // Only one left drawer at a time; unlock so the sky can be panned to move
     // the frame, and seed the box on the current view centre.
-    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     hideDisplay();
+    hideCats();
+    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     stel.core.lock = null;
     var c = viewCenterRaDec();
     // isFinite (not !isNaN): a not-yet-initialised engine can return Infinity, and
@@ -1244,6 +1419,7 @@ StelWebEngine({
     wireCmds();
     wireFrame();
     wireDisplay();
+    wireCats();
     loadSite();                              // pull the real site from the daemon
     setInterval(loadSite, 2000);             // and keep it in sync with Options (near-instant)
   }
