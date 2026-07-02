@@ -42,12 +42,22 @@ final switchApiProvider = Provider<SwitchClient?>((ref) {
 /// flight. The daemon reports no per-port actuation state, so `SwitchDevice`
 /// can't carry busy; this is the "derive it from an in-flight set-value op"
 /// signal the top-bar chip watches to show amber during actuation. Set by
-/// [SwitchListNotifier._act]'s try/finally, so it always clears when the action
-/// unwinds (including an abandoned call after a server switch — with, at worst,
-/// a brief lag until the force-closed transport call returns).
+/// [SwitchListNotifier._act]'s try/finally.
 class SwitchActingNotifier extends Notifier<bool> {
   @override
-  bool build() => false;
+  bool build() {
+    // Reset on an active-server change (the same value-select [switchApiProvider]
+    // rebuilds on). This is load-bearing, not hygiene: an action abandoned against
+    // the OLD server has its clear deliberately generation-guarded away in _act's
+    // finally (so it can't stomp a newer action's signal) — without this rebuild
+    // the chip would stick amber forever after a mid-action server switch.
+    ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+          data: (list) => list.isEmpty ? null : list.last,
+          orElse: () => null,
+        )));
+    return false;
+  }
+
   void set(bool v) => state = v;
 }
 
