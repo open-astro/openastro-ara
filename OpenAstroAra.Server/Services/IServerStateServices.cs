@@ -74,7 +74,6 @@ public interface IBugReportService {
     Task<(Stream Stream, string FileName)?> OpenDownloadAsync(Guid preparationId, CancellationToken ct);
 }
 
-/// <summary>Data Manager (§36.2).</summary>
 /// <summary>§36 — outcome of a sky-data package delete. Split (not a bool) so callers can tell
 /// "give up, it's gone" (<see cref="NotInstalled"/>) from "retry later, the files are locked or
 /// permission was denied" (<see cref="Blocked"/>) — a locked directory must not be treated as
@@ -85,6 +84,7 @@ public enum PackageDeleteResult {
     Blocked,
 }
 
+/// <summary>Data Manager (§36.2).</summary>
 public interface IDataManagerService {
     Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct);
     Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct);
