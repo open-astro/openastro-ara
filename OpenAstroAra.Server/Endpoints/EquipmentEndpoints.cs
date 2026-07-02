@@ -159,6 +159,27 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         focuser.MapPost("/move", async ([FromBody] FocuserMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
+        // §59 — run one autofocus V-curve sweep with the profile's §37.11 settings, as a
+        // §65.5 background job (a sweep is minutes of focuser moves + probe exposures — far too
+        // long for a request). Returns 202 + the job; poll GET /api/v1/jobs/{id} for state, and
+        // a failed sweep (unusable fit, starless probes, focuser fault) surfaces as a Failed job
+        // with the reason in error_message. One sweep runs at a time (the service serializes;
+        // a queued second job simply waits its turn).
+        focuser.MapPost("/autofocus", (
+                OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
+                IBatchJobService jobs) => {
+            var job = jobs.Enqueue("autofocus", totalSteps: 1, async (tick, ct) => {
+                var ok = await autofocus.RunAutofocusAsync(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), ct);
+                if (!ok) {
+                    throw new InvalidOperationException(
+                        "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
+                }
+                tick(1);
+            });
+            return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
+        })
+            .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
+            .WithName("RunAutofocus");
 
         // ─── FilterWheel ───
         var filterwheel = equipment.MapGroup("/filterwheel");
