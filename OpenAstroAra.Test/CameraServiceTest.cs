@@ -64,6 +64,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void CaptureForAnalysisAsync_rejects_out_of_range_binning() {
+            // An over-short binning would otherwise WRAP in ApplyExposureSettings' narrowing
+            // cast and TrySet would log-and-skip — a silently mis-binned AF probe.
+            using var svc = new CameraService();
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.CaptureForAnalysisAsync(1.0, binning: 0, CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.CaptureForAnalysisAsync(1.0, binning: short.MaxValue + 1, CancellationToken.None));
+        }
+
+        [Test]
         public void CaptureForAnalysisAsync_rejects_nan_and_infinite_exposures() {
             // NaN comparisons are always false, so a bare `<= 0` guard lets NaN through to the
             // device call — and the §59 sweep feeds COMPUTED exposures into this seam.

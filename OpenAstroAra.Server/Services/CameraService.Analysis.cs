@@ -49,18 +49,32 @@ public sealed partial class CameraService : IAnalysisFrameSource {
 
     /// <inheritdoc/>
     public async Task<AnalysisFrame> CaptureForAnalysisAsync(double exposureSec, int binning, CancellationToken ct) {
-        // NaN sails past a bare `<= 0` (NaN comparisons are always false) and +Infinity would
-        // reach the device call before TimeSpan.FromSeconds threw — guard both explicitly, same
-        // as the REST path's exposure validation. The §59 sweep feeds COMPUTED exposure values
-        // through this seam, exactly the kind of caller that can produce NaN from bad math.
-        if (exposureSec <= 0 || double.IsNaN(exposureSec) || double.IsInfinity(exposureSec)) {
-            throw new ArgumentOutOfRangeException(nameof(exposureSec), exposureSec, "analysis exposure must be a positive, finite number of seconds");
-        }
-        var bin = Math.Max(1, binning);
         AlpacaCamera? client;
+        CameraCapabilitiesDto? caps;
         lock (_gate) {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            caps = _capabilities;
         }
+        // Same validation contract as StartExposureAsync (argument range before the connected
+        // check; a zero caps max means the capability read failed and validation defers to the
+        // device). The §59 sweep feeds COMPUTED values through this seam — the caller class most
+        // likely to produce NaN from bad math or an absurd binning from a bug — and both would
+        // otherwise fail SILENTLY: NaN sails past a bare `<= 0` (NaN comparisons are always
+        // false), and an over-short binning wraps in ApplyExposureSettings' narrowing cast where
+        // TrySet logs-and-skips. A silently mis-set probe corrupts the focus curve.
+        if (exposureSec <= 0 || double.IsNaN(exposureSec) || double.IsInfinity(exposureSec)
+            || (caps is not null && caps.MaxExposureSec > 0
+                && (exposureSec < caps.MinExposureSec || exposureSec > caps.MaxExposureSec))) {
+            throw new ArgumentOutOfRangeException(nameof(exposureSec), exposureSec,
+                "analysis exposure must be a positive, finite number of seconds within the camera's supported range");
+        }
+        if (binning < 1 || binning > short.MaxValue
+            || (caps is not null && caps.MaxBinX > 0 && caps.MaxBinY > 0
+                && (binning > caps.MaxBinX || binning > caps.MaxBinY))) {
+            throw new ArgumentOutOfRangeException(nameof(binning), binning,
+                "analysis binning is outside the camera's supported range");
+        }
+        var bin = binning;
         if (client is null) {
             throw new InvalidOperationException("camera is not connected");
         }
