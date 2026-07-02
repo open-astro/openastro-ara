@@ -225,9 +225,15 @@ badly from tonight's reality shifts `m_lim` like it shifts everything else seein
 garbage-in is the profile's problem, stated once in the reason string's assumptions.
 
 **Slice plan:** 1) `m_lim(t)` solver — **SHIPPED (2026-07-02, `StarDetectability`)**, deliberately
-UNWIRED: it is the uncontroversial half needed under any count-model outcome, tested against
-exact physical invariants (SNR-at-m_lim self-consistency, the exact 2.5 mag/decade read-noise
-regime, the asymptotic 1.25 mag/decade sky regime). Slices 2–3 stay post-sign-off:
+UNWIRED. 2) count model — **SHIPPED (2026-07-02, `StarCountModel`) with the VALIDATION GATE
+MEASURED AND PASSING**: pooled HYG densities computed from the sha-pinned canonical snapshot
+(`scripts/fit-star-count-model.py`), per-band log-linear fits on m ∈ [5,8], out-of-sample m = 9
+extrapolation ratios 1.17–1.67 — all inside the factor-2 trigger at every band, and the gate is
+re-derived + re-asserted in CI (`StarCountModelTest`) from the embedded grid so the proof is
+permanent. The shipped predictor anchors at the ACTUAL m = 9 densities and extrapolates with the
+validated slope (documented one-sided optimistic bias beyond m = 9). Also UNWIRED. 3) stays
+post-sign-off — wiring both into the sub-exposure window + Tonight's Sky reasons is the
+user-visible step, and the maintainer may still veto the whole feature by declining it:
 2) the count model + the HYG-validation test (the go/no-go gate for the whole feature);
 3) wire into the §3 window + Tonight's Sky reason tags.
 
