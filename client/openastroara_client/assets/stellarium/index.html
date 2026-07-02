@@ -530,6 +530,7 @@ function wireSelection() {
     syncSelection();
     updateStarScale();
     followFrame();
+    updateCatLabels();
   });
   setInterval(syncSelection, 150);
   updateStarScale();
@@ -741,6 +742,8 @@ function toggleTonight() {
 var _catLayer = null;   // shared engine layer for every catalog overlay
 var _catObjs = {};      // catalog id -> geojson engine object
 var _catData = {};      // catalog id -> built FeatureCollection (fetch cache)
+var _catRows = {};      // catalog id -> fetched rows [{name, ra_deg, dec_deg, magnitude}]
+var _catVecs = {};      // catalog id -> Float64Array unit vectors (3 per row) for the label cone test
 var _catOn = {};        // catalog id -> currently drawn
 var _catBusy = {};      // catalog id -> fetch in flight (ignore re-taps)
 var _catList = null;    // [{id, name, group}] from the daemon, null until loaded
@@ -791,11 +794,139 @@ function catEnsureObj(id) {
   return _catObjs[id];
 }
 
+// ---- Catalog labels — engine-rendered names beside the circle markers ----
+// Labels ride a SECOND geojson object per catalog: `Point` features with a
+// `title` and fill-opacity 0 — a transparent point draws no geometry (the fill
+// pass skips it), but the engine still paints its title, so the text is
+// engine-projected with zero per-frame JS. Titles are per-FEATURE, which is
+// exactly the cost the single-MultiPolygon circles avoid — so unlike the
+// circles the label set must stay SMALL: only the brightest LABEL_CAP objects
+// inside the current view, and only zoomed in to LABEL_MAX_FOV or tighter.
+// Rebuilds are debounced until the view settles (followFrame precedent).
+var _catLabelObjs = {};   // catalog id -> geojson engine object for the labels
+var LABEL_MAX_FOV = 45;   // deg — wider than this the names are pure clutter
+var LABEL_CAP = 60;       // labels on screen across ALL catalogs, brightest-first
+var _lblTimer = null;     // trailing-rebuild debounce
+var _lblLast = { ra: 0, dec: 0, fov: 0, key: '' };  // view state at last rebuild
+
+// Precomputed ICRF unit vectors so the per-rebuild visibility test is one dot
+// product per object. A malformed row keeps its zero vector, which can never
+// pass the cone test — same skip-the-bad-object stance as catCircles.
+function catUnitVectors(objs) {
+  var v = new Float64Array(objs.length * 3);
+  for (var i = 0; i < objs.length; i++) {
+    var ra = objs[i].ra_deg, dec = objs[i].dec_deg;
+    if (!isFinite(ra) || !isFinite(dec)) continue;
+    var cd = Math.cos(dec * D2R);
+    v[i * 3] = cd * Math.cos(ra * D2R);
+    v[i * 3 + 1] = cd * Math.sin(ra * D2R);
+    v[i * 3 + 2] = Math.sin(dec * D2R);
+  }
+  return v;
+}
+
+function catLabelObj(id) {
+  if (!_catLayer) _catLayer = stel.createLayer({ z: 78, visible: true });
+  if (!_catLabelObjs[id]) {
+    _catLabelObjs[id] = stel.createObj('geojson');
+    _catLayer.add(_catLabelObjs[id]);
+  }
+  return _catLabelObjs[id];
+}
+
+function clearCatLabels(id) {
+  if (_catLabelObjs[id]) _catLabelObjs[id].data = EMPTY_FC;
+}
+
+// Rebuild every ON catalog's label set: candidates inside the view cone, sorted
+// brightest-first, deduped by name (an object in two ON catalogs — say M31 in
+// Messier and Galaxies — gets ONE label, from the brighter/first candidate),
+// capped at LABEL_CAP total.
+function rebuildCatLabels(raDeg, decDeg, fovDeg) {
+  var cd = Math.cos(decDeg * D2R);
+  var cx = cd * Math.cos(raDeg * D2R), cy = cd * Math.sin(raDeg * D2R),
+      cz = Math.sin(decDeg * D2R);
+  // A little past the view half-diagonal so markers near the edge keep names.
+  var cosLim = Math.cos(Math.min(fovDeg * 0.75, 80) * D2R);
+  var cand = [];
+  Object.keys(_catOn).forEach(function (id) {
+    if (!_catOn[id] || !_catRows[id]) return;
+    var rows = _catRows[id], vecs = _catVecs[id];
+    for (var i = 0; i < rows.length; i++) {
+      if (vecs[i * 3] * cx + vecs[i * 3 + 1] * cy + vecs[i * 3 + 2] * cz < cosLim) continue;
+      if (!rows[i].name) continue;
+      cand.push({ id: id, row: rows[i] });
+    }
+  });
+  cand.sort(function (a, b) {
+    var ma = a.row.magnitude, mb = b.row.magnitude;
+    return (ma == null ? 99 : ma) - (mb == null ? 99 : mb);
+  });
+  var seen = {}, picked = {}, n = 0;
+  for (var i = 0; i < cand.length && n < LABEL_CAP; i++) {
+    var key = String(cand[i].row.name).toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true; n++;
+    (picked[cand[i].id] = picked[cand[i].id] || []).push(cand[i].row);
+  }
+  Object.keys(_catOn).forEach(function (id) {
+    if (!_catOn[id]) return;              // off catalogs were cleared at toggle
+    var rows = picked[id];
+    if (!rows) { clearCatLabels(id); return; }
+    var color = catColor(id), feats = [];
+    for (var i = 0; i < rows.length; i++) {
+      feats.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [rows[i].ra_deg, rows[i].dec_deg] },
+        properties: { title: String(rows[i].name),
+                      'fill-opacity': 0,             // no visible point — text only
+                      stroke: color, 'stroke-opacity': 0.85,   // title colour
+                      'text-anchor': 'bottom', 'text-size': 11,
+                      'text-offset': [0, -7] },      // float above the octagon ring
+      });
+    }
+    catLabelObj(id).data = { type: 'FeatureCollection', features: feats };
+  });
+}
+
+// Cheap per-frame gate (called from stel.change, i.e. while panning/zooming):
+// rebuild only when the ON-set changed, the centre moved a decent fraction of
+// the fov, or the fov itself changed — and then only after the view settles.
+function updateCatLabels() {
+  if (!stel) return;
+  var key = Object.keys(_catOn).filter(function (id) { return _catOn[id]; }).sort().join(',');
+  var fovDeg = stel.fov / D2R;
+  if (!key || fovDeg > LABEL_MAX_FOV) {
+    if (_lblLast.key) {                  // was labelling — clear once, then idle
+      if (_lblTimer) { clearTimeout(_lblTimer); _lblTimer = null; }
+      Object.keys(_catLabelObjs).forEach(clearCatLabels);
+      _lblLast.key = '';
+    }
+    return;
+  }
+  var c = viewCenterRaDec();
+  if (!isFinite(c[0]) || !isFinite(c[1])) return;   // pole solve wobble — keep old labels
+  // Shortest-angle RA delta (0h/24h wrap), scaled to a great-circle distance.
+  var dRa = Math.abs(((c[0] - _lblLast.ra + 540) % 360) - 180);
+  var moved = key !== _lblLast.key ||
+      Math.max(dRa * Math.cos(c[1] * D2R), Math.abs(c[1] - _lblLast.dec)) > fovDeg * 0.08 ||
+      Math.abs(fovDeg - _lblLast.fov) > fovDeg * 0.08;
+  if (!moved) return;
+  _lblLast = { ra: c[0], dec: c[1], fov: fovDeg, key: key };
+  if (_lblTimer) clearTimeout(_lblTimer);
+  _lblTimer = setTimeout(function () {
+    _lblTimer = null;
+    rebuildCatLabels(_lblLast.ra, _lblLast.dec, _lblLast.fov);
+  }, 200);
+}
+
 function catToggle(id) {
   if (!stel || _catBusy[id]) return;
   if (_catOn[id]) {
     _catOn[id] = false;
     catEnsureObj(id).data = EMPTY_FC;
+    clearCatLabels(id);
+    updateCatLabels();         // ON-set shrank — re-share the label budget
     renderCatPanel();
     postDisplayPrefs();
     return;
@@ -803,6 +934,7 @@ function catToggle(id) {
   if (_catData[id]) {          // cached from an earlier toggle
     _catOn[id] = true;
     catEnsureObj(id).data = _catData[id];
+    updateCatLabels();
     renderCatPanel();
     postDisplayPrefs();
     return;
@@ -812,9 +944,12 @@ function catToggle(id) {
   fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id))
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (objs) {
-      _catData[id] = catCircles(objs || [], catColor(id));
+      _catRows[id] = objs || [];
+      _catVecs[id] = catUnitVectors(_catRows[id]);
+      _catData[id] = catCircles(_catRows[id], catColor(id));
       _catOn[id] = true;
       catEnsureObj(id).data = _catData[id];
+      updateCatLabels();
       postDisplayPrefs();
     })
     .catch(function () { /* transient daemon error — row simply stays off */ })
