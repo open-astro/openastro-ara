@@ -108,7 +108,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             INotificationService? notifications,
             IEquipmentReconnector? reconnector,
             ICameraMediator? cameraMediator,
-            IFocuserMediator? focuserMediator) {
+            IFocuserMediator? focuserMediator,
+            OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor? autofocusExecutor = null) {
         this.profileService = profileService;
         this.telescopeMediator = telescopeMediator;
         this.guiderMediator = guiderMediator;
@@ -120,7 +121,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         this.reconnector = reconnector;
         this.cameraMediator = cameraMediator;
         this.focuserMediator = focuserMediator;
+        this.autofocusExecutor = autofocusExecutor;
     }
+
+    private readonly OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor? autofocusExecutor;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Flip-recovery boundary: any step (mount slew/flip, tracking toggle, plate-solve recenter, guider resume) can throw arbitrary driver/HTTP/IO exceptions. A flip MUST fail safe on ANY of them — restore tracking + resume the guider, then halt the sequence (return false) — never let an escape leave the OTA mid-flip or fault the engine. CA1031's fail-safe boundary applies.")]
@@ -188,11 +192,18 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
             await DoFlip(targetCoordinates, settings.SettleTime, safety, progress, token);
 
-            // §58.4 step 3 — re-focus is conditional. The live AF V-curve sweep is focuser-gated and unbuilt,
-            // so honour the policy by logging the skip rather than aborting (re-focus failures must not abort
-            // the night — §58.7).
+            // §58.4 step 3 — re-focus is conditional, and per §58.7 a re-focus FAILURE must not abort
+            // the night: the flip proceeds (recenter → guiding resume) with the focuser restored to
+            // its pre-sweep position by the sweep's own failure policy, and the skip/failure logged.
             if (settings.AutoFocusAfterFlip) {
-                Logger.Warning("Meridian Flip - AutoFocusAfterFlip is enabled but the live autofocus sweep is not implemented yet; skipping re-focus.");
+                if (autofocusExecutor is null) {
+                    Logger.Warning("Meridian Flip - AutoFocusAfterFlip is enabled but no autofocus executor is wired; skipping re-focus.");
+                } else {
+                    var focused = await autofocusExecutor.RunAutofocusAsync(progress, token);
+                    if (!focused) {
+                        Logger.Warning("Meridian Flip - post-flip autofocus failed; continuing the flip recovery (per §58.7 re-focus failures do not abort the night).");
+                    }
+                }
             }
 
             if (settings.Recenter) {

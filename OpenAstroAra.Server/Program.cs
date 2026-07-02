@@ -403,6 +403,13 @@ public partial class Program {
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
         builder.Services.AddSingleton<IAnalysisFrameSource>(sp => sp.GetRequiredService<CameraService>());
+        // §59 — the live autofocus V-curve sweep (probe → HFR → curve fit → move-to-best).
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>(sp =>
+            new AutofocusSweepService(
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(),
+                sp.GetRequiredService<IAnalysisFrameSource>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AutofocusSweepService>>()));
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder
@@ -586,7 +593,10 @@ public partial class Program {
                 meridianFlipExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>(),
                 // §28/§38 — CenteringService doubles as the sequencer's centering seam, so an
                 // imported CenterAndRotate drives the same solve→sync→re-slew loop as REST/flip.
-                centeringExecutor: (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>()));
+                centeringExecutor: (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>(),
+                // §59 — the live V-curve sweep, so RunAutofocus (and AutofocusAfterExposures)
+                // execute for real instead of failing loudly.
+                autofocusExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
