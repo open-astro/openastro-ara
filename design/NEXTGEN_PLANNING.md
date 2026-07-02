@@ -1,13 +1,19 @@
 # Next-generation planning & exposure intelligence — design backlog
 
-> **Status: IN PROGRESS — the epic was picked up 2026-07-01 (maintainer decision), full scope,
-> in the suggested slice order.** Shipped so far: **slice 1** (the Optimal-Sub calculator —
-> Glover floor + saturation ceiling, `OptimalSubCalculator`, PR #624) and **slice 2** (profile
-> setup: `camera_electronics` + `filter_set` sections + `optics.aperture_mm`, connect-time
-> electronics auto-capture, `GET /api/v1/planning/optimal-sub`, Settings panels + registry —
-> the `feature/exposure-profile-setup` PR). Slices 3 (Tonight's Sky filter advice) and 4
-> (sequence-editor Optimal-Sub advisor) are next. §6 (native sequence model) and
-> adaptive/runtime Glover remain deferred.
+> **Status: SLICES 1–4 SHIPPED (2026-07-01) — the core epic is live.** Picked up 2026-07-01
+> (maintainer decision), full scope, in the suggested slice order, all four merged the same day:
+> **slice 1** — the Optimal-Sub calculator (`OptimalSubCalculator`, Glover floor + saturation
+> ceiling, PR #624); **slice 2** — profile setup (`camera_electronics` + `filter_set` sections,
+> `optics.aperture_mm`, connect-time electronics auto-capture, `GET /api/v1/planning/optimal-sub`,
+> Settings panels + registry, PR #625); **slice 3** — Tonight's Sky filter/emission-aware advice
+> (chip + Why?-breakdown reason + per-approach Optimal-Sub figure, advice-only, PR #626);
+> **slice 4** — the sequence-editor "Optimal Sub" advisor filling the standard `ExposureTime`
+> (NINA-fidelity preserved, PR #627). Dr. Glover is attributed in every user-facing surface per
+> the recorded permission (§2).
+> **Still deferred:** §6 (native sequence model), adaptive/runtime Glover (§5's second fork),
+> the star-detectability + satellite-trail bounds (§3), the ±score-nudge and the wizard
+> electronics/filter capture steps (both recorded in `design/PORT_TODO.md`), and the ~20-row
+> sensor QE library (Tier 1).
 > Originally captured 2026-06-29 and bookmarked behind the v1 cross-platform release; see
 > `design/PORT_DECISIONS.md` (2026-06-29) for that context.
 
