@@ -666,6 +666,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Cap a hung analyze/test run well below the 6h Actions default; the
+    # slowest leg (Windows) completes in well under 15 minutes.
+    timeout-minutes: 30
     defaults:
       run:
         # Use bash on all three platforms so the version-reading + cd
@@ -730,6 +733,9 @@ jobs:
           - os: windows-latest
             target: windows
     runs-on: ${{ matrix.os }}
+    # Cap a hung native build well below the 6h Actions default (a healthy
+    # release build finishes in single-digit minutes on every OS).
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
