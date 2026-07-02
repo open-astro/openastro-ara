@@ -96,12 +96,17 @@ class OptimalSubApi {
   /// daemon's message on a 400 (e.g. optics not yet configured); rethrows
   /// transport errors.
   Future<OptimalSubResult?> get({String? filter, double? bandwidthNm}) async {
+    // Blank-or-null filter → omit the parameter (the daemon's broadband default).
+    final trimmedFilter = switch (filter?.trim()) {
+      final f? when f.isNotEmpty => f,
+      _ => null,
+    };
     try {
       final res = await _dio.get<Map<String, dynamic>>(
         '/api/v1/planning/optimal-sub',
         queryParameters: {
-          if (filter != null && filter.trim().isNotEmpty) 'filter': filter.trim(),
-          if (bandwidthNm != null) 'bandwidthNm': bandwidthNm,
+          'filter': ?trimmedFilter,
+          'bandwidthNm': ?bandwidthNm,
         },
       );
       return OptimalSubResult.fromJson(res.data ?? const {});
