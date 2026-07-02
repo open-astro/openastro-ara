@@ -144,7 +144,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IWeatherDataMediator? weatherDataMediator = null,
             IProfileService? profileService = null,
             IImagingMediator? imagingMediator = null,
-            IMeridianFlipExecutor? meridianFlipExecutor = null) {
+            IMeridianFlipExecutor? meridianFlipExecutor = null,
+            ICenteringExecutor? centeringExecutor = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -261,7 +262,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // AF / §28 centering services is a run-engine follow-up (their Execute fails loudly
                 // for now rather than silently skipping focus/centering).
                 new RunAutofocus(),
-                new CenterAndRotate(),
+                new CenterAndRotate(centeringExecutor, rotatorMediator),
                 // §38k-22 — Connect dir. All take the full 11 device mediators;
                 // Connect*/SwitchProfile also take IProfileService (profile-first),
                 // Disconnect* do not (camera-first). The Disconnect* classes were

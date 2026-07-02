@@ -580,7 +580,10 @@ public partial class Program {
                 weatherDataMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator>(),
                 profileService: sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
                 imagingMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>(),
-                meridianFlipExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>()));
+                meridianFlipExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>(),
+                // §28/§38 — CenteringService doubles as the sequencer's centering seam, so an
+                // imported CenterAndRotate drives the same solve→sync→re-slew loop as REST/flip.
+                centeringExecutor: (OpenAstroAra.Server.Services.CenteringService)sp.GetRequiredService<OpenAstroAra.Server.Services.ICenteringService>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();

@@ -15,6 +15,8 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.ComponentModel.Composition;
 using System.Threading;
@@ -28,9 +30,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
     ///
     /// Ported as a first-class type so NINA exports round-trip (Coordinates / PositionAngle /
     /// Inherited survive import) instead of degrading to an <see cref="UnknownSequenceItem"/>.
-    /// Execution is not yet wired into the sequencer run-engine (the §28 CenteringService is
-    /// server-side and not exposed to the sequencer); running this step fails loudly rather than
-    /// silently skipping the centre/rotate.
+    ///
+    /// EXECUTION: the centre half runs for real through <see cref="ICenteringExecutor"/> (the §28
+    /// capture → plate-solve → sync → re-slew loop). The ROTATE half is not wired yet: with a
+    /// rotator connected this step still fails loudly rather than silently skipping the rotation
+    /// (a mis-rotated field ruins framing); with no rotator — the common case, and the only case
+    /// NINA itself rotates in — the position angle is preserved in the plan but deliberately not
+    /// applied, matching NINA's no-rotator behaviour. Rotation fidelity is tracked in PORT_TODO
+    /// alongside the framing position-angle item.
     /// </summary>
     [ExportMetadata("Name", "Lbl_SequenceItem_Platesolving_CenterAndRotate_Name")]
     [ExportMetadata("Description", "Lbl_SequenceItem_Platesolving_CenterAndRotate_Description")]
@@ -41,9 +48,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
     public class CenterAndRotate : SequenceItem {
 
         [ImportingConstructor]
-        public CenterAndRotate() {
+        public CenterAndRotate(ICenteringExecutor? centeringExecutor = null, IRotatorMediator? rotatorMediator = null) {
+            this.centeringExecutor = centeringExecutor;
+            this.rotatorMediator = rotatorMediator;
             Coordinates = new InputCoordinates();
         }
+
+        private readonly ICenteringExecutor? centeringExecutor;
+        private readonly IRotatorMediator? rotatorMediator;
 
         private bool inherited;
 
@@ -78,11 +90,33 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
             }
         }
 
-        public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) =>
-            throw new SequenceEntityFailedException("Center-and-rotate is not yet wired for sequence execution.");
+        public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            if (centeringExecutor is null) {
+                // Prototype-only construction (no executor wired into the run engine) —
+                // fail loudly rather than silently skipping the centre.
+                throw new SequenceEntityFailedException("Center-and-rotate is not wired for sequence execution on this daemon.");
+            }
+            var target = Coordinates?.Coordinates
+                ?? throw new SequenceEntityFailedException("Center-and-rotate has no target coordinates.");
+            // Rotation is not wired yet. With a rotator CONNECTED the user expects the
+            // rotate half to happen — fail loudly instead of quietly mis-framing. With no
+            // rotator, NINA itself never rotates, so centring alone is faithful; keep the
+            // position angle in the plan and note the skip.
+            if (rotatorMediator?.GetInfo()?.Connected == true) {
+                throw new SequenceEntityFailedException(
+                    "Center-and-rotate: rotator rotation is not wired for sequence execution yet — " +
+                    "use Center (or disconnect the rotator) until rotation lands.");
+            }
+            Logger.Info($"Center-and-rotate: centering on {target} (position angle {PositionAngle}° preserved; no rotator connected, rotation skipped — matches NINA without a rotator)");
+            var converged = await centeringExecutor.CenterAsync(target, progress, token);
+            if (!converged) {
+                // An un-centred target would quietly ruin every subsequent frame.
+                throw new SequenceEntityFailedException("Centering did not converge within the profile's threshold/attempts.");
+            }
+        }
 
         public override object Clone() {
-            return new CenterAndRotate {
+            return new CenterAndRotate(centeringExecutor, rotatorMediator) {
                 Icon = Icon,
                 Name = Name,
                 Category = Category,
