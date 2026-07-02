@@ -529,8 +529,10 @@ function wireSelection() {
   stel.change(function () {
     syncSelection();
     updateStarScale();
-    followFrame();
-    updateCatLabels();
+    // followFrame returns the view centre when it solved one this tick; hand it
+    // to the label updater so framing + labels don't each run the same
+    // observer-frame conversion per frame.
+    updateCatLabels(followFrame());
   });
   setInterval(syncSelection, 150);
   updateStarScale();
@@ -892,7 +894,9 @@ function rebuildCatLabels(raDeg, decDeg, fovDeg) {
 // Cheap per-frame gate (called from stel.change, i.e. while panning/zooming):
 // rebuild only when the ON-set changed, the centre moved a decent fraction of
 // the fov, or the fov itself changed — and then only after the view settles.
-function updateCatLabels() {
+// `preCentre` is the finite [raDeg, decDeg] followFrame already solved this
+// tick (when framing is active) so the two features share one conversion.
+function updateCatLabels(preCentre) {
   if (!stel) return;
   var key = Object.keys(_catOn).filter(function (id) { return _catOn[id]; }).sort().join(',');
   var fovDeg = stel.fov / D2R;
@@ -904,7 +908,7 @@ function updateCatLabels() {
     }
     return;
   }
-  var c = viewCenterRaDec();
+  var c = preCentre || viewCenterRaDec();
   if (!isFinite(c[0]) || !isFinite(c[1])) return;   // pole solve wobble — keep old labels
   // Shortest-angle RA delta (0h/24h wrap), scaled to a great-circle distance.
   var dRa = Math.abs(((c[0] - _lblLast.ra + 540) % 360) - 180);
@@ -1184,15 +1188,19 @@ var _frameBuildTimer = null;
 function rebuildFrameGeo() {
   if (_frameGeo && frameOn) _frameGeo.data = mosaicData();
 }
+// Returns the view centre it solved (finite [raDeg, decDeg]) so the caller can
+// share it with updateCatLabels instead of re-running the frame conversion —
+// per-tick, both features want the same centre.
 function followFrame() {
   if (!frameOn || !optics || !optics.ok) return;
   var c = viewCenterRaDec();
-  if (!isFinite(c[0]) || !isFinite(c[1]) || Math.abs(c[1]) > 87) return;
+  if (!isFinite(c[0]) || !isFinite(c[1])) return;
+  if (Math.abs(c[1]) > 87) return c;   // pole guard: frame stays put, centre still valid
   // Shortest-angle RA delta so the 0h/24h wrap doesn't read as a huge jump.
   var moved = frameRaDeg == null ||
       Math.abs(((c[0] - frameRaDeg + 540) % 360) - 180) > 0.003 ||
       Math.abs(c[1] - frameDecDeg) > 0.003;
-  if (!moved) return;
+  if (!moved) return c;
   frameRaDeg = c[0]; frameDecDeg = c[1];
   setFrameCoordText();   // cheap text update — keep the RA/Dec readout live while panning
   // Debounce the rebuild: only redraw once the view has SETTLED (~180 ms idle),
@@ -1206,6 +1214,7 @@ function followFrame() {
     _frameBuildTimer = null;
     rebuildFrameGeo();
   }, 180);
+  return c;
 }
 
 // Deproject a tangent-plane offset (xi = east/RA+, eta = north/Dec+, in DEGREES)
