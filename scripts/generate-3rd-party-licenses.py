@@ -144,6 +144,11 @@ https://licenses.nuget.org/MIT) and https://spdx.org/licenses/. Where a
 package predates SPDX metadata, the "License source" line records where its
 terms were verified.
 
+The list is the full RESOLVED graph, which deliberately over-discloses:
+RID-specific native packages for other platforms (e.g. the runtime.win-*
+SqlClient shims) appear here even though the linux-arm64 self-contained
+publish does not ship their binaries.
+
 Engines and companions installed as SEPARATE packages (openastro-guider,
 alpacabridge, ASTAP) carry their own licenses and are not part of this
 daemon's distribution; the WILMA desktop client's third-party notices are
@@ -230,6 +235,12 @@ def read_nuspec(pkg_id: str, version: str) -> dict[str, str | None]:
 
 
 def build_document(pkgs: dict[str, str]) -> str:
+    unused = sorted(set(OVERRIDES) - set(pkgs))
+    if unused:
+        sys.exit(
+            "error: dead OVERRIDES entries for packages no longer in the graph — "
+            f"remove them: {', '.join(unused)}"
+        )
     entries: list[str] = []
     counts: dict[str, int] = {}
     for pkg_id in sorted(pkgs, key=str.lower):
