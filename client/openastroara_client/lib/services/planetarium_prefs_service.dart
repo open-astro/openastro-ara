@@ -16,10 +16,18 @@ import 'package:path_provider/path_provider.dart';
 /// the loopback event channel and reads the saved state from its load URL. Absent
 /// keys fall back to the planetarium's first-run defaults.
 class PlanetariumPrefsService {
+  /// [supportDir] overrides the app-support directory lookup (tests use a temp
+  /// dir; production uses path_provider).
+  PlanetariumPrefsService({Future<Directory> Function()? supportDir})
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
+
+  final Future<Directory> Function() _supportDir;
   static const _fileName = 'planetarium_display.json';
+  // Serializes save() calls — see save().
+  Future<void> _chain = Future<void>.value();
 
   Future<File> _file() async {
-    final dir = await getApplicationSupportDirectory();
+    final dir = await _supportDir();
     return File('${dir.path}/$_fileName');
   }
 
@@ -41,10 +49,27 @@ class PlanetariumPrefsService {
     }
   }
 
-  Future<void> save(Map<String, bool> prefs) async {
-    try {
-      final f = await _file();
-      await f.writeAsString(jsonEncode(prefs), flush: true);
-    } catch (_) {/* best effort — non-critical UI prefs */}
+  /// MERGE-on-save: [prefs] is laid over the stored map, so a key the page
+  /// didn't repeat this time keeps its saved value instead of being dropped.
+  /// That closes a real loss path: the page can only report toggles it knows
+  /// about *this session* (e.g. a saved-on catalog whose boot-time re-fetch
+  /// failed never lands in its state map), and a full-overwrite save would
+  /// silently erase such keys the moment any unrelated toggle posted.
+  /// Explicit "off" still persists — the page posts `false` values, it just
+  /// can't be relied on to re-post every historical key.
+  ///
+  /// Saves are chained so two rapid posts can't interleave their
+  /// load-merge-write cycles and drop each other's delta; the inner catch
+  /// keeps the chain alive after a failed write (best effort — UI prefs).
+  Future<void> save(Map<String, bool> prefs) {
+    final task = _chain.then((_) async {
+      try {
+        final merged = await load()..addAll(prefs);
+        final f = await _file();
+        await f.writeAsString(jsonEncode(merged), flush: true);
+      } catch (_) {/* best effort — non-critical UI prefs */}
+    });
+    _chain = task;
+    return task;
   }
 }
