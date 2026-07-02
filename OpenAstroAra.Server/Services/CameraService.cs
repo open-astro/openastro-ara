@@ -828,6 +828,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { canAbort = c.CanAbortExposure; } catch (Exception) { }
         bool canCoolerPower = false;
         try { _ = c.CoolerPower; canCoolerPower = true; } catch (Exception) { }
+        // §25.5.5 dumb-cooler probe: ASCOM's contract is that CoolerOn throws
+        // PropertyNotImplementedException on a camera with no cooler, so a successful read —
+        // regardless of the value — means a cooler exists even when there's no TEC set-point
+        // (CanSetCCDTemperature=false).
+        bool hasCooler = false;
+        try { _ = c.CoolerOn; hasCooler = true; } catch (Exception) { }
         int minGain = 0, maxGain = 0;
         try { minGain = c.GainMin; maxGain = c.GainMax; } catch (Exception) { }
         int minOffset = 0, maxOffset = 0;
@@ -870,7 +876,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             FullWellCapacityE: fullWell,
             ElectronsPerAdu: ePerAdu,
             SensorName: sensorName,
-            CurrentGain: currentGain);
+            CurrentGain: currentGain,
+            HasCooler: hasCooler);
     }
 
     // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,

@@ -35,6 +35,8 @@ void main() {
     });
     expect(c.connectionState, EquipmentConnectionState.connected);
     expect(c.capabilities!.canSetTemperature, isTrue);
+    // has_cooler absent (pre-§25.5.5 daemon) → falls back to canSetTemperature.
+    expect(c.capabilities!.hasCooler, isTrue);
     expect(c.capabilities!.isColor, isTrue);
     expect(c.capabilities!.maxGain, 500);
     expect(c.ccdTemperature, -9.8);
@@ -55,5 +57,47 @@ void main() {
 
     final preConnect = CameraStatus.fromJson(const {'state': 'connecting'});
     expect(preConnect.capabilities, isNull);
+  });
+
+  test('§25.5.5 has_cooler parses independently of can_set_temperature', () {
+    // The dumb-cooler shape: on/off cooler, no TEC regulation.
+    final dumb = CameraStatus.fromJson(const {
+      'state': 'connected',
+      'capabilities': {
+        'sensor_width': 100,
+        'sensor_height': 100,
+        'can_set_temperature': false,
+        'has_cooler': true,
+      },
+      'runtime': {'state': 'idle'},
+    });
+    expect(dumb.capabilities!.hasCooler, isTrue);
+    expect(dumb.capabilities!.canSetTemperature, isFalse);
+
+    // Explicit false wins over the fallback even when the TEC flag is true
+    // (a daemon that reports both is trusted verbatim).
+    final explicit = CameraStatus.fromJson(const {
+      'state': 'connected',
+      'capabilities': {
+        'sensor_width': 100,
+        'sensor_height': 100,
+        'can_set_temperature': true,
+        'has_cooler': false,
+      },
+      'runtime': {'state': 'idle'},
+    });
+    expect(explicit.capabilities!.hasCooler, isFalse);
+
+    // Absent (pre-§25.5.5 daemon) → falls back to canSetTemperature=false too.
+    final absent = CameraStatus.fromJson(const {
+      'state': 'connected',
+      'capabilities': {
+        'sensor_width': 100,
+        'sensor_height': 100,
+        'can_set_temperature': false,
+      },
+      'runtime': {'state': 'idle'},
+    });
+    expect(absent.capabilities!.hasCooler, isFalse);
   });
 }

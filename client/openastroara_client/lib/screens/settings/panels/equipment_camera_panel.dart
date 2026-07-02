@@ -100,7 +100,11 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               style: const TextStyle(color: AraColors.accentBusy),
             ),
           ),
-        if (caps?.canSetTemperature ?? false) ...[
+        // §25.5.5 — the on/off Switch needs only a cooler (has_cooler); the TEC
+        // set-point additionally needs temperature regulation. A "dumb" on/off
+        // cooler (CoolerOn implemented, CanSetCCDTemperature=false) gets the
+        // Switch alone instead of no cooler UI at all.
+        if (caps?.hasCooler ?? false) ...[
           Row(children: [
             const Expanded(child: Text('Cooler')),
             Switch(
@@ -108,26 +112,27 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
               onChanged: (v) => _setCooler(v),
             ),
           ]),
-          Row(children: [
-            SizedBox(
-              width: 130,
-              child: TextField(
-                controller: _target,
-                keyboardType:
-                    const TextInputType.numberWithOptions(signed: true, decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^-?[0-9]*\.?[0-9]*$')),
-                ],
-                decoration: const InputDecoration(
-                    isDense: true, labelText: 'Target (°C)'),
+          if (caps?.canSetTemperature ?? false)
+            Row(children: [
+              SizedBox(
+                width: 130,
+                child: TextField(
+                  controller: _target,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(signed: true, decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^-?[0-9]*\.?[0-9]*$')),
+                  ],
+                  decoration: const InputDecoration(
+                      isDense: true, labelText: 'Target (°C)'),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            OutlinedButton(
-              onPressed: () => _setTarget(),
-              child: const Text('Set target'),
-            ),
-          ]),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                onPressed: () => _setTarget(),
+                child: const Text('Set target'),
+              ),
+            ]),
         ],
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
