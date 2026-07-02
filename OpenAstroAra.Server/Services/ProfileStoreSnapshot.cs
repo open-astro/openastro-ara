@@ -39,7 +39,8 @@ public static class ProfileStoreSnapshot {
         StretchDefaults: s.GetStretchDefaults(),
         Optics: s.GetOpticsSettings(),
         CameraElectronics: s.GetCameraElectronics(),
-        FilterSet: s.GetFilterSet());
+        FilterSet: s.GetFilterSet(),
+        FilterWheelLabels: s.GetFilterWheelLabels());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -61,5 +62,6 @@ public static class ProfileStoreSnapshot {
         s.PutOpticsSettings(snap.Optics);
         s.PutCameraElectronics(snap.CameraElectronics);
         s.PutFilterSet(snap.FilterSet);
+        s.PutFilterWheelLabels(snap.FilterWheelLabels);
     }
 }

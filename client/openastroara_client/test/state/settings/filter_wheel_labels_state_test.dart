@@ -1,6 +1,40 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
+
+/// Overrides only the labels round-trip; every other ProfileApi member keeps
+/// its real (never-called-here) implementation.
+class _FakeApi extends ProfileApi {
+  _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
+
+  List<String>? served; // null → the GET throws (daemon unreachable)
+  List<String>? putReceived;
+  List<String>? putEcho; // defaults to the received input when null
+
+  @override
+  Future<FilterWheelLabels> getFilterWheelLabels() async {
+    final s = served;
+    if (s == null) throw StateError('unreachable');
+    return FilterWheelLabels(labels: s);
+  }
+
+  @override
+  Future<FilterWheelLabels> putFilterWheelLabels(FilterWheelLabels value) async {
+    putReceived = [for (var i = 1; i <= value.slotCount; i++) value.labelAt(i)];
+    return FilterWheelLabels(labels: putEcho ?? putReceived!);
+  }
+}
+
+ProviderContainer _apiContainer(ProfileApi? api) {
+  final c = ProviderContainer(overrides: [
+    profileApiProvider.overrideWithValue(api),
+  ]);
+  addTearDown(c.dispose);
+  return c;
+}
 
 void main() {
   group('FilterWheelLabelsNotifier', () {
@@ -96,6 +130,65 @@ void main() {
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
       expect(a, isNot(equals(c)));
+    });
+  });
+
+  group('daemon round-trip (12h.2b)', () {
+    test('self-hydrates from the daemon when a server is active', () async {
+      final api = _FakeApi()..served = ['Ha', 'OIII', 'SII', ''];
+      final c = _apiContainer(api);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      // The reference defaults render immediately…
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'L');
+      // …and the daemon's labels land once the microtask hydration settles.
+      await Future<void>.delayed(Duration.zero);
+      final labels = c.read(filterWheelLabelsProvider);
+      expect(labels.slotCount, 4);
+      expect(labels.labelAt(1), 'Ha');
+    });
+
+    test('a failed hydration keeps the reference defaults (offline authoring)',
+        () async {
+      final api = _FakeApi(); // served == null → GET throws
+      final c = _apiContainer(api);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'L',
+          reason: 'daemon unreachable → the in-memory defaults stand');
+    });
+
+    test('no active server → defaults, no network attempt', () async {
+      final c = _apiContainer(null);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(filterWheelLabelsProvider).labelAt(6), 'OIII');
+    });
+
+    test('persistToServer sends the current labels and adopts the echo',
+        () async {
+      final api = _FakeApi()
+        ..served = ['L', 'R']
+        ..putEcho = ['L trimmed', 'R'];
+      final c = _apiContainer(api);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+
+      c.read(filterWheelLabelsProvider.notifier).setLabel(2, 'R2');
+      await c.read(filterWheelLabelsProvider.notifier).persistToServer();
+
+      expect(api.putReceived, ['L', 'R2'],
+          reason: 'the edited state is what goes up');
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'L trimmed',
+          reason: 'the daemon echo (server-side trimming) is adopted');
+    });
+
+    test('persistToServer without a server throws for the panel to surface', () {
+      final c = _apiContainer(null);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      expect(
+        () => c.read(filterWheelLabelsProvider.notifier).persistToServer(),
+        throwsStateError,
+      );
     });
   });
 }

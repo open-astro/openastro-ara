@@ -307,6 +307,46 @@ public static class ProfileEndpoints {
             .WithName("PutFilterSet")
             .WithSummary("Replace the active profile's planning filter set.");
 
+        // §37.4/§46.2 filter-wheel slot labels — the offline-authoring names the §38
+        // editor's filter picker sources (12h.2b round-trip). Distinct from the
+        // connected wheel's driver names AND the planning filter set above.
+        profile.MapGet("/filter-wheel/labels", (IProfileStore store) =>
+                Results.Ok(store.GetFilterWheelLabels()))
+            .Produces<FilterWheelLabelsDto>(StatusCodes.Status200OK)
+            .WithName("GetFilterWheelLabels")
+            .WithSummary("Get the active profile's filter-wheel slot labels.");
+
+        profile.MapPut("/filter-wheel/labels", (FilterWheelLabelsDto body, IProfileStore store) => {
+            if ((System.Collections.Generic.IReadOnlyList<string>?)body.Labels is null) {
+                return Results.Problem(
+                    detail: "labels must be a list of slot names (empty string = unused slot).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            if (body.Labels.Count is < 1 or > 32) {
+                return Results.Problem(
+                    detail: "labels must carry between 1 and 32 slots.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            var trimmed = new List<string>(body.Labels.Count);
+            foreach (var label in body.Labels) {
+                var t = (label ?? string.Empty).Trim();
+                if (t.Length > 64) {
+                    return Results.Problem(
+                        detail: "a slot label can be at most 64 characters.",
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+                trimmed.Add(t);
+            }
+            var normalized = new FilterWheelLabelsDto(trimmed);
+            store.PutFilterWheelLabels(normalized);
+            return Results.Ok(normalized);
+        })
+            .Accepts<FilterWheelLabelsDto>("application/json")
+            .Produces<FilterWheelLabelsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutFilterWheelLabels")
+            .WithSummary("Replace the active profile's filter-wheel slot labels.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)

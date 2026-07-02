@@ -148,6 +148,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     public FilterSetDto GetFilterSet() { lock (_lock) { return _snapshot.FilterSet; } }
     public void PutFilterSet(FilterSetDto value) => UpdateAndPersist(s => s with { FilterSet = value });
 
+    public FilterWheelLabelsDto GetFilterWheelLabels() { lock (_lock) { return _snapshot.FilterWheelLabels; } }
+    public void PutFilterWheelLabels(FilterWheelLabelsDto value) => UpdateAndPersist(s => s with { FilterWheelLabels = value });
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
@@ -207,7 +210,15 @@ public sealed partial class FileProfileStore : IProfileStore {
             if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
                 filterSet = defaults.FilterSet;
             }
-            return loaded with { Optics = optics, CameraElectronics = electronics, FilterSet = filterSet };
+            // §37.4 slot labels — same back-fill + inner-list normalization.
+            var wheelLabels = (FilterWheelLabelsDto?)loaded.FilterWheelLabels ?? defaults.FilterWheelLabels;
+            if ((IReadOnlyList<string>?)wheelLabels.Labels is null) {
+                wheelLabels = defaults.FilterWheelLabels;
+            }
+            return loaded with {
+                Optics = optics, CameraElectronics = electronics, FilterSet = filterSet,
+                FilterWheelLabels = wheelLabels,
+            };
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             LogParseFailed(ex, _profilePath);
             return defaults;
@@ -286,7 +297,8 @@ public sealed partial class FileProfileStore : IProfileStore {
         // NEXTGEN §4 — unset until the user enters values / a camera connect
         // auto-captures; planning falls back to Tier-0 defaults and says so.
         CameraElectronics: new(),
-        FilterSet: new(Filters: []));
+        FilterSet: new(Filters: []),
+        FilterWheelLabels: FilterWheelLabelsDto.Default);
 
     #region LoggerMessage delegates (CA1848)
 
