@@ -57,6 +57,15 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     /// hot-pixel-only detections) and fails the sweep rather than feeding a junk HFR to the fit.</summary>
     internal const int MinStarsPerProbe = 3;
 
+    /// <summary>
+    /// The sweep's probe count for a given configuration — the ONE place the
+    /// `2·Steps+1` scheme lives, shared with the autofocus job endpoint so the
+    /// job's progress denominator can never silently drift from the sweep's
+    /// real step count.
+    /// </summary>
+    public static int ProbeCount(AutofocusSettingsDto settings) =>
+        settings.Steps >= 1 ? settings.Steps * 2 + 1 : 1;
+
     private readonly IProfileStore _profiles;
     private readonly IFocuserMediator _focuser;
     private readonly IAnalysisFrameSource _frames;
@@ -117,11 +126,11 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         var restoreOnFailure = settings.RestorePositionOnFailure;
 
         try {
-            var points = new List<FocusPoint>(settings.Steps * 2 + 1);
+            var points = new List<FocusPoint>(ProbeCount(settings));
             // Outermost-first, stepping DOWN through every position: one approach direction means
             // backlash biases every sample identically instead of splitting the curve in two.
             var top = startPosition + settings.Steps * settings.StepSize;
-            var totalProbes = settings.Steps * 2 + 1;
+            var totalProbes = ProbeCount(settings);
             // The FIRST probe needs the same treatment: `top` is reached by an UPWARD move from
             // the start position, so without this overshoot its sample would carry up-approach
             // backlash while every other sample is approached downward — and the topmost point is

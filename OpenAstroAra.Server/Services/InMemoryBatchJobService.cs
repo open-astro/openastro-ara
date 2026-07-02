@@ -65,7 +65,19 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
         _ = Task.Run(async () => {
             try {
                 state.State = "running";
-                await work(done => state.Done = done, cts.Token);
+                // Tick invariant for EVERY job: done is monotone (a delayed
+                // Progress<T> callback queued to the pool can land after a later
+                // tick — it must never regress the count) and clamped to Total
+                // (a worker whose own step count drifted from the enqueue-time
+                // total must never leave a terminal job showing done > total).
+                await work(done => {
+                    lock (state) {
+                        var clamped = state.Total > 0 ? Math.Min(done, state.Total) : done;
+                        if (clamped > state.Done) {
+                            state.Done = clamped;
+                        }
+                    }
+                }, cts.Token);
                 if (cts.Token.IsCancellationRequested) {
                     state.State = "cancelled";
                 } else {

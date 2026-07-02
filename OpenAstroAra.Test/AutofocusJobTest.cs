@@ -36,20 +36,9 @@ namespace OpenAstroAra.Test {
         // itself is a thin Results.Accepted wrapper smoke-tested by CI's runtime job).
         private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus, int totalProbes = 1) =>
             async (tick, ct) => {
-                // Monotonic guard mirrors the endpoint: a Progress<T> report queued to
-                // the pool can land after the settle tick and must never regress done.
-                var doneLock = new object();
-                var maxDone = 0;
-                void TickMonotonic(int v) {
-                    lock (doneLock) {
-                        if (v <= maxDone) return;
-                        maxDone = v;
-                        tick(v);
-                    }
-                }
                 var progress = new Progress<ApplicationStatus>(s => {
                     if (s.MaxProgress > 0 && s.Progress > 0) {
-                        TickMonotonic((int)s.Progress);
+                        tick((int)s.Progress);
                     }
                 });
                 var ok = await autofocus.RunAutofocusAsync(progress, ct);
@@ -57,7 +46,7 @@ namespace OpenAstroAra.Test {
                     throw new InvalidOperationException(
                         "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
                 }
-                TickMonotonic(totalProbes);
+                tick(totalProbes); // the job service's tick guard (monotone + clamped) makes this final
             };
 
         private static Mock<IAutofocusExecutor> Executor(bool result, TimeSpan? delay = null) {
@@ -122,6 +111,24 @@ namespace OpenAstroAra.Test {
             var final = await WaitForTerminalAsync(jobs, job.JobId);
             Assert.That(final.State, Is.EqualTo("failed"));
             Assert.That(final.ErrorMessage, Does.Contain("Autofocus sweep failed"));
+        }
+
+        [Test]
+        public async Task Tick_guard_never_regresses_or_exceeds_total() {
+            // The service-level invariant that closes both review races: a delayed
+            // report (smaller value after the settle) is ignored, and a sweep whose
+            // live probe count outgrew the enqueue-time total clamps at total —
+            // done can never end up > total on a terminal job.
+            var jobs = new InMemoryBatchJobService(null);
+            var job = jobs.Enqueue("autofocus", 9, async (tick, ct) => {
+                tick(21);  // live sweep grew (Steps changed while queued) → clamps to 9
+                tick(3);   // delayed straggler → ignored (monotone)
+                await Task.CompletedTask;
+            });
+            var final = await WaitForTerminalAsync(jobs, job.JobId);
+            Assert.That(final.State, Is.EqualTo("complete"));
+            Assert.That(final.Total, Is.EqualTo(9));
+            Assert.That(final.Done, Is.EqualTo(9));
         }
 
         [Test]

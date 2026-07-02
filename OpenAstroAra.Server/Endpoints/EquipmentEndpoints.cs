@@ -172,31 +172,17 @@ public static class EquipmentEndpoints {
             // Real progress: the job's total is the sweep's probe count (from the
             // profile's §37.11 settings), and the sweep reports structured
             // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
-            // Read once at enqueue time. The sweep re-reads the profile when the job
-            // body actually RUNS, so a settings change in that narrow window can make
-            // this total disagree with the sweep's real probe count — accepted: done
-            // may briefly overshoot and the bar resyncs at the final settle tick;
-            // threading one settings read through the executor seam isn't worth it
-            // for a cosmetic progress denominator.
-            var af = profiles.GetAutofocusSettings();
-            var totalProbes = af.Steps >= 1 ? af.Steps * 2 + 1 : 1;
+            // Read once at enqueue time via the sweep's OWN probe-count helper, so
+            // the job's denominator and the sweep's stepping scheme can't drift
+            // apart. If Steps changes while this job waits its turn, the tick
+            // invariant in InMemoryBatchJobService (monotone + clamped to Total)
+            // keeps done sane either way: a bigger live sweep clamps at this
+            // total, a smaller one settles to it below.
+            var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
             var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
-                // Monotonic tick guard: Progress<T> without a SynchronizationContext
-                // queues each Report to the thread pool, so a DELAYED probe report can
-                // land after the completion settle below — an absolute tick would then
-                // regress a finished job's done and freeze it under total forever.
-                var doneLock = new object();
-                var maxDone = 0;
-                void TickMonotonic(int v) {
-                    lock (doneLock) {
-                        if (v <= maxDone) return;
-                        maxDone = v;
-                        tick(v);
-                    }
-                }
                 var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
                     if (s.MaxProgress > 0 && s.Progress > 0) {
-                        TickMonotonic((int)s.Progress);
+                        tick((int)s.Progress);
                     }
                 });
                 var ok = await autofocus.RunAutofocusAsync(progress, ct);
@@ -204,7 +190,7 @@ public static class EquipmentEndpoints {
                     throw new InvalidOperationException(
                         "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
                 }
-                TickMonotonic(totalProbes); // settle at total; stragglers are now ≤ and ignored
+                tick(totalProbes); // settle at total; the service's tick guard makes this final
             });
             return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
         })
