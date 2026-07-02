@@ -363,7 +363,7 @@ public partial class Program {
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetRequiredService<ISkyCatalogService>()));
 
-        // §36 Planning horizon — projects the site's local horizon onto the equatorial sky for the Aladin overlay.
+        // §36 Planning horizon — projects the site's local horizon onto the equatorial sky for a client overlay.
         builder.Services.AddSingleton<IHorizonService>(sp =>
             new HorizonService(sp.GetRequiredService<IProfileStore>()));
 

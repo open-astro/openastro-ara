@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// PORT_DECISIONS §36/§25.5):
 ///   - the framing parameters (rotation, mosaic panel grid)
 ///   - the Frame-toggle on/off flag
-/// Target search now flows through the Planning tab's universal search
-/// (`skyAtlasSearchProvider`). The profile-derived FOV (camera + scope) +
-/// "Build Sequence" output land in the FOV slice.
+/// Target selection flows through `skyTargetProvider` / the planetarium
+/// command bus (`planetariumCommandProvider`). The profile-derived FOV
+/// (camera + scope) + "Build Sequence" output land in the FOV slice.
 
 class FramingParams {
   final double rotationDeg;

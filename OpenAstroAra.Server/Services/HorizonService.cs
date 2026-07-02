@@ -19,8 +19,8 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>§36 Planning horizon — projects the active profile's local horizon onto the equatorial
-/// (RA/Dec) sky at a given instant so the Aladin atlas can overlay it. Aladin is an equatorial atlas,
-/// not an alt/az planetarium, so the horizon is a curve in RA/Dec that moves with the site latitude
+/// (RA/Dec) sky at a given instant so an equatorial sky-chart view can overlay it. In equatorial
+/// coordinates the horizon is a curve in RA/Dec that moves with the site latitude
 /// and the local sidereal time; this service computes that curve plus the zenith and the cardinal
 /// points. All the trig lives in <see cref="TonightSkyService"/> (the site-astrometry math home);
 /// this is a thin orchestrator over the active profile's site settings.</summary>

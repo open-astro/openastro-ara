@@ -95,8 +95,8 @@ public enum FramingFit {
 
 /// <summary>
 /// §36 Planning horizon — the observer's local horizon projected onto the equatorial
-/// (RA/Dec, J2000) sky for the active profile's site at a given instant, so the Aladin
-/// atlas can overlay it. Aladin is an equatorial atlas, not an alt/az planetarium, so the
+/// (RA/Dec, J2000) sky for the active profile's site at a given instant, so an equatorial
+/// sky-chart view can overlay it. In equatorial coordinates the
 /// horizon is a curve in RA/Dec that depends on the site latitude and the local sidereal
 /// time. <see cref="Points"/> is that curve — the site's horizon altitude
 /// (<see cref="HorizonAltitudeDeg"/>, the profile's DefaultHorizonAltitudeDeg) swept

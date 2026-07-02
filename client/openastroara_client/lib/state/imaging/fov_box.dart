@@ -4,7 +4,7 @@ import '../settings/optics_settings_state.dart';
 import 'framing_state.dart';
 
 /// §36/§25.5 — the framing overlay the Planning **Frame** mode draws on the
-/// Aladin atlas: the profile's sensor seen through its optics, sized in
+/// planetarium: the profile's sensor seen through its optics, sized in
 /// **degrees** and oriented at the framing rotation. A single panel by default
 /// ([cols]×[rows] = 1×1); a mosaic when the framing controls request more, with
 /// each panel one FOV and adjacent panels sharing [overlapPct]. Null when Frame
@@ -54,11 +54,15 @@ class FovBox {
 /// ([framingControllerProvider]: rotation + mosaic cols/rows/overlap). The FOV
 /// getters are arcminutes → /60 to degrees for the atlas overlay.
 ///
+/// Currently unconsumed by design, NOT dead code: its atlas-view consumer was
+/// pruned with `AladinView` (#611), and this provider is the contract the §36
+/// Frame/FOV overlay slice reuses on the Stellarium planetarium.
+///
 /// [FovBox] implements `==` deliberately (unlike the sibling settings models):
-/// this provider feeds an `AladinView.ref.listen` that fires an expensive native
-/// `executeJavaScript` redraw, so value-equality keeps an unchanged recompute
+/// the overlay consumer `ref.listen`s this provider to push a redraw across the
+/// webview loopback seam, so value-equality keeps an unchanged recompute
 /// (e.g. an unrelated optics field, or a rebuild) from triggering a redundant
-/// round-trip into the CEF browser.
+/// round-trip into the page.
 final frameFovBoxProvider = Provider<FovBox?>((ref) {
   if (!ref.watch(frameModeEnabledProvider)) return null;
   final optics = ref.watch(opticsSettingsProvider);
