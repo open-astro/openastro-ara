@@ -136,65 +136,80 @@ _NUGET_OVERRIDES_CI = {k.lower(): (k, v) for k, v in NUGET_OVERRIDES.items()}
 
 # --- CLIENT: curated licenses for the WILMA app's direct runtime pub
 # packages (pub.dev metadata carries no license field, so this is
-# hand-verified against each package's LICENSE file — entries carried over
-# from the hand-curated v0.0.1-ara.1 inventory, the rest verified from the
-# resolved package's LICENSE in the pub cache on 2026-07-01). Keyed by pub
-# package name; versions come from pubspec.lock at generation time. The set
-# is self-enforcing both ways (unmapped direct dep / dead entry → hard fail).
+# hand-verified against each resolved package's LICENSE file in the pub
+# cache — every entry checked at its pinned version on 2026-07-01). Keyed by
+# pub package name and version-pinned like NUGET_OVERRIDES: a pubspec.lock
+# bump of a curated package fails the run until a human re-verifies the new
+# version's LICENSE and updates the pin. The set is also self-enforcing both
+# ways (unmapped direct dep / dead entry → hard fail).
 PUB_LICENSES: dict[str, dict[str, str]] = {
     "collection": {
+        "version": "1.19.1",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2015, the Dart project authors",
     },
     "cupertino_icons": {
+        "version": "1.0.9",
         "license": "MIT",
         "copyright": "Copyright (c) 2016 Vladimir Kharlampidi",
     },
     "dio": {
+        "version": "5.10.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team",
     },
     "file_picker": {
+        "version": "12.0.0-beta.7",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Miguel Ruivo",
     },
     "fl_chart": {
+        "version": "1.2.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2022 Flutter 4 Fun",
     },
     "flutter_riverpod": {
+        "version": "3.3.2",
         "license": "MIT",
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
     "flutter_secure_storage": {
+        "version": "10.3.1",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 German Saprykin",
     },
     "multicast_dns": {
+        "version": "0.3.3",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "package_info_plus": {
+        "version": "10.2.0",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 The Chromium Authors",
     },
     "path_provider": {
+        "version": "2.1.6",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "riverpod": {
+        "version": "3.3.2",
         "license": "MIT",
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
     "url_launcher": {
+        "version": "6.3.2",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "web_socket_channel": {
+        "version": "3.0.3",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2016, the Dart project authors",
     },
     "webview_all": {
+        "version": "1.2.0",
         "license": "MIT",
         "copyright": "Copyright 2021-2026 Abandoft",
     },
@@ -454,6 +469,12 @@ def build_client_section(pkgs: dict[str, str]) -> tuple[str, Counter]:
     counts: Counter = Counter()
     for name in sorted(pkgs):
         data = PUB_LICENSES[name]
+        if data["version"] != pkgs[name]:
+            fail(
+                f"{name} bumped {data['version']} → {pkgs[name]} in pubspec.lock but "
+                "its curated PUB_LICENSES entry was verified against the old version "
+                "— re-verify the new version's LICENSE and update the pin"
+            )
         counts[data["license"]] += 1
         entries.append(
             "\n".join(
