@@ -125,6 +125,11 @@ namespace OpenAstroAra.Test {
                 () => StarDetectability.LimitingMagnitude(input, 60, Seeing, snrThreshold: 0));
             Assert.Throws<ArgumentOutOfRangeException>(
                 () => StarDetectability.LimitingMagnitude(input, double.NaN, Seeing));
+            // r1: non-finite read noise is garbage, not "unset" — it must throw, never
+            // slide through the > 0 fallback check to an m_lim of −∞.
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => StarDetectability.LimitingMagnitude(
+                    Input(readNoise: double.PositiveInfinity), 60, Seeing));
         }
     }
 }

@@ -58,7 +58,7 @@ public static class StarDetectability {
             throw new ArgumentOutOfRangeException(nameof(seeingFwhmArcsec),
                 "seeing FWHM must be a positive, finite arcsec figure");
         }
-        var pixelScaleArcsec = 206.265 * input.PixelSizeUm / (input.FocalLengthMm * input.ReducerFactor);
+        var pixelScaleArcsec = OptimalSubCalculator.PixelScaleArcsec(input);
         var discAreaArcsec2 = Math.PI * Math.Pow(seeingFwhmArcsec / 2.0, 2);
         return Math.Max(1.0, discAreaArcsec2 / (pixelScaleArcsec * pixelScaleArcsec));
     }
@@ -79,6 +79,13 @@ public static class StarDetectability {
                 "SNR threshold must be positive and finite");
         }
 
+        if (!double.IsFinite(input.ReadNoiseE)) {
+            // > 0 alone would let +∞ through to an m_lim of −∞; a non-finite read noise is
+            // garbage input, not "unset" (unset is the ≤ 0 the Tier-0 default covers below).
+            throw new ArgumentOutOfRangeException(nameof(input),
+                "read noise must be finite (or ≤ 0 for the generic default)");
+        }
+
         // Shared sky rate P (e⁻/s/pixel) — validates aperture/pixel/QE/sky inputs too.
         var p = OptimalSubCalculator.SkyFluxEPerSecPerPx(input);
         var nPix = SeeingDiscPixels(input, seeingFwhmArcsec);
@@ -91,7 +98,7 @@ public static class StarDetectability {
         var sMin = (k2 + Math.Sqrt(k2 * k2 + 4.0 * k2 * n)) / 2.0;
 
         // Convert the minimum signal back to a magnitude via the mag-0 electron rate.
-        var apertureAreaCm2 = Math.PI * Math.Pow(input.ApertureMm / 20.0, 2);
+        var apertureAreaCm2 = OptimalSubCalculator.ApertureAreaCm2(input);
         var mag0ElectronsPerSec = OptimalSubCalculator.PhotonFluxMag0PerCm2PerNm
             * input.FilterBandwidthNm * apertureAreaCm2 * input.QuantumEfficiency;
         return -2.5 * Math.Log10(sMin / (mag0ElectronsPerSec * exposureSec));
