@@ -181,7 +181,8 @@ but the night's data won't integrate. Two ingredients:
 1. **Limiting magnitude for a sub of length `t`** — pure rig+sky math, no new data:
    a star of magnitude `m` delivers `S(m) = F₀·10^(−0.4m)·A·QE·t` electrons through aperture
    area `A` (atmospheric + optical losses folded into a single documented transmission factor);
-   detection needs `SNR = S/√(S + n_pix·(B·t + R²)) ≥ k` with the sky rate `B` already computed
+   detection needs `SNR = S/√(S + n_pix·(P·t + R²)) ≥ k` with the sky rate `P` (the same
+   e⁻/s/pixel sky-background flux §2's Glover derivation calls `P`) already computed
    by `OptimalSubCalculator` from Bortle/SQM, `R` the read noise, `n_pix` the seeing-disc
    footprint from the profile's `TypicalSeeingArcsec` + pixel scale. Solve for `m_lim(t)`;
    `k = 5` (the conventional detection threshold; registration wants SNR-10-ish centroids, so
