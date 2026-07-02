@@ -13,12 +13,12 @@ import 'sequence_load_dialog.dart';
 import 'sequence_new_dialog.dart';
 
 /// §25.5.3 sequencer toolbar. New opens the §38.7 template picker; Load opens
-/// the §38 sequence picker; Run / Abort drive the lifecycle endpoints on the
-/// selected sequence, gated by its live run state; Save / Validate / Export /
-/// Import act on the loaded body. Pause is intentionally omitted until the
-/// daemon supports real run suspension: its PauseAsync is an accepted no-op that
-/// never actually suspends a run (PORT_TODO §38), so a Pause control would
-/// mislead the user into thinking a run paused.
+/// the §38 sequence picker; Run / Pause / Resume / Skip / Abort drive the
+/// lifecycle endpoints on the selected sequence, gated by its live run state;
+/// Save / Validate / Export / Import act on the loaded body. Pause is real
+/// since the daemon grew its instruction-boundary pause gate (§38): the run
+/// suspends between instructions (the in-flight instruction finishes first),
+/// reports Paused, and Run relabels to Resume.
 class SequencerToolbar extends ConsumerWidget {
   const SequencerToolbar({super.key});
 
@@ -55,18 +55,21 @@ class SequencerToolbar extends ConsumerWidget {
     final editorLoaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
     final canValidate = connected && editorLoaded && !busy;
     final isActive = runState?.isActive ?? false;
+    final isRunning = runState == SequenceRunState.running;
+    final isPaused = runState == SequenceRunState.paused;
     final isAborting = runState == SequenceRunState.aborting;
-    // Run = start whenever no run is active (including re-running a finished one);
-    // disabled while starting/running/aborting. Pause is intentionally not offered
-    // (the daemon's pause is a no-op — see the class doc); re-add Pause + Resume
-    // when the engine grows a real pause hook and emits paused/resumed.
-    final canRun = hasSelection && !isActive;
+    // Run = start when no run is active (including re-running a finished one);
+    // the same button relabels to Resume while paused. Pause only while
+    // running — the request is honored at the next instruction boundary, so the
+    // Paused state appears once the engine actually suspends (never on the
+    // mere request).
+    final canRunOrResume = hasSelection && (!isActive || isPaused);
+    final canPause = hasSelection && isRunning;
     // Abort while a run is active, but not when it's already aborting.
     final canAbort = hasSelection && isActive && !isAborting;
-    // Skip-current shares Abort's gate exactly: both interrupt an active run, so
-    // Skip is offered in every state Abort is (including paused, which the daemon
-    // never actually reaches today — pause is a no-op, see the Pause/Resume note
-    // above) and withdrawn once a teardown (abort) is already underway.
+    // Skip-current shares Abort's gate: both interrupt an active run. While
+    // paused nothing is running to skip, so the daemon treats it as a harmless
+    // accepted no-op.
     final canSkip = hasSelection && isActive && !isAborting;
 
     return Container(
@@ -137,10 +140,17 @@ class SequencerToolbar extends ConsumerWidget {
                 const VerticalDivider(width: 16, indent: 8, endIndent: 8),
                 _ToolButton(
                   icon: Icons.play_arrow,
-                  label: 'Run',
-                  onPressed: canRun
-                      ? () => _lifecycle(
-                          context, ref, (api, id) => api.start(id))
+                  label: isPaused ? 'Resume' : 'Run',
+                  onPressed: canRunOrResume
+                      ? () => _lifecycle(context, ref,
+                          (api, id) => isPaused ? api.resume(id) : api.start(id))
+                      : null,
+                ),
+                _ToolButton(
+                  icon: Icons.pause,
+                  label: 'Pause',
+                  onPressed: canPause
+                      ? () => _lifecycle(context, ref, (api, id) => api.pause(id))
                       : null,
                 ),
                 _ToolButton(
