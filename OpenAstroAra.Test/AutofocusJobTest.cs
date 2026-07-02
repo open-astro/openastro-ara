@@ -34,14 +34,19 @@ namespace OpenAstroAra.Test {
 
         // The exact work body the endpoint enqueues (kept in lockstep — the endpoint lambda
         // itself is a thin Results.Accepted wrapper smoke-tested by CI's runtime job).
-        private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus) =>
+        private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus, int totalProbes = 1) =>
             async (tick, ct) => {
-                var ok = await autofocus.RunAutofocusAsync(new Progress<ApplicationStatus>(), ct);
+                var progress = new Progress<ApplicationStatus>(s => {
+                    if (s.MaxProgress > 0 && s.Progress > 0) {
+                        tick((int)s.Progress);
+                    }
+                });
+                var ok = await autofocus.RunAutofocusAsync(progress, ct);
                 if (!ok) {
                     throw new InvalidOperationException(
                         "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
                 }
-                tick(1);
+                tick(totalProbes); // the job service's tick guard (monotone + clamped) makes this final
             };
 
         private static Mock<IAutofocusExecutor> Executor(bool result, TimeSpan? delay = null) {
@@ -73,12 +78,57 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Structured_sweep_progress_ticks_the_job_per_probe() {
+            // The sweep reports Progress/MaxProgress per probe; the job body maps
+            // those onto done/total so a polling client sees 3/9, not 0→1.
+            var jobs = new InMemoryBatchJobService(null);
+            var executor = new Mock<IAutofocusExecutor>();
+            var probesSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            executor.Setup(e => e.RunAutofocusAsync(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(async (IProgress<ApplicationStatus> p, CancellationToken _) => {
+                    for (var i = 1; i <= 9; i++) {
+                        p.Report(new ApplicationStatus {
+                            Progress = i,
+                            MaxProgress = 9,
+                            ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
+                        });
+                    }
+                    probesSeen.TrySetResult();
+                    return true;
+                });
+            var job = jobs.Enqueue("autofocus", 9, Work(executor.Object, totalProbes: 9));
+            await probesSeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var final = await WaitForTerminalAsync(jobs, job.JobId);
+            Assert.That(final.State, Is.EqualTo("complete"));
+            Assert.That(final.Total, Is.EqualTo(9));
+            Assert.That(final.Done, Is.EqualTo(9));
+        }
+
+        [Test]
         public async Task Failed_sweep_fails_the_job_with_the_reason() {
             var jobs = new InMemoryBatchJobService(null);
             var job = jobs.Enqueue("autofocus", 1, Work(Executor(result: false).Object));
             var final = await WaitForTerminalAsync(jobs, job.JobId);
             Assert.That(final.State, Is.EqualTo("failed"));
             Assert.That(final.ErrorMessage, Does.Contain("Autofocus sweep failed"));
+        }
+
+        [Test]
+        public async Task Tick_guard_never_regresses_or_exceeds_total() {
+            // The service-level invariant that closes both review races: a delayed
+            // report (smaller value after the settle) is ignored, and a sweep whose
+            // live probe count outgrew the enqueue-time total clamps at total —
+            // done can never end up > total on a terminal job.
+            var jobs = new InMemoryBatchJobService(null);
+            var job = jobs.Enqueue("autofocus", 9, async (tick, ct) => {
+                tick(21);  // live sweep grew (Steps changed while queued) → clamps to 9
+                tick(3);   // delayed straggler → ignored (monotone)
+                await Task.CompletedTask;
+            });
+            var final = await WaitForTerminalAsync(jobs, job.JobId);
+            Assert.That(final.State, Is.EqualTo("complete"));
+            Assert.That(final.Total, Is.EqualTo(9));
+            Assert.That(final.Done, Is.EqualTo(9));
         }
 
         [Test]

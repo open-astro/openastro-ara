@@ -167,14 +167,30 @@ public static class EquipmentEndpoints {
         // a queued second job simply waits its turn).
         focuser.MapPost("/autofocus", (
                 OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor autofocus,
-                IBatchJobService jobs) => {
-            var job = jobs.Enqueue("autofocus", totalSteps: 1, async (tick, ct) => {
-                var ok = await autofocus.RunAutofocusAsync(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), ct);
+                IBatchJobService jobs,
+                IProfileStore profiles) => {
+            // Real progress: the job's total is the sweep's probe count (from the
+            // profile's §37.11 settings), and the sweep reports structured
+            // Progress/MaxProgress per probe — a polling client sees 3/9, not 0→1.
+            // Read once at enqueue time via the sweep's OWN probe-count helper, so
+            // the job's denominator and the sweep's stepping scheme can't drift
+            // apart. If Steps changes while this job waits its turn, the tick
+            // invariant in InMemoryBatchJobService (monotone + clamped to Total)
+            // keeps done sane either way: a bigger live sweep clamps at this
+            // total, a smaller one settles to it below.
+            var totalProbes = AutofocusSweepService.ProbeCount(profiles.GetAutofocusSettings());
+            var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
+                var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
+                    if (s.MaxProgress > 0 && s.Progress > 0) {
+                        tick((int)s.Progress);
+                    }
+                });
+                var ok = await autofocus.RunAutofocusAsync(progress, ct);
                 if (!ok) {
                     throw new InvalidOperationException(
                         "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
                 }
-                tick(1);
+                tick(totalProbes); // settle at total; the service's tick guard makes this final
             });
             return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
         })
