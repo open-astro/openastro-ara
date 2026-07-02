@@ -17,7 +17,11 @@ WebGL/WASM planetarium renderer by Stellarium Labs SRL.
   **https://github.com/open-astro/stellarium-web-engine** — branch `master`
   (upstream `525aa40` + the ARA patch commits), pinned by tag
   [`ara-v1`](https://github.com/open-astro/stellarium-web-engine/releases/tag/ara-v1)
-  at commit `6bfebb5`. The same patch is also reproduced verbatim in
+  at commit `6bfebb5`, whose ancestry carries all four patch commits
+  (oldest → newest): `cf31725` (SConstruct: withStackSave export),
+  `ba905ca` (stars.c: every star selectable), `a867caf` (stars.c: type-less
+  survey accepted), `6bfebb5` (stars.c: per-frame pick-area cap).
+  The same patch is also reproduced verbatim in
   [§ Source modifications](#source-modifications) below — apply it to a clean
   upstream checkout and run the build recipe to reproduce the exact artifacts.
   (§13 applies because the daemon conveys the engine to users over the network;
