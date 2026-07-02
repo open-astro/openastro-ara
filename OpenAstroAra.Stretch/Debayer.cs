@@ -86,6 +86,33 @@ public static class Debayer {
     }
 
     /// <summary>
+    /// Super-pixel debayer + per-channel stretch + RGB interleave — the whole
+    /// "raw OSC mosaic → displayable half-res RGB" preview recipe in one call, shared by the §65
+    /// capture preview and the §64 Live View render so the two paths can't drift. Per-channel
+    /// auto-stretch incidentally auto-white-balances the preview; the stored/live raw data stays
+    /// the undebayered mosaic.
+    /// <para>WB caveat: with a caller-supplied <paramref name="stretchParams"/> (manual black/white
+    /// points), applying the same params per channel can shift white balance — those points were
+    /// chosen against the mosaic's combined luminance, not per-channel. Acceptable for a preview;
+    /// revisit if manual OSC stretch looks off.</para>
+    /// </summary>
+    public static (byte[] Rgb, int Width, int Height) SuperPixelStretched(
+        ReadOnlySpan<ushort> mosaic, int width, int height, BayerPattern pattern,
+        StretchAlgorithm algorithm, StretchParams? stretchParams = null) {
+        var (r, g, b, ow, oh) = SuperPixel(mosaic, width, height, pattern);
+        var rs = Stretcher.Apply(algorithm, r, stretchParams);
+        var gs = Stretcher.Apply(algorithm, g, stretchParams);
+        var bs = Stretcher.Apply(algorithm, b, stretchParams);
+        var rgb = new byte[rs.Length * 3];
+        for (int i = 0, d = 0; i < rs.Length; i++, d += 3) {
+            rgb[d] = rs[i];
+            rgb[d + 1] = gs[i];
+            rgb[d + 2] = bs[i];
+        }
+        return (rgb, ow, oh);
+    }
+
+    /// <summary>
     /// Full-resolution bilinear debayer of a raw mosaic into three R/G/B planes, each
     /// <c>width × height</c>. At every pixel the native CFA channel is kept and the two missing
     /// channels are bilinearly interpolated from the appropriate orthogonal / diagonal / row /

@@ -487,29 +487,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return (pixels, w, h, bayer);
     }
 
-    // §65 OSC color: super-pixel debayer the raw mosaic → 3 half-res channels, stretch each, and
-    // interleave to RGB. Per-channel auto-stretch incidentally auto-white-balances the preview; the
-    // stored FITS stays the raw, undebayered mosaic.
-    //
-    // WB caveat: with a user-supplied stretchParams (manual black/white points), applying the same
-    // params per channel can shift white balance — those points were chosen against the mosaic's
-    // combined luminance, not per-channel. Acceptable for a preview; revisit if manual OSC stretch
-    // looks off.
+    // §65 OSC color — the mosaic→RGB preview recipe lives in Debayer.SuperPixelStretched, shared
+    // with the §64 Live View render (see the helper's doc for the manual-stretch WB caveat).
     private static (byte[] Rgb, int Width, int Height) DebayerAndStretch(
         ushort[] mosaic, int width, int height, OpenAstroAra.Stretch.BayerPattern pattern,
-        OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams) {
-        var (r, g, b, ow, oh) = OpenAstroAra.Stretch.Debayer.SuperPixel(mosaic, width, height, pattern);
-        var rs = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, r, stretchParams);
-        var gs = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, g, stretchParams);
-        var bs = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, b, stretchParams);
-        var rgb = new byte[rs.Length * 3];
-        for (int i = 0, d = 0; i < rs.Length; i++, d += 3) {
-            rgb[d] = rs[i];
-            rgb[d + 1] = gs[i];
-            rgb[d + 2] = bs[i];
-        }
-        return (rgb, ow, oh);
-    }
+        OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams) =>
+        OpenAstroAra.Stretch.Debayer.SuperPixelStretched(mosaic, width, height, pattern, algorithm, stretchParams);
 
     /// <summary>
     /// §65.2 defaults policy: frame-type auto-override beats request
