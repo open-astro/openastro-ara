@@ -88,6 +88,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_shipped_slopes_match_the_grid_derived_fit_through_the_public_api() {
+            // r1: the anchor test is structurally blind to SlopePerMag (the exponent is
+            // zero at m=9), so check the slope constants BEHAVIOURALLY: one magnitude of
+            // depth at a band centre must multiply counts by exactly 10^(slope re-derived
+            // from the embedded grid). A typo'd/stale/hand-edited slope constant now fails
+            // CI — closing the gap the review found in the "this test catches it" claim.
+            for (var band = 0; band < BandLatitudes.Length; band++) {
+                double meanX = 0, meanY = 0;
+                for (var i = 0; i < 4; i++) {
+                    meanX += 5 + i;
+                    meanY += Math.Log10(HygDensities[band][i]);
+                }
+                meanX /= 4;
+                meanY /= 4;
+                double num = 0, den = 0;
+                for (var i = 0; i < 4; i++) {
+                    var dx = 5 + i - meanX;
+                    num += dx * (Math.Log10(HygDensities[band][i]) - meanY);
+                    den += dx * dx;
+                }
+                var derivedSlope = num / den;
+                var ratio = StarCountModel.CumulativeStarsPerDeg2(10, BandLatitudes[band])
+                          / StarCountModel.CumulativeStarsPerDeg2(9, BandLatitudes[band]);
+                // Two 6-dp rounding sources stack here: the shipped slope constant
+                // (≤5e-7) and the embedded grid densities the re-derivation reads
+                // (≲1.5e-6 on the fitted slope) — 2e-6 covers both while still failing
+                // on any real drift (a stale regeneration or hand-edit moves slopes by
+                // orders of magnitude more).
+                Assert.That(Math.Log10(ratio), Is.EqualTo(derivedSlope).Within(2e-6),
+                    $"|b|={BandLatitudes[band]}°: the shipped slope must be the grid-derived fit");
+            }
+        }
+
+        [Test]
         public void Counts_rise_with_depth_and_fall_away_from_the_plane() {
             Assert.That(StarCountModel.CumulativeStarsPerDeg2(12, 30),
                 Is.GreaterThan(StarCountModel.CumulativeStarsPerDeg2(9, 30)),
@@ -119,6 +153,14 @@ namespace OpenAstroAra.Test {
                 () => StarCountModel.CumulativeStarsPerDeg2(double.NaN, 30));
             Assert.Throws<ArgumentOutOfRangeException>(
                 () => StarCountModel.CumulativeStarsPerDeg2(9, double.PositiveInfinity));
+            // r1 range guards: out-of-range latitude/dec is caller garbage that must
+            // surface, not silently alias through sin|b| onto a valid band.
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => StarCountModel.CumulativeStarsPerDeg2(9, 91));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => StarCountModel.GalacticLatitudeDeg(180, 95));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => StarCountModel.GalacticLatitudeDeg(double.NaN, 0));
         }
     }
 }

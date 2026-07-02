@@ -25,7 +25,10 @@ import hashlib
 import math
 import sys
 
-EXPECTED_SHA = "8e3ff9e67445e558a759b117910850cff1b1d4d492f45f715c2ee2db3d869bac"
+EXPECTED_SHA_GZ = "8e3ff9e67445e558a759b117910850cff1b1d4d492f45f715c2ee2db3d869bac"
+# sha256 of the DECOMPRESSED csv (what the Data Manager installs as catalog.csv),
+# so the plain-.csv regeneration path is held to the same canonical-snapshot bar.
+EXPECTED_SHA_CSV = "80152c797783b53449458b675eee65656f1404225481e766f8dab21c00ad3c69"
 NGP_RA = math.radians(192.85948)   # J2000 north galactic pole
 NGP_DEC = math.radians(27.12825)
 BANDS = [0, 10, 20, 30, 50, 70, 90]
@@ -46,11 +49,12 @@ def main():
         sys.exit("usage: fit-star-count-model.py <hygdata_v40.csv[.gz]>")
     path = sys.argv[1]
     opener = gzip.open if path.endswith(".gz") else open
-    if path.endswith(".gz"):
-        digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
-        if digest != EXPECTED_SHA:
-            sys.exit(f"digest mismatch: {digest} != pinned {EXPECTED_SHA} — "
-                     "constants must only regenerate from the canonical snapshot")
+    digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    expected = EXPECTED_SHA_GZ if path.endswith(".gz") else EXPECTED_SHA_CSV
+    if digest != expected:
+        sys.exit(f"digest mismatch: {digest} != pinned {expected} — "
+                 "constants must only regenerate from the canonical snapshot "
+                 "(both the .csv.gz and the installed plain .csv forms are pinned)")
 
     counts = {L: {m: 0 for m in MAGS} for L in BANDS}
     with opener(path, "rt") as f:

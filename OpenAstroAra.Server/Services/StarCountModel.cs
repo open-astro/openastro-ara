@@ -77,8 +77,11 @@ public static class StarCountModel {
         if (!double.IsFinite(limitingMag)) {
             throw new ArgumentOutOfRangeException(nameof(limitingMag), "limiting magnitude must be finite");
         }
-        if (!double.IsFinite(galacticLatitudeDeg)) {
-            throw new ArgumentOutOfRangeException(nameof(galacticLatitudeDeg), "galactic latitude must be finite");
+        if (!double.IsFinite(galacticLatitudeDeg) || Math.Abs(galacticLatitudeDeg) > 90.0) {
+            // Range guard (r1): a latitude beyond ±90° is caller garbage — folding it
+            // through sin|b| would silently alias onto a valid band instead of surfacing.
+            throw new ArgumentOutOfRangeException(nameof(galacticLatitudeDeg),
+                "galactic latitude must be finite and within ±90°");
         }
         var sinB = Math.Sin(Math.Abs(galacticLatitudeDeg) * Math.PI / 180.0);
         var n9 = InterpolateInSinB(DensityAtMag9, sinB);
@@ -90,6 +93,13 @@ public static class StarCountModel {
     /// the standard NGP rotation (α_G = 192.85948°, δ_G = 27.12825°). Slice 3 feeds a
     /// target's RA/Dec through this to pick the count-model latitude.</summary>
     public static double GalacticLatitudeDeg(double raDeg, double decDeg) {
+        if (!double.IsFinite(raDeg)) {
+            throw new ArgumentOutOfRangeException(nameof(raDeg), "RA must be finite");
+        }
+        if (!double.IsFinite(decDeg) || Math.Abs(decDeg) > 90.0) {
+            throw new ArgumentOutOfRangeException(nameof(decDeg),
+                "declination must be finite and within ±90°");
+        }
         const double ngpRa = 192.85948 * Math.PI / 180.0;
         const double ngpDec = 27.12825 * Math.PI / 180.0;
         var ra = raDeg * Math.PI / 180.0;
