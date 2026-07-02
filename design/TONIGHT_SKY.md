@@ -171,6 +171,11 @@ profile's optical train) and `atUtc`. Endpoint stays `GET /api/v1/planning/tonig
       pre-filter, expected <100ms, but confirm on-device.
 - **Slice 4 (polish)** — custom-horizon (terrain) integration if `UseCustomHorizon`;
   moon avoidance / separation as a score input; per-target "best window" highlight.
+  - Best-window highlight SHIPPED (2026-07-02): the row's timing line reads a
+    green bold "now · …" while the object's window is OPEN, dims once it has
+    fully passed, and stays neutral before it opens (`windowStateFor`, pure +
+    instant-parameterised; boundaries count as open). Advise-don't-dictate:
+    rows are never hidden or re-ranked by it.
   - Moon **advisory display** SHIPPED (2026-07-02): per-object separation at the
     window midpoint + disc illumination + moon-up fraction over the window
     (`moon_separation_deg` / `moon_illumination_pct` / `moon_up_fraction`,

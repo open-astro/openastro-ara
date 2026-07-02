@@ -19,6 +19,24 @@ import '../../theme/ara_colors.dart';
 /// `StellariumView` forwards to the page's `/aracmd` handler (the §36 native
 /// webview has no Dart→page JS bridge, and `skyTargetProvider` isn't read by the
 /// planetarium). The panel docks beside the planetarium in `tonightsSky` mode.
+/// §36.8 slice-4 — where "now" falls against an object's dark window, driving
+/// the timing line's at-a-glance treatment: **open** (shoot it now — green),
+/// **upcoming** (neutral, the default look), **passed** (dimmed — tonight's
+/// chance is gone), **none** (no window on the wire). Pure and
+/// instant-parameterised so it unit-tests without a clock seam. Boundary
+/// instants count as open (isBefore/isAfter are strict) — an exposure started
+/// in the window's last minute is still in the window.
+enum TonightWindowState { none, upcoming, open, passed }
+
+TonightWindowState windowStateFor(TonightSkyObject o, DateTime nowUtc) {
+  final start = o.windowStartUtc;
+  final end = o.windowEndUtc;
+  if (start == null || end == null) return TonightWindowState.none;
+  if (nowUtc.isBefore(start)) return TonightWindowState.upcoming;
+  if (nowUtc.isAfter(end)) return TonightWindowState.passed;
+  return TonightWindowState.open;
+}
+
 class TonightSkyPanel extends ConsumerWidget {
   const TonightSkyPanel({super.key});
 
@@ -129,6 +147,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final subtitle = '${_typeLabel(_object.type)} · $magText · '
         'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°';
     final timing = _timingLine(_object);
+    // Best-window highlight (slice 4): advise-don't-dictate — the row is never
+    // hidden or re-ranked, the timing line just reads green "now · …" while the
+    // window is open and dims once it has fully passed.
+    final windowState = windowStateFor(_object, DateTime.now().toUtc());
     final framingLabel = _framingLabel(_object.framing);
     final reasons = _object.scoreReasons;
     final hasReasons = reasons != null && reasons.isNotEmpty;
@@ -197,9 +219,18 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                 if (timing != null)
                   Expanded(
                     child: Text(
-                      timing,
+                      windowState == TonightWindowState.open
+                          ? 'now · $timing'
+                          : timing,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AraColors.textSecondary,
+                        color: switch (windowState) {
+                          TonightWindowState.open => AraColors.accentConnected,
+                          TonightWindowState.passed => AraColors.textDisabled,
+                          _ => AraColors.textSecondary,
+                        },
+                        fontWeight: windowState == TonightWindowState.open
+                            ? FontWeight.w600
+                            : null,
                       ),
                     ),
                   ),
