@@ -46,8 +46,10 @@ public sealed class CoalescingAsyncPublisher {
         _publish = publish ?? throw new ArgumentNullException(nameof(publish));
     }
 
-    /// <summary>Request a publish. Returns immediately; the publish runs on the
-    /// thread pool. Safe from any thread.</summary>
+    /// <summary>Request a publish. Safe from any thread. NOTE: the pump executes
+    /// inline on the calling thread up to the delegate's first await — keep the
+    /// delegate's synchronous prefix cheap (the sequencer's EmitAsync only builds
+    /// a small JSON payload before its first await).</summary>
     public void Poke() {
         if (Volatile.Read(ref _sealed) == 1) {
             // Sealed: a late tick (Progress<T> queues callbacks to the thread pool,
