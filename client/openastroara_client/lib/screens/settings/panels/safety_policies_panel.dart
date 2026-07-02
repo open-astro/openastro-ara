@@ -147,6 +147,25 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
           value: s.meridianRecalGuider,
           onChanged: n.setMeridianRecalGuider,
         ),
+        SettingsSwitchRow(
+          label: 'Unattended flip safety (§58.9)',
+          hint: 'Pre-flip flight check, in-slew watchdog and hard pier-side '
+              'verification. Turn off only if this mount misreports pier side.',
+          value: s.flipSafetyEnabled,
+          onChanged: n.setFlipSafetyEnabled,
+        ),
+        EditableNumberRow(
+          label: 'Expected flip-slew duration (s)',
+          currentValue: s.expectedFlipSlewSeconds.toString(),
+          getCanonical: () => ref
+              .read(safetyPoliciesProvider)
+              .expectedFlipSlewSeconds
+              .toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setExpectedFlipSlewSeconds(v);
+          },
+        ),
         const SettingsSectionHeader('On altitude limit'),
         SettingsDropdownRow<AltitudeLimitAction>(
           label: 'Action',

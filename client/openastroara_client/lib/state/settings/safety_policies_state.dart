@@ -35,6 +35,16 @@ class SafetyPolicies {
   // §29 — on critically-low disk space.
   final DiskSpaceCriticalAction onDiskSpaceCritical;
 
+  // §58.9 — unattended flip safety: the pre-flip flight check + in-slew
+  // watchdog + hard pier-side gate. Default on; rigs whose driver misreports
+  // pier side can turn it off.
+  final bool flipSafetyEnabled;
+
+  // §58.9 — expected flip-slew duration (s). Alpaca has no slew-estimate API,
+  // so this stands in for the "mount estimate": the watchdog's hard timeout is
+  // min(3 × this, 5 min).
+  final int expectedFlipSlewSeconds;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -49,6 +59,8 @@ class SafetyPolicies {
     this.guiderRetryTimeoutSec = 60,
     this.skipTargetIfRecoveryFails = true,
     this.onDiskSpaceCritical = DiskSpaceCriticalAction.warn,
+    this.flipSafetyEnabled = true,
+    this.expectedFlipSlewSeconds = 90,
   });
 
   SafetyPolicies copyWith({
@@ -65,6 +77,8 @@ class SafetyPolicies {
     int? guiderRetryTimeoutSec,
     bool? skipTargetIfRecoveryFails,
     DiskSpaceCriticalAction? onDiskSpaceCritical,
+    bool? flipSafetyEnabled,
+    int? expectedFlipSlewSeconds,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -84,6 +98,9 @@ class SafetyPolicies {
             skipTargetIfRecoveryFails ?? this.skipTargetIfRecoveryFails,
         onDiskSpaceCritical:
             onDiskSpaceCritical ?? this.onDiskSpaceCritical,
+        flipSafetyEnabled: flipSafetyEnabled ?? this.flipSafetyEnabled,
+        expectedFlipSlewSeconds:
+            expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
       );
 }
 
@@ -112,6 +129,15 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
       state = state.copyWith(meridianRecenter: v);
   void setMeridianRecalGuider(bool v) =>
       state = state.copyWith(meridianRecalGuider: v);
+
+  void setFlipSafetyEnabled(bool v) =>
+      state = state.copyWith(flipSafetyEnabled: v);
+
+  void setExpectedFlipSlewSeconds(int v) {
+    if (v <= 0) return; // the daemon's watchdog needs a positive expectation
+    state = state.copyWith(expectedFlipSlewSeconds: v);
+  }
+
   void setOnAltitudeLimit(AltitudeLimitAction a) =>
       state = state.copyWith(onAltitudeLimit: a);
   void setParkIfNoMoreTargets(bool v) =>
