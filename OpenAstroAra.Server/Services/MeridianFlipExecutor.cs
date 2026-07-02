@@ -142,15 +142,27 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         // check the flip never starts, the mount stays in its known-safe pre-flip state (tracking
         // sidereal, guider running) and a critical notification fires. Only active when the safety
         // config is available (server DI) and enabled in the profile.
-        var safety = profileStore?.GetSafetyPolicies();
-        if (safety is { FlipSafetyEnabled: true }) {
-            var failReason = await PreFlipFlightCheck(targetCoordinates, settings, token);
-            if (failReason is not null) {
-                Logger.Error($"Meridian Flip - Pre-flip flight check failed: {failReason}. The flip will not start; the mount stays in its pre-flip state.");
-                await NotifyCritical("Meridian flip aborted before it started",
-                    $"Pre-flip flight check failed: {failReason} The mount was left tracking in its pre-flip state and the sequence has been halted.");
-                return false;
+        SafetyPoliciesDto? safety = null;
+        string? failReason = null;
+        try {
+            safety = profileStore?.GetSafetyPolicies();
+            if (safety is { FlipSafetyEnabled: true }) {
+                failReason = await PreFlipFlightCheck(targetCoordinates, timeToFlip, settings, token);
             }
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            // The flight check itself must sit inside the same fail-safe boundary as everything
+            // else: a throwing equipment/profile query is a FAILED check (flip never starts,
+            // notification fires), never an unnotified escape.
+            Logger.Error("Meridian Flip - The pre-flip flight check itself threw.", ex);
+            failReason = $"the flight check itself failed ({ex.Message}).";
+        }
+        if (failReason is not null) {
+            Logger.Error($"Meridian Flip - Pre-flip flight check failed: {failReason}. The flip will not start; the mount stays in its pre-flip state.");
+            await NotifyCritical("Meridian flip aborted before it started",
+                $"Pre-flip flight check failed: {failReason} The mount was left tracking in its pre-flip state and the sequence has been halted.");
+            return false;
         }
 
         // Track what we actually touched so the catch blocks only undo real state changes: don't resume a
@@ -386,14 +398,16 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     /// one §42.3 hot-reconnect attempt before giving up on a disconnected device. The spec's
     /// "predicted slew duration sane" gate has no Alpaca API to read an estimate from, so the
     /// profile's ExpectedFlipSlewSeconds stands in for it in the Layer-2 watchdog instead.</summary>
-    private async Task<string?> PreFlipFlightCheck(Coordinates target, IMeridianFlipSettings settings, CancellationToken token) {
+    private async Task<string?> PreFlipFlightCheck(Coordinates target, TimeSpan timeToFlip, IMeridianFlipSettings settings, CancellationToken token) {
         Logger.Info("Meridian Flip - Running the §58.9 pre-flip flight check.");
 
         // Endpoint prediction: the flip re-points at the same target from the other pier side, so
-        // the question is simply "is the target still above the hard floor right now". The site
-        // horizon altitude is the profile's floor (§35/§36 semantics).
+        // the question is "is the target still above the hard floor AT THE FLIP" — predicted at
+        // now + timeToFlip, since PassMeridian can wait out tens of minutes and a target near the
+        // floor keeps sinking through the wait. The site horizon altitude is the profile's floor
+        // (§35/§36 semantics).
         var site = profileStore!.GetSiteSettings();
-        var predictedAlt = PredictedTargetAltitudeDeg(target, site.LatitudeDeg, site.LongitudeDeg, UtcNow());
+        var predictedAlt = PredictedTargetAltitudeDeg(target, site.LatitudeDeg, site.LongitudeDeg, UtcNow() + timeToFlip);
         if (predictedAlt < site.DefaultHorizonAltitudeDeg) {
             return $"the predicted post-flip target altitude ({predictedAlt:0.#}°) is below the site's horizon floor ({site.DefaultHorizonAltitudeDeg:0.#}°) — the target should be skipped, not flipped to.";
         }

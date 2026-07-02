@@ -399,6 +399,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_throwing_flight_check_is_a_failed_check_not_an_unnotified_escape() {
+            // #629 review: an equipment/profile query throwing INSIDE the flight check must yield
+            // the same outcome as a failed gate — no flip, notification fired — never an uncaught
+            // escape that skips the §35.5 alarm.
+            SetupProfile();
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            profileStore.Setup(p => p.GetSiteSettings()).Throws(new InvalidOperationException("profile store on fire"));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(published.Single().Message, Does.Contain("flight check itself failed"));
+        }
+
+        [Test]
         public async Task A_disconnected_camera_that_hot_reconnects_lets_the_flip_proceed() {
             SetupProfile(recenter: false);
             SetupSafety(Safety());
