@@ -18,7 +18,6 @@ final focuserApiFactoryProvider =
       ),
 );
 
-/// Focuser client bound to the **active** server, or `null` when none is saved.
 /// Builds the §59 manual-autofocus client. Overridable in tests.
 final autofocusApiFactoryProvider = Provider<AutofocusApi Function(AraServer)>(
   (ref) => (server) => DioAutofocusApi(server),
@@ -36,6 +35,7 @@ final autofocusApiProvider = Provider<AutofocusApi?>((ref) {
   return api;
 });
 
+/// Focuser client bound to the **active** server, or `null` when none is saved.
 final focuserApiProvider =
     Provider<EquipmentDeviceClient<FocuserStatus>?>((ref) {
   final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
