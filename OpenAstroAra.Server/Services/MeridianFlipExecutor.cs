@@ -16,6 +16,7 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
@@ -195,7 +196,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             }
 
             if (settings.Recenter) {
-                await Recenter(targetCoordinates, progress, token);
+                await Recenter(targetCoordinates, safety, progress, token);
             }
 
             if (guiderConnected) {
@@ -227,25 +228,31 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             }
             throw;
         } catch (Exception ex) {
-            // A failed flip halts the sequence (the trigger throws on our false return). Best-effort restore:
-            // resume guiding + re-enable tracking so the mount keeps the target rather than drifting. §58.9's
-            // park-on-failure safe-rest state (Layer 4) is the follow-up PR.
+            // A failed flip halts the sequence (the trigger throws on our false return).
             Logger.Error("Meridian Flip - Failed.", ex);
             if (safety is { FlipSafetyEnabled: true }) {
+                // §58.9 Layer 4 — safe rest: the guider stays STOPPED (PHD2 corrections on a
+                // mis-aimed scope drift it further) and the mount parks (or stops tracking when it
+                // can't park). The cooler keeps running and the captured frames are preserved —
+                // the user may resume if conditions allow.
+                var rest = await SafeRest(progress);
                 await NotifyCritical("Meridian flip failed",
-                    $"{ex.Message} Tracking was restored where possible and the sequence has been halted.");
-            }
-            // Only resume a guider we actually stopped: if StopAutoguider itself threw, guiding was never
-            // stopped, so a resume would be spurious (and log a misleading "resume also failed").
-            if (guidingStopped) {
-                try {
-                    await ResumeAutoguider(progress, CancellationToken.None);
-                } catch (Exception resumeEx) {
-                    Logger.Error("Meridian Flip - Resuming the guider after a flip error also failed.", resumeEx);
+                    $"{ex.Message} §58.9 safe rest: {rest} The guider is stopped, the cooler keeps running, and the sequence has been halted.");
+            } else {
+                // Baseline (§58.4) best-effort restore: resume guiding + re-enable tracking so the
+                // mount keeps the target rather than drifting. Only resume a guider we actually
+                // stopped: if StopAutoguider itself threw, guiding was never stopped, so a resume
+                // would be spurious (and log a misleading "resume also failed").
+                if (guidingStopped) {
+                    try {
+                        await ResumeAutoguider(progress, CancellationToken.None);
+                    } catch (Exception resumeEx) {
+                        Logger.Error("Meridian Flip - Resuming the guider after a flip error also failed.", resumeEx);
+                    }
                 }
-            }
-            if (trackingDisabled) {
-                TryRestoreTracking();
+                if (trackingDisabled) {
+                    TryRestoreTracking();
+                }
             }
             return false;
         } finally {
@@ -328,18 +335,58 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         }
     }
 
-    // Mandatory plate-solve + sync to recover the exact framing after the flip (§28 centering). Best-effort:
-    // a failed centre logs + continues (matches NINA) so a stubborn solve doesn't abort an otherwise-good flip;
-    // §58.9 Layer 3's "no imaging resumes on solve failure" is the enhanced unattended gate (follow-up).
-    private async Task Recenter(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token) {
+    // §58.9 Layer 3 — the retry count and post-solve sanity bound ("solved position must be within
+    // ± 2° of the intended target"; both per-spec defaults, a profile knob only if someone asks).
+    private const int RecenterAttemptsWithSafety = 3;
+    private const double RecenterSanityBoundDeg = 2.0;
+
+    // Post-flip re-center via mandatory plate-solve + sync (§28 centering).
+    //
+    // With §58.9 safety OFF (or no server collaborators): best-effort — a failed centre logs +
+    // continues (matches NINA), a stubborn solve doesn't abort an otherwise-good flip.
+    //
+    // With safety ON this is the Layer-3 verification gate: up to 3 attempts, and the solved
+    // position must land within ± 2° of the intended target. All attempts failed (or a solve that
+    // says "you're 30° off") → the flip FAILS and imaging does not resume — better to lose the
+    // rest of the night than to image with a misaimed scope. NB the gate hardens the existing
+    // recenter step, so it engages only when Recenter is enabled (the default): with Recenter off
+    // there is no solve to verify — the §58.9 "plate-solve mandatory" presumes recenter-on.
+    private async Task Recenter(Coordinates target, SafetyPoliciesDto? safety, IProgress<ApplicationStatus> progress, CancellationToken token) {
         Logger.Info("Meridian Flip - Re-centering after the flip.");
         progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Re-centering" });
-        var result = await centeringService.CenterOnTarget(target, null, progress, token);
-        if (result == null || !result.Success) {
-            // Warning, not Error: re-centering is best-effort and does not halt the flip (same severity as the
-            // best-effort dome sync). The §58.9 Layer 3 hard "no imaging on solve failure" gate is the follow-up.
-            Logger.Warning("Meridian Flip - Re-center after the flip failed. Continuing without it.");
+
+        if (safety is not { FlipSafetyEnabled: true }) {
+            var result = await centeringService.CenterOnTarget(target, null, progress, token);
+            if (result == null || !result.Success) {
+                // Warning, not Error: without the safety layers re-centering stays best-effort and
+                // does not halt the flip (same severity as the best-effort dome sync).
+                Logger.Warning("Meridian Flip - Re-center after the flip failed. Continuing without it.");
+            }
+            return;
         }
+
+        for (var attempt = 1; attempt <= RecenterAttemptsWithSafety; attempt++) {
+            token.ThrowIfCancellationRequested();
+            var result = await centeringService.CenterOnTarget(target, null, progress, token);
+            if (result is { Success: true }) {
+                // The sanity bound needs the solved position; a solver that reports success without
+                // coordinates can't prove where the scope points, so it does NOT pass the gate.
+                if (result.Coordinates is { } solved) {
+                    var offsetDeg = (target - solved).Distance.Degree;
+                    if (offsetDeg <= RecenterSanityBoundDeg) {
+                        Logger.Info($"Meridian Flip - Layer-3 verification passed on attempt {attempt}: solved {offsetDeg:0.##}° from the target (bound {RecenterSanityBoundDeg}°).");
+                        return;
+                    }
+                    Logger.Error($"Meridian Flip - Layer-3 verification: the solve says the scope is {offsetDeg:0.#}° from the intended target (bound {RecenterSanityBoundDeg}°) — not trusting it.");
+                } else {
+                    Logger.Error("Meridian Flip - Layer-3 verification: the centering reported success but carried no solved coordinates; cannot verify the pointing.");
+                }
+            } else {
+                Logger.Warning($"Meridian Flip - Layer-3 re-center attempt {attempt}/{RecenterAttemptsWithSafety} failed.");
+            }
+        }
+        throw new InvalidOperationException(
+            $"post-flip verification failed: the plate-solve re-center did not confirm the pointing within {RecenterSanityBoundDeg}° after {RecenterAttemptsWithSafety} attempts. Imaging will not resume on an unverified pointing.");
     }
 
     private async Task SelectNewGuideStar(CancellationToken token) {
@@ -557,6 +604,72 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // watchdog's diagnosis below is the truth worth reporting.
         }
         throw new InvalidOperationException($"Meridian flip aborted by the §58.9 watchdog: {reason}.");
+    }
+
+    // §58.9 Layer 4 — bound the park wait so a wedged park can't hang the failure path forever.
+    private const int ParkTimeoutSeconds = 90;
+
+    /// <summary>§58.9 Layer 4 — put the mount in the safest reachable state after a flip failure:
+    /// park when <c>CanPark</c> (the safest possible position, bounded by
+    /// <see cref="ParkTimeoutSeconds"/>), else stop tracking where the abort caught it. Every step
+    /// is best-effort — this runs from the failure path and must never throw. Returns a one-line
+    /// description of what was actually done, for the notification.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The safe-rest path runs from the failure handler: a park/tracking-stop fault must degrade to the next-safest action and a truthful message, never mask the original flip fault. CA1031's fail-safe boundary applies.")]
+    private async Task<string> SafeRest(IProgress<ApplicationStatus> progress) {
+        // Stop the guider FIRST, unconditionally — the failure may have landed after the resume
+        // step (the pier-side hard fail does exactly that), and PHD2 corrections on a mount that
+        // may not have actually flipped drift it further. Spec Layer 4 lists "guider stopped" as
+        // part of the rest state, so this must hold for every path into it.
+        try {
+            if (guiderMediator.GetInfo().Connected) {
+                Logger.Info("Meridian Flip - Safe rest: stopping the guider.");
+                await guiderMediator.StopGuiding(CancellationToken.None);
+            }
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Safe rest: stopping the guider failed.", ex);
+        }
+
+        TelescopeInfo mount;
+        try {
+            mount = telescopeMediator.GetInfo();
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Safe rest: reading the mount state failed; no park/tracking action taken.", ex);
+            return "the mount state could not be read — no park or tracking change was possible.";
+        }
+
+        // Distinguish "this mount has no park capability" from "the park ATTEMPT failed" — the
+        // returned line lands in the Critical notification an operator reads to diagnose an
+        // unattended incident, so it must say which one actually happened.
+        var parkAttemptFailed = false;
+        if (mount.CanPark && !mount.AtPark) {
+            try {
+                Logger.Info("Meridian Flip - Safe rest: parking the mount.");
+                progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Parking (safe rest)" });
+                using var parkCts = new CancellationTokenSource(TimeSpan.FromSeconds(ParkTimeoutSeconds));
+                if (await telescopeMediator.ParkTelescope(progress, parkCts.Token)) {
+                    return "the mount was parked.";
+                }
+                parkAttemptFailed = true;
+                Logger.Error("Meridian Flip - Safe rest: the park command reported failure; stopping tracking instead.");
+            } catch (Exception ex) {
+                parkAttemptFailed = true;
+                Logger.Error("Meridian Flip - Safe rest: parking failed; stopping tracking instead.", ex);
+            }
+        }
+
+        try {
+            telescopeMediator.SetTrackingEnabled(false);
+            if (mount.AtPark) {
+                return "the mount was already parked.";
+            }
+            return parkAttemptFailed
+                ? "the park attempt failed — tracking was stopped instead; check the mount."
+                : "the mount cannot park — tracking was stopped where the abort caught it.";
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Safe rest: stopping tracking also failed.", ex);
+            return "parking and stopping tracking both failed — check the mount.";
+        }
     }
 
     /// <summary>Best-effort critical notification (§58.9 → §35.5 alarm on connected WILMA

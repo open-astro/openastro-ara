@@ -516,6 +516,163 @@ namespace OpenAstroAra.Test {
             Assert.That(okRelaxed, Is.True, "safety OFF → misreporting drivers keep working");
         }
 
+        // ─── §58.9 Layer 3 — post-flip verification gate ───
+
+        [Test]
+        public async Task Recenter_that_never_verifies_fails_the_flip_after_three_attempts() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False, "no verified pointing → imaging must not resume");
+            centering.Verify(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+            Assert.That(published.Single().Message, Does.Contain("verification failed"));
+        }
+
+        [Test]
+        public async Task A_solve_far_from_the_target_is_not_trusted_but_a_close_retry_passes() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            // First solve says the scope is ~30° away (don't trust it); the retry lands 0.5° out.
+            var wayOff = new Coordinates(Angle.ByHours(5), Angle.ByDegree(59), Epoch.J2000);
+            var close = new Coordinates(Angle.ByHours(5), Angle.ByDegree(88.5), Epoch.J2000);
+            centering.SetupSequence(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = wayOff })
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = close });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "the in-bounds retry verifies the pointing");
+            centering.Verify(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
+
+        [Test]
+        public async Task With_safety_off_a_failed_recenter_still_continues() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false));
+            SetupHealthyTrackingMount();
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "baseline §58.4: re-centering stays best-effort");
+            centering.Verify(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        // ─── §58.9 Layer 4 — safe rest on failure ───
+
+        [Test]
+        public async Task A_failed_flip_parks_a_parkable_mount_and_leaves_the_guider_stopped() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety());
+            var side = PierSide.pierEast;
+            telescope.Setup(t => t.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = side,
+                RightAscension = 5, Declination = 20, CanPark = true,
+            });
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => side = PierSide.pierWest).ReturnsAsync(true);
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });   // Layer 3 fails → Layer 4
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            guider.Verify(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()),
+                Times.Never, "PHD2 corrections on a mis-aimed scope drift it further — the guider stays stopped");
+            Assert.That(published.Single().Message, Does.Contain("parked"));
+        }
+
+        [Test]
+        public async Task A_pier_side_failure_after_guider_resume_still_ends_with_the_guider_stopped() {
+            // #630 review: the pier-side hard fail fires AFTER the guider-resume step, so safe
+            // rest must stop the guider again — the "guider is stopped" claim in the notification
+            // has to hold for every path into the failure handler, not just pre-resume ones.
+            SetupProfile(recenter: false);
+            SetupSafety(Safety());
+            telescope.Setup(t => t.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = PierSide.pierEast,   // never flips
+                RightAscension = 5, Declination = 20,
+            });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            var resumeIndex = callLog.LastIndexOf("StartGuiding");
+            var finalStopIndex = callLog.LastIndexOf("StopGuiding");
+            Assert.That(resumeIndex, Is.GreaterThanOrEqualTo(0), "the resume step ran before the pier-side check");
+            Assert.That(finalStopIndex, Is.GreaterThan(resumeIndex),
+                "safe rest must stop the guider AFTER the resume that preceded the pier-side failure");
+        }
+
+        [Test]
+        public async Task A_failed_park_attempt_reports_itself_honestly_not_as_cannot_park() {
+            // #630 review: CanPark=true but the attempt fails → the notification must say the
+            // ATTEMPT failed (an operator diagnostic), not misreport "the mount cannot park".
+            SetupProfile(recenter: true);
+            SetupSafety(Safety());
+            var side = PierSide.pierEast;
+            telescope.Setup(t => t.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = side,
+                RightAscension = 5, Declination = 20, CanPark = true,
+            });
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => side = PierSide.pierWest).ReturnsAsync(true);
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);   // parkable, but this attempt fails
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(callLog.Last(), Is.EqualTo("SetTracking(False)"), "fallback action still runs");
+            Assert.That(published.Single().Message, Does.Contain("park attempt failed"));
+            Assert.That(published.Single().Message, Does.Not.Contain("cannot park"));
+        }
+
+        [Test]
+        public async Task A_failed_flip_on_an_unparkable_mount_stops_tracking_instead() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();   // CanPark defaults to false
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(callLog.Last(), Is.EqualTo("SetTracking(False)"),
+                "safe rest ends with tracking OFF — the §58.4 restore-to-tracking path must not run");
+            Assert.That(published.Single().Message, Does.Contain("tracking was stopped"));
+        }
+
         /// <summary>A healthy tracking mount whose pier side flips east→west when MeridianFlip is
         /// called — so safety tests that should PASS the pier-side gate do.</summary>
         private void SetupHealthyTrackingMount() {
