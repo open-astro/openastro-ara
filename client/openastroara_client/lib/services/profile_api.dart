@@ -805,6 +805,9 @@ class ProfileApi {
         onDiskSpaceCritical: (j['on_disk_space_critical'] as String?) == 'abort'
             ? DiskSpaceCriticalAction.abort
             : DiskSpaceCriticalAction.warn,
+        flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
+        expectedFlipSlewSeconds:
+            (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -822,6 +825,8 @@ class ProfileApi {
         'skip_target_if_recovery_fails': v.skipTargetIfRecoveryFails,
         // enum.name is 'warn'/'abort' — matches the server's OnDiskSpaceCritical values verbatim.
         'on_disk_space_critical': v.onDiskSpaceCritical.name,
+        'flip_safety_enabled': v.flipSafetyEnabled,
+        'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
       };
 
   static UnsafeAction _unsafeActionFromString(String? s) {
