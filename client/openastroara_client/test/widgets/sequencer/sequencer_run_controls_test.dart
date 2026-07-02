@@ -123,31 +123,35 @@ void main() {
     TextButton btn(WidgetTester tester, String label) => tester.widget<TextButton>(
         find.ancestor(of: find.text(label), matching: find.byType(TextButton)));
 
-    testWidgets('no active run → Run enabled, Abort disabled', (tester) async {
+    testWidgets('no active run → Run enabled, Pause/Abort disabled', (tester) async {
       await pump(tester, run: null);
       expect(btn(tester, 'Run').onPressed, isNotNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
       expect(btn(tester, 'Abort').onPressed, isNull);
     });
 
-    testWidgets('running → Abort enabled, Run disabled', (tester) async {
+    testWidgets('running → Pause + Abort enabled, Run disabled', (tester) async {
       await pump(tester, run: _info(SequenceRunState.running));
       expect(btn(tester, 'Run').onPressed, isNull);
+      expect(btn(tester, 'Pause').onPressed, isNotNull);
       expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
-    testWidgets('no Pause/Resume control is offered (daemon pause is a no-op)',
+    testWidgets('paused → Run shows Resume (enabled), Abort enabled, Pause disabled',
         (tester) async {
-      // The daemon's PauseAsync is an accepted no-op that never suspends a run
-      // (PORT_TODO §38), so the toolbar must not expose a Pause/Resume control —
-      // in any run state — or the user would think a run paused when it didn't.
-      await pump(tester, run: _info(SequenceRunState.running));
-      expect(find.text('Pause'), findsNothing);
-      expect(find.text('Resume'), findsNothing);
+      // The daemon's §38 instruction-boundary pause is real now: Paused means
+      // the engine actually suspended, Resume releases it.
+      await pump(tester, run: _info(SequenceRunState.paused));
+      expect(find.text('Resume'), findsOneWidget);
+      expect(btn(tester, 'Resume').onPressed, isNotNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
+      expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
-    testWidgets('starting → Run disabled, Abort enabled', (tester) async {
+    testWidgets('starting → Run + Pause disabled, Abort enabled', (tester) async {
       await pump(tester, run: _info(SequenceRunState.starting));
       expect(btn(tester, 'Run').onPressed, isNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
       expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
@@ -157,9 +161,10 @@ void main() {
       expect(btn(tester, 'Run').onPressed, isNull);
     });
 
-    testWidgets('completed → Run re-enabled (re-run)', (tester) async {
+    testWidgets('completed → Run re-enabled (re-run), Pause disabled', (tester) async {
       await pump(tester, run: _info(SequenceRunState.completed));
       expect(btn(tester, 'Run').onPressed, isNotNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
       expect(btn(tester, 'Abort').onPressed, isNull);
     });
 
