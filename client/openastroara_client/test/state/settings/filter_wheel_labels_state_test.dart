@@ -254,6 +254,40 @@ void main() {
       expect(api.putLog.last, ['X', 'Y']);
     });
 
+    test('r2: a server switch mid-PUT refuses the old server\'s echo', () async {
+      // Mutable holder so invalidating the provider simulates a server switch:
+      // the notifier rebuilds (generation bump) and hydrates from the NEW api.
+      var current = _FakeApi()..served = ['A-old'];
+      final c = ProviderContainer(overrides: [
+        profileApiProvider.overrideWith((ref) => current),
+      ]);
+      addTearDown(c.dispose);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      final n = c.read(filterWheelLabelsProvider.notifier);
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'A-old');
+
+      // Persist to server A, held in flight…
+      final apiA = current;
+      apiA.putGate = Completer<void>();
+      n.setLabel(1, 'A-edit');
+      final persist = n.persistToServer();
+      await Future<void>.delayed(Duration.zero);
+
+      // …the active server switches to B and its hydration lands.
+      current = _FakeApi()..served = ['B-new'];
+      c.invalidate(profileApiProvider);
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'B-new');
+
+      // Server A's PUT finally resolves — its echo is from the wrong world.
+      apiA.putGate!.complete();
+      apiA.putGate = null;
+      await persist;
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'B-new',
+          reason: "the old server's echo must not overwrite the new server's state");
+    });
+
     test('persistToServer without a server throws for the panel to surface', () {
       final c = _apiContainer(null);
       c.listen(filterWheelLabelsProvider, (_, _) {});

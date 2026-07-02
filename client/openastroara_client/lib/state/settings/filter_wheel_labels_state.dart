@@ -115,8 +115,13 @@ class FilterWheelLabelsNotifier extends Notifier<FilterWheelLabels> {
         .catchError((Object _) {});
     final run = previous.then((_) async {
       final versionAtSend = _editVersion;
+      // r2: also refuse the echo after an active-server switch — build() bumps
+      // _generation and re-hydrates from the NEW server; the old server's echo
+      // must not overwrite that freshly-hydrated state (same guard the switch
+      // notifier applies to its own write echoes).
+      final genAtSend = _generation;
       final echoed = await api.putFilterWheelLabels(state);
-      if (_editVersion == versionAtSend) {
+      if (_editVersion == versionAtSend && _generation == genAtSend) {
         state = echoed;
       }
     });
