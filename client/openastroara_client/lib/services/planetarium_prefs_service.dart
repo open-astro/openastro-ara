@@ -5,7 +5,9 @@ import 'package:path_provider/path_provider.dart';
 
 /// Persists the §36 planetarium's Display-panel layer toggles (deep-sky objects,
 /// constellation lines/art, equatorial/azimuthal grids, DSS2, atmosphere,
-/// landscape) so a user's choices survive closing and reopening Ara.
+/// landscape) — plus the Catalogs-panel overlay toggles, namespaced as
+/// `cat:{id}` keys in the same map — so a user's choices survive closing and
+/// reopening Ara.
 ///
 /// Stored as a small JSON file (`layer -> bool`) in the app-support directory. We
 /// deliberately do NOT use the page's own `localStorage`: the loopback asset server
