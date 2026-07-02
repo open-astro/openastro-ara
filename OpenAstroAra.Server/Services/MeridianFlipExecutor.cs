@@ -147,7 +147,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         try {
             safety = profileStore?.GetSafetyPolicies();
             if (safety is { FlipSafetyEnabled: true }) {
-                failReason = await PreFlipFlightCheck(targetCoordinates, timeToFlip, settings, token);
+                failReason = await PreFlipFlightCheck(targetCoordinates, timeToFlip, settings, safety, token);
             }
         } catch (OperationCanceledException) {
             throw;
@@ -398,7 +398,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     /// one §42.3 hot-reconnect attempt before giving up on a disconnected device. The spec's
     /// "predicted slew duration sane" gate has no Alpaca API to read an estimate from, so the
     /// profile's ExpectedFlipSlewSeconds stands in for it in the Layer-2 watchdog instead.</summary>
-    private async Task<string?> PreFlipFlightCheck(Coordinates target, TimeSpan timeToFlip, IMeridianFlipSettings settings, CancellationToken token) {
+    private async Task<string?> PreFlipFlightCheck(Coordinates target, TimeSpan timeToFlip,
+            IMeridianFlipSettings settings, SafetyPoliciesDto safety, CancellationToken token) {
         Logger.Info("Meridian Flip - Running the §58.9 pre-flip flight check.");
 
         // Endpoint prediction: the flip re-points at the same target from the other pier side, so
@@ -428,7 +429,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
         // Required equipment, each with one §42.3 hot-reconnect attempt. Camera is always required
         // (imaging resumes after the flip); guider/focuser only when the flip flow will use them.
-        var recalGuider = profileStore.GetSafetyPolicies().MeridianRecalGuider;
+        var recalGuider = safety.MeridianRecalGuider;
         if (await EnsureConnected(DeviceType.Camera, () => cameraMediator?.GetInfo().Connected ?? false, token) is { } cameraFail) {
             return cameraFail;
         }
