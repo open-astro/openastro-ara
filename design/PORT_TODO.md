@@ -243,11 +243,20 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   the straight arms, not the vertex curvature). Note: the combined TREND*PARABOLIC / TREND*HYPERBOLIC enum
   variants (which average a trendline estimate with a smooth-curve estimate) are not implemented — low value
   over the three standalone fits; revisit only if a profile needs them.
-- **Live focuser V-curve sweep (§59.8 / §59.3 Phase-1 calibration) — PHYSICAL BLOCKER (no focuser on the rig):**
-  the orchestration that steps a connected Alpaca focuser through 9 positions, captures + runs `StarDetector`
-  HFR at each, feeds `FocusCurveFit`, moves to the predicted best, and verifies. Needs a focuser to live-validate;
-  the user's Alpaca server is camera-only. Build the orchestration against `IFocuserMediator` (already unified,
-  #14e PR14) + the capture path, but defer end-to-end validation. Backlash auto-discovery (§59.7) rides on this.
+- ✅ **Live focuser V-curve sweep — ORCHESTRATION BUILT (2026-07-02); live validation still focuser-gated.**
+  `AutofocusSweepService` (implements the sequencer's new `IAutofocusExecutor` seam): steps ±Steps·StepSize
+  around the start in ONE direction (outermost first → every sample carries identical backlash bias, final
+  approach also from above), probes each position through the §59 `IAnalysisFrameSource` capture seam
+  (same device path + in-flight gate as real captures, nothing persisted), `StarDetector` HFR per probe
+  (min 3 stars or the sweep fails — no junk points into the fit), `FocusCurveFit.FitBest`, and moves to the
+  best only when the fit is usable AND within the sampled range. Failure/cancel restores the start position
+  per the profile's `RestorePositionOnFailure`. Wired into: `RunAutofocus` (imported NINA plans now focus for
+  real), the factory prototype, and the meridian flip's `AutoFocusAfterFlip` (a failed re-focus logs + continues
+  per §58.7, never aborts the night). Fully unit-tested with mocked equipment + an injected metric (8 tests:
+  single-direction probing, vertex recovery, disconnected/invalid-config/starless/flat-curve/capture-failure/
+  cancellation × restore policy). **Still owed:** live end-to-end validation on a real focuser (the dev rig is
+  camera-only — the original physical blocker stands for VALIDATION, not the build), §59.7 backlash
+  auto-discovery, and the `AutofocusAfterExposures` trigger's own wiring check.
 - **Smart Focus (§59.2–59.4):** the feature-vector model (donut diameters, asymmetry, telescope-type extractor)
   + inverse-mapping calibration table. Research-grade "better than NINA" feature — likely v0.1.0, not v0.0.1.
 - **AF triggers + sequencer wiring (§59.5):** sequence-start / temp-Δ / HFR-drift / post-flip / first-filter
