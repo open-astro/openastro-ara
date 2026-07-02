@@ -129,9 +129,20 @@ public sealed partial class CameraService {
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
             _liveViewMeta = new LiveViewMeta(request.ExposureSec, DateTimeOffset.UtcNow);
+            // §64 OSC: resolve the session's Bayer pattern once at start (it can't change mid-session
+            // — a restart is required to rebin anyway). Debayer only at 1×1, mirroring the capture
+            // path's BAYERPAT stamping: hardware binning averages adjacent cells, mixing R/G/B, so a
+            // binned readout is no longer a Bayer mosaic and renders as luminance instead.
+            BayerPattern? bayerPattern = null;
+            if (request.BinX == 1 && request.BinY == 1
+                    && Debayer.TryParse(_capabilities?.BayerPattern, out var parsedPattern)) {
+                bayerPattern = parsedPattern;
+            }
             var session = Interlocked.Increment(ref _liveViewSession);
             Volatile.Write(ref _liveViewActive, 1);
-            _liveViewLoop = Task.Run(() => RunLiveViewLoopAsync(request, session, cts.Token), CancellationToken.None);
+            _liveViewLoop = Task.Run(
+                () => RunLiveViewLoopAsync(request, session, bayerPattern, cts.Token),
+                CancellationToken.None);
         } finally {
             _liveViewMutex.Release();
         }
@@ -216,7 +227,9 @@ public sealed partial class CameraService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Live View loop boundary: a single frame's device/render failure (ASCOM throw, dropped link, decode error) must not fault the long-running loop — it is logged and the loop continues to the next frame. CA1031's log-and-recover boundary applies.")]
-    private async Task RunLiveViewLoopAsync(LiveViewStartRequestDto request, long session, CancellationToken token) {
+    private async Task RunLiveViewLoopAsync(
+            LiveViewStartRequestDto request, long session, BayerPattern? bayerPattern,
+            CancellationToken token) {
         var consecutiveFailures = 0;
         // The bin/gain/subframe are constant for a session, so ApplyExposureSettings (up to ~10
         // Alpaca round-trips) only needs to run once — re-running it every frame is pure latency on
@@ -244,7 +257,9 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    produced = await CaptureLiveFrameAsync(client, request, session, applySettings: !settingsApplied, token).ConfigureAwait(false);
+                    produced = await CaptureLiveFrameAsync(
+                        client, request, session, bayerPattern,
+                        applySettings: !settingsApplied, token).ConfigureAwait(false);
                     settingsApplied = true; // settings are current (just applied, or unchanged since we hold the gate)
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;
@@ -285,7 +300,9 @@ public sealed partial class CameraService {
 
     // Returns true if a frame was published, false if the frame was skipped (device never reached
     // ImageReady / dropped). Throwing propagates to the loop's catch, which counts it as a failure.
-    private async Task<bool> CaptureLiveFrameAsync(AlpacaCamera client, LiveViewStartRequestDto request, long session, bool applySettings, CancellationToken token) {
+    private async Task<bool> CaptureLiveFrameAsync(
+            AlpacaCamera client, LiveViewStartRequestDto request, long session,
+            BayerPattern? bayerPattern, bool applySettings, CancellationToken token) {
         // Reuse the capture path's settings application (bin/gain, full-frame subframe). Applied only
         // when the loop knows the device settings may be stale (first frame of a session, or after a
         // manual capture / error) — see RunLiveViewLoopAsync's settingsApplied tracking.
@@ -326,18 +343,30 @@ public sealed partial class CameraService {
             Interlocked.Exchange(ref _downloading, 0);
         }
         var (pixels, width, height) = ConvertImageArray(imageArray);
-        // Mono renders true luminance; an RGGB OSC frame renders its raw CFA mosaic as greyscale (no
-        // debayer here) — acceptable for framing/focus. A debayered live render is a later LV slice
-        // (tracked in PORT_TODO §64). SensorType.Color is refused at start (3-plane, unsupported).
-        var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
-        var jpeg = JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim);
+        var (jpeg, outWidth, outHeight) = RenderLiveFrame(pixels, width, height, bayerPattern);
 
         // Single writer (this loop). Meta (exposure/start) was set once at start and isn't touched
         // here, so the only per-frame publish is the frame itself — one atomic volatile write
         // carrying seq + dimensions + capture time, so status reads can't tear.
         var nextSeq = (_liveViewFrame?.Seq ?? 0) + 1;
-        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq, session, width, height, DateTimeOffset.UtcNow);
+        _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq, session, outWidth, outHeight, DateTimeOffset.UtcNow);
         return true;
+    }
+
+    // §64 render: raw pixels → live JPEG. An OSC session at 1×1 (bayerPattern set at start) renders
+    // debayered COLOUR via the shared §65 preview recipe — super-pixel halves the dimensions, which
+    // the published frame dims must reflect (the client sizes by them). Mono — or a binned OSC
+    // readout, which is no longer a Bayer mosaic — renders greyscale luminance as before.
+    // SensorType.Color (already-debayered 3-plane) is refused at start.
+    internal static (byte[] Jpeg, int Width, int Height) RenderLiveFrame(
+            ushort[] pixels, int width, int height, BayerPattern? bayerPattern) {
+        if (bayerPattern is { } pattern) {
+            var (rgb, ow, oh) = Debayer.SuperPixelStretched(
+                pixels, width, height, pattern, StretchAlgorithm.AutoStf);
+            return (JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: LiveViewMaxDim), ow, oh);
+        }
+        var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
+        return (JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim), width, height);
     }
 
     // Called from Dispose: cancel the loop promptly without awaiting it, and release the CTS. Not

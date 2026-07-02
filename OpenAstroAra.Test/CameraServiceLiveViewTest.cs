@@ -102,5 +102,52 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.GetLiveViewStatus().Active, Is.False);
             Assert.That(svc.GetLiveViewFrame(), Is.Null);
         }
+
+        // ─── §64 OSC debayered render (the RenderLiveFrame seam) ───
+
+        [Test]
+        public void RenderLiveFrame_with_a_bayer_pattern_renders_halved_color_dimensions() {
+            // 8×6 RGGB mosaic with varied cell values. Super-pixel debayer halves both axes, and
+            // the published dims must be the halved ones (the client sizes its viewport by them).
+            const int w = 8, h = 6;
+            var mosaic = new ushort[w * h];
+            for (var i = 0; i < mosaic.Length; i++) {
+                mosaic[i] = (ushort)(i * 997 % 65536);
+            }
+            var (jpeg, ow, oh) = CameraService.RenderLiveFrame(
+                mosaic, w, h, OpenAstroAra.Stretch.BayerPattern.RGGB);
+            Assert.That((ow, oh), Is.EqualTo((4, 3)));
+            Assert.That(jpeg, Has.Length.GreaterThan(2));
+            Assert.That((jpeg[0], jpeg[1]), Is.EqualTo(((byte)0xFF, (byte)0xD8)), "JPEG SOI marker");
+        }
+
+        [Test]
+        public void RenderLiveFrame_without_a_pattern_keeps_dimensions() {
+            // Mono (or binned-OSC) path: greyscale luminance at the native dimensions, as before.
+            const int w = 8, h = 6;
+            var pixels = new ushort[w * h];
+            for (var i = 0; i < pixels.Length; i++) {
+                pixels[i] = (ushort)(i * 997 % 65536);
+            }
+            var (jpeg, ow, oh) = CameraService.RenderLiveFrame(pixels, w, h, bayerPattern: null);
+            Assert.That((ow, oh), Is.EqualTo((8, 6)));
+            Assert.That((jpeg[0], jpeg[1]), Is.EqualTo(((byte)0xFF, (byte)0xD8)), "JPEG SOI marker");
+        }
+
+        [Test]
+        public void SuperPixelStretched_maps_the_bayer_cells_to_interleaved_rgb() {
+            // One RGGB tile: R=65535, G=32768 (both greens), B=16384. Manual stretch with default
+            // params is a straight linear 16→8-bit map, so the interleaved output is deterministic:
+            // [255, ~128, ~64] — proving both the cell→channel mapping and the R,G,B byte order.
+            var mosaic = new ushort[] { 65535, 32768, 32768, 16384 };
+            var (rgb, w, h) = OpenAstroAra.Stretch.Debayer.SuperPixelStretched(
+                mosaic, 2, 2, OpenAstroAra.Stretch.BayerPattern.RGGB,
+                OpenAstroAra.Stretch.StretchAlgorithm.Manual, new OpenAstroAra.Stretch.StretchParams());
+            Assert.That((w, h), Is.EqualTo((1, 1)));
+            Assert.That(rgb, Has.Length.EqualTo(3));
+            Assert.That(rgb[0], Is.EqualTo(255));
+            Assert.That((int)rgb[1], Is.EqualTo(128).Within(2));
+            Assert.That((int)rgb[2], Is.EqualTo(64).Within(2));
+        }
     }
 }
