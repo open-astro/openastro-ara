@@ -165,6 +165,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_poke_racing_the_seal_never_publishes_after_drain_returns() {
+            // r2 TOCTOU: hammer the exact window — a poke in flight while
+            // SealAndDrainAsync runs. After drain returns, the publish count must
+            // never rise again, whichever side of the seal each poke landed on.
+            for (var iteration = 0; iteration < 300; iteration++) {
+                var count = 0;
+                var pump = new CoalescingAsyncPublisher(() => {
+                    Interlocked.Increment(ref count);
+                    return Task.CompletedTask;
+                });
+
+                using var start = new ManualResetEventSlim(false);
+                var poker = Task.Run(() => {
+                    start.Wait();
+                    for (var i = 0; i < 20; i++) {
+                        pump.Poke();
+                    }
+                });
+                start.Set();
+                await pump.SealAndDrainAsync();
+                var atDrain = Volatile.Read(ref count);
+
+                await poker; // let every racing poke finish…
+                await Task.Delay(1); // …and any (wrongly started) pump land its publish
+                Assert.That(Volatile.Read(ref count), Is.EqualTo(atDrain),
+                    $"iteration {iteration}: a publish landed after SealAndDrainAsync returned");
+            }
+        }
+
+        [Test]
         public void A_null_delegate_throws_up_front() {
             Assert.Throws<ArgumentNullException>(() => _ = new CoalescingAsyncPublisher(null!));
         }

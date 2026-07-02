@@ -60,7 +60,20 @@ public sealed class CoalescingAsyncPublisher {
         // Pending FIRST, then try to acquire: a concurrent pump that just consumed
         // pending will either see this one in its loop check, or the release-recheck
         // below restarts it — a poke can never be lost between the two flags.
-        Volatile.Write(ref _pending, 1);
+        // Interlocked (full fence), NOT Volatile.Write: the seal re-check below is
+        // the store→load half of a Dekker pair with SealAndDrainAsync's
+        // seal-store→pending-load, and acquire/release alone permits the StoreLoad
+        // reordering that would let both sides miss each other (r2).
+        Interlocked.Exchange(ref _pending, 1);
+        if (Volatile.Read(ref _sealed) == 1) {
+            // r2 TOCTOU close: the seal landed between the fast-path check above and
+            // our pending-store. The drain loop may be spinning on our pending flag —
+            // clear it and DON'T start a pump. (Sealed is permanent, so clearing can
+            // only ever suppress a publish, which is exactly what sealed means; a
+            // poke racing the seal is concurrent, and either outcome is linearizable.)
+            Volatile.Write(ref _pending, 0);
+            return;
+        }
         if (Interlocked.CompareExchange(ref _publishing, 1, 0) == 0) {
             _pumpTask = PumpAsync();
         }
@@ -71,7 +84,10 @@ public sealed class CoalescingAsyncPublisher {
     /// coalesced progress publish can never arrive after it. Late pokes (queued
     /// Progress&lt;T&gt; callbacks landing post-run) become no-ops.</summary>
     public async Task SealAndDrainAsync() {
-        Volatile.Write(ref _sealed, 1);
+        // Full fence (see Poke): the drain loop's pending/publishing loads must not
+        // reorder ahead of this seal-store, or a racing poke could slip past both
+        // sides' checks.
+        Interlocked.Exchange(ref _sealed, 1);
         // The pump may tail-restart once (release-recheck), so loop over snapshots
         // of the live pump task until the machine is quiescent.
         while (Volatile.Read(ref _publishing) == 1 || Volatile.Read(ref _pending) == 1) {
