@@ -68,6 +68,10 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
   bool _loading = false;
   bool _hidden = false; // 404 — older daemon without the endpoint
   Object? _error;
+  // Monotonic fetch sequence: didUpdateWidget re-fetches on a filter change, so
+  // two requests can be in flight and resolve out of order — only the latest
+  // one may write state, or a slow stale response would overwrite a newer one.
+  int _fetchSeq = 0;
 
   @override
   void initState() {
@@ -82,6 +86,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
   }
 
   Future<void> _fetch() async {
+    final seq = ++_fetchSeq;
     final api = ref.read(optimalSubApiProvider);
     if (api == null) {
       setState(() => _hidden = true); // no server — nothing to advise from
@@ -94,21 +99,21 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     });
     try {
       final result = await api.get(filter: widget.filterName);
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return; // superseded — drop the stale response
       setState(() {
         _result = result;
         _hidden = result == null; // 404 → feature not on this daemon
         _loading = false;
       });
     } on OptimalSubUnavailable catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(() {
         _unavailable = e.message;
         _result = null;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _fetchSeq) return;
       setState(() {
         _error = e;
         _loading = false;

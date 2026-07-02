@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -206,5 +208,66 @@ void main() {
       expect(find.textContaining('Glover'), findsNothing);
       expect(find.text('Apply'), findsNothing);
     });
+
+    testWidgets('a stale slow response cannot overwrite a newer one',
+        (tester) async {
+      // First request (filter A) resolves SLOWLY; the filter then changes and
+      // the second request (filter B) resolves fast. When A's response finally
+      // lands it must be dropped — the advisor keeps B's figure.
+      final slowA = Completer<OptimalSubResult?>();
+      final api = _CompleterFakeApi({
+        'A': slowA.future,
+        'B': Future.value(_viable), // 300 s → "5.0 min"
+      });
+      container = ProviderContainer(overrides: [
+        optimalSubApiProvider.overrideWith((ref) => api),
+      ]);
+      addTearDown(container.dispose);
+      container.read(sequenceEditorProvider.notifier).load(smartExposureDetail());
+
+      Widget host(String filter) => UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: Scaffold(
+                body: OptimalSubAdvisor(path: const [1], filterName: filter),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(host('A'));
+      await tester.pump();
+      await tester.pumpWidget(host('B')); // filter change → second fetch
+      await tester.pump();
+      expect(find.textContaining('Optimal Sub: 5.0 min'), findsOneWidget,
+          reason: "B's fast response renders");
+
+      // Now the stale A response arrives — with a very different figure.
+      slowA.complete(const OptimalSubResult(
+        skyFluxEPerSecPerPx: 10,
+        floorSec: 2,
+        ceilingSec: 4000,
+        viable: true,
+        limitingBound: 'readnoisefloor',
+        recommendedSec: 2,
+      ));
+      await tester.pump();
+      expect(find.textContaining('Optimal Sub: 5.0 min'), findsOneWidget,
+          reason: "the newer result survives; A's stale 2 s must not overwrite it");
+      expect(find.textContaining('Optimal Sub: 2 s'), findsNothing);
+    });
   });
+}
+
+/// Per-filter canned futures, so a test can hold one response open (a
+/// [Completer]) while another resolves — the stale-response race harness.
+class _CompleterFakeApi implements OptimalSubApi {
+  _CompleterFakeApi(this.byFilter);
+  final Map<String, Future<OptimalSubResult?>> byFilter;
+
+  @override
+  Future<OptimalSubResult?> get({String? filter, double? bandwidthNm}) =>
+      byFilter[filter] ?? Future.value(null);
+
+  @override
+  void close() {}
 }
