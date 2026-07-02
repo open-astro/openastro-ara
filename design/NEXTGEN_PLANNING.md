@@ -167,6 +167,73 @@ spec model splits along a real seam:
 
 Net: **zero camera database required.** Ship Tier 0 day one; the rest is self-populating or optional.
 
+### 3.1 Star-detectability floor — design proposal (2026-07-02, awaiting maintainer sign-off)
+
+> Status: PROPOSAL. The Glover floor + saturation ceiling shipped in slice 1; this section pins
+> down the first "refinement" bound so it can be built design-first rather than improvised. No
+> code exists yet — the model choice below wants a maintainer yes/no before implementation.
+
+**What it computes.** The shortest sub `t_stars` such that a sub is *usable by the pipeline*:
+enough stars register above the detection threshold to align/stack (and, for solve-per-sub
+workflows, to plate-solve). Below `t_stars`, subs are individually well-exposed for the target
+but the night's data won't integrate. Two ingredients:
+
+1. **Limiting magnitude for a sub of length `t`** — pure rig+sky math, no new data:
+   a star of magnitude `m` delivers `S(m) = F₀·10^(−0.4m)·A·QE·t` electrons through aperture
+   area `A` (atmospheric + optical losses folded into a single documented transmission factor);
+   detection needs `SNR = S/√(S + n_pix·(P·t + R²)) ≥ k` with the sky rate `P` (the same
+   e⁻/s/pixel sky-background flux §2's Glover derivation calls `P`) already computed
+   by `OptimalSubCalculator` from Bortle/SQM, `R` the read noise, `n_pix` the seeing-disc
+   footprint from the profile's `TypicalSeeingArcsec` + pixel scale. Solve for `m_lim(t)`;
+   `k = 5` (the conventional detection threshold; registration wants SNR-10-ish centroids, so
+   present both). Every input already lives in the profile. **This half is uncontroversial.**
+
+2. **Star count above `m_lim` in the FOV** — the contentious half. Options considered:
+   - **(a) Analytic galactic star-count model** (Bahcall–Soneira-family approximation:
+     `log₁₀ N(<m)` per deg² as a smooth function of `m` and galactic latitude). Pros: no data
+     dependency, covers any FOV/depth. Cons: it is an *invented curve* unless validated —
+     exactly the "garbage catalog" failure mode this project refuses.
+   - **(b) Empirical counts from installed catalogs.** HYG (installed via the Data Manager)
+     is honest data but caps near mag 9 — far too shallow (a 1° FOV needs `m_lim` 11–14 for
+     useful counts). ASTAP's D50/D80 star databases go deep enough but are the solver's binary
+     format; parsing them couples us to the fork's internals for an advisory number.
+   - **(c) RECOMMENDED — analytic model, validated against HYG where HYG is complete.** Ship
+     (a)'s curve, but with a unit test that compares its predicted `N(<9)` against actual HYG
+     counts over a grid of galactic latitudes (the catalog is complete to ~mag 9): the model is
+     only trusted because the test proves it against real data in the range we CAN check, and
+     the extrapolation beyond mag 9 is labelled as such in the "Why?" reason string. If the
+     validation shows >2× error anywhere on the grid, the model is wrong and doesn't ship.
+     **Grid + trigger, pinned (r1):** validate `N(< 9)` per deg² at galactic latitudes
+     `|b| ∈ {0°, 10°, 20°, 30°, 50°, 70°, 90°}`, HYG counts pooled over all longitudes in a
+     ±5° band around each latitude (longitude pooling averages out spiral-arm/cluster
+     clumping the smooth model can't and shouldn't capture); go/no-go = the model within a
+     factor of 2 of the pooled HYG count at EVERY grid point. Seven points, one dataset,
+     no tunable escape hatch.
+
+**Presentation (advise-don't-dictate, as everywhere):** `t_stars` joins the window as a floor
+bound with a reason tag ("~12 stars/sub at 30 s — thin for registration (+0)"); it never gates.
+When `t_stars` exceeds the Glover floor, the window message flags that stars, not read noise,
+are the binding constraint (the design's "flagging when an obvious bound is the real
+constraint").
+
+**Snapshot semantics (r1):** `m_lim(t)` computes from the PROFILE values at computation time
+(seeing = `TypicalSeeingArcsec`, pixel scale from the unbinned optics train) — the advisory is
+a planning figure, not a live-recomputed one, same as every other §3 bound. Binning cancels to
+first order (the seeing-disc footprint `n_pix` shrinks as binned-pixel area grows while per-pixel
+sky+read terms grow with it), so no per-binning variant is computed; a seeing value that differs
+badly from tonight's reality shifts `m_lim` like it shifts everything else seeing-derived —
+garbage-in is the profile's problem, stated once in the reason string's assumptions.
+
+**Slice plan (post-sign-off):** 1) `m_lim(t)` solver + tests against hand-computed cases;
+2) the count model + the HYG-validation test (the go/no-go gate for the whole feature);
+3) wire into the §3 window + Tonight's Sky reason tags.
+
+**Satellite-trail ceiling: explicitly NOT proposed.** A defensible trail-rate model needs
+constellation-shell density by sky position, season and local time, and the publicly available
+rates go stale year over year. A wrong number here would masquerade as engineering. Revisit only
+if a maintained public trail-rate source appears; until then the ceiling stays a prose note in
+the §3 window text, not a computed bound.
+
 ---
 
 ## 4. Profile-setup additions implied by §1–§3
