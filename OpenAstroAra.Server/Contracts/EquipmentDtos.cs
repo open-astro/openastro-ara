@@ -90,7 +90,12 @@ public sealed record CameraCapabilitiesDto(
     double FullWellCapacityE = 0,
     double ElectronsPerAdu = 0,
     string? SensorName = null,
-    int CurrentGain = -1);
+    int CurrentGain = -1,
+    // §25.5.5 — whether the camera has a cooler at all (the ASCOM CoolerOn property is
+    // implemented), independent of CanSetTemperature: a "dumb" on/off cooler with no TEC
+    // set-point reports HasCooler=true + CanSetTemperature=false. Drives the client's
+    // cooler-Switch gating (the set-point field stays gated on CanSetTemperature).
+    bool HasCooler = false);
 
 public sealed record CameraStateDto(
     string State,   // "idle" | "exposing" | "downloading" | "error"

@@ -44,6 +44,9 @@ class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
 CameraStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
   bool canSetTemperature = true,
+  // Defaults to canSetTemperature (a TEC camera has a cooler), so pre-§25.5.5
+  // fixtures read unchanged; pass explicitly for the dumb-cooler shape.
+  bool? hasCooler,
   bool coolerOn = false,
   String runtimeState = 'idle',
 }) =>
@@ -56,6 +59,7 @@ CameraStatus _status({
         sensorHeight: 4176,
         pixelSizeUm: 3.76,
         canSetTemperature: canSetTemperature,
+        hasCooler: hasCooler ?? canSetTemperature,
         minGain: 0,
         maxGain: 500,
         minOffset: 0,
@@ -131,6 +135,22 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'Set target'), findsNothing);
     // Only the auto-connect switch remains.
     expect(find.byType(Switch), findsOneWidget);
+  });
+
+  testWidgets(
+      '§25.5.5 dumb cooler: on/off Switch without a set-point field',
+      (tester) async {
+    // CoolerOn implemented but no TEC regulation: the Switch must appear
+    // (auto-connect + cooler = two switches) with no Target/Set target UI.
+    final api =
+        await _pump(tester, _status(canSetTemperature: false, hasCooler: true));
+    expect(find.byType(Switch), findsNWidgets(2));
+    expect(find.widgetWithText(OutlinedButton, 'Set target'), findsNothing);
+    expect(find.text('Target (°C)'), findsNothing);
+    // And the switch actually drives the cooler (never a set-point).
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:cooler:enabled=true:target=null'));
   });
 
   testWidgets('no device connected shows the empty state + Connect…',

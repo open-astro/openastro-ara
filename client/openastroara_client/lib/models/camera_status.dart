@@ -8,6 +8,13 @@ class CameraCapabilities {
   final int sensorHeight;
   final double pixelSizeUm;
   final bool canSetTemperature;
+
+  /// §25.5.5 — whether the camera has a cooler at all (independent of
+  /// [canSetTemperature]: a "dumb" on/off cooler with no TEC set-point is
+  /// hasCooler=true + canSetTemperature=false). A pre-slice daemon omits the
+  /// field; the parse falls back to [canSetTemperature] so older daemons keep
+  /// exactly the old gating.
+  final bool hasCooler;
   final int minGain;
   final int maxGain;
   final int minOffset;
@@ -25,6 +32,7 @@ class CameraCapabilities {
     required this.sensorHeight,
     required this.pixelSizeUm,
     required this.canSetTemperature,
+    this.hasCooler = false,
     required this.minGain,
     required this.maxGain,
     required this.minOffset,
@@ -44,11 +52,15 @@ class CameraCapabilities {
   factory CameraCapabilities.fromJson(Map<String, dynamic> json) {
     int i(String k) => (json[k] as num?)?.toInt() ?? 0;
     double d(String k) => (json[k] as num?)?.toDouble() ?? 0;
+    final canSetTemperature = json['can_set_temperature'] as bool? ?? false;
     return CameraCapabilities(
       sensorWidth: i('sensor_width'),
       sensorHeight: i('sensor_height'),
       pixelSizeUm: d('pixel_size_um'),
-      canSetTemperature: json['can_set_temperature'] as bool? ?? false,
+      canSetTemperature: canSetTemperature,
+      // Absent on a pre-§25.5.5 daemon → fall back to canSetTemperature, which
+      // reproduces the old cooler-UI gating exactly.
+      hasCooler: json['has_cooler'] as bool? ?? canSetTemperature,
       minGain: i('min_gain'),
       maxGain: i('max_gain'),
       minOffset: i('min_offset'),
@@ -71,6 +83,7 @@ class CameraCapabilities {
           other.sensorHeight == sensorHeight &&
           other.pixelSizeUm == pixelSizeUm &&
           other.canSetTemperature == canSetTemperature &&
+          other.hasCooler == hasCooler &&
           other.minGain == minGain &&
           other.maxGain == maxGain &&
           other.minOffset == minOffset &&
@@ -89,6 +102,7 @@ class CameraCapabilities {
         sensorHeight,
         pixelSizeUm,
         canSetTemperature,
+        hasCooler,
         minGain,
         maxGain,
         minOffset,
