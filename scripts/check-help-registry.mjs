@@ -99,11 +99,14 @@ const keys = new Map();
 
 for (const entry of entries) {
   const key = (entry.body.match(/key:\s*'([^']+)'/) || [])[1];
-  const title = (entry.body.match(/title:\s*'([^']*)'/) || [])[1];
-  // body: '...multiline raw string...' OR body: 'singleline'
-  // Match the simpler single-quoted form; multi-line raw strings (''') are
-  // also accepted by checking for ''' presence.
-  const hasBody = /body:\s*('([^']*)'|'''[\s\S]*?''')/.test(entry.body);
+  // Dart string literals come single- OR double-quoted (an entry whose text is
+  // apostrophe-heavy uses double quotes so the paren-walker above never sees
+  // escaped quotes) — accept both for title and body.
+  const title = (entry.body.match(/title:\s*'([^']*)'/) ||
+    entry.body.match(/title:\s*"([^"]*)"/) || [])[1];
+  // body: single-, double-, or triple-single-quoted; with Dart's adjacent-
+  // literal concatenation the first literal is enough to prove presence.
+  const hasBody = /body:\s*('([^']*)'|"([^"]*)"|'''[\s\S]*?''')/.test(entry.body);
 
   // Skip class constructor matches: `const Help({required this.key, ...})`
   // is matched by the same regex but has no quoted `key:` literal.

@@ -1,14 +1,20 @@
+import '../../help/registry.dart';
 import '../../settings/registry.dart';
 import 'settings_nav.dart';
 
 /// §61 smart-search registry. Indexes every settable panel from
-/// `settingsTree` plus individual settings from `settingsRegistry`.
-/// Users can find settings by intent ("dither", "park", "cooler") not just by
-/// exact label.
+/// `settingsTree`, individual settings from `settingsRegistry`, and — §68.4 —
+/// the §69 help entries from `helpRegistry` (informational hits that open the
+/// help sheet rather than jumping to a panel). Users can find things by intent
+/// ("dither", "park", "equipment hub down") not just by exact label.
 
 class SettingsSearchEntry {
   final String? panelId;
   final String? settingId;
+
+  /// §68.4 — set for an informational help hit: activating it opens the §69
+  /// help sheet instead of navigating to a settings panel.
+  final String? helpKey;
   final String label;
   final String groupLabel;
   final List<String> keywords;
@@ -18,6 +24,7 @@ class SettingsSearchEntry {
   const SettingsSearchEntry({
     this.panelId,
     this.settingId,
+    this.helpKey,
     required this.label,
     required this.groupLabel,
     required this.keywords,
@@ -25,7 +32,7 @@ class SettingsSearchEntry {
     this.relatedSettings = const <String>[],
   });
 
-  String get id => settingId ?? panelId ?? '';
+  String get id => settingId ?? panelId ?? helpKey ?? '';
 }
 
 /// Per-panel keyword corpus. Each entry lists user-intent words the panel
@@ -273,6 +280,18 @@ List<SettingsSearchEntry> buildSearchIndex() {
       relatedSettings: s.relatedSettings,
       // Map setting to its parent panel if possible for jumping.
       panelId: _mapSettingToPanel(s),
+    ));
+  }
+  // 3. §68.4 — index help entries as informational hits. The body doubles as
+  // the description so a phrase from the help text itself still matches (the
+  // lowest-score tier, same as setting descriptions).
+  for (final h in helpRegistry.values) {
+    entries.add(SettingsSearchEntry(
+      helpKey: h.key,
+      label: h.title,
+      groupLabel: 'Help',
+      keywords: h.keywords,
+      description: h.body,
     ));
   }
   return entries;

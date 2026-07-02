@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../help/registry.dart';
 import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../state/settings/settings_search.dart';
 import '../theme/ara_colors.dart';
+import 'help_icon.dart';
 
 /// §61 ⌘K command palette. Opens as a centered dialog, indexes
 /// `settingsTree` via `buildSearchIndex()`, and on enter/click jumps to
@@ -71,6 +73,17 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   void _activate() {
     if (_results.isEmpty) return;
     final entry = _results[_selectedIndex];
+    // §68.4 — an informational help hit opens the help sheet instead of
+    // navigating. Grab a root context BEFORE popping the palette (this
+    // widget's own context dies with the pop); the sheet carries its own
+    // Consumer, so no disposed-ref hazard.
+    if (entry.helpKey != null) {
+      final help = helpRegistry[entry.helpKey!];
+      final rootContext = Navigator.of(context, rootNavigator: true).context;
+      Navigator.of(context).pop();
+      if (help != null) showHelpSheet(rootContext, help);
+      return;
+    }
     if (entry.panelId != null) {
       ref.read(selectedSettingsPanelProvider.notifier).select(entry.panelId!);
     }
@@ -244,7 +257,7 @@ class _ResultRow extends StatelessWidget {
                   Text(entry.label,
                       style: Theme.of(context).textTheme.bodyMedium),
                   Text(
-                    '${entry.groupLabel}${entry.settingId != null ? ' · ${entry.settingId}' : ' · ${entry.panelId}'}',
+                    '${entry.groupLabel} · ${entry.id}',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AraColors.textDisabled,
                         ),
@@ -253,7 +266,15 @@ class _ResultRow extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        entry.description!,
+                        // Clamp to a two-line PREVIEW with paragraph breaks
+                        // collapsed: a §68.4 help hit carries its full
+                        // multi-paragraph body as the description (so a body
+                        // phrase still matches in search), which must not dump
+                        // raw newlines/shell commands into the compact row —
+                        // the full text lives in the help sheet it opens.
+                        entry.description!.replaceAll(RegExp(r'\s+'), ' '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: AraColors.textSecondary,
                               fontStyle: FontStyle.italic,
