@@ -25,9 +25,10 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeAutofocusApi implements AutofocusApi {
-  _FakeAutofocusApi({this.terminalState = 'complete', this.errorMessage});
+  _FakeAutofocusApi({this.terminalState = 'complete', this.errorMessage, this.failFirstPolls = 0});
   final String terminalState;
   final String? errorMessage;
+  final int failFirstPolls; // simulate transient poll blips before answering
   int startCalls = 0;
   int polls = 0;
   @override
@@ -39,6 +40,7 @@ class _FakeAutofocusApi implements AutofocusApi {
   @override
   Future<AutofocusJob?> job(String jobId) async {
     polls++;
+    if (polls <= failFirstPolls) throw Exception('transient blip');
     return AutofocusJob(jobId: jobId, state: terminalState, errorMessage: errorMessage);
   }
 
@@ -201,6 +203,23 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(find.textContaining('curve fit unusable'), findsOneWidget);
+  });
+
+  testWidgets('transient poll blips do not abort the tracking', (tester) async {
+    // The daemon job keeps running through a dropped request — one blip must
+    // not declare failure (the mid-sweep-outage convention from the device
+    // liveness polls).
+    final af = _FakeAutofocusApi(terminalState: 'complete', failFirstPolls: 2);
+    await _pump(tester, _status(), autofocus: af);
+    await tester.tap(find.widgetWithText(FilledButton, 'Run autofocus'));
+    await tester.pump();
+    // Two failing polls + the successful third (2s apart each).
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Autofocus complete'), findsOneWidget);
+    expect(af.polls, greaterThanOrEqualTo(3));
   });
 
   testWidgets('Run autofocus disabled without a connected focuser', (tester) async {

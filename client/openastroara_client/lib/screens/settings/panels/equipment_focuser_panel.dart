@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/focuser_status.dart';
+import '../../../services/autofocus_api.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -251,10 +252,36 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
       // Poll to terminal. A sweep is minutes of moves + probe exposures; 2s is
       // plenty responsive without hammering the daemon. Stop polling if this
       // panel is disposed mid-sweep — the daemon job keeps running regardless.
+      //
+      // Transient poll errors must NOT end the tracking (matching the device
+      // liveness-poll convention): the daemon job keeps running through a
+      // dropped request, and declaring failure on one blip would mislead the
+      // user about a sweep that may complete moments later. Only a sustained
+      // outage (~30s of consecutive failures) gives up — on the TRACKING, with
+      // a message that says exactly that.
+      var consecutivePollFailures = 0;
+      const maxConsecutivePollFailures = 15;
       while (!job.isTerminal) {
         await Future<void>.delayed(const Duration(seconds: 2));
         if (!mounted) return;
-        final polled = await api.job(job.jobId);
+        AutofocusJob? polled;
+        try {
+          polled = await api.job(job.jobId);
+          consecutivePollFailures = 0;
+        } catch (e) {
+          if (++consecutivePollFailures >= maxConsecutivePollFailures) {
+            if (!mounted) return;
+            setState(() {
+              _running = false;
+              _lastFailed = true;
+              _result =
+                  'Lost contact with the server while autofocusing — the sweep may still be running on the daemon; check the Focuser panel or the daemon log.';
+            });
+            debugPrint('[autofocus] poll gave up after $consecutivePollFailures consecutive failures: $e');
+            return;
+          }
+          continue; // transient blip — keep tracking
+        }
         if (polled == null) break; // evicted after finishing — treat as done
         job = polled;
       }
