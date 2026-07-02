@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed
+- **§60.9 — sequence progress events no longer pile up under fast capture.** A sequence reporting progress at camera-capture rates used to queue one WebSocket publish per tick with nothing bounding the backlog; progress events now coalesce — at most one publish in flight, bursts collapse into a single trailing update carrying the freshest state. Start/pause/complete events are never throttled, and low-rate progress is still delivered instantly.
+
 ### Added
 - **§37.4/§38 — your filter names now live in the profile and follow you into the sequence editor.** Filter-wheel slot labels persist to the daemon (`/api/v1/profile/filter-wheel/labels`) and load automatically whenever the app connects — so the sequence editor's filter picker offers your filters (not the built-in defaults) on every device, edits in Settings → Filter Wheel save as you commit each row, and everything still works offline with the reference defaults.
 - **NEXTGEN §5 — your camera's quantum efficiency fills itself in.** On connect, ARA now recognises the sensor behind most modern astro cameras (IMX571/455/533/294/183/585 and friends, plus classic CCDs) and fills the profile's peak-QE from a small published-data library — one less spec-sheet number to hunt down before the Optimal Sub advisor works. Only ever fills a blank: anything you've entered yourself is never touched, and an unrecognised sensor simply keeps the calculator's documented default.

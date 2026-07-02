@@ -493,14 +493,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
 
+                // §60.9 progress back-pressure: equipment instructions (TakeExposure et al.)
+                // report at capture rates, and the old per-tick fire-and-forget queued one
+                // publish task per tick with nothing bounding the backlog. The coalescing
+                // single-flight pump keeps at most ONE sequence.progress publish in flight
+                // and collapses a burst into one trailing publish carrying the freshest run
+                // state (read at publish time). Lifecycle events stay unthrottled.
+                var progressPublisher = new CoalescingAsyncPublisher(
+                    () => EmitAsync("sequence.progress", sequenceId, run));
                 var progress = new Progress<ApplicationStatus>(status => {
                     run.SetDescription(status.Status);
                     run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
-                    // Fire-and-forget; EmitAsync swallows all failures so there's no
-                    // unobserved-task risk. No back-pressure yet — see PORT_TODO
-                    // "Progress-emit back-pressure" for the debounce/single-in-flight
-                    // guard to add once equipment instructions report at capture rates.
-                    _ = EmitAsync("sequence.progress", sequenceId, run);
+                    progressPublisher.Poke();
                     WriteCheckpointIfOwner(run, sequenceId);
                 });
 
