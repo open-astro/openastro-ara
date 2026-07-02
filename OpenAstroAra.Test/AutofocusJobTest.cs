@@ -36,9 +36,20 @@ namespace OpenAstroAra.Test {
         // itself is a thin Results.Accepted wrapper smoke-tested by CI's runtime job).
         private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus, int totalProbes = 1) =>
             async (tick, ct) => {
+                // Monotonic guard mirrors the endpoint: a Progress<T> report queued to
+                // the pool can land after the settle tick and must never regress done.
+                var doneLock = new object();
+                var maxDone = 0;
+                void TickMonotonic(int v) {
+                    lock (doneLock) {
+                        if (v <= maxDone) return;
+                        maxDone = v;
+                        tick(v);
+                    }
+                }
                 var progress = new Progress<ApplicationStatus>(s => {
                     if (s.MaxProgress > 0 && s.Progress > 0) {
-                        tick((int)s.Progress);
+                        TickMonotonic((int)s.Progress);
                     }
                 });
                 var ok = await autofocus.RunAutofocusAsync(progress, ct);
@@ -46,7 +57,7 @@ namespace OpenAstroAra.Test {
                     throw new InvalidOperationException(
                         "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
                 }
-                tick(totalProbes);
+                TickMonotonic(totalProbes);
             };
 
         private static Mock<IAutofocusExecutor> Executor(bool result, TimeSpan? delay = null) {
@@ -93,8 +104,6 @@ namespace OpenAstroAra.Test {
                             ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
                         });
                     }
-                    // Progress<T> posts to the pool; give the ticks a beat to land.
-                    await Task.Delay(100, CancellationToken.None);
                     probesSeen.TrySetResult();
                     return true;
                 });
