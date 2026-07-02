@@ -8,8 +8,16 @@ class AutofocusJob {
   final String jobId;
   final String state;
   final String? errorMessage;
+  final int done;
+  final int total;
 
-  const AutofocusJob({required this.jobId, required this.state, this.errorMessage});
+  const AutofocusJob({
+    required this.jobId,
+    required this.state,
+    this.errorMessage,
+    this.done = 0,
+    this.total = 0,
+  });
 
   bool get isTerminal => state == 'complete' || state == 'failed' || state == 'cancelled';
 
@@ -17,6 +25,8 @@ class AutofocusJob {
         jobId: json['job_id'] as String,
         state: json['state'] as String? ?? 'unknown',
         errorMessage: json['error_message'] as String?,
+        done: (json['done'] as num?)?.toInt() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? 0,
       );
 }
 

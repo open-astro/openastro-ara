@@ -121,6 +121,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // Outermost-first, stepping DOWN through every position: one approach direction means
             // backlash biases every sample identically instead of splitting the curve in two.
             var top = startPosition + settings.Steps * settings.StepSize;
+            var totalProbes = settings.Steps * 2 + 1;
             // The FIRST probe needs the same treatment: `top` is reached by an UPWARD move from
             // the start position, so without this overshoot its sample would carry up-approach
             // backlash while every other sample is approached downward — and the topmost point is
@@ -130,7 +131,15 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             for (var i = 0; i <= settings.Steps * 2; i++) {
                 token.ThrowIfCancellationRequested();
                 var position = top - i * settings.StepSize;
-                Report(progress, $"Autofocus: probing position {position} ({i + 1}/{settings.Steps * 2 + 1})");
+                // Structured per-probe progress (Progress/MaxProgress), so consumers
+                // (the §65.5 job endpoint) can tick real numbers instead of parsing
+                // the status string.
+                progress.Report(new ApplicationStatus {
+                    Status = $"Autofocus: probing position {position} ({i + 1}/{totalProbes})",
+                    Progress = i + 1,
+                    MaxProgress = totalProbes,
+                    ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
+                });
                 var reached = await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
                 var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
                 var (hfr, stars) = _metric(frame, token);

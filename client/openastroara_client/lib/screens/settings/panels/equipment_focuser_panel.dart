@@ -237,6 +237,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
   bool _running = false;
   String? _result; // last terminal outcome, shown under the button
   bool _lastFailed = false;
+  String _runningLabel = 'Autofocusing…';
 
   Future<void> _run() async {
     final api = ref.read(autofocusApiProvider);
@@ -245,6 +246,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
       _running = true;
       _result = null;
       _lastFailed = false;
+      _runningLabel = 'Autofocusing…';
     });
     try {
       final started = await api.start();
@@ -281,6 +283,11 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
             return;
           }
           continue; // transient blip — keep tracking
+        }
+        // Live probe count from the daemon's per-probe job ticks (3/9 …).
+        if (polled != null && polled.total > 0 && mounted) {
+          setState(() =>
+              _runningLabel = 'Autofocusing… (${polled!.done}/${polled.total})');
         }
         if (polled == null) {
           // The daemon no longer knows the job. Its in-memory store never
@@ -337,7 +344,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
                     height: 14,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.center_focus_strong, size: 16),
-            label: Text(_running ? 'Autofocusing…' : 'Run autofocus'),
+            label: Text(_running ? _runningLabel : 'Run autofocus'),
           ),
         ),
         if (!widget.focuserConnected)

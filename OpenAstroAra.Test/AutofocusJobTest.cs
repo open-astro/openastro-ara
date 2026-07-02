@@ -34,14 +34,19 @@ namespace OpenAstroAra.Test {
 
         // The exact work body the endpoint enqueues (kept in lockstep — the endpoint lambda
         // itself is a thin Results.Accepted wrapper smoke-tested by CI's runtime job).
-        private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus) =>
+        private static Func<Action<int>, CancellationToken, Task> Work(IAutofocusExecutor autofocus, int totalProbes = 1) =>
             async (tick, ct) => {
-                var ok = await autofocus.RunAutofocusAsync(new Progress<ApplicationStatus>(), ct);
+                var progress = new Progress<ApplicationStatus>(s => {
+                    if (s.MaxProgress > 0 && s.Progress > 0) {
+                        tick((int)s.Progress);
+                    }
+                });
+                var ok = await autofocus.RunAutofocusAsync(progress, ct);
                 if (!ok) {
                     throw new InvalidOperationException(
                         "Autofocus sweep failed — see the daemon log (probe quality, curve fit, or focuser fault).");
                 }
-                tick(1);
+                tick(totalProbes);
             };
 
         private static Mock<IAutofocusExecutor> Executor(bool result, TimeSpan? delay = null) {
@@ -70,6 +75,35 @@ namespace OpenAstroAra.Test {
             var final = await WaitForTerminalAsync(jobs, job.JobId);
             Assert.That(final.State, Is.EqualTo("complete"));
             Assert.That(final.Done, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task Structured_sweep_progress_ticks_the_job_per_probe() {
+            // The sweep reports Progress/MaxProgress per probe; the job body maps
+            // those onto done/total so a polling client sees 3/9, not 0→1.
+            var jobs = new InMemoryBatchJobService(null);
+            var executor = new Mock<IAutofocusExecutor>();
+            var probesSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            executor.Setup(e => e.RunAutofocusAsync(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(async (IProgress<ApplicationStatus> p, CancellationToken _) => {
+                    for (var i = 1; i <= 9; i++) {
+                        p.Report(new ApplicationStatus {
+                            Progress = i,
+                            MaxProgress = 9,
+                            ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue,
+                        });
+                    }
+                    // Progress<T> posts to the pool; give the ticks a beat to land.
+                    await Task.Delay(100, CancellationToken.None);
+                    probesSeen.TrySetResult();
+                    return true;
+                });
+            var job = jobs.Enqueue("autofocus", 9, Work(executor.Object, totalProbes: 9));
+            await probesSeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var final = await WaitForTerminalAsync(jobs, job.JobId);
+            Assert.That(final.State, Is.EqualTo("complete"));
+            Assert.That(final.Total, Is.EqualTo(9));
+            Assert.That(final.Done, Is.EqualTo(9));
         }
 
         [Test]
