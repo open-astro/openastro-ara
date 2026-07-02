@@ -97,4 +97,7 @@ public interface IProfileStore {
 
     FilterSetDto GetFilterSet();
     void PutFilterSet(FilterSetDto value);
+
+    FilterWheelLabelsDto GetFilterWheelLabels();
+    void PutFilterWheelLabels(FilterWheelLabelsDto value);
 }

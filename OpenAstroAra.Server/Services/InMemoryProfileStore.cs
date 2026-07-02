@@ -350,6 +350,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // §37.4 filter-wheel slot labels — the reference-8 default until the user edits.
+    private FilterWheelLabelsDto _filterWheelLabels = FilterWheelLabelsDto.Default;
+
+    public FilterWheelLabelsDto GetFilterWheelLabels() {
+        lock (_lock) { return _filterWheelLabels; }
+    }
+
+    public void PutFilterWheelLabels(FilterWheelLabelsDto value) {
+        lock (_lock) { _filterWheelLabels = value; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(

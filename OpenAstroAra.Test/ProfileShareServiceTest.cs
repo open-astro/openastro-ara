@@ -103,7 +103,9 @@ public class ProfileShareServiceTest {
             ElectronsPerAdu: 0.78, Gain: 100, QuantumEfficiencyPeak: 0.85, AutoCaptured: true),
         FilterSet: new(Filters: [
             new PlanningFilterDto(Name: "Donor L-eXtreme", Kind: FilterKind.Duo, BandwidthNm: 7),
-        ]));
+        ]),
+        // Kept on export: filter names are gear facts, not host/secret/location data.
+        FilterWheelLabels: new(["L", "Ha", "", "OIII"]));
 
     [Test]
     public async Task Export_strips_paths_secrets_location_and_network() {

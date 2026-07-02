@@ -248,6 +248,21 @@ public sealed record OpticsSettingsDto(
 /// defaults in <c>OptimalSubCalculator</c> and says so via <c>assumed_defaults</c>.
 /// <c>AutoCaptured</c> records provenance of the ASCOM-sourced fields (display-only).
 /// </summary>
+/// <summary>§37.4/§46.2 — the filter-wheel SLOT LABELS used for offline sequence
+/// authoring (the §38 editor's SwitchFilter picker sources its dropdown from these)
+/// and as the seed for the planning filter set. Slot-indexed (index 0 = slot 1);
+/// an empty string marks an unused slot; labels are trimmed on write. Distinct from
+/// BOTH the connected wheel's driver-reported names (authoritative while a wheel is
+/// connected — the Settings panel hides this list then) and the NEXTGEN planning
+/// <see cref="FilterSetDto"/> (kind + bandwidth, matched by name).</summary>
+public sealed record FilterWheelLabelsDto(System.Collections.Generic.IReadOnlyList<string> Labels) {
+    /// <summary>The §46.2 reference-wheel default set (8 slots) — mirrors the
+    /// client's pre-round-trip in-memory default so first hydration is a no-op
+    /// visual change.</summary>
+    public static FilterWheelLabelsDto Default { get; } =
+        new(["L", "R", "G", "B", "Hα", "OIII", "SII", ""]);
+}
+
 public sealed record CameraElectronicsDto(
     string SensorName = "",
     double ReadNoiseE = 0,

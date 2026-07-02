@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -72,7 +74,13 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
               currentValue: labels.labelAt(slot),
               getCanonical: () =>
                   ref.read(filterWheelLabelsProvider).labelAt(slot),
-              parse: (s) => labelsN.setLabel(slot, s),
+              // Each committed row persists to the daemon (12h.2b round-trip);
+              // a failure keeps the local edit and says so — offline authoring
+              // still works, the labels just won't survive a daemon-side reload.
+              parse: (s) {
+                labelsN.setLabel(slot, s);
+                unawaited(_persistLabels(context, ref));
+              },
               hint: 'Empty = unused',
             ),
         ],
@@ -209,5 +217,18 @@ class _SlotRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Persist the slot labels to the daemon, surfacing a failure as a SnackBar
+/// (the local edit is kept either way — offline authoring keeps working).
+Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
+  try {
+    await ref.read(filterWheelLabelsProvider.notifier).persistToServer();
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Slot labels not saved: $e')));
+    }
   }
 }
