@@ -219,7 +219,11 @@ def read_nuspec(pkg_id: str, version: str) -> dict[str, str | None]:
 
     def text(tag: str) -> str | None:
         el = meta.find(f"{ns}{tag}")
-        return el.text.strip() if el is not None and el.text else None
+        if el is None or not el.text:
+            return None
+        # Collapse internal whitespace/newlines so a multi-line nuspec field
+        # can't break the fixed one-line-per-field output format.
+        return " ".join(el.text.split()) or None
 
     license_el = meta.find(f"{ns}license")
     expression = None
