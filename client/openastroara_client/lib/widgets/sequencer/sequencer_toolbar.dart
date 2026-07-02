@@ -356,10 +356,13 @@ String _statusLine(bool connected, String? selectedId, String? selectedName,
   final name = selectedName ?? selectedId;
   final state = runInfo?.state;
   if (state == null) return 'Selected: $name';
-  final frames = runInfo!.framesTotal > 0
-      ? ' — ${runInfo.framesCompleted}/${runInfo.framesTotal} frames'
+  // "instructions", NOT "frames" (r1 on the wire rename): the counters are
+  // sequence-tree leaves — slews, filter changes and autofocus steps included —
+  // and the §28.2 startup notification uses the same word.
+  final progress = runInfo!.instructionsTotal > 0
+      ? ' — ${runInfo.instructionsCompleted}/${runInfo.instructionsTotal} instructions'
       : '';
-  return '$name — ${_runStateLabel(state)}$frames';
+  return '$name — ${_runStateLabel(state)}$progress';
 }
 
 String _runStateLabel(SequenceRunState s) => switch (s) {

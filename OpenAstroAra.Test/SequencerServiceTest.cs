@@ -105,7 +105,7 @@ namespace OpenAstroAra.Test {
         public void CountTerminalLeaves_counts_disabled_as_done() {
             // A DISABLED leaf never runs (SequentialStrategy only picks CREATED), so
             // it stays DISABLED — it must count as "done" or a successful run with a
-            // disabled instruction would report frames_completed < frames_total.
+            // disabled instruction would report instructions_completed < instructions_total.
             var leaves = new List<ISequenceItem> {
                 new Annotation { Status = SequenceEntityStatus.FINISHED },
                 new Annotation { Status = SequenceEntityStatus.DISABLED },
@@ -129,8 +129,8 @@ namespace OpenAstroAra.Test {
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
-            Assert.That(state.FramesTotal, Is.EqualTo(3), "3 leaf instructions");
-            Assert.That(state.FramesCompleted, Is.EqualTo(3), "all completed");
+            Assert.That(state.InstructionsTotal, Is.EqualTo(3), "3 leaf instructions");
+            Assert.That(state.InstructionsCompleted, Is.EqualTo(3), "all completed");
             Assert.That(state.CurrentInstructionIndex, Is.Null, "nothing running at completion");
         }
 
@@ -297,7 +297,7 @@ namespace OpenAstroAra.Test {
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
             var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(paused!.State, Is.EqualTo(SequenceRunState.Paused));
-            Assert.That(paused.FramesCompleted, Is.EqualTo(1), "the in-flight wait ran to completion before the suspension");
+            Assert.That(paused.InstructionsCompleted, Is.EqualTo(1), "the in-flight wait ran to completion before the suspension");
             Assert.That(ws.Events, Does.Contain("sequence.paused"));
 
             // Suspended means suspended: the run must still be Paused after a beat.
@@ -307,7 +307,7 @@ namespace OpenAstroAra.Test {
             await svc.ResumeAsync(id, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
-            Assert.That(state.FramesCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
+            Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
             Assert.That(ws.Events, Does.Contain("sequence.resumed"));
         }
 

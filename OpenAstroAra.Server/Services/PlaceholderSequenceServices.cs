@@ -166,7 +166,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
 
                 try { await Task.Delay(MockInstructionDurationMs, run.Cts.Token); } catch (OperationCanceledException) { break; }
 
-                run.FramesCompleted = i + 1;
+                run.InstructionsCompleted = i + 1;
                 await EmitAsync("sequence.instruction_complete", sequenceId, run);
                 await EmitAsync("sequence.progress", sequenceId, run);
                 // §38j-6 — refresh the active/current.json on each progress
@@ -202,7 +202,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         if (_ws is null) return;
         try {
             var json = $$"""
-                {"sequence_id":"{{sequenceId}}","run_id":"{{run.RunId}}","state":"{{run.State.ToString().ToLowerInvariant()}}","current_instruction_index":{{(run.CurrentInstructionIndex.HasValue ? run.CurrentInstructionIndex.Value.ToString() : "null")}},"frames_completed":{{run.FramesCompleted}},"frames_total":{{run.InstructionCount}}}
+                {"sequence_id":"{{sequenceId}}","run_id":"{{run.RunId}}","state":"{{run.State.ToString().ToLowerInvariant()}}","current_instruction_index":{{(run.CurrentInstructionIndex.HasValue ? run.CurrentInstructionIndex.Value.ToString() : "null")}},"instructions_completed":{{run.InstructionsCompleted}},"instructions_total":{{run.InstructionCount}}}
                 """;
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
@@ -216,7 +216,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         public SequenceRunState State { get; set; } = SequenceRunState.Starting;
         public int? CurrentInstructionIndex { get; set; }
         public string? CurrentInstructionDescription { get; set; }
-        public int FramesCompleted { get; set; }
+        public int InstructionsCompleted { get; set; }
         public int InstructionCount { get; }
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? CompletedUtc { get; set; }
@@ -234,8 +234,8 @@ public sealed class PlaceholderSequencerService : ISequencerService {
             CurrentTargetName: null,
             StartedUtc: StartedUtc,
             CompletedUtc: CompletedUtc,
-            FramesCompleted: FramesCompleted,
-            FramesTotal: InstructionCount,
+            InstructionsCompleted: InstructionsCompleted,
+            InstructionsTotal: InstructionCount,
             CurrentInstructionDescription: CurrentInstructionDescription);
     }
 }

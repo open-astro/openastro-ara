@@ -30,8 +30,8 @@ namespace OpenAstroAra.Test {
             CurrentTargetName: null,
             StartedUtc: DateTimeOffset.UtcNow.AddMinutes(-10),
             CompletedUtc: null,
-            FramesCompleted: 4,
-            FramesTotal: 10,
+            InstructionsCompleted: 4,
+            InstructionsTotal: 10,
             CurrentInstructionDescription: null);
 
         [Test]

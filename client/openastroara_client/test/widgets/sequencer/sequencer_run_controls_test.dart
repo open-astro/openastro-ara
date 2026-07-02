@@ -76,7 +76,7 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
 }
 
 SequenceRunStateInfo _info(SequenceRunState s, {int done = 0, int total = 0}) =>
-    SequenceRunStateInfo(state: s, framesCompleted: done, framesTotal: total);
+    SequenceRunStateInfo(state: s, instructionsCompleted: done, instructionsTotal: total);
 
 void main() {
   group('run-state provider', () {
@@ -97,7 +97,7 @@ void main() {
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       final info = await container.read(sequenceRunStateProvider.future);
       expect(info!.state, SequenceRunState.running);
-      expect(info.framesCompleted, 3);
+      expect(info.instructionsCompleted, 3);
     });
   });
 
@@ -122,6 +122,15 @@ void main() {
 
     TextButton btn(WidgetTester tester, String label) => tester.widget<TextButton>(
         find.ancestor(of: find.text(label), matching: find.byType(TextButton)));
+
+    testWidgets('the status line counts INSTRUCTIONS, never "frames" (r1 on the '
+        'frames_*→instructions_* rename)', (tester) async {
+      await pump(tester, run: _info(SequenceRunState.running, done: 3, total: 9));
+      expect(find.textContaining('3/9 instructions'), findsOneWidget,
+          reason: 'the counters are sequence-tree leaves — slews and autofocus '
+              'steps included — not camera exposures');
+      expect(find.textContaining('frames'), findsNothing);
+    });
 
     testWidgets('no active run → Run enabled, Pause/Abort disabled', (tester) async {
       await pump(tester, run: null);

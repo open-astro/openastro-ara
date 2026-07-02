@@ -795,6 +795,22 @@ paths:
 #   diagnostic.alert        — §51 real-time acquisition diagnostic flag
 #   server.restart_imminent — pairs with 1012 close per §34.7 update flow
 #   operation.{started|progress|complete|failed} — long-running op state from REST 202s
+#
+# Sequence-run event ORDERING contract (§60.9):
+#   * A run's terminal event (sequence.complete / sequence.stopped / sequence.aborted /
+#     sequence.failed) MAY arrive WITHOUT a preceding sequence.started — an abort/stop
+#     that lands in the window between run acceptance and the worker executing skips
+#     the (would-be misleading) started event. Consumers must not assume a strict
+#     started → terminal pairing.
+#   * sequence.progress is GUARANTEED to never arrive after the same run's terminal
+#     event: the server seals+drains its progress publisher before every terminal
+#     emit. Progress events are coalesced under load (at most one publish in flight;
+#     bursts collapse to a trailing publish carrying the freshest state), so
+#     consumers must treat each progress payload as a snapshot, not a delta stream.
+#   * instructions_completed / instructions_total count SEQUENCE INSTRUCTIONS (tree
+#     leaves), not camera exposures — renamed from the misleading frames_* while the
+#     wire had no external consumers. A true exposure counter can arrive later as a
+#     separate frames_* pair without a second rename.
 
 # ─── Reusable parameters + schemas ────────────────────────────────────────────
 
@@ -933,8 +949,8 @@ components:
         paused: { type: boolean }
         current_target: { type: string, nullable: true }
         current_instruction: { type: string, nullable: true }
-        frames_completed: { type: integer, minimum: 0 }
-        frames_total: { type: integer, minimum: 0 }
+        instructions_completed: { type: integer, minimum: 0 }
+        instructions_total: { type: integer, minimum: 0 }
 
     Sequence:
       type: object

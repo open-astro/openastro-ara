@@ -182,7 +182,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // returned), so an abort during load still cancels it.
         var dto = await sequences.GetAsync(id, run.Cts.Token);
         if (dto is null) return null;
-        // frames_total + frames_completed are derived from the deserialized leaf
+        // instructions_total + instructions_completed are derived from the deserialized leaf
         // instructions by the worker (UpdateProgress) — the precise denominator we
         // count completions against — so no separate inspector count is set here.
         return ToRootContainer(dto.Body);
@@ -451,7 +451,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         foreach (var leaf in leaves) {
             // DISABLED is "done" too: SequentialStrategy only runs CREATED items, so
             // a disabled leaf never executes and stays DISABLED — counting it keeps
-            // frames_completed consistent with frames_total on a successful run.
+            // instructions_completed consistent with instructions_total on a successful run.
             if (leaf.Status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED
                             or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.DISABLED) {
                 n++;
@@ -490,8 +490,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (run.State is not (SequenceRunState.Aborting or SequenceRunState.Stopped)) {
                 run.State = SequenceRunState.Running;
                 // Flatten the tree once to the ordered leaf instructions; their
-                // Status drives precise frames_completed / current_instruction_index.
-                // (frames_total = leaf count, the same denominator we count against.)
+                // Status drives precise instructions_completed / current_instruction_index.
+                // (instructions_total = leaf count, the same denominator we count against.)
                 var leaves = CollectLeaves(root);
                 run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
@@ -594,8 +594,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["run_id"] = run.RunId.ToString(),
                 ["state"] = run.State.ToString().ToLowerInvariant(),
                 ["current_instruction_index"] = run.CurrentInstructionIndex,
-                ["frames_completed"] = run.FramesCompleted,
-                ["frames_total"] = run.InstructionCount,
+                ["instructions_completed"] = run.InstructionsCompleted,
+                ["instructions_total"] = run.InstructionCount,
             };
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
@@ -640,7 +640,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public OpenAstroAra.Sequencer.Utility.PauseGate Gate { get; } = new();
         public int? CurrentInstructionIndex { get; private set; }   // wired with instruction-level hooks (deferred)
         public string? CurrentInstructionDescription { get; private set; }
-        public int FramesCompleted { get; private set; }            // wired with instruction-level hooks (deferred)
+        public int InstructionsCompleted { get; private set; }            // wired with instruction-level hooks (deferred)
         // Filled in after the body loads (StartAsync reserves the run slot before
         // the async body read, so the count isn't known at construction). Set once
         // before the run becomes observable; an int read/write is atomic.
@@ -668,7 +668,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public void UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
                 InstructionCount = total;
-                FramesCompleted = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
+                InstructionsCompleted = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
                 CurrentInstructionIndex = runningIndex;
             }
         }
@@ -702,8 +702,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     CurrentTargetName: null,
                     StartedUtc: StartedUtc,
                     CompletedUtc: CompletedUtc,
-                    FramesCompleted: FramesCompleted,
-                    FramesTotal: InstructionCount,
+                    InstructionsCompleted: InstructionsCompleted,
+                    InstructionsTotal: InstructionCount,
                     CurrentInstructionDescription: CurrentInstructionDescription);
             }
         }
