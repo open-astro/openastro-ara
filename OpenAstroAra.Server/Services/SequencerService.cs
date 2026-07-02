@@ -50,11 +50,13 @@ namespace OpenAstroAra.Server.Services;
 /// report failure cleanly. Real driving lands when the Alpaca stubs swap for
 /// real drivers (§14e).
 ///
-/// Deferred (tracked in PORT_TODO): <see cref="PauseAsync"/> /
-/// <see cref="ResumeAsync"/> — the headless engine has no pause hook (NINA's
-/// pause was WPF-coupled and stripped), so true mid-run suspension needs an
-/// instruction-boundary pause gate added to the execution loop. Until then these
-/// are accepted no-ops rather than faking a "paused" state the run wouldn't honor.
+/// <see cref="PauseAsync"/> / <see cref="ResumeAsync"/> are REAL: each run owns a
+/// <see cref="OpenAstroAra.Sequencer.Utility.PauseGate"/> attached to the root
+/// container; the execution strategies await it at every instruction boundary
+/// (the current instruction always finishes — NINA pause semantics). The run
+/// reports <c>Paused</c> and emits <c>sequence.paused</c> only when the engine
+/// ACTUALLY suspends (the gate's PauseEntered callback), never on the mere
+/// request; Abort/Stop win over an active pause via token cancellation.
 /// </summary>
 public sealed partial class SequencerService : ISequencerService, IHostedService {
 
@@ -153,6 +155,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // interrupted run. Claim ownership first so this run's writes/clear win.
         ClaimCheckpoint(run);
         WriteCheckpointIfOwner(run, id);
+        // §38 pause — hang the run's gate off the root so the execution
+        // strategies suspend on it at instruction boundaries, and observe actual
+        // suspension (not the mere request) for the Paused state + WS event.
+        if (root is OpenAstroAra.Sequencer.Utility.IPauseGateHost host) {
+            host.PauseGate = run.Gate;
+            run.Gate.PauseEntered += (_, _) => OnPauseEntered(id, run);
+        }
         // Publish the running root so SkipAsync can reach it for the duration of the run.
         run.SetRoot(root);
         try {
@@ -180,14 +189,43 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
-        // Deferred: no pause hook in the headless engine yet (see class remarks).
-        // Accepted no-op — deliberately does NOT emit a "paused" event the run
-        // would not actually honor.
+        // Arm the run's instruction-boundary gate; the engine suspends at the next
+        // boundary (SequentialStrategy awaits the gate before each item, so the
+        // current instruction always finishes — NINA pause semantics). The state
+        // flip to Paused + the sequence.paused event happen in OnPauseEntered when
+        // the engine ACTUALLY suspends, never on the mere request. Idempotent, and
+        // harmless for terminal/aborting runs (a cancelled token wins the gate).
+        if (_runs.TryGetValue(id, out var run) && IsAbortableRun(run.State)) {
+            run.Gate.RequestPause();
+        }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.pause", idempotencyKey));
     }
 
-    public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
+    public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        if (_runs.TryGetValue(id, out var run)) {
+            // Disarm + release first so the engine can proceed the moment the
+            // state says Running again. The CAS keeps this from resurrecting a
+            // run that an Abort/Stop moved past Paused (their unconditional state
+            // write + token cancel still win; a released gate is then harmless).
+            run.Gate.Resume();
+            if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
+                _ = EmitAsync("sequence.resumed", id, run);
+                WriteCheckpointIfOwner(run, id);
+            }
+        }
+        return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
+    }
+
+    // PauseGate.PauseEntered callback — runs on the engine worker at the moment a
+    // strategy actually suspends. Running→Paused via CAS so a concurrent
+    // Abort/Stop (which sets Aborting/Stopped unconditionally) is never clobbered;
+    // parallel branches may fire this repeatedly — the CAS also makes it idempotent.
+    private void OnPauseEntered(Guid sequenceId, RunState run) {
+        if (run.TryTransition(SequenceRunState.Running, SequenceRunState.Paused)) {
+            _ = EmitAsync("sequence.paused", sequenceId, run);
+            WriteCheckpointIfOwner(run, sequenceId);
+        }
+    }
 
     public Task<OperationAcceptedDto> SkipAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         // Skip whatever the run is currently executing (e.g. a target that isn't well-positioned):
@@ -545,16 +583,36 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
 
     private sealed class RunState : IDisposable {
-        // State is written from Abort/Stop (request threads) and the background
-        // worker; volatile makes the cross-thread visibility explicit.
-        private volatile SequenceRunState _state = SequenceRunState.Starting;
+        // State is written from Abort/Stop (request threads), the background
+        // worker, AND the pause-gate callback; int-backed so transitions that must
+        // not clobber a concurrent abort (Running→Paused, Paused→Running) can CAS.
+        private int _state = (int)SequenceRunState.Starting;
         // The remaining telemetry fields are written on the worker and read via
         // ToDto on request threads (GetRunState / checkpoint). _gate guards both
         // sides so a request thread always sees a consistent snapshot.
         private readonly object _gate = new();
 
         public Guid RunId { get; } = Guid.NewGuid();
-        public SequenceRunState State { get => _state; set => _state = value; }
+
+        public SequenceRunState State {
+            get => (SequenceRunState)Volatile.Read(ref _state);
+            set => Volatile.Write(ref _state, (int)value);
+        }
+
+        /// <summary>
+        /// Atomically transition <paramref name="from"/> → <paramref name="to"/>;
+        /// false when another writer got there first. Used by the pause paths so
+        /// entering/leaving Paused can never clobber a concurrent Abort/Stop
+        /// (whose unconditional write always wins over a failed CAS).
+        /// </summary>
+        public bool TryTransition(SequenceRunState from, SequenceRunState to) =>
+            Interlocked.CompareExchange(ref _state, (int)to, (int)from) == (int)from;
+
+        /// <summary>
+        /// §38 pause — the run's instruction-boundary gate, attached to the root
+        /// container before execution and driven by Pause/Resume.
+        /// </summary>
+        public OpenAstroAra.Sequencer.Utility.PauseGate Gate { get; } = new();
         public int? CurrentInstructionIndex { get; private set; }   // wired with instruction-level hooks (deferred)
         public string? CurrentInstructionDescription { get; private set; }
         public int FramesCompleted { get; private set; }            // wired with instruction-level hooks (deferred)
@@ -614,7 +672,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 return new(
                     SequenceId: sequenceId,
                     RunId: RunId,
-                    State: _state,
+                    State: State,
                     CurrentInstructionIndex: CurrentInstructionIndex,
                     CurrentTargetName: null,
                     StartedUtc: StartedUtc,

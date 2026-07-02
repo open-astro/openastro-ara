@@ -40,7 +40,16 @@ namespace OpenAstroAra.Sequencer.Container {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Container")]
     [Export(typeof(ISequenceContainer))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class SequenceRootContainer : SequenceContainer, ISequenceRootContainer, IImmutableContainer {
+    public class SequenceRootContainer : SequenceContainer, ISequenceRootContainer, IImmutableContainer, IPauseGateHost {
+
+        /// <summary>
+        /// §38 headless pause — the run's instruction-boundary gate. Attached by
+        /// the daemon's SequencerService before execution; the execution
+        /// strategies resolve it from the tree root and suspend on it between
+        /// instructions. Null (default) = pause unavailable. Not serialized —
+        /// runtime-only wiring (no [JsonProperty] under MemberSerialization.OptIn).
+        /// </summary>
+        public PauseGate? PauseGate { get; set; }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
