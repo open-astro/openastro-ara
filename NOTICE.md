@@ -4,7 +4,20 @@ OpenAstro Ara (ARA) is a derivative work of [N.I.N.A. (Nighttime Imaging 'N' Ast
 
 ## License
 
-This software is released under the Mozilla Public License, v. 2.0. See `LICENSE.txt` for the full terms.
+This repository carries two licenses, split by directory (decided 2026-07-01 —
+see `design/PORT_DECISIONS.md`):
+
+- **Server/daemon and everything not listed below — Mozilla Public License,
+  v. 2.0.** See `LICENSE.txt` for the full terms. This covers the NINA-derived
+  .NET code, whose MPL-2.0 lineage is preserved unchanged.
+- **WILMA client (`client/openastroara_client/`) — GNU Affero General Public
+  License, v. 3.0 or later.** See `client/openastroara_client/LICENSE`. The
+  client is wholly original work written for OpenAstro Ara (no NINA-derived
+  files); AGPL's network-interaction clause keeps derived clients open even
+  when they are served from a device rather than shipped.
+
+The client and the daemon communicate over REST/WebSocket as separate
+programs — neither links the other, so the two licenses apply independently.
 
 ## Inherited source
 
