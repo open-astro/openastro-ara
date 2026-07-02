@@ -251,6 +251,72 @@ void main() {
     expect(find.textContaining('☾'), findsNothing);
   });
 
+  group('windowStateFor (slice-4 best-window highlight)', () {
+    TonightSkyObject obj({DateTime? start, DateTime? end}) => TonightSkyObject(
+          id: 'X', name: 'X', type: 'galaxy', magnitude: 8,
+          raDeg: 0, decDeg: 0, altitudeDeg: 40, maxAltitudeDeg: 60,
+          windowStartUtc: start, windowEndUtc: end,
+        );
+    final t0 = DateTime.utc(2026, 12, 21, 22);
+    final t1 = DateTime.utc(2026, 12, 22, 4);
+
+    test('no window → none', () {
+      expect(windowStateFor(obj(), t0), TonightWindowState.none);
+      expect(windowStateFor(obj(start: t0), t0), TonightWindowState.none);
+    });
+    test('before the window → upcoming', () {
+      expect(windowStateFor(obj(start: t0, end: t1), DateTime.utc(2026, 12, 21, 20)),
+          TonightWindowState.upcoming);
+    });
+    test('inside (and at both boundaries) → open', () {
+      final o = obj(start: t0, end: t1);
+      expect(windowStateFor(o, DateTime.utc(2026, 12, 22, 1)), TonightWindowState.open);
+      expect(windowStateFor(o, t0), TonightWindowState.open,
+          reason: 'the opening instant is in the window');
+      expect(windowStateFor(o, t1), TonightWindowState.open,
+          reason: 'an exposure started in the last minute still counts');
+    });
+    test('after the window → passed', () {
+      expect(windowStateFor(obj(start: t0, end: t1), DateTime.utc(2026, 12, 22, 6)),
+          TonightWindowState.passed);
+    });
+  });
+
+  testWidgets('an open window renders the green "now · " timing treatment',
+      (tester) async {
+    // Window straddling the real clock (±1 h) — deterministic for any test run.
+    final now = DateTime.now().toUtc();
+    final inWindow = TonightSkyObject(
+      id: _m31.id, name: _m31.name, type: _m31.type, magnitude: _m31.magnitude,
+      raDeg: _m31.raDeg, decDeg: _m31.decDeg,
+      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
+      windowStartUtc: now.subtract(const Duration(hours: 1)),
+      windowEndUtc: now.add(const Duration(hours: 1)),
+      integrationHours: 2,
+    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [inWindow]));
+    await tester.pump();
+    expect(find.textContaining('now · '), findsOneWidget);
+  });
+
+  testWidgets('a fully-passed window renders without the "now" marker',
+      (tester) async {
+    final now = DateTime.now().toUtc();
+    final passed = TonightSkyObject(
+      id: _m31.id, name: _m31.name, type: _m31.type, magnitude: _m31.magnitude,
+      raDeg: _m31.raDeg, decDeg: _m31.decDeg,
+      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
+      windowStartUtc: now.subtract(const Duration(hours: 8)),
+      windowEndUtc: now.subtract(const Duration(hours: 2)),
+      integrationHours: 6,
+    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [passed]));
+    await tester.pump();
+    expect(find.textContaining('now · '), findsNothing);
+    expect(find.textContaining('h dark'), findsOneWidget,
+        reason: 'the row still shows its timing — advise, never hide');
+  });
+
   testWidgets('a pre-slice-4 daemon (no moon fields) renders no moon chip',
       (tester) async {
     // _m31 carries no moon fields at all.

@@ -36,6 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Added
+- **§36.8 — Tonight's Sky shows which targets are in their window right now.** Each row's timing line turns green with a leading "now ·" while the target's dark window is open, and dims once the window has fully passed for the night — so "what should I be shooting at this instant" is answerable at a glance. Purely visual: nothing is hidden or re-ranked.
 - **§68.4/§69 — the command palette now searches help, not just settings.** Every in-app help article is searchable by intent — type "equipment hub down" or "alpaca bridge missing" and the palette surfaces the new **AlpacaBridge not detected?** troubleshooting article (install command, service check, subnet notes) right alongside settings hits; activating a help result opens the help sheet. Long help titles now ellipsize instead of overflowing the sheet header.
 - **§68.2 — the profile wizard now catches a missing AlpacaBridge up front.** Screen 2 probes the daemon's equipment-discovery path automatically when you arrive; if the bridge isn't reachable you get a clear "AlpacaBridge not detected" panel with the exact install command (`sudo apt install alpaca-bridge`) and a Retry button, and **Next stays disabled** until detection succeeds — so a missing equipment hub surfaces on the spot instead of as mysterious empty device lists on the next screen. Pointing at a non-standard bridge? Fill in the address override and skip detection explicitly.
 
