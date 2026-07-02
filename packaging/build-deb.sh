@@ -45,6 +45,18 @@ mkdir -p "$STAGE/opt/openastroara"
 cp -r "$PUBLISH_DIR/." "$STAGE/opt/openastroara/"
 chmod 0755 "$STAGE/opt/openastroara/OpenAstroAra.Server"
 
+# Ship the license documents per §15/§17.2: the project license + NINA
+# lineage notice, and the generated third-party notices for the daemon's
+# NuGet dependency graph (scripts/generate-3rd-party-licenses.py keeps the
+# repo-root file fresh; CI fails when it goes stale).
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DOC_DIR="$STAGE/usr/share/doc/openastroara-server"
+mkdir -p "$DOC_DIR"
+for doc in LICENSE.txt NOTICE.md 3rd-party-licenses.txt; do
+    [ -f "$REPO_ROOT/$doc" ] || { echo "error: $doc missing at repo root — required in the package" >&2; exit 1; }
+    cp "$REPO_ROOT/$doc" "$DOC_DIR/"
+done
+
 # Render the control file from the template + version.
 sed "s/@VERSION@/$VERSION/g" "$STAGE/DEBIAN/control.template" > "$STAGE/DEBIAN/control"
 rm "$STAGE/DEBIAN/control.template"

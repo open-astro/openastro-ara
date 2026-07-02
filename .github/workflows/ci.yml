@@ -348,6 +348,13 @@ jobs:
       - name: dotnet restore (Server)
         run: dotnet restore OpenAstroAra.Server/OpenAstroAra.Server.csproj
 
+      # §15/§17.2 — the committed 3rd-party-licenses.txt must match the
+      # daemon's actual NuGet dependency graph (it ships in the .deb at
+      # /usr/share/doc/openastroara-server/). Runs right after restore so a
+      # dependency bump that forgets to regenerate the notices fails fast.
+      - name: Third-party licenses freshness gate
+        run: python3 scripts/generate-3rd-party-licenses.py --check
+
       - name: dotnet build (Server, Release)
         run: dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release --no-restore
 
