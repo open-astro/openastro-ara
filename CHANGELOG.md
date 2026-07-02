@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added
+- **§68.2 — the profile wizard now catches a missing AlpacaBridge up front.** Screen 2 probes the daemon's equipment-discovery path automatically when you arrive; if the bridge isn't reachable you get a clear "AlpacaBridge not detected" panel with the exact install command (`sudo apt install alpaca-bridge`) and a Retry button, and **Next stays disabled** until detection succeeds — so a missing equipment hub surfaces on the spot instead of as mysterious empty device lists on the next screen. Pointing at a non-standard bridge? Fill in the address override and skip detection explicitly.
+
 ### Fixed
 - **§25.3 — the Switch chip now turns amber while a port is actuating.** Flipping a switch port (or connecting/disconnecting a switch device) used to leave the top-bar Switch chip green as if nothing was happening; it now shows the same busy amber the other equipment chips do for the duration of the action.
 - **§36 — a blocked sky-data delete no longer looks like it worked.** Removing a downloaded catalog whose files were locked or permission-denied used to answer exactly like "already removed" (404), so the UI treated still-present files as freed. The daemon now answers 409 with the reason, and the Data Manager shows "the files are in use or protected — close anything using them and try again" so you know to retry.
