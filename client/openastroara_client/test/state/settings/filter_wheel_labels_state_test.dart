@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -21,10 +23,17 @@ class _FakeApi extends ProfileApi {
     return FilterWheelLabels(labels: s);
   }
 
+  final List<List<String>> putLog = [];
+  Completer<void>? putGate; // when set, each PUT awaits it before returning
+
   @override
   Future<FilterWheelLabels> putFilterWheelLabels(FilterWheelLabels value) async {
-    putReceived = [for (var i = 1; i <= value.slotCount; i++) value.labelAt(i)];
-    return FilterWheelLabels(labels: putEcho ?? putReceived!);
+    final sent = [for (var i = 1; i <= value.slotCount; i++) value.labelAt(i)];
+    putReceived = sent;
+    putLog.add(sent);
+    final gate = putGate;
+    if (gate != null) await gate.future;
+    return FilterWheelLabels(labels: putEcho ?? sent);
   }
 }
 
@@ -180,6 +189,69 @@ void main() {
           reason: 'the edited state is what goes up');
       expect(c.read(filterWheelLabelsProvider).labelAt(1), 'L trimmed',
           reason: 'the daemon echo (server-side trimming) is adopted');
+    });
+
+    test('r1: persists are serialized and a stale echo never clobbers a newer '
+        'edit', () async {
+      final api = _FakeApi()..served = ['A', 'B'];
+      final c = _apiContainer(api);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      final n = c.read(filterWheelLabelsProvider.notifier);
+
+      // Edit slot 1 and persist — the PUT is held in flight by the gate.
+      api.putGate = Completer<void>();
+      n.setLabel(1, 'A2');
+      final first = n.persistToServer();
+      await Future<void>.delayed(Duration.zero);
+      expect(api.putLog, hasLength(1), reason: 'first PUT in flight');
+
+      // Tab to slot 2, edit, persist again — must QUEUE, not overlap.
+      n.setLabel(2, 'B2');
+      final second = n.persistToServer();
+      await Future<void>.delayed(Duration.zero);
+      expect(api.putLog, hasLength(1),
+          reason: 'the second PUT waits for the first (serialized)');
+
+      // First PUT completes AFTER the slot-2 edit: its echo is stale — the
+      // version guard must refuse it so B2 survives.
+      api.putGate!.complete();
+      api.putGate = null;
+      await first;
+      expect(c.read(filterWheelLabelsProvider).labelAt(2), 'B2',
+          reason: 'a stale in-flight echo must not revert the newer edit');
+
+      await second;
+      expect(api.putLog, hasLength(2));
+      expect(api.putLog[1], ['A2', 'B2'],
+          reason: 'the queued PUT carries every edit made so far');
+      expect(c.read(filterWheelLabelsProvider).labelAt(1), 'A2');
+    });
+
+    test('r1: a failed persist does not wedge the chain', () async {
+      final api = _FakeApi()..served = ['A', 'B'];
+      final c = _apiContainer(api);
+      c.listen(filterWheelLabelsProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      final n = c.read(filterWheelLabelsProvider.notifier);
+
+      // First persist fails (transport error mid-flight)…
+      n.setLabel(1, 'X');
+      api.putEcho = null;
+      // Simulate failure by throwing from the gate path: complete with error.
+      api.putGate = Completer<void>();
+      final first = n.persistToServer();
+      // Let the (chained, microtask-deferred) PUT start and capture the gate
+      // before failing it — otherwise it would run gateless and succeed.
+      await Future<void>.delayed(Duration.zero);
+      api.putGate!.completeError(StateError('boom'));
+      api.putGate = null;
+      await expectLater(first, throwsA(isA<StateError>()));
+
+      // …the next persist still runs and succeeds.
+      n.setLabel(2, 'Y');
+      await n.persistToServer();
+      expect(api.putLog.last, ['X', 'Y']);
     });
 
     test('persistToServer without a server throws for the panel to surface', () {

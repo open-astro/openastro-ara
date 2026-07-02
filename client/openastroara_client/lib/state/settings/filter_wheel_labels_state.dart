@@ -82,19 +82,46 @@ class FilterWheelLabelsNotifier extends Notifier<FilterWheelLabels> {
     return FilterWheelLabels();
   }
 
+  // Bumped on every local edit: an in-flight PUT's echo is only adopted when
+  // no newer edit happened while it was flying (r1 — a stale echo would
+  // silently revert the newer edit, and EditableTextRow would visibly re-sync
+  // the field to it).
+  int _editVersion = 0;
+
+  // Serializes persists (r1): per-row auto-persist means tabbing through the
+  // slot fields fires several PUTs; without ordering, out-of-order responses
+  // could adopt an older snapshot over a newer one. Each persist waits for the
+  // previous one (same chain pattern as PlanetariumPrefsService) AND sends the
+  // LATEST state at send time, so the last PUT always carries every edit.
+  Future<void>? _persistChain;
+
   void setLabel(int slot, String label) {
+    _editVersion++;
     state = state.withLabel(slot, label);
   }
 
-  /// Send the current labels to the daemon; returns its echo (labels trimmed
-  /// server-side) and adopts it. Throws on transport/validation failure — the
-  /// caller surfaces it (the panel shows a SnackBar).
-  Future<void> persistToServer() async {
+  /// Send the current labels to the daemon; adopts its echo (labels trimmed
+  /// server-side) unless a newer local edit landed while the PUT was in
+  /// flight. Persists are serialized. Throws on transport/validation failure —
+  /// the caller surfaces it (the panel shows a SnackBar).
+  Future<void> persistToServer() {
     final api = ref.read(profileApiProvider);
     if (api == null) {
       throw StateError('No active server — connect to a daemon first.');
     }
-    state = await api.putFilterWheelLabels(state);
+    // A failed predecessor must not wedge the chain — its error already went
+    // to ITS caller; this persist proceeds regardless.
+    final previous = (_persistChain ?? Future<void>.value())
+        .catchError((Object _) {});
+    final run = previous.then((_) async {
+      final versionAtSend = _editVersion;
+      final echoed = await api.putFilterWheelLabels(state);
+      if (_editVersion == versionAtSend) {
+        state = echoed;
+      }
+    });
+    _persistChain = run;
+    return run;
   }
 }
 
