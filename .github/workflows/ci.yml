@@ -30,6 +30,9 @@ name: CI
 #     → 14c [LANDED]: client-test extended to {linux, macos, windows} matrix.
 #     → 14d [LANDED]: server-e2e — actually `docker run` the arm64 image
 #       via qemu, probe /healthz + /api/v1/server/info from the host.
+#     → [LANDED]: client-build — native desktop compile gate
+#       (`flutter build {macos,linux,windows} --release`), closing the
+#       analyze-only gap that let a non-linking macOS client merge (#599).
 #     → still ahead: Alpaca-simulator pinning auto-download (§14.5.1).
 #
 # Until then, every job in this file MUST stay green on a vanilla `master`
@@ -676,9 +679,6 @@ jobs:
         with:
           lfs: false
           persist-credentials: false
-          # webview_cef is vendored as a submodule (packages/webview_cef); the
-          # client's path dependency needs it checked out for `flutter pub get`.
-          submodules: recursive
 
       - name: Read pinned Flutter version
         id: flutter-version
@@ -709,6 +709,77 @@ jobs:
       - name: flutter test
         working-directory: client/openastroara_client
         run: flutter test
+
+  client-build:
+    name: Client (native build) — ${{ matrix.target }}
+    # Native desktop compile gate. `client-test` only runs analyze + test —
+    # it never compiles the platform Runner, which is how PR #599 shipped a
+    # macOS client that didn't link through a green gate (see PORT_TODO
+    # "§36 CEF 149 helpers" / the #600 review). Building all three desktop
+    # targets catches native link/plugin regressions (webview_all platform
+    # views, secure-storage backends, CMake/Xcode project drift) before
+    # merge. Release mode matches what ships.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: windows
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Install Linux desktop build dependencies
+        if: matrix.target == 'linux'
+        # clang/cmake/ninja/pkg-config: the Flutter Linux toolchain.
+        # libgtk-3-dev: the Flutter Linux embedder.
+        # libwebkit2gtk-4.1-dev: linux/runner/planetarium_overlay.cc (§36
+        #   native-webview planetarium, pkg_check_modules REQUIRED).
+        # libsecret-1-dev + libjsoncpp-dev: flutter_secure_storage_linux.
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libsecret-1-dev libjsoncpp-dev
+
+      - name: Read pinned Flutter version
+        id: flutter-version
+        run: |
+          set -euo pipefail
+          VERSION="$(cat client/openastroara_client/.flutter-version | tr -d '[:space:]')"
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::client/openastroara_client/.flutter-version is empty"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.x pinned per zizmor immutable-ref policy
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+
+      - name: pub get
+        working-directory: client/openastroara_client
+        run: flutter pub get
+
+      - name: flutter build (release)
+        working-directory: client/openastroara_client
+        run: flutter build ${{ matrix.target }} --release
 
   unicode:
     name: Unicode scan
