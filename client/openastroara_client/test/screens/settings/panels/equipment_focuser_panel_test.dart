@@ -7,6 +7,7 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_focuser_panel.dart';
+import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
@@ -21,6 +22,28 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
   Future<void> add(AraServer server) async {}
+}
+
+class _FakeAutofocusApi implements AutofocusApi {
+  _FakeAutofocusApi({this.terminalState = 'complete', this.errorMessage});
+  final String terminalState;
+  final String? errorMessage;
+  int startCalls = 0;
+  int polls = 0;
+  @override
+  Future<AutofocusJob> start() async {
+    startCalls++;
+    return const AutofocusJob(jobId: 'j1', state: 'running');
+  }
+
+  @override
+  Future<AutofocusJob?> job(String jobId) async {
+    polls++;
+    return AutofocusJob(jobId: jobId, state: terminalState, errorMessage: errorMessage);
+  }
+
+  @override
+  void close() {}
 }
 
 class _FakeFocuserApi implements EquipmentDeviceClient<FocuserStatus> {
@@ -68,7 +91,8 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeFocuserApi> _pump(WidgetTester tester, FocuserStatus? status) async {
+Future<_FakeFocuserApi> _pump(WidgetTester tester, FocuserStatus? status,
+    {_FakeAutofocusApi? autofocus}) async {
   await _wideSurface(tester);
   final api = _FakeFocuserApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -77,6 +101,8 @@ Future<_FakeFocuserApi> _pump(WidgetTester tester, FocuserStatus? status) async 
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       focuserApiFactoryProvider.overrideWithValue((_) => api),
+      autofocusApiFactoryProvider
+          .overrideWithValue((_) => autofocus ?? _FakeAutofocusApi()),
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentFocuserPanel())),
   ));
@@ -152,5 +178,36 @@ void main() {
     await _pump(tester, null);
     expect(find.text('No focuser connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
+  });
+
+  testWidgets('Run autofocus polls the job to completion', (tester) async {
+    final af = _FakeAutofocusApi(terminalState: 'complete');
+    await _pump(tester, _status(), autofocus: af);
+    await tester.tap(find.widgetWithText(FilledButton, 'Run autofocus'));
+    await tester.pump(); // start() resolves; row flips to running
+    expect(find.text('Autofocusing…'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3)); // first poll → terminal
+    await tester.pumpAndSettle();
+    expect(af.startCalls, 1);
+    expect(find.textContaining('Autofocus complete'), findsOneWidget);
+  });
+
+  testWidgets('failed sweep surfaces the daemon reason inline', (tester) async {
+    final af = _FakeAutofocusApi(
+        terminalState: 'failed', errorMessage: 'Autofocus sweep failed — curve fit unusable');
+    await _pump(tester, _status(), autofocus: af);
+    await tester.tap(find.widgetWithText(FilledButton, 'Run autofocus'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('curve fit unusable'), findsOneWidget);
+  });
+
+  testWidgets('Run autofocus disabled without a connected focuser', (tester) async {
+    await _pump(tester, _status(state: EquipmentConnectionState.disconnected));
+    final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Run autofocus'));
+    expect(button.onPressed, isNull);
+    expect(find.text('Connect a focuser to run autofocus.'), findsOneWidget);
   });
 }

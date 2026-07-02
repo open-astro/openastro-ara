@@ -48,6 +48,13 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
         ),
         const SettingsSectionHeader('Autofocus'),
+        // §59 — trigger one V-curve sweep with the profile's autofocus settings.
+        // Runs as a daemon background job; the row polls it to a terminal state.
+        // Enabled only while a focuser is connected (the sweep also needs the
+        // camera, but the daemon fail-louds that — the job row shows the reason).
+        _RunAutofocusRow(
+          focuserConnected: status.asData?.value?.isConnected ?? false,
+        ),
         // The editable autofocus settings (temp compensation, AF-after-filter-change,
         // trigger temp delta — saved per profile) live in their own panel; link there
         // rather than duplicate them here.
@@ -209,5 +216,107 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         backgroundColor: AraColors.accentError,
       ));
     }
+  }
+}
+
+
+/// §59 — the "Run autofocus" control: starts the daemon's V-curve sweep as a
+/// background job and polls it to a terminal state, surfacing progress and the
+/// failure reason inline. A duplicate tap while a sweep runs joins the running
+/// job (daemon single-job-per-type), so the button simply disables while busy.
+class _RunAutofocusRow extends ConsumerStatefulWidget {
+  final bool focuserConnected;
+  const _RunAutofocusRow({required this.focuserConnected});
+
+  @override
+  ConsumerState<_RunAutofocusRow> createState() => _RunAutofocusRowState();
+}
+
+class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
+  bool _running = false;
+  String? _result; // last terminal outcome, shown under the button
+  bool _lastFailed = false;
+
+  Future<void> _run() async {
+    final api = ref.read(autofocusApiProvider);
+    if (api == null) return;
+    setState(() {
+      _running = true;
+      _result = null;
+      _lastFailed = false;
+    });
+    try {
+      final started = await api.start();
+      var job = started;
+      // Poll to terminal. A sweep is minutes of moves + probe exposures; 2s is
+      // plenty responsive without hammering the daemon. Stop polling if this
+      // panel is disposed mid-sweep — the daemon job keeps running regardless.
+      while (!job.isTerminal) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        final polled = await api.job(job.jobId);
+        if (polled == null) break; // evicted after finishing — treat as done
+        job = polled;
+      }
+      if (!mounted) return;
+      setState(() {
+        _running = false;
+        _lastFailed = job.state == 'failed';
+        _result = switch (job.state) {
+          'complete' => 'Autofocus complete — focuser is at the fitted best position.',
+          'failed' => job.errorMessage ?? 'Autofocus failed — see the daemon log.',
+          'cancelled' => 'Autofocus was cancelled.',
+          _ => 'Autofocus finished.',
+        };
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _running = false;
+        _lastFailed = true;
+        _result = 'Could not run autofocus: check the connection and try again.';
+      });
+      debugPrint('[autofocus] run failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canRun =
+        widget.focuserConnected && !_running && ref.watch(autofocusApiProvider) != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.tonalIcon(
+            onPressed: canRun ? _run : null,
+            icon: _running
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.center_focus_strong, size: 16),
+            label: Text(_running ? 'Autofocusing…' : 'Run autofocus'),
+          ),
+        ),
+        if (!widget.focuserConnected)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text('Connect a focuser to run autofocus.',
+                style: TextStyle(fontSize: 12, color: AraColors.textSecondary)),
+          ),
+        if (_result != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              _result!,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: _lastFailed ? AraColors.accentError : AraColors.textSecondary),
+            ),
+          ),
+      ],
+    );
   }
 }
