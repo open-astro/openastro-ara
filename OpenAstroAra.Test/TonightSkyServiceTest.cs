@@ -380,12 +380,65 @@ namespace OpenAstroAra.Test {
                 site, Optics(), at, limit: 10).Single();
 
             Assert.That(o.Score, Is.InRange(0.0, 100.0));
-            Assert.That(o.ScoreReasons, Is.Not.Null.And.Count.EqualTo(5), "one tag per scoring component");
+            // 5 scoring components + the always-appended zero-point moon-context tag (slice 4).
+            Assert.That(o.ScoreReasons, Is.Not.Null.And.Count.EqualTo(6),
+                "one tag per scoring component + the moon context tag");
             Assert.That(o.ScoreReasons!, Has.Some.Contains("frame"), "framing reason present");
             // Each reason carries its rounded point contribution "(+N)"; their sum reconstructs the score
-            // to within the per-component rounding slack (5 × 0.5).
+            // to within the per-component rounding slack (5 × 0.5; the moon tag contributes +0).
             var sum = o.ScoreReasons!.Sum(ParsePoints);
             Assert.That(sum, Is.EqualTo(o.Score).Within(3.0));
+        }
+
+        // ─── §36.8 slice-4 — moon advisory ───
+
+        [Test]
+        public void Moon_position_matches_the_Meeus_worked_example() {
+            // Meeus, Astronomical Algorithms, example 47.a — 1992 April 12.0 TD (ΔT ≈ 59 s, far below
+            // the series' own truncation): apparent RA 134.688°, Dec +13.768°. The low-precision
+            // Almanac series is good to ≈0.3°, so assert within 0.5°.
+            var at = new DateTimeOffset(1992, 4, 12, 0, 0, 0, TimeSpan.Zero);
+            var (ra, dec) = TonightSkyService.MoonEquatorialDeg(at);
+            Assert.That(ra, Is.EqualTo(134.688).Within(0.5));
+            Assert.That(dec, Is.EqualTo(13.768).Within(0.5));
+        }
+
+        [Test]
+        public void Moon_illumination_matches_the_Meeus_worked_example() {
+            // Meeus example 48.a (the same instant as 47.a): k = 0.6786. The elongation is derived
+            // from the low-precision positions, so allow a few percent.
+            var at = new DateTimeOffset(1992, 4, 12, 0, 0, 0, TimeSpan.Zero);
+            Assert.That(TonightSkyService.MoonIlluminatedFraction(at), Is.EqualTo(0.6786).Within(0.05));
+        }
+
+        [Test]
+        public void Angular_separation_handles_the_cardinal_cases() {
+            Assert.That(TonightSkyService.AngularSeparationDeg(0, 0, 0, 0), Is.EqualTo(0).Within(1e-9));
+            Assert.That(TonightSkyService.AngularSeparationDeg(0, 90, 0, -90), Is.EqualTo(180).Within(1e-9));
+            Assert.That(TonightSkyService.AngularSeparationDeg(0, 0, 90, 0), Is.EqualTo(90).Within(1e-9));
+            // RA wrap: 359° → 1° along the equator is 2° apart, not 358°.
+            Assert.That(TonightSkyService.AngularSeparationDeg(359, 0, 1, 0), Is.EqualTo(2).Within(1e-9));
+        }
+
+        [Test]
+        public void Ranked_objects_carry_the_moon_advisory_fields() {
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var o = TonightSkyService.Rank(new[] { Obj("M", ra, 40) }, site, at, limit: 10).Single();
+
+            Assert.That(o.MoonSeparationDeg, Is.Not.Null);
+            Assert.That(o.MoonSeparationDeg!.Value, Is.InRange(0.0, 180.0));
+            Assert.That(o.MoonIlluminationPct, Is.Not.Null);
+            Assert.That(o.MoonIlluminationPct!.Value, Is.InRange(0.0, 100.0));
+            Assert.That(o.MoonUpFraction, Is.Not.Null);
+            Assert.That(o.MoonUpFraction!.Value, Is.InRange(0.0, 1.0));
+            // The advisory rides the zero-point reason pattern: exactly ONE moon tag ("moon N° away…"
+            // or "moonless window"), contributing +0 so the score sum is untouched.
+            Assert.That(o.ScoreReasons!.Count(r => r.StartsWith("moon", StringComparison.Ordinal)),
+                Is.EqualTo(1));
+            Assert.That(o.ScoreReasons!.Single(r => r.StartsWith("moon", StringComparison.Ordinal)),
+                Does.EndWith("(+0)"));
         }
 
         private static double ParsePoints(string reason) {

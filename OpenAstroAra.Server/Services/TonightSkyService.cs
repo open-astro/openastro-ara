@@ -212,6 +212,23 @@ public sealed class TonightSkyService : ITonightSkyService {
         var cosLat = Math.Cos(Deg2Rad(lat));
         var sinHorizon = Math.Sin(Deg2Rad(horizon));
 
+        // §36.8 slice-4 moon advisory (display-only, deliberately NOT a score input — weighting is a
+        // recorded follow-up for the user to tune). The moon's position per night sample is
+        // object-independent, so precompute it on the same grid as the sun. "Up" uses the TRUE (0°)
+        // horizon, not the site's imaging horizon: moonlight washes the sky whenever the moon is up at
+        // all, trees or no trees. Illumination moves ~10%/day at the quarters — one value at atUtc
+        // serves the whole request (it's rounded to a whole percent anyway).
+        var moonRaDeg = new double[sampleCount];
+        var moonDecDeg = new double[sampleCount];
+        var moonUp = new bool[sampleCount];
+        for (var i = 0; i < sampleCount; i++) {
+            var (mRa, mDec) = MoonEquatorialDeg(sampleUtc[i]);
+            moonRaDeg[i] = mRa;
+            moonDecDeg[i] = mDec;
+            moonUp[i] = AltitudeFromHourAngleDeg(mDec, lat, Mod360(sampleLstDeg[i] - mRa)) > 0.0;
+        }
+        var moonIlluminationPct = Math.Round(MoonIlluminatedFraction(atUtc) * 100.0);
+
         // NEXTGEN §1 — the per-approach Optimal-Sub floor (seconds) is object-independent (it's a
         // rig + sky + filter figure), so compute it at most once per approach across the whole
         // request. Null (no figure) unless the exposure-critical inputs are genuinely configured:
@@ -319,13 +336,32 @@ public sealed class TonightSkyService : ITonightSkyService {
                 reasons = reasonList;
             }
 
+            // Moon context over THIS object's window: the fraction of the window with the moon up, and
+            // the separation at the window midpoint (the moon moves ~0.5°/h — a few degrees across a
+            // whole window, fine for a whole-degree advisory). Rides the same zero-point reason pattern
+            // as the filter advice: visible in the "Why?" breakdown, never a score input.
+            var moonUpCount = 0;
+            for (var i = start; i <= end; i++) {
+                if (moonUp[i]) moonUpCount++;
+            }
+            var moonUpFraction = (double)moonUpCount / (end - start + 1);
+            var mid = (start + end) / 2;
+            var moonSeparationDeg = AngularSeparationDeg(o.RaDeg, o.DecDeg, moonRaDeg[mid], moonDecDeg[mid]);
+            reasons = new List<string>(reasons) {
+                moonUpFraction > 0
+                    ? $"moon {moonSeparationDeg:0}° away, {moonIlluminationPct:0}% lit (+0)"
+                    : "moonless window (+0)",
+            };
+
             scored.Add((score, new TonightSkyObjectDto(
                 o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
                 Math.Round(altNow, 1), Math.Round(peakAltDeg, 1),
                 o.SizeMajArcmin, o.SizeMinArcmin, o.PosAngleDeg, o.SurfaceBrightness,
                 windowStart, windowEnd, transitUtc, Math.Round(integrationHours, 2),
                 framing, Math.Round(score, 1), reasons, Math.Round(remainingHours, 2),
-                advice, adviceReason, optimalSubS)));
+                advice, adviceReason, optimalSubS,
+                Math.Round(moonSeparationDeg, 1), moonIlluminationPct,
+                Math.Round(moonUpFraction, 2))));
         }
         if (scored.Count == 0) {
             return Array.Empty<TonightSkyObjectDto>();
@@ -544,6 +580,63 @@ public sealed class TonightSkyService : ITonightSkyService {
         return (Mod360(Rad2Deg(ra)), Rad2Deg(dec));
     }
 
+    /// <summary>The moon's apparent equatorial coordinates (RA/Dec, degrees) at <paramref name="atUtc"/>,
+    /// via the Astronomical Almanac low-precision lunar series (the truncation Meeus ch. 47 is built
+    /// from): mean longitude plus the six largest longitude terms and the four largest latitude terms,
+    /// rotated by the mean obliquity to equatorial. Accuracy ≈ 0.3° — an advisory separation figure,
+    /// not an ephemeris. Geocentric: topocentric parallax can shift the moon up to ~1°, immaterial for
+    /// a whole-degree advisory readout.</summary>
+    internal static (double RaDeg, double DecDeg) MoonEquatorialDeg(DateTimeOffset atUtc) {
+        var jd = atUtc.ToUnixTimeMilliseconds() / 86400000.0 + 2440587.5;
+        var t = (jd - 2451545.0) / 36525.0;                               // Julian centuries since J2000.0
+        // Ecliptic longitude λ / latitude β (deg). Every trig argument goes through SinDeg's Mod360,
+        // matching SunEquatorialDeg's range-reduction discipline (the raw arguments grow ~481000°/century).
+        var lambda = Mod360(218.32 + 481267.881 * t)
+            + 6.29 * SinDeg(135.0 + 477198.87 * t)
+            - 1.27 * SinDeg(259.3 - 413335.36 * t)
+            + 0.66 * SinDeg(235.7 + 890534.22 * t)
+            + 0.21 * SinDeg(269.9 + 954397.74 * t)
+            - 0.19 * SinDeg(357.5 + 35999.05 * t)
+            - 0.11 * SinDeg(186.5 + 966404.03 * t);
+        var beta = 5.13 * SinDeg(93.3 + 483202.02 * t)
+            + 0.28 * SinDeg(228.2 + 960400.89 * t)
+            - 0.28 * SinDeg(318.3 + 6003.15 * t)
+            - 0.17 * SinDeg(217.6 - 407332.21 * t);
+        var l = Deg2Rad(lambda);
+        var b = Deg2Rad(beta);
+        var eps = Deg2Rad(23.439);                                        // mean obliquity (low-precision)
+        // Full ecliptic→equatorial rotation — the moon has real ecliptic latitude (up to ±5.1°),
+        // so the sun's β=0 shortcut doesn't apply here.
+        var x = Math.Cos(b) * Math.Cos(l);
+        var y = Math.Cos(eps) * Math.Cos(b) * Math.Sin(l) - Math.Sin(eps) * Math.Sin(b);
+        var z = Math.Sin(eps) * Math.Cos(b) * Math.Sin(l) + Math.Cos(eps) * Math.Sin(b);
+        var ra = Math.Atan2(y, x);
+        var dec = Math.Asin(Math.Clamp(z, -1.0, 1.0));
+        return (Mod360(Rad2Deg(ra)), Rad2Deg(dec));
+    }
+
+    /// <summary>The fraction of the moon's disc that is illuminated at <paramref name="atUtc"/>, 0–1.
+    /// From the sun–moon elongation ψ: with the sun treated as infinitely distant the phase angle is
+    /// 180° − ψ, so k = (1 + cos(180° − ψ))/2 = (1 − cos ψ)/2 (Meeus ch. 48; the finite-distance
+    /// correction moves k by well under a percent).</summary>
+    internal static double MoonIlluminatedFraction(DateTimeOffset atUtc) {
+        var (sunRa, sunDec) = SunEquatorialDeg(atUtc);
+        var (moonRa, moonDec) = MoonEquatorialDeg(atUtc);
+        var psi = Deg2Rad(AngularSeparationDeg(sunRa, sunDec, moonRa, moonDec));
+        return (1.0 - Math.Cos(psi)) / 2.0;
+    }
+
+    /// <summary>Great-circle separation (degrees) between two equatorial positions:
+    /// cos ψ = sin δ₁ sin δ₂ + cos δ₁ cos δ₂ cos Δα. Fine for advisory readouts (the acos form
+    /// loses precision only below ~0.1°, far under a whole-degree display).</summary>
+    internal static double AngularSeparationDeg(double ra1Deg, double dec1Deg, double ra2Deg, double dec2Deg) {
+        var d1 = Deg2Rad(dec1Deg);
+        var d2 = Deg2Rad(dec2Deg);
+        var cosSep = Math.Sin(d1) * Math.Sin(d2)
+                   + Math.Cos(d1) * Math.Cos(d2) * Math.Cos(Deg2Rad(ra1Deg - ra2Deg));
+        return Rad2Deg(Math.Acos(Math.Clamp(cosSep, -1.0, 1.0)));
+    }
+
     /// <summary>Local apparent sidereal time in degrees (Meeus low-precision GMST + east-positive
     /// longitude). Arcminute-level accuracy — far finer than altitude ranking needs.</summary>
     internal static double LocalSiderealTimeDeg(DateTimeOffset atUtc, double longitudeDeg) {
@@ -607,4 +700,8 @@ public sealed class TonightSkyService : ITonightSkyService {
 
     private static double Deg2Rad(double d) => d * Math.PI / 180.0;
     private static double Rad2Deg(double r) => r * 180.0 / Math.PI;
+
+    /// <summary>sin of an angle given in degrees, range-reduced first (see the Mod360 notes above —
+    /// the lunar series' raw arguments are huge).</summary>
+    private static double SinDeg(double deg) => Math.Sin(Deg2Rad(Mod360(deg)));
 }

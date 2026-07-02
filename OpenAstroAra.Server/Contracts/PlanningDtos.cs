@@ -45,6 +45,12 @@ namespace OpenAstroAra.Server.Contracts;
 /// or the target's emission character is unknown (never guess). <see cref="OptimalSubS"/> is the
 /// Glover read-noise-floor sub length (seconds) for the advised approach's representative filter —
 /// null until the camera electronics + aperture are configured (the advice string still flows).</para>
+/// <para>§36.8 slice-4 moon advisory (appended, all optional — display context, never a score input):
+/// <see cref="MoonSeparationDeg"/> is the great-circle distance from the target to the moon at the
+/// window midpoint; <see cref="MoonIlluminationPct"/> the illuminated disc fraction (0–100) tonight;
+/// <see cref="MoonUpFraction"/> how much of the object's dark window has the moon above the true
+/// horizon (0 = a genuinely moonless window, 1 = moon up throughout). Advisory precision (~0.5°,
+/// geocentric) — plan by it, don't point by it.</para>
 /// </summary>
 public sealed record TonightSkyObjectDto(
     string Id,
@@ -69,7 +75,10 @@ public sealed record TonightSkyObjectDto(
     double RemainingHours = 0,
     FilterApproach? FilterAdvice = null,
     string? AdviceReason = null,
-    double? OptimalSubS = null);
+    double? OptimalSubS = null,
+    double? MoonSeparationDeg = null,
+    double? MoonIlluminationPct = null,
+    double? MoonUpFraction = null);
 
 /// <summary>NEXTGEN §1 — the recommended filter approach for a target: <see cref="Narrowband"/> mono
 /// line filters (Hα/OIII/SII), <see cref="Duoband"/> OSC + dual/tri-band, <see cref="Broadband"/>
