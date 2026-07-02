@@ -179,6 +179,21 @@ void main() {
       expect(out.filters[2].kind, FilterKind.r);
     });
 
+    test('applyDraftToFilterSet dedupes names case-insensitively (keep-first)', () {
+      // The daemon 400s the whole filter-set PUT on a duplicate name; the
+      // Settings paths dedupe, so the wizard must too — a repeated wheel label
+      // must not fail the entire wizard save.
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()..name = 'Ha',
+        FilterDef()..name = 'ha ',
+        FilterDef()..name = 'HA',
+        FilterDef()..name = 'OIII',
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters.map((f) => f.name), ['Ha', 'OIII']);
+    });
+
     test('applyDraftToFilterSet preserves the base when the draft has no named filters', () {
       const base = FilterSetSettings(
           filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]);

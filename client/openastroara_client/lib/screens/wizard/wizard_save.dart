@@ -70,10 +70,17 @@ CameraElectronics applyDraftToCameraElectronics(CameraElectronics base, ProfileD
 /// Imaging → Filter set. An empty/unnamed draft list preserves the base —
 /// until this mapper, the wizard's filter entries were saved nowhere at all.
 FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) {
-  final named = d.filterWheel.filters
-      .map((f) => f.name?.trim() ?? '')
-      .where((n) => n.isNotEmpty)
-      .toList(growable: false);
+  // Dedupe case-insensitively (keep-first), mirroring the daemon's PUT
+  // validation and the Settings notifier's addFilter/seedFromWheelLabels —
+  // duplicate wheel labels (multiple unset slots, case variants) must degrade
+  // to one planning filter, not 400 the ENTIRE wizard save.
+  final seen = <String>{};
+  final named = <String>[
+    for (final f in d.filterWheel.filters)
+      if ((f.name?.trim().isNotEmpty ?? false) &&
+          seen.add(f.name!.trim().toLowerCase()))
+        f.name!.trim(),
+  ];
   if (named.isEmpty) return base;
   return FilterSetSettings(filters: [
     for (final name in named)
