@@ -266,7 +266,15 @@ class _ResultRow extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        entry.description!,
+                        // Clamp to a two-line PREVIEW with paragraph breaks
+                        // collapsed: a §68.4 help hit carries its full
+                        // multi-paragraph body as the description (so a body
+                        // phrase still matches in search), which must not dump
+                        // raw newlines/shell commands into the compact row —
+                        // the full text lives in the help sheet it opens.
+                        entry.description!.replaceAll(RegExp(r'\s+'), ' '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: AraColors.textSecondary,
                               fontStyle: FontStyle.italic,

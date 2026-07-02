@@ -29,6 +29,15 @@ void main() {
     expect(find.text('AlpacaBridge not detected?'), findsOneWidget,
         reason: 'the troubleshoot help entry is the top hit');
 
+    // r1: the selected row shows a clamped one-breath PREVIEW of the help
+    // body — paragraph breaks collapsed, two lines max — never the raw
+    // multi-paragraph text with shell commands.
+    final preview = tester.widget<Text>(
+        find.textContaining('AlpacaBridge is ARA', findRichText: false));
+    expect(preview.maxLines, 2);
+    expect(preview.overflow, TextOverflow.ellipsis);
+    expect(preview.data, isNot(contains('\n')));
+
     await tester.tap(find.text('AlpacaBridge not detected?'));
     await tester.pumpAndSettle();
 
