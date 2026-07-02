@@ -95,9 +95,12 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
+            // The sweep first overshoots ABOVE the topmost probe so even the first sample is
+            // approached downward (the top is otherwise reached by an upward move from start).
+            Assert.That(moves[0], Is.EqualTo(StartPosition + 500));
             // 9 probe positions, outermost (start+400) first, strictly descending — one approach
             // direction so backlash biases every sample identically.
-            var probes = moves.GetRange(0, 9);
+            var probes = moves.GetRange(1, 9);
             Assert.That(probes[0], Is.EqualTo(StartPosition + 400));
             Assert.That(probes, Is.Ordered.Descending);
             Assert.That(probes[^1], Is.EqualTo(StartPosition - 400));

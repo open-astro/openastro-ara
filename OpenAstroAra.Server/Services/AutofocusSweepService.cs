@@ -121,6 +121,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // Outermost-first, stepping DOWN through every position: one approach direction means
             // backlash biases every sample identically instead of splitting the curve in two.
             var top = startPosition + settings.Steps * settings.StepSize;
+            // The FIRST probe needs the same treatment: `top` is reached by an UPWARD move from
+            // the start position, so without this overshoot its sample would carry up-approach
+            // backlash while every other sample is approached downward — and the topmost point is
+            // one of the two boundary points that most influence the fit. Overshoot above, then
+            // enter the sweep moving down.
+            await _focuser.MoveFocuser(top + settings.StepSize, token).ConfigureAwait(false);
             for (var i = 0; i <= settings.Steps * 2; i++) {
                 token.ThrowIfCancellationRequested();
                 var position = top - i * settings.StepSize;
@@ -149,10 +155,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             var best = (int)Math.Round(fit.BestPosition);
             Report(progress, $"Autofocus: moving to best focus {best} (R²={fit.RSquared:0.##})");
             // Approach best from the SAME direction as the probes (from above) so backlash at the
-            // final move matches the backlash baked into every sample.
-            if (best < startPosition + settings.Steps * settings.StepSize) {
-                await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
-            }
+            // final move matches the backlash baked into every sample. Unconditional: the sweep
+            // ends at the bottom, so even a best at (or rounding to) the top edge needs the
+            // overshoot — a direct move there would be upward, i.e. backlash-inconsistent.
+            await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
             return true;
