@@ -12,20 +12,34 @@ WebGL/WASM planetarium renderer by Stellarium Labs SRL.
   there is no Dart→page JS bridge.
 - **This is a MODIFIED build of the engine.** The vendored `.wasm`/`.js` carry a
   small source patch (clickable star pick-areas + a star-survey type-check relax)
-  on top of upstream, plus three build-config flags. The complete corresponding
-  source is the upstream repository above with the patch reproduced verbatim in
+  on top of upstream, plus three build-config flags. **The complete corresponding
+  source is publicly hosted at the AGPL §13 fork:**
+  **https://github.com/open-astro/stellarium-web-engine** — branch `master`
+  (upstream `525aa40` + the ARA patch commits), pinned by tag
+  [`ara-v1`](https://github.com/open-astro/stellarium-web-engine/releases/tag/ara-v1)
+  at commit `6bfebb5`. The same patch is also reproduced verbatim in
   [§ Source modifications](#source-modifications) below — apply it to a clean
   upstream checkout and run the build recipe to reproduce the exact artifacts.
-  > **AGPL §13 (pre-merge):** because the daemon conveys the engine to users over
-  > the network, the patched source must also be publicly hosted (an `open-astro`
-  > fork of `stellarium-web-engine`). Confirm that repo is public before release.
+  (§13 applies because the daemon conveys the engine to users over the network;
+  published 2026-07-01.)
 
 ## How the vendored artifacts were built
 
 `stellarium-web-engine.js` + `stellarium-web-engine.wasm` were built from a clean
 checkout of the upstream repo in the official emscripten container, after applying
 the source patch in [§ Source modifications](#source-modifications) and three
-adjustments to the build invocation (`SConstruct`):
+adjustments to the build invocation (`SConstruct`). The simplest reproduction is
+to clone the published fork at the pinned tag, which already carries the patch
+and the SConstruct edits as commits:
+
+```sh
+git clone --branch ara-v1 https://github.com/open-astro/stellarium-web-engine.git
+cd stellarium-web-engine
+docker run --rm -v "$PWD":/src -w /src emscripten/emsdk:3.1.51 \
+  bash -lc "pip3 install scons && emscons scons -j8 mode=release werror=0"
+```
+
+Or equivalently, from a clean upstream checkout:
 
 ```sh
 git clone --depth 1 https://github.com/Stellarium/stellarium-web-engine.git
