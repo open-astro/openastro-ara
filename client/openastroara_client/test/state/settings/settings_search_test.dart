@@ -22,6 +22,27 @@ void main() {
       expect(results.first.label, 'Camera');
     });
 
+    test('§68.4 help entries are indexed as informational hits', () {
+      final helpHits = index.where((e) => e.helpKey != null).toList();
+      expect(helpHits, isNotEmpty, reason: 'the §69 help registry is indexed');
+      expect(helpHits.every((e) => e.groupLabel == 'Help'), isTrue);
+      expect(helpHits.every((e) => e.panelId == null && e.settingId == null),
+          isTrue, reason: 'help hits open the sheet, never navigate');
+    });
+
+    test('§68.4 "equipment hub down" surfaces the AlpacaBridge troubleshoot '
+        'help entry', () {
+      final results = searchSettings(index, 'equipment hub down');
+      expect(results, isNotEmpty);
+      expect(results.first.helpKey, 'equipment.alpacabridge.troubleshoot');
+    });
+
+    test('§68.4 a help TITLE search finds the entry too', () {
+      final results = searchSettings(index, 'alpacabridge not detected');
+      expect(results.map((e) => e.helpKey),
+          contains('equipment.alpacabridge.troubleshoot'));
+    });
+
     test('keyword "dither" surfaces Guider panel', () {
       final results = searchSettings(index, 'dither');
       expect(results.any((e) => e.panelId == 'eq.guider'), isTrue);

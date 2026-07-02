@@ -10,6 +10,12 @@ class Help {
   final List<String> relatedHelpKeys;
   final List<String> relatedSettings;
 
+  /// §61/§68.4 — user-intent search words beyond the title ("equipment hub
+  /// down" → the AlpacaBridge troubleshoot entry). Help entries are indexed
+  /// into the command palette alongside settings; most entries need none
+  /// (their titles already match), so this defaults empty.
+  final List<String> keywords;
+
   const Help({
     required this.key,
     required this.title,
@@ -17,10 +23,44 @@ class Help {
     this.learnMoreUrl,
     this.relatedHelpKeys = const <String>[],
     this.relatedSettings = const <String>[],
+    this.keywords = const <String>[],
   });
 }
 
 const Map<String, Help> helpRegistry = {
+  // §68.4 — the AlpacaBridge troubleshoot pointer (searchable via the palette;
+  // the wizard's §68.2 Screen-2 panel carries the same guidance in-flow). The
+  // companion `equipment.alpacabridge.version` entry from the playbook is MOOT:
+  // the §68.1 version gate was removed (Alpaca has no version endpoint by
+  // design — user decision 2026-06-21), so there is no version to explain.
+  'equipment.alpacabridge.troubleshoot': Help(
+    key: 'equipment.alpacabridge.troubleshoot',
+    title: 'AlpacaBridge not detected?',
+    body: "AlpacaBridge is ARA's equipment hub — every camera, mount, focuser "
+        "and other ASCOM Alpaca device connects through it. If equipment "
+        "discovery finds nothing or the profile wizard reports the bridge "
+        "missing:\n\n"
+        "1. It should have been installed alongside ARA Core via apt. If it "
+        "wasn't, install it on the daemon host:\n\n"
+        "    sudo apt install alpaca-bridge\n\n"
+        "2. Check the service is running on the daemon host:\n\n"
+        "    systemctl status alpaca-bridge\n\n"
+        "3. Devices are discovered over UDP port 32227 on the DAEMON's subnet "
+        "— gear on a different network segment won't be found. A non-standard "
+        "bridge, on a different host or port, can be entered as an address "
+        "override on the wizard's AlpacaBridge screen.\n\n"
+        "INDI/INDIGO users: connect through an Alpaca bridge such as AlpacaPi "
+        "or INDIGO Sky's -A Alpaca server.",
+    keywords: [
+      'alpaca bridge missing',
+      'equipment not found',
+      'alpaca bridge not detected',
+      'install alpaca bridge',
+      'equipment hub down',
+      'no devices',
+      'discovery',
+    ],
+  ),
   // (Old `guider.dither_pixels` starter entry retired in 12h.4 — superseded
   // by the proper `eq.guider.*` namespace below.)
   'safety.policies.on_unsafe': Help(

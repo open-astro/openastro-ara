@@ -23,7 +23,7 @@ class HelpIcon extends ConsumerWidget {
       child: Tooltip(
         message: '${entry.title}: ${entry.body.split('.').first}.',
         child: InkWell(
-          onTap: () => _showHelpModal(context, ref, entry),
+          onTap: () => showHelpSheet(context, entry),
           borderRadius: BorderRadius.circular(12),
           child: const Padding(
             padding: EdgeInsets.all(4),
@@ -38,15 +38,22 @@ class HelpIcon extends ConsumerWidget {
     );
   }
 
-  void _showHelpModal(BuildContext context, WidgetRef ref, Help entry) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AraColors.bgPanel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
+}
+
+/// §69 help sheet, callable from any live context (the HelpIcon tap, or a
+/// §68.4 help hit in the command palette AFTER the palette has popped). The
+/// sheet carries its own [Consumer] so the related-settings chips never
+/// depend on a caller's ref that may be disposed by the time they're tapped.
+void showHelpSheet(BuildContext context, Help entry) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AraColors.bgPanel,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+    ),
+    builder: (context) => Consumer(
+      builder: (context, ref, _) => DraggableScrollableSheet(
         initialChildSize: 0.4,
         minChildSize: 0.2,
         maxChildSize: 0.8,
@@ -60,9 +67,13 @@ class HelpIcon extends ConsumerWidget {
                 children: [
                   const Icon(Icons.help_outline, size: 20),
                   const SizedBox(width: 12),
-                  Text(entry.title,
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const Spacer(),
+                  // Expanded (not bare Text + Spacer): a long title must
+                  // ellipsize, not overflow the sheet on narrow layouts.
+                  Expanded(
+                    child: Text(entry.title,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge),
+                  ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
@@ -124,6 +135,6 @@ class HelpIcon extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
