@@ -59,6 +59,12 @@ public static class StarDetectability {
                 "seeing FWHM must be a positive, finite arcsec figure");
         }
         var pixelScaleArcsec = OptimalSubCalculator.PixelScaleArcsec(input);
+        if (!double.IsFinite(pixelScaleArcsec) || pixelScaleArcsec <= 0) {
+            // Standalone-caller guard (r3): a zeroed focal length / pixel size must surface
+            // as bad input, not silently collapse to the one-pixel floor via an Infinity scale.
+            throw new ArgumentOutOfRangeException(nameof(input),
+                "rig geometry (pixel size, focal length, reducer) must yield a positive, finite plate scale");
+        }
         var discAreaArcsec2 = Math.PI * Math.Pow(seeingFwhmArcsec / 2.0, 2);
         return Math.Max(1.0, discAreaArcsec2 / (pixelScaleArcsec * pixelScaleArcsec));
     }
@@ -79,11 +85,12 @@ public static class StarDetectability {
                 "SNR threshold must be positive and finite");
         }
 
-        if (!double.IsFinite(input.ReadNoiseE)) {
-            // > 0 alone would let +∞ through to an m_lim of −∞; a non-finite read noise is
-            // garbage input, not "unset" (unset is the ≤ 0 the Tier-0 default covers below).
+        if (!double.IsFinite(input.ReadNoiseE) || input.ReadNoiseE < 0) {
+            // Garbage is rejected, unset is defaulted (r3): only EXACTLY 0 — the DTO's unset
+            // value — takes the Tier-0 default below. A negative read noise is a unit bug
+            // upstream, and +∞ would slide through a bare > 0 check to an m_lim of −∞.
             throw new ArgumentOutOfRangeException(nameof(input),
-                "read noise must be finite (or ≤ 0 for the generic default)");
+                "read noise must be finite and ≥ 0 (0 = unset → the generic default)");
         }
 
         // Shared sky rate P (e⁻/s/pixel) — validates aperture/pixel/QE/sky inputs too.

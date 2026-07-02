@@ -125,11 +125,20 @@ namespace OpenAstroAra.Test {
                 () => StarDetectability.LimitingMagnitude(input, 60, Seeing, snrThreshold: 0));
             Assert.Throws<ArgumentOutOfRangeException>(
                 () => StarDetectability.LimitingMagnitude(input, double.NaN, Seeing));
-            // r1: non-finite read noise is garbage, not "unset" — it must throw, never
-            // slide through the > 0 fallback check to an m_lim of −∞.
+            // r1/r3: garbage read noise is rejected, only exactly 0 means "unset → default".
             Assert.Throws<ArgumentOutOfRangeException>(
                 () => StarDetectability.LimitingMagnitude(
                     Input(readNoise: double.PositiveInfinity), 60, Seeing));
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => StarDetectability.LimitingMagnitude(Input(readNoise: -3.3), 60, Seeing));
+            Assert.DoesNotThrow(
+                () => StarDetectability.LimitingMagnitude(Input(readNoise: 0), 60, Seeing),
+                "exactly 0 is the DTO's unset value and takes the Tier-0 default");
+            // r3: a zeroed focal length must surface as bad input from the standalone
+            // helper, not silently collapse to the one-pixel floor via an Infinity scale.
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => StarDetectability.SeeingDiscPixels(
+                    Input() with { FocalLengthMm = 0 }, Seeing));
         }
     }
 }
