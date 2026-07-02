@@ -36,6 +36,7 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import quote
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECT = "OpenAstroAra.Server/OpenAstroAra.Server.csproj"
@@ -149,6 +150,12 @@ RID-specific native packages for other platforms (e.g. the runtime.win-*
 SqlClient shims) appear here even though the linux-arm64 self-contained
 publish does not ship their binaries.
 
+SCOPE — this file covers the NuGet dependency graph only. Non-NuGet runtime
+components are tracked in NOTICE.md ("Third-party dependencies"), notably
+CFITSIO (ISC-style license): it is P/Invoked by OpenAstroAra.Fits but NOT
+bundled in this package — the .deb declares a dependency on the distro's
+libcfitsio package, which supplies the shared library.
+
 Engines and companions installed as SEPARATE packages (openastro-guider,
 alpacabridge, ASTAP) carry their own licenses and are not part of this
 daemon's distribution; the WILMA desktop client's third-party notices are
@@ -259,7 +266,10 @@ def build_document(pkgs: dict[str, str]) -> str:
             )
         if meta["expression"]:
             license_name = meta["expression"]
-            source = f"https://licenses.nuget.org/{license_name}"
+            # licenses.nuget.org resolves full SPDX expressions, including
+            # compound ones ("MIT OR Apache-2.0") — but those need their
+            # spaces/parens URL-encoded or the emitted link is broken.
+            source = f"https://licenses.nuget.org/{quote(license_name)}"
         elif override:
             license_name = override["license"]
             source = override["source"]

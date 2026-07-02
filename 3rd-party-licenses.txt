@@ -22,6 +22,12 @@ RID-specific native packages for other platforms (e.g. the runtime.win-*
 SqlClient shims) appear here even though the linux-arm64 self-contained
 publish does not ship their binaries.
 
+SCOPE — this file covers the NuGet dependency graph only. Non-NuGet runtime
+components are tracked in NOTICE.md ("Third-party dependencies"), notably
+CFITSIO (ISC-style license): it is P/Invoked by OpenAstroAra.Fits but NOT
+bundled in this package — the .deb declares a dependency on the distro's
+libcfitsio package, which supplies the shared library.
+
 Engines and companions installed as SEPARATE packages (openastro-guider,
 alpacabridge, ASTAP) carry their own licenses and are not part of this
 daemon's distribution; the WILMA desktop client's third-party notices are
