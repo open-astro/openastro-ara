@@ -11,9 +11,15 @@
 > (NINA-fidelity preserved, PR #627). Dr. Glover is attributed in every user-facing surface per
 > the recorded permission (§2).
 > **Still deferred:** §6 (native sequence model), adaptive/runtime Glover (§5's second fork),
-> the star-detectability + satellite-trail bounds (§3), the ±score-nudge and the wizard
-> electronics/filter capture steps (both recorded in `design/PORT_TODO.md`), and the ~20-row
-> sensor QE library (Tier 1).
+> the star-detectability + satellite-trail bounds (§3), and the ±score-nudge (recorded in
+> `design/PORT_TODO.md`).
+> **Tier 1 sensor QE library SHIPPED (2026-07-02):** `SensorQeLibrary` (16 rows, sensor→peak-QE
+> fractions rounded to 0.05 — vendor figures vary ±5–10% and the model is forgiving, so coarse
+> honest values over false precision) fills `QuantumEfficiencyPeak` in the connect-time
+> electronics auto-capture, keyed as a substring of the driver's free-form `SensorName`, ONLY
+> when unset — user-entered values always win, unknown sensors stay unset (the calculator's
+> documented generic default applies). Electronics-owned specs deliberately excluded per the
+> table below. The wizard electronics/filter capture steps also shipped earlier (#646/#647).
 > Originally captured 2026-06-29 and bookmarked behind the v1 cross-platform release; see
 > `design/PORT_DECISIONS.md` (2026-06-29) for that context.
 

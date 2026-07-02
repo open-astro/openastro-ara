@@ -738,8 +738,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// when no change is warranted. Merges PER FIELD: a property the driver didn't expose
     /// (<c>ReadCapabilities</c> reports 0 / null / −1 for it) keeps the stored value — a driver with
     /// partial support (say full well but no e⁻/ADU) must not clobber a user-entered or previously
-    /// captured value with a zero. <c>ReadNoiseE</c> and <c>QuantumEfficiencyPeak</c> are never in
-    /// ASCOM and always user-owned, so they're preserved outright. ASCOM reports full well / e⁻/ADU
+    /// captured value with a zero. <c>ReadNoiseE</c> is never in ASCOM and always user-owned, so it's
+    /// preserved outright. <c>QuantumEfficiencyPeak</c> is also never in ASCOM, but it IS a property
+    /// of the sensor — so when it's UNSET it fills from the NEXTGEN §5 Tier-1
+    /// <see cref="SensorQeLibrary"/> keyed off the reported sensor name (a non-zero stored value,
+    /// user-entered or previously filled, is never overwritten). ASCOM reports full well / e⁻/ADU
     /// for the CURRENT readout mode, so reconnecting in e.g. High Full Well mode re-captures the
     /// bigger well automatically (the "differs → re-cache" case). Reported doubles are epsilon-compared
     /// against the stored ones (they round-trip through profile.json) so a serialization artefact
@@ -759,6 +762,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 ? caps.ElectronsPerAdu
                 : current.ElectronsPerAdu,
             Gain = caps.CurrentGain >= 0 ? caps.CurrentGain : current.Gain,
+            // Tier-1 QE fill: only when unset — never over a user-entered (or previously
+            // filled) value, and only for a sensor the library actually knows.
+            QuantumEfficiencyPeak = current.QuantumEfficiencyPeak <= 0
+                    && SensorQeLibrary.LookupPeakQe(caps.SensorName) is { } libraryQe
+                ? libraryQe
+                : current.QuantumEfficiencyPeak,
             AutoCaptured = true,
         };
         return next == current ? null : next;
