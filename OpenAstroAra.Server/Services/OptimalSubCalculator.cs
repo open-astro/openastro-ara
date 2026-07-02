@@ -90,6 +90,16 @@ public static class OptimalSubCalculator {
     public static double SkyMagFromBortle(int bortleClass) =>
         22.0 - (Math.Clamp(bortleClass, 1, 9) - 1) * 0.5;
 
+    /// <summary>Plate scale in arcsec/pixel — shared with <see cref="StarDetectability"/> so a
+    /// formula change propagates (one geometry model, like the one sky model).</summary>
+    internal static double PixelScaleArcsec(OptimalSubInputDto input) =>
+        206.265 * input.PixelSizeUm / (input.FocalLengthMm * input.ReducerFactor);
+
+    /// <summary>Clear-aperture area in cm² (mm diameter → cm radius) — shared with
+    /// <see cref="StarDetectability"/>.</summary>
+    internal static double ApertureAreaCm2(OptimalSubInputDto input) =>
+        Math.PI * Math.Pow(input.ApertureMm / 20.0, 2);
+
     /// <summary><c>P</c>: the modelled sky-background flux in e⁻/s/pixel.
     /// <code>
     /// pixelScale = 206.265 · PixelSizeUm / (FocalLengthMm · ReducerFactor)   [arcsec/px]
@@ -100,8 +110,8 @@ public static class OptimalSubCalculator {
     /// </code></summary>
     public static double SkyFluxEPerSecPerPx(OptimalSubInputDto input) {
         ValidateFluxInputs(input);
-        var pixelScaleArcsec = 206.265 * input.PixelSizeUm / (input.FocalLengthMm * input.ReducerFactor);
-        var apertureAreaCm2 = Math.PI * Math.Pow(input.ApertureMm / 20.0, 2);
+        var pixelScaleArcsec = PixelScaleArcsec(input);
+        var apertureAreaCm2 = ApertureAreaCm2(input);
         return PhotonFluxMag0PerCm2PerNm
             * Math.Pow(10.0, -0.4 * input.SkyMagPerArcsec2)
             * input.FilterBandwidthNm

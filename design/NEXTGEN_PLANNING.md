@@ -224,7 +224,10 @@ sky+read terms grow with it), so no per-binning variant is computed; a seeing va
 badly from tonight's reality shifts `m_lim` like it shifts everything else seeing-derived —
 garbage-in is the profile's problem, stated once in the reason string's assumptions.
 
-**Slice plan (post-sign-off):** 1) `m_lim(t)` solver + tests against hand-computed cases;
+**Slice plan:** 1) `m_lim(t)` solver — **SHIPPED (2026-07-02, `StarDetectability`)**, deliberately
+UNWIRED: it is the uncontroversial half needed under any count-model outcome, tested against
+exact physical invariants (SNR-at-m_lim self-consistency, the exact 2.5 mag/decade read-noise
+regime, the asymptotic 1.25 mag/decade sky regime). Slices 2–3 stay post-sign-off:
 2) the count model + the HYG-validation test (the go/no-go gate for the whole feature);
 3) wire into the §3 window + Tonight's Sky reason tags.
 
