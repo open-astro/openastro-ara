@@ -159,14 +159,19 @@ class EquipmentStatusChip extends ConsumerWidget {
   }
 }
 
-/// Maps the multi-instance Switch list to the chip dot: connected (green) when
-/// *any* switch is connected, else disconnected; loading → info, error → error.
-/// Pure → unit-testable. (Switch has no busy state — `SwitchDevice` doesn't model
-/// it — so the chip never shows amber; see design/PORT_TODO.md.)
-StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async) => async.when(
-      data: (list) => list.any((s) => s.isConnected)
-          ? StatusLevel.connected
-          : StatusLevel.disconnected,
+/// Maps the multi-instance Switch list to the chip dot: busy (amber) while an
+/// action — a connect/disconnect or a port write — is in flight ([acting], the
+/// §25.3 derived signal, since the daemon reports no per-port actuation state),
+/// else connected (green) when *any* switch is connected, else disconnected;
+/// loading → info, error → error. Pure → unit-testable.
+StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async,
+        {bool acting = false}) =>
+    async.when(
+      data: (list) => acting
+          ? StatusLevel.busy
+          : list.any((s) => s.isConnected)
+              ? StatusLevel.connected
+              : StatusLevel.disconnected,
       loading: () => StatusLevel.info,
       error: (_, _) => StatusLevel.error,
     );
@@ -181,7 +186,8 @@ class SwitchStatusChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final level = ref.watch(serverLinkUpProvider)
-        ? switchChipLevel(ref.watch(switchListProvider))
+        ? switchChipLevel(ref.watch(switchListProvider),
+            acting: ref.watch(switchActingProvider))
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,

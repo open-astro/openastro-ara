@@ -36,6 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Fixed
+- **§25.3 — the Switch chip now turns amber while a port is actuating.** Flipping a switch port (or connecting/disconnecting a switch device) used to leave the top-bar Switch chip green as if nothing was happening; it now shows the same busy amber the other equipment chips do for the duration of the action.
 - **§36 — a blocked sky-data delete no longer looks like it worked.** Removing a downloaded catalog whose files were locked or permission-denied used to answer exactly like "already removed" (404), so the UI treated still-present files as freed. The daemon now answers 409 with the reason, and the Data Manager shows "the files are in use or protected — close anything using them and try again" so you know to retry.
 
 ### Added

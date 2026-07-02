@@ -38,6 +38,22 @@ final switchApiProvider = Provider<SwitchClient?>((ref) {
 /// a daemon-side change NOT triggered here (another client connects a switch, a
 /// switch drops) is invisible until the next read. Periodic/live (WS) refresh is a
 /// later slice; the UI can call `refresh()` on a cadence if needed.
+/// §25.3 — true while a switch action (connect / disconnect / port write) is in
+/// flight. The daemon reports no per-port actuation state, so `SwitchDevice`
+/// can't carry busy; this is the "derive it from an in-flight set-value op"
+/// signal the top-bar chip watches to show amber during actuation. Set by
+/// [SwitchListNotifier._act]'s try/finally, so it always clears when the action
+/// unwinds (including an abandoned call after a server switch — with, at worst,
+/// a brief lag until the force-closed transport call returns).
+class SwitchActingNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool v) => state = v;
+}
+
+final switchActingProvider =
+    NotifierProvider<SwitchActingNotifier, bool>(SwitchActingNotifier.new);
+
 class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // Serializes manual refresh() so rapid taps don't stack concurrent getAll()s;
   // the post-action refresh from connect/etc. passes a pinned client and always
@@ -103,6 +119,8 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     final api = ref.read(switchApiProvider);
     if (api == null) return false; // no active server — dropped
     _acting = true;
+    // §25.3 — mirror the guard onto the chip's busy signal (amber while actuating).
+    ref.read(switchActingProvider.notifier).set(true);
     final gen = _generation;
     try {
       // The action throws on failure — propagate to the caller (the list stays as
@@ -117,7 +135,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       // — and a fresh action there may have set it true again; an unconditional clear
       // here would wipe that newer action's guard, letting two control actions fly at
       // once against the new server.
-      if (gen == _generation) _acting = false;
+      if (gen == _generation) {
+        _acting = false;
+        if (ref.mounted) ref.read(switchActingProvider.notifier).set(false);
+      }
     }
   }
 
