@@ -90,14 +90,6 @@ public static class OptimalSubCalculator {
     public static double SkyMagFromBortle(int bortleClass) =>
         22.0 - (Math.Clamp(bortleClass, 1, 9) - 1) * 0.5;
 
-    /// <summary><c>P</c>: the modelled sky-background flux in e⁻/s/pixel.
-    /// <code>
-    /// pixelScale = 206.265 · PixelSizeUm / (FocalLengthMm · ReducerFactor)   [arcsec/px]
-    /// P = PhotonFluxMag0PerCm2PerNm · 10^(−0.4·SkyMag) · BandwidthNm
-    ///       · π·(ApertureMm/20)²                                             [cm² aperture area]
-    ///       · pixelScale²                                                    [arcsec²/px]
-    ///       · QE
-    /// </code></summary>
     /// <summary>Plate scale in arcsec/pixel — shared with <see cref="StarDetectability"/> so a
     /// formula change propagates (one geometry model, like the one sky model).</summary>
     internal static double PixelScaleArcsec(OptimalSubInputDto input) =>
@@ -108,6 +100,14 @@ public static class OptimalSubCalculator {
     internal static double ApertureAreaCm2(OptimalSubInputDto input) =>
         Math.PI * Math.Pow(input.ApertureMm / 20.0, 2);
 
+    /// <summary><c>P</c>: the modelled sky-background flux in e⁻/s/pixel.
+    /// <code>
+    /// pixelScale = 206.265 · PixelSizeUm / (FocalLengthMm · ReducerFactor)   [arcsec/px]
+    /// P = PhotonFluxMag0PerCm2PerNm · 10^(−0.4·SkyMag) · BandwidthNm
+    ///       · π·(ApertureMm/20)²                                             [cm² aperture area]
+    ///       · pixelScale²                                                    [arcsec²/px]
+    ///       · QE
+    /// </code></summary>
     public static double SkyFluxEPerSecPerPx(OptimalSubInputDto input) {
         ValidateFluxInputs(input);
         var pixelScaleArcsec = PixelScaleArcsec(input);
