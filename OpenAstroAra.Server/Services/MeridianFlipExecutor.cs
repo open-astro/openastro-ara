@@ -617,6 +617,19 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The safe-rest path runs from the failure handler: a park/tracking-stop fault must degrade to the next-safest action and a truthful message, never mask the original flip fault. CA1031's fail-safe boundary applies.")]
     private async Task<string> SafeRest(IProgress<ApplicationStatus> progress) {
+        // Stop the guider FIRST, unconditionally — the failure may have landed after the resume
+        // step (the pier-side hard fail does exactly that), and PHD2 corrections on a mount that
+        // may not have actually flipped drift it further. Spec Layer 4 lists "guider stopped" as
+        // part of the rest state, so this must hold for every path into it.
+        try {
+            if (guiderMediator.GetInfo().Connected) {
+                Logger.Info("Meridian Flip - Safe rest: stopping the guider.");
+                await guiderMediator.StopGuiding(CancellationToken.None);
+            }
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Safe rest: stopping the guider failed.", ex);
+        }
+
         TelescopeInfo mount;
         try {
             mount = telescopeMediator.GetInfo();

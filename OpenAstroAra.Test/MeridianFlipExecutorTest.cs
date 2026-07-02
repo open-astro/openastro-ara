@@ -604,6 +604,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_pier_side_failure_after_guider_resume_still_ends_with_the_guider_stopped() {
+            // #630 review: the pier-side hard fail fires AFTER the guider-resume step, so safe
+            // rest must stop the guider again — the "guider is stopped" claim in the notification
+            // has to hold for every path into the failure handler, not just pre-resume ones.
+            SetupProfile(recenter: false);
+            SetupSafety(Safety());
+            telescope.Setup(t => t.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = PierSide.pierEast,   // never flips
+                RightAscension = 5, Declination = 20,
+            });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            var resumeIndex = callLog.LastIndexOf("StartGuiding");
+            var finalStopIndex = callLog.LastIndexOf("StopGuiding");
+            Assert.That(resumeIndex, Is.GreaterThanOrEqualTo(0), "the resume step ran before the pier-side check");
+            Assert.That(finalStopIndex, Is.GreaterThan(resumeIndex),
+                "safe rest must stop the guider AFTER the resume that preceded the pier-side failure");
+        }
+
+        [Test]
         public async Task A_failed_park_attempt_reports_itself_honestly_not_as_cannot_park() {
             // #630 review: CanPark=true but the attempt fails → the notification must say the
             // ATTEMPT failed (an operator diagnostic), not misreport "the mount cannot park".
