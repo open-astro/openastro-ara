@@ -128,6 +128,12 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
 
   @override
   Widget build(BuildContext context) {
+    // WATCH (don't just read) the autoDispose API provider: this registered
+    // listener is what keeps it — and its Dio — alive for the widget's
+    // lifetime. With only the ref.read in _fetch, Riverpod would dispose the
+    // provider (closing the Dio, aborting the in-flight request) right after
+    // the synchronous read returned, and every fetch would die mid-flight.
+    ref.watch(optimalSubApiProvider);
     if (_hidden) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final dim = theme.textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
@@ -223,12 +229,11 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
 }
 
 /// The active server's Optimal-Sub API, or null with no server. AutoDispose +
-/// close-on-dispose, mirroring `sequenceApiProvider`.
+/// close-on-dispose, mirroring `sequenceApiProvider`. NB the advisor widget
+/// WATCHES this in build — autoDispose would otherwise tear the Dio down
+/// (aborting the in-flight request) as soon as _fetch's read returned.
 final optimalSubApiProvider = Provider.autoDispose<OptimalSubApi?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(optimalSubApiFactoryProvider)(server);
   ref.onDispose(api.close);
