@@ -285,12 +285,6 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     }
 
     /// <summary>
-    /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
-    /// (<c>IImagingMediator.CaptureImage</c> on the mediator partial). Caller owns the in-flight
-    /// gate and the exception boundary; genuine cancellation (the sequencer token) aborts the
-    /// exposure best-effort and propagates. Returns true only when the frame landed in the catalog.
-    /// </summary>
-    /// <summary>
     /// The device half of a capture — settings → expose → poll ImageReady → download → pixel
     /// conversion — extracted from <see cref="CaptureCoreAsync"/> so the §59 autofocus sweep can
     /// capture analysis frames through the IDENTICAL device path without the persistence half
@@ -350,6 +344,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return (pixels, width, height, capturedAt);
     }
 
+    /// <summary>
+    /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
+    /// (<c>IImagingMediator.CaptureImage</c> on the mediator partial). Caller owns the in-flight
+    /// gate and the exception boundary; genuine cancellation (the sequencer token) aborts the
+    /// exposure best-effort and propagates. Returns true only when the frame landed in the catalog.
+    /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
     private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
