@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,7 +36,7 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             // only — once the branches are running they execute to completion (a
             // nested sequential container inside a branch still pauses at its own
             // boundaries via the shared root gate).
-            var pauseGate = (Utility.ItemUtility.GetRootContainer(context) as Utility.IPauseGateHost)?.PauseGate;
+            var pauseGate = (ItemUtility.GetRootContainer(context) as IPauseGateHost)?.PauseGate;
             if (pauseGate != null) {
                 await pauseGate.WaitWhilePausedAsync(token);
             }
