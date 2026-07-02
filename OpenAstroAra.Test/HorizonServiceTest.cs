@@ -21,8 +21,8 @@ using System.Linq;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// §36 Planning horizon — the alt/az → equatorial projection that draws the local horizon on the
-    /// Aladin atlas. The trig is checked against exact invariants (no external almanac): every point on
+    /// §36 Planning horizon — the alt/az → equatorial projection that draws the local horizon on an
+    /// equatorial sky chart. The trig is checked against exact invariants (no external almanac): every point on
     /// the returned curve reads back at exactly the horizon altitude (round-trip through the forward
     /// altitude formula); the zenith sits at dec = latitude, RA = local sidereal time; and at the
     /// equator the due-north horizon point is the north celestial pole.

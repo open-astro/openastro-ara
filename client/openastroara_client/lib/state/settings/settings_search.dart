@@ -205,7 +205,6 @@ const Map<String, List<String>> _panelKeywords = {
   'sky.data': [
     'hips',
     'survey',
-    'aladin',
     'catalog',
     'tycho',
     'gaia',

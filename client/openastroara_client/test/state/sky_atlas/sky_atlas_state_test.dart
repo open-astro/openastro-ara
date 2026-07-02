@@ -29,22 +29,6 @@ void main() {
     });
   });
 
-  group('SkyAtlasSearchNotifier', () {
-    late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
-    tearDown(() => container.dispose());
-
-    test('defaults to empty', () {
-      expect(container.read(skyAtlasSearchProvider), '');
-    });
-
-    test('set updates query', () {
-      final n = container.read(skyAtlasSearchProvider.notifier);
-      n.set('M42');
-      expect(container.read(skyAtlasSearchProvider), 'M42');
-    });
-  });
-
   group('PlanetariumCommandNotifier', () {
     late ProviderContainer container;
     setUp(() => container = ProviderContainer());
@@ -80,12 +64,4 @@ void main() {
     });
   });
 
-  group('skyImageryAvailableProvider', () {
-    test('Phase 12e.1 stub returns false', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      // Demo state — no downloads tracked yet (12e.2 lifts this).
-      expect(container.read(skyImageryAvailableProvider), isFalse);
-    });
-  });
 }

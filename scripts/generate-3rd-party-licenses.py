@@ -261,7 +261,7 @@ alpacabridge, ASTAP) carry their own licenses and are not part of this
 distribution. Client-embedded engines with their own disclosure files keep
 them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
-fork) and Aladin Lite (GPL-3.0, client/.../assets/aladin/ALADIN_LICENSE.md).
+fork).
 """
 
 SEPARATOR = "\n\n" + "-" * 72 + "\n"
