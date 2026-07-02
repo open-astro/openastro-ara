@@ -761,6 +761,11 @@ function catColor(id) { return CAT_COLORS[id] || '#90caf9'; }
 function catCircles(objs, color) {
   var R = 0.18, N = 8, polys = [];
   for (var i = 0; i < objs.length; i++) {
+    // Guard malformed rows (same precedent as the search-result handler): a
+    // missing/non-finite coordinate would put NaN vertices INSIDE the single
+    // shared MultiPolygon and could break the native parse of the whole
+    // catalog, not just one marker — skip the bad object instead.
+    if (!isFinite(objs[i].ra_deg) || !isFinite(objs[i].dec_deg)) continue;
     var ra = objs[i].ra_deg, dec = Math.max(-89.5, Math.min(89.5, objs[i].dec_deg));
     var cosD = Math.max(0.02, Math.cos(dec * D2R));
     var ring = [];
@@ -1196,7 +1201,6 @@ function toggleFrame(on) {
     hideDisplay();
     hideCats();
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
-    hideDisplay();
     stel.core.lock = null;
     var c = viewCenterRaDec();
     // isFinite (not !isNaN): a not-yet-initialised engine can return Infinity, and
