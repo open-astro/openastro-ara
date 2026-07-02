@@ -1,0 +1,17 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: openastroara-server
+Upstream-Contact: OpenAstro <noreply@openastro.net>
+Source: https://github.com/open-astro/openastro-ara
+
+Files: *
+Copyright: Stefan Berg <isbeorn@hotmail.com> and the N.I.N.A. Contributors
+           2026-present Open Astro contributors
+License: MPL-2.0
+ This package is a derivative work of N.I.N.A. (Nighttime Imaging 'N'
+ Astronomy), used under the Mozilla Public License 2.0. The full MPL-2.0
+ text is installed alongside this file as LICENSE.txt; lineage and
+ attribution details are in NOTICE.md.
+ .
+ Third-party components bundled with or required by this package are
+ enumerated with their licenses in 3rd-party-licenses.txt in this
+ directory.

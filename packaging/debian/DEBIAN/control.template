@@ -4,7 +4,7 @@ Section: net
 Priority: optional
 Architecture: arm64
 Maintainer: OpenAstro <noreply@openastro.net>
-Depends: libc6, libgcc-s1, libstdc++6
+Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10
 Recommends: alpacabridge, openastro-guider
 Suggests: gpsd
 Homepage: https://github.com/open-astro/openastro-ara

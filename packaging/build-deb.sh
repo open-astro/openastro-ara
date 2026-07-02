@@ -46,10 +46,21 @@ cp -r "$PUBLISH_DIR/." "$STAGE/opt/openastroara/"
 chmod 0755 "$STAGE/opt/openastroara/OpenAstroAra.Server"
 
 # Ship the license documents per §15/§17.2: the project license + NINA
-# lineage notice, and the generated third-party notices for the daemon's
-# NuGet dependency graph (scripts/generate-3rd-party-licenses.py keeps the
-# repo-root file fresh; CI fails when it goes stale).
+# lineage notice, and the generated third-party notices
+# (scripts/generate-3rd-party-licenses.py keeps the repo-root file fresh;
+# CI fails when it goes stale, and this script re-checks so a stale .deb
+# can't be built locally or by a future release pipeline either). The
+# Debian-Policy-12.5 `copyright` file arrives via the packaging source
+# tree copy above.
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if command -v python3 > /dev/null && command -v dotnet > /dev/null; then
+    python3 "$REPO_ROOT/scripts/generate-3rd-party-licenses.py" --check \
+        || { echo "error: 3rd-party-licenses.txt is stale — regenerate before packaging" >&2; exit 1; }
+else
+    # A pure packaging box (publish dir produced elsewhere) may lack the
+    # toolchain; CI always has both, so the gate still guards every merge.
+    echo "warn: python3/dotnet not available; skipping third-party-notices freshness check" >&2
+fi
 DOC_DIR="$STAGE/usr/share/doc/openastroara-server"
 mkdir -p "$DOC_DIR"
 for doc in LICENSE.txt NOTICE.md 3rd-party-licenses.txt; do
