@@ -197,6 +197,50 @@ void main() {
     expect(container.read(selectedTabIndexProvider), 1);
   });
 
+  testWidgets('12f.3: the filter pill narrows frame strips; search hides sessions',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [
+        _frame('f1'),
+        LibraryFrameItem(
+          id: 'f2',
+          frameType: 'light',
+          filterName: 'OIII',
+          exposureSeconds: 180,
+          capturedUtc: DateTime.utc(2026, 6, 30, 23, 30),
+          hfr: 2.1,
+          starCount: 300,
+          rating: 5,
+        ),
+      ],
+    });
+    await _pump(tester, fake);
+    expect(find.text('Ha'), findsOneWidget);
+    expect(find.text('OIII'), findsOneWidget);
+
+    // Filter to OIII: the Ha thumbnail disappears from the strip.
+    await tester.tap(find.text('All filters'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OIII').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Ha'), findsNothing);
+
+    // Search for a target that doesn't exist: the session hides, with a
+    // clear-filters escape hatch.
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'NGC 9999');
+    await tester.tap(find.widgetWithText(FilledButton, 'Search'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('No sessions match'), findsOneWidget);
+
+    await tester.tap(find.text('Clear filters'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('M42'), findsWidgets);
+  });
+
   testWidgets('an empty catalog explains itself instead of showing demo data',
       (tester) async {
     await _pump(tester, _FakeLibraryClient());
