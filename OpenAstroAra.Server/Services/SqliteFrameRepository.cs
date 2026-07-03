@@ -644,63 +644,54 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The composed fragment is only '$id0,$id1,...' parameter placeholders generated from the list COUNT; every value is bound. No user input reaches the command text.")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "FileStream ownership transfers to FrameExportPrep (entries list); the endpoint disposes the prep in its stream callback, and the catch block disposes on partial failure.")]
+        Justification = "The composed fragment is only '$id0,$id1,...' parameter placeholders generated from the chunk COUNT; every value is bound. No user input reaches the command text.")]
     public async Task<FrameExportPrep?> PrepareExportAsync(BulkExportRequestDto request, CancellationToken ct) {
         if (request.FrameIds.Count == 0) return null;
 
-        // One IN(...) query for path resolution (the #686 review's N+1 note),
-        // mapped back to request order so entry naming stays deterministic.
+        // Path resolution in bound-parameter-safe chunks (SQLite's parameter
+        // limit would throw on very large selections otherwise), mapped back
+        // to request order so entry naming stays deterministic.
+        const int ChunkSize = 500;
         var byId = new Dictionary<Guid, string>();
         await using (var conn = _db.OpenConnection()) {
-            await using var cmd = conn.CreateCommand();
-            var parts = new List<string>(request.FrameIds.Count);
-            for (var i = 0; i < request.FrameIds.Count; i++) {
-                parts.Add($"$id{i}");
-                cmd.Parameters.AddWithValue($"$id{i}", request.FrameIds[i].ToString());
-            }
-            cmd.CommandText = $"SELECT id, file_path FROM frames WHERE id IN ({string.Join(',', parts)});";
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct)) {
-                if (Guid.TryParse(reader.GetString(0), out var id) && !await reader.IsDBNullAsync(1, ct)) {
-                    byId[id] = reader.GetString(1);
+            for (var offset = 0; offset < request.FrameIds.Count; offset += ChunkSize) {
+                var chunk = request.FrameIds.Skip(offset).Take(ChunkSize).ToList();
+                await using var cmd = conn.CreateCommand();
+                var parts = new List<string>(chunk.Count);
+                for (var i = 0; i < chunk.Count; i++) {
+                    parts.Add($"$id{i}");
+                    cmd.Parameters.AddWithValue($"$id{i}", chunk[i].ToString());
+                }
+                cmd.CommandText = $"SELECT id, file_path FROM frames WHERE id IN ({string.Join(',', parts)});";
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct)) {
+                    if (Guid.TryParse(reader.GetString(0), out var id) && !await reader.IsDBNullAsync(1, ct)) {
+                        byId[id] = reader.GetString(1);
+                    }
                 }
             }
         }
 
-        // Open every file UP FRONT: an open handle cannot vanish, so the TOCTOU
-        // skip happens here — before any tar bytes exist — and the streamed body
-        // needs no rollback. Missing/locked files skip; the rest still export.
-        var entries = new List<(FileStream Stream, string EntryName)>();
+        // Plan entries for files present NOW (no handles opened here — see
+        // FrameExportPrep: the endpoint opens one at a time while streaming).
+        var entries = new List<(string Path, string EntryName)>();
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        try {
-            foreach (var frameId in request.FrameIds) {
-                if (!byId.TryGetValue(frameId, out var path) || path.Length == 0) continue;
-                FileStream fs;
-                try {
-                    fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException) {
-                    continue; // rotated volume / locked file — skip, keep the rest
-                }
-                var name = Path.GetFileName(path);
-                if (!seenNames.Add(name)) {
-                    // Suffix until genuinely unique — a single rename can itself
-                    // collide (frame_1/frame/frame), silently clobbering on extract.
-                    var stem = Path.GetFileNameWithoutExtension(name);
-                    var ext = Path.GetExtension(name);
-                    var suffix = 1;
-                    string candidate;
-                    do {
-                        candidate = $"{stem}_{suffix++}{ext}";
-                    } while (!seenNames.Add(candidate));
-                    name = candidate;
-                }
-                entries.Add((fs, name));
+        foreach (var frameId in request.FrameIds) {
+            if (!byId.TryGetValue(frameId, out var path) || path.Length == 0 || !File.Exists(path)) continue;
+            var name = Path.GetFileName(path);
+            if (!seenNames.Add(name)) {
+                // Suffix until genuinely unique — a single rename can itself
+                // collide (frame_1/frame/frame), silently clobbering on extract.
+                var stem = Path.GetFileNameWithoutExtension(name);
+                var ext = Path.GetExtension(name);
+                var suffix = 1;
+                string candidate;
+                do {
+                    candidate = $"{stem}_{suffix++}{ext}";
+                } while (!seenNames.Add(candidate));
+                name = candidate;
             }
-        } catch {
-            foreach (var (fs, _) in entries) await fs.DisposeAsync();
-            throw;
+            entries.Add((path, name));
         }
         if (entries.Count == 0) return null;
         return new FrameExportPrep(entries, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar");

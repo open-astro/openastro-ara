@@ -32,20 +32,16 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="OpenDownloadAsync"/> method (per §72) which streams the original
 /// frame file — used by the WILMA library "Download original" action.
 /// </summary>
-/// <summary>§39.10 export, prepared for STREAMING: every file is already open
-/// (an open handle can't vanish — the missing-file skip happened at open time,
-/// before any tar bytes exist), so the endpoint can stream entries straight to
-/// the response with no in-memory assembly and no rollback. Count = entries.
-/// Dispose closes all handles; the endpoint owns that via its stream callback.</summary>
+/// <summary>§39.10 export plan for STREAMING with one file handle at a time
+/// (the r1 FD-exhaustion fix — Pi-class ulimits are low, so files open
+/// as-you-go in the endpoint's stream callback, never as a batch). Entries
+/// carry paths + pre-deduped tar names for files that existed at plan time;
+/// the count is therefore BEST-EFFORT — a file vanishing before its turn
+/// streams is skipped at open, and per-entry failure after open cannot occur
+/// (an open handle can't vanish), keeping the tar aligned with no rollback.</summary>
 public sealed record FrameExportPrep(
-    IReadOnlyList<(System.IO.FileStream Stream, string EntryName)> Entries,
-    string FileName) : IAsyncDisposable {
-    public async ValueTask DisposeAsync() {
-        foreach (var (stream, _) in Entries) {
-            await stream.DisposeAsync();
-        }
-    }
-}
+    IReadOnlyList<(string Path, string EntryName)> Entries,
+    string FileName);
 
 public interface IFrameRepository {
     /// <summary>

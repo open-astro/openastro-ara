@@ -138,7 +138,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(prep, Is.Not.Null);
             Assert.That(prep!.FileName, Does.StartWith("openastroara-frames-").And.EndWith(".tar"));
-            Assert.That(prep.Entries.Count, Is.EqualTo(1), "the missing file is skipped at open time");
+            Assert.That(prep.Entries.Count, Is.EqualTo(1), "the missing file is excluded from the plan");
             var names = await StreamAndListEntriesAsync(prep);
             Assert.That(names, Is.EqualTo(new[] { Path.GetFileName(fitsA) }),
                 "the existing file is in the tar; the missing one is skipped");
@@ -161,15 +161,15 @@ namespace OpenAstroAra.Test {
             Assert.That(names.Count, Is.EqualTo(3));
         }
 
-        // Streams the prep exactly like the endpoint's callback, then reads the
-        // entry names back — proving the open handles produce a valid tar.
+        // Streams the prep exactly like the endpoint's callback (one handle at a
+        // time), then reads the entry names back — proving a valid tar.
         private static async Task<List<string>> StreamAndListEntriesAsync(FrameExportPrep prep) {
             var ms = new MemoryStream();
-            await using (var _ = prep)
             await using (var tar = new System.Formats.Tar.TarWriter(ms, leaveOpen: true)) {
-                foreach (var (stream, name) in prep.Entries) {
+                foreach (var (path, name) in prep.Entries) {
+                    await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                     var entry = new System.Formats.Tar.PaxTarEntry(
-                        System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = stream };
+                        System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = fs };
                     await tar.WriteEntryAsync(entry, CancellationToken.None);
                 }
             }

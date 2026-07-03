@@ -143,20 +143,31 @@ public static class ImageEndpoints {
                 async (HttpContext http, IFrameRepository repo, [FromBody] BulkExportRequestDto request, CancellationToken ct) => {
                     var prep = await repo.PrepareExportAsync(request, ct);
                     if (prep is null) return Results.NotFound();
-                    // Export is partial-success by design (missing files skip) —
-                    // the count of files actually opened for the tar (headers must
-                    // precede the streamed body, which is why opens happen up front).
+                    // Export is partial-success by design (missing files skip).
+                    // BEST-EFFORT count: planned entries whose files existed at
+                    // plan time (headers must precede the streamed body; a file
+                    // vanishing before its turn still skips below).
                     http.Response.Headers["X-Ara-Exported-Count"] =
                         prep.Entries.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    // Stream entries straight to the response — no in-memory tar
-                    // (the #686 review's Pi-class-host memory concern).
+                    // Stream entries with ONE file handle open at a time (the r1
+                    // FD-exhaustion fix for Pi-class ulimits) and no in-memory tar.
+                    // A file vanishing between planning and its turn skips at open
+                    // — before its entry writes — so the tar stays aligned; the
+                    // count header is best-effort by that same token.
                     return Results.Stream(async output => {
-                        await using var _ = prep;
                         await using var tar = new System.Formats.Tar.TarWriter(output, leaveOpen: true);
-                        foreach (var (stream, name) in prep.Entries) {
-                            var entry = new System.Formats.Tar.PaxTarEntry(
-                                System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = stream };
-                            await tar.WriteEntryAsync(entry, http.RequestAborted);
+                        foreach (var (path, name) in prep.Entries) {
+                            System.IO.FileStream fs;
+                            try {
+                                fs = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read);
+                            } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) {
+                                continue;
+                            }
+                            await using (fs) {
+                                var entry = new System.Formats.Tar.PaxTarEntry(
+                                    System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = fs };
+                                await tar.WriteEntryAsync(entry, http.RequestAborted);
+                            }
                         }
                     }, "application/x-tar", prep.FileName);
                 })
