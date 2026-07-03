@@ -49,7 +49,8 @@ class CalibrationSessionsNotifier
     if (api == null) return null;
     final page = await api.listSessions();
     _nextCursor = page.nextCursor;
-    _hasMore = page.hasMore;
+    // A has_more without a cursor would render a dead button — treat as end.
+      _hasMore = page.hasMore && page.nextCursor != null;
     return page.items;
   }
 
@@ -61,7 +62,8 @@ class CalibrationSessionsNotifier
       final page = await api.listSessions();
       if (gen == _refreshGen) {
         _nextCursor = page.nextCursor;
-        _hasMore = page.hasMore;
+        // A has_more without a cursor would render a dead button — treat as end.
+      _hasMore = page.hasMore && page.nextCursor != null;
       }
       return page.items;
     });
@@ -76,7 +78,12 @@ class CalibrationSessionsNotifier
     // slower response clobber the newer cursor.
     if (!_hasMore || cursor == null || _loadingMore) return;
     _loadingMore = true;
-    final gen = _refreshGen;
+    // Mint a generation (r5): borrowing the ambient one let an append issued
+    // DURING an in-flight refresh share its generation — the slower append
+    // would then clobber the fresh refresh with a stale list + cursor chain.
+    // Minting makes every writer last-issued-wins: the older refresh's write
+    // is rejected, and `current` can no longer be replaced under our await.
+    final gen = ++_refreshGen;
     final api = ref.read(calibrationApiProvider);
     final current = state.value;
     if (api == null || current == null) {
@@ -87,7 +94,8 @@ class CalibrationSessionsNotifier
       final page = await api.listSessions(cursor: cursor);
       if (gen != _refreshGen) return;
       _nextCursor = page.nextCursor;
-      _hasMore = page.hasMore;
+      // A has_more without a cursor would render a dead button — treat as end.
+      _hasMore = page.hasMore && page.nextCursor != null;
       state = AsyncData([...current, ...page.items]);
     } catch (_) {
       // Catch-all like refresh()'s AsyncValue.guard (r4): even a TypeError
