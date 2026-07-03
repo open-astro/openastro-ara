@@ -103,10 +103,19 @@ public static class CalibrationSequenceBuilder {
         return JsonSerializer.SerializeToElement(root);
     }
 
-    private static JsonObject FlatBlock(FlatStepSpec step) {
+    private static JsonObject FlatBlock(FlatStepSpec step) =>
+        FilterCaptureBlock("Flats", "FLAT", step.FilterName, step.FrameCount,
+            step.ExposureSeconds, step.Gain, step.Offset, step.FocuserPosition);
+
+    /// <summary>The shared per-filter capture shape (r1 dedup): a looped SequentialContainer of
+    /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure] — flats and resume-target lights
+    /// differ only in ImageType and the block-name prefix.</summary>
+    private static JsonObject FilterCaptureBlock(
+            string namePrefix, string imageType, string? filterName, int frameCount,
+            double exposureSeconds, int? gainValue, int? offsetValue, int? focuserPosition) {
         var items = new JsonArray();
 
-        if (step.FilterName is not null) {
+        if (filterName is not null) {
             items.Add(new JsonObject {
                 ["$type"] = SwitchFilterType,
                 // _position -1 on purpose: SwitchFilter.MatchFilter resolves by NAME against the
@@ -114,13 +123,13 @@ public static class CalibrationSequenceBuilder {
                 // recorded position is >= 0. A stale index from a re-ordered wheel must not win.
                 ["Filter"] = new JsonObject {
                     ["$type"] = FilterInfoType,
-                    ["_name"] = step.FilterName,
+                    ["_name"] = filterName,
                     ["_position"] = -1,
                 },
             });
         }
 
-        if (step.FocuserPosition is int focus) {
+        if (focuserPosition is int focus) {
             items.Add(new JsonObject {
                 ["$type"] = MoveFocuserAbsoluteType,
                 ["Position"] = focus,
@@ -129,27 +138,27 @@ public static class CalibrationSequenceBuilder {
 
         var exposure = new JsonObject {
             ["$type"] = TakeExposureType,
-            ["ExposureTime"] = step.ExposureSeconds,
-            ["ImageType"] = "FLAT",
+            ["ExposureTime"] = exposureSeconds,
+            ["ImageType"] = imageType,
             ["ExposureCount"] = 0,
         };
         // Omitted Gain/Offset deserialize to TakeExposure's -1 "camera default" sentinel.
-        if (step.Gain is int gain) {
+        if (gainValue is int gain) {
             exposure["Gain"] = gain;
         }
-        if (step.Offset is int offset) {
+        if (offsetValue is int offset) {
             exposure["Offset"] = offset;
         }
         items.Add(exposure);
 
-        var label = step.FilterName ?? "no filter";
+        var label = filterName ?? "no filter";
         return new JsonObject {
             ["$type"] = SequentialContainerType,
             ["Strategy"] = Strategy(),
-            ["Name"] = $"Flats — {label} ({step.FrameCount}×{step.ExposureSeconds:0.####}s)",
+            ["Name"] = $"{namePrefix} — {label} ({frameCount}×{exposureSeconds:0.####}s)",
             ["Conditions"] = new JsonArray(new JsonObject {
                 ["$type"] = LoopConditionType,
-                ["Iterations"] = step.FrameCount,
+                ["Iterations"] = frameCount,
                 ["CompletedIterations"] = 0,
             }),
             ["Items"] = items,
@@ -241,53 +250,9 @@ public static class CalibrationSequenceBuilder {
         return JsonSerializer.SerializeToElement(root);
     }
 
-    private static JsonObject LightBlock(LightStepSpec step) {
-        var items = new JsonArray();
-        if (step.FilterName is not null) {
-            items.Add(new JsonObject {
-                ["$type"] = SwitchFilterType,
-                // _position -1: resolve by NAME only (same rationale as FlatBlock).
-                ["Filter"] = new JsonObject {
-                    ["$type"] = FilterInfoType,
-                    ["_name"] = step.FilterName,
-                    ["_position"] = -1,
-                },
-            });
-        }
-        if (step.FocuserPosition is int focus) {
-            items.Add(new JsonObject {
-                ["$type"] = MoveFocuserAbsoluteType,
-                ["Position"] = focus,
-            });
-        }
-        var exposure = new JsonObject {
-            ["$type"] = TakeExposureType,
-            ["ExposureTime"] = step.ExposureSeconds,
-            ["ImageType"] = "LIGHT",
-            ["ExposureCount"] = 0,
-        };
-        if (step.Gain is int gain) {
-            exposure["Gain"] = gain;
-        }
-        if (step.Offset is int offset) {
-            exposure["Offset"] = offset;
-        }
-        items.Add(exposure);
-
-        var label = step.FilterName ?? "no filter";
-        return new JsonObject {
-            ["$type"] = SequentialContainerType,
-            ["Strategy"] = Strategy(),
-            ["Name"] = $"Lights — {label} ({step.FrameCount}×{step.ExposureSeconds:0.####}s)",
-            ["Conditions"] = new JsonArray(new JsonObject {
-                ["$type"] = LoopConditionType,
-                ["Iterations"] = step.FrameCount,
-                ["CompletedIterations"] = 0,
-            }),
-            ["Items"] = items,
-            ["Triggers"] = new JsonArray(),
-        };
-    }
+    private static JsonObject LightBlock(LightStepSpec step) =>
+        FilterCaptureBlock("Lights", "LIGHT", step.FilterName, step.FrameCount,
+            step.ExposureSeconds, step.Gain, step.Offset, step.FocuserPosition);
 
     private static JsonObject Strategy() => new() { ["$type"] = SequentialStrategyType };
 }
