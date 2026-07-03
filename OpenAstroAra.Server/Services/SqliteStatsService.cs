@@ -539,9 +539,11 @@ public sealed class SqliteStatsService : IStatsService {
                 reader.GetString(0),
                 CsvEscape(filter),
                 reader.GetInt32(5).ToString(CultureInfo.InvariantCulture),
-                reader.GetInt32(2).ToString(CultureInfo.InvariantCulture),
+                // §28 widened schema: duration is REAL (sub-second subs must not export 0)
+                // and gain is nullable (blank the field, like the sibling export above).
+                reader.GetDouble(2).ToString("0.####", CultureInfo.InvariantCulture),
                 "",
-                reader.GetInt32(3).ToString(CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(3, ct) ? "" : reader.GetInt32(3).ToString(CultureInfo.InvariantCulture),
                 reader.GetInt32(4).ToString(CultureInfo.InvariantCulture),
                 "", "", "", "", "", "", "", "", ""));
         }
