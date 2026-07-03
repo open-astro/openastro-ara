@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -68,6 +69,7 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     'asinh',
     'sqrt',
     'equalized',
+    'manual',
   ];
 
   String _stretch = 'auto_stf';
@@ -86,6 +88,14 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   // Detail (tags + capture settings the list DTO lacks); null while loading.
   LibraryFrameDetail? _detail;
   bool _tagBusy = false;
+
+  // §65.9 manual stretch sliders (0–1 normalized; seeds match the server's
+  // profile defaults). Edits debounce 200 ms into a server re-render — the
+  // documented v0.0.1 UX (client-side real-time stretching is v0.1.0).
+  double _black = 0.02;
+  double _midtone = 0.5;
+  double _white = 0.98;
+  Timer? _sliderDebounce;
 
   @override
   void initState() {
@@ -148,6 +158,18 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     await _editTags(add: tag);
   }
 
+  @override
+  void dispose() {
+    _sliderDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSliderChanged() {
+    // Coalesce drag events into one render request per 200 ms of quiet.
+    _sliderDebounce?.cancel();
+    _sliderDebounce = Timer(const Duration(milliseconds: 200), _load);
+  }
+
   Future<void> _load() async {
     final api = ref.read(libraryApiProvider);
     if (api == null) return;
@@ -158,8 +180,13 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     });
     final requested = _stretch;
     try {
-      final bytes =
-          await api.fetchPreview(widget.frame.id, stretch: requested);
+      final bytes = await api.fetchPreview(
+        widget.frame.id,
+        stretch: requested,
+        blackPoint: requested == 'manual' ? _black : null,
+        midtonePoint: requested == 'manual' ? _midtone : null,
+        whitePoint: requested == 'manual' ? _white : null,
+      );
       if (!mounted || gen != _fetchGen) return;
       setState(() {
         // Dio's ResponseType.bytes already yields a Uint8List — avoid copying
@@ -317,6 +344,38 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
               ],
             ),
           ),
+          if (_stretch == 'manual')
+            Container(
+              width: double.infinity,
+              color: AraColors.bgPanelAlt,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                _StretchSlider(
+                  label: 'Black',
+                  value: _black,
+                  onChanged: (v) {
+                    setState(() => _black = v.clamp(0.0, _white - 0.01));
+                    _onSliderChanged();
+                  },
+                ),
+                _StretchSlider(
+                  label: 'Midtone',
+                  value: _midtone,
+                  onChanged: (v) {
+                    setState(() => _midtone = v);
+                    _onSliderChanged();
+                  },
+                ),
+                _StretchSlider(
+                  label: 'White',
+                  value: _white,
+                  onChanged: (v) {
+                    setState(() => _white = v.clamp(_black + 0.01, 1.0));
+                    _onSliderChanged();
+                  },
+                ),
+              ]),
+            ),
           Container(
             width: double.infinity,
             color: AraColors.bgPanel,
@@ -395,5 +454,40 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         ],
       ),
     );
+  }
+}
+
+/// One labelled 0–1 stretch slider row (§65.9).
+class _StretchSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _StretchSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      SizedBox(
+          width: 60,
+          child: Text(label, style: Theme.of(context).textTheme.bodySmall)),
+      Expanded(
+        child: Slider(
+          value: value.clamp(0.0, 1.0),
+          onChanged: onChanged,
+        ),
+      ),
+      SizedBox(
+          width: 44,
+          child: Text(value.toStringAsFixed(2),
+              textAlign: TextAlign.right,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary))),
+    ]);
   }
 }

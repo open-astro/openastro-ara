@@ -41,9 +41,16 @@ abstract interface class LibraryClient {
   Future<LibraryFrameDetail> frameDetail(String frameId);
 
   /// §65 stretched preview JPEG bytes for the frame viewer. [stretch] is one
-  /// of the §65 palette ids (auto_stf, linear, log, asinh, sqrt, equalized).
+  /// of the §65 palette ids (auto_stf, linear, log, asinh, sqrt, equalized,
+  /// manual). The 0–1 normalized [blackPoint]/[midtonePoint]/[whitePoint]
+  /// apply to the manual palette (§65.9); null falls back to the profile's
+  /// manual-stretch seeds server-side.
   Future<List<int>> fetchPreview(String frameId,
-      {required String stretch, int maxDimensionPx = 2048});
+      {required String stretch,
+      int maxDimensionPx = 2048,
+      double? blackPoint,
+      double? midtonePoint,
+      double? whitePoint});
 
   void close();
 }
@@ -142,14 +149,18 @@ class LibraryApi implements LibraryClient {
 
   @override
   Future<List<int>> fetchPreview(String frameId,
-      {required String stretch, int maxDimensionPx = 2048}) async {
+      {required String stretch,
+      int maxDimensionPx = 2048,
+      double? blackPoint,
+      double? midtonePoint,
+      double? whitePoint}) async {
     final res = await _dio.post<List<int>>(
       '/api/v1/frames/$frameId/preview',
       data: <String, dynamic>{
         'stretch_palette': stretch,
-        'black_point': null,
-        'midtone_point': null,
-        'white_point': null,
+        'black_point': blackPoint,
+        'midtone_point': midtonePoint,
+        'white_point': whitePoint,
         'max_dimension_px': maxDimensionPx,
         'apply_debayer': false,
       },
