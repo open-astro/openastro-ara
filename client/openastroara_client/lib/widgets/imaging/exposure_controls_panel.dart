@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/imaging/exposure_state.dart';
+import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../theme/ara_colors.dart';
 
 /// Right-side controls in the Imaging tab per §25.5.1 — exposure / gain /
@@ -65,6 +66,16 @@ class ExposureControlsPanel extends ConsumerWidget {
             min: 1,
             max: 8,
             onChanged: ctrl.setBin,
+          ),
+          const SizedBox(height: 8),
+          // PR #71 follow-up — the filter picker, wired to params.filterSlot
+          // (sent as `filter_name` on every capture; until now only the 'L'
+          // default ever went up because nothing set it). Choices come from the
+          // profile's wheel slot labels (daemon-authoritative via the 12h.2b
+          // round-trip), same source as the sequence editor's picker.
+          _FilterDropdown(
+            value: params.filterSlot,
+            onChanged: ctrl.setFilterSlot,
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<FrameKind>(
@@ -206,6 +217,37 @@ class _IntFieldState extends State<_IntField> {
         if (parsed != null && parsed >= widget.min && parsed <= widget.max) {
           widget.onChanged(parsed);
         }
+      },
+    );
+  }
+}
+
+/// Filter choice for manual captures. Options are the labelled wheel slots;
+/// a stored value not among them (a renamed slot, or a profile switch) stays
+/// selectable rather than being silently dropped — same stance as the §38
+/// editor's picker. When no slots are labelled at all, the control still
+/// offers the current value so the capture keeps a filter name.
+class _FilterDropdown extends ConsumerWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _FilterDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labels = ref.watch(filterWheelLabelsProvider);
+    final names = <String>[
+      for (var slot = 1; slot <= labels.slotCount; slot++)
+        if (labels.labelAt(slot).isNotEmpty) labels.labelAt(slot),
+    ];
+    if (!names.contains(value)) names.insert(0, value);
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: const InputDecoration(labelText: 'Filter'),
+      items: [
+        for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
+      ],
+      onChanged: (n) {
+        if (n != null) onChanged(n);
       },
     );
   }
