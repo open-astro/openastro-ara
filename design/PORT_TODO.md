@@ -383,13 +383,26 @@ carrying the lights' modal gain/offset]. `GeneratedSequenceId` is the real store
 `GenerateOnly` → null id, 200). Proven by deserializing the stored body through the real sequencer factory.
 Deferred: a flat-device instruction (panel on/brightness/auto-ADU exposure — generated TakeExposure uses a 1 s
 starting point, TargetAdu stays advisory) and §39.6 cooler-temp replay; both need new sequencer instructions.
+### §39.8 dark library — catalog-backed + generated build sequence ✅ DONE (2026-07-02)
+`SqliteDarkLibraryService` replaced the fixture placeholder: entries ARE the catalog's DARK frames grouped by
+the §39 matching key (exposure, gain-nullable, whole-degree temp bucket; stable SHA-derived entry ids; group
+byte totals; newest frame as representative path). The build generates a runnable §38 dark-matrix sequence via
+`CalibrationSequenceBuilder.BuildDarkLibraryBody` (CoolCamera per set-point — empty temp list = ambient, no
+CoolCamera; looped TakeExposure(DARK) per combination; empty gain list = camera default) and persists it
+(`calibration:dark-library`); `DarkLibraryStateDto.GeneratedSequenceId` surfaces it. Status is coverage-based
+(a combination completes when the catalog holds >= FramesPerCombination matching darks; completion stamped at
+first observation). `ReuseExistingFrames` skips already-covered combinations. Wire changes (no client consumer
+yet): build request exposures int->double (§28), entry Gain int->int? (the #670 review note), state +
+GeneratedSequenceId. Deferred: `calibration.dark_library.*` WS events (the generated sequence already emits
+standard §60.9 run events) and server-side master-dark stacking (§39.2 capture-only philosophy — external
+stackers consume the raw frames).
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
 per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at v0.0.1 scale over the
 embedded SQLite file (in-process, sub-ms each → tens of ms for a page), but a catalog with hundreds of nights
 would benefit from batching the per-filter + coverage queries via `IN ($ids)` / a single GROUP BY pass and
-assembling the DTOs in code. Defer until catalog sizes warrant it. The cursor is also a plain integer OFFSET (same pattern as the §28 frame repo), so a session inserted between page fetches can repeat/skip a row; the eventual keyset-pagination migration over captured_utc covers both.
+assembling the DTOs in code. Same N-query shape in `SqliteDarkLibraryService`'s coverage loops (one COUNT per requested combination — fine at real dark-matrix sizes, from the #672 review). Defer until catalog sizes warrant it. The cursor is also a plain integer OFFSET (same pattern as the §28 frame repo), so a session inserted between page fetches can repeat/skip a row; the eventual keyset-pagination migration over captured_utc covers both.
 
 ## §63.5 guider-e-2 — follow-ups (2026-06-11, from the #372 push review)
 The §63.5 on-connect push (`PHD2Guider.GuiderEngineConfig.cs`, #372) shipped the core map-and-push; two

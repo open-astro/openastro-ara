@@ -34,8 +34,23 @@ public sealed record FlatStepSpec(
     int? Offset,
     int? FocuserPosition);
 
+/// <summary>One (exposure, gain) dark set inside a temperature group. Null <paramref name="Gain"/>
+/// = camera default (TakeExposure's -1 sentinel, expressed by omitting the property).</summary>
+public sealed record DarkStepSpec(
+    double ExposureSeconds,
+    int? Gain,
+    int FrameCount);
+
 /// <summary>
-/// §39.5 — materializes a calibration capture plan into a runnable §38.1 sequence body.
+/// One cooler set-point's worth of dark sets. Null <paramref name="TemperatureC"/> = capture at
+/// ambient (no CoolCamera step — an uncooled camera, or the user didn't ask for regulation).
+/// </summary>
+public sealed record DarkTemperatureGroupSpec(
+    double? TemperatureC,
+    IReadOnlyList<DarkStepSpec> Steps);
+
+/// <summary>
+/// §39.5/§39.8 — materializes a calibration capture plan into a runnable §38.1 sequence body.
 /// Bodies use the NINA-verbatim <c>$type</c> tree (the same shape every stored sequence,
 /// starter template, and NINA import uses); the sequencer's type remapping resolves them
 /// to the OpenAstroAra classes on load, and the WILMA sequence renderer already knows how
@@ -51,6 +66,7 @@ public static class CalibrationSequenceBuilder {
     private const string FilterInfoType = "NINA.Core.Model.Equipment.FilterInfo, NINA.Core";
     private const string MoveFocuserAbsoluteType = "NINA.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, NINA.Sequencer";
     private const string TakeExposureType = "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer";
+    private const string CoolCameraType = "NINA.Sequencer.SequenceItem.Camera.CoolCamera, NINA.Sequencer";
 
     /// <summary>
     /// Build the §38.1 body: a SequentialContainer root with one looped per-filter container —
@@ -126,6 +142,67 @@ public static class CalibrationSequenceBuilder {
                 ["CompletedIterations"] = 0,
             }),
             ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+    }
+
+    /// <summary>
+    /// Build the §39.8 dark-matrix body: per temperature group, an optional CoolCamera step
+    /// (Duration 0 = regulate as fast as the driver allows) followed by one looped container
+    /// per (exposure, gain) combination shooting TakeExposure(DARK)s. Cover the scope or park
+    /// first — darks depend only on the sensor, not the sky, which is why §39.8 recommends a
+    /// cloudy/moonless night.
+    /// </summary>
+    public static JsonElement BuildDarkLibraryBody(string name, IReadOnlyList<DarkTemperatureGroupSpec> groups) {
+        var items = new JsonArray();
+        foreach (var group in groups) {
+            if (group.TemperatureC is double temp) {
+                items.Add(new JsonObject {
+                    ["$type"] = CoolCameraType,
+                    ["Temperature"] = temp,
+                    ["Duration"] = 0,
+                });
+            }
+            foreach (var step in group.Steps) {
+                items.Add(DarkBlock(group.TemperatureC, step));
+            }
+        }
+
+        var root = new JsonObject {
+            ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = name,
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+        return JsonSerializer.SerializeToElement(root);
+    }
+
+    private static JsonObject DarkBlock(double? temperatureC, DarkStepSpec step) {
+        var exposure = new JsonObject {
+            ["$type"] = TakeExposureType,
+            ["ExposureTime"] = step.ExposureSeconds,
+            ["ImageType"] = "DARK",
+            ["ExposureCount"] = 0,
+        };
+        if (step.Gain is int gain) {
+            exposure["Gain"] = gain;
+        }
+
+        var gainLabel = step.Gain is int g ? $"g{g}" : "default gain";
+        var tempLabel = temperatureC is double t ? $" @{t:0.#}°C" : "";
+        return new JsonObject {
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = $"Darks — {step.ExposureSeconds:0.####}s {gainLabel}{tempLabel} ({step.FrameCount}×)",
+            ["Conditions"] = new JsonArray(new JsonObject {
+                ["$type"] = LoopConditionType,
+                ["Iterations"] = step.FrameCount,
+                ["CompletedIterations"] = 0,
+            }),
+            ["Items"] = new JsonArray(exposure),
             ["Triggers"] = new JsonArray(),
         };
     }
