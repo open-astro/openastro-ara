@@ -63,3 +63,50 @@ final sessionFramesProvider = FutureProvider.autoDispose
   if (api == null) return const [];
   return api.sessionFrames(sessionId);
 });
+
+/// §40 header-bar filters (12f.3): narrow the library by filter name, minimum
+/// rating, and a target-name search. Sessions hide when the search misses
+/// their target; frame strips hide frames failing the filter/rating criteria.
+class LibraryFilter {
+  final String? filterName; // null = all filters
+  final int minRating; // 0 = any
+  final String query; // target-name substring, case-insensitive
+
+  const LibraryFilter({this.filterName, this.minRating = 0, this.query = ''});
+
+  bool get isActive => filterName != null || minRating > 0 || query.isNotEmpty;
+
+  LibraryFilter copyWith({
+    String? Function()? filterName,
+    int? minRating,
+    String? query,
+  }) =>
+      LibraryFilter(
+        filterName: filterName != null ? filterName() : this.filterName,
+        minRating: minRating ?? this.minRating,
+        query: query ?? this.query,
+      );
+
+  bool matchesSession(LibrarySession s) =>
+      query.isEmpty ||
+      s.targetName.toLowerCase().contains(query.toLowerCase());
+
+  bool matchesFrame(LibraryFrameItem f) =>
+      (filterName == null || f.filterName == filterName) &&
+      f.rating >= minRating;
+}
+
+class LibraryFilterNotifier extends Notifier<LibraryFilter> {
+  @override
+  LibraryFilter build() => const LibraryFilter();
+
+  void setFilterName(String? name) =>
+      state = state.copyWith(filterName: () => name);
+  void setMinRating(int rating) => state = state.copyWith(minRating: rating);
+  void setQuery(String query) => state = state.copyWith(query: query);
+  void clear() => state = const LibraryFilter();
+}
+
+final libraryFilterProvider =
+    NotifierProvider<LibraryFilterNotifier, LibraryFilter>(
+        LibraryFilterNotifier.new);

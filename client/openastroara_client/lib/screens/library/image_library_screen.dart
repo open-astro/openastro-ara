@@ -58,7 +58,22 @@ class ImageLibraryScreen extends ConsumerWidget {
             return const Center(
                 child: Text('No sessions yet — captured frames will appear here.'));
           }
-          final groups = _groupSessions(list, grouping);
+          final filter = ref.watch(libraryFilterProvider);
+          final visible = list.where(filter.matchesSession).toList();
+          if (visible.isEmpty) {
+            return Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('No sessions match "${filter.query}".'),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () =>
+                      ref.read(libraryFilterProvider.notifier).clear(),
+                  child: const Text('Clear filters'),
+                ),
+              ]),
+            );
+          }
+          final groups = _groupSessions(visible, grouping);
           return Column(
             children: [
               Expanded(
@@ -161,18 +176,79 @@ class _LibraryHeaderBar extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 16),
-          // Filter + rating + search pills wire up in 12f.3. Wrapped in a
+          // 12f.3 filter/rating/search pills. Wrapped in a
           // SingleChildScrollView so the header stays usable on narrow widths.
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Row(children: const [
-                _ChipPlaceholder(icon: Icons.filter_list, label: 'All filters'),
-                SizedBox(width: 8),
-                _ChipPlaceholder(icon: Icons.star_border, label: 'Any rating'),
-                SizedBox(width: 8),
-                _ChipPlaceholder(icon: Icons.search, label: 'Search'),
-              ]),
+              child: Consumer(builder: (context, ref, _) {
+                final filter = ref.watch(libraryFilterProvider);
+                final sessions =
+                    ref.watch(liveLibrarySessionsProvider).value ?? const [];
+                final filterNames = {
+                  for (final s in sessions) ...s.filtersUsed
+                }.toList()
+                  ..sort();
+                return Row(children: [
+                  _FilterPill(
+                    icon: Icons.filter_list,
+                    label: filter.filterName ?? 'All filters',
+                    active: filter.filterName != null,
+                    onTap: () async {
+                      final choice = await _pickFromMenu(context, [
+                        'All filters',
+                        ...filterNames,
+                      ]);
+                      if (choice == null) return;
+                      ref.read(libraryFilterProvider.notifier).setFilterName(
+                          choice == 'All filters' ? null : choice);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    icon: Icons.star_border,
+                    label: filter.minRating == 0
+                        ? 'Any rating'
+                        : '${filter.minRating}+ stars',
+                    active: filter.minRating > 0,
+                    onTap: () async {
+                      final choice = await _pickFromMenu(context, [
+                        'Any rating',
+                        for (var i = 1; i <= 5; i++) '$i+ stars',
+                      ]);
+                      if (choice == null) return;
+                      ref.read(libraryFilterProvider.notifier).setMinRating(
+                          choice == 'Any rating'
+                              ? 0
+                              : int.parse(choice.substring(0, 1)));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    icon: Icons.search,
+                    label: filter.query.isEmpty ? 'Search' : '"${filter.query}"',
+                    active: filter.query.isNotEmpty,
+                    onTap: () async {
+                      final query = await showDialog<String>(
+                        context: context,
+                        builder: (_) => _SearchDialog(initial: filter.query),
+                      );
+                      if (query == null) return;
+                      ref.read(libraryFilterProvider.notifier).setQuery(query);
+                    },
+                  ),
+                  if (filter.isActive) ...[
+                    const SizedBox(width: 8),
+                    _FilterPill(
+                      icon: Icons.clear,
+                      label: 'Clear',
+                      active: false,
+                      onTap: () =>
+                          ref.read(libraryFilterProvider.notifier).clear(),
+                    ),
+                  ],
+                ]);
+              }),
             ),
           ),
         ],
@@ -181,30 +257,98 @@ class _LibraryHeaderBar extends ConsumerWidget {
   }
 }
 
-class _ChipPlaceholder extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _ChipPlaceholder({required this.icon, required this.label});
+/// Bottom-sheet style single-choice menu used by the filter/rating pills.
+Future<String?> _pickFromMenu(BuildContext context, List<String> options) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      children: [
+        for (final option in options)
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(context).pop(option),
+            child: Text(option),
+          ),
+      ],
+    ),
+  );
+}
+
+class _SearchDialog extends StatefulWidget {
+  final String initial;
+  const _SearchDialog({required this.initial});
+
+  @override
+  State<_SearchDialog> createState() => _SearchDialogState();
+}
+
+class _SearchDialogState extends State<_SearchDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AraColors.bgInput,
-        border: Border.all(color: AraColors.border),
-        borderRadius: BorderRadius.circular(16),
+    return AlertDialog(
+      title: const Text('Search targets'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Target name contains…'),
+        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AraColors.textSecondary),
-          const SizedBox(width: 6),
-          Text(label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ],
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Search'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _FilterPill({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? AraColors.selectionBg : AraColors.textSecondary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AraColors.bgInput,
+          border: Border.all(color: active ? AraColors.selectionBg : AraColors.border),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Text(label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -329,9 +473,18 @@ class _FrameStrip extends ConsumerWidget {
                 .bodySmall
                 ?.copyWith(color: AraColors.textSecondary)),
       ),
-      data: (list) {
-        if (list.isEmpty) {
+      data: (all) {
+        if (all.isEmpty) {
           return Text('No frames recorded for this session.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary));
+        }
+        final filter = ref.watch(libraryFilterProvider);
+        final list = all.where(filter.matchesFrame).toList();
+        if (list.isEmpty) {
+          return Text('No frames match the active filters.',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
