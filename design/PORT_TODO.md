@@ -404,7 +404,8 @@ Library tab (catalogued groups incl. null-gain/sub-second rendering, coverage st
 [Open build sequence], the §39.8 matrix build form). New `CalibrationApi`/models/state follow the
 sequence-list factory->api->notifier idiom. Remaining §39 client work: the Image Library session
 card's stubbed [Capture Matching Flats] button waits on 12f.2 (library live-wiring gives cards real
-session ids); WS-driven auto-refresh of coverage (polling/pull-to-refresh today).
+session ids); WS-driven auto-refresh of coverage (polling/pull-to-refresh today); cursor paging on the
+sessions tab (first page at the server's 200 cap today — from the #673 review).
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,

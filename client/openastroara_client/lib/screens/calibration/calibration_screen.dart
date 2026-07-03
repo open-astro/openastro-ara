@@ -198,9 +198,15 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     final api = ref.read(calibrationApiProvider);
     if (api == null) return;
     final frames = int.tryParse(_frames.text.trim());
-    final adu = int.tryParse(_targetAdu.text.trim());
+    final aduText = _targetAdu.text.trim();
+    final adu = int.tryParse(aduText);
     if (frames == null || frames <= 0) {
       setState(() => _error = 'Frames per filter must be a positive number.');
+      return;
+    }
+    // Advisory or not, stray text must not silently become "no override".
+    if (aduText.isNotEmpty && adu == null) {
+      setState(() => _error = 'Target ADU must be a whole number (or empty).');
       return;
     }
     setState(() {

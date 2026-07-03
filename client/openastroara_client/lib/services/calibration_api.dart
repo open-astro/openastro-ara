@@ -6,7 +6,9 @@ import '../models/server.dart';
 /// §39 calibration client (`/api/v1/calibration/*`). Interface first so tests
 /// and future transports can fake it, mirroring `SequenceClient`.
 abstract interface class CalibrationClient {
-  Future<List<CalibrationSession>> listSessions({int limit = 50});
+  /// First page only, at the server's page-size cap — cursor paging for
+  /// catalogs beyond 200 sessions is tracked in PORT_TODO (§39.10).
+  Future<List<CalibrationSession>> listSessions({int limit = 200});
 
   /// Generate matching flats for a session. With [generateOnly] false (the
   /// default) the server persists a runnable §38 sequence and the result
@@ -41,7 +43,7 @@ class CalibrationApi implements CalibrationClient {
             ));
 
   @override
-  Future<List<CalibrationSession>> listSessions({int limit = 50}) async {
+  Future<List<CalibrationSession>> listSessions({int limit = 200}) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/calibration/sessions',
       queryParameters: <String, dynamic>{'limit': limit},
