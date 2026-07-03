@@ -383,6 +383,19 @@ carrying the lights' modal gain/offset]. `GeneratedSequenceId` is the real store
 `GenerateOnly` → null id, 200). Proven by deserializing the stored body through the real sequencer factory.
 Deferred: a flat-device instruction (panel on/brightness/auto-ADU exposure — generated TakeExposure uses a 1 s
 starting point, TargetAdu stays advisory) and §39.6 cooler-temp replay; both need new sequencer instructions.
+### §39.8 dark library — catalog-backed + generated build sequence ✅ DONE (2026-07-02)
+`SqliteDarkLibraryService` replaced the fixture placeholder: entries ARE the catalog's DARK frames grouped by
+the §39 matching key (exposure, gain-nullable, whole-degree temp bucket; stable SHA-derived entry ids; group
+byte totals; newest frame as representative path). The build generates a runnable §38 dark-matrix sequence via
+`CalibrationSequenceBuilder.BuildDarkLibraryBody` (CoolCamera per set-point — empty temp list = ambient, no
+CoolCamera; looped TakeExposure(DARK) per combination; empty gain list = camera default) and persists it
+(`calibration:dark-library`); `DarkLibraryStateDto.GeneratedSequenceId` surfaces it. Status is coverage-based
+(a combination completes when the catalog holds >= FramesPerCombination matching darks; completion stamped at
+first observation). `ReuseExistingFrames` skips already-covered combinations. Wire changes (no client consumer
+yet): build request exposures int->double (§28), entry Gain int->int? (the #670 review note), state +
+GeneratedSequenceId. Deferred: `calibration.dark_library.*` WS events (the generated sequence already emits
+standard §60.9 run events) and server-side master-dark stacking (§39.2 capture-only philosophy — external
+stackers consume the raw frames).
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,

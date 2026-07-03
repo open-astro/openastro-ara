@@ -16,52 +16,9 @@ using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
-// §39 — the calibration session/matching-flats placeholder was replaced by the catalog-backed
-// SqliteCalibrationService. The dark-library + mosaic placeholders below remain (build is guider/sequencer-gated).
-
-/// <summary>
-/// Phase 13.14 — placeholder <see cref="IDarkLibraryService"/>. Status
-/// reports a 2-entry library; build accepts and returns 202; entries
-/// list reflects the same 2 fixture darks.
-/// </summary>
-public sealed class PlaceholderDarkLibraryService : IDarkLibraryService {
-    private static readonly DarkLibraryEntryDto[] SampleEntries = new[] {
-        new DarkLibraryEntryDto(
-            Id: Guid.Parse("88888888-8888-8888-8888-888888888881"),
-            ExposureSeconds: 180,
-            Gain: 100,
-            TemperatureC: -10.0,
-            FrameCount: 30,
-            CapturedUtc: new DateTimeOffset(2026, 5, 15, 22, 0, 0, TimeSpan.Zero),
-            FilePath: "/var/lib/openastroara/darks/180s_g100_-10c.fits",
-            FileSizeBytes: 503_316_480L),
-        new DarkLibraryEntryDto(
-            Id: Guid.Parse("88888888-8888-8888-8888-888888888882"),
-            ExposureSeconds: 300,
-            Gain: 100,
-            TemperatureC: -10.0,
-            FrameCount: 30,
-            CapturedUtc: new DateTimeOffset(2026, 5, 15, 23, 0, 0, TimeSpan.Zero),
-            FilePath: "/var/lib/openastroara/darks/300s_g100_-10c.fits",
-            FileSizeBytes: 503_316_480L),
-    };
-
-    public Task<OperationAcceptedDto> StartBuildAsync(DarkLibraryBuildRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dark-library.build", idempotencyKey));
-
-    public Task<DarkLibraryStateDto> GetStatusAsync(CancellationToken ct) =>
-        Task.FromResult(new DarkLibraryStateDto(
-            Status: "idle",
-            TotalCombinations: 2,
-            CompletedCombinations: 2,
-            BuildStartedUtc: new DateTimeOffset(2026, 5, 15, 22, 0, 0, TimeSpan.Zero),
-            BuildCompletedUtc: new DateTimeOffset(2026, 5, 15, 23, 30, 0, TimeSpan.Zero),
-            FailureReason: null,
-            Entries: SampleEntries));
-
-    public Task<IReadOnlyList<DarkLibraryEntryDto>> ListEntriesAsync(CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<DarkLibraryEntryDto>>(SampleEntries);
-}
+// §39 — the calibration session/matching-flats/dark-library placeholders were replaced by the
+// catalog-backed SqliteCalibrationService + SqliteDarkLibraryService. Only the §47 mosaic
+// placeholder remains.
 
 /// <summary>
 /// Phase 13.14 — placeholder <see cref="IMosaicService"/>. In-memory

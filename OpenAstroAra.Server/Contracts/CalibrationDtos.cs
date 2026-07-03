@@ -60,15 +60,21 @@ public sealed record GeneratedFlatStepDto(
     int? TargetAdu,
     int? PanelBrightness);
 
-/// <summary>POST /api/v1/calibration/dark-library/build body per §39 / §63.</summary>
+/// <summary>POST /api/v1/calibration/dark-library/build body per §39.8 / §63. Exposures are
+/// real seconds (§28); an empty gain list means "camera default gain" (one combination, no Gain
+/// on the generated TakeExposure); an empty temperature list means "capture at ambient" (no
+/// CoolCamera step). An empty exposure list is rejected — there would be nothing to capture.</summary>
 public sealed record DarkLibraryBuildRequestDto(
-    IReadOnlyList<int> ExposureSecondsList,
+    IReadOnlyList<double> ExposureSecondsList,
     IReadOnlyList<int> GainList,
     IReadOnlyList<double> TargetTemperatureCList,
     int FramesPerCombination,
     bool ReuseExistingFrames);
 
-/// <summary>GET /api/v1/calibration/dark-library/status body.</summary>
+/// <summary>GET /api/v1/calibration/dark-library/status body. <c>GeneratedSequenceId</c> is the
+/// runnable §38 sequence the last build request produced (null before any build this daemon
+/// lifetime). Combination progress is coverage-based: a combination counts as completed when the
+/// catalog holds at least FramesPerCombination darks matching it, however they were captured.</summary>
 public sealed record DarkLibraryStateDto(
     string Status,
     int TotalCombinations,
@@ -76,13 +82,17 @@ public sealed record DarkLibraryStateDto(
     DateTimeOffset? BuildStartedUtc,
     DateTimeOffset? BuildCompletedUtc,
     string? FailureReason,
-    IReadOnlyList<DarkLibraryEntryDto> Entries);
+    IReadOnlyList<DarkLibraryEntryDto> Entries,
+    Guid? GeneratedSequenceId);
 
-/// <summary>One entry in the dark library.</summary>
+/// <summary>One entry in the dark library: a distinct (exposure, gain, whole-degree temperature)
+/// group of catalogued DARK frames. <c>Id</c> is a stable hash of that key (same group ⇒ same id
+/// across calls). <c>FilePath</c> is the newest frame's file as a representative;
+/// <c>FileSizeBytes</c> is the group total. Null <c>Gain</c> = frames that recorded no gain.</summary>
 public sealed record DarkLibraryEntryDto(
     Guid Id,
     double ExposureSeconds,
-    int Gain,
+    int? Gain,
     double TemperatureC,
     int FrameCount,
     DateTimeOffset CapturedUtc,

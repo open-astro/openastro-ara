@@ -68,12 +68,22 @@ public static class CalibrationEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GenerateMatchingFlats");
 
-        // Dark library (§39, §63)
+        // Dark library (§39.8, §63). The Idempotency-Key header is threaded through to the
+        // sequence store like every other write route — echoed for tracing but NOT enforced
+        // (no idempotency store exists server-wide; see ServerStateEndpoints for the origin
+        // of that convention).
         calibration.MapPost("/dark-library/build",
-                async ([FromBody] DarkLibraryBuildRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDarkLibraryService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.StartBuildAsync(request, key, ct)))
+                async ([FromBody] DarkLibraryBuildRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDarkLibraryService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Accepted(value: await svc.StartBuildAsync(request, key, ct));
+                    } catch (ArgumentException ex) {
+                        // Empty exposure list / non-positive frame count — nothing to capture.
+                        return Results.UnprocessableEntity(new { error = ex.Message });
+                    }
+                })
             .Accepts<DarkLibraryBuildRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("BuildDarkLibrary");
 
         calibration.MapGet("/dark-library/status",
