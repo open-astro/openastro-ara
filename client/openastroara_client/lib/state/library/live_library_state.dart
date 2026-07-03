@@ -43,13 +43,19 @@ class LiveLibrarySessionsNotifier
 
   @override
   Future<List<LibrarySession>?> build() async {
-    _refreshGen++;
+    final gen = ++_refreshGen;
     final api = ref.watch(libraryApiProvider);
     if (api == null) return null;
     final page = await api.listSessions();
-    _nextCursor = page.nextCursor;
-    // A has_more without a cursor would render a dead button — treat as end.
+    // Guard the cursor-state writes like refresh()/loadMore() (r6): Riverpod
+    // discards a superseded build()'s STATE, but these field writes would
+    // still land — a slow old-server response must not leave its cursor
+    // chain under the new server's list.
+    if (gen == _refreshGen) {
+      _nextCursor = page.nextCursor;
+      // A has_more without a cursor would render a dead button — treat as end.
       _hasMore = page.hasMore && page.nextCursor != null;
+    }
     return page.items;
   }
 
