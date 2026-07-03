@@ -181,6 +181,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(ReleaseNotesDto))]
 [JsonSerializable(typeof(RestoreRequestDto))]
 [JsonSerializable(typeof(ResumeTargetRequestDto))]
+[JsonSerializable(typeof(ResumeTargetResultDto))]
 [JsonSerializable(typeof(RotatorDto))]
 [JsonSerializable(typeof(RotatorMoveRequestDto))]
 [JsonSerializable(typeof(RotatorReverseRequestDto))]

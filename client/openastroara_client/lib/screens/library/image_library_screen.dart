@@ -264,12 +264,34 @@ class _SessionCard extends ConsumerWidget {
                   icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
                   label: const Text('Capture Matching Flats'),
                 ),
-                TextButton.icon(
-                  // Resume Target (§40.6) wires in a later slice.
-                  onPressed: null,
-                  icon: const Icon(Icons.replay, size: 16),
-                  label: const Text('Resume Target'),
-                ),
+                Consumer(builder: (context, ref, _) {
+                  final api = ref.watch(libraryApiProvider);
+                  return TextButton.icon(
+                    // §40.6 — the server resumes the session's recorded
+                    // sequence (or synthesizes a per-filter plan from its
+                    // lights) and we land on it in the Run tab.
+                    onPressed: api == null
+                        ? null
+                        : () async {
+                            try {
+                              final id = await api.resumeTarget(session.id);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Resume sequence saved — review the slew/center steps before running.')));
+                              openGeneratedSequence(context, ref, id);
+                            } on Exception catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text('Resume failed: $e')));
+                            }
+                          },
+                    icon: const Icon(Icons.replay, size: 16),
+                    label: const Text('Resume Target'),
+                  );
+                }),
               ],
             ),
             const SizedBox(height: 8),

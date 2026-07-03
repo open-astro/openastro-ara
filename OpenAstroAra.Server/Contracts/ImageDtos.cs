@@ -111,6 +111,17 @@ public sealed record ResumeTargetRequestDto(
     bool RecreateSequence,
     Guid? OverrideSequenceId);
 
+/// <summary>POST /api/v1/sessions/{id}/resume-target result (§40.6): the runnable §38
+/// sequence to continue the target with. <c>Origin</c> says where it came from —
+/// "original-sequence" (the session's recorded sequence body, re-persisted),
+/// "synthesized-from-catalog" (per-filter capture plan rebuilt from the session's
+/// lights), or "override" (the caller's own sequence id, echoed back).</summary>
+public sealed record ResumeTargetResultDto(
+    Guid SessionId,
+    Guid SequenceId,
+    string SequenceName,
+    string Origin);
+
 /// <summary>POST /api/v1/sessions/{id}/restretch body per §65.</summary>
 public sealed record SessionRestretchRequestDto(
     string StretchPalette,

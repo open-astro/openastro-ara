@@ -49,8 +49,19 @@ public sealed record DarkTemperatureGroupSpec(
     double? TemperatureC,
     IReadOnlyList<DarkStepSpec> Steps);
 
+/// <summary>One per-filter light block for the §40.6 resume-target synthesis: the session's
+/// modal capture settings per filter, with <paramref name="FrameCount"/> = how many lights
+/// that filter originally captured (a same-shape second pass on the target).</summary>
+public sealed record LightStepSpec(
+    string? FilterName,
+    int FrameCount,
+    double ExposureSeconds,
+    int? Gain,
+    int? Offset,
+    int? FocuserPosition);
+
 /// <summary>
-/// §39.5/§39.8 — materializes a calibration capture plan into a runnable §38.1 sequence body.
+/// §39.5/§39.8/§40.6 — materializes a capture plan into a runnable §38.1 sequence body.
 /// Bodies use the NINA-verbatim <c>$type</c> tree (the same shape every stored sequence,
 /// starter template, and NINA import uses); the sequencer's type remapping resolves them
 /// to the OpenAstroAra classes on load, and the WILMA sequence renderer already knows how
@@ -92,10 +103,19 @@ public static class CalibrationSequenceBuilder {
         return JsonSerializer.SerializeToElement(root);
     }
 
-    private static JsonObject FlatBlock(FlatStepSpec step) {
+    private static JsonObject FlatBlock(FlatStepSpec step) =>
+        FilterCaptureBlock("Flats", "FLAT", step.FilterName, step.FrameCount,
+            step.ExposureSeconds, step.Gain, step.Offset, step.FocuserPosition);
+
+    /// <summary>The shared per-filter capture shape (r1 dedup): a looped SequentialContainer of
+    /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure] — flats and resume-target lights
+    /// differ only in ImageType and the block-name prefix.</summary>
+    private static JsonObject FilterCaptureBlock(
+            string namePrefix, string imageType, string? filterName, int frameCount,
+            double exposureSeconds, int? gainValue, int? offsetValue, int? focuserPosition) {
         var items = new JsonArray();
 
-        if (step.FilterName is not null) {
+        if (filterName is not null) {
             items.Add(new JsonObject {
                 ["$type"] = SwitchFilterType,
                 // _position -1 on purpose: SwitchFilter.MatchFilter resolves by NAME against the
@@ -103,13 +123,13 @@ public static class CalibrationSequenceBuilder {
                 // recorded position is >= 0. A stale index from a re-ordered wheel must not win.
                 ["Filter"] = new JsonObject {
                     ["$type"] = FilterInfoType,
-                    ["_name"] = step.FilterName,
+                    ["_name"] = filterName,
                     ["_position"] = -1,
                 },
             });
         }
 
-        if (step.FocuserPosition is int focus) {
+        if (focuserPosition is int focus) {
             items.Add(new JsonObject {
                 ["$type"] = MoveFocuserAbsoluteType,
                 ["Position"] = focus,
@@ -118,27 +138,27 @@ public static class CalibrationSequenceBuilder {
 
         var exposure = new JsonObject {
             ["$type"] = TakeExposureType,
-            ["ExposureTime"] = step.ExposureSeconds,
-            ["ImageType"] = "FLAT",
+            ["ExposureTime"] = exposureSeconds,
+            ["ImageType"] = imageType,
             ["ExposureCount"] = 0,
         };
         // Omitted Gain/Offset deserialize to TakeExposure's -1 "camera default" sentinel.
-        if (step.Gain is int gain) {
+        if (gainValue is int gain) {
             exposure["Gain"] = gain;
         }
-        if (step.Offset is int offset) {
+        if (offsetValue is int offset) {
             exposure["Offset"] = offset;
         }
         items.Add(exposure);
 
-        var label = step.FilterName ?? "no filter";
+        var label = filterName ?? "no filter";
         return new JsonObject {
             ["$type"] = SequentialContainerType,
             ["Strategy"] = Strategy(),
-            ["Name"] = $"Flats — {label} ({step.FrameCount}×{step.ExposureSeconds:0.####}s)",
+            ["Name"] = $"{namePrefix} — {label} ({frameCount}×{exposureSeconds:0.####}s)",
             ["Conditions"] = new JsonArray(new JsonObject {
                 ["$type"] = LoopConditionType,
-                ["Iterations"] = step.FrameCount,
+                ["Iterations"] = frameCount,
                 ["CompletedIterations"] = 0,
             }),
             ["Items"] = items,
@@ -206,6 +226,33 @@ public static class CalibrationSequenceBuilder {
             ["Triggers"] = new JsonArray(),
         };
     }
+
+    /// <summary>
+    /// Build the §40.6 resume-target body: one looped per-filter container —
+    /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure(LIGHT)] × FrameCount — replaying
+    /// the capture settings the session's lights actually used. The user adds the slew/center
+    /// steps (per-frame plate-solve coordinates aren't in the catalog yet — see PORT_TODO).
+    /// </summary>
+    public static JsonElement BuildResumeTargetBody(string name, IReadOnlyList<LightStepSpec> steps) {
+        var items = new JsonArray();
+        foreach (var step in steps) {
+            items.Add(LightBlock(step));
+        }
+        var root = new JsonObject {
+            ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = name,
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+        return JsonSerializer.SerializeToElement(root);
+    }
+
+    private static JsonObject LightBlock(LightStepSpec step) =>
+        FilterCaptureBlock("Lights", "LIGHT", step.FilterName, step.FrameCount,
+            step.ExposureSeconds, step.Gain, step.Offset, step.FocuserPosition);
 
     private static JsonObject Strategy() => new() { ["$type"] = SequentialStrategyType };
 }

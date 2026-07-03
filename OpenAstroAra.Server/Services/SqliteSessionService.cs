@@ -14,6 +14,8 @@
 
 using Microsoft.Data.Sqlite;
 using OpenAstroAra.Server.Contracts;
+using System.Globalization;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -38,11 +40,17 @@ public sealed class SqliteSessionService : ISessionService {
     private readonly IBatchJobService _jobs;
     private readonly IWsBroadcaster _ws;
 
-    public SqliteSessionService(IAraDatabase db, IFrameRepository frames, IBatchJobService jobs, IWsBroadcaster ws) {
+    private readonly ISequenceService? _sequences;
+
+    /// <param name="sequences">The §38 store §40.6 resume-target persists its sequence into.
+    /// Null (test/bootstrap only — Program.cs always wires the real store) makes resume-target
+    /// throw, since a resume with nowhere to put the sequence has no honest result.</param>
+    public SqliteSessionService(IAraDatabase db, IFrameRepository frames, IBatchJobService jobs, IWsBroadcaster ws, ISequenceService? sequences = null) {
         _db = db;
         _frames = frames;
         _jobs = jobs;
         _ws = ws;
+        _sequences = sequences;
     }
 
     public async Task<CursorPage<SessionDto>> ListAsync(int limit, string? cursor, CancellationToken ct) {
@@ -103,10 +111,119 @@ public sealed class SqliteSessionService : ISessionService {
         // consistent with /api/v1/frames?sessionId=…
         _frames.ListAsync(limit, cursor, sessionId, targetName: null, ct);
 
-    public Task<OperationAcceptedDto> ResumeTargetAsync(Guid sessionId, ResumeTargetRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        // §38 sequence orchestrator required for real execution; placeholder
-        // 202 keeps the wire contract intact.
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.resume-target", idempotencyKey));
+    // §40.6 — resume a multi-night target. Preference order:
+    //   1. OverrideSequenceId: the caller already has the sequence; verify + echo it.
+    //   2. The session's recorded sequence body (sessions.sequence_json), re-persisted as a
+    //      fresh runnable sequence — the exact plan the lights were captured with.
+    //   3. Synthesis from the catalog: per-filter looped LIGHT blocks replaying the modal
+    //      (exposure, gain, offset, focuser) the session's lights used, one block per filter
+    //      with the original frame count. (Slew/center steps are the user's to add — per-frame
+    //      plate-solve coordinates aren't in the catalog yet; tracked in PORT_TODO.)
+    public async Task<ResumeTargetResultDto> ResumeTargetAsync(Guid sessionId, ResumeTargetRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        if (_sequences is null) {
+            throw new InvalidOperationException("resume-target requires the sequence store; none is wired.");
+        }
+
+        if (request.OverrideSequenceId is Guid overrideId) {
+            var existing = await _sequences.GetAsync(overrideId, ct);
+            if (existing is null) {
+                throw new ArgumentException($"OverrideSequenceId {overrideId:D} does not exist in the sequence store.", nameof(request));
+            }
+            return new ResumeTargetResultDto(sessionId, existing.Id, existing.Name, "override");
+        }
+
+        string? sequenceJson = null;
+        string targetName;
+        DateTimeOffset startedAt;
+        await using (var conn = _db.OpenConnection()) {
+            await using (var cmd = conn.CreateCommand()) {
+                cmd.CommandText = "SELECT sequence_json, started_at FROM sessions WHERE id = $id LIMIT 1;";
+                cmd.Parameters.AddWithValue("$id", sessionId.ToString());
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                if (!await reader.ReadAsync(ct)) {
+                    // nameof(request) on purpose: the endpoint's catch filter maps ParamName=="request"
+                    // to 422 (the repo-wide validation convention) — any other name becomes a 500.
+                    throw new ArgumentException($"Session {sessionId:D} does not exist.", nameof(request));
+                }
+                sequenceJson = await reader.IsDBNullAsync(0, ct) ? null : reader.GetString(0);
+                startedAt = DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture);
+            }
+            await using (var cmd = conn.CreateCommand()) {
+                cmd.CommandText = "SELECT MIN(target_name) FROM frames WHERE session_id = $id AND frame_type = 'light';";
+                cmd.Parameters.AddWithValue("$id", sessionId.ToString());
+                targetName = await cmd.ExecuteScalarAsync(ct) as string ?? "(unknown)";
+            }
+
+            var name = $"Resume {targetName} — from {startedAt:yyyy-MM-dd}";
+
+            // Path 2: the session's own recorded sequence, when present, valid, and the
+            // caller didn't ask for a fresh rebuild.
+            if (!request.RecreateSequence && !string.IsNullOrWhiteSpace(sequenceJson)) {
+                JsonElement body;
+                var usable = false;
+                try {
+                    using var doc = JsonDocument.Parse(sequenceJson);
+                    body = doc.RootElement.Clone();
+                    usable = SequenceSchemaValidator.Validate(body).Valid;
+                } catch (JsonException) {
+                    body = default;
+                }
+                if (usable) {
+                    var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
+                        Name: name,
+                        Description: $"§40.6 resume — the sequence session {sessionId:D} originally ran.",
+                        Body: body,
+                        TemplateOrigin: "session:resume-target"), idempotencyKey, ct);
+                    return new ResumeTargetResultDto(sessionId, created.Id, created.Name, "original-sequence");
+                }
+                // Corrupt/legacy body → fall through to catalog synthesis.
+            }
+
+            // Path 3: synthesize from what the session actually captured. Modal per-filter
+            // combo (frequency-ordered with a deterministic tiebreaker — the same shape as
+            // SqliteCalibrationService's matching-flats query, plus exposure and count).
+            var steps = new List<LightStepSpec>();
+            await using (var cmd = conn.CreateCommand()) {
+                cmd.CommandText = """
+                    SELECT filter_name, exposure_seconds, gain, "offset", focuser_position,
+                           COUNT(*) AS c,
+                           (SELECT COUNT(*) FROM frames f2
+                             WHERE f2.session_id = $id AND f2.frame_type = 'light'
+                               AND (f2.filter_name = f.filter_name OR (f2.filter_name IS NULL AND f.filter_name IS NULL))) AS filter_total
+                    FROM frames f
+                    WHERE session_id = $id AND frame_type = 'light'
+                    GROUP BY filter_name, exposure_seconds, gain, "offset", focuser_position
+                    ORDER BY c DESC, exposure_seconds, gain, "offset", focuser_position;
+                    """;
+                cmd.Parameters.AddWithValue("$id", sessionId.ToString());
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                while (await reader.ReadAsync(ct)) {
+                    var filter = await reader.IsDBNullAsync(0, ct) ? null : reader.GetString(0);
+                    if (!seen.Add(filter ?? string.Empty)) {
+                        continue; // frequency-ordered: first row per filter is its modal combo
+                    }
+                    steps.Add(new LightStepSpec(
+                        FilterName: filter,
+                        FrameCount: reader.GetInt32(6),
+                        ExposureSeconds: reader.GetDouble(1),
+                        Gain: await reader.IsDBNullAsync(2, ct) ? null : reader.GetInt32(2),
+                        Offset: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3),
+                        FocuserPosition: await reader.IsDBNullAsync(4, ct) ? null : reader.GetInt32(4)));
+                }
+            }
+            if (steps.Count == 0) {
+                throw new ArgumentException($"Session {sessionId:D} has no light frames to resume from and no recorded sequence.", nameof(request));
+            }
+
+            var synthesized = await _sequences.CreateAsync(new SequenceCreateRequestDto(
+                Name: name,
+                Description: $"§40.6 resume — synthesized from session {sessionId:D}'s catalogued lights. Add your slew/center steps before running.",
+                Body: CalibrationSequenceBuilder.BuildResumeTargetBody(name, steps),
+                TemplateOrigin: "session:resume-target"), idempotencyKey, ct);
+            return new ResumeTargetResultDto(sessionId, synthesized.Id, synthesized.Name, "synthesized-from-catalog");
+        }
+    }
 
     public async Task<OperationAcceptedDto> RestretchAsync(Guid sessionId, SessionRestretchRequestDto request, string? idempotencyKey, CancellationToken ct) {
         // §65.5 batch re-stretch. Enqueue a job that iterates the session's

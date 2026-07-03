@@ -27,6 +27,10 @@ abstract interface class LibraryClient {
   Future<void> bulkDelete(List<String> frameIds,
       {bool deleteFromDisk = false});
 
+  /// §40.6 resume-target: the server persists (or echoes) a runnable §38
+  /// sequence seeded from the session and returns its id.
+  Future<String> resumeTarget(String sessionId);
+
   void close();
 }
 
@@ -96,6 +100,24 @@ class LibraryApi implements LibraryClient {
       'frame_ids': frameIds,
       'delete_from_disk': deleteFromDisk,
     });
+  }
+
+  @override
+  Future<String> resumeTarget(String sessionId) async {
+    final res = await _dio.post<dynamic>(
+      '/api/v1/sessions/$sessionId/resume-target',
+      data: <String, dynamic>{
+        'recreate_sequence': false,
+        'override_sequence_id': null,
+      },
+    );
+    final data = res.data;
+    final id = data is Map<String, dynamic> ? data['sequence_id'] : null;
+    if (id is! String || id.isEmpty) {
+      throw FormatException(
+          'resume-target returned an unexpected body (${data.runtimeType})');
+    }
+    return id;
   }
 
   /// CursorPage envelope { items, next_cursor, has_more }; a 2xx with another

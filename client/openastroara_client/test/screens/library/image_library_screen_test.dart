@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/screens/library/image_library_screen.dart';
 import 'package:openastroara/services/library_api.dart';
+import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
 class _FakeLibraryClient implements LibraryClient {
   final List<LibrarySession> sessions;
@@ -23,6 +25,14 @@ class _FakeLibraryClient implements LibraryClient {
   @override
   String thumbnailUrl(String frameId) =>
       'http://test.invalid/api/v1/frames/$frameId/thumbnail';
+
+  String? resumedSessionId;
+
+  @override
+  Future<String> resumeTarget(String sessionId) async {
+    resumedSessionId = sessionId;
+    return 'seq-resume-1';
+  }
 
   (List<String>, int)? rated;
   (List<String>, List<String>, List<String>)? tagged;
@@ -162,6 +172,29 @@ void main() {
     expect(fake.deleted, isNotNull);
     expect(fake.deleted!.$1, ['f1']);
     expect(fake.deleted!.$2, isFalse);
+  });
+
+  testWidgets('§40.6: Resume Target lands on the generated sequence in Run',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [_session()]);
+    late ProviderContainer container;
+    final c = ProviderContainer(overrides: [
+      libraryApiProvider.overrideWithValue(fake),
+    ]);
+    container = c;
+    addTearDown(c.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: ImageLibraryScreen()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Resume Target'));
+    await tester.pumpAndSettle();
+
+    expect(fake.resumedSessionId, 'sess-1');
+    expect(container.read(selectedSequenceIdProvider), 'seq-resume-1');
+    expect(container.read(selectedTabIndexProvider), 1);
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',
