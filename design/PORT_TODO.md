@@ -402,7 +402,7 @@ stackers consume the raw frames).
 per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at v0.0.1 scale over the
 embedded SQLite file (in-process, sub-ms each → tens of ms for a page), but a catalog with hundreds of nights
 would benefit from batching the per-filter + coverage queries via `IN ($ids)` / a single GROUP BY pass and
-assembling the DTOs in code. Defer until catalog sizes warrant it. The cursor is also a plain integer OFFSET (same pattern as the §28 frame repo), so a session inserted between page fetches can repeat/skip a row; the eventual keyset-pagination migration over captured_utc covers both.
+assembling the DTOs in code. Same N-query shape in `SqliteDarkLibraryService`'s coverage loops (one COUNT per requested combination — fine at real dark-matrix sizes, from the #672 review). Defer until catalog sizes warrant it. The cursor is also a plain integer OFFSET (same pattern as the §28 frame repo), so a session inserted between page fetches can repeat/skip a row; the eventual keyset-pagination migration over captured_utc covers both.
 
 ## §63.5 guider-e-2 — follow-ups (2026-06-11, from the #372 push review)
 The §63.5 on-connect push (`PHD2Guider.GuiderEngineConfig.cs`, #372) shipped the core map-and-push; two

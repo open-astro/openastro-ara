@@ -169,16 +169,21 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
             }
         }
 
+        // Everything below reads the ONE captured record — a concurrent StartBuildAsync may
+        // replace _lastBuild mid-read, and mixing its fields with a coverage count computed
+        // against the old combination set would return an inconsistent DTO. The stamp is
+        // likewise guarded: it only lands on the record the coverage was computed for.
         var done = completed >= build.Combinations.Count;
-        if (done) {
+        var completedUtc = build.CompletedUtc;
+        if (done && completedUtc is null) {
+            // First status read to observe full coverage stamps completion (the capture runs
+            // as a normal §38 sequence, so no other component can). Idempotent: once stored,
+            // later reads return the stored timestamp.
+            completedUtc = DateTimeOffset.UtcNow;
             lock (_gate) {
-                // Stamp completion the first time a status read observes full coverage (the
-                // capture runs as a normal §38 sequence, so no other component can). Idempotent:
-                // once stamped, later reads keep the first timestamp.
-                if (_lastBuild is not null && _lastBuild.CompletedUtc is null) {
-                    _lastBuild = _lastBuild with { CompletedUtc = DateTimeOffset.UtcNow };
+                if (ReferenceEquals(_lastBuild, build)) {
+                    _lastBuild = build with { CompletedUtc = completedUtc };
                 }
-                build = _lastBuild ?? build;
             }
         }
 
@@ -187,7 +192,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
             TotalCombinations: build.Combinations.Count,
             CompletedCombinations: completed,
             BuildStartedUtc: build.StartedUtc,
-            BuildCompletedUtc: build.CompletedUtc,
+            BuildCompletedUtc: completedUtc,
             FailureReason: null,
             Entries: entries,
             GeneratedSequenceId: build.GeneratedSequenceId);
