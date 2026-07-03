@@ -143,6 +143,13 @@ public sealed record BulkTagRequestDto(
     IReadOnlyList<string> AddTags,
     IReadOnlyList<string> RemoveTags);
 
+/// <summary>POST /api/v1/frames/bulk/move body per §40.8 — reassign frames to
+/// another session (fixing e.g. recovered orphans filed under a recovery
+/// session, or §14e manual snapshots that belong with a real run).</summary>
+public sealed record BulkMoveRequestDto(
+    IReadOnlyList<Guid> FrameIds,
+    Guid TargetSessionId);
+
 /// <summary>POST /api/v1/frames/bulk/delete body per §40.8.</summary>
 public sealed record BulkDeleteRequestDto(
     IReadOnlyList<Guid> FrameIds,

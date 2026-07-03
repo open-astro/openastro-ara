@@ -124,6 +124,21 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("BulkTagFrames");
 
+        frames.MapPost("/bulk/move",
+                async (IFrameRepository repo, [FromBody] BulkMoveRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) => {
+                           try {
+                               return Results.Accepted(value: await repo.BulkMoveAsync(request, idempotencyKey, ct));
+                           } catch (ArgumentException ex) when (ex.ParamName == "request") {
+                               return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                           }
+                       })
+            .Accepts<BulkMoveRequestDto>("application/json")
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("BulkMoveFrames");
+
         frames.MapPost("/bulk/delete",
                 async (IFrameRepository repo, [FromBody] BulkDeleteRequestDto request,
                        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,

@@ -96,6 +96,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Bulk_move_reassigns_frames_to_an_existing_session() {
+            var (id, _) = await InsertFrameWithFilesAsync();
+            var sessionB = Guid.Parse("55555555-5555-5555-5555-5555555555b2");
+            await using (var conn = _db.OpenConnection()) {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "INSERT INTO sessions (id, started_at) VALUES ($id, $t);";
+                cmd.Parameters.AddWithValue("$id", sessionB.ToString());
+                cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O"));
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await _repo.BulkMoveAsync(
+                new BulkMoveRequestDto(FrameIds: [id], TargetSessionId: sessionB),
+                idempotencyKey: null, CancellationToken.None);
+
+            var moved = await _repo.GetAsync(id, CancellationToken.None);
+            Assert.That(moved!.SessionId, Is.EqualTo(sessionB));
+        }
+
+        [Test]
+        public async Task Bulk_move_to_an_unknown_session_is_a_validation_error() {
+            var (id, _) = await InsertFrameWithFilesAsync();
+            var ex = Assert.ThrowsAsync<ArgumentException>(() => _repo.BulkMoveAsync(
+                new BulkMoveRequestDto(FrameIds: [id], TargetSessionId: Guid.NewGuid()),
+                idempotencyKey: null, CancellationToken.None));
+            Assert.That(ex!.ParamName, Is.EqualTo("request"),
+                "the endpoint's 422 catch filters on ParamName == request");
+            var frame = await _repo.GetAsync(id, CancellationToken.None);
+            Assert.That(frame!.SessionId, Is.EqualTo(Session), "nothing moved");
+        }
+
+        [Test]
         public async Task Catalog_only_delete_leaves_the_files_on_disk() {
             var (id, fits) = await InsertFrameWithFilesAsync();
 

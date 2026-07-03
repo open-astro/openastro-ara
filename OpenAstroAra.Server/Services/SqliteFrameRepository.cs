@@ -615,6 +615,34 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-tag", idempotencyKey);
     }
 
+    public async Task<OperationAcceptedDto> BulkMoveAsync(BulkMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        if (request.FrameIds.Count > 0) {
+            await using var conn = _db.OpenConnection();
+            await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
+            // The target session must exist — silently filing frames under a
+            // nonexistent id would orphan them from every session view.
+            await using (var probe = conn.CreateCommand()) {
+                probe.Transaction = tx;
+                probe.CommandText = "SELECT 1 FROM sessions WHERE id = $sid LIMIT 1;";
+                probe.Parameters.AddWithValue("$sid", request.TargetSessionId.ToString());
+                if (await probe.ExecuteScalarAsync(ct) is null) {
+                    throw new ArgumentException($"Target session {request.TargetSessionId:D} does not exist.", nameof(request));
+                }
+            }
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "UPDATE frames SET session_id = $sid WHERE id = $id;";
+            cmd.Parameters.AddWithValue("$sid", request.TargetSessionId.ToString());
+            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+            foreach (var frameId in request.FrameIds) {
+                idParam.Value = frameId.ToString();
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
+            await tx.CommitAsync(ct);
+        }
+        return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
+    }
+
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's

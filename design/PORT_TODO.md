@@ -429,7 +429,9 @@ edit via the §40.8 bulk endpoint; strips invalidated after). In-viewer tag edit
 metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size rows + tag chips
 with add/remove via the single-id bulk reuse). Cursor paging SHIPPED (Load-more on the library +
 calibration session lists via the shared CursorPage envelope; frame strips stay first-page-only by
-design). Still stubbed/tracked: §65.9 manual stretch sliders, Move-to-session/Export bulk endpoints.
+design). Move-to-session SHIPPED (POST /frames/bulk/move,
+target-session existence 422-guarded; bulk bar picker over the loaded sessions). Still stubbed/tracked:
+§65.9 manual stretch sliders; Export bulk endpoint (tarball per §39.10).
 
 ### ✅ DONE (2026-07-03) — `temperature_c` sentinel pass (from the #681 review)
 Nullable end-to-end: DDL dropped NOT NULL (in-place rebuild keyed on the stored DDL; rows copied

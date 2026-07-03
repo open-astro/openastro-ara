@@ -80,6 +80,12 @@ class _FakeLibraryClient implements LibraryClient {
   (List<String>, int)? rated;
   (List<String>, List<String>, List<String>)? tagged;
   (List<String>, bool)? deleted;
+  (List<String>, String)? moved;
+
+  @override
+  Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {
+    moved = (frameIds, targetSessionId);
+  }
 
   @override
   Future<void> bulkRate(List<String> frameIds, int rating) async {
@@ -397,6 +403,32 @@ void main() {
         reason: 'the second page appends');
     expect(find.text('Load more sessions'), findsNothing,
         reason: 'no further pages');
+  });
+
+  testWidgets('12f.3b: bulk move picks a session and posts the reassignment',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [_frame('f1')],
+    });
+    await _pump(tester, fake);
+
+    await tester.longPress(find.text('Ha').first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Move to session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to session'));
+    await tester.pumpAndSettle();
+
+    // The picker lists the loaded sessions; choose M42's.
+    await tester.tap(find.textContaining('M42').last);
+    await tester.pumpAndSettle();
+
+    expect(fake.moved, isNotNull);
+    expect(fake.moved!.$1, ['f1']);
+    expect(fake.moved!.$2, 'sess-1');
+    expect(find.text('1 selected'), findsNothing, reason: 'selection clears');
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',
