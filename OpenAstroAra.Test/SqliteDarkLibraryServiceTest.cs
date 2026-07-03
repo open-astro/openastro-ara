@@ -69,7 +69,7 @@ namespace OpenAstroAra.Test {
             await InsertDarkAsync(60, 100, -10.0, sizeBytes: 100); // different exposure
             await InsertDarkAsync(300, null, -10.0, sizeBytes: 100); // no gain reported
 
-            var svc = new SqliteDarkLibraryService(_db);
+            using var svc = new SqliteDarkLibraryService(_db);
             var entries = await svc.ListEntriesAsync(CancellationToken.None);
 
             Assert.That(entries.Count, Is.EqualTo(4));
@@ -84,7 +84,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Entry_ids_are_stable_across_calls() {
             await InsertDarkAsync(300, 100, -10.0);
-            var svc = new SqliteDarkLibraryService(_db);
+            using var svc = new SqliteDarkLibraryService(_db);
             var first = (await svc.ListEntriesAsync(CancellationToken.None)).Single().Id;
             var second = (await svc.ListEntriesAsync(CancellationToken.None)).Single().Id;
             Assert.That(second, Is.EqualTo(first), "same (exposure, gain, temp) group ⇒ same id");
@@ -95,7 +95,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task StartBuild_persists_a_runnable_dark_matrix_sequence() {
             var store = new FileSequenceService(_dir);
-            var svc = new SqliteDarkLibraryService(_db, store);
+            using var svc = new SqliteDarkLibraryService(_db, store);
 
             await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
                 ExposureSecondsList: [60, 300],
@@ -135,7 +135,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Empty_gain_and_temperature_lists_mean_camera_default_at_ambient() {
             var store = new FileSequenceService(_dir);
-            var svc = new SqliteDarkLibraryService(_db, store);
+            using var svc = new SqliteDarkLibraryService(_db, store);
 
             await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
                 ExposureSecondsList: [0.5],
@@ -158,7 +158,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task ReuseExistingFrames_skips_combinations_the_catalog_already_covers() {
             var store = new FileSequenceService(_dir);
-            var svc = new SqliteDarkLibraryService(_db, store);
+            using var svc = new SqliteDarkLibraryService(_db, store);
             // 60s g100 @-10°C already has 2 darks — enough for FramesPerCombination: 2.
             await InsertDarkAsync(60, 100, -10.0);
             await InsertDarkAsync(60, 100, -10.0);
@@ -184,7 +184,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void An_empty_exposure_list_is_rejected() {
-            var svc = new SqliteDarkLibraryService(_db);
+            using var svc = new SqliteDarkLibraryService(_db);
             Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
                 ExposureSecondsList: [],
                 GainList: [100],
@@ -198,7 +198,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Status_tracks_coverage_from_pending_to_complete() {
             var store = new FileSequenceService(_dir);
-            var svc = new SqliteDarkLibraryService(_db, store);
+            using var svc = new SqliteDarkLibraryService(_db, store);
 
             var idle = await svc.GetStatusAsync(CancellationToken.None);
             Assert.That(idle.Status, Is.EqualTo("idle"));
@@ -229,6 +229,58 @@ namespace OpenAstroAra.Test {
 
             var again = await svc.GetStatusAsync(CancellationToken.None);
             Assert.That(again.BuildCompletedUtc, Is.EqualTo(complete.BuildCompletedUtc), "stamp is idempotent");
+        }
+
+        [Test]
+        public async Task Ambient_builds_ignore_preexisting_darks_from_other_temperatures() {
+            // The r3 failure scenario: 2 cooled darks at (60s, g100, -10°C) already catalogued.
+            await InsertDarkAsync(60, 100, -10.0);
+            await InsertDarkAsync(60, 100, -10.0);
+            var store = new FileSequenceService(_dir);
+            using var svc = new SqliteDarkLibraryService(_db, store);
+
+            // An ambient build (no set-point, ReuseExistingFrames: false) for the same
+            // exposure/gain must NOT be reported complete by those unrelated cooled frames.
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [60],
+                GainList: [100],
+                TargetTemperatureCList: [],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: false), idempotencyKey: null, CancellationToken.None);
+
+            var before = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(before.Status, Is.EqualTo("pending"),
+                "pre-existing cooled darks must not complete an ambient build that never ran");
+            Assert.That(before.CompletedCombinations, Is.EqualTo(0));
+
+            // Darks captured AFTER the build was requested (the generated sequence ran) count.
+            await InsertDarkAsync(60, 100, 12.5);
+            await InsertDarkAsync(60, 100, 13.1);
+            var after = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(after.Status, Is.EqualTo("complete"));
+        }
+
+        [Test]
+        public async Task A_reuse_ambient_build_counts_preexisting_darks_consistently() {
+            // Opposite intent: ReuseExistingFrames opted into any-temperature matching for
+            // ambient combos, so the skip AND the status must both count the old frames —
+            // otherwise a reuse-skipped combination would read "pending" forever.
+            await InsertDarkAsync(60, 100, -10.0);
+            await InsertDarkAsync(60, 100, -10.0);
+            var store = new FileSequenceService(_dir);
+            using var svc = new SqliteDarkLibraryService(_db, store);
+
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [60],
+                GainList: [100],
+                TargetTemperatureCList: [],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: true), idempotencyKey: null, CancellationToken.None);
+
+            var status = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(status.Status, Is.EqualTo("complete"), "everything was already covered");
+            Assert.That(status.GeneratedSequenceId, Is.Null, "nothing to capture, nothing persisted");
+            Assert.That(status.BuildCompletedUtc, Is.Not.Null);
         }
 
         // ── helpers ────────────────────────────────────────────────────────────

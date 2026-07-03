@@ -39,18 +39,26 @@ namespace OpenAstroAra.Server.Services;
 /// sequence store. The user reviews and starts it like any other sequence; captured darks
 /// land in the catalog through the normal §28 pipeline and thereby appear here.
 /// </summary>
-public sealed class SqliteDarkLibraryService : IDarkLibraryService {
+public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable {
 
     private readonly IAraDatabase _db;
     private readonly ISequenceService? _sequences;
 
     private readonly object _gate = new();
+    // Serializes StartBuildAsync end-to-end (combo computation → coverage check → sequence
+    // persist → _lastBuild write). Without it, two overlapping builds could each persist a
+    // sequence while only the last lock-winner's record became _lastBuild — status would then
+    // report one request's coverage against the other's GeneratedSequenceId. Same shape as the
+    // §63.6 guider calibration-build gate. Last completed build wins status tracking; an
+    // earlier build's generated sequence stays in the store as a normal, runnable sequence.
+    private readonly SemaphoreSlim _buildGate = new(1, 1);
     private BuildRecord? _lastBuild;
 
     private sealed record BuildRecord(
         Guid? GeneratedSequenceId,
         IReadOnlyList<(double ExposureSeconds, int? Gain, double? TemperatureC)> Combinations,
         int FramesPerCombination,
+        bool ReuseExisting,
         DateTimeOffset StartedUtc,
         DateTimeOffset? CompletedUtc);
 
@@ -89,15 +97,30 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
             }
         }
 
+        await _buildGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await StartBuildCoreAsync(request, combos, frames, idempotencyKey, ct).ConfigureAwait(false);
+        } finally {
+            _buildGate.Release();
+        }
+    }
+
+    private async Task<OperationAcceptedDto> StartBuildCoreAsync(
+            DarkLibraryBuildRequestDto request,
+            List<(double ExposureSeconds, int? Gain, double? TemperatureC)> combos,
+            int frames,
+            string? idempotencyKey,
+            CancellationToken ct) {
         var toCapture = combos;
         if (request.ReuseExistingFrames) {
             // Skip combinations the catalog already covers with enough darks. An ambient
-            // (no set-point) combination can't predict its captured temperature, so coverage
-            // for those matches on (exposure, gain) at any temperature.
+            // (no set-point) combination can't predict its captured temperature; for THIS
+            // opt-in reuse path any-temperature matching is the user's stated intent
+            // ("I don't regulate — existing darks of this exposure/gain are fine").
             var covered = new List<(double, int?, double?)>();
             await using var conn = _db.OpenConnection();
             foreach (var combo in combos) {
-                if (await CoveredCountAsync(conn, combo, ct) >= frames) {
+                if (await CoveredCountAsync(conn, combo, capturedAtOrAfter: null, ct) >= frames) {
                     covered.Add(combo);
                 }
             }
@@ -127,6 +150,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
                 GeneratedSequenceId: generatedId,
                 Combinations: combos,
                 FramesPerCombination: frames,
+                ReuseExisting: request.ReuseExistingFrames,
                 StartedUtc: DateTimeOffset.UtcNow,
                 CompletedUtc: toCapture.Count == 0 ? DateTimeOffset.UtcNow : null);
         }
@@ -163,7 +187,19 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
         var completed = 0;
         await using (var conn = _db.OpenConnection()) {
             foreach (var combo in build.Combinations) {
-                if (await CoveredCountAsync(conn, combo, ct) >= build.FramesPerCombination) {
+                // Set-point combos: coverage is "however captured" — temperature matching makes
+                // any such darks genuinely usable, so pre-existing frames legitimately complete
+                // a combination. Ambient combos have NO temperature predicate, so the same rule
+                // would let unrelated cooled darks from an earlier session mark a build complete
+                // before its sequence ever ran — scope those to frames captured since this
+                // build was requested. Exception: a ReuseExistingFrames build opted into
+                // any-temperature matching for ambient combos (its skip logic already honoured
+                // that), so its status must count the same frames or a reuse-skipped ambient
+                // combination would read "pending" forever.
+                var since = combo.TemperatureC is null && !build.ReuseExisting
+                    ? build.StartedUtc
+                    : (DateTimeOffset?)null;
+                if (await CoveredCountAsync(conn, combo, since, ct) >= build.FramesPerCombination) {
                     completed++;
                 }
             }
@@ -242,21 +278,30 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
     }
 
     private static async Task<int> CoveredCountAsync(
-            SqliteConnection conn, (double ExposureSeconds, int? Gain, double? TemperatureC) combo, CancellationToken ct) {
+            SqliteConnection conn,
+            (double ExposureSeconds, int? Gain, double? TemperatureC) combo,
+            DateTimeOffset? capturedAtOrAfter,
+            CancellationToken ct) {
         await using var cmd = conn.CreateCommand();
-        // One constant command text (CA2100-clean): the nullable gain/temperature predicates
+        // One constant command text (CA2100-clean): the nullable gain/temperature/time predicates
         // collapse via IS-NULL branches on bound parameters instead of string composition.
-        // $temp NULL = ambient combo → any captured temperature counts (can't predict ambient).
+        // $temp NULL = ambient combo → any captured temperature counts; callers that need to
+        // avoid the resulting false positives pass $since (captured_utc is ISO-8601 "O" text,
+        // so lexicographic >= is chronological).
         cmd.CommandText = """
             SELECT COUNT(*) FROM frames
             WHERE frame_type = 'dark'
               AND exposure_seconds = $exp
               AND (gain = $gain OR ($gain IS NULL AND gain IS NULL))
-              AND ($temp IS NULL OR ROUND(temperature_c, 0) = ROUND($temp, 0));
+              AND ($temp IS NULL OR ROUND(temperature_c, 0) = ROUND($temp, 0))
+              AND ($since IS NULL OR captured_utc >= $since);
             """;
         cmd.Parameters.AddWithValue("$exp", combo.ExposureSeconds);
         cmd.Parameters.AddWithValue("$gain", combo.Gain is int gain ? gain : DBNull.Value);
         cmd.Parameters.AddWithValue("$temp", combo.TemperatureC is double temp ? temp : DBNull.Value);
+        cmd.Parameters.AddWithValue("$since", capturedAtOrAfter is DateTimeOffset since
+            ? since.ToString("O", CultureInfo.InvariantCulture)
+            : DBNull.Value);
         return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct) ?? 0, CultureInfo.InvariantCulture);
     }
 
@@ -268,6 +313,8 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         return new Guid(hash.AsSpan(0, 16));
     }
+
+    public void Dispose() => _buildGate.Dispose();
 
     private static DateTimeOffset ParseUtc(string s) =>
         DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto)
