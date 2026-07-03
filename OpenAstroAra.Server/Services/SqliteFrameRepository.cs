@@ -617,23 +617,60 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
+            // Collect file paths BEFORE the rows go — after the delete there's
+            // nothing left to resolve them from. Only needed for disk deletion.
+            var paths = new List<string>();
             await using var conn = _db.OpenConnection();
-            await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
-            await using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "DELETE FROM frames WHERE id = $id;";
-            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
-            foreach (var frameId in request.FrameIds) {
-                idParam.Value = frameId.ToString();
-                await cmd.ExecuteNonQueryAsync(ct);
+            await using (var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct)) {
+                if (request.DeleteFromDisk) {
+                    await using var pathCmd = conn.CreateCommand();
+                    pathCmd.Transaction = tx;
+                    pathCmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
+                    var pathParam = pathCmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+                    foreach (var frameId in request.FrameIds) {
+                        pathParam.Value = frameId.ToString();
+                        if (await pathCmd.ExecuteScalarAsync(ct) is string path && path.Length > 0) {
+                            paths.Add(path);
+                        }
+                    }
+                }
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM frames WHERE id = $id;";
+                var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+                foreach (var frameId in request.FrameIds) {
+                    idParam.Value = frameId.ToString();
+                    await cmd.ExecuteNonQueryAsync(ct);
+                }
+                await tx.CommitAsync(ct);
             }
-            await tx.CommitAsync(ct);
-            // request.DeleteFromDisk: §72 FITS storage is not yet wired,
-            // so there's no file to delete in v0.0.1. The flag is
-            // preserved on the wire so clients can opt in once storage
-            // lands without a contract change.
+
+            // Disk deletion is best-effort AFTER the catalog commit: a frame the
+            // user asked to remove must leave the catalog even if its file is on
+            // a detached volume. FITS + the §65.4 sidecars (default/variant
+            // previews, thumbnail) all go; locked/missing files are skipped.
+            foreach (var fitsPath in paths) {
+                DeleteFrameFilesBestEffort(fitsPath);
+            }
         }
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-delete", idempotencyKey);
+    }
+
+    private static void DeleteFrameFilesBestEffort(string fitsPath) {
+        try { File.Delete(fitsPath); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException) { /* skip */ }
+        var dir = Path.GetDirectoryName(fitsPath);
+        if (string.IsNullOrEmpty(dir)) return;
+        var stem = Path.GetFileNameWithoutExtension(fitsPath);
+        try {
+            // <stem>.preview.jpg (default), <stem>.preview.<stretch>[.<hash>].jpg
+            // (variants) and <stem>.thumb.jpg (thumbnail) — same naming the §65.4
+            // cache helpers use above.
+            foreach (var sidecar in Directory.EnumerateFiles(dir, $"{stem}.preview*.jpg")
+                         .Concat(Directory.EnumerateFiles(dir, $"{stem}.thumb.jpg"))) {
+                try { File.Delete(sidecar); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* skip locked */ }
+            }
+        } catch (DirectoryNotFoundException) { /* volume detached — nothing to delete */
+        } catch (UnauthorizedAccessException) { /* read-only mount */ }
     }
 
     private static async Task<IReadOnlyList<string>> ReadTagsAsync(
