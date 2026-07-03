@@ -425,9 +425,20 @@ Clear escape hatch). §50 demo-data retirement SHIPPED: the Stats CSVs stream fr
 12f.1/12g.2 in-memory demo sessions are deleted — every Stats/Library surface is catalog-backed.
 §65 stretched previews SHIPPED in the viewer (palette picker -> POST /frames/{id}/preview full-res
 render, thumbnail as instant first paint, fetch-generation guard). In-viewer star rating SHIPPED (optimistic single-frame
-edit via the §40.8 bulk endpoint; strips invalidated after). Still stubbed/tracked: §65.9 manual
-stretch sliders + tag editing in the viewer, cursor paging past 200, Move-to-session/Export
-bulk endpoints.
+edit via the §40.8 bulk endpoint; strips invalidated after). In-viewer tag editing + detail
+metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size rows + tag chips
+with add/remove via the single-id bulk reuse). Still stubbed/tracked: §65.9 manual stretch sliders,
+cursor paging past 200, Move-to-session/Export bulk endpoints.
+
+### §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
+`frames.temperature_c` is NOT NULL and `CameraService.RegisterFrameAsync` coalesces a missing CCD
+temperature to 0.0 — the same fabricated-sentinel anti-pattern §28 removed for gain (#670), now
+user-visible as "Sensor: 0.0°C" in the frame viewer. Widening to nullable end-to-end is a dedicated
+pass like #670 (column rebuild, FrameDto, readers) **plus a design decision**: the §39 dark-matching
+rules deliberately exploit the sentinel ("uncooled lights/darks still bucket-match at 0.0" —
+documented + tested in SqliteCalibrationServiceTest). NULL-matching semantics must replace that
+(NULL matches NULL, as filters do) before the sentinel goes. Client is already nullable-ready
+(`LibraryFrameDetail.temperatureC` is `double?`, renders unknown as "—").
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
