@@ -195,17 +195,21 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task An_unknown_override_id_is_a_validation_error() {
             await InsertSessionAsync(Session);
-            Assert.ThrowsAsync<ArgumentException>(() => _svc.ResumeTargetAsync(Session,
+            var ex = Assert.ThrowsAsync<ArgumentException>(() => _svc.ResumeTargetAsync(Session,
                 new ResumeTargetRequestDto(RecreateSequence: false, OverrideSequenceId: Guid.NewGuid()),
                 idempotencyKey: null, CancellationToken.None));
+            Assert.That(ex!.ParamName, Is.EqualTo("request"),
+                "the endpoint's 422 catch filters on ParamName == request; any other name becomes a 500");
         }
 
         [Test]
         public async Task A_session_with_no_lights_and_no_sequence_is_a_validation_error() {
             await InsertSessionAsync(Session);
-            Assert.ThrowsAsync<ArgumentException>(() => _svc.ResumeTargetAsync(Session,
+            var ex = Assert.ThrowsAsync<ArgumentException>(() => _svc.ResumeTargetAsync(Session,
                 new ResumeTargetRequestDto(RecreateSequence: false, OverrideSequenceId: null),
                 idempotencyKey: null, CancellationToken.None));
+            Assert.That(ex!.ParamName, Is.EqualTo("request"),
+                "the endpoint's 422 catch filters on ParamName == request; any other name becomes a 500");
         }
     }
 }

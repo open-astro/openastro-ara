@@ -141,7 +141,9 @@ public sealed class SqliteSessionService : ISessionService {
                 cmd.Parameters.AddWithValue("$id", sessionId.ToString());
                 await using var reader = await cmd.ExecuteReaderAsync(ct);
                 if (!await reader.ReadAsync(ct)) {
-                    throw new ArgumentException($"Session {sessionId:D} does not exist.", nameof(sessionId));
+                    // nameof(request) on purpose: the endpoint's catch filter maps ParamName=="request"
+                    // to 422 (the repo-wide validation convention) — any other name becomes a 500.
+                    throw new ArgumentException($"Session {sessionId:D} does not exist.", nameof(request));
                 }
                 sequenceJson = await reader.IsDBNullAsync(0, ct) ? null : reader.GetString(0);
                 startedAt = DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture);
@@ -211,7 +213,7 @@ public sealed class SqliteSessionService : ISessionService {
                 }
             }
             if (steps.Count == 0) {
-                throw new ArgumentException($"Session {sessionId:D} has no light frames to resume from and no recorded sequence.", nameof(sessionId));
+                throw new ArgumentException($"Session {sessionId:D} has no light frames to resume from and no recorded sequence.", nameof(request));
             }
 
             var synthesized = await _sequences.CreateAsync(new SequenceCreateRequestDto(
