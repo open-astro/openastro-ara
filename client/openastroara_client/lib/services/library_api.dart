@@ -1,15 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/cursor_page.dart';
 import '../models/library/live_library.dart';
 import '../models/server.dart';
 
 /// §40 image-library client (`/api/v1/sessions` + `/api/v1/frames`).
 /// Interface first so tests can fake it, mirroring `SequenceClient`.
 abstract interface class LibraryClient {
-  /// First page at the server's cap — cursor paging for larger catalogs is
-  /// tracked in PORT_TODO alongside the calibration screen's.
-  Future<List<LibrarySession>> listSessions({int limit = 200});
+  /// One page at the server's cap; pass [cursor] from the previous page's
+  /// [CursorPage.nextCursor] to continue.
+  Future<CursorPage<LibrarySession>> listSessions(
+      {int limit = 200, String? cursor});
 
   Future<List<LibraryFrameItem>> sessionFrames(String sessionId,
       {int limit = 200});
@@ -59,13 +61,24 @@ class LibraryApi implements LibraryClient {
             ));
 
   @override
-  Future<List<LibrarySession>> listSessions({int limit = 200}) async {
+  Future<CursorPage<LibrarySession>> listSessions(
+      {int limit = 200, String? cursor}) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/sessions',
-      queryParameters: <String, dynamic>{'limit': limit},
+      queryParameters: <String, dynamic>{
+        'limit': limit,
+        'cursor': ?cursor,
+      },
     );
-    return _parsePage(res.data, 'sessions', LibrarySession.fromJson,
+    final items = _parsePage(res.data, 'sessions', LibrarySession.fromJson,
         (s) => s.id.isNotEmpty, limit);
+    final data = res.data as Map<String, dynamic>;
+    final next = data['next_cursor'];
+    return CursorPage(
+      items: items,
+      nextCursor: next is String && next.isNotEmpty ? next : null,
+      hasMore: data['has_more'] == true,
+    );
   }
 
   @override
@@ -176,7 +189,9 @@ class LibraryApi implements LibraryClient {
           '$what returned an unexpected body (${data.runtimeType})');
     }
     if (data['has_more'] == true) {
-      debugPrint('$what truncated to first $limit — more exist');
+      // Sessions surface a Load-more affordance; frame strips stay
+      // first-page-only (a 200-frame strip is already beyond useful scroll).
+      debugPrint('$what page full at $limit — more exist');
     }
     return (data['items'] as List)
         .whereType<Map<String, dynamic>>()

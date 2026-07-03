@@ -73,7 +73,22 @@ class _SessionsTab extends ConsumerWidget {
           onRefresh: () =>
               ref.read(calibrationSessionsProvider.notifier).refresh(),
           child: ListView(
-            children: [for (final s in list) _SessionCard(session: s)],
+            children: [
+              for (final s in list) _SessionCard(session: s),
+              if (ref.read(calibrationSessionsProvider.notifier).hasMore)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: OutlinedButton.icon(
+                      onPressed: () => ref
+                          .read(calibrationSessionsProvider.notifier)
+                          .loadMore(),
+                      icon: const Icon(Icons.expand_more, size: 16),
+                      label: const Text('Load more sessions'),
+                    ),
+                  ),
+                ),
+            ],
           ),
         );
       },

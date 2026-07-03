@@ -33,21 +33,56 @@ class LiveLibrarySessionsNotifier
     extends AsyncNotifier<List<LibrarySession>?> {
   // Last-issued-wins refresh guard (same shape as SequenceListNotifier).
   int _refreshGen = 0;
+  String? _nextCursor;
+  bool _hasMore = false;
+
+  /// Whether a further page exists for the Load-more affordance.
+  bool get hasMore => _hasMore;
 
   @override
   Future<List<LibrarySession>?> build() async {
     _refreshGen++;
     final api = ref.watch(libraryApiProvider);
     if (api == null) return null;
-    return api.listSessions();
+    final page = await api.listSessions();
+    _nextCursor = page.nextCursor;
+    _hasMore = page.hasMore;
+    return page.items;
   }
 
   Future<void> refresh() async {
     final gen = ++_refreshGen;
     final api = ref.read(libraryApiProvider);
     if (api == null) return;
-    final next = await AsyncValue.guard(() => api.listSessions());
+    final next = await AsyncValue.guard(() async {
+      final page = await api.listSessions();
+      if (gen == _refreshGen) {
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+      }
+      return page.items;
+    });
     if (gen == _refreshGen) state = next;
+  }
+
+  /// Append the next page. No-op when everything is already loaded or a
+  /// refresh superseded this call (generation guard).
+  Future<void> loadMore() async {
+    final cursor = _nextCursor;
+    if (!_hasMore || cursor == null) return;
+    final gen = _refreshGen;
+    final api = ref.read(libraryApiProvider);
+    final current = state.value;
+    if (api == null || current == null) return;
+    try {
+      final page = await api.listSessions(cursor: cursor);
+      if (gen != _refreshGen) return; // a refresh/server-switch won the race
+      _nextCursor = page.nextCursor;
+      _hasMore = page.hasMore;
+      state = AsyncData([...current, ...page.items]);
+    } on Exception {
+      // Leave the loaded pages intact; the button stays for a retry.
+    }
   }
 }
 

@@ -34,20 +34,55 @@ class CalibrationSessionsNotifier
   // generation so an in-flight refresh against a stale server loses the race.
   int _refreshGen = 0;
 
+  String? _nextCursor;
+  bool _hasMore = false;
+
+  /// Whether a further page exists for the Load-more affordance.
+  bool get hasMore => _hasMore;
+
   @override
   Future<List<CalibrationSession>?> build() async {
     _refreshGen++;
     final api = ref.watch(calibrationApiProvider);
     if (api == null) return null;
-    return api.listSessions();
+    final page = await api.listSessions();
+    _nextCursor = page.nextCursor;
+    _hasMore = page.hasMore;
+    return page.items;
   }
 
   Future<void> refresh() async {
     final gen = ++_refreshGen;
     final api = ref.read(calibrationApiProvider);
     if (api == null) return;
-    final next = await AsyncValue.guard(() => api.listSessions());
+    final next = await AsyncValue.guard(() async {
+      final page = await api.listSessions();
+      if (gen == _refreshGen) {
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+      }
+      return page.items;
+    });
     if (gen == _refreshGen) state = next;
+  }
+
+  /// Append the next page (mirrors LiveLibrarySessionsNotifier.loadMore).
+  Future<void> loadMore() async {
+    final cursor = _nextCursor;
+    if (!_hasMore || cursor == null) return;
+    final gen = _refreshGen;
+    final api = ref.read(calibrationApiProvider);
+    final current = state.value;
+    if (api == null || current == null) return;
+    try {
+      final page = await api.listSessions(cursor: cursor);
+      if (gen != _refreshGen) return;
+      _nextCursor = page.nextCursor;
+      _hasMore = page.hasMore;
+      state = AsyncData([...current, ...page.items]);
+    } on Exception {
+      // Loaded pages stay; the button remains for a retry.
+    }
   }
 }
 

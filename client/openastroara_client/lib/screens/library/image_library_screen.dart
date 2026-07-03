@@ -93,8 +93,24 @@ class ImageLibraryScreen extends ConsumerWidget {
                                 ?.copyWith(color: AraColors.textSecondary),
                           ),
                         ),
-                        ...g.sessions.map((s) => _SessionCard(session: s)),
+                          ...g.sessions.map((s) => _SessionCard(session: s)),
                       ],
+                      // Cursor paging: append the next server page on demand.
+                      if (ref
+                          .read(liveLibrarySessionsProvider.notifier)
+                          .hasMore)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: OutlinedButton.icon(
+                              onPressed: () => ref
+                                  .read(liveLibrarySessionsProvider.notifier)
+                                  .loadMore(),
+                              icon: const Icon(Icons.expand_more, size: 16),
+                              label: const Text('Load more sessions'),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
