@@ -82,6 +82,106 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Null_temperature_round_trips() {
+            var db = new SqliteAraDatabase(_dir, logger: null);
+            await db.InitializeAsync(CancellationToken.None);
+            await InsertSessionAsync(db, Session);
+            var repo = new SqliteFrameRepository(db, new InMemoryProfileStore());
+
+            var id = Guid.NewGuid();
+            await repo.InsertAsync(Frame(id, exposureSeconds: 60, gain: 100) with { TemperatureC = null }, CancellationToken.None);
+
+            var got = await repo.GetAsync(id, CancellationToken.None);
+            Assert.That(got!.TemperatureC, Is.Null,
+                "a camera reporting no CCD temperature records NULL, never a 0.0 sentinel");
+        }
+
+        [Test]
+        public async Task A_not_null_temperature_schema_is_rebuilt_nullable_with_rows_verbatim() {
+            // Hand-build the post-#670 / pre-sentinel-pass shape (REAL NOT NULL temp)
+            // with one legacy uncooled row (the ambiguous 0.0) and one cooled row.
+            var dbPath = Path.Combine(_dir, "openastroara.db");
+            await using (var conn = new SqliteConnection($"Data Source={dbPath}")) {
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = """
+                    CREATE TABLE sessions (
+                        id                            TEXT PRIMARY KEY NOT NULL,
+                        profile_id                    TEXT,
+                        sequence_json                 TEXT,
+                        started_at                    TEXT NOT NULL,
+                        ended_at                      TEXT,
+                        recovery_needed               INTEGER NOT NULL DEFAULT 0,
+                        last_completed_instruction_id TEXT,
+                        current_target_id             TEXT,
+                        frame_count                   INTEGER NOT NULL DEFAULT 0
+                    );
+                    CREATE TABLE frames (
+                        id                 TEXT PRIMARY KEY NOT NULL,
+                        session_id         TEXT NOT NULL,
+                        target_name        TEXT NOT NULL,
+                        frame_type         TEXT NOT NULL,
+                        filter_name        TEXT,
+                        exposure_seconds   REAL NOT NULL,
+                        gain               INTEGER,
+                        "offset"           INTEGER,
+                        temperature_c      REAL NOT NULL,
+                        captured_utc       TEXT NOT NULL,
+                        file_path          TEXT NOT NULL,
+                        file_size_bytes    INTEGER NOT NULL,
+                        width              INTEGER NOT NULL,
+                        height             INTEGER NOT NULL,
+                        bit_depth          INTEGER NOT NULL,
+                        hfr                REAL,
+                        star_count         INTEGER,
+                        eccentricity       REAL,
+                        guiding_rms_arcsec REAL,
+                        snr_estimate       REAL,
+                        quality_score_json TEXT,
+                        rating             INTEGER NOT NULL DEFAULT 0,
+                        tags_json          TEXT NOT NULL DEFAULT '[]',
+                        focuser_position   INTEGER,
+                        FOREIGN KEY (session_id) REFERENCES sessions(id)
+                    );
+                    INSERT INTO sessions (id, started_at) VALUES ('28282828-2828-2828-2828-282828282828', '2026-01-01T00:00:00Z');
+                    INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
+                        exposure_seconds, gain, "offset", temperature_c, captured_utc, file_path,
+                        file_size_bytes, width, height, bit_depth, rating, tags_json)
+                    VALUES
+                    ('22222222-2222-2222-2222-222222222221', '28282828-2828-2828-2828-282828282828',
+                        'M31', 'light', 'Ha', 300, 100, 10, 0.0, '2026-01-01T01:00:00Z', '/tmp/a.fits', 1, 100, 100, 16, 0, '[]'),
+                    ('22222222-2222-2222-2222-222222222222', '28282828-2828-2828-2828-282828282828',
+                        'M31', 'light', 'Ha', 300, 100, 10, -10.0, '2026-01-01T01:05:00Z', '/tmp/b.fits', 1, 100, 100, 16, 0, '[]');
+                    """;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            SqliteConnection.ClearAllPools();
+
+            var db = new SqliteAraDatabase(_dir, logger: null);
+            await db.InitializeAsync(CancellationToken.None);
+            var repo = new SqliteFrameRepository(db, new InMemoryProfileStore());
+
+            // Rows copied VERBATIM: the ambiguous legacy 0.0 stays 0.0 (it cannot be
+            // told apart from a real freezing-point reading), the cooled row stays.
+            var legacy = await repo.GetAsync(Guid.Parse("22222222-2222-2222-2222-222222222221"), CancellationToken.None);
+            Assert.That(legacy!.TemperatureC, Is.EqualTo(0.0));
+            var cooled = await repo.GetAsync(Guid.Parse("22222222-2222-2222-2222-222222222222"), CancellationToken.None);
+            Assert.That(cooled!.TemperatureC, Is.EqualTo(-10.0));
+
+            // The rebuilt shape accepts NULL, and schema_version records the pass.
+            var id = Guid.NewGuid();
+            await repo.InsertAsync(Frame(id, exposureSeconds: 60, gain: null) with { TemperatureC = null }, CancellationToken.None);
+            Assert.That((await repo.GetAsync(id, CancellationToken.None))!.TemperatureC, Is.Null);
+            await using var check = db.OpenConnection();
+            await using var ver = check.CreateCommand();
+            ver.CommandText = "SELECT version FROM schema_version;";
+            Assert.That(Convert.ToInt64(await ver.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture),
+                Is.EqualTo(3), "the sentinel pass introduces schema_version=3 (the #670 commitment)");
+
+            Assert.DoesNotThrowAsync(() => new SqliteAraDatabase(_dir, logger: null).InitializeAsync(CancellationToken.None));
+        }
+
+        [Test]
         public async Task An_old_schema_database_is_widened_in_place_on_initialize() {
             // Hand-build the v0.0.1 shape (INTEGER exposure, NOT NULL gain) with a
             // legacy row carrying the -1 gain sentinel…

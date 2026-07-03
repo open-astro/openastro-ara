@@ -135,13 +135,12 @@ public sealed class SqliteStatsService : IStatsService {
         // how strongly the focus point tracks temperature (the temp-comp slope).
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
-        // focuser_position is the nullable axis (frames captured without a
-        // focuser have none); temperature_c is REAL NOT NULL in the schema, so
-        // every row that survives this filter has both plotted values.
+        // Both axes are nullable now (temperature_c dropped its 0.0 sentinel in
+        // the nullable pass) — a plotted point needs real values for both.
         var sql = """
             SELECT temperature_c, focuser_position, captured_utc
             FROM frames
-            WHERE focuser_position IS NOT NULL
+            WHERE focuser_position IS NOT NULL AND temperature_c IS NOT NULL
             """;
         if (since.HasValue) {
             sql += " AND captured_utc >= $since";
@@ -554,7 +553,7 @@ public sealed class SqliteStatsService : IStatsService {
                    filter_name,
                    exposure_seconds,
                    gain,
-                   CAST(ROUND(temperature_c) AS INTEGER) AS cooling,
+                   CAST(ROUND(temperature_c) AS INTEGER) AS cooling, -- NULL temp -> NULL cooling group
                    COUNT(*) AS number
             FROM frames
             WHERE frame_type = 'light' AND target_name = $target
@@ -583,7 +582,8 @@ public sealed class SqliteStatsService : IStatsService {
                 reader.GetDouble(2).ToString("0.####", CultureInfo.InvariantCulture),
                 "",
                 await reader.IsDBNullAsync(3, ct) ? "" : reader.GetInt32(3).ToString(CultureInfo.InvariantCulture),
-                reader.GetInt32(4).ToString(CultureInfo.InvariantCulture),
+                // Unknown sensor temperature blanks the cooling field, like gain.
+                await reader.IsDBNullAsync(4, ct) ? "" : reader.GetInt32(4).ToString(CultureInfo.InvariantCulture),
                 "", "", "", "", "", "", "", "", ""));
         }
         if (rows == 0) {

@@ -174,6 +174,39 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Uncooled_null_temperature_matches_across_generations() {
+            // Sentinel pass: new uncooled frames record NULL; legacy rows may hold 0.0.
+            // COALESCE bucketing keeps both generations matching each other.
+            await InsertNullTempFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK", temperatureC: 0.0); // legacy sentinel dark
+            var matched = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            Assert.That(matched!.MatchingDarksAvailable, Is.True,
+                "a NULL-temp light buckets with a legacy 0.0 dark (documented uncooled semantics)");
+        }
+
+        private async Task InsertNullTempFrameAsync(Guid sessionId, string frameType, string? filter, double exposureSeconds, int gain, string target) {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
+                    exposure_seconds, gain, temperature_c, captured_utc, file_path,
+                    file_size_bytes, width, height, bit_depth)
+                VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, NULL, $utc,
+                    $path, 1000, 16, 16, 16);
+                """;
+            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
+            cmd.Parameters.AddWithValue("$target", target);
+            cmd.Parameters.AddWithValue("$type", frameType);
+            cmd.Parameters.AddWithValue("$filter", (object?)filter ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$exp", exposureSeconds);
+            cmd.Parameters.AddWithValue("$gain", gain);
+            cmd.Parameters.AddWithValue("$utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$path", $"/tmp/{Guid.NewGuid():N}.fits");
+            await cmd.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+
+        [Test]
         public async Task MatchingDarksAvailable_matches_uncooled_sentinel_temperature() {
             // temperature_c is NOT NULL; an uncooled camera records the 0.0 sentinel on both lights and darks,
             // so they bucket-match. A cooled light (-10°C) is not covered by that uncooled (0.0) dark.

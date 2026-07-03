@@ -594,9 +594,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null) {
         var sessionId = await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
-        double ccdTemp;
+        double? ccdTemp;
         lock (_gate) {
-            ccdTemp = _runtime.CcdTemperature ?? 0.0; // _runtime is written under _gate; read it there too
+            // Null when the camera reports no CCD temperature — recorded as NULL,
+            // not a fabricated 0.0 (the same honesty rule as gain, #670).
+            ccdTemp = _runtime.CcdTemperature; // _runtime is written under _gate; read it there too
         }
         await _frames.InsertAsync(new FrameDto(
             Id: frameId,

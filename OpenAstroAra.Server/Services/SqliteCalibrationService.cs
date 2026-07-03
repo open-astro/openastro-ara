@@ -258,15 +258,15 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             """, ct);
 
         // Darks match a light by (exposure, gain, temperature). Temperature is bucketed to the nearest whole
-        // degree via ROUND(temperature_c, 0): a cooled camera regulates to its set-point within a fraction of a
-        // degree, so same-set-point lights and darks land in the same bucket, while a dark shot at a different
-        // temperature correctly fails to match. temperature_c is NOT NULL — an uncooled camera (no temperature
-        // sensor) records the 0.0 sentinel (CameraService coalesces a missing CCD temperature to 0.0), the same
-        // on both its lights and darks, so they still bucket-match as before.
+        // degree via ROUND(COALESCE(temperature_c, 0), 0): a cooled camera regulates to its set-point within a
+        // fraction of a degree, so same-set-point lights and darks land in the same bucket, while a dark shot at
+        // a different temperature correctly fails to match. An uncooled camera (no temperature sensor) records
+        // NULL since the sentinel pass; legacy rows may hold the old 0.0 sentinel — COALESCE buckets NULL with 0
+        // so uncooled lights/darks keep matching across both generations, exactly the documented semantics.
         var darksAvailable = await AllCoveredAsync(conn, sid, """
-            SELECT DISTINCT exposure_seconds, gain, ROUND(temperature_c, 0) FROM frames WHERE frame_type = 'light' AND session_id = $sid
+            SELECT DISTINCT exposure_seconds, gain, ROUND(COALESCE(temperature_c, 0), 0) FROM frames WHERE frame_type = 'light' AND session_id = $sid
             EXCEPT
-            SELECT DISTINCT exposure_seconds, gain, ROUND(temperature_c, 0) FROM frames WHERE frame_type = 'dark'
+            SELECT DISTINCT exposure_seconds, gain, ROUND(COALESCE(temperature_c, 0), 0) FROM frames WHERE frame_type = 'dark'
             """, ct);
 
         string? profileId = null;
