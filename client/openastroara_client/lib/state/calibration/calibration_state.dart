@@ -51,7 +51,10 @@ class CalibrationSessionsNotifier
   }
 }
 
-final calibrationSessionsProvider = AsyncNotifierProvider<
+/// autoDispose (like sequenceListProvider): torn down when the Calibration
+/// screen pops, so reopening it always refetches instead of showing a stale
+/// cached list — and the api provider's onDispose(close) actually fires.
+final calibrationSessionsProvider = AsyncNotifierProvider.autoDispose<
     CalibrationSessionsNotifier,
     List<CalibrationSession>?>(CalibrationSessionsNotifier.new);
 
@@ -77,5 +80,5 @@ class DarkLibraryStatusNotifier extends AsyncNotifier<DarkLibraryState?> {
 }
 
 final darkLibraryStatusProvider =
-    AsyncNotifierProvider<DarkLibraryStatusNotifier, DarkLibraryState?>(
+    AsyncNotifierProvider.autoDispose<DarkLibraryStatusNotifier, DarkLibraryState?>(
         DarkLibraryStatusNotifier.new);

@@ -455,6 +455,14 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
       setState(() => _error = 'Gains and temperatures must be numbers.');
       return;
     }
+    if (exposures.any((e) => e <= 0)) {
+      setState(() => _error = 'Exposures must be positive seconds.');
+      return;
+    }
+    if (gains.any((g) => g < 0)) {
+      setState(() => _error = 'Gains cannot be negative.');
+      return;
+    }
     if (frames == null || frames <= 0) {
       setState(() => _error = 'Frames per combination must be positive.');
       return;

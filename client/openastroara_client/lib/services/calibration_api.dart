@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/calibration/calibration_models.dart';
 import '../models/server.dart';
@@ -54,6 +55,11 @@ class CalibrationApi implements CalibrationClient {
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
           'calibration sessions returned an unexpected body (${data.runtimeType})');
+    }
+    if (data['has_more'] == true) {
+      // First-page-only surface (paging tracked in PORT_TODO) — make the
+      // truncation observable in logs like the sequence-list loader does.
+      debugPrint('calibration sessions truncated to first $limit — more exist');
     }
     return (data['items'] as List)
         .whereType<Map<String, dynamic>>()
