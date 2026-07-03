@@ -682,17 +682,23 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     } while (!seenNames.Add(candidate));
                     name = candidate;
                 }
+                // Snapshot the archive position: a failure MID-copy (after the
+                // entry header + partial data hit the stream) would otherwise
+                // leave bytes that corrupt alignment for every later entry (r3).
+                var positionBefore = ms.Position;
                 try {
                     await tar.WriteEntryAsync(path, name, ct);
                 } catch (Exception ex) when (
                         ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException
                         || (ex is IOException && !File.Exists(path))) {
                     // The file vanished between the existence check and the write
-                    // (r1 TOCTOU) — skip it like the check would have; the rest of
-                    // the selection still exports. A generic IOException with the
-                    // file STILL present is a real failure (e.g. the in-memory
-                    // archive hitting MemoryStream capacity) and must surface,
-                    // not masquerade as a missing file (r2).
+                    // (r1 TOCTOU) — un-write any partial entry and skip it; the
+                    // rest of the selection still exports. A generic IOException
+                    // with the file STILL present is a real failure (e.g. the
+                    // in-memory archive hitting MemoryStream capacity) and must
+                    // surface, not masquerade as a missing file (r2).
+                    ms.SetLength(positionBefore);
+                    ms.Position = positionBefore;
                     seenNames.Remove(name);
                     continue;
                 }

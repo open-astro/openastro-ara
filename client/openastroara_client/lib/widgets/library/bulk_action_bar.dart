@@ -155,8 +155,13 @@ class LibraryBulkActionBar extends ConsumerWidget {
                               if (bytes.isEmpty || !context.mounted) return;
                               String? saved;
                               try {
+                                // Dio already yields Uint8List — don't copy a
+                                // potentially multi-GB tar (the repo idiom).
                                 saved = await frameExportSaver(
-                                    fileName, Uint8List.fromList(bytes));
+                                    fileName,
+                                    bytes is Uint8List
+                                        ? bytes
+                                        : Uint8List.fromList(bytes));
                               } on Exception catch (e) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
