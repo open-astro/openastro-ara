@@ -51,7 +51,8 @@ String exportFramesCsv(List<CaptureSession> sessions) {
         f.capturedAt.toIso8601String(),
         _csv(f.filter),
         _csv(f.frameType),
-        '${f.exposure.inSeconds}',
+        // §28: sub-second exposures export honestly (inSeconds truncates 0.5→0).
+        _formatSeconds(f.exposure),
         '${f.gain}',
         '${f.offset}',
         '${f.bin}',
@@ -83,4 +84,13 @@ String _csv(String s) {
     return '"${s.replaceAll('"', '""')}"';
   }
   return s;
+}
+
+/// Seconds with sub-second precision, trailing zeros trimmed ('0.5', '180').
+String _formatSeconds(Duration d) {
+  final secs = d.inMilliseconds / 1000.0;
+  final text = secs.toStringAsFixed(3);
+  return text.contains('.')
+      ? text.replaceFirst(RegExp(r'\.?0+$'), '')
+      : text;
 }

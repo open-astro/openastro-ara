@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+- **§28 — sub-second calibration frames are catalogued honestly.** A 0.5 s bias used to be recorded as 1 s (or 0 s when rescanned from FITS — the decimal `EXPTIME` header failed the integer parse); the frames catalog now stores real seconds end-to-end, existing databases are upgraded in place on the daemon's next start, and a camera that doesn't report gain records "unknown" instead of a fake −1.
+
 ### Added
 - **§25.5.1 — pick your filter for manual captures.** The Imaging tab's exposure controls gain a Filter dropdown (between Bin and Frame type), sourced from your profile's filter-wheel slot labels — every Take One now records the filter you actually used instead of a hardcoded 'L'. (Live View frames are ephemeral and never catalogued, so no filter is recorded there.)
 

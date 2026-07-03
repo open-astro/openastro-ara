@@ -608,7 +608,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // they never record as 0s. The FITS EXPTIME header preserves the exact value; widening
             // the column+DTO to double is tracked in PORT_TODO (wire-shape change for WILMA).
             ExposureSeconds: Math.Max(1, (int)Math.Round(request.ExposureSec)),
-            Gain: request.Gain ?? -1,
+            Gain: request.Gain, // §28: null when the request carries none — no more -1 sentinel
             Offset: request.CameraOffset,
             TemperatureC: ccdTemp,
             CapturedUtc: capturedAt,

@@ -45,8 +45,10 @@ public sealed record FrameDto(
     string TargetName,
     FrameType FrameType,
     string? FilterName,
-    int ExposureSeconds,
-    int Gain,
+    // §28 widening: REAL seconds (sub-second bias/darks) + nullable gain (a
+    // camera that doesn't report gain records null, not a -1 sentinel).
+    double ExposureSeconds,
+    int? Gain,
     int? Offset,
     double TemperatureC,
     DateTimeOffset CapturedUtc,
@@ -74,7 +76,7 @@ public sealed record FrameListItemDto(
     string TargetName,
     FrameType FrameType,
     string? FilterName,
-    int ExposureSeconds,
+    double ExposureSeconds,
     DateTimeOffset CapturedUtc,
     double? Hfr,
     int? StarCount,

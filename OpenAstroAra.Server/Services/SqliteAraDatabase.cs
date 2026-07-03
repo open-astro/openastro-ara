@@ -87,8 +87,8 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 target_name        TEXT NOT NULL,
                 frame_type         TEXT NOT NULL,
                 filter_name        TEXT,
-                exposure_seconds   INTEGER NOT NULL,
-                gain               INTEGER NOT NULL,
+                exposure_seconds   REAL NOT NULL,
+                gain               INTEGER,
                 "offset"           INTEGER,
                 temperature_c      REAL NOT NULL,
                 captured_utc       TEXT NOT NULL,
@@ -115,6 +115,15 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // earlier build is brought forward with an idempotent ADD COLUMN. (v0.0.1
         // ships no migrations runner — this is the sanctioned additive-column path.)
         await AddColumnIfMissingAsync(conn, "frames", "focuser_position", "INTEGER", ct);
+
+        // §28 widening pass (pre-§40): sub-second calibration exposures need
+        // exposure_seconds REAL (they rounded up to 1s as INTEGER), and gain must
+        // be nullable (a camera that doesn't report gain stored the -1 sentinel).
+        // SQLite can't ALTER COLUMN, so a DB created with the old DDL is rebuilt
+        // once via the documented recreate dance; the trigger is the old DDL text
+        // itself, so this is idempotent and fresh DBs (already the new shape) skip
+        // it. Legacy -1 gain sentinels are normalized to NULL during the copy.
+        await MigrateFramesWideningAsync(conn, ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
@@ -190,6 +199,69 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         cmd.CommandText = sql;
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    // See the §28 widening comment at the call site. Detection sniffs the stored
+    // CREATE TABLE text for the OLD column shape — after the rebuild (or on a
+    // fresh DB) the text no longer matches, so re-running is a no-op.
+    private static async Task MigrateFramesWideningAsync(SqliteConnection conn, CancellationToken ct) {
+        string? ddl;
+        await using (var probe = conn.CreateCommand()) {
+            probe.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'frames';";
+            ddl = (string?)await probe.ExecuteScalarAsync(ct);
+        }
+        if (ddl is null || !ddl.Contains("exposure_seconds   INTEGER", StringComparison.Ordinal)) {
+            return; // fresh DB (new shape) or already migrated
+        }
+        // The documented SQLite recreate dance, atomic in one transaction. Column
+        // list pinned explicitly (both shapes share it; focuser_position exists on
+        // any DB that reaches here — AddColumnIfMissingAsync ran just above).
+        await ExecAsync(conn, """
+            BEGIN;
+            CREATE TABLE frames_widened (
+                id                 TEXT PRIMARY KEY NOT NULL,
+                session_id         TEXT NOT NULL,
+                target_name        TEXT NOT NULL,
+                frame_type         TEXT NOT NULL,
+                filter_name        TEXT,
+                exposure_seconds   REAL NOT NULL,
+                gain               INTEGER,
+                "offset"           INTEGER,
+                temperature_c      REAL NOT NULL,
+                captured_utc       TEXT NOT NULL,
+                file_path          TEXT NOT NULL,
+                file_size_bytes    INTEGER NOT NULL,
+                width              INTEGER NOT NULL,
+                height             INTEGER NOT NULL,
+                bit_depth          INTEGER NOT NULL,
+                hfr                REAL,
+                star_count         INTEGER,
+                eccentricity       REAL,
+                guiding_rms_arcsec REAL,
+                snr_estimate       REAL,
+                quality_score_json TEXT,
+                rating             INTEGER NOT NULL DEFAULT 0,
+                tags_json          TEXT NOT NULL DEFAULT '[]',
+                focuser_position   INTEGER,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            INSERT INTO frames_widened
+                SELECT id, session_id, target_name, frame_type, filter_name,
+                       exposure_seconds,
+                       CASE WHEN gain = -1 THEN NULL ELSE gain END,
+                       "offset", temperature_c, captured_utc, file_path,
+                       file_size_bytes, width, height, bit_depth, hfr, star_count,
+                       eccentricity, guiding_rms_arcsec, snr_estimate,
+                       quality_score_json, rating, tags_json, focuser_position
+                FROM frames;
+            DROP TABLE frames;
+            ALTER TABLE frames_widened RENAME TO frames;
+            CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);
+            CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);
+            CREATE INDEX IF NOT EXISTS idx_frames_light_captured ON frames(captured_utc) WHERE frame_type = 'light';
+            COMMIT;
+            """, ct);
+    }
+
 
     /// <summary>Adds a column to an existing table only when it isn't already
     /// present, so re-running init (or bringing a DB created by an earlier build
