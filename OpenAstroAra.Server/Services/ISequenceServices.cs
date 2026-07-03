@@ -85,7 +85,7 @@ public interface IAutoFlatsService {
 public interface ICalibrationService {
     Task<CursorPage<CalibrationSessionDto>> ListSessionsAsync(int limit, string? cursor, CancellationToken ct);
     Task<CalibrationSessionDto?> GetSessionAsync(Guid id, CancellationToken ct);
-    Task<GeneratedFlatSequenceDto> GenerateMatchingFlatsAsync(Guid sessionId, MatchingFlatsRequestDto request, CancellationToken ct);
+    Task<GeneratedFlatSequenceDto> GenerateMatchingFlatsAsync(Guid sessionId, MatchingFlatsRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 /// <summary>Dark library builder + state (§39 / §63).</summary>

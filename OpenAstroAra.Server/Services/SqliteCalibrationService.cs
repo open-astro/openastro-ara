@@ -111,7 +111,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         return await BuildSessionDtoAsync(conn, id, ct);
     }
 
-    public async Task<GeneratedFlatSequenceDto> GenerateMatchingFlatsAsync(Guid sessionId, MatchingFlatsRequestDto request, CancellationToken ct) {
+    public async Task<GeneratedFlatSequenceDto> GenerateMatchingFlatsAsync(Guid sessionId, MatchingFlatsRequestDto request, string? idempotencyKey, CancellationToken ct) {
         await using var conn = _db.OpenConnection();
 
         var session = await BuildSessionDtoAsync(conn, sessionId, ct)
@@ -152,7 +152,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",
                 Body: body,
-                TemplateOrigin: "calibration:matching-flats"), idempotencyKey: null, ct);
+                TemplateOrigin: "calibration:matching-flats"), idempotencyKey, ct);
             generatedId = created.Id;
         }
 
@@ -170,7 +170,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // replay them (§39.5: gain/offset must match for the calibration to apply; focus per filter so
     // dust shadows align). "Modal" = the most frequent (gain, offset, focuser) combination per
     // filter — a mid-session change loses the minority combination, which is the standard
-    // one-flat-set-per-filter trade-off.
+    // one-flat-set-per-filter trade-off. The trailing ORDER BY terms are a deterministic
+    // tiebreaker: an even split must not pick a different combo on different runs.
     private static async Task<Dictionary<string, ModalCaptureSettings>> ModalCaptureSettingsByFilterAsync(
             SqliteConnection conn, Guid sessionId, CancellationToken ct) {
         var result = new Dictionary<string, ModalCaptureSettings>(StringComparer.Ordinal);
@@ -180,7 +181,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             FROM frames
             WHERE frame_type = 'light' AND session_id = $sid
             GROUP BY filter_name, gain, "offset", focuser_position
-            ORDER BY c DESC;
+            ORDER BY c DESC, gain, "offset", focuser_position;
             """;
         cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
         await using var reader = await cmd.ExecuteReaderAsync(ct);

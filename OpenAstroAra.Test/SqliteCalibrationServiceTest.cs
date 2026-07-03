@@ -110,7 +110,7 @@ namespace OpenAstroAra.Test {
         public async Task GenerateMatchingFlats_uses_the_default_target_adu_when_not_overridden() {
             await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
             var plan = await _svc.GenerateMatchingFlatsAsync(
-                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), CancellationToken.None);
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
             Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(32000));
         }
 
@@ -196,7 +196,7 @@ namespace OpenAstroAra.Test {
 
             var plan = await _svc.GenerateMatchingFlatsAsync(
                 Session, new MatchingFlatsRequestDto(OverrideFrameCount: 30, OverrideTargetAdu: 25000, GenerateOnly: true),
-                CancellationToken.None);
+                idempotencyKey: null, CancellationToken.None);
 
             Assert.That(plan.Steps.Count, Is.EqualTo(2));
             Assert.That(plan.Steps.All(s => s.FrameCount == 30), Is.True);
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Test {
         public async Task GenerateMatchingFlats_defaults_to_20_frames_when_not_overridden() {
             await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
             var plan = await _svc.GenerateMatchingFlatsAsync(
-                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), CancellationToken.None);
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
             Assert.That(plan.Steps.Single().FrameCount, Is.EqualTo(20));
         }
 
@@ -224,7 +224,7 @@ namespace OpenAstroAra.Test {
 
             var plan = await svc.GenerateMatchingFlatsAsync(
                 Session, new MatchingFlatsRequestDto(OverrideFrameCount: 5, OverrideTargetAdu: null, GenerateOnly: false),
-                CancellationToken.None);
+                idempotencyKey: null, CancellationToken.None);
 
             Assert.That(plan.GeneratedSequenceId, Is.Not.Null, "persisting mode must return the stored sequence id");
             var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
@@ -275,7 +275,7 @@ namespace OpenAstroAra.Test {
             await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
 
             var plan = await svc.GenerateMatchingFlatsAsync(
-                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), CancellationToken.None);
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), idempotencyKey: null, CancellationToken.None);
 
             Assert.That(plan.GeneratedSequenceId, Is.Null);
             var list = await store.ListAsync(50, null, CancellationToken.None);
@@ -289,7 +289,7 @@ namespace OpenAstroAra.Test {
             await InsertFrameAsync(Session, "light", null, 300, 100, "Moon");
 
             var plan = await svc.GenerateMatchingFlatsAsync(
-                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false), CancellationToken.None);
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
 
             var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
             var factory = HeadlessSequencerFactory.WithDefaults();
