@@ -90,7 +90,7 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 exposure_seconds   REAL NOT NULL,
                 gain               INTEGER,
                 "offset"           INTEGER,
-                temperature_c      REAL NOT NULL,
+                temperature_c      REAL,
                 captured_utc       TEXT NOT NULL,
                 file_path          TEXT NOT NULL,
                 file_size_bytes    INTEGER NOT NULL,
@@ -124,6 +124,22 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // itself, so this is idempotent and fresh DBs (already the new shape) skip
         // it. Legacy -1 gain sentinels are normalized to NULL during the copy.
         await MigrateFramesWideningAsync(conn, ct);
+
+        // §28-style pass 2: temperature_c drops NOT NULL — a camera that reports
+        // no CCD temperature records NULL, not the fabricated 0.0 sentinel (the
+        // same honesty fix #670 made for gain). Existing rows are copied verbatim:
+        // a stored 0.0 cannot be told apart from a real 0.0degC reading, so the §39
+        // matching queries bucket NULL together with 0 via COALESCE, preserving
+        // the documented uncooled-match semantics exactly. This pass also
+        // introduces the schema_version table (the #670 review commitment) so
+        // future passes key on a version, not a DDL sniff.
+        await MigrateTemperatureNullableAsync(conn, ct);
+        await ExecAsync(conn, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);", ct);
+        await ExecAsync(conn, """
+            INSERT INTO schema_version (version)
+            SELECT 3 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+            UPDATE schema_version SET version = 3 WHERE version < 3;
+            """, ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
@@ -226,7 +242,7 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 exposure_seconds   REAL NOT NULL,
                 gain               INTEGER,
                 "offset"           INTEGER,
-                temperature_c      REAL NOT NULL,
+                temperature_c      REAL,
                 captured_utc       TEXT NOT NULL,
                 file_path          TEXT NOT NULL,
                 file_size_bytes    INTEGER NOT NULL,
@@ -262,6 +278,64 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
             """, ct);
     }
 
+
+    // Pass 2 of the frames widening (see call site). Trigger: the stored DDL
+    // still carries temperature_c NOT NULL. Data copied verbatim — see the call
+    // site comment for why 0.0 sentinels are NOT rewritten to NULL.
+    private static async Task MigrateTemperatureNullableAsync(SqliteConnection conn, CancellationToken ct) {
+        string? ddl;
+        await using (var probe = conn.CreateCommand()) {
+            probe.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'frames';";
+            ddl = (string?)await probe.ExecuteScalarAsync(ct);
+        }
+        if (ddl is null || !ddl.Contains("temperature_c      REAL NOT NULL", StringComparison.Ordinal)) {
+            return; // fresh DB (new shape) or already migrated
+        }
+        await ExecAsync(conn, """
+            BEGIN;
+            CREATE TABLE frames_widened (
+                id                 TEXT PRIMARY KEY NOT NULL,
+                session_id         TEXT NOT NULL,
+                target_name        TEXT NOT NULL,
+                frame_type         TEXT NOT NULL,
+                filter_name        TEXT,
+                exposure_seconds   REAL NOT NULL,
+                gain               INTEGER,
+                "offset"           INTEGER,
+                temperature_c      REAL,
+                captured_utc       TEXT NOT NULL,
+                file_path          TEXT NOT NULL,
+                file_size_bytes    INTEGER NOT NULL,
+                width              INTEGER NOT NULL,
+                height             INTEGER NOT NULL,
+                bit_depth          INTEGER NOT NULL,
+                hfr                REAL,
+                star_count         INTEGER,
+                eccentricity       REAL,
+                guiding_rms_arcsec REAL,
+                snr_estimate       REAL,
+                quality_score_json TEXT,
+                rating             INTEGER NOT NULL DEFAULT 0,
+                tags_json          TEXT NOT NULL DEFAULT '[]',
+                focuser_position   INTEGER,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            INSERT INTO frames_widened
+                SELECT id, session_id, target_name, frame_type, filter_name,
+                       exposure_seconds, gain, "offset", temperature_c,
+                       captured_utc, file_path, file_size_bytes, width, height,
+                       bit_depth, hfr, star_count, eccentricity,
+                       guiding_rms_arcsec, snr_estimate, quality_score_json,
+                       rating, tags_json, focuser_position
+                FROM frames;
+            DROP TABLE frames;
+            ALTER TABLE frames_widened RENAME TO frames;
+            CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);
+            CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);
+            CREATE INDEX IF NOT EXISTS idx_frames_light_captured ON frames(captured_utc) WHERE frame_type = 'light';
+            COMMIT;
+            """, ct);
+    }
 
     /// <summary>Adds a column to an existing table only when it isn't already
     /// present, so re-running init (or bringing a DB created by an earlier build

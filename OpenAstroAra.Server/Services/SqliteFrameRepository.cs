@@ -252,7 +252,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$exposure_seconds", f.ExposureSeconds);
         cmd.Parameters.AddWithValue("$gain", DbValue(f.Gain));
         cmd.Parameters.AddWithValue("$offset", DbValue(f.Offset));
-        cmd.Parameters.AddWithValue("$temperature_c", f.TemperatureC);
+        cmd.Parameters.AddWithValue("$temperature_c", DbValue(f.TemperatureC));
         cmd.Parameters.AddWithValue("$captured_utc", f.CapturedUtc.ToString("O"));
         cmd.Parameters.AddWithValue("$file_path", f.FilePath);
         cmd.Parameters.AddWithValue("$file_size_bytes", f.FileSizeBytes);
@@ -375,7 +375,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             ExposureSeconds: reader.GetDouble(5),
             Gain: await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
             Offset: await reader.IsDBNullAsync(7, ct) ? null : reader.GetInt32(7),
-            TemperatureC: reader.GetDouble(8),
+            TemperatureC: await reader.IsDBNullAsync(8, ct) ? null : reader.GetDouble(8),
             CapturedUtc: DateTimeOffset.Parse(reader.GetString(9)),
             FilePath: reader.GetString(10),
             FileSizeBytes: reader.GetInt64(11),

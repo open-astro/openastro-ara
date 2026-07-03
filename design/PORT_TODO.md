@@ -431,7 +431,17 @@ with add/remove via the single-id bulk reuse). Cursor paging SHIPPED (Load-more 
 calibration session lists via the shared CursorPage envelope; frame strips stay first-page-only by
 design). Still stubbed/tracked: §65.9 manual stretch sliders, Move-to-session/Export bulk endpoints.
 
-### §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
+### ✅ DONE (2026-07-03) — `temperature_c` sentinel pass (from the #681 review)
+Nullable end-to-end: DDL dropped NOT NULL (in-place rebuild keyed on the stored DDL; rows copied
+VERBATIM — a legacy 0.0 cannot be told apart from a real freezing-point reading), FrameDto double?,
+RegisterFrameAsync + the FITS rescan record NULL when the camera/header reports nothing. The §39
+matching/bucketing queries use ROUND(COALESCE(temperature_c, 0), 0) so NULL and legacy 0.0 share a
+bucket — the documented uncooled-match semantics hold across both generations (tested). Astrobin
+cooling + frame viewer blank unknown; focus-temp chart filters NULL. This pass also introduced the
+**schema_version table** (=3, the #670 review commitment) for future passes to key on. Superseded
+entry follows for history:
+
+### (superseded) §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
 `frames.temperature_c` is NOT NULL and `CameraService.RegisterFrameAsync` coalesces a missing CCD
 temperature to 0.0 — the same fabricated-sentinel anti-pattern §28 removed for gain (#670), now
 user-visible as "Sensor: 0.0°C" in the frame viewer. Widening to nullable end-to-end is a dedicated

@@ -248,7 +248,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         var entries = new List<DarkLibraryEntryDto>();
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
-        // ROUND(temperature_c, 0) is the same whole-degree bucket the §39 matching rules use.
+        // ROUND(COALESCE(temperature_c, 0), 0) is the same whole-degree bucket the §39 matching rules use.
         // The representative file path is the newest frame's; size is the group total.
         // NOTE the correlated newest_path subquery references bare f.exposure_seconds/f.gain/
         // f.temperature_c from the outer GROUP BY row. That's safe TODAY because those columns
@@ -258,7 +258,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         cmd.CommandText = """
             SELECT exposure_seconds,
                    gain,
-                   ROUND(temperature_c, 0) AS temp_bucket,
+                   ROUND(COALESCE(temperature_c, 0), 0) AS temp_bucket,
                    COUNT(*) AS frame_count,
                    MAX(captured_utc) AS newest_utc,
                    SUM(file_size_bytes) AS total_bytes,
@@ -266,7 +266,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
                      WHERE f2.frame_type = 'dark'
                        AND f2.exposure_seconds = f.exposure_seconds
                        AND (f2.gain = f.gain OR (f2.gain IS NULL AND f.gain IS NULL))
-                       AND ROUND(f2.temperature_c, 0) = ROUND(f.temperature_c, 0)
+                       AND ROUND(COALESCE(f2.temperature_c, 0), 0) = ROUND(COALESCE(f.temperature_c, 0), 0)
                      ORDER BY f2.captured_utc DESC LIMIT 1) AS newest_path
             FROM frames f
             WHERE frame_type = 'dark'
@@ -307,7 +307,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             WHERE frame_type = 'dark'
               AND exposure_seconds = $exp
               AND (gain = $gain OR ($gain IS NULL AND gain IS NULL))
-              AND ($temp IS NULL OR ROUND(temperature_c, 0) = ROUND($temp, 0))
+              AND ($temp IS NULL OR ROUND(COALESCE(temperature_c, 0), 0) = ROUND($temp, 0))
               AND ($since IS NULL OR captured_utc >= $since);
             """;
         cmd.Parameters.AddWithValue("$exp", combo.ExposureSeconds);

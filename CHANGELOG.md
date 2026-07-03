@@ -36,6 +36,9 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Fixed
+- **§28 — unknown sensor temperature is recorded honestly.** A camera that reports no CCD temperature now records "unknown" instead of a fabricated 0.0°C (existing databases upgrade in place; dark-matching for uncooled cameras keeps working across old and new recordings), and exports/views show a blank instead of a fake reading.
+
+### Fixed
 - **§28 — sub-second calibration frames are catalogued honestly.** A 0.5 s bias used to be recorded as 1 s (or 0 s when rescanned from FITS — the decimal `EXPTIME` header failed the integer parse); the frames catalog now stores real seconds end-to-end, existing databases are upgraded in place on the daemon's next start, and a camera that doesn't report gain records "unknown" instead of a fake −1.
 
 ### Added

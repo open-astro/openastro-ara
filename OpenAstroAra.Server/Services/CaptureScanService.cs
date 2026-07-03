@@ -170,7 +170,8 @@ public sealed partial class CaptureScanService {
         // §28: a FITS without a GAIN header records null (unknown), not a fake 0.
         var gain = ParseInt(LookupHeader(headers, "GAIN"));
         var offset = ParseInt(LookupHeader(headers, "OFFSET"));
-        var temp = ParseDouble(LookupHeader(headers, "CCD-TEMP")) ?? 0.0;
+        // Null when the FITS carries no CCD-TEMP — recorded honestly, no sentinel.
+        var temp = ParseDouble(LookupHeader(headers, "CCD-TEMP"));
         var bitDepth = ParseInt(LookupHeader(headers, "BITPIX"))
             ?? (LookupHeader(headers, "BSCALE") != null ? 16 : 16);
         var hfr = ParseDouble(LookupHeader(headers, "HFR"));
@@ -210,7 +211,7 @@ public sealed partial class CaptureScanService {
         insert.Parameters.AddWithValue("$exposure", exposureSec);
         insert.Parameters.AddWithValue("$gain", gain is null ? DBNull.Value : gain.Value);
         insert.Parameters.AddWithValue("$offset", DbValue(offset));
-        insert.Parameters.AddWithValue("$temp", temp);
+        insert.Parameters.AddWithValue("$temp", temp is null ? DBNull.Value : temp.Value);
         insert.Parameters.AddWithValue("$captured_utc", capturedUtc.ToString("O"));
         insert.Parameters.AddWithValue("$file_path", fitsPath);
         insert.Parameters.AddWithValue("$file_size", fileSize);

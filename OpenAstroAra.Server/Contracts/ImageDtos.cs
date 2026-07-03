@@ -50,7 +50,9 @@ public sealed record FrameDto(
     double ExposureSeconds,
     int? Gain,
     int? Offset,
-    double TemperatureC,
+    // Null = the camera reported no CCD temperature (no more 0.0 sentinel);
+    // legacy rows may still hold an ambiguous 0.0 — see the §39 COALESCE note.
+    double? TemperatureC,
     DateTimeOffset CapturedUtc,
     string FilePath,
     long FileSizeBytes,
