@@ -44,6 +44,20 @@ void main() {
     expect(find.text(''), findsNothing);
   });
 
+  testWidgets('r1: duplicate slot labels dedupe instead of crashing the picker',
+      (tester) async {
+    // Two slots labelled 'Ha' would trip DropdownButtonFormField's
+    // exactly-one-item-per-value assertion without the keep-first dedupe.
+    final container = await _pump(tester, labels: ['L', 'Ha', 'Ha', 'OIII']);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Ha'), findsOneWidget, reason: 'the duplicate collapses to one choice');
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+  });
+
   testWidgets('a stored filter not among the labels stays selectable',
       (tester) async {
     final container = await _pump(tester, labels: ['Ha', 'OIII']);

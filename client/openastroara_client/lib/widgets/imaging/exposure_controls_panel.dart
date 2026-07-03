@@ -235,9 +235,15 @@ class _FilterDropdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final labels = ref.watch(filterWheelLabelsProvider);
+    // Dedupe (keep-first): two slots labelled identically would otherwise crash
+    // DropdownButtonFormField's exactly-one-item-per-value assertion (r1 —
+    // nothing stops duplicate slot labels at entry, and a name-keyed picker
+    // only needs each name once anyway).
+    final seen = <String>{};
     final names = <String>[
       for (var slot = 1; slot <= labels.slotCount; slot++)
-        if (labels.labelAt(slot).isNotEmpty) labels.labelAt(slot),
+        if (labels.labelAt(slot).isNotEmpty && seen.add(labels.labelAt(slot)))
+          labels.labelAt(slot),
     ];
     if (!names.contains(value)) names.insert(0, value);
     return DropdownButtonFormField<String>(
