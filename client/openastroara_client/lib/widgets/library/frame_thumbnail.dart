@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../models/library/frame.dart';
 import '../../theme/ara_colors.dart';
 
-/// Per-frame thumbnail in the session frame strip per §40.4. Phase 12f.1
-/// renders a placeholder square + filter label + rating; 12f.2 swaps the
-/// placeholder for `Image.network` against `/api/v1/frames/{id}/preview`.
-/// Phase 12f.3a adds selection-mode rendering (checkbox overlay + border
-/// highlight + long-press to enter selection mode).
+/// Per-frame thumbnail in the session frame strip per §40.4. 12f.2: takes the
+/// plain wire fields (works for both live `LibraryFrameItem`s and any legacy
+/// caller) and renders the capture-time thumbnail via [imageUrl] when the
+/// server provides one, falling back to the placeholder icon. Selection-mode
+/// rendering (checkbox overlay + border highlight) per 12f.3a.
 class FrameThumbnail extends StatelessWidget {
-  final CapturedFrame frame;
+  final String filter;
+  final double? hfr;
+  final int rating;
+  final String? imageUrl;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final bool selected;
   final bool selectionMode;
   const FrameThumbnail({
     super.key,
-    required this.frame,
+    required this.filter,
+    required this.hfr,
+    required this.rating,
+    this.imageUrl,
     this.onTap,
     this.onLongPress,
     this.selected = false,
@@ -26,7 +31,9 @@ class FrameThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Frame ${frame.filter} HFR ${frame.hfr.toStringAsFixed(2)}',
+      label: hfr is double
+          ? 'Frame $filter HFR ${hfr!.toStringAsFixed(2)}'
+          : 'Frame $filter',
       selected: selected,
       child: InkWell(
         onTap: onTap,
@@ -49,6 +56,19 @@ class FrameThumbnail extends StatelessWidget {
                 child: Icon(Icons.image_outlined,
                     color: AraColors.textDisabled, size: 32),
               ),
+              if (imageUrl != null)
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: Image.network(
+                      imageUrl!,
+                      fit: BoxFit.cover,
+                      // Keep the placeholder icon on 404/network failure —
+                      // a thumbnail may not exist for recovered orphans.
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
               Positioned(
                 left: 4,
                 top: 4,
@@ -56,7 +76,7 @@ class FrameThumbnail extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   color: AraColors.bgPanel.withValues(alpha: 0.85),
                   child: Text(
-                    frame.filter,
+                    filter,
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
@@ -89,14 +109,14 @@ class FrameThumbnail extends StatelessWidget {
               // Defensive clamp — malformed payload could push rating
               // outside 0..5 and overflow the thumbnail. Real validation
               // lands at the API/model boundary in Phase 12f.2.
-              if (frame.rating > 0)
+              if (rating > 0)
                 Positioned(
                   right: 4,
                   bottom: 4,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (var i = 0; i < frame.rating.clamp(0, 5); i++)
+                      for (var i = 0; i < rating.clamp(0, 5); i++)
                         const Icon(Icons.star, size: 8, color: AraColors.accentBusy),
                     ],
                   ),
