@@ -86,7 +86,15 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         // TakeExposure); empty temperature list = capture at ambient (no CoolCamera step).
         var gains = (request.GainList ?? Array.Empty<int>()).Distinct().Select(g => (int?)g).DefaultIfEmpty(null).ToList();
         var rawTemps = request.TargetTemperatureCList ?? Array.Empty<double>();
-        var finiteTemps = rawTemps.Where(double.IsFinite).Distinct().ToList();
+        // Dedupe by the SAME whole-degree bucket coverage/entries/matching use (r5): the
+        // library cannot distinguish -10.4 from -9.6 downstream (both bucket to -10), so
+        // capturing both would double-spend rig time while either one's darks satisfied both
+        // combos' coverage. First requested set-point per bucket wins as the CoolCamera target.
+        // AwayFromZero matches SQLite's ROUND() midpoint behavior.
+        var finiteTemps = rawTemps.Where(double.IsFinite)
+            .GroupBy(t => Math.Round(t, 0, MidpointRounding.AwayFromZero))
+            .Select(g => g.First())
+            .ToList();
         if (rawTemps.Count > 0 && finiteTemps.Count == 0) {
             // The caller supplied set-points but every one was NaN/±Inf — silently degrading
             // to an ambient build would flip the request's meaning (r4). Empty-list = ambient

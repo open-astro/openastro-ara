@@ -288,6 +288,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Set_points_colliding_after_whole_degree_rounding_merge_into_one_combination() {
+            // r5: -10.4 and -9.6 both bucket to -10 — the library can't tell their darks
+            // apart downstream, so generating two CoolCamera blocks would double-spend rig
+            // time while either block's captures satisfied both coverage counts.
+            var store = new FileSequenceService(_dir);
+            using var svc = new SqliteDarkLibraryService(_db, store);
+
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [60],
+                GainList: [100],
+                TargetTemperatureCList: [-10.4, -9.6],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: false), idempotencyKey: null, CancellationToken.None);
+
+            var status = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(status.TotalCombinations, Is.EqualTo(1), "colliding set-points merge");
+
+            var stored = await store.GetAsync(status.GeneratedSequenceId!.Value, CancellationToken.None);
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var root = new SequenceJsonConverter(factory).Deserialize(stored!.Body.GetRawText());
+            var cools = root.GetItemsSnapshot().OfType<CoolCamera>().ToList();
+            Assert.That(cools.Count, Is.EqualTo(1), "one CoolCamera block, not two");
+            Assert.That(cools[0].Temperature, Is.EqualTo(-10.4), "first requested set-point per bucket wins");
+        }
+
+        [Test]
         public void A_temperature_list_of_only_NaN_is_rejected_not_silently_ambient() {
             using var svc = new SqliteDarkLibraryService(_db);
             Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
