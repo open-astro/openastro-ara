@@ -141,14 +141,24 @@ public static class ImageEndpoints {
 
         frames.MapPost("/bulk/export",
                 async (HttpContext http, IFrameRepository repo, [FromBody] BulkExportRequestDto request, CancellationToken ct) => {
-                    var result = await repo.BulkExportAsync(request, ct);
-                    if (result is null) return Results.NotFound();
+                    var prep = await repo.PrepareExportAsync(request, ct);
+                    if (prep is null) return Results.NotFound();
                     // Export is partial-success by design (missing files skip) —
-                    // tell the client how many actually made it into the tar so
-                    // it can report honestly (r2).
+                    // the count of files actually opened for the tar (headers must
+                    // precede the streamed body, which is why opens happen up front).
                     http.Response.Headers["X-Ara-Exported-Count"] =
-                        result.Value.ExportedCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    return Results.Stream(result.Value.Stream, "application/x-tar", result.Value.FileName);
+                        prep.Entries.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    // Stream entries straight to the response — no in-memory tar
+                    // (the #686 review's Pi-class-host memory concern).
+                    return Results.Stream(async output => {
+                        await using var _ = prep;
+                        await using var tar = new System.Formats.Tar.TarWriter(output, leaveOpen: true);
+                        foreach (var (stream, name) in prep.Entries) {
+                            var entry = new System.Formats.Tar.PaxTarEntry(
+                                System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = stream };
+                            await tar.WriteEntryAsync(entry, http.RequestAborted);
+                        }
+                    }, "application/x-tar", prep.FileName);
                 })
             .Accepts<BulkExportRequestDto>("application/json")
             .Produces<byte[]>(StatusCodes.Status200OK, "application/x-tar")

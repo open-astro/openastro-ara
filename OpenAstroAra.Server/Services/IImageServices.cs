@@ -32,6 +32,21 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="OpenDownloadAsync"/> method (per §72) which streams the original
 /// frame file — used by the WILMA library "Download original" action.
 /// </summary>
+/// <summary>§39.10 export, prepared for STREAMING: every file is already open
+/// (an open handle can't vanish — the missing-file skip happened at open time,
+/// before any tar bytes exist), so the endpoint can stream entries straight to
+/// the response with no in-memory assembly and no rollback. Count = entries.
+/// Dispose closes all handles; the endpoint owns that via its stream callback.</summary>
+public sealed record FrameExportPrep(
+    IReadOnlyList<(System.IO.FileStream Stream, string EntryName)> Entries,
+    string FileName) : IAsyncDisposable {
+    public async ValueTask DisposeAsync() {
+        foreach (var (stream, _) in Entries) {
+            await stream.DisposeAsync();
+        }
+    }
+}
+
 public interface IFrameRepository {
     /// <summary>
     /// §14e capture write-path: inserts a newly captured frame row (the camera service writes the
@@ -66,7 +81,7 @@ public interface IFrameRepository {
     /// <summary>§39.10 export: a tar stream of the selected frames' FITS files.
     /// Frames whose files are missing on disk are skipped; null when NOTHING
     /// was exportable (unknown ids or all files gone) — the endpoint 404s.</summary>
-    Task<(Stream Stream, string FileName, int ExportedCount)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct);
+    Task<FrameExportPrep?> PrepareExportAsync(BulkExportRequestDto request, CancellationToken ct);
     /// <summary>
     /// §65.6 cache reset: delete all alt-stretch variants for a frame.
     /// Returns true if the frame exists, false if not found (→ 404).

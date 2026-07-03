@@ -133,18 +133,13 @@ namespace OpenAstroAra.Test {
             var (idB, fitsB) = await InsertFrameWithFilesAsync();
             File.Delete(fitsB); // rotated volume — must not fail the rest
 
-            var result = await _repo.BulkExportAsync(
+            var prep = await _repo.PrepareExportAsync(
                 new BulkExportRequestDto(FrameIds: [idA, idB]), CancellationToken.None);
 
-            Assert.That(result, Is.Not.Null);
-            Assert.That(result!.Value.FileName, Does.StartWith("openastroara-frames-").And.EndWith(".tar"));
-            Assert.That(result.Value.ExportedCount, Is.EqualTo(1), "the skipped file is not counted");
-            var names = new List<string>();
-            await using (var tar = new System.Formats.Tar.TarReader(result.Value.Stream)) {
-                while (await tar.GetNextEntryAsync(cancellationToken: CancellationToken.None) is { } entry) {
-                    names.Add(entry.Name);
-                }
-            }
+            Assert.That(prep, Is.Not.Null);
+            Assert.That(prep!.FileName, Does.StartWith("openastroara-frames-").And.EndWith(".tar"));
+            Assert.That(prep.Entries.Count, Is.EqualTo(1), "the missing file is skipped at open time");
+            var names = await StreamAndListEntriesAsync(prep);
             Assert.That(names, Is.EqualTo(new[] { Path.GetFileName(fitsA) }),
                 "the existing file is in the tar; the missing one is skipped");
         }
@@ -157,18 +152,35 @@ namespace OpenAstroAra.Test {
             var idB = await InsertFrameWithNamedFileAsync("frame.fits", subdir: "b");
             var idC = await InsertFrameWithNamedFileAsync("frame.fits", subdir: "c");
 
-            var result = await _repo.BulkExportAsync(
+            var prep = await _repo.PrepareExportAsync(
                 new BulkExportRequestDto(FrameIds: [idA, idB, idC]), CancellationToken.None);
 
-            Assert.That(result!.Value.ExportedCount, Is.EqualTo(3));
+            Assert.That(prep!.Entries.Count, Is.EqualTo(3));
+            var names = await StreamAndListEntriesAsync(prep);
+            Assert.That(names, Is.Unique, "no tar entry may clobber another on extract");
+            Assert.That(names.Count, Is.EqualTo(3));
+        }
+
+        // Streams the prep exactly like the endpoint's callback, then reads the
+        // entry names back — proving the open handles produce a valid tar.
+        private static async Task<List<string>> StreamAndListEntriesAsync(FrameExportPrep prep) {
+            var ms = new MemoryStream();
+            await using (var _ = prep)
+            await using (var tar = new System.Formats.Tar.TarWriter(ms, leaveOpen: true)) {
+                foreach (var (stream, name) in prep.Entries) {
+                    var entry = new System.Formats.Tar.PaxTarEntry(
+                        System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = stream };
+                    await tar.WriteEntryAsync(entry, CancellationToken.None);
+                }
+            }
+            ms.Position = 0;
             var names = new List<string>();
-            await using (var tar = new System.Formats.Tar.TarReader(result.Value.Stream)) {
-                while (await tar.GetNextEntryAsync(cancellationToken: CancellationToken.None) is { } entry) {
+            await using (var reader = new System.Formats.Tar.TarReader(ms)) {
+                while (await reader.GetNextEntryAsync(cancellationToken: CancellationToken.None) is { } entry) {
                     names.Add(entry.Name);
                 }
             }
-            Assert.That(names, Is.Unique, "no tar entry may clobber another on extract");
-            Assert.That(names.Count, Is.EqualTo(3));
+            return names;
         }
 
         private async Task<Guid> InsertFrameWithNamedFileAsync(string fileName, string subdir) {
@@ -191,9 +203,9 @@ namespace OpenAstroAra.Test {
         public async Task Bulk_export_with_nothing_exportable_returns_null() {
             var (id, fits) = await InsertFrameWithFilesAsync();
             File.Delete(fits);
-            var result = await _repo.BulkExportAsync(
+            var prep = await _repo.PrepareExportAsync(
                 new BulkExportRequestDto(FrameIds: [id, Guid.NewGuid()]), CancellationToken.None);
-            Assert.That(result, Is.Null, "unknown ids + missing files -> the endpoint 404s");
+            Assert.That(prep, Is.Null, "unknown ids + missing files -> the endpoint 404s");
         }
 
         [Test]
