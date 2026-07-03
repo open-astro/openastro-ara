@@ -78,7 +78,7 @@ public sealed record DarkLibraryStateDto(
 /// <summary>One entry in the dark library.</summary>
 public sealed record DarkLibraryEntryDto(
     Guid Id,
-    int ExposureSeconds,
+    double ExposureSeconds,
     int Gain,
     double TemperatureC,
     int FrameCount,

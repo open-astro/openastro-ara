@@ -82,7 +82,9 @@ namespace OpenAstroAra.Test {
             Assert.That(withCaps!.Capabilities!.SensorWidth, Is.GreaterThan(0), "sensor size should be read from the sim");
 
             try {
-                var response = await svc.StartExposureAsync(new ExposureRequestDto(ExposureSec: 1.0, Gain: null), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                // §28 widening: sub-second on purpose — this is the ONLY test that drives
+                // RegisterFrameAsync, and 0.5 used to be rounded up to a catalogued 1 s.
+                var response = await svc.StartExposureAsync(new ExposureRequestDto(ExposureSec: 0.5, Gain: null), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
                 Assert.That(response.FrameId, Is.Not.Empty);
                 var frameId = Guid.Parse(response.FrameId);
                 Assert.That(response.PreviewUrl.ToString(), Does.Contain(response.FrameId));
@@ -97,7 +99,9 @@ namespace OpenAstroAra.Test {
                     }
                 }
                 Assert.That(frame, Is.Not.Null, "the captured frame never appeared in the catalog");
-                Assert.That(frame!.Width, Is.GreaterThan(0));
+                Assert.That(frame!.ExposureSeconds, Is.EqualTo(0.5), "the real capture path must catalog sub-second exposures verbatim (§28)");
+                Assert.That(frame.Gain, Is.Null, "a request without gain must catalog NULL, not a sentinel (§28)");
+                Assert.That(frame.Width, Is.GreaterThan(0));
                 Assert.That(frame.Height, Is.GreaterThan(0));
                 Assert.That(File.Exists(frame.FilePath), Is.True, "the FITS file should exist on disk");
                 Assert.That(frame.FileSizeBytes, Is.GreaterThan(0));

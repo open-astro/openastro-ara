@@ -107,6 +107,20 @@ namespace OpenAstroAra.Test {
             Assert.That(lines[1], Is.EqualTo("2026-03-03,,1,5,,0,20,,,,,,,,,"));
         }
 
+        [Test]
+        public async Task Sub_second_duration_and_null_gain_export_honestly() {
+            // §28 widened schema (PR #670 r2): a 0.5s lucky-imaging sub used to
+            // export duration=0 (GetInt32 truncation) and NULL gain exported a
+            // false gain=0 instead of a blank field.
+            var night = new DateTimeOffset(2026, 4, 4, 22, 0, 0, TimeSpan.Zero);
+            await InsertFrameAsync("light", "Jupiter", "L", 0.5, gain: null, 5.0, night);
+
+            var result = await _svc.OpenAstrobinExportAsync("Jupiter", CancellationToken.None);
+            var lines = await ReadAllLinesAsync(result!.Value.Stream);
+            Assert.That(lines[1], Is.EqualTo("2026-04-04,L,1,0.5,,,5,,,,,,,,,"),
+                "duration keeps sub-second precision; unknown gain is blank, never 0");
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
 
         private static async Task<string[]> ReadAllLinesAsync(Stream s) {
@@ -116,7 +130,7 @@ namespace OpenAstroAra.Test {
                 .Select(l => l.TrimEnd('\r')).ToArray();
         }
 
-        private Task InsertLightAsync(string target, string filter, int exposureSeconds, int gain, double tempC, DateTimeOffset capturedUtc) =>
+        private Task InsertLightAsync(string target, string filter, double exposureSeconds, int? gain, double tempC, DateTimeOffset capturedUtc) =>
             InsertFrameAsync("light", target, filter, exposureSeconds, gain, tempC, capturedUtc);
 
         private async Task InsertSessionAsync(Guid id) {
@@ -133,7 +147,7 @@ namespace OpenAstroAra.Test {
         }
 
         private async Task InsertFrameAsync(string frameType, string target, string? filter,
-                int exposureSeconds, int gain, double tempC, DateTimeOffset capturedUtc) {
+                double exposureSeconds, int? gain, double tempC, DateTimeOffset capturedUtc) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
@@ -149,7 +163,7 @@ namespace OpenAstroAra.Test {
             cmd.Parameters.AddWithValue("$type", frameType);
             cmd.Parameters.AddWithValue("$filter", (object?)filter ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$exp", exposureSeconds);
-            cmd.Parameters.AddWithValue("$gain", gain);
+            cmd.Parameters.AddWithValue("$gain", gain is null ? DBNull.Value : gain.Value);
             cmd.Parameters.AddWithValue("$temp", tempC);
             cmd.Parameters.AddWithValue("$utc", capturedUtc.ToString("O", CultureInfo.InvariantCulture));
             cmd.Parameters.AddWithValue("$path", $"/tmp/{Guid.NewGuid():N}.fits");

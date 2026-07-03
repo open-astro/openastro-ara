@@ -604,11 +604,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             TargetName: targetName,
             FrameType: frameType,
             FilterName: string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName,
-            // The catalog column is int (legacy §28 shape); sub-second exposures round up to 1 so
-            // they never record as 0s. The FITS EXPTIME header preserves the exact value; widening
-            // the column+DTO to double is tracked in PORT_TODO (wire-shape change for WILMA).
-            ExposureSeconds: Math.Max(1, (int)Math.Round(request.ExposureSec)),
-            Gain: request.Gain ?? -1,
+            ExposureSeconds: request.ExposureSec, // §28: real seconds — a 0.5s bias no longer rounds up to 1
+            Gain: request.Gain, // §28: null when the request carries none — no more -1 sentinel
             Offset: request.CameraOffset,
             TemperatureC: ccdTemp,
             CapturedUtc: capturedAt,

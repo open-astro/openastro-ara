@@ -486,8 +486,8 @@ public sealed class SqliteStatsService : IStatsService {
                 CsvEscape(reader.GetString(2)),
                 reader.GetString(3),
                 CsvEscape(await reader.IsDBNullAsync(4, ct) ? "" : reader.GetString(4)),
-                reader.GetInt32(5).ToString(CultureInfo.InvariantCulture),
-                reader.GetInt32(6).ToString(CultureInfo.InvariantCulture),
+                reader.GetDouble(5).ToString("0.####", CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(6, ct) ? "" : reader.GetInt32(6).ToString(CultureInfo.InvariantCulture),
                 reader.GetString(7),
                 await reader.IsDBNullAsync(8, ct) ? "" : reader.GetDouble(8).ToString("G", CultureInfo.InvariantCulture),
                 await reader.IsDBNullAsync(9, ct) ? "" : reader.GetInt32(9).ToString(CultureInfo.InvariantCulture),
@@ -539,9 +539,11 @@ public sealed class SqliteStatsService : IStatsService {
                 reader.GetString(0),
                 CsvEscape(filter),
                 reader.GetInt32(5).ToString(CultureInfo.InvariantCulture),
-                reader.GetInt32(2).ToString(CultureInfo.InvariantCulture),
+                // §28 widened schema: duration is REAL (sub-second subs must not export 0)
+                // and gain is nullable (blank the field, like the sibling export above).
+                reader.GetDouble(2).ToString("0.####", CultureInfo.InvariantCulture),
                 "",
-                reader.GetInt32(3).ToString(CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(3, ct) ? "" : reader.GetInt32(3).ToString(CultureInfo.InvariantCulture),
                 reader.GetInt32(4).ToString(CultureInfo.InvariantCulture),
                 "", "", "", "", "", "", "", "", ""));
         }

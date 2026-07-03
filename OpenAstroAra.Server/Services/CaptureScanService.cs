@@ -162,12 +162,13 @@ public sealed partial class CaptureScanService {
         }
 
         var capturedUtc = ParseDateObs(headers) ?? File.GetLastWriteTimeUtc(fitsPath);
-        var exposureSec = ParseExposure(headers) ?? 0;
+        var exposureSec = ParseExposure(headers) ?? 0.0;
         var target = LookupHeader(headers, "OBJECT") ?? "Unknown Target";
         var imageType = LookupHeader(headers, "IMAGETYP") ?? "LIGHT";
         var frameType = MapImageTypeToFrameType(imageType);
         var filter = LookupHeader(headers, "FILTER");
-        var gain = ParseInt(LookupHeader(headers, "GAIN")) ?? 0;
+        // §28: a FITS without a GAIN header records null (unknown), not a fake 0.
+        var gain = ParseInt(LookupHeader(headers, "GAIN"));
         var offset = ParseInt(LookupHeader(headers, "OFFSET"));
         var temp = ParseDouble(LookupHeader(headers, "CCD-TEMP")) ?? 0.0;
         var bitDepth = ParseInt(LookupHeader(headers, "BITPIX"))
@@ -207,7 +208,7 @@ public sealed partial class CaptureScanService {
         insert.Parameters.AddWithValue("$frame_type", frameType);
         insert.Parameters.AddWithValue("$filter", (object?)filter ?? DBNull.Value);
         insert.Parameters.AddWithValue("$exposure", exposureSec);
-        insert.Parameters.AddWithValue("$gain", gain);
+        insert.Parameters.AddWithValue("$gain", gain is null ? DBNull.Value : gain.Value);
         insert.Parameters.AddWithValue("$offset", DbValue(offset));
         insert.Parameters.AddWithValue("$temp", temp);
         insert.Parameters.AddWithValue("$captured_utc", capturedUtc.ToString("O"));
@@ -282,9 +283,11 @@ public sealed partial class CaptureScanService {
             : null;
     }
 
-    private static int? ParseExposure(IReadOnlyDictionary<string, string> headers) =>
-        ParseInt(LookupHeader(headers, "EXPOSURE"))
-            ?? ParseInt(LookupHeader(headers, "EXPTIME"));
+    // §28: EXPTIME/EXPOSURE are FITS doubles — a 0.5 s bias header used to parse
+    // as null (int.TryParse fails on "0.5") and record 0; now it records 0.5.
+    private static double? ParseExposure(IReadOnlyDictionary<string, string> headers) =>
+        ParseDouble(LookupHeader(headers, "EXPOSURE"))
+            ?? ParseDouble(LookupHeader(headers, "EXPTIME"));
 
     private static int? ParseInt(string? s) =>
         s is not null && int.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v)
@@ -332,7 +335,7 @@ public sealed partial class CaptureScanService {
     private partial void LogSkipCorruptFits(Exception ex, string path);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 recovered orphan FITS: {Path} (target={Target}, frame_type={FrameType}, exposure={Exposure}s)")]
-    private partial void LogRecoveredOrphan(string path, string target, string frameType, int exposure);
+    private partial void LogRecoveredOrphan(string path, string target, string frameType, double exposure);
 
     #endregion
 }

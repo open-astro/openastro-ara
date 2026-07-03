@@ -250,7 +250,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$frame_type", FrameTypeToString(f.FrameType));
         cmd.Parameters.AddWithValue("$filter_name", (object?)f.FilterName ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$exposure_seconds", f.ExposureSeconds);
-        cmd.Parameters.AddWithValue("$gain", f.Gain);
+        cmd.Parameters.AddWithValue("$gain", DbValue(f.Gain));
         cmd.Parameters.AddWithValue("$offset", DbValue(f.Offset));
         cmd.Parameters.AddWithValue("$temperature_c", f.TemperatureC);
         cmd.Parameters.AddWithValue("$captured_utc", f.CapturedUtc.ToString("O"));
@@ -325,7 +325,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 TargetName: reader.GetString(2),
                 FrameType: ParseFrameType(reader.GetString(3)),
                 FilterName: await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4),
-                ExposureSeconds: reader.GetInt32(5),
+                ExposureSeconds: reader.GetDouble(5),
                 CapturedUtc: DateTimeOffset.Parse(reader.GetString(6)),
                 Hfr: await reader.IsDBNullAsync(7, ct) ? null : reader.GetDouble(7),
                 StarCount: await reader.IsDBNullAsync(8, ct) ? null : reader.GetInt32(8),
@@ -372,8 +372,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             TargetName: reader.GetString(2),
             FrameType: ParseFrameType(reader.GetString(3)),
             FilterName: await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4),
-            ExposureSeconds: reader.GetInt32(5),
-            Gain: reader.GetInt32(6),
+            ExposureSeconds: reader.GetDouble(5),
+            Gain: await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
             Offset: await reader.IsDBNullAsync(7, ct) ? null : reader.GetInt32(7),
             TemperatureC: reader.GetDouble(8),
             CapturedUtc: DateTimeOffset.Parse(reader.GetString(9)),
