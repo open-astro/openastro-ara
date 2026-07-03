@@ -16,6 +16,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -182,7 +183,36 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         ArgumentNullException.ThrowIfNull(frame);
         await using var conn = _db.OpenConnection();
         await InsertFrameAsync(conn, frame, ct).ConfigureAwait(false);
+        await PublishFrameCompleteAsync(frame, ct).ConfigureAwait(false);
     }
+
+    // §60.9 frame.complete — catalogued in WsEventCatalog since Phase 7 but
+    // never emitted until the WS-refresh slice: every frame landing through
+    // the capture path (this method; the §28.8 rescan emits recovered_orphan
+    // separately) notifies live listeners (WILMA calibration coverage,
+    // library strips) so they refresh without polling.
+    private async Task PublishFrameCompleteAsync(FrameDto frame, CancellationToken ct) {
+        if (_ws is null) return;
+        try {
+            // Raw JSON like EmitVariantEvictedAsync below — anonymous types
+            // aren't in the source-gen context (AOT). Guids/enum are literal-safe;
+            // the filter name is user-influenced and gets escaped.
+            var filter = frame.FilterName is null
+                ? "null"
+                : JsonSerializer.Serialize(frame.FilterName, AraJsonSerializerContext.Default.String);
+            var json = $$"""
+                {"frame_id":"{{frame.Id:D}}","session_id":"{{frame.SessionId:D}}","frame_type":"{{frame.FrameType.ToString().ToLowerInvariant()}}","filter_name":{{filter}}}
+                """;
+            using var doc = JsonDocument.Parse(json);
+            await _ws.PublishAsync(WsEventCatalog.FrameComplete, doc.RootElement.Clone(), ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // Broadcasting is best-effort — a WS hiccup must not fail the catalog insert.
+            LogFrameEventFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "frame.complete broadcast failed")]
+    private partial void LogFrameEventFailed(Exception ex);
 
     // Lazily-created "manual capture" session for REST-initiated exposures. All callers share ONE
     // creation task, so no caller can observe the id before the INSERT committed (the sessions FK

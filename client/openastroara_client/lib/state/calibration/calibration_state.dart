@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/calibration/calibration_models.dart';
 import '../../models/server.dart';
 import '../../services/calibration_api.dart';
 import '../saved_server_state.dart';
+import '../ws/ws_providers.dart';
 
 /// §39 calibration state — the factory → api → notifier trio mirrors
 /// `sequence_list_state.dart` (the current exemplar for API-backed lists).
@@ -34,6 +37,20 @@ class CalibrationSessionsNotifier
   // generation so an in-flight refresh against a stale server loses the race.
   int _refreshGen = 0;
 
+  // §60.9 live refresh: coverage badges track a running capture (darks landing
+  // flip MatchingDarksAvailable) — debounced 2 s like the library list.
+  Timer? _wsDebounce;
+
+  void _bindFrameCompleteRefresh() {
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'frame.complete') return;
+      _wsDebounce?.cancel();
+      _wsDebounce = Timer(const Duration(seconds: 2), refresh);
+    });
+    ref.onDispose(() => _wsDebounce?.cancel());
+  }
+
   String? _nextCursor;
   bool _hasMore = false;
   bool _loadingMore = false;
@@ -45,6 +62,7 @@ class CalibrationSessionsNotifier
   @override
   Future<List<CalibrationSession>?> build() async {
     final gen = ++_refreshGen;
+    _bindFrameCompleteRefresh();
     final api = ref.watch(calibrationApiProvider);
     if (api == null) return null;
     final page = await api.listSessions();
@@ -124,9 +142,23 @@ final calibrationSessionsProvider = AsyncNotifierProvider.autoDispose<
 class DarkLibraryStatusNotifier extends AsyncNotifier<DarkLibraryState?> {
   int _refreshGen = 0;
 
+  // §39.8 build progress goes live: each captured dark bumps coverage.
+  Timer? _wsDebounce;
+
+  void _bindFrameCompleteRefresh() {
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'frame.complete') return;
+      _wsDebounce?.cancel();
+      _wsDebounce = Timer(const Duration(seconds: 2), refresh);
+    });
+    ref.onDispose(() => _wsDebounce?.cancel());
+  }
+
   @override
   Future<DarkLibraryState?> build() async {
     _refreshGen++;
+    _bindFrameCompleteRefresh();
     final api = ref.watch(calibrationApiProvider);
     if (api == null) return null;
     return api.darkLibraryStatus();

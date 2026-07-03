@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/library/live_library.dart';
 import '../../models/server.dart';
 import '../../services/library_api.dart';
 import '../saved_server_state.dart';
+import '../ws/ws_providers.dart';
 
 /// §40 live library state (12f.2) — the factory → api → notifier trio
 /// mirroring `sequence_list_state.dart`. The demo data in `library_state.dart`
@@ -37,6 +40,25 @@ class LiveLibrarySessionsNotifier
   bool _hasMore = false;
   bool _loadingMore = false;
 
+  // §60.9 live refresh: frame.complete events (a capture run filling the
+  // catalog) refresh the list after 2 s of quiet — debounced so a fast bias
+  // run doesn't refetch per frame. Strips invalidate too (new frames belong
+  // in an open card's strip).
+  Timer? _wsDebounce;
+
+  void _bindFrameCompleteRefresh() {
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'frame.complete') return;
+      _wsDebounce?.cancel();
+      _wsDebounce = Timer(const Duration(seconds: 2), () {
+        ref.invalidate(sessionFramesProvider);
+        refresh();
+      });
+    });
+    ref.onDispose(() => _wsDebounce?.cancel());
+  }
+
   /// Whether a further page exists for the Load-more affordance.
   bool get hasMore => _hasMore;
 
@@ -44,6 +66,7 @@ class LiveLibrarySessionsNotifier
   @override
   Future<List<LibrarySession>?> build() async {
     final gen = ++_refreshGen;
+    _bindFrameCompleteRefresh();
     final api = ref.watch(libraryApiProvider);
     if (api == null) return null;
     final page = await api.listSessions();

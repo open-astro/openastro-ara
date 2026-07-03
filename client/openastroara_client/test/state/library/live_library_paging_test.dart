@@ -6,9 +6,12 @@ import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/services/library_api.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
+import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 
 class _PagedFake implements LibraryClient {
   int pageTwoCalls = 0;
+  int firstPageCalls = 0;
   final Completer<void> gate = Completer<void>();
   // When set, first-page (refresh) responses wait on this gate too.
   Completer<void>? refreshGate;
@@ -28,6 +31,7 @@ class _PagedFake implements LibraryClient {
   Future<CursorPage<LibrarySession>> listSessions(
       {int limit = 200, String? cursor}) async {
     if (cursor == null) {
+      firstPageCalls++;
       final g = refreshGate;
       if (g != null) await g.future;
       return CursorPage(
@@ -106,6 +110,33 @@ void main() {
     final items = container.read(liveLibrarySessionsProvider).value!;
     expect(items.length, 2, reason: 'page 2 appended exactly once');
     expect(notifier.hasMore, isFalse);
+  });
+
+  test('§60.9: a frame.complete event refreshes the list after the debounce',
+      () async {
+    final fake = _PagedFake();
+    final controller = StreamController<WsEvent>.broadcast();
+    addTearDown(controller.close);
+    final container = ProviderContainer(overrides: [
+      libraryApiProvider.overrideWithValue(fake),
+      wsEventsProvider.overrideWith((ref) => controller.stream),
+    ]);
+    addTearDown(container.dispose);
+
+    // Hold a live subscription — the provider is autoDispose, and a disposed
+    // notifier tears down its ws listener + debounce timer.
+    final sub = container.listen(liveLibrarySessionsProvider, (_, _) {});
+    addTearDown(sub.close);
+    await container.read(liveLibrarySessionsProvider.future);
+    final before = fake.firstPageCalls;
+
+    controller.add(WsEvent(type: 'frame.complete', seq: 1, ts: DateTime.utc(2026, 7, 3), payload: const {}));
+    // Debounce window: no refetch yet.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(fake.firstPageCalls, before, reason: 'debounce still open');
+    await Future<void>.delayed(const Duration(milliseconds: 2000));
+    expect(fake.firstPageCalls, before + 1,
+        reason: 'the quiet window elapsed -> one refresh');
   });
 
   test('r5: an append issued during an in-flight refresh supersedes it coherently',
