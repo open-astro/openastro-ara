@@ -76,9 +76,12 @@ public static class CalibrationEndpoints {
                 async ([FromBody] DarkLibraryBuildRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDarkLibraryService svc, CancellationToken ct) => {
                     try {
                         return Results.Accepted(value: await svc.StartBuildAsync(request, key, ct));
-                    } catch (ArgumentException ex) {
+                    } catch (ArgumentException ex) when (ex.ParamName == "request") {
                         // Empty exposure list / non-positive frame count — nothing to capture.
-                        return Results.UnprocessableEntity(new { error = ex.Message });
+                        // The when-filter scopes this to the service's intentional validation
+                        // throws (all ParamName=request); an incidental ArgumentException from
+                        // deeper in the chain still surfaces as a 500, not a fake 422.
+                        return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
                     }
                 })
             .Accepts<DarkLibraryBuildRequestDto>("application/json")
