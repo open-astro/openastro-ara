@@ -1,0 +1,134 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace OpenAstroAra.Server.Services;
+
+/// <summary>
+/// One per-filter flat block for <see cref="CalibrationSequenceBuilder.BuildMatchingFlatsBody"/>.
+/// <paramref name="FilterName"/> null means the session had no filter wheel — the generated block
+/// then has no SwitchFilter step. <paramref name="Gain"/> / <paramref name="Offset"/> are the
+/// values the session's lights used (null = camera default, which TakeExposure expresses as its
+/// -1 sentinel by simply omitting the property). <paramref name="FocuserPosition"/> restores the
+/// per-filter focus the lights were captured at (§39.5: dust-mote shadows only align when the
+/// optical train is unchanged).
+/// </summary>
+public sealed record FlatStepSpec(
+    string? FilterName,
+    int FrameCount,
+    double ExposureSeconds,
+    int? Gain,
+    int? Offset,
+    int? FocuserPosition);
+
+/// <summary>
+/// §39.5 — materializes a calibration capture plan into a runnable §38.1 sequence body.
+/// Bodies use the NINA-verbatim <c>$type</c> tree (the same shape every stored sequence,
+/// starter template, and NINA import uses); the sequencer's type remapping resolves them
+/// to the OpenAstroAra classes on load, and the WILMA sequence renderer already knows how
+/// to display them. One builder so the §39.8 dark-matrix generation (follow-up slice) and
+/// the matching-flats generation share the exact same body dialect.
+/// </summary>
+public static class CalibrationSequenceBuilder {
+
+    private const string SequentialContainerType = "NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer";
+    private const string SequentialStrategyType = "NINA.Sequencer.Container.ExecutionStrategy.SequentialStrategy, NINA.Sequencer";
+    private const string LoopConditionType = "NINA.Sequencer.Conditions.LoopCondition, NINA.Sequencer";
+    private const string SwitchFilterType = "NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter, NINA.Sequencer";
+    private const string FilterInfoType = "NINA.Core.Model.Equipment.FilterInfo, NINA.Core";
+    private const string MoveFocuserAbsoluteType = "NINA.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, NINA.Sequencer";
+    private const string TakeExposureType = "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer";
+
+    /// <summary>
+    /// Build the §38.1 body: a SequentialContainer root with one looped per-filter container —
+    /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure(FLAT)] × FrameCount. SwitchFilter /
+    /// MoveFocuserAbsolute re-execute on every loop pass; both are no-ops once in position,
+    /// which is exactly how NINA's own SmartExposure loops behave.
+    /// </summary>
+    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps) {
+        var items = new JsonArray();
+        foreach (var step in steps) {
+            items.Add(FlatBlock(step));
+        }
+
+        var root = new JsonObject {
+            ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = name,
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+        return JsonSerializer.SerializeToElement(root);
+    }
+
+    private static JsonObject FlatBlock(FlatStepSpec step) {
+        var items = new JsonArray();
+
+        if (step.FilterName is not null) {
+            items.Add(new JsonObject {
+                ["$type"] = SwitchFilterType,
+                // _position -1 on purpose: SwitchFilter.MatchFilter resolves by NAME against the
+                // active profile's filter list, and only falls back to a slot index when the
+                // recorded position is >= 0. A stale index from a re-ordered wheel must not win.
+                ["Filter"] = new JsonObject {
+                    ["$type"] = FilterInfoType,
+                    ["_name"] = step.FilterName,
+                    ["_position"] = -1,
+                },
+            });
+        }
+
+        if (step.FocuserPosition is int focus) {
+            items.Add(new JsonObject {
+                ["$type"] = MoveFocuserAbsoluteType,
+                ["Position"] = focus,
+            });
+        }
+
+        var exposure = new JsonObject {
+            ["$type"] = TakeExposureType,
+            ["ExposureTime"] = step.ExposureSeconds,
+            ["ImageType"] = "FLAT",
+            ["ExposureCount"] = 0,
+        };
+        // Omitted Gain/Offset deserialize to TakeExposure's -1 "camera default" sentinel.
+        if (step.Gain is int gain) {
+            exposure["Gain"] = gain;
+        }
+        if (step.Offset is int offset) {
+            exposure["Offset"] = offset;
+        }
+        items.Add(exposure);
+
+        var label = step.FilterName ?? "no filter";
+        return new JsonObject {
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = $"Flats — {label} ({step.FrameCount}×{step.ExposureSeconds:0.####}s)",
+            ["Conditions"] = new JsonArray(new JsonObject {
+                ["$type"] = LoopConditionType,
+                ["Iterations"] = step.FrameCount,
+                ["CompletedIterations"] = 0,
+            }),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+    }
+
+    private static JsonObject Strategy() => new() { ["$type"] = SequentialStrategyType };
+}
