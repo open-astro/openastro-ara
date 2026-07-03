@@ -27,6 +27,22 @@ class _FakeLibraryClient implements LibraryClient {
       'http://test.invalid/api/v1/frames/$frameId/thumbnail';
 
   String? resumedSessionId;
+  (String, String)? previewRequest;
+
+  @override
+  Future<List<int>> fetchPreview(String frameId,
+      {required String stretch, int maxDimensionPx = 2048}) async {
+    previewRequest = (frameId, stretch);
+    // A 1x1 transparent PNG so Image.memory can decode it in tests.
+    return const [
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+      0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+      0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+    ];
+  }
 
   @override
   Future<String> resumeTarget(String sessionId) async {
@@ -239,6 +255,30 @@ void main() {
     await tester.tap(find.text('Clear filters'));
     await tester.pumpAndSettle();
     expect(find.textContaining('M42'), findsWidgets);
+  });
+
+  testWidgets('§65: the viewer fetches a stretched preview and repaints on palette change',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [_frame('f1')],
+    });
+    await _pump(tester, fake);
+
+    // Open the viewer from the strip.
+    await tester.tap(find.text('Ha'));
+    await tester.pumpAndSettle();
+    expect(fake.previewRequest, isNotNull);
+    expect(fake.previewRequest!.$1, 'f1');
+    expect(fake.previewRequest!.$2, 'auto_stf', reason: 'default palette');
+
+    // Switch palettes: a fresh server render is requested.
+    await tester.tap(find.text('auto_stf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('asinh').last);
+    await tester.pumpAndSettle();
+    expect(fake.previewRequest!.$2, 'asinh');
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',

@@ -31,6 +31,11 @@ abstract interface class LibraryClient {
   /// sequence seeded from the session and returns its id.
   Future<String> resumeTarget(String sessionId);
 
+  /// §65 stretched preview JPEG bytes for the frame viewer. [stretch] is one
+  /// of the §65 palette ids (auto_stf, linear, log, asinh, sqrt, equalized).
+  Future<List<int>> fetchPreview(String frameId,
+      {required String stretch, int maxDimensionPx = 2048});
+
   void close();
 }
 
@@ -100,6 +105,28 @@ class LibraryApi implements LibraryClient {
       'frame_ids': frameIds,
       'delete_from_disk': deleteFromDisk,
     });
+  }
+
+  @override
+  Future<List<int>> fetchPreview(String frameId,
+      {required String stretch, int maxDimensionPx = 2048}) async {
+    final res = await _dio.post<List<int>>(
+      '/api/v1/frames/$frameId/preview',
+      data: <String, dynamic>{
+        'stretch_palette': stretch,
+        'black_point': null,
+        'midtone_point': null,
+        'white_point': null,
+        'max_dimension_px': maxDimensionPx,
+        'apply_debayer': false,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = res.data;
+    if (data == null || data.isEmpty) {
+      throw const FormatException('frame preview returned an empty body');
+    }
+    return data;
   }
 
   @override
