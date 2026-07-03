@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../services/stats_csv_export.dart';
-import '../../state/library/library_state.dart';
+import '../../state/stats/stats_targets_state.dart';
 import '../../widgets/stats/charts/calendar_heatmap.dart';
 import '../../widgets/stats/charts/focus_temp_scatter.dart';
 import '../../widgets/stats/charts/frame_quality_chart.dart';
@@ -96,21 +95,29 @@ class StatsDashboardScreen extends ConsumerWidget {
       );
       return;
     }
-    final sessions = ref.read(librarySessionsProvider);
-    // Count rows from the source data, not by splitting the CSV — quoted
-    // fields with embedded newlines (rare but legal per RFC-4180) would
-    // otherwise inflate the count.
-    final rowCount = switch (key) {
-      'sessions' => sessions.length,
-      'frames' => sessions.fold<int>(0, (sum, s) => sum + s.frames.length),
-      _ => 0,
-    };
-    final csv = switch (key) {
-      'sessions' => exportSessionsCsv(sessions),
-      'frames' => exportFramesCsv(sessions),
-      _ => '',
-    };
-    if (csv.isEmpty) return;
+    // §50: the CSVs come from the server's catalog (scope=frames|sessions),
+    // not from client-side demo data.
+    final api = ref.read(statsExportApiProvider);
+    if (api == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connect to a server to export.')));
+      return;
+    }
+    final String csv;
+    try {
+      csv = await api.fetchCsv(key);
+    } on Exception catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      return;
+    }
+    if (!context.mounted) return;
+    // Data rows = lines minus the header. The server never embeds newlines in
+    // fields (targets are CsvEscape'd but single-line), so a line count is
+    // accurate here.
+    final rowCount =
+        csv.split('\n').where((l) => l.trim().isNotEmpty).length - 1;
 
     try {
       await Clipboard.setData(ClipboardData(text: csv));

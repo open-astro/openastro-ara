@@ -34,6 +34,9 @@ class _FakeStatsExportClient implements StatsExportClient {
   }
 
   @override
+  Future<String> fetchCsv(String scope) async => 'header\n';
+
+  @override
   String astrobinExportUrl(String target) => 'http://h/x?target=$target';
 
   @override

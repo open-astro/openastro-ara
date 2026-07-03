@@ -463,9 +463,11 @@ public sealed class SqliteStatsService : IStatsService {
     }
 
     public async Task<(Stream Stream, string FileName)?> OpenCsvExportAsync(string scope, CancellationToken ct) {
-        // v0.0.1: scope is informational; we always dump the full frames
-        // table. Filter-by-scope queries (per-session, per-target) land
-        // when the WILMA Stats tab adds those export buttons.
+        // scope=sessions gets the per-session rollup; anything else (the
+        // historical default) dumps the full frames table.
+        if (string.Equals(scope, "sessions", StringComparison.OrdinalIgnoreCase)) {
+            return await OpenSessionsCsvExportAsync(ct);
+        }
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -499,6 +501,43 @@ public sealed class SqliteStatsService : IStatsService {
         await writer.FlushAsync(ct);
         ms.Position = 0;
         return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
+    }
+
+    // The per-session rollup the WILMA Stats tab's "Sessions CSV" button streams:
+    // one row per session with target, window, frame counts and light integration.
+    private async Task<(Stream Stream, string FileName)?> OpenSessionsCsvExportAsync(CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT session_id,
+                   MIN(captured_utc) AS started,
+                   MAX(captured_utc) AS ended,
+                   MIN(CASE WHEN frame_type = 'light' THEN target_name END) AS target,
+                   COUNT(*) AS total_frames,
+                   SUM(CASE WHEN frame_type = 'light' THEN 1 ELSE 0 END) AS light_frames,
+                   SUM(CASE WHEN frame_type = 'light' THEN exposure_seconds ELSE 0 END) AS light_integration_seconds
+            FROM frames
+            GROUP BY session_id
+            ORDER BY started DESC;
+            """;
+        var ms = new MemoryStream();
+        await using var writer = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true);
+        await writer.WriteLineAsync(
+            "session_id,started_utc,ended_utc,target_name,total_frames,light_frames,light_integration_seconds");
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            await writer.WriteLineAsync(string.Join(',',
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                CsvEscape(await reader.IsDBNullAsync(3, ct) ? "" : reader.GetString(3)),
+                reader.GetInt32(4).ToString(CultureInfo.InvariantCulture),
+                reader.GetInt32(5).ToString(CultureInfo.InvariantCulture),
+                reader.GetDouble(6).ToString("0.####", CultureInfo.InvariantCulture)));
+        }
+        await writer.FlushAsync(ct);
+        ms.Position = 0;
+        return (ms, $"openastroara-sessions-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
     }
 
     public async Task<(Stream Stream, string FileName)?> OpenAstrobinExportAsync(string targetName, CancellationToken ct) {
