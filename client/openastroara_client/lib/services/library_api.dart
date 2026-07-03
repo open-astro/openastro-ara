@@ -70,8 +70,10 @@ class LibraryApi implements LibraryClient {
         'cursor': ?cursor,
       },
     );
+    // logTruncation false: a full page with has_more is the NORMAL paged case
+    // here — the Load-more affordance handles it, no warning warranted (r4).
     final items = _parsePage(res.data, 'sessions', LibrarySession.fromJson,
-        (s) => s.id.isNotEmpty, limit);
+        (s) => s.id.isNotEmpty, limit, logTruncation: false);
     final data = res.data as Map<String, dynamic>;
     final next = data['next_cursor'];
     return CursorPage(
@@ -182,16 +184,17 @@ class LibraryApi implements LibraryClient {
     String what,
     T Function(Map<String, dynamic>) fromJson,
     bool Function(T) keep,
-    int limit,
-  ) {
+    int limit, {
+    bool logTruncation = true,
+  }) {
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
           '$what returned an unexpected body (${data.runtimeType})');
     }
-    if (data['has_more'] == true) {
-      // Sessions surface a Load-more affordance; frame strips stay
-      // first-page-only (a 200-frame strip is already beyond useful scroll).
-      debugPrint('$what page full at $limit — more exist');
+    if (logTruncation && data['has_more'] == true) {
+      // Frame strips stay first-page-only by design (a 200-frame strip is
+      // already beyond useful scroll) — surface the truncation in logs.
+      debugPrint('$what truncated to first $limit — more exist');
     }
     return (data['items'] as List)
         .whereType<Map<String, dynamic>>()

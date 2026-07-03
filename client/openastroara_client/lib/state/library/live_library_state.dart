@@ -89,8 +89,10 @@ class LiveLibrarySessionsNotifier
       _nextCursor = page.nextCursor;
       _hasMore = page.hasMore;
       state = AsyncData([...current, ...page.items]);
-    } on Exception {
-      // Leave the loaded pages intact; the button stays for a retry.
+    } catch (_) {
+      // Catch-all like refresh()'s AsyncValue.guard (r4): even a TypeError
+      // from a malformed page must leave the loaded pages + retry button
+      // intact rather than escaping as an unhandled rejection.
     } finally {
       _loadingMore = false;
     }
