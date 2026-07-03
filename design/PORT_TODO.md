@@ -404,7 +404,9 @@ Library tab (catalogued groups incl. null-gain/sub-second rendering, coverage st
 [Open build sequence], the §39.8 matrix build form). New `CalibrationApi`/models/state follow the
 sequence-list factory->api->notifier idiom. Remaining §39 client work: the Image Library session
 card's stubbed [Capture Matching Flats] button waits on 12f.2 (library live-wiring gives cards real
-session ids); WS-driven auto-refresh of coverage (polling/pull-to-refresh today); cursor paging on the
+session ids); WS auto-refresh SHIPPED (frame.complete now actually EMITTED on capture insert — it was
+catalogued but never published — and the library/calibration/dark-library notifiers refresh on it,
+debounced 2 s); cursor paging on the
 sessions tab (first page at the server's 200 cap today — from the #673 review).
 ### 12f.2 Image Library live-wiring — sessions/frames/thumbnails + flats button ✅ DONE (2026-07-02)
 `ImageLibraryScreen` now renders `/api/v1/sessions` + `/sessions/{id}/frames` via the new
