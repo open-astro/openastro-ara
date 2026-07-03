@@ -35,9 +35,13 @@ class LiveLibrarySessionsNotifier
   int _refreshGen = 0;
   String? _nextCursor;
   bool _hasMore = false;
+  bool _loadingMore = false;
 
   /// Whether a further page exists for the Load-more affordance.
   bool get hasMore => _hasMore;
+
+  /// True while a loadMore() request is in flight (drives the button spinner).
+  bool get isLoadingMore => _loadingMore;
 
   @override
   Future<List<LibrarySession>?> build() async {
@@ -69,11 +73,18 @@ class LiveLibrarySessionsNotifier
   /// refresh superseded this call (generation guard).
   Future<void> loadMore() async {
     final cursor = _nextCursor;
-    if (!_hasMore || cursor == null) return;
+    // The in-flight guard makes repeated taps a no-op (r1): two concurrent
+    // calls would share the same cursor, double-append the page, and let the
+    // slower response clobber the newer cursor.
+    if (!_hasMore || cursor == null || _loadingMore) return;
+    _loadingMore = true;
     final gen = _refreshGen;
     final api = ref.read(libraryApiProvider);
     final current = state.value;
-    if (api == null || current == null) return;
+    if (api == null || current == null) {
+      _loadingMore = false;
+      return;
+    }
     try {
       final page = await api.listSessions(cursor: cursor);
       if (gen != _refreshGen) return; // a refresh/server-switch won the race
@@ -82,6 +93,8 @@ class LiveLibrarySessionsNotifier
       state = AsyncData([...current, ...page.items]);
     } on Exception {
       // Leave the loaded pages intact; the button stays for a retry.
+    } finally {
+      _loadingMore = false;
     }
   }
 }
