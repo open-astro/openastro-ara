@@ -691,10 +691,16 @@ class _FilterEditor extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final labels = ref.watch(filterWheelLabelsProvider);
     // Configured slots → (name, 0-based position) for the dropdown + write-back.
+    // Dedupe by name, keep-first (r1, shared with the Imaging picker): the
+    // daemon's MatchFilter resolves by name first anyway, and a duplicate name
+    // would crash the dropdown's exactly-one-item-per-value assertion.
+    final seenNames = <String>{};
     final slots = <({String name, int position})>[];
     for (var slot = 1; slot <= labels.slotCount; slot++) {
       final name = labels.labelAt(slot);
-      if (name.isNotEmpty) slots.add((name: name, position: slot - 1));
+      if (name.isNotEmpty && seenNames.add(name)) {
+        slots.add((name: name, position: slot - 1));
+      }
     }
     final stored = value is Map ? (value as Map)['_name'] : null;
     final storedName = stored is String && stored.isNotEmpty ? stored : null;
