@@ -36,7 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Added
-- **§25.5.1 — pick your filter for manual captures.** The Imaging tab's exposure controls gain a Filter dropdown (between Bin and Frame type), sourced from your profile's filter-wheel slot labels — every Take One and Live View session now records the filter you actually used instead of a hardcoded 'L'.
+- **§25.5.1 — pick your filter for manual captures.** The Imaging tab's exposure controls gain a Filter dropdown (between Bin and Frame type), sourced from your profile's filter-wheel slot labels — every Take One now records the filter you actually used instead of a hardcoded 'L'. (Live View frames are ephemeral and never catalogued, so no filter is recorded there.)
 
 ### Changed
 - **§60.9 — BREAKING (wire): sequence run counters renamed `frames_*` → `instructions_*`.** They always counted sequence instructions, not camera exposures; renamed on both the REST run-state and the WebSocket events while the wire has no external consumers (daemon + WILMA ship together). The stream's ordering contract is now documented in `openapi.yaml`: a terminal event may arrive without a preceding `started`, and `sequence.progress` never arrives after the run's terminal event.
