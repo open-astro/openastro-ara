@@ -6,6 +6,7 @@ import '../../state/app_shell_state.dart';
 import '../../state/calibration/calibration_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/library/load_more_button.dart';
 
 /// §39.10 Calibration screen — live over `/api/v1/calibration/*`.
 ///
@@ -69,11 +70,26 @@ class _SessionsTab extends ConsumerWidget {
           return const _EmptyNote(
               'No imaging sessions with light frames yet — capture some lights first.');
         }
+        final hasMore = ref.read(calibrationSessionsProvider.notifier).hasMore;
+        // Lazy builder: paged catalogs can grow well past 200 cards (r3).
         return RefreshIndicator(
           onRefresh: () =>
               ref.read(calibrationSessionsProvider.notifier).refresh(),
-          child: ListView(
-            children: [for (final s in list) _SessionCard(session: s)],
+          child: ListView.builder(
+            itemCount: list.length + (hasMore ? 1 : 0),
+            itemBuilder: (context, i) {
+              if (i == list.length) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: LoadMoreButton(onLoadMore: () => ref
+                        .read(calibrationSessionsProvider.notifier)
+                        .loadMore()),
+                  ),
+                );
+              }
+              return _SessionCard(session: list[i]);
+            },
           ),
         );
       },

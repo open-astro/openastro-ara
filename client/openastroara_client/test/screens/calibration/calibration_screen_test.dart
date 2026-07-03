@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/calibration/calibration_models.dart';
+import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/screens/calibration/calibration_screen.dart';
 import 'package:openastroara/services/calibration_api.dart';
 import 'package:openastroara/state/app_shell_state.dart';
@@ -27,8 +28,9 @@ class _FakeCalibrationClient implements CalibrationClient {
   });
 
   @override
-  Future<List<CalibrationSession>> listSessions({int limit = 50}) async =>
-      sessions;
+  Future<CursorPage<CalibrationSession>> listSessions(
+          {int limit = 200, String? cursor}) async =>
+      CursorPage(items: sessions, nextCursor: null, hasMore: false);
 
   @override
   Future<GeneratedFlatSequence> generateMatchingFlats(

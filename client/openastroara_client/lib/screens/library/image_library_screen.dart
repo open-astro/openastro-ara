@@ -8,6 +8,7 @@ import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
+import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
 import 'live_frame_viewer_screen.dart';
 
@@ -61,41 +62,85 @@ class ImageLibraryScreen extends ConsumerWidget {
           final filter = ref.watch(libraryFilterProvider);
           final visible = list.where(filter.matchesSession).toList();
           if (visible.isEmpty) {
+            final hasMore =
+                ref.read(liveLibrarySessionsProvider.notifier).hasMore;
             return Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Text('No sessions match "${filter.query}".'),
+                if (hasMore) ...[
+                  const SizedBox(height: 4),
+                  Text('More sessions exist on the server — load them to widen the search.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AraColors.textSecondary)),
+                ],
                 const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: () =>
-                      ref.read(libraryFilterProvider.notifier).clear(),
-                  child: const Text('Clear filters'),
-                ),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  OutlinedButton(
+                    onPressed: () =>
+                        ref.read(libraryFilterProvider.notifier).clear(),
+                    child: const Text('Clear filters'),
+                  ),
+                  // A match may live in an unfetched page (r1) — keep paging
+                  // reachable without forcing the user to drop their filter.
+                  if (hasMore) ...[
+                    const SizedBox(width: 8),
+                    LoadMoreButton(onLoadMore: () => ref
+                        .read(liveLibrarySessionsProvider.notifier)
+                        .loadMore()),
+                  ],
+                ]),
               ]),
             );
           }
           final groups = _groupSessions(visible, grouping);
+          // Flatten the grouped view into row descriptors so ListView.builder
+          // constructs cards lazily — paged catalogs grow past 200 rows (r3).
+          final rows = <_LibraryRow>[
+            for (final g in groups) ...[
+              _LibraryRow.header(g.label),
+              for (final s in g.sessions) _LibraryRow.session(s),
+            ],
+          ];
+          final hasMorePages =
+              ref.read(liveLibrarySessionsProvider.notifier).hasMore;
           return Column(
             children: [
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () =>
                       ref.read(liveLibrarySessionsProvider.notifier).refresh(),
-                  child: ListView(
-                    children: [
-                      for (final g in groups) ...[
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                          child: Text(
-                            g.label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(color: AraColors.textSecondary),
+                  child: ListView.builder(
+                    itemCount: rows.length + (hasMorePages ? 1 : 0),
+                    itemBuilder: (context, i) {
+                      if (i == rows.length) {
+                        // Cursor paging: append the next server page on demand.
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: LoadMoreButton(onLoadMore: () => ref
+                                .read(liveLibrarySessionsProvider.notifier)
+                                .loadMore()),
                           ),
+                        );
+                      }
+                      final row = rows[i];
+                      final session = row.session;
+                      if (session != null) {
+                        return _SessionCard(session: session);
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        child: Text(
+                          row.label!,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(color: AraColors.textSecondary),
                         ),
-                        ...g.sessions.map((s) => _SessionCard(session: s)),
-                      ],
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -145,6 +190,14 @@ class _SessionGroup {
   final String label;
   final List<LibrarySession> sessions;
   const _SessionGroup({required this.label, required this.sessions});
+}
+
+/// One lazy list row: either a group header or a session card.
+class _LibraryRow {
+  final String? label;
+  final LibrarySession? session;
+  const _LibraryRow.header(String this.label) : session = null;
+  const _LibraryRow.session(LibrarySession this.session) : label = null;
 }
 
 class _LibraryHeaderBar extends ConsumerWidget {

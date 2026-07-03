@@ -1,15 +1,16 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/calibration/calibration_models.dart';
+import '../models/cursor_page.dart';
 import '../models/server.dart';
 
 /// §39 calibration client (`/api/v1/calibration/*`). Interface first so tests
 /// and future transports can fake it, mirroring `SequenceClient`.
 abstract interface class CalibrationClient {
-  /// First page only, at the server's page-size cap — cursor paging for
-  /// catalogs beyond 200 sessions is tracked in PORT_TODO (§39.10).
-  Future<List<CalibrationSession>> listSessions({int limit = 200});
+  /// One page at the server's cap; pass [cursor] from the previous page's
+  /// [CursorPage.nextCursor] to continue.
+  Future<CursorPage<CalibrationSession>> listSessions(
+      {int limit = 200, String? cursor});
 
   /// Generate matching flats for a session. With [generateOnly] false (the
   /// default) the server persists a runnable §38 sequence and the result
@@ -44,10 +45,11 @@ class CalibrationApi implements CalibrationClient {
             ));
 
   @override
-  Future<List<CalibrationSession>> listSessions({int limit = 200}) async {
+  Future<CursorPage<CalibrationSession>> listSessions(
+      {int limit = 200, String? cursor}) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/calibration/sessions',
-      queryParameters: <String, dynamic>{'limit': limit},
+      queryParameters: <String, dynamic>{'limit': limit, 'cursor': ?cursor},
     );
     final data = res.data;
     // CursorPage envelope { items, next_cursor, has_more }; a 2xx with another
@@ -56,16 +58,17 @@ class CalibrationApi implements CalibrationClient {
       throw FormatException(
           'calibration sessions returned an unexpected body (${data.runtimeType})');
     }
-    if (data['has_more'] == true) {
-      // First-page-only surface (paging tracked in PORT_TODO) — make the
-      // truncation observable in logs like the sequence-list loader does.
-      debugPrint('calibration sessions truncated to first $limit — more exist');
-    }
-    return (data['items'] as List)
+    final items = (data['items'] as List)
         .whereType<Map<String, dynamic>>()
         .map(CalibrationSession.fromJson)
         .where((s) => s.id.isNotEmpty)
         .toList(growable: false);
+    final next = data['next_cursor'];
+    return CursorPage(
+      items: items,
+      nextCursor: next is String && next.isNotEmpty ? next : null,
+      hasMore: data['has_more'] == true,
+    );
   }
 
   @override

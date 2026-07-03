@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/screens/library/image_library_screen.dart';
 import 'package:openastroara/services/library_api.dart';
@@ -13,9 +14,22 @@ class _FakeLibraryClient implements LibraryClient {
   final Map<String, List<LibraryFrameItem>> frames;
   _FakeLibraryClient({this.sessions = const [], this.frames = const {}});
 
+  // When set, the first page reports has_more with this cursor and the second
+  // page (any cursor) returns [moreSessions].
+  List<LibrarySession> moreSessions = const [];
+  bool pageTwoExists = false;
+
   @override
-  Future<List<LibrarySession>> listSessions({int limit = 200}) async =>
-      sessions;
+  Future<CursorPage<LibrarySession>> listSessions(
+      {int limit = 200, String? cursor}) async {
+    if (cursor != null) {
+      return CursorPage(items: moreSessions, nextCursor: null, hasMore: false);
+    }
+    return CursorPage(
+        items: sessions,
+        nextCursor: pageTwoExists ? 'page-2' : null,
+        hasMore: pageTwoExists);
+  }
 
   @override
   Future<List<LibraryFrameItem>> sessionFrames(String sessionId,
@@ -354,6 +368,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.tagged!.$3, ['keeper']);
     expect(find.text('keeper'), findsNothing);
+  });
+
+  testWidgets('cursor paging: Load more appends the next server page',
+      (tester) async {
+    final more = LibrarySession(
+      id: 'sess-2',
+      targetName: 'NGC 6888',
+      sessionStartUtc: DateTime.utc(2026, 6, 20, 22),
+      sessionEndUtc: null,
+      totalFrames: 1,
+      lightFrames: 1,
+      calibrationFrames: 0,
+      filtersUsed: const ['Ha'],
+    );
+    final fake = _FakeLibraryClient(sessions: [_session()])
+      ..pageTwoExists = true
+      ..moreSessions = [more];
+    await _pump(tester, fake);
+
+    expect(find.textContaining('M42'), findsWidgets);
+    expect(find.text('Load more sessions'), findsOneWidget);
+
+    await tester.tap(find.text('Load more sessions'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('NGC 6888'), findsWidgets,
+        reason: 'the second page appends');
+    expect(find.text('Load more sessions'), findsNothing,
+        reason: 'no further pages');
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',

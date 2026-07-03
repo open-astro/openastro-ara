@@ -427,8 +427,9 @@ Clear escape hatch). §50 demo-data retirement SHIPPED: the Stats CSVs stream fr
 render, thumbnail as instant first paint, fetch-generation guard). In-viewer star rating SHIPPED (optimistic single-frame
 edit via the §40.8 bulk endpoint; strips invalidated after). In-viewer tag editing + detail
 metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size rows + tag chips
-with add/remove via the single-id bulk reuse). Still stubbed/tracked: §65.9 manual stretch sliders,
-cursor paging past 200, Move-to-session/Export bulk endpoints.
+with add/remove via the single-id bulk reuse). Cursor paging SHIPPED (Load-more on the library +
+calibration session lists via the shared CursorPage envelope; frame strips stay first-page-only by
+design). Still stubbed/tracked: §65.9 manual stretch sliders, Move-to-session/Export bulk endpoints.
 
 ### §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
 `frames.temperature_c` is NOT NULL and `CameraService.RegisterFrameAsync` coalesces a missing CCD
