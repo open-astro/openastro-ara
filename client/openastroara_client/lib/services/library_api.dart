@@ -29,6 +29,9 @@ abstract interface class LibraryClient {
   Future<void> bulkDelete(List<String> frameIds,
       {bool deleteFromDisk = false});
 
+  /// §40.8 move: reassign frames to another session (422 if it doesn't exist).
+  Future<void> bulkMove(List<String> frameIds, String targetSessionId);
+
   /// §40.6 resume-target: the server persists (or echoes) a runnable §38
   /// sequence seeded from the session and returns its id.
   Future<String> resumeTarget(String sessionId);
@@ -157,6 +160,14 @@ class LibraryApi implements LibraryClient {
       throw const FormatException('frame preview returned an empty body');
     }
     return data;
+  }
+
+  @override
+  Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {
+    await _dio.post<dynamic>('/api/v1/frames/bulk/move', data: <String, dynamic>{
+      'frame_ids': frameIds,
+      'target_session_id': targetSessionId,
+    });
   }
 
   @override

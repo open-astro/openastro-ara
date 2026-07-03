@@ -42,6 +42,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **§28 — sub-second calibration frames are catalogued honestly.** A 0.5 s bias used to be recorded as 1 s (or 0 s when rescanned from FITS — the decimal `EXPTIME` header failed the integer parse); the frames catalog now stores real seconds end-to-end, existing databases are upgraded in place on the daemon's next start, and a camera that doesn't report gain records "unknown" instead of a fake −1.
 
 ### Added
+- **§40.8 — move frames between sessions.** Select frames in the Image Library and file them under a different session (fixing recovered orphans or snapshots that belong with a real run) via a session picker in the bulk bar.
 - **§40 — big catalogs page cleanly.** The Image Library and Calibration session lists load beyond the first 200 sessions with a Load-more button instead of silently truncating.
 - **§40.5 — tags and full capture settings in the viewer.** The frame viewer now shows the frame's recorded gain, offset, sensor temperature, focus position, and dimensions, plus editable tag chips — add or remove tags without leaving the image.
 - **§40.5 — rate frames from the viewer.** A star row under the preview rates the open frame (tap the current rating to clear); the library strips update immediately.

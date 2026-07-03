@@ -112,10 +112,25 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                   'Updated tags on ${ids.length} frame(s).');
                             },
                     ),
-                    // Move-to-session + Export: no server endpoints yet.
-                    const _BulkAction(
-                        icon: Icons.drive_file_move_outlined,
-                        label: 'Move to session'),
+                    _BulkAction(
+                      icon: Icons.drive_file_move_outlined,
+                      label: 'Move to session',
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              final target = await showDialog<String>(
+                                context: context,
+                                builder: (_) => const _SessionPickerDialog(),
+                              );
+                              if (target == null || !context.mounted) return;
+                              await _apply(
+                                  context,
+                                  ref,
+                                  () => api.bulkMove(ids, target),
+                                  'Moved ${ids.length} frame(s).');
+                            },
+                    ),
+                    // Export: no server endpoint yet (tarball per §39.10).
                     const _BulkAction(
                         icon: Icons.file_download_outlined, label: 'Export'),
                     _BulkAction(
@@ -175,6 +190,34 @@ class _BulkAction extends StatelessWidget {
           foregroundColor: destructive ? AraColors.accentBusy : null,
         ),
       ),
+    );
+  }
+}
+
+/// Pick the target session for a bulk move from the loaded session list.
+/// Pops null on cancel.
+class _SessionPickerDialog extends ConsumerWidget {
+  const _SessionPickerDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessions = ref.watch(liveLibrarySessionsProvider).value ?? const [];
+    return SimpleDialog(
+      title: const Text('Move to session'),
+      children: [
+        if (sessions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('No sessions loaded.'),
+          )
+        else
+          for (final s in sessions)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(s.id),
+              child: Text(
+                  '${s.sessionStartUtc.toLocal().toIso8601String().substring(0, 10)} — ${s.targetName}'),
+            ),
+      ],
     );
   }
 }
