@@ -224,7 +224,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
       if (d != null) ...[
         ('Gain', d.gain?.toString() ?? '—'),
         ('Offset', d.offset?.toString() ?? '—'),
-        ('Sensor', '${d.temperatureC.toStringAsFixed(1)}°C'),
+        // 0.0 may be the uncooled-camera sentinel (see LibraryFrameDetail) —
+        // rendered as-is until the server-side nullable pass lands.
+        ('Sensor', d.temperatureC != null ? '${d.temperatureC!.toStringAsFixed(1)}°C' : '—'),
         if (d.focuserPosition != null) ('Focus', '${d.focuserPosition} steps'),
         if (d.width > 0) ('Size', '${d.width}×${d.height}'),
       ],

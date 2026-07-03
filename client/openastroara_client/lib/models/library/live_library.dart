@@ -86,7 +86,11 @@ class LibraryFrameDetail {
   final String id;
   final int? gain;
   final int? offset;
-  final double temperatureC;
+  // Nullable-ready: the wire is NOT NULL today (an uncooled camera records the
+  // 0.0 sentinel — the same anti-pattern §28 removed for gain; the server-side
+  // widening pass is tracked in PORT_TODO). When it lands, null renders as
+  // unknown here with no client change.
+  final double? temperatureC;
   final int? focuserPosition;
   final int width;
   final int height;
@@ -108,7 +112,7 @@ class LibraryFrameDetail {
       id: (json['id'] as String?) ?? '',
       gain: (json['gain'] as num?)?.toInt(),
       offset: (json['offset'] as num?)?.toInt(),
-      temperatureC: (json['temperature_c'] as num?)?.toDouble() ?? 0,
+      temperatureC: (json['temperature_c'] as num?)?.toDouble(),
       focuserPosition: (json['focuser_position'] as num?)?.toInt(),
       width: (json['width'] as num?)?.toInt() ?? 0,
       height: (json['height'] as num?)?.toInt() ?? 0,

@@ -430,6 +430,16 @@ metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size r
 with add/remove via the single-id bulk reuse). Still stubbed/tracked: §65.9 manual stretch sliders,
 cursor paging past 200, Move-to-session/Export bulk endpoints.
 
+### §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
+`frames.temperature_c` is NOT NULL and `CameraService.RegisterFrameAsync` coalesces a missing CCD
+temperature to 0.0 — the same fabricated-sentinel anti-pattern §28 removed for gain (#670), now
+user-visible as "Sensor: 0.0°C" in the frame viewer. Widening to nullable end-to-end is a dedicated
+pass like #670 (column rebuild, FrameDto, readers) **plus a design decision**: the §39 dark-matching
+rules deliberately exploit the sentinel ("uncooled lights/darks still bucket-match at 0.0" —
+documented + tested in SqliteCalibrationServiceTest). NULL-matching semantics must replace that
+(NULL matches NULL, as filters do) before the sentinel goes. Client is already nullable-ready
+(`LibraryFrameDetail.temperatureC` is `double?`, renders unknown as "—").
+
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
 per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at v0.0.1 scale over the
