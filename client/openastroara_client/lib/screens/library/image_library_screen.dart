@@ -61,15 +61,35 @@ class ImageLibraryScreen extends ConsumerWidget {
           final filter = ref.watch(libraryFilterProvider);
           final visible = list.where(filter.matchesSession).toList();
           if (visible.isEmpty) {
+            final hasMore =
+                ref.read(liveLibrarySessionsProvider.notifier).hasMore;
             return Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Text('No sessions match "${filter.query}".'),
+                if (hasMore) ...[
+                  const SizedBox(height: 4),
+                  Text('More sessions exist on the server — load them to widen the search.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AraColors.textSecondary)),
+                ],
                 const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: () =>
-                      ref.read(libraryFilterProvider.notifier).clear(),
-                  child: const Text('Clear filters'),
-                ),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  OutlinedButton(
+                    onPressed: () =>
+                        ref.read(libraryFilterProvider.notifier).clear(),
+                    child: const Text('Clear filters'),
+                  ),
+                  // A match may live in an unfetched page (r1) — keep paging
+                  // reachable without forcing the user to drop their filter.
+                  if (hasMore) ...[
+                    const SizedBox(width: 8),
+                    _LoadMoreButton(onLoadMore: () => ref
+                        .read(liveLibrarySessionsProvider.notifier)
+                        .loadMore()),
+                  ],
+                ]),
               ]),
             );
           }
