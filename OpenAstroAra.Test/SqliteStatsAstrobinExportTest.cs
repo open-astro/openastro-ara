@@ -121,6 +121,26 @@ namespace OpenAstroAra.Test {
                 "duration keeps sub-second precision; unknown gain is blank, never 0");
         }
 
+        [Test]
+        public async Task Sessions_scope_streams_the_per_session_rollup() {
+            // §50: scope=sessions rolls the catalog up one row per session
+            // (frames scope keeps dumping the full frames table).
+            var night = new DateTimeOffset(2026, 5, 5, 21, 0, 0, TimeSpan.Zero);
+            await InsertLightAsync("M31", "Ha", 300, 100, -10.0, night);
+            await InsertLightAsync("M31", "Ha", 0.5, 100, -10.0, night.AddMinutes(10));
+            await InsertFrameAsync("dark", "M31", null, 300, 100, -10.0, night.AddHours(1));
+
+            var result = await _svc.OpenCsvExportAsync("sessions", CancellationToken.None);
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.Value.FileName, Does.StartWith("openastroara-sessions-"));
+            var lines = await ReadAllLinesAsync(result.Value.Stream);
+            Assert.That(lines[0], Is.EqualTo(
+                "session_id,started_utc,ended_utc,target_name,total_frames,light_frames,light_integration_seconds"));
+            Assert.That(lines.Length, Is.EqualTo(2), "header + one session row");
+            Assert.That(lines[1], Does.Contain(",M31,3,2,300.5"),
+                "counts split lights vs total; integration sums real (sub-second) light seconds");
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
 
         private static async Task<string[]> ReadAllLinesAsync(Stream s) {

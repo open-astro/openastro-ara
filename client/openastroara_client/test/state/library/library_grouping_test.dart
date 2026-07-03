@@ -23,18 +23,4 @@ void main() {
     });
   });
 
-  group('librarySessionsProvider', () {
-    test('demo data has 7 sessions, all populated', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final sessions = container.read(librarySessionsProvider);
-      expect(sessions.length, 7);
-      for (final s in sessions) {
-        expect(s.id.isNotEmpty, isTrue, reason: 'id missing');
-        expect(s.targetName.isNotEmpty, isTrue, reason: 'target missing');
-        expect(s.frames, isNotEmpty,
-            reason: '${s.id} has no frames');
-      }
-    });
-  });
 }

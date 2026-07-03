@@ -11,6 +11,10 @@ abstract interface class StatsExportClient {
   /// error or a non-object body (wire contract drift).
   Future<List<StatsTarget>> fetchTargets();
 
+  /// The catalog CSV export (scope: 'frames' or 'sessions') as text, for the
+  /// copy-to-clipboard flow.
+  Future<String> fetchCsv(String scope);
+
   /// Absolute URL of the AstroBin acquisition CSV for [target], for opening in a
   /// browser / save dialog.
   String astrobinExportUrl(String target);
@@ -33,6 +37,20 @@ class StatsExportApi implements StatsExportClient {
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
             ));
+
+  @override
+  Future<String> fetchCsv(String scope) async {
+    final res = await _dio.get<String>(
+      '/api/v1/stats/export/csv',
+      queryParameters: <String, dynamic>{'scope': scope},
+      options: Options(responseType: ResponseType.plain),
+    );
+    final data = res.data;
+    if (data == null || data.isEmpty) {
+      throw const FormatException('stats CSV export returned an empty body');
+    }
+    return data;
+  }
 
   @override
   Future<List<StatsTarget>> fetchTargets() async {
