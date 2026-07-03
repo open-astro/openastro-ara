@@ -261,6 +261,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_non_reuse_set_point_build_ignores_preexisting_coverage() {
+            // r4: ReuseExistingFrames: false asks for FRESH frames — pre-existing matching
+            // darks (same exposure/gain/temperature!) must not light the progress green
+            // before the generated sequence runs.
+            await InsertDarkAsync(300, 100, -10.0);
+            await InsertDarkAsync(300, 100, -10.0);
+            var store = new FileSequenceService(_dir);
+            using var svc = new SqliteDarkLibraryService(_db, store);
+
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [300],
+                GainList: [100],
+                TargetTemperatureCList: [-10.0],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: false), idempotencyKey: null, CancellationToken.None);
+
+            var before = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(before.Status, Is.EqualTo("pending"),
+                "the user asked for fresh darks; old coverage must not complete the build");
+
+            await InsertDarkAsync(300, 100, -10.0);
+            await InsertDarkAsync(300, 100, -10.4); // same bucket, captured after the request
+            var after = await svc.GetStatusAsync(CancellationToken.None);
+            Assert.That(after.Status, Is.EqualTo("complete"));
+        }
+
+        [Test]
+        public void A_temperature_list_of_only_NaN_is_rejected_not_silently_ambient() {
+            using var svc = new SqliteDarkLibraryService(_db);
+            Assert.ThrowsAsync<ArgumentException>(() => svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [60],
+                GainList: [100],
+                TargetTemperatureCList: [double.NaN],
+                FramesPerCombination: 2,
+                ReuseExistingFrames: false), idempotencyKey: null, CancellationToken.None));
+        }
+
+        [Test]
         public async Task A_reuse_ambient_build_counts_preexisting_darks_consistently() {
             // Opposite intent: ReuseExistingFrames opted into any-temperature matching for
             // ambient combos, so the skip AND the status must both count the old frames —

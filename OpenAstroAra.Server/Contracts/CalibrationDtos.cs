@@ -74,7 +74,10 @@ public sealed record DarkLibraryBuildRequestDto(
 /// <summary>GET /api/v1/calibration/dark-library/status body. <c>GeneratedSequenceId</c> is the
 /// runnable §38 sequence the last build request produced (null before any build this daemon
 /// lifetime). Combination progress is coverage-based: a combination counts as completed when the
-/// catalog holds at least FramesPerCombination darks matching it, however they were captured.</summary>
+/// catalog holds at least FramesPerCombination darks matching it. ReuseExistingFrames governs
+/// which frames count, symmetrically with capture: a reuse build counts every matching
+/// catalogued dark; a non-reuse build asked for fresh frames, so only captures made at or after
+/// the build request count.</summary>
 public sealed record DarkLibraryStateDto(
     string Status,
     int TotalCombinations,

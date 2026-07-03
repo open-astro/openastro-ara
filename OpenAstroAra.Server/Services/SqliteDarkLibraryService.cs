@@ -85,8 +85,15 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         // Empty gain list = one combination at camera-default gain (no Gain on the generated
         // TakeExposure); empty temperature list = capture at ambient (no CoolCamera step).
         var gains = (request.GainList ?? Array.Empty<int>()).Distinct().Select(g => (int?)g).DefaultIfEmpty(null).ToList();
-        var temps = (request.TargetTemperatureCList ?? Array.Empty<double>())
-            .Where(double.IsFinite).Distinct().Select(t => (double?)t).DefaultIfEmpty(null).ToList();
+        var rawTemps = request.TargetTemperatureCList ?? Array.Empty<double>();
+        var finiteTemps = rawTemps.Where(double.IsFinite).Distinct().ToList();
+        if (rawTemps.Count > 0 && finiteTemps.Count == 0) {
+            // The caller supplied set-points but every one was NaN/±Inf — silently degrading
+            // to an ambient build would flip the request's meaning (r4). Empty-list = ambient
+            // remains the explicit way to ask for that.
+            throw new ArgumentException("TargetTemperatureCList contains no finite temperature.", nameof(request));
+        }
+        var temps = finiteTemps.Select(t => (double?)t).DefaultIfEmpty(null).ToList();
 
         var combos = new List<(double ExposureSeconds, int? Gain, double? TemperatureC)>();
         foreach (var t in temps) {
@@ -187,18 +194,13 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         var completed = 0;
         await using (var conn = _db.OpenConnection()) {
             foreach (var combo in build.Combinations) {
-                // Set-point combos: coverage is "however captured" — temperature matching makes
-                // any such darks genuinely usable, so pre-existing frames legitimately complete
-                // a combination. Ambient combos have NO temperature predicate, so the same rule
-                // would let unrelated cooled darks from an earlier session mark a build complete
-                // before its sequence ever ran — scope those to frames captured since this
-                // build was requested. Exception: a ReuseExistingFrames build opted into
-                // any-temperature matching for ambient combos (its skip logic already honoured
-                // that), so its status must count the same frames or a reuse-skipped ambient
-                // combination would read "pending" forever.
-                var since = combo.TemperatureC is null && !build.ReuseExisting
-                    ? build.StartedUtc
-                    : (DateTimeOffset?)null;
+                // ReuseExistingFrames governs status symmetrically with capture (r4): a reuse
+                // build counts every matching catalogued dark (its skip logic already treated
+                // them as satisfying the request), while a non-reuse build asked for FRESH
+                // frames — so only captures made since the request count, for set-point and
+                // ambient combos alike. Without that, pre-existing coverage would light the
+                // progress green before the generated sequence ever ran.
+                var since = build.ReuseExisting ? (DateTimeOffset?)null : build.StartedUtc;
                 if (await CoveredCountAsync(conn, combo, since, ct) >= build.FramesPerCombination) {
                     completed++;
                 }
@@ -239,8 +241,12 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
         // ROUND(temperature_c, 0) is the same whole-degree bucket the §39 matching rules use.
-        // The representative file path is the newest frame's (MAX(captured_utc) pairs with it
-        // via the self-ordering trick below); size is the group total.
+        // The representative file path is the newest frame's; size is the group total.
+        // NOTE the correlated newest_path subquery references bare f.exposure_seconds/f.gain/
+        // f.temperature_c from the outer GROUP BY row. That's safe TODAY because those columns
+        // are constant within each group (group-by keys, and temperature_c always lands in the
+        // same rounded bucket) — but it leans on SQLite's bare-column-in-aggregate resolution,
+        // so re-check it if this query ever grows a second aggregate or a non-key column.
         cmd.CommandText = """
             SELECT exposure_seconds,
                    gain,
