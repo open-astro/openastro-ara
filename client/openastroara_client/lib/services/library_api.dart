@@ -17,6 +17,16 @@ abstract interface class LibraryClient {
   /// GET url serving the frame's capture-time thumbnail JPEG (§40.4).
   String thumbnailUrl(String frameId);
 
+  /// §40.8 bulk operations — the server answers 202 and applies them in the
+  /// background; callers refresh after.
+  Future<void> bulkRate(List<String> frameIds, int rating);
+
+  Future<void> bulkTag(List<String> frameIds,
+      {List<String> addTags = const [], List<String> removeTags = const []});
+
+  Future<void> bulkDelete(List<String> frameIds,
+      {bool deleteFromDisk = false});
+
   void close();
 }
 
@@ -59,6 +69,34 @@ class LibraryApi implements LibraryClient {
   @override
   String thumbnailUrl(String frameId) =>
       '$_baseUrl/api/v1/frames/$frameId/thumbnail';
+
+  @override
+  Future<void> bulkRate(List<String> frameIds, int rating) async {
+    await _dio.post<dynamic>('/api/v1/frames/bulk/rate', data: <String, dynamic>{
+      'frame_ids': frameIds,
+      'rating': rating,
+    });
+  }
+
+  @override
+  Future<void> bulkTag(List<String> frameIds,
+      {List<String> addTags = const [],
+      List<String> removeTags = const []}) async {
+    await _dio.post<dynamic>('/api/v1/frames/bulk/tag', data: <String, dynamic>{
+      'frame_ids': frameIds,
+      'add_tags': addTags,
+      'remove_tags': removeTags,
+    });
+  }
+
+  @override
+  Future<void> bulkDelete(List<String> frameIds,
+      {bool deleteFromDisk = false}) async {
+    await _dio.post<dynamic>('/api/v1/frames/bulk/delete', data: <String, dynamic>{
+      'frame_ids': frameIds,
+      'delete_from_disk': deleteFromDisk,
+    });
+  }
 
   /// CursorPage envelope { items, next_cursor, has_more }; a 2xx with another
   /// shape means the wire contract changed — throw so the notifier surfaces it.

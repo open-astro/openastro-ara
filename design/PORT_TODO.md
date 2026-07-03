@@ -413,8 +413,9 @@ cards (light/calibration counts, filters), lazily-loaded frame strips with captu
 (`/frames/{id}/thumbnail`, placeholder on 404), the shared §39.5 [Capture Matching Flats] dialog
 wired with REAL session ids, and a wire-truth `LiveFrameViewerScreen` (pinch-zoom thumbnail +
 list-endpoint metadata; the demo `FrameViewerScreen` deleted). Demo `librarySessionsProvider`
-remains ONLY for the Stats dashboard (§50 live-wiring is its own slice). Still stubbed/tracked:
-bulk ops (12f.3b `/frames/bulk/*`), Resume Target (§40.6), filter/rating/search pills (12f.3),
+remains ONLY for the Stats dashboard (§50 live-wiring is its own slice). 12f.3b bulk ops SHIPPED (Rate/Tag/Delete live against `/frames/bulk/*` with confirm/star/tag dialogs;
+Move-to-session + Export stay disabled — no server endpoints). Still stubbed/tracked:
+Resume Target (§40.6), filter/rating/search pills (12f.3),
 full-res §65 stretched previews + rating/tag editing in the viewer, cursor paging past 200.
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
