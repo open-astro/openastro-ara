@@ -150,6 +150,11 @@ public sealed record BulkMoveRequestDto(
     IReadOnlyList<Guid> FrameIds,
     Guid TargetSessionId);
 
+/// <summary>POST /api/v1/frames/bulk/export body per §39.10/§40.8 — download a
+/// tarball of the selected frames' FITS files for external post-processing.</summary>
+public sealed record BulkExportRequestDto(
+    IReadOnlyList<Guid> FrameIds);
+
 /// <summary>POST /api/v1/frames/bulk/delete body per §40.8.</summary>
 public sealed record BulkDeleteRequestDto(
     IReadOnlyList<Guid> FrameIds,

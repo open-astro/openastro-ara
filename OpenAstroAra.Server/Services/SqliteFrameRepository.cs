@@ -643,6 +643,47 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
     }
 
+    public async Task<(Stream Stream, string FileName)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct) {
+        // Resolve the selected frames' file paths from the catalog.
+        var paths = new List<string>();
+        await using (var conn = _db.OpenConnection()) {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
+            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+            foreach (var frameId in request.FrameIds) {
+                idParam.Value = frameId.ToString();
+                if (await cmd.ExecuteScalarAsync(ct) is string path && path.Length > 0) {
+                    paths.Add(path);
+                }
+            }
+        }
+
+        // Tar the files that actually exist (a rotated volume must not fail the
+        // rest of the selection). Entry names are basenames, deduped by frame
+        // order suffix on collision so nothing silently overwrites in the tar.
+        var ms = new MemoryStream();
+        var exported = 0;
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var tar = new System.Formats.Tar.TarWriter(ms, leaveOpen: true)) {
+            foreach (var path in paths) {
+                if (!File.Exists(path)) continue;
+                var name = Path.GetFileName(path);
+                if (!seenNames.Add(name)) {
+                    name = $"{Path.GetFileNameWithoutExtension(name)}_{exported}{Path.GetExtension(name)}";
+                    seenNames.Add(name);
+                }
+                await tar.WriteEntryAsync(path, name, ct);
+                exported++;
+            }
+        }
+        if (exported == 0) {
+            await ms.DisposeAsync();
+            return null;
+        }
+        ms.Position = 0;
+        return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar");
+    }
+
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's

@@ -1,3 +1,5 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -130,9 +132,37 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                   'Moved ${ids.length} frame(s).');
                             },
                     ),
-                    // Export: no server endpoint yet (tarball per §39.10).
-                    const _BulkAction(
-                        icon: Icons.file_download_outlined, label: 'Export'),
+                    _BulkAction(
+                      icon: Icons.file_download_outlined,
+                      label: 'Export',
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              // §39.10: tar of the selected FITS files via the
+                              // OS save dialog (the sequence-export idiom).
+                              final (bytes, fileName) = await (() async {
+                                try {
+                                  return await api.exportFrames(ids);
+                                } on Exception catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Export failed: $e')));
+                                  }
+                                  return (const <int>[], '');
+                                }
+                              })();
+                              if (bytes.isEmpty || !context.mounted) return;
+                              final saved = await frameExportSaver(
+                                  fileName, Uint8List.fromList(bytes));
+                              if (saved == null || !context.mounted) return;
+                              ref
+                                  .read(librarySelectionProvider.notifier)
+                                  .clear();
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(
+                                      'Exported ${ids.length} frame(s) → ${saved.split(RegExp(r'[/\\]')).last}')));
+                            },
+                    ),
                     _BulkAction(
                       icon: Icons.delete_outline,
                       label: 'Delete',
@@ -193,6 +223,18 @@ class _BulkAction extends StatelessWidget {
     );
   }
 }
+
+/// Writes the export tar via the OS save dialog. Swappable in widget tests
+/// (the real FilePicker plugin isn't available there).
+@visibleForTesting
+Future<String?> Function(String fileName, Uint8List bytes) frameExportSaver =
+    (fileName, bytes) => FilePicker.saveFile(
+          dialogTitle: 'Export frames',
+          fileName: fileName,
+          type: FileType.custom,
+          allowedExtensions: const ['tar'],
+          bytes: bytes,
+        );
 
 /// Pick the target session for a bulk move from the loaded session list.
 /// Pops null on cancel.

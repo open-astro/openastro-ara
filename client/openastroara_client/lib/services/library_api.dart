@@ -32,6 +32,10 @@ abstract interface class LibraryClient {
   /// §40.8 move: reassign frames to another session (422 if it doesn't exist).
   Future<void> bulkMove(List<String> frameIds, String targetSessionId);
 
+  /// §39.10 export: tar bytes of the selected frames' FITS files (server skips
+  /// files missing on disk; 404 when nothing was exportable).
+  Future<(List<int> bytes, String fileName)> exportFrames(List<String> frameIds);
+
   /// §40.6 resume-target: the server persists (or echoes) a runnable §38
   /// sequence seeded from the session and returns its id.
   Future<String> resumeTarget(String sessionId);
@@ -179,6 +183,23 @@ class LibraryApi implements LibraryClient {
       'frame_ids': frameIds,
       'target_session_id': targetSessionId,
     });
+  }
+
+  @override
+  Future<(List<int>, String)> exportFrames(List<String> frameIds) async {
+    final res = await _dio.post<List<int>>(
+      '/api/v1/frames/bulk/export',
+      data: <String, dynamic>{'frame_ids': frameIds},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = res.data;
+    if (data == null || data.isEmpty) {
+      throw const FormatException('frame export returned an empty body');
+    }
+    // The server names the tar via Content-Disposition; fall back sanely.
+    final disposition = res.headers.value('content-disposition') ?? '';
+    final match = RegExp('filename="?([^";]+)"?').firstMatch(disposition);
+    return (data, match?.group(1) ?? 'openastroara-frames.tar');
   }
 
   @override

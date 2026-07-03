@@ -128,6 +128,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Bulk_export_tars_the_existing_files_and_skips_missing() {
+            var (idA, fitsA) = await InsertFrameWithFilesAsync();
+            var (idB, fitsB) = await InsertFrameWithFilesAsync();
+            File.Delete(fitsB); // rotated volume — must not fail the rest
+
+            var result = await _repo.BulkExportAsync(
+                new BulkExportRequestDto(FrameIds: [idA, idB]), CancellationToken.None);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.Value.FileName, Does.StartWith("openastroara-frames-").And.EndWith(".tar"));
+            var names = new List<string>();
+            await using (var tar = new System.Formats.Tar.TarReader(result.Value.Stream)) {
+                while (await tar.GetNextEntryAsync(cancellationToken: CancellationToken.None) is { } entry) {
+                    names.Add(entry.Name);
+                }
+            }
+            Assert.That(names, Is.EqualTo(new[] { Path.GetFileName(fitsA) }),
+                "the existing file is in the tar; the missing one is skipped");
+        }
+
+        [Test]
+        public async Task Bulk_export_with_nothing_exportable_returns_null() {
+            var (id, fits) = await InsertFrameWithFilesAsync();
+            File.Delete(fits);
+            var result = await _repo.BulkExportAsync(
+                new BulkExportRequestDto(FrameIds: [id, Guid.NewGuid()]), CancellationToken.None);
+            Assert.That(result, Is.Null, "unknown ids + missing files -> the endpoint 404s");
+        }
+
+        [Test]
         public async Task Catalog_only_delete_leaves_the_files_on_disk() {
             var (id, fits) = await InsertFrameWithFilesAsync();
 
