@@ -41,6 +41,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   String? _error;
   // Guards against a slow older fetch overwriting a newer palette choice.
   int _fetchGen = 0;
+  // Local echo of the rating after an edit (the list item is immutable).
+  late int _rating = widget.frame.rating;
+  bool _ratingBusy = false;
 
   @override
   void initState() {
@@ -83,6 +86,31 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     }
   }
 
+  Future<void> _setRating(int rating) async {
+    final api = ref.read(libraryApiProvider);
+    if (api == null) return;
+    final previous = _rating;
+    setState(() {
+      _rating = rating; // optimistic — reverted on failure
+      _ratingBusy = true;
+    });
+    try {
+      await api.bulkRate([widget.frame.id], rating);
+      if (!mounted) return;
+      setState(() => _ratingBusy = false);
+      // The list item behind this viewer is stale now — refresh the strips.
+      ref.invalidate(sessionFramesProvider);
+    } on Exception catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _rating = previous;
+        _ratingBusy = false;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Rating failed: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final api = ref.watch(libraryApiProvider);
@@ -97,7 +125,6 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
       ('Exposure', '${exposure}s'),
       ('HFR', f.hfr?.toStringAsFixed(2) ?? '—'),
       ('Stars', f.starCount?.toString() ?? '—'),
-      ('Rating', f.rating > 0 ? '${f.rating}/5' : '—'),
       ('Captured', f.capturedUtc.toIso8601String()),
     ];
 
@@ -187,16 +214,48 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
             width: double.infinity,
             color: AraColors.bgPanel,
             padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 24,
-              runSpacing: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final (label, value) in rows)
-                  Text('$label: $value',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: AraColors.textSecondary)),
+                // §40.5 rating editor — reuses the §40.8 bulk endpoint with a
+                // single id; tapping the current rating clears it.
+                Row(children: [
+                  for (var star = 1; star <= 5; star++)
+                    InkWell(
+                      onTap: _ratingBusy || api == null
+                          ? null
+                          : () => _setRating(star == _rating ? 0 : star),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Icon(
+                          star <= _rating ? Icons.star : Icons.star_border,
+                          size: 18,
+                          color: star <= _rating
+                              ? AraColors.accentBusy
+                              : AraColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  if (_ratingBusy)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: SizedBox(
+                          width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ),
+                ]),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 24,
+                  runSpacing: 6,
+                  children: [
+                    for (final (label, value) in rows)
+                      Text('$label: $value',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: AraColors.textSecondary)),
+                  ],
+                ),
               ],
             ),
           ),
