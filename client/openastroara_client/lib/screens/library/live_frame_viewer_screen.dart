@@ -78,6 +78,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   // dropdown reverts to this so the picker never claims a render that didn't
   // happen (r1).
   String? _loadedStretch;
+  // The knob values the visible manual render used — snapped back on a failed
+  // re-render so the sliders never disagree with the pixels (r1).
+  (double, double, double)? _loadedKnobs;
   bool _loading = false;
   String? _error;
   // Guards against a slow older fetch overwriting a newer palette choice.
@@ -193,6 +196,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         // a full-resolution image on every palette switch (r1).
         _preview = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
         _loadedStretch = requested;
+        if (requested == 'manual') {
+          _loadedKnobs = (_black, _midtone, _white);
+        }
         _loading = false;
       });
     } on Exception catch (e) {
@@ -202,9 +208,16 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
         _error = 'Preview unavailable: $e';
         // Keep the last good render on screen, but snap the picker back to
         // the palette it was actually rendered with (r1: the dropdown must
-        // never read as if the failed palette succeeded).
+        // never read as if the failed palette succeeded) — and the sliders
+        // back to the knobs of the visible render, so a re-drag doesn't
+        // resend the failing values and the UI matches the pixels.
         if (_loadedStretch != null) {
           _stretch = _loadedStretch!;
+        }
+        if (_loadedKnobs case (final b, final m, final w)) {
+          _black = b;
+          _midtone = m;
+          _white = w;
         }
       });
     }
@@ -279,6 +292,9 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
                 ? null
                 : (v) {
                     if (v == null || v == _stretch) return;
+                    // A pending slider debounce must not re-fetch after the
+                    // palette switch already rendered (r1).
+                    _sliderDebounce?.cancel();
                     setState(() => _stretch = v);
                     _load();
                   },
