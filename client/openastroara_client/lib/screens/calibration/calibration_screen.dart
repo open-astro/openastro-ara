@@ -6,6 +6,7 @@ import '../../state/app_shell_state.dart';
 import '../../state/calibration/calibration_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/library/load_more_button.dart';
 
 /// §39.10 Calibration screen — live over `/api/v1/calibration/*`.
 ///
@@ -69,22 +70,26 @@ class _SessionsTab extends ConsumerWidget {
           return const _EmptyNote(
               'No imaging sessions with light frames yet — capture some lights first.');
         }
+        final hasMore = ref.read(calibrationSessionsProvider.notifier).hasMore;
+        // Lazy builder: paged catalogs can grow well past 200 cards (r3).
         return RefreshIndicator(
           onRefresh: () =>
               ref.read(calibrationSessionsProvider.notifier).refresh(),
-          child: ListView(
-            children: [
-              for (final s in list) _SessionCard(session: s),
-              if (ref.read(calibrationSessionsProvider.notifier).hasMore)
-                Center(
+          child: ListView.builder(
+            itemCount: list.length + (hasMore ? 1 : 0),
+            itemBuilder: (context, i) {
+              if (i == list.length) {
+                return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: _LoadMoreButton(onLoadMore: () => ref
+                    child: LoadMoreButton(onLoadMore: () => ref
                         .read(calibrationSessionsProvider.notifier)
                         .loadMore()),
                   ),
-                ),
-            ],
+                );
+              }
+              return _SessionCard(session: list[i]);
+            },
           ),
         );
       },
@@ -629,41 +634,6 @@ class _ErrorRetry extends StatelessWidget {
           OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
-    );
-  }
-}
-
-/// Load-more with a local in-flight spinner; the notifier's own guard makes
-/// double-taps a no-op even if this widget's state lags (r1).
-class _LoadMoreButton extends StatefulWidget {
-  final Future<void> Function() onLoadMore;
-  const _LoadMoreButton({required this.onLoadMore});
-
-  @override
-  State<_LoadMoreButton> createState() => _LoadMoreButtonState();
-}
-
-class _LoadMoreButtonState extends State<_LoadMoreButton> {
-  bool _busy = false;
-
-  Future<void> _tap() async {
-    setState(() => _busy = true);
-    try {
-      await widget.onLoadMore();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: _busy ? null : _tap,
-      icon: _busy
-          ? const SizedBox(
-              width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.expand_more, size: 16),
-      label: const Text('Load more sessions'),
     );
   }
 }

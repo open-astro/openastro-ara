@@ -8,6 +8,7 @@ import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
+import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
 import 'live_frame_viewer_screen.dart';
 
@@ -85,7 +86,7 @@ class ImageLibraryScreen extends ConsumerWidget {
                   // reachable without forcing the user to drop their filter.
                   if (hasMore) ...[
                     const SizedBox(width: 8),
-                    _LoadMoreButton(onLoadMore: () => ref
+                    LoadMoreButton(onLoadMore: () => ref
                         .read(liveLibrarySessionsProvider.notifier)
                         .loadMore()),
                   ],
@@ -94,40 +95,52 @@ class ImageLibraryScreen extends ConsumerWidget {
             );
           }
           final groups = _groupSessions(visible, grouping);
+          // Flatten the grouped view into row descriptors so ListView.builder
+          // constructs cards lazily — paged catalogs grow past 200 rows (r3).
+          final rows = <_LibraryRow>[
+            for (final g in groups) ...[
+              _LibraryRow.header(g.label),
+              for (final s in g.sessions) _LibraryRow.session(s),
+            ],
+          ];
+          final hasMorePages =
+              ref.read(liveLibrarySessionsProvider.notifier).hasMore;
           return Column(
             children: [
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () =>
                       ref.read(liveLibrarySessionsProvider.notifier).refresh(),
-                  child: ListView(
-                    children: [
-                      for (final g in groups) ...[
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                          child: Text(
-                            g.label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(color: AraColors.textSecondary),
-                          ),
-                        ),
-                          ...g.sessions.map((s) => _SessionCard(session: s)),
-                      ],
-                      // Cursor paging: append the next server page on demand.
-                      if (ref
-                          .read(liveLibrarySessionsProvider.notifier)
-                          .hasMore)
-                        Center(
+                  child: ListView.builder(
+                    itemCount: rows.length + (hasMorePages ? 1 : 0),
+                    itemBuilder: (context, i) {
+                      if (i == rows.length) {
+                        // Cursor paging: append the next server page on demand.
+                        return Center(
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            child: _LoadMoreButton(onLoadMore: () => ref
+                            child: LoadMoreButton(onLoadMore: () => ref
                                 .read(liveLibrarySessionsProvider.notifier)
                                 .loadMore()),
                           ),
+                        );
+                      }
+                      final row = rows[i];
+                      final session = row.session;
+                      if (session != null) {
+                        return _SessionCard(session: session);
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        child: Text(
+                          row.label!,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(color: AraColors.textSecondary),
                         ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -177,6 +190,14 @@ class _SessionGroup {
   final String label;
   final List<LibrarySession> sessions;
   const _SessionGroup({required this.label, required this.sessions});
+}
+
+/// One lazy list row: either a group header or a session card.
+class _LibraryRow {
+  final String? label;
+  final LibrarySession? session;
+  const _LibraryRow.header(String this.label) : session = null;
+  const _LibraryRow.session(LibrarySession this.session) : label = null;
 }
 
 class _LibraryHeaderBar extends ConsumerWidget {
@@ -558,41 +579,6 @@ class _FrameStrip extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// Load-more with a local in-flight spinner; the notifier's own guard makes
-/// double-taps a no-op even if this widget's state lags (r1).
-class _LoadMoreButton extends StatefulWidget {
-  final Future<void> Function() onLoadMore;
-  const _LoadMoreButton({required this.onLoadMore});
-
-  @override
-  State<_LoadMoreButton> createState() => _LoadMoreButtonState();
-}
-
-class _LoadMoreButtonState extends State<_LoadMoreButton> {
-  bool _busy = false;
-
-  Future<void> _tap() async {
-    setState(() => _busy = true);
-    try {
-      await widget.onLoadMore();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: _busy ? null : _tap,
-      icon: _busy
-          ? const SizedBox(
-              width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.expand_more, size: 16),
-      label: const Text('Load more sessions'),
     );
   }
 }

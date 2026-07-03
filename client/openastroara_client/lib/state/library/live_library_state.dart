@@ -40,8 +40,6 @@ class LiveLibrarySessionsNotifier
   /// Whether a further page exists for the Load-more affordance.
   bool get hasMore => _hasMore;
 
-  /// True while a loadMore() request is in flight (drives the button spinner).
-  bool get isLoadingMore => _loadingMore;
 
   @override
   Future<List<LibrarySession>?> build() async {
