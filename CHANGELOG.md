@@ -42,6 +42,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **§28 — sub-second calibration frames are catalogued honestly.** A 0.5 s bias used to be recorded as 1 s (or 0 s when rescanned from FITS — the decimal `EXPTIME` header failed the integer parse); the frames catalog now stores real seconds end-to-end, existing databases are upgraded in place on the daemon's next start, and a camera that doesn't report gain records "unknown" instead of a fake −1.
 
 ### Added
+- **§39.10 — export frames for post-processing.** Select frames in the Image Library and Export downloads a tar of their FITS files via the OS save dialog — ready for PixInsight, Siril, or anything else. That completes the bulk bar: rate, tag, move, export, delete are all live.
 - **§65.9 — manual stretch sliders in the frame viewer.** Pick the "manual" palette and shape the stretch yourself: black point, midtone, and white point sliders re-render the full-resolution preview as you drag (debounced to keep the daemon happy on LAN).
 - **§40.8 — move frames between sessions.** Select frames in the Image Library and file them under a different session (fixing recovered orphans or snapshots that belong with a real run) via a session picker in the bulk bar.
 - **§40 — big catalogs page cleanly.** The Image Library and Calibration session lists load beyond the first 200 sessions with a Load-more button instead of silently truncating.

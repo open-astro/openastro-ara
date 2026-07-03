@@ -643,6 +643,76 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
     }
 
+    public async Task<(Stream Stream, string FileName, int ExportedCount)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct) {
+        // Resolve the selected frames' file paths from the catalog.
+        var paths = new List<string>();
+        await using (var conn = _db.OpenConnection()) {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
+            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+            foreach (var frameId in request.FrameIds) {
+                idParam.Value = frameId.ToString();
+                if (await cmd.ExecuteScalarAsync(ct) is string path && path.Length > 0) {
+                    paths.Add(path);
+                }
+            }
+        }
+
+        // Tar the files that actually exist (a rotated volume must not fail the
+        // rest of the selection). Entry names are basenames, deduped by frame
+        // order suffix on collision so nothing silently overwrites in the tar.
+        var ms = new MemoryStream();
+        var exported = 0;
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var tar = new System.Formats.Tar.TarWriter(ms, leaveOpen: true)) {
+            foreach (var path in paths) {
+                if (!File.Exists(path)) continue;
+                var name = Path.GetFileName(path);
+                if (!seenNames.Add(name)) {
+                    // Suffix until genuinely unique (r2): a single "_<n>" rename can
+                    // itself collide with a basename already in the set — e.g.
+                    // frame_2.fits, frame.fits, frame.fits would produce two
+                    // frame_2.fits entries and extractors silently clobber.
+                    var stem = Path.GetFileNameWithoutExtension(name);
+                    var ext = Path.GetExtension(name);
+                    var suffix = 1;
+                    string candidate;
+                    do {
+                        candidate = $"{stem}_{suffix++}{ext}";
+                    } while (!seenNames.Add(candidate));
+                    name = candidate;
+                }
+                // Snapshot the archive position: a failure MID-copy (after the
+                // entry header + partial data hit the stream) would otherwise
+                // leave bytes that corrupt alignment for every later entry (r3).
+                var positionBefore = ms.Position;
+                try {
+                    await tar.WriteEntryAsync(path, name, ct);
+                } catch (Exception ex) when (
+                        ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException
+                        || (ex is IOException && !File.Exists(path))) {
+                    // The file vanished between the existence check and the write
+                    // (r1 TOCTOU) — un-write any partial entry and skip it; the
+                    // rest of the selection still exports. A generic IOException
+                    // with the file STILL present is a real failure (e.g. the
+                    // in-memory archive hitting MemoryStream capacity) and must
+                    // surface, not masquerade as a missing file (r2).
+                    ms.SetLength(positionBefore);
+                    ms.Position = positionBefore;
+                    seenNames.Remove(name);
+                    continue;
+                }
+                exported++;
+            }
+        }
+        if (exported == 0) {
+            await ms.DisposeAsync();
+            return null;
+        }
+        ms.Position = 0;
+        return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar", exported);
+    }
+
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's

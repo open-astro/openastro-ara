@@ -5,6 +5,7 @@ import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/screens/library/image_library_screen.dart';
 import 'package:openastroara/services/library_api.dart';
+import 'package:openastroara/widgets/library/bulk_action_bar.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -88,6 +89,13 @@ class _FakeLibraryClient implements LibraryClient {
   (List<String>, List<String>, List<String>)? tagged;
   (List<String>, bool)? deleted;
   (List<String>, String)? moved;
+  List<String>? exported;
+
+  @override
+  Future<(List<int>, String, int)> exportFrames(List<String> frameIds) async {
+    exported = frameIds;
+    return ([1, 2, 3], 'openastroara-frames-test.tar', frameIds.length);
+  }
 
   @override
   Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {
@@ -473,6 +481,34 @@ void main() {
         reason: 'the debounced render carried the dragged midtone');
     expect(requestsBeforeQuiet!.$2, 0.5,
         reason: 'no render fired inside the 200 ms quiet window');
+  });
+
+  testWidgets('§39.10: Export fetches the tar and saves via the injected saver',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [_frame('f1')],
+    });
+    (String, int)? savedCall;
+    final previousSaver = frameExportSaver;
+    frameExportSaver = (fileName, bytes) async {
+      savedCall = (fileName, bytes.length);
+      return '/tmp/$fileName';
+    };
+    addTearDown(() => frameExportSaver = previousSaver);
+    await _pump(tester, fake);
+
+    await tester.longPress(find.text('Ha').first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Export'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export'));
+    await tester.pumpAndSettle();
+
+    expect(fake.exported, ['f1']);
+    expect(savedCall, ('openastroara-frames-test.tar', 3));
+    expect(find.text('1 selected'), findsNothing, reason: 'selection clears');
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',

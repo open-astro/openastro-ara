@@ -139,6 +139,22 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("BulkMoveFrames");
 
+        frames.MapPost("/bulk/export",
+                async (HttpContext http, IFrameRepository repo, [FromBody] BulkExportRequestDto request, CancellationToken ct) => {
+                    var result = await repo.BulkExportAsync(request, ct);
+                    if (result is null) return Results.NotFound();
+                    // Export is partial-success by design (missing files skip) —
+                    // tell the client how many actually made it into the tar so
+                    // it can report honestly (r2).
+                    http.Response.Headers["X-Ara-Exported-Count"] =
+                        result.Value.ExportedCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    return Results.Stream(result.Value.Stream, "application/x-tar", result.Value.FileName);
+                })
+            .Accepts<BulkExportRequestDto>("application/json")
+            .Produces<byte[]>(StatusCodes.Status200OK, "application/x-tar")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("BulkExportFrames");
+
         frames.MapPost("/bulk/delete",
                 async (IFrameRepository repo, [FromBody] BulkDeleteRequestDto request,
                        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,

@@ -65,6 +65,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(OpenAstroAra.Server.Services.BackupManifest))]
 [JsonSerializable(typeof(BestFrameDto))]
 [JsonSerializable(typeof(BugReportPreparationDto))]
+[JsonSerializable(typeof(BulkExportRequestDto))]
 [JsonSerializable(typeof(BulkMoveRequestDto))]
 [JsonSerializable(typeof(BulkDeleteRequestDto))]
 [JsonSerializable(typeof(BulkRateRequestDto))]
