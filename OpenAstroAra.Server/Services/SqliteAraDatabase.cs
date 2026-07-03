@@ -320,7 +320,14 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 focuser_position   INTEGER,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             );
-            INSERT INTO frames_widened SELECT * FROM frames;
+            INSERT INTO frames_widened
+                SELECT id, session_id, target_name, frame_type, filter_name,
+                       exposure_seconds, gain, "offset", temperature_c,
+                       captured_utc, file_path, file_size_bytes, width, height,
+                       bit_depth, hfr, star_count, eccentricity,
+                       guiding_rms_arcsec, snr_estimate, quality_score_json,
+                       rating, tags_json, focuser_position
+                FROM frames;
             DROP TABLE frames;
             ALTER TABLE frames_widened RENAME TO frames;
             CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);
