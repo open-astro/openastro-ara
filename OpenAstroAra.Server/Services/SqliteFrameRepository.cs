@@ -672,7 +672,15 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     name = $"{Path.GetFileNameWithoutExtension(name)}_{exported}{Path.GetExtension(name)}";
                     seenNames.Add(name);
                 }
-                await tar.WriteEntryAsync(path, name, ct);
+                try {
+                    await tar.WriteEntryAsync(path, name, ct);
+                } catch (Exception ex) when (ex is IOException or FileNotFoundException or UnauthorizedAccessException) {
+                    // The file vanished between the existence check and the write
+                    // (r1 TOCTOU) — skip it like the check would have; the rest of
+                    // the selection still exports.
+                    seenNames.Remove(name);
+                    continue;
+                }
                 exported++;
             }
         }
