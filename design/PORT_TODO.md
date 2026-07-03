@@ -424,8 +424,9 @@ Clear escape hatch). §50 demo-data retirement SHIPPED: the Stats CSVs stream fr
 (scope=sessions now a real per-session rollup server-side; scope=frames the full table), and the
 12f.1/12g.2 in-memory demo sessions are deleted — every Stats/Library surface is catalog-backed.
 §65 stretched previews SHIPPED in the viewer (palette picker -> POST /frames/{id}/preview full-res
-render, thumbnail as instant first paint, fetch-generation guard). Still stubbed/tracked: §65.9 manual
-stretch sliders + rating/tag editing in the viewer, cursor paging past 200, Move-to-session/Export
+render, thumbnail as instant first paint, fetch-generation guard). In-viewer star rating SHIPPED (optimistic single-frame
+edit via the §40.8 bulk endpoint; strips invalidated after). Still stubbed/tracked: §65.9 manual
+stretch sliders + tag editing in the viewer, cursor paging past 200, Move-to-session/Export
 bulk endpoints.
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)

@@ -281,6 +281,33 @@ void main() {
     expect(fake.previewRequest!.$2, 'asinh');
   });
 
+  testWidgets('§40.5: the viewer star row rates the single frame optimistically',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [_frame('f1')],
+    });
+    await _pump(tester, fake);
+
+    await tester.tap(find.text('Ha'));
+    await tester.pumpAndSettle();
+
+    // Four filled stars after tapping the fourth star.
+    await tester.tap(find.byIcon(Icons.star_border).at(3));
+    await tester.pumpAndSettle();
+    expect(fake.rated, isNotNull);
+    expect(fake.rated!.$1, ['f1']);
+    expect(fake.rated!.$2, 4);
+    expect(find.byIcon(Icons.star), findsNWidgets(4));
+
+    // Tapping the current rating clears it (0).
+    await tester.tap(find.byIcon(Icons.star).at(3));
+    await tester.pumpAndSettle();
+    expect(fake.rated!.$2, 0);
+    expect(find.byIcon(Icons.star), findsNothing);
+  });
+
   testWidgets('an empty catalog explains itself instead of showing demo data',
       (tester) async {
     await _pump(tester, _FakeLibraryClient());
