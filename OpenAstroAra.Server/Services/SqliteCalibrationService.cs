@@ -41,10 +41,21 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // prior placeholder default so a plan always carries a usable target unless the caller overrides it.
     private const int DefaultTargetAdu = 32000;
 
-    private readonly IAraDatabase _db;
+    // §39.5 flats need a panel-calibrated exposure; until the flat-device instruction ships
+    // (deferred — see PORT_TODO), the generated TakeExposure uses this conventional starting
+    // point and the user tunes it against their panel. TargetAdu stays advisory in the plan.
+    private const double DefaultFlatExposureSec = 1.0;
 
-    public SqliteCalibrationService(IAraDatabase db) {
+    private readonly IAraDatabase _db;
+    private readonly ISequenceService? _sequences;
+
+    /// <param name="db">The §28 frame catalog.</param>
+    /// <param name="sequences">The §38 sequence store the generated matching-flats sequence is
+    /// persisted into. Null (test/bootstrap contexts only — Program.cs always wires the real
+    /// store) degrades generation to plan-only, exactly as if the caller set GenerateOnly.</param>
+    public SqliteCalibrationService(IAraDatabase db, ISequenceService? sequences = null) {
         _db = db;
+        _sequences = sequences;
     }
 
     public async Task<CursorPage<CalibrationSessionDto>> ListSessionsAsync(int limit, string? cursor, CancellationToken ct) {
@@ -108,7 +119,9 @@ public sealed class SqliteCalibrationService : ICalibrationService {
 
         var frameCount = request.OverrideFrameCount is int n && n > 0 ? n : DefaultFlatFrames;
         var targetAdu = request.OverrideTargetAdu ?? DefaultTargetAdu;
+        var captureSettings = await ModalCaptureSettingsByFilterAsync(conn, sessionId, ct);
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);
+        var specs = new List<FlatStepSpec>(session.FiltersUsed.Count);
         var total = 0;
         foreach (var filter in session.FiltersUsed) {
             steps.Add(new GeneratedFlatStepDto(
@@ -116,17 +129,72 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 FrameCount: frameCount,
                 TargetAdu: targetAdu,
                 PanelBrightness: null));
+            var settings = captureSettings.GetValueOrDefault(filter.FilterName);
+            specs.Add(new FlatStepSpec(
+                FilterName: filter.FilterName == NoFilter ? null : filter.FilterName,
+                FrameCount: frameCount,
+                ExposureSeconds: DefaultFlatExposureSec,
+                Gain: settings?.Gain,
+                Offset: settings?.Offset,
+                FocuserPosition: settings?.FocuserPosition));
             total += frameCount;
         }
 
-        // v0.0.1 returns the PLAN (one step per light filter). Enqueuing it as a runnable flat sequence is a
-        // follow-up that needs the §38 sequence service; GenerateOnly is honoured by simply never persisting.
+        var name = $"Flats — {session.TargetName}";
+
+        // §39.5: materialize the plan into a runnable §38 sequence unless the caller asked for the
+        // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
+        // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
+        Guid? generatedId = null;
+        if (!request.GenerateOnly && _sequences is not null) {
+            var body = CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs);
+            var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
+                Name: name,
+                Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",
+                Body: body,
+                TemplateOrigin: "calibration:matching-flats"), idempotencyKey: null, ct);
+            generatedId = created.Id;
+        }
+
         return new GeneratedFlatSequenceDto(
             SourceSessionId: sessionId,
-            GeneratedSequenceId: Guid.NewGuid(),
-            GeneratedSequenceName: $"Flats — {session.TargetName}",
+            GeneratedSequenceId: generatedId,
+            GeneratedSequenceName: name,
             TotalFlatFrames: total,
             Steps: steps);
+    }
+
+    private sealed record ModalCaptureSettings(int? Gain, int? Offset, int? FocuserPosition);
+
+    // The per-filter capture settings the session's lights actually used, so the generated flats
+    // replay them (§39.5: gain/offset must match for the calibration to apply; focus per filter so
+    // dust shadows align). "Modal" = the most frequent (gain, offset, focuser) combination per
+    // filter — a mid-session change loses the minority combination, which is the standard
+    // one-flat-set-per-filter trade-off.
+    private static async Task<Dictionary<string, ModalCaptureSettings>> ModalCaptureSettingsByFilterAsync(
+            SqliteConnection conn, Guid sessionId, CancellationToken ct) {
+        var result = new Dictionary<string, ModalCaptureSettings>(StringComparer.Ordinal);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT filter_name, gain, "offset", focuser_position, COUNT(*) AS c
+            FROM frames
+            WHERE frame_type = 'light' AND session_id = $sid
+            GROUP BY filter_name, gain, "offset", focuser_position
+            ORDER BY c DESC;
+            """;
+        cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            var filter = await reader.IsDBNullAsync(0, ct) ? NoFilter : reader.GetString(0);
+            if (result.ContainsKey(filter)) {
+                continue; // rows are frequency-ordered; the first per filter is the modal combo
+            }
+            result[filter] = new ModalCaptureSettings(
+                Gain: await reader.IsDBNullAsync(1, ct) ? null : reader.GetInt32(1),
+                Offset: await reader.IsDBNullAsync(2, ct) ? null : reader.GetInt32(2),
+                FocuserPosition: await reader.IsDBNullAsync(3, ct) ? null : reader.GetInt32(3));
+        }
+        return result;
     }
 
     private static async Task<CalibrationSessionDto?> BuildSessionDtoAsync(SqliteConnection conn, Guid sessionId, CancellationToken ct) {

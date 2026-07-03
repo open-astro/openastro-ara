@@ -43,10 +43,13 @@ public sealed record MatchingFlatsRequestDto(
     int? OverrideTargetAdu,
     bool GenerateOnly);
 
-/// <summary>Sequence the server generated to capture matching flats for the session.</summary>
+/// <summary>Sequence the server generated to capture matching flats for the session.
+/// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via
+/// <c>POST /api/v1/sequences/{id}/start</c>); null when the caller asked for the plan
+/// only (<c>GenerateOnly</c>).</summary>
 public sealed record GeneratedFlatSequenceDto(
     Guid SourceSessionId,
-    Guid GeneratedSequenceId,
+    Guid? GeneratedSequenceId,
     string GeneratedSequenceName,
     int TotalFlatFrames,
     IReadOnlyList<GeneratedFlatStepDto> Steps);

@@ -56,10 +56,15 @@ public static class CalibrationEndpoints {
                     var session = await svc.GetSessionAsync(id, ct);
                     if (session is null) return Results.NotFound();
                     var generated = await svc.GenerateMatchingFlatsAsync(id, request, ct);
-                    return Results.Created($"/api/v1/sequences/{generated.GeneratedSequenceId}", generated);
+                    // 201 + Location when a runnable sequence was persisted; a GenerateOnly
+                    // plan has nothing at any location, so it's a plain 200.
+                    return generated.GeneratedSequenceId is Guid seqId
+                        ? Results.Created($"/api/v1/sequences/{seqId}", generated)
+                        : Results.Ok(generated);
                 })
             .Accepts<MatchingFlatsRequestDto>("application/json")
             .Produces<GeneratedFlatSequenceDto>(StatusCodes.Status201Created)
+            .Produces<GeneratedFlatSequenceDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GenerateMatchingFlats");
 

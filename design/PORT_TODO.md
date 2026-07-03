@@ -372,8 +372,17 @@ on the following path), threaded from the caller's token at all three call sites
 ROUND(temperature_c, 0))` — temperature bucketed to the nearest whole degree. `temperature_c` is `NOT NULL`
 (an uncooled camera records the 0.0 sentinel that `CameraService` coalesces a missing CCD temperature to), so
 uncooled lights/darks still bucket-match. +3 tests (temp-mismatch rejects, within-degree bucketing, uncooled
-sentinel). Remaining §39 follow-up: the matching-flats generation returns a PLAN (one step per light filter);
-enqueuing it as a runnable §38 flat sequence is still a separate follow-up. Flats match by `filter` only (correct).
+sentinel). Flats match by `filter` only (correct).
+
+### §39.5 matching flats — plan → runnable sequence ✅ DONE (2026-07-02)
+`GenerateMatchingFlatsAsync` now materializes the plan into a persisted §38 sequence via `ISequenceService`
+(`CalibrationSequenceBuilder` emits the NINA-verbatim body dialect): per light filter, a looped
+SequentialContainer of [SwitchFilter (name-resolved, `_position:-1` so a stale slot index never wins) →
+MoveFocuserAbsolute (the session's modal per-filter focus, §39.5 dust-shadow alignment) → TakeExposure(FLAT)
+carrying the lights' modal gain/offset]. `GeneratedSequenceId` is the real stored id (endpoint: 201+Location;
+`GenerateOnly` → null id, 200). Proven by deserializing the stored body through the real sequencer factory.
+Deferred: a flat-device instruction (panel on/brightness/auto-ADU exposure — generated TakeExposure uses a 1 s
+starting point, TargetAdu stays advisory) and §39.6 cooler-temp replay; both need new sequencer instructions.
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,

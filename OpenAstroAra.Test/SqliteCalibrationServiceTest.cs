@@ -14,6 +14,12 @@
 
 using Microsoft.Data.Sqlite;
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
+using OpenAstroAra.Sequencer.SequenceItem.Focuser;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -207,6 +213,93 @@ namespace OpenAstroAra.Test {
             Assert.That(plan.Steps.Single().FrameCount, Is.EqualTo(20));
         }
 
+        // ── §39.5 persisted runnable sequence ──────────────────────────────────
+
+        [Test]
+        public async Task GenerateMatchingFlats_persists_a_runnable_sequence() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", offset: 10, focuserPosition: 5230);
+            await InsertFrameAsync(Session, "light", "OIII", 300, 100, "M42");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(OverrideFrameCount: 5, OverrideTargetAdu: null, GenerateOnly: false),
+                CancellationToken.None);
+
+            Assert.That(plan.GeneratedSequenceId, Is.Not.Null, "persisting mode must return the stored sequence id");
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored, Is.Not.Null, "the sequence must be retrievable from the §38 store");
+            Assert.That(stored!.Name, Is.EqualTo("Flats — M42"));
+            Assert.That(stored.TemplateOrigin, Is.EqualTo("calibration:matching-flats"));
+
+            var (valid, reason) = SequenceSchemaValidator.Validate(stored.Body);
+            Assert.That(valid, Is.True, $"generated body must pass §38.5 validation: {reason}");
+
+            // The decisive proof: the stored body deserializes through the REAL sequencer factory
+            // into typed, executable instructions. The profile carries the wheel's filter list —
+            // SwitchFilter resolves its recorded name against the ACTIVE profile on deserialize
+            // (by design: the body stores the name, the daemon resolves it at load time).
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0));
+            profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("OIII", 0, 1));
+            var factory = HeadlessSequencerFactory.WithDefaults(profileService: profile);
+            var root = new SequenceJsonConverter(factory).Deserialize(stored.Body.GetRawText());
+            Assert.That(root, Is.Not.Null);
+            var blocks = root.GetItemsSnapshot().OfType<SequentialContainer>().ToList();
+            Assert.That(blocks.Count, Is.EqualTo(2), "one looped container per light filter");
+
+            var ha = blocks[0];
+            var loop = ha.GetConditionsSnapshot().OfType<LoopCondition>().Single();
+            Assert.That(loop.Iterations, Is.EqualTo(5));
+            var haItems = ha.GetItemsSnapshot();
+            var switchFilter = haItems.OfType<SwitchFilter>().Single();
+            Assert.That(switchFilter.Filter?.Name, Is.EqualTo("Ha"));
+            var focus = haItems.OfType<MoveFocuserAbsolute>().Single();
+            Assert.That(focus.Position, Is.EqualTo(5230), "per-filter focus from the session's lights is replayed");
+            var take = haItems.OfType<TakeExposure>().Single();
+            Assert.That(take.ImageType, Is.EqualTo("FLAT"));
+            Assert.That(take.Gain, Is.EqualTo(100), "flats replay the lights' gain");
+            Assert.That(take.Offset, Is.EqualTo(10), "flats replay the lights' offset");
+
+            // The OIII lights carried no offset/focuser → no focuser step; defaults untouched.
+            var oiiiItems = blocks[1].GetItemsSnapshot();
+            Assert.That(oiiiItems.OfType<MoveFocuserAbsolute>(), Is.Empty);
+            Assert.That(oiiiItems.OfType<TakeExposure>().Single().Offset, Is.EqualTo(-1),
+                "no recorded offset → TakeExposure keeps its camera-default sentinel");
+        }
+
+        [Test]
+        public async Task GenerateOnly_returns_the_plan_without_persisting() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), CancellationToken.None);
+
+            Assert.That(plan.GeneratedSequenceId, Is.Null);
+            var list = await store.ListAsync(50, null, CancellationToken.None);
+            Assert.That(list.Items, Is.Empty, "GenerateOnly must not write to the sequence store");
+        }
+
+        [Test]
+        public async Task A_filterless_session_generates_a_block_without_a_SwitchFilter() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", null, 300, 100, "Moon");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false), CancellationToken.None);
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var root = new SequenceJsonConverter(factory).Deserialize(stored!.Body.GetRawText());
+            var block = root.GetItemsSnapshot().OfType<SequentialContainer>().Single();
+            Assert.That(block.GetItemsSnapshot().OfType<SwitchFilter>(), Is.Empty,
+                "no filter wheel in the session → no SwitchFilter step");
+            Assert.That(block.GetItemsSnapshot().OfType<TakeExposure>().Single().ImageType, Is.EqualTo("FLAT"));
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
 
         private async Task InsertSessionAsync(Guid id) {
@@ -222,16 +315,18 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0) {
+        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
-                    exposure_seconds, gain, temperature_c, captured_utc, file_path,
+                    exposure_seconds, gain, "offset", focuser_position, temperature_c, captured_utc, file_path,
                     file_size_bytes, width, height, bit_depth)
-                VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, $temp, $utc,
+                VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, $offset, $focus, $temp, $utc,
                     $path, 1000, 16, 16, 16);
                 """;
+            cmd.Parameters.AddWithValue("$offset", offset is null ? DBNull.Value : offset.Value);
+            cmd.Parameters.AddWithValue("$focus", focuserPosition is null ? DBNull.Value : focuserPosition.Value);
             cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
             cmd.Parameters.AddWithValue("$sid", sessionId.ToString());
             cmd.Parameters.AddWithValue("$target", target);
