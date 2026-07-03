@@ -396,6 +396,15 @@ yet): build request exposures int->double (§28), entry Gain int->int? (the #670
 GeneratedSequenceId. Deferred: `calibration.dark_library.*` WS events (the generated sequence already emits
 standard §60.9 run events) and server-side master-dark stacking (§39.2 capture-only philosophy — external
 stackers consume the raw frames).
+### §39.10 calibration client surface ✅ DONE (2026-07-02)
+Full-screen Calibration route (bottom status bar, beside Image Library/Stats) live over
+`/api/v1/calibration/*`: Sessions tab (per-filter summaries, flats/darks coverage badges, the §39.5
+[Capture Matching Flats] dialog -> generate -> select the sequence -> jump to the Run tab) and Dark
+Library tab (catalogued groups incl. null-gain/sub-second rendering, coverage status header with
+[Open build sequence], the §39.8 matrix build form). New `CalibrationApi`/models/state follow the
+sequence-list factory->api->notifier idiom. Remaining §39 client work: the Image Library session
+card's stubbed [Capture Matching Flats] button waits on 12f.2 (library live-wiring gives cards real
+session ids); WS-driven auto-refresh of coverage (polling/pull-to-refresh today).
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
