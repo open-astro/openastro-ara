@@ -178,13 +178,20 @@ public static class ImageEndpoints {
                            // session is 404, not a 202 the operator will silently watch
                            // never make progress.
                            var session = await svc.GetAsync(id, ct);
-                           return session is null
-                               ? Results.NotFound()
-                               : Results.Accepted(value: await svc.ResumeTargetAsync(id, request, idempotencyKey, ct));
+                           if (session is null) return Results.NotFound();
+                           try {
+                               // §40.6 result carries the runnable sequence — 201 + Location,
+                               // like the §39.5 matching-flats endpoint.
+                               var result = await svc.ResumeTargetAsync(id, request, idempotencyKey, ct);
+                               return Results.Created($"/api/v1/sequences/{result.SequenceId}", result);
+                           } catch (ArgumentException ex) when (ex.ParamName == "request") {
+                               return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                           }
                        })
             .Accepts<ResumeTargetRequestDto>("application/json")
-            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .Produces<ResumeTargetResultDto>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ResumeSessionTarget");
 
         sessions.MapPost("/{id:guid}/restretch",

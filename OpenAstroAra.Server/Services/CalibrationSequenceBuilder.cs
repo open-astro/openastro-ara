@@ -49,8 +49,19 @@ public sealed record DarkTemperatureGroupSpec(
     double? TemperatureC,
     IReadOnlyList<DarkStepSpec> Steps);
 
+/// <summary>One per-filter light block for the §40.6 resume-target synthesis: the session's
+/// modal capture settings per filter, with <paramref name="FrameCount"/> = how many lights
+/// that filter originally captured (a same-shape second pass on the target).</summary>
+public sealed record LightStepSpec(
+    string? FilterName,
+    int FrameCount,
+    double ExposureSeconds,
+    int? Gain,
+    int? Offset,
+    int? FocuserPosition);
+
 /// <summary>
-/// §39.5/§39.8 — materializes a calibration capture plan into a runnable §38.1 sequence body.
+/// §39.5/§39.8/§40.6 — materializes a capture plan into a runnable §38.1 sequence body.
 /// Bodies use the NINA-verbatim <c>$type</c> tree (the same shape every stored sequence,
 /// starter template, and NINA import uses); the sequencer's type remapping resolves them
 /// to the OpenAstroAra classes on load, and the WILMA sequence renderer already knows how
@@ -203,6 +214,77 @@ public static class CalibrationSequenceBuilder {
                 ["CompletedIterations"] = 0,
             }),
             ["Items"] = new JsonArray(exposure),
+            ["Triggers"] = new JsonArray(),
+        };
+    }
+
+    /// <summary>
+    /// Build the §40.6 resume-target body: one looped per-filter container —
+    /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure(LIGHT)] × FrameCount — replaying
+    /// the capture settings the session's lights actually used. The user adds the slew/center
+    /// steps (per-frame plate-solve coordinates aren't in the catalog yet — see PORT_TODO).
+    /// </summary>
+    public static JsonElement BuildResumeTargetBody(string name, IReadOnlyList<LightStepSpec> steps) {
+        var items = new JsonArray();
+        foreach (var step in steps) {
+            items.Add(LightBlock(step));
+        }
+        var root = new JsonObject {
+            ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = name,
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+        return JsonSerializer.SerializeToElement(root);
+    }
+
+    private static JsonObject LightBlock(LightStepSpec step) {
+        var items = new JsonArray();
+        if (step.FilterName is not null) {
+            items.Add(new JsonObject {
+                ["$type"] = SwitchFilterType,
+                // _position -1: resolve by NAME only (same rationale as FlatBlock).
+                ["Filter"] = new JsonObject {
+                    ["$type"] = FilterInfoType,
+                    ["_name"] = step.FilterName,
+                    ["_position"] = -1,
+                },
+            });
+        }
+        if (step.FocuserPosition is int focus) {
+            items.Add(new JsonObject {
+                ["$type"] = MoveFocuserAbsoluteType,
+                ["Position"] = focus,
+            });
+        }
+        var exposure = new JsonObject {
+            ["$type"] = TakeExposureType,
+            ["ExposureTime"] = step.ExposureSeconds,
+            ["ImageType"] = "LIGHT",
+            ["ExposureCount"] = 0,
+        };
+        if (step.Gain is int gain) {
+            exposure["Gain"] = gain;
+        }
+        if (step.Offset is int offset) {
+            exposure["Offset"] = offset;
+        }
+        items.Add(exposure);
+
+        var label = step.FilterName ?? "no filter";
+        return new JsonObject {
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = $"Lights — {label} ({step.FrameCount}×{step.ExposureSeconds:0.####}s)",
+            ["Conditions"] = new JsonArray(new JsonObject {
+                ["$type"] = LoopConditionType,
+                ["Iterations"] = step.FrameCount,
+                ["CompletedIterations"] = 0,
+            }),
+            ["Items"] = items,
             ["Triggers"] = new JsonArray(),
         };
     }

@@ -414,8 +414,12 @@ cards (light/calibration counts, filters), lazily-loaded frame strips with captu
 wired with REAL session ids, and a wire-truth `LiveFrameViewerScreen` (pinch-zoom thumbnail +
 list-endpoint metadata; the demo `FrameViewerScreen` deleted). Demo `librarySessionsProvider`
 remains ONLY for the Stats dashboard (§50 live-wiring is its own slice). 12f.3b bulk ops SHIPPED (Rate/Tag/Delete live against `/frames/bulk/*` with confirm/star/tag dialogs;
-Move-to-session + Export stay disabled — no server endpoints). Still stubbed/tracked:
-Resume Target (§40.6), filter/rating/search pills (12f.3),
+Move-to-session + Export stay disabled — no server endpoints). §40.6 Resume Target SHIPPED
+(server ResumeTargetAsync real: recorded sequence_json re-persisted when present/valid, else per-filter
+modal LIGHT synthesis via `CalibrationSequenceBuilder.BuildResumeTargetBody` with original frame counts,
+OverrideSequenceId echoed; endpoint 201+Location; library button -> Run-tab jump. Slew/center steps are
+the user's to add — per-frame plate-solve coordinates aren't in the catalog). Still stubbed/tracked:
+filter/rating/search pills (12f.3),
 full-res §65 stretched previews + rating/tag editing in the viewer, cursor paging past 200.
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
