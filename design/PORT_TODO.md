@@ -406,6 +406,16 @@ sequence-list factory->api->notifier idiom. Remaining §39 client work: the Imag
 card's stubbed [Capture Matching Flats] button waits on 12f.2 (library live-wiring gives cards real
 session ids); WS-driven auto-refresh of coverage (polling/pull-to-refresh today); cursor paging on the
 sessions tab (first page at the server's 200 cap today — from the #673 review).
+### 12f.2 Image Library live-wiring — sessions/frames/thumbnails + flats button ✅ DONE (2026-07-02)
+`ImageLibraryScreen` now renders `/api/v1/sessions` + `/sessions/{id}/frames` via the new
+`LibraryApi`/`live_library` models/state trio (autoDispose, last-issued-wins refresh): live session
+cards (light/calibration counts, filters), lazily-loaded frame strips with capture-time thumbnails
+(`/frames/{id}/thumbnail`, placeholder on 404), the shared §39.5 [Capture Matching Flats] dialog
+wired with REAL session ids, and a wire-truth `LiveFrameViewerScreen` (pinch-zoom thumbnail +
+list-endpoint metadata; the demo `FrameViewerScreen` deleted). Demo `librarySessionsProvider`
+remains ONLY for the Stats dashboard (§50 live-wiring is its own slice). Still stubbed/tracked:
+bulk ops (12f.3b `/frames/bulk/*`), Resume Target (§40.6), filter/rating/search pills (12f.3),
+full-res §65 stretched previews + rating/tag editing in the viewer, cursor paging past 200.
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,

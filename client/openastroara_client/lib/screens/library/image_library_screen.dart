@@ -1,25 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/library/frame.dart';
+import '../../models/library/live_library.dart';
 import '../../state/library/library_selection.dart';
 import '../../state/library/library_state.dart';
+import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
-import 'frame_viewer_screen.dart';
+import '../calibration/calibration_screen.dart';
+import 'live_frame_viewer_screen.dart';
 
-/// Image Library per playbook §40. Phase 12f.1 renders the by-session
-/// grouping over in-memory demo data. 12f.2 wires the real backend +
-/// stretch picker + filter/rating pills + bulk operations.
+/// Image Library per playbook §40 — 12f.2: live over `/api/v1/sessions` +
+/// `/api/v1/frames` (sessions, frame strips, capture-time thumbnails), with
+/// the §39.5 [Capture Matching Flats] flow wired on every session card.
+/// Bulk operations (12f.3b) and Resume Target remain stubbed.
 class ImageLibraryScreen extends ConsumerWidget {
   const ImageLibraryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(librarySessionsProvider);
+    final sessions = ref.watch(liveLibrarySessionsProvider);
     final grouping = ref.watch(libraryGroupingProvider);
-    final groups = _groupSessions(sessions, grouping);
 
     return Scaffold(
       appBar: AppBar(
@@ -30,46 +32,80 @@ class ImageLibraryScreen extends ConsumerWidget {
           child: _LibraryHeaderBar(),
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              children: [
-                for (final g in groups) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text(
-                      g.label,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
-                    ),
-                  ),
-                  ...g.sessions.map((s) => _SessionCard(session: s)),
-                ],
-              ],
-            ),
+      body: sessions.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Could not load the library: $e',
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () =>
+                    ref.read(liveLibrarySessionsProvider.notifier).refresh(),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
-          // Slides into view when selection is non-empty (§40.8).
-          const LibraryBulkActionBar(),
-        ],
+        ),
+        data: (list) {
+          if (list == null) {
+            return const Center(
+                child: Text('Connect to a server to browse its library.'));
+          }
+          if (list.isEmpty) {
+            return const Center(
+                child: Text('No sessions yet — captured frames will appear here.'));
+          }
+          final groups = _groupSessions(list, grouping);
+          return Column(
+            children: [
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(liveLibrarySessionsProvider.notifier).refresh(),
+                  child: ListView(
+                    children: [
+                      for (final g in groups) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: Text(
+                            g.label,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(color: AraColors.textSecondary),
+                          ),
+                        ),
+                        ...g.sessions.map((s) => _SessionCard(session: s)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              // Slides into view when selection is non-empty (§40.8).
+              const LibraryBulkActionBar(),
+            ],
+          );
+        },
       ),
     );
   }
 
-  /// Apply the active grouping to the flat session list. Each group also
-  /// gets its sessions sorted newest-first (matches NINA's UX). Phase 12f.2
-  /// adds a secondary-sort dropdown.
+  /// Apply the active grouping. Each group's sessions sort newest-first
+  /// (matches NINA's UX).
   List<_SessionGroup> _groupSessions(
-    List<CaptureSession> sessions,
+    List<LibrarySession> sessions,
     LibraryGrouping grouping,
   ) {
-    final sorted = [...sessions]..sort((a, b) => b.date.compareTo(a.date));
+    final sorted = [...sessions]
+      ..sort((a, b) => b.sessionStartUtc.compareTo(a.sessionStartUtc));
     switch (grouping) {
       case LibraryGrouping.bySession:
         return [_SessionGroup(label: 'All sessions', sessions: sorted)];
       case LibraryGrouping.byTarget:
-        final byTarget = <String, List<CaptureSession>>{};
+        final byTarget = <String, List<LibrarySession>>{};
         for (final s in sorted) {
           byTarget.putIfAbsent(s.targetName, () => []).add(s);
         }
@@ -77,10 +113,10 @@ class ImageLibraryScreen extends ConsumerWidget {
             .map((e) => _SessionGroup(label: e.key, sessions: e.value))
             .toList();
       case LibraryGrouping.byDate:
-        final byMonth = <String, List<CaptureSession>>{};
+        final byMonth = <String, List<LibrarySession>>{};
         for (final s in sorted) {
-          final key =
-              '${s.date.year}-${s.date.month.toString().padLeft(2, '0')}';
+          final d = s.sessionStartUtc.toLocal();
+          final key = '${d.year}-${d.month.toString().padLeft(2, '0')}';
           byMonth.putIfAbsent(key, () => []).add(s);
         }
         return byMonth.entries
@@ -92,7 +128,7 @@ class ImageLibraryScreen extends ConsumerWidget {
 
 class _SessionGroup {
   final String label;
-  final List<CaptureSession> sessions;
+  final List<LibrarySession> sessions;
   const _SessionGroup({required this.label, required this.sessions});
 }
 
@@ -125,9 +161,8 @@ class _LibraryHeaderBar extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 16),
-          // Filter + rating + search pills wire up in 12f.2. Wrapped in a
-          // SingleChildScrollView so the header stays usable on narrow
-          // window widths.
+          // Filter + rating + search pills wire up in 12f.3. Wrapped in a
+          // SingleChildScrollView so the header stays usable on narrow widths.
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -175,26 +210,18 @@ class _ChipPlaceholder extends StatelessWidget {
   }
 }
 
-class _SessionCard extends StatelessWidget {
-  final CaptureSession session;
+class _SessionCard extends ConsumerWidget {
+  final LibrarySession session;
   const _SessionCard({required this.session});
 
   String _dateLabel() {
-    final d = session.date;
+    final d = session.sessionStartUtc.toLocal();
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
-  String _integrationLabel() {
-    final mins = session.totalIntegration.inMinutes;
-    return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}min total';
-  }
-
-  String _filterCountLabel() => session.framesByFilter.entries
-      .map((e) => '${e.key}:${e.value}')
-      .join(' ');
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filters = session.filtersUsed.join(' · ');
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -202,47 +229,43 @@ class _SessionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Long target/site names would otherwise blow out the Row's
-            // intrinsic width; clip with ellipsis instead.
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${_dateLabel()} — ${session.targetName}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    '(${session.siteName})',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
-                  ),
-                ),
-              ],
+            Text(
+              '${_dateLabel()} — ${session.targetName}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
             Text(
-              '${_integrationLabel()} · ${_filterCountLabel()} (${session.frames.length} frames)',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+              [
+                '${session.lightFrames} lights',
+                if (session.calibrationFrames > 0)
+                  '${session.calibrationFrames} calibration',
+                if (filters.isNotEmpty) filters,
+              ].join(' · '),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
                 TextButton.icon(
-                  onPressed: null,
+                  // §39.5 — live since 12f.2: cards carry real session ids.
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => MatchingFlatsDialog(
+                      sessionId: session.id,
+                      targetName: session.targetName,
+                      filterNames: session.filtersUsed,
+                    ),
+                  ),
                   icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
                   label: const Text('Capture Matching Flats'),
                 ),
                 TextButton.icon(
+                  // Resume Target (§40.6) wires in a later slice.
                   onPressed: null,
                   icon: const Icon(Icons.replay, size: 16),
                   label: const Text('Resume Target'),
@@ -250,51 +273,84 @@ class _SessionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            // Frame strip — in selection mode, tap toggles selection; out
-            // of selection mode, tap opens the §40.5 Frame Viewer. Long-
-            // press always enters selection mode (or adds to it).
-            Consumer(builder: (context, ref, _) {
-              final selection = ref.watch(librarySelectionProvider);
-              final inSelectionMode = selection.isNotEmpty;
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: session.frames
-                      .map((f) => FrameThumbnail(
-                            frame: f,
-                            selected: selection.contains(f.id),
-                            selectionMode: inSelectionMode,
-                            onTap: () {
-                              if (inSelectionMode) {
-                                ref
-                                    .read(librarySelectionProvider.notifier)
-                                    .toggle(f.id);
-                              } else {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => FrameViewerScreen(frame: f),
-                                  ),
-                                );
-                              }
-                            },
-                            onLongPress: () {
-                              // Long-press is add-only — never deselects.
-                              // Use tap (in selection mode) or the bulk-bar
-                              // Close to clear selection.
-                              if (!selection.contains(f.id)) {
-                                ref
-                                    .read(librarySelectionProvider.notifier)
-                                    .toggle(f.id);
-                              }
-                            },
-                          ))
-                      .toList(),
-                ),
-              );
-            }),
+            _FrameStrip(sessionId: session.id),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Lazily-loaded frame strip — in selection mode, tap toggles selection; out
+/// of selection mode, tap opens the §40.5 frame viewer. Long-press always
+/// enters selection mode (add-only).
+class _FrameStrip extends ConsumerWidget {
+  final String sessionId;
+  const _FrameStrip({required this.sessionId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final frames = ref.watch(sessionFramesProvider(sessionId));
+    final api = ref.watch(libraryApiProvider);
+    return frames.when(
+      loading: () => const SizedBox(
+        height: 72,
+        child: Center(
+            child: SizedBox(
+                width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+      ),
+      error: (e, _) => SizedBox(
+        height: 40,
+        child: Text('Frames unavailable: $e',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: AraColors.textSecondary)),
+      ),
+      data: (list) {
+        if (list.isEmpty) {
+          return Text('No frames recorded for this session.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary));
+        }
+        final selection = ref.watch(librarySelectionProvider);
+        final inSelectionMode = selection.isNotEmpty;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final f in list)
+                FrameThumbnail(
+                  filter: f.filterName ?? f.frameType.toUpperCase(),
+                  hfr: f.hfr,
+                  rating: f.rating,
+                  imageUrl: api?.thumbnailUrl(f.id),
+                  selected: selection.contains(f.id),
+                  selectionMode: inSelectionMode,
+                  onTap: () {
+                    if (inSelectionMode) {
+                      ref.read(librarySelectionProvider.notifier).toggle(f.id);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => LiveFrameViewerScreen(frame: f),
+                        ),
+                      );
+                    }
+                  },
+                  onLongPress: () {
+                    // Long-press is add-only — never deselects.
+                    if (!selection.contains(f.id)) {
+                      ref.read(librarySelectionProvider.notifier).toggle(f.id);
+                    }
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

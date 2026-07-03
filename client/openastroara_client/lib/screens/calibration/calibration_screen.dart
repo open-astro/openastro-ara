@@ -124,7 +124,13 @@ class _SessionCard extends ConsumerWidget {
               TextButton.icon(
                 onPressed: () => showDialog<void>(
                   context: context,
-                  builder: (_) => MatchingFlatsDialog(session: session),
+                  builder: (_) => MatchingFlatsDialog(
+                    sessionId: session.id,
+                    targetName: session.targetName,
+                    filterNames: [
+                      for (final f in session.filtersUsed) f.filterName
+                    ],
+                  ),
                 ),
                 icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
                 label: const Text('Capture Matching Flats'),
@@ -172,9 +178,18 @@ class _CoverageBadge extends StatelessWidget {
 /// §39.5 dialog: frame count + target ADU, then generate-and-open. The server
 /// persists a runnable sequence that replays the session's per-filter
 /// filter/focus/gain state; on success we jump straight to it in the Run tab.
+/// Takes plain fields (not a model) so both the Calibration screen and the
+/// Image Library session cards can launch it.
 class MatchingFlatsDialog extends ConsumerStatefulWidget {
-  final CalibrationSession session;
-  const MatchingFlatsDialog({super.key, required this.session});
+  final String sessionId;
+  final String targetName;
+  final List<String> filterNames;
+  const MatchingFlatsDialog({
+    super.key,
+    required this.sessionId,
+    required this.targetName,
+    required this.filterNames,
+  });
 
   @override
   ConsumerState<MatchingFlatsDialog> createState() =>
@@ -215,7 +230,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
     });
     try {
       final result = await api.generateMatchingFlats(
-        widget.session.id,
+        widget.sessionId,
         frameCount: frames,
         targetAdu: adu,
       );
@@ -232,7 +247,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.session.filtersUsed.length} filter(s).'),
+            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s).'),
       ));
       openGeneratedSequence(context, ref, id);
     } on Exception catch (e) {
@@ -246,8 +261,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final filters =
-        widget.session.filtersUsed.map((f) => f.filterName).join(', ');
+    final filters = widget.filterNames.join(', ');
     return AlertDialog(
       title: const Text('Capture Matching Flats'),
       content: Column(
