@@ -33,6 +33,10 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
 
   String _stretch = 'auto_stf';
   Uint8List? _preview;
+  // The palette _preview was actually rendered with — on a failed re-fetch the
+  // dropdown reverts to this so the picker never claims a render that didn't
+  // happen (r1).
+  String? _loadedStretch;
   bool _loading = false;
   String? _error;
   // Guards against a slow older fetch overwriting a newer palette choice.
@@ -52,12 +56,16 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
       _loading = true;
       _error = null;
     });
+    final requested = _stretch;
     try {
       final bytes =
-          await api.fetchPreview(widget.frame.id, stretch: _stretch);
+          await api.fetchPreview(widget.frame.id, stretch: requested);
       if (!mounted || gen != _fetchGen) return;
       setState(() {
-        _preview = Uint8List.fromList(bytes);
+        // Dio's ResponseType.bytes already yields a Uint8List — avoid copying
+        // a full-resolution image on every palette switch (r1).
+        _preview = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+        _loadedStretch = requested;
         _loading = false;
       });
     } on Exception catch (e) {
@@ -65,6 +73,12 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
       setState(() {
         _loading = false;
         _error = 'Preview unavailable: $e';
+        // Keep the last good render on screen, but snap the picker back to
+        // the palette it was actually rendered with (r1: the dropdown must
+        // never read as if the failed palette succeeded).
+        if (_loadedStretch != null) {
+          _stretch = _loadedStretch!;
+        }
       });
     }
   }
@@ -121,7 +135,17 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
                     maxScale: 8,
                     child: Center(
                       child: _preview != null
-                          ? Image.memory(_preview!, fit: BoxFit.contain, gaplessPlayback: true)
+                          ? Image.memory(
+                              _preview!,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                              // Undecodable bytes (truncated response) degrade
+                              // like the thumbnail path instead of a render error.
+                              errorBuilder: (_, _, _) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 64,
+                                  color: AraColors.textDisabled),
+                            )
                           : thumbUrl != null
                               ? Image.network(
                                   thumbUrl,
