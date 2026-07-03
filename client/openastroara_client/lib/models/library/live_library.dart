@@ -79,3 +79,42 @@ class LibraryFrameItem {
     );
   }
 }
+
+/// Full frame detail (`GET /api/v1/frames/{id}`) — the fields the list DTO
+/// doesn't carry, for the viewer's metadata strip and tag editor.
+class LibraryFrameDetail {
+  final String id;
+  final int? gain;
+  final int? offset;
+  final double temperatureC;
+  final int? focuserPosition;
+  final int width;
+  final int height;
+  final List<String> tags;
+
+  const LibraryFrameDetail({
+    required this.id,
+    required this.gain,
+    required this.offset,
+    required this.temperatureC,
+    required this.focuserPosition,
+    required this.width,
+    required this.height,
+    required this.tags,
+  });
+
+  factory LibraryFrameDetail.fromJson(Map<String, dynamic> json) {
+    return LibraryFrameDetail(
+      id: (json['id'] as String?) ?? '',
+      gain: (json['gain'] as num?)?.toInt(),
+      offset: (json['offset'] as num?)?.toInt(),
+      temperatureC: (json['temperature_c'] as num?)?.toDouble() ?? 0,
+      focuserPosition: (json['focuser_position'] as num?)?.toInt(),
+      width: (json['width'] as num?)?.toInt() ?? 0,
+      height: (json['height'] as num?)?.toInt() ?? 0,
+      tags: ((json['tags'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+    );
+  }
+}

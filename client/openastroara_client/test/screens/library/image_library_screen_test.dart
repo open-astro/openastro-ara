@@ -30,6 +30,19 @@ class _FakeLibraryClient implements LibraryClient {
   (String, String)? previewRequest;
 
   @override
+  Future<LibraryFrameDetail> frameDetail(String frameId) async =>
+      LibraryFrameDetail(
+        id: frameId,
+        gain: 100,
+        offset: 10,
+        temperatureC: -9.8,
+        focuserPosition: 5230,
+        width: 4144,
+        height: 2822,
+        tags: const ['keeper'],
+      );
+
+  @override
   Future<List<int>> fetchPreview(String frameId,
       {required String stretch, int maxDimensionPx = 2048}) async {
     previewRequest = (frameId, stretch);
@@ -306,6 +319,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.rated!.$2, 0);
     expect(find.byIcon(Icons.star), findsNothing);
+  });
+
+  testWidgets('§40.5: the viewer shows detail metadata and edits tags',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [_frame('f1')],
+    });
+    await _pump(tester, fake);
+    await tester.tap(find.text('Ha'));
+    await tester.pumpAndSettle();
+
+    // Detail-backed metadata rows render.
+    expect(find.textContaining('Gain: 100'), findsOneWidget);
+    expect(find.textContaining('Sensor: -9.8°C'), findsOneWidget);
+    expect(find.text('keeper'), findsOneWidget);
+
+    // Add a tag through the + chip.
+    await tester.tap(find.text('tag'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'lucky');
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
+    expect(fake.tagged, isNotNull);
+    expect(fake.tagged!.$1, ['f1']);
+    expect(fake.tagged!.$2, ['lucky']);
+    expect(find.text('lucky'), findsOneWidget, reason: 'optimistic chip');
+
+    // Delete the original tag via its chip.
+    // Two chips now (keeper, lucky) — keeper renders first.
+    await tester.tap(find.byTooltip('Delete').first);
+    await tester.pumpAndSettle();
+    expect(fake.tagged!.$3, ['keeper']);
+    expect(find.text('keeper'), findsNothing);
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',

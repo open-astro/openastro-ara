@@ -21,6 +21,45 @@ class LiveFrameViewerScreen extends ConsumerStatefulWidget {
       _LiveFrameViewerScreenState();
 }
 
+/// Owns its TextEditingController so disposal happens with the dialog's own
+/// State (disposing in the caller races the route's exit animation).
+class _AddTagDialog extends StatefulWidget {
+  const _AddTagDialog();
+
+  @override
+  State<_AddTagDialog> createState() => _AddTagDialogState();
+}
+
+class _AddTagDialogState extends State<_AddTagDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add tag'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+            child: const Text('Add')),
+      ],
+    );
+  }
+}
+
 class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   static const _palettes = [
     'auto_stf',
@@ -44,11 +83,69 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
   // Local echo of the rating after an edit (the list item is immutable).
   late int _rating = widget.frame.rating;
   bool _ratingBusy = false;
+  // Detail (tags + capture settings the list DTO lacks); null while loading.
+  LibraryFrameDetail? _detail;
+  bool _tagBusy = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    final api = ref.read(libraryApiProvider);
+    if (api == null) return;
+    try {
+      final detail = await api.frameDetail(widget.frame.id);
+      if (!mounted) return;
+      setState(() => _detail = detail);
+    } on Exception {
+      // Detail enriches the strip; the viewer stays functional without it.
+    }
+  }
+
+  Future<void> _editTags({String? add, String? remove}) async {
+    final api = ref.read(libraryApiProvider);
+    final detail = _detail;
+    if (api == null || detail == null) return;
+    setState(() => _tagBusy = true);
+    try {
+      await api.bulkTag([widget.frame.id],
+          addTags: [?add], removeTags: [?remove]);
+      if (!mounted) return;
+      final tags = [...detail.tags];
+      if (remove != null) tags.remove(remove);
+      if (add != null && !tags.contains(add)) tags.add(add);
+      setState(() {
+        _detail = LibraryFrameDetail(
+          id: detail.id,
+          gain: detail.gain,
+          offset: detail.offset,
+          temperatureC: detail.temperatureC,
+          focuserPosition: detail.focuserPosition,
+          width: detail.width,
+          height: detail.height,
+          tags: tags,
+        );
+        _tagBusy = false;
+      });
+    } on Exception catch (e) {
+      if (!mounted) return;
+      setState(() => _tagBusy = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Tag update failed: $e')));
+    }
+  }
+
+  Future<void> _promptAddTag() async {
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (_) => const _AddTagDialog(),
+    );
+    if (tag == null || tag.isEmpty || !mounted) return;
+    await _editTags(add: tag);
   }
 
   Future<void> _load() async {
@@ -119,10 +216,18 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
     final exposure = f.exposureSeconds == f.exposureSeconds.roundToDouble()
         ? f.exposureSeconds.toStringAsFixed(0)
         : f.exposureSeconds.toString();
+    final d = _detail;
     final rows = <(String, String)>[
       ('Type', f.frameType),
       ('Filter', f.filterName ?? '—'),
       ('Exposure', '${exposure}s'),
+      if (d != null) ...[
+        ('Gain', d.gain?.toString() ?? '—'),
+        ('Offset', d.offset?.toString() ?? '—'),
+        ('Sensor', '${d.temperatureC.toStringAsFixed(1)}°C'),
+        if (d.focuserPosition != null) ('Focus', '${d.focuserPosition} steps'),
+        if (d.width > 0) ('Size', '${d.width}×${d.height}'),
+      ],
       ('HFR', f.hfr?.toStringAsFixed(2) ?? '—'),
       ('Stars', f.starCount?.toString() ?? '—'),
       ('Captured', f.capturedUtc.toIso8601String()),
@@ -244,6 +349,32 @@ class _LiveFrameViewerScreenState extends ConsumerState<LiveFrameViewerScreen> {
                     ),
                 ]),
                 const SizedBox(height: 8),
+                // §40.5 tag editor — chips delete individual tags; the + chip
+                // adds one. Same single-id reuse of the §40.8 bulk endpoint.
+                if (d != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final tag in d.tags)
+                          InputChip(
+                            label: Text(tag),
+                            visualDensity: VisualDensity.compact,
+                            onDeleted: _tagBusy
+                                ? null
+                                : () => _editTags(remove: tag),
+                          ),
+                        ActionChip(
+                          avatar: const Icon(Icons.add, size: 14),
+                          label: const Text('tag'),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _tagBusy ? null : _promptAddTag,
+                        ),
+                      ],
+                    ),
+                  ),
                 Wrap(
                   spacing: 24,
                   runSpacing: 6,

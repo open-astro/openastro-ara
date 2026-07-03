@@ -39,6 +39,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **§28 — sub-second calibration frames are catalogued honestly.** A 0.5 s bias used to be recorded as 1 s (or 0 s when rescanned from FITS — the decimal `EXPTIME` header failed the integer parse); the frames catalog now stores real seconds end-to-end, existing databases are upgraded in place on the daemon's next start, and a camera that doesn't report gain records "unknown" instead of a fake −1.
 
 ### Added
+- **§40.5 — tags and full capture settings in the viewer.** The frame viewer now shows the frame's recorded gain, offset, sensor temperature, focus position, and dimensions, plus editable tag chips — add or remove tags without leaving the image.
 - **§40.5 — rate frames from the viewer.** A star row under the preview rates the open frame (tap the current rating to clear); the library strips update immediately.
 - **§65 — stretched previews in the frame viewer.** Opening a frame now renders a full-resolution server-side stretch (auto STF by default) with a palette picker — linear, log, asinh, sqrt, equalized — while the thumbnail paints instantly as a placeholder.
 - **§50 — Stats CSV exports come from your real catalog.** The Stats dashboard's Sessions/Frames CSV buttons now stream the daemon's catalog (sessions as a per-session rollup with light counts and integration), and the last of the built-in demo data is gone.

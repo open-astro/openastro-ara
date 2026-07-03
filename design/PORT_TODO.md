@@ -425,9 +425,10 @@ Clear escape hatch). §50 demo-data retirement SHIPPED: the Stats CSVs stream fr
 12f.1/12g.2 in-memory demo sessions are deleted — every Stats/Library surface is catalog-backed.
 §65 stretched previews SHIPPED in the viewer (palette picker -> POST /frames/{id}/preview full-res
 render, thumbnail as instant first paint, fetch-generation guard). In-viewer star rating SHIPPED (optimistic single-frame
-edit via the §40.8 bulk endpoint; strips invalidated after). Still stubbed/tracked: §65.9 manual
-stretch sliders + tag editing in the viewer, cursor paging past 200, Move-to-session/Export
-bulk endpoints.
+edit via the §40.8 bulk endpoint; strips invalidated after). In-viewer tag editing + detail
+metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size rows + tag chips
+with add/remove via the single-id bulk reuse). Still stubbed/tracked: §65.9 manual stretch sliders,
+cursor paging past 200, Move-to-session/Export bulk endpoints.
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,

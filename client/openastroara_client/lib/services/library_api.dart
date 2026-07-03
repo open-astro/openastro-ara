@@ -31,6 +31,10 @@ abstract interface class LibraryClient {
   /// sequence seeded from the session and returns its id.
   Future<String> resumeTarget(String sessionId);
 
+  /// Full frame detail for the viewer (tags + capture settings the list
+  /// endpoint doesn't carry).
+  Future<LibraryFrameDetail> frameDetail(String frameId);
+
   /// §65 stretched preview JPEG bytes for the frame viewer. [stretch] is one
   /// of the §65 palette ids (auto_stf, linear, log, asinh, sqrt, equalized).
   Future<List<int>> fetchPreview(String frameId,
@@ -105,6 +109,17 @@ class LibraryApi implements LibraryClient {
       'frame_ids': frameIds,
       'delete_from_disk': deleteFromDisk,
     });
+  }
+
+  @override
+  Future<LibraryFrameDetail> frameDetail(String frameId) async {
+    final res = await _dio.get<dynamic>('/api/v1/frames/$frameId');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'frame detail returned an unexpected body (${data.runtimeType})');
+    }
+    return LibraryFrameDetail.fromJson(data);
   }
 
   @override
