@@ -436,13 +436,10 @@ profile-seed defaults; client-side real-time stretching stays v0.1.0). Export SH
 /frames/bulk/export streams a tar of the selected FITS via System.Formats.Tar — missing files
 skipped, name-collision dedupe, 404 when nothing exportable; client saves via the OS dialog with
 an injectable saver for tests). THE §40.8 BULK BAR IS COMPLETE. In-memory tar assembly is fine at
-selection scale; the #686 review flags the streaming writer as the one real scalability risk (Pi-class
-hosts, multi-hundred-MB FITS). Design sketch for that pass: open ALL FileStreams up front (an open
-handle can't vanish — the TOCTOU skip happens at open time, before any bytes are written), send
-X-Ara-Exported-Count from the successful-open count, then stream TarEntry{DataStream=handle} entries
-straight into the response via the Results.Stream callback overload — no MemoryStream, no rollback
-needed since per-entry failure can't occur after open barring hardware faults. Same pass: batch the
-N+1 path resolution with one IN(...) query (joins the tracked batching family).
+selection scale; the streaming writer SHIPPED (open-handles-first
+FrameExportPrep: TOCTOU skip at open time before any tar bytes, count header from successful opens,
+entries streamed straight into the response via the Results.Stream callback — no MemoryStream, no
+rollback; path resolution batched into one IN(...) query, closing the #686 N+1 note for export).
 
 ### ✅ DONE (2026-07-03) — `temperature_c` sentinel pass (from the #681 review)
 Nullable end-to-end: DDL dropped NOT NULL (in-place rebuild keyed on the stored DDL; rows copied

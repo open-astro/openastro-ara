@@ -141,14 +141,35 @@ public static class ImageEndpoints {
 
         frames.MapPost("/bulk/export",
                 async (HttpContext http, IFrameRepository repo, [FromBody] BulkExportRequestDto request, CancellationToken ct) => {
-                    var result = await repo.BulkExportAsync(request, ct);
-                    if (result is null) return Results.NotFound();
-                    // Export is partial-success by design (missing files skip) —
-                    // tell the client how many actually made it into the tar so
-                    // it can report honestly (r2).
+                    var prep = await repo.PrepareExportAsync(request, ct);
+                    if (prep is null) return Results.NotFound();
+                    // Export is partial-success by design (missing files skip).
+                    // BEST-EFFORT count: planned entries whose files existed at
+                    // plan time (headers must precede the streamed body; a file
+                    // vanishing before its turn still skips below).
                     http.Response.Headers["X-Ara-Exported-Count"] =
-                        result.Value.ExportedCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    return Results.Stream(result.Value.Stream, "application/x-tar", result.Value.FileName);
+                        prep.Entries.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    // Stream entries with ONE file handle open at a time (the r1
+                    // FD-exhaustion fix for Pi-class ulimits) and no in-memory tar.
+                    // A file vanishing between planning and its turn skips at open
+                    // — before its entry writes — so the tar stays aligned; the
+                    // count header is best-effort by that same token.
+                    return Results.Stream(async output => {
+                        await using var tar = new System.Formats.Tar.TarWriter(output, leaveOpen: true);
+                        foreach (var (path, name) in prep.Entries) {
+                            System.IO.FileStream fs;
+                            try {
+                                fs = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read);
+                            } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) {
+                                continue;
+                            }
+                            await using (fs) {
+                                var entry = new System.Formats.Tar.PaxTarEntry(
+                                    System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = fs };
+                                await tar.WriteEntryAsync(entry, http.RequestAborted);
+                            }
+                        }
+                    }, "application/x-tar", prep.FileName);
                 })
             .Accepts<BulkExportRequestDto>("application/json")
             .Produces<byte[]>(StatusCodes.Status200OK, "application/x-tar")

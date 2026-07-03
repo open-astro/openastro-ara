@@ -643,74 +643,58 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
     }
 
-    public async Task<(Stream Stream, string FileName, int ExportedCount)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct) {
-        // Resolve the selected frames' file paths from the catalog.
-        var paths = new List<string>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The composed fragment is only '$id0,$id1,...' parameter placeholders generated from the chunk COUNT; every value is bound. No user input reaches the command text.")]
+    public async Task<FrameExportPrep?> PrepareExportAsync(BulkExportRequestDto request, CancellationToken ct) {
+        if (request.FrameIds.Count == 0) return null;
+
+        // Path resolution in bound-parameter-safe chunks (SQLite's parameter
+        // limit would throw on very large selections otherwise), mapped back
+        // to request order so entry naming stays deterministic.
+        const int ChunkSize = 500;
+        var byId = new Dictionary<Guid, string>();
         await using (var conn = _db.OpenConnection()) {
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
-            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
-            foreach (var frameId in request.FrameIds) {
-                idParam.Value = frameId.ToString();
-                if (await cmd.ExecuteScalarAsync(ct) is string path && path.Length > 0) {
-                    paths.Add(path);
+            for (var offset = 0; offset < request.FrameIds.Count; offset += ChunkSize) {
+                var chunk = request.FrameIds.Skip(offset).Take(ChunkSize).ToList();
+                await using var cmd = conn.CreateCommand();
+                var parts = new List<string>(chunk.Count);
+                for (var i = 0; i < chunk.Count; i++) {
+                    parts.Add($"$id{i}");
+                    cmd.Parameters.AddWithValue($"$id{i}", chunk[i].ToString());
+                }
+                cmd.CommandText = $"SELECT id, file_path FROM frames WHERE id IN ({string.Join(',', parts)});";
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct)) {
+                    if (Guid.TryParse(reader.GetString(0), out var id) && !await reader.IsDBNullAsync(1, ct)) {
+                        byId[id] = reader.GetString(1);
+                    }
                 }
             }
         }
 
-        // Tar the files that actually exist (a rotated volume must not fail the
-        // rest of the selection). Entry names are basenames, deduped by frame
-        // order suffix on collision so nothing silently overwrites in the tar.
-        var ms = new MemoryStream();
-        var exported = 0;
+        // Plan entries for files present NOW (no handles opened here — see
+        // FrameExportPrep: the endpoint opens one at a time while streaming).
+        var entries = new List<(string Path, string EntryName)>();
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        await using (var tar = new System.Formats.Tar.TarWriter(ms, leaveOpen: true)) {
-            foreach (var path in paths) {
-                if (!File.Exists(path)) continue;
-                var name = Path.GetFileName(path);
-                if (!seenNames.Add(name)) {
-                    // Suffix until genuinely unique (r2): a single "_<n>" rename can
-                    // itself collide with a basename already in the set — e.g.
-                    // frame_2.fits, frame.fits, frame.fits would produce two
-                    // frame_2.fits entries and extractors silently clobber.
-                    var stem = Path.GetFileNameWithoutExtension(name);
-                    var ext = Path.GetExtension(name);
-                    var suffix = 1;
-                    string candidate;
-                    do {
-                        candidate = $"{stem}_{suffix++}{ext}";
-                    } while (!seenNames.Add(candidate));
-                    name = candidate;
-                }
-                // Snapshot the archive position: a failure MID-copy (after the
-                // entry header + partial data hit the stream) would otherwise
-                // leave bytes that corrupt alignment for every later entry (r3).
-                var positionBefore = ms.Position;
-                try {
-                    await tar.WriteEntryAsync(path, name, ct);
-                } catch (Exception ex) when (
-                        ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException
-                        || (ex is IOException && !File.Exists(path))) {
-                    // The file vanished between the existence check and the write
-                    // (r1 TOCTOU) — un-write any partial entry and skip it; the
-                    // rest of the selection still exports. A generic IOException
-                    // with the file STILL present is a real failure (e.g. the
-                    // in-memory archive hitting MemoryStream capacity) and must
-                    // surface, not masquerade as a missing file (r2).
-                    ms.SetLength(positionBefore);
-                    ms.Position = positionBefore;
-                    seenNames.Remove(name);
-                    continue;
-                }
-                exported++;
+        foreach (var frameId in request.FrameIds) {
+            if (!byId.TryGetValue(frameId, out var path) || path.Length == 0 || !File.Exists(path)) continue;
+            var name = Path.GetFileName(path);
+            if (!seenNames.Add(name)) {
+                // Suffix until genuinely unique — a single rename can itself
+                // collide (frame_1/frame/frame), silently clobbering on extract.
+                var stem = Path.GetFileNameWithoutExtension(name);
+                var ext = Path.GetExtension(name);
+                var suffix = 1;
+                string candidate;
+                do {
+                    candidate = $"{stem}_{suffix++}{ext}";
+                } while (!seenNames.Add(candidate));
+                name = candidate;
             }
+            entries.Add((path, name));
         }
-        if (exported == 0) {
-            await ms.DisposeAsync();
-            return null;
-        }
-        ms.Position = 0;
-        return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar", exported);
+        if (entries.Count == 0) return null;
+        return new FrameExportPrep(entries, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar");
     }
 
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
