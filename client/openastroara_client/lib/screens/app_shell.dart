@@ -8,6 +8,7 @@ import '../widgets/command_palette.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/ws_connection_indicator.dart';
+import 'calibration/calibration_screen.dart';
 import 'library/image_library_screen.dart';
 import 'stats/stats_dashboard_screen.dart';
 import 'tabs/imaging_tab.dart';
@@ -221,6 +222,21 @@ class _BottomStatusBar extends StatelessWidget {
             ),
             icon: const Icon(Icons.photo_library_outlined, size: 16),
             label: const Text('Image Library'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          // Calibration entry (§39.10). Full-screen route — live calibration
+          // sessions + matching-flats generation + the dark library.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const CalibrationScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.flare_outlined, size: 16),
+            label: const Text('Calibration'),
             style: TextButton.styleFrom(
               foregroundColor: AraColors.textSecondary,
               textStyle: Theme.of(context).textTheme.bodySmall,
