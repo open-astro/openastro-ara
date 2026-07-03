@@ -430,8 +430,10 @@ metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size r
 with add/remove via the single-id bulk reuse). Cursor paging SHIPPED (Load-more on the library +
 calibration session lists via the shared CursorPage envelope; frame strips stay first-page-only by
 design). Move-to-session SHIPPED (POST /frames/bulk/move,
-target-session existence 422-guarded; bulk bar picker over the loaded sessions). Still stubbed/tracked:
-§65.9 manual stretch sliders; Export bulk endpoint (tarball per §39.10).
+target-session existence 422-guarded; bulk bar picker over the loaded sessions). §65.9 manual sliders SHIPPED
+(the baked v0.0.1 design: 200 ms debounced server round-trip; black/midtone/white 0-1 with the
+profile-seed defaults; client-side real-time stretching stays v0.1.0). Still stubbed/tracked:
+Export bulk endpoint (tarball per §39.10 — the last §40.8 stub).
 
 ### ✅ DONE (2026-07-03) — `temperature_c` sentinel pass (from the #681 review)
 Nullable end-to-end: DDL dropped NOT NULL (in-place rebuild keyed on the stored DDL; rows copied

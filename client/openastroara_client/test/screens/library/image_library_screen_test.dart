@@ -56,10 +56,17 @@ class _FakeLibraryClient implements LibraryClient {
         tags: const ['keeper'],
       );
 
+  (double?, double?, double?)? previewKnobs;
+
   @override
   Future<List<int>> fetchPreview(String frameId,
-      {required String stretch, int maxDimensionPx = 2048}) async {
+      {required String stretch,
+      int maxDimensionPx = 2048,
+      double? blackPoint,
+      double? midtonePoint,
+      double? whitePoint}) async {
     previewRequest = (frameId, stretch);
+    previewKnobs = (blackPoint, midtonePoint, whitePoint);
     // A 1x1 transparent PNG so Image.memory can decode it in tests.
     return const [
       0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
@@ -429,6 +436,43 @@ void main() {
     expect(fake.moved!.$1, ['f1']);
     expect(fake.moved!.$2, 'sess-1');
     expect(find.text('1 selected'), findsNothing, reason: 'selection clears');
+  });
+
+  testWidgets('§65.9: manual palette shows sliders and debounces a re-render',
+      (tester) async {
+    final fake = _FakeLibraryClient(sessions: [
+      _session()
+    ], frames: {
+      'sess-1': [_frame('f1')],
+    });
+    await _pump(tester, fake);
+    await tester.tap(find.text('Ha'));
+    await tester.pumpAndSettle();
+
+    // Non-manual palettes send no knobs.
+    expect(fake.previewKnobs, (null, null, null));
+
+    await tester.tap(find.text('auto_stf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('manual').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Black'), findsOneWidget);
+    expect(find.text('Midtone'), findsOneWidget);
+    expect(find.text('White'), findsOneWidget);
+    // Switching to manual rendered with the seed values.
+    expect(fake.previewRequest!.$2, 'manual');
+    expect(fake.previewKnobs, (0.02, 0.5, 0.98));
+
+    // Drag the midtone slider; the debounce coalesces into one request.
+    await tester.drag(find.byType(Slider).at(1), const Offset(80, 0));
+    await tester.pump(const Duration(milliseconds: 100));
+    final requestsBeforeQuiet = fake.previewKnobs;
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(fake.previewKnobs!.$2, isNot(0.5),
+        reason: 'the debounced render carried the dragged midtone');
+    expect(requestsBeforeQuiet!.$2, 0.5,
+        reason: 'no render fired inside the 200 ms quiet window');
   });
 
   testWidgets('an empty catalog explains itself instead of showing demo data',
