@@ -138,6 +138,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(result, Is.Not.Null);
             Assert.That(result!.Value.FileName, Does.StartWith("openastroara-frames-").And.EndWith(".tar"));
+            Assert.That(result.Value.ExportedCount, Is.EqualTo(1), "the skipped file is not counted");
             var names = new List<string>();
             await using (var tar = new System.Formats.Tar.TarReader(result.Value.Stream)) {
                 while (await tar.GetNextEntryAsync(cancellationToken: CancellationToken.None) is { } entry) {
@@ -146,6 +147,44 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(names, Is.EqualTo(new[] { Path.GetFileName(fitsA) }),
                 "the existing file is in the tar; the missing one is skipped");
+        }
+
+        [Test]
+        public async Task Bulk_export_dedupes_names_that_collide_with_a_prior_rename() {
+            // r2: basenames frame_1.fits, frame.fits, frame.fits — the naive
+            // single-suffix rename of the third would collide with the first.
+            var idA = await InsertFrameWithNamedFileAsync("frame_1.fits", subdir: "a");
+            var idB = await InsertFrameWithNamedFileAsync("frame.fits", subdir: "b");
+            var idC = await InsertFrameWithNamedFileAsync("frame.fits", subdir: "c");
+
+            var result = await _repo.BulkExportAsync(
+                new BulkExportRequestDto(FrameIds: [idA, idB, idC]), CancellationToken.None);
+
+            Assert.That(result!.Value.ExportedCount, Is.EqualTo(3));
+            var names = new List<string>();
+            await using (var tar = new System.Formats.Tar.TarReader(result.Value.Stream)) {
+                while (await tar.GetNextEntryAsync(cancellationToken: CancellationToken.None) is { } entry) {
+                    names.Add(entry.Name);
+                }
+            }
+            Assert.That(names, Is.Unique, "no tar entry may clobber another on extract");
+            Assert.That(names.Count, Is.EqualTo(3));
+        }
+
+        private async Task<Guid> InsertFrameWithNamedFileAsync(string fileName, string subdir) {
+            var dir = Path.Combine(_dir, subdir);
+            Directory.CreateDirectory(dir);
+            var fits = Path.Combine(dir, fileName);
+            await File.WriteAllTextAsync(fits, "FITS");
+            var id = Guid.NewGuid();
+            await _repo.InsertAsync(new FrameDto(
+                Id: id, SessionId: Session, TargetName: "M31", FrameType: FrameType.Light,
+                FilterName: "Ha", ExposureSeconds: 300, Gain: 100, Offset: 10,
+                TemperatureC: -10, CapturedUtc: DateTimeOffset.UtcNow, FilePath: fits,
+                FileSizeBytes: 4, Width: 100, Height: 100, BitDepth: 16, Hfr: null,
+                StarCount: null, Eccentricity: null, GuidingRmsArcsec: null, SnrEstimate: null,
+                QualityScore: null, Rating: 0, Tags: []), CancellationToken.None);
+            return id;
         }
 
         [Test]

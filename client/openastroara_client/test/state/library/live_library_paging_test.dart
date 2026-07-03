@@ -75,7 +75,7 @@ class _PagedFake implements LibraryClient {
   Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {}
 
   @override
-  Future<(List<int>, String)> exportFrames(List<String> frameIds) async =>
+  Future<(List<int>, String, int)> exportFrames(List<String> frameIds) async =>
       throw UnimplementedError();
 
   @override

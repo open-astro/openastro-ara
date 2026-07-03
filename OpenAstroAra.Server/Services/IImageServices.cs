@@ -66,7 +66,7 @@ public interface IFrameRepository {
     /// <summary>§39.10 export: a tar stream of the selected frames' FITS files.
     /// Frames whose files are missing on disk are skipped; null when NOTHING
     /// was exportable (unknown ids or all files gone) — the endpoint 404s.</summary>
-    Task<(Stream Stream, string FileName)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct);
+    Task<(Stream Stream, string FileName, int ExportedCount)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct);
     /// <summary>
     /// §65.6 cache reset: delete all alt-stretch variants for a frame.
     /// Returns true if the frame exists, false if not found (→ 404).

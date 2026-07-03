@@ -643,7 +643,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-move", idempotencyKey);
     }
 
-    public async Task<(Stream Stream, string FileName)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct) {
+    public async Task<(Stream Stream, string FileName, int ExportedCount)?> BulkExportAsync(BulkExportRequestDto request, CancellationToken ct) {
         // Resolve the selected frames' file paths from the catalog.
         var paths = new List<string>();
         await using (var conn = _db.OpenConnection()) {
@@ -669,15 +669,30 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 if (!File.Exists(path)) continue;
                 var name = Path.GetFileName(path);
                 if (!seenNames.Add(name)) {
-                    name = $"{Path.GetFileNameWithoutExtension(name)}_{exported}{Path.GetExtension(name)}";
-                    seenNames.Add(name);
+                    // Suffix until genuinely unique (r2): a single "_<n>" rename can
+                    // itself collide with a basename already in the set — e.g.
+                    // frame_2.fits, frame.fits, frame.fits would produce two
+                    // frame_2.fits entries and extractors silently clobber.
+                    var stem = Path.GetFileNameWithoutExtension(name);
+                    var ext = Path.GetExtension(name);
+                    var suffix = 1;
+                    string candidate;
+                    do {
+                        candidate = $"{stem}_{suffix++}{ext}";
+                    } while (!seenNames.Add(candidate));
+                    name = candidate;
                 }
                 try {
                     await tar.WriteEntryAsync(path, name, ct);
-                } catch (Exception ex) when (ex is IOException or FileNotFoundException or UnauthorizedAccessException) {
+                } catch (Exception ex) when (
+                        ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException
+                        || (ex is IOException && !File.Exists(path))) {
                     // The file vanished between the existence check and the write
                     // (r1 TOCTOU) — skip it like the check would have; the rest of
-                    // the selection still exports.
+                    // the selection still exports. A generic IOException with the
+                    // file STILL present is a real failure (e.g. the in-memory
+                    // archive hitting MemoryStream capacity) and must surface,
+                    // not masquerade as a missing file (r2).
                     seenNames.Remove(name);
                     continue;
                 }
@@ -689,7 +704,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return null;
         }
         ms.Position = 0;
-        return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar");
+        return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar", exported);
     }
 
     public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {

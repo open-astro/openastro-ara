@@ -92,9 +92,9 @@ class _FakeLibraryClient implements LibraryClient {
   List<String>? exported;
 
   @override
-  Future<(List<int>, String)> exportFrames(List<String> frameIds) async {
+  Future<(List<int>, String, int)> exportFrames(List<String> frameIds) async {
     exported = frameIds;
-    return ([1, 2, 3], 'openastroara-frames-test.tar');
+    return ([1, 2, 3], 'openastroara-frames-test.tar', frameIds.length);
   }
 
   @override

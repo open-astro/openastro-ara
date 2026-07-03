@@ -140,7 +140,8 @@ class LibraryBulkActionBar extends ConsumerWidget {
                           : () async {
                               // §39.10: tar of the selected FITS files via the
                               // OS save dialog (the sequence-export idiom).
-                              final (bytes, fileName) = await (() async {
+                              final (bytes, fileName, exportedCount) =
+                                  await (() async {
                                 try {
                                   return await api.exportFrames(ids);
                                 } on Exception catch (e) {
@@ -148,7 +149,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(content: Text('Export failed: $e')));
                                   }
-                                  return (const <int>[], '');
+                                  return (const <int>[], '', 0);
                                 }
                               })();
                               if (bytes.isEmpty || !context.mounted) return;
@@ -169,9 +170,14 @@ class LibraryBulkActionBar extends ConsumerWidget {
                               ref
                                   .read(librarySelectionProvider.notifier)
                                   .clear();
+                              // Honest partial-success reporting (r2): missing
+                              // files skip server-side by design.
+                              final summary = exportedCount == ids.length
+                                  ? 'Exported $exportedCount frame(s)'
+                                  : 'Exported $exportedCount of ${ids.length} frame(s) — the rest were missing on disk';
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                   content: Text(
-                                      'Exported ${ids.length} frame(s) → ${saved.split(RegExp(r'[/\\]')).last}')));
+                                      '$summary → ${saved.split(RegExp(r'[/\\]')).last}')));
                             },
                     ),
                     _BulkAction(
