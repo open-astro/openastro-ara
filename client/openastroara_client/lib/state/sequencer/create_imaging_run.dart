@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/imaging_run_body.dart';
+import '../../models/sequence/sequence_summary.dart';
+import '../../services/profile_api.dart';
 import '../../services/sequence_api.dart';
 import '../app_shell_state.dart';
+import '../saved_server_state.dart';
 import '../settings/autofocus_settings_state.dart';
 import '../settings/imaging_defaults_state.dart';
 import 'sequence_editor_state.dart';
@@ -36,7 +39,14 @@ class ImagingRunResult {
 /// ([buildImagingRunBody]) on the daemon.
 ///
 /// Returns the result, or null when no server is connected. Throws on
-/// create/validation failure — callers own their error surface (SnackBar).
+/// create/append failure — callers own their error surface (SnackBar).
+///
+/// All post-await provider work goes through the [ProviderContainer], not the
+/// caller's [WidgetRef]: the calling widget (a Tonight's Sky row, the action
+/// bar) can be disposed while a round-trip is in flight, and a disposed
+/// WidgetRef throws — which would turn a create/append that SUCCEEDED on the
+/// daemon into a reported failure (and, on the append path, into a duplicate
+/// fresh run via the fallback).
 Future<ImagingRunResult?> createImagingRun(
   WidgetRef ref, {
   required double raDeg,
@@ -46,9 +56,18 @@ Future<ImagingRunResult?> createImagingRun(
 }) async {
   final api = ref.read(sequenceApiProvider);
   if (api == null) return null;
+  final container = ProviderScope.containerOf(ref.context, listen: false);
 
-  final defaults = ref.read(imagingDefaultsProvider);
-  final af = ref.read(autofocusSettingsProvider);
+  // The run is "built from the user's configured Imaging Defaults" — which
+  // live on the daemon. The settings notifiers hydrate lazily (when their
+  // Settings panels mount), so a fresh session that goes straight to Planning
+  // would otherwise bake the CLIENT'S constructor defaults into the run. Pull
+  // them fresh here; a failure keeps whatever the notifiers already hold (the
+  // same best-effort contract the panels use).
+  await _hydratePlanningSettings(container);
+
+  final defaults = container.read(imagingDefaultsProvider);
+  final af = container.read(autofocusSettingsProvider);
   final exposureSeconds =
       defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
   final frameCount = defaultFrameCount(
@@ -62,7 +81,7 @@ Future<ImagingRunResult?> createImagingRun(
       ? math.max(1, ((af.everyNHours * 3600.0) / exposureSeconds).ceil())
       : null;
 
-  final selectedId = ref.read(selectedSequenceIdProvider);
+  final selectedId = container.read(selectedSequenceIdProvider);
   if (selectedId != null) {
     final block = buildTargetBlock(
       raDeg: raDeg,
@@ -75,11 +94,16 @@ Future<ImagingRunResult?> createImagingRun(
       frameCount: frameCount,
       autofocusEveryNExposures: afEveryExposures,
     );
-    if (await _tryAppendTarget(ref, api, selectedId, block)) {
-      // The list's ModifiedUtc ordering changed; selection already points at
-      // the sequence, so just bring the Run tab forward onto the grown plan.
-      ref.invalidate(sequenceListProvider);
-      ref.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    // Only PRE-PATCH problems (running, vanished, non-container root,
+    // transport failure while reading) fall back to creating a fresh run. A
+    // failed updateSequence rethrows instead: the daemon may have applied the
+    // append before the response was lost, and creating then would duplicate
+    // the target across two sequences.
+    final newBody = await _prepareAppend(container, api, selectedId, block);
+    if (newBody != null) {
+      final detail = await api.updateSequence(selectedId, body: newBody);
+      _syncAfterBodyChange(container, selectedId, detail);
+      container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
       return ImagingRunResult(selectedId, appended: true);
     }
   }
@@ -103,9 +127,9 @@ Future<ImagingRunResult?> createImagingRun(
   // Same post-create choreography as the NINA import flow: refresh the list,
   // select the new sequence (the Run tab listens and loads it), then bring the
   // Run tab forward so "Create Run" lands the user ON the run it created.
-  ref.invalidate(sequenceListProvider);
-  ref.read(selectedSequenceIdProvider.notifier).select(id);
-  ref.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+  container.invalidate(sequenceListProvider);
+  container.read(selectedSequenceIdProvider.notifier).select(id);
+  container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
   return ImagingRunResult(id, appended: false);
 }
 
@@ -125,7 +149,9 @@ Future<RemoveTargetOutcome> removeTargetFromSequence(
 }) async {
   final api = ref.read(sequenceApiProvider);
   if (api == null) return RemoveTargetOutcome.noServer;
-  final id = ref.read(selectedSequenceIdProvider);
+  // Container, not WidgetRef, past the awaits — see createImagingRun.
+  final container = ProviderScope.containerOf(ref.context, listen: false);
+  final id = container.read(selectedSequenceIdProvider);
   if (id == null) return RemoveTargetOutcome.notFound;
 
   final runState = await api.getRunState(id);
@@ -133,60 +159,87 @@ Future<RemoveTargetOutcome> removeTargetFromSequence(
     return RemoveTargetOutcome.runningBlocked;
   }
 
-  final editor = ref.read(sequenceEditorProvider);
-  final baseBody = (editor != null && editor.id == id)
-      ? editor.body
-      : (await api.getSequenceDetail(id)).body;
+  final baseBody = await _openSequenceBaseBody(container, api, id);
   final newBody = removeTargetFromRunBody(baseBody, targetName);
   if (newBody == null) return RemoveTargetOutcome.notFound;
 
   final detail = await api.updateSequence(id, body: newBody);
-  // Re-sync the editor (not-dirty, at the saved body) when it holds this
-  // sequence, so the Run tab drops the target without a re-select.
-  if (ref.read(sequenceEditorProvider)?.id == id) {
-    ref.read(sequenceEditorProvider.notifier).load(detail);
-  }
-  ref.invalidate(sequenceListProvider);
+  _syncAfterBodyChange(container, id, detail);
   return RemoveTargetOutcome.removed;
 }
 
-/// Append [targetBlock] to sequence [id] on the daemon. True on success; false
-/// means "fall back to creating a fresh run" — the sequence is actively
-/// running/pausing (the executor works from its own loaded copy, so a file
-/// edit would silently not join the live run), its root isn't a container, or
-/// any round-trip failed (a create is about to retry the same transport
-/// anyway, and ITS failure is the one surfaced to the user).
-///
-/// The base body is the editor's working copy when this sequence is the one
-/// loaded there — "Add to Sequence" targets what the user SEES, so any unsaved
-/// edits are deliberately persisted along with the new target rather than
-/// silently dropped by patching over them from the daemon's older copy.
-Future<bool> _tryAppendTarget(
-  WidgetRef ref,
+/// Best-effort hydration of the planning-relevant settings sections from the
+/// active server's profile (imaging defaults + autofocus). No server → no-op;
+/// a transport failure keeps the notifiers' current state.
+Future<void> _hydratePlanningSettings(ProviderContainer container) async {
+  final servers = container.read(savedServersProvider).maybeWhen(
+        data: (list) => list,
+        orElse: () => const [],
+      );
+  if (servers.isEmpty) return;
+  // Most-recently-saved server is the de-facto active one — same convention
+  // as the settings panels' own hydration.
+  final api = ProfileApi(servers.last);
+  try {
+    await Future.wait([
+      container.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
+      container.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
+    ]);
+  } catch (e) {
+    debugPrint('[planning] settings hydration failed (using local values): $e');
+  }
+}
+
+/// The append's PRE-PATCH phase: probe the run state, resolve the base body,
+/// and graft [targetBlock] onto it. Null = "fall back to creating a fresh
+/// run" — the sequence is actively running (a file edit would silently not
+/// join the live run), its root isn't a container, or a read failed (a create
+/// is about to retry the same transport anyway). Deliberately does NOT cover
+/// the PATCH itself — see the call site.
+Future<Map<String, dynamic>?> _prepareAppend(
+  ProviderContainer container,
   SequenceClient api,
   String id,
   Map<String, dynamic> targetBlock,
 ) async {
   try {
     final runState = await api.getRunState(id);
-    if (runState?.state?.isActive ?? false) return false;
-
-    final editor = ref.read(sequenceEditorProvider);
-    final baseBody = (editor != null && editor.id == id)
-        ? editor.body
-        : (await api.getSequenceDetail(id)).body;
-    final newBody = appendTargetToRunBody(baseBody, targetBlock);
-    final detail = await api.updateSequence(id, body: newBody);
-    // Re-sync the editor (not-dirty, at the saved body) when it holds this
-    // sequence, so the Run tab shows the appended target without a re-select.
-    if (ref.read(sequenceEditorProvider)?.id == id) {
-      ref.read(sequenceEditorProvider.notifier).load(detail);
-    }
-    return true;
+    if (runState?.state?.isActive ?? false) return null;
+    final baseBody = await _openSequenceBaseBody(container, api, id);
+    return appendTargetToRunBody(baseBody, targetBlock);
   } on ArgumentError {
-    return false; // non-container root (e.g. an exotic import) — create fresh
+    return null; // non-container root (e.g. an exotic import) — create fresh
   } catch (e) {
     debugPrint('[planning] append-to-sequence failed, creating a new run: $e');
-    return false;
+    return null;
   }
+}
+
+/// The base body a mutation of sequence [id] starts from: the editor's working
+/// copy when the editor holds this sequence — "Add to Sequence"/"Remove"
+/// target what the user SEES, so unsaved edits are deliberately persisted
+/// along with the change rather than clobbered by the daemon's older copy —
+/// else the daemon's saved detail.
+Future<Map<String, dynamic>> _openSequenceBaseBody(
+  ProviderContainer container,
+  SequenceClient api,
+  String id,
+) async {
+  final editor = container.read(sequenceEditorProvider);
+  if (editor != null && editor.id == id) return editor.body;
+  return (await api.getSequenceDetail(id)).body;
+}
+
+/// After a persisted body mutation: re-sync the editor (not-dirty, at the
+/// saved body) when it holds this sequence so the Run tab shows the change
+/// without a re-select, and refresh the list (ModifiedUtc ordering changed).
+void _syncAfterBodyChange(
+  ProviderContainer container,
+  String id,
+  SequenceDetail detail,
+) {
+  if (container.read(sequenceEditorProvider)?.id == id) {
+    container.read(sequenceEditorProvider.notifier).load(detail);
+  }
+  container.invalidate(sequenceListProvider);
 }

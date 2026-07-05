@@ -34,6 +34,12 @@ Future<bool> confirmAndDeleteSequence(
         backgroundColor: AraColors.accentError));
     return false;
   }
+  // Post-await provider work goes through the container, not [ref]: the Load
+  // dialog can be barrier-dismissed while the DELETE is in flight (disposing
+  // the button and making its WidgetRef throw), and the selection/editor
+  // cleanup below MUST still run or the Run tab keeps editing a record that
+  // no longer exists.
+  final container = ProviderScope.containerOf(context, listen: false);
 
   // Ask the daemon NOW whether a run is active, so the confirm wording — and
   // whether we abort first — matches reality rather than a stale list row.
@@ -99,12 +105,15 @@ Future<bool> confirmAndDeleteSequence(
     // false = the daemon didn't know the id (already gone) — same outcome the
     // user wanted, so both paths clean up and report success.
     await api.deleteSequence(id);
-    if (!context.mounted) return true;
-    if (ref.read(selectedSequenceIdProvider) == id) {
-      ref.read(selectedSequenceIdProvider.notifier).select(null);
-      ref.read(sequenceEditorProvider.notifier).clear();
+    if (container.read(selectedSequenceIdProvider) == id) {
+      container.read(selectedSequenceIdProvider.notifier).select(null);
+      container.read(sequenceEditorProvider.notifier).clear();
     }
-    unawaited(ref.read(sequenceListProvider.notifier).refresh());
+    // The list refresh only matters while something is showing it; an
+    // unmounted dialog's autoDispose list refetches on its next open anyway.
+    if (context.mounted) {
+      unawaited(container.read(sequenceListProvider.notifier).refresh());
+    }
     messenger.showSnackBar(SnackBar(content: Text('Deleted $displayName.')));
     return true;
   } catch (e, st) {

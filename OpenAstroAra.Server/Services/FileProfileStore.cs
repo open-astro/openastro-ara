@@ -177,8 +177,13 @@ public sealed partial class FileProfileStore : IProfileStore {
     /// value, plus the inner-list normalizations (a <c>"filter_set": {}</c> yields a DTO with
     /// a null list). The nullable casts sidestep the "left operand is never null" NRT
     /// warnings — the runtime values genuinely can be null here (Json.NET-style holes).</summary>
+    // Built once: the snapshot is a pure constant of immutable records, and
+    // profile-select pushes 16 back-to-back Puts through NormalizeSections —
+    // rebuilding it per write is deterministic wasted allocation.
+    private static readonly ProfileSnapshotDto CachedDefaults = DefaultSnapshot();
+
     private static ProfileSnapshotDto NormalizeSections(ProfileSnapshotDto snap) {
-        var defaults = DefaultSnapshot();
+        var defaults = CachedDefaults;
         var filterSet = (FilterSetDto?)snap.FilterSet ?? defaults.FilterSet;
         if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
             filterSet = defaults.FilterSet;
@@ -225,7 +230,7 @@ public sealed partial class FileProfileStore : IProfileStore {
     }
 
     private ProfileSnapshotDto LoadOrDefaults() {
-        var defaults = DefaultSnapshot();
+        var defaults = CachedDefaults;
         if (!File.Exists(_profilePath)) {
             // First boot — write the defaults out so the user can see
             // the schema even before they edit anything.

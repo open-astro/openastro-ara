@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/slew_target_body.dart';
 
@@ -187,6 +188,23 @@ void main() {
     test('appends at the end when the session has no warm-up step', () {
       final grown = appendTargetToRunBody(session(warmAtEnd: false), block('M 31'));
       expect(childrenOf(grown).last['Name'], 'M 31');
+    });
+
+    test('walks back over a trailing warm-up AND park run', () {
+      // A hand-edited session ending [..., WarmCamera, ParkScope]: the new
+      // target must image BEFORE the scope parks and the camera warms —
+      // appending after either would shoot a parked mount with a warm sensor.
+      final park = instructionForType(parkScopeType)!.build();
+      final base = session(); // ends with WarmCamera
+      final withPark = withChildren(base, [...childrenOf(base), park]);
+
+      final grown = appendTargetToRunBody(withPark, block('M 31'));
+      final types =
+          childrenOf(grown).map((c) => c[r'$type'] as String).toList();
+      final names = childrenOf(grown).map((c) => c['Name']).toList();
+      expect(names[names.length - 3], 'M 31');
+      expect(types[types.length - 2], contains('.Camera.WarmCamera'));
+      expect(types.last, contains('.Telescope.ParkScope'));
     });
 
     test('does not mutate the source body', () {

@@ -165,7 +165,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     // panel is shown — a bare read would let it dispose (closing its Dio) before
     // an in-flight create() resolves.
     final canAdd = ref.watch(sequenceApiProvider) != null;
-    final selected = ref.watch(selectedTonightObjectProvider) == _object.id;
+    // select() so a selection change rebuilds only the two rows whose
+    // highlight actually flipped, not every visible row.
+    final selected = ref
+        .watch(selectedTonightObjectProvider.select((id) => id == _object.id));
 
     return InkWell(
       onTap: _frameOnAtlas,
@@ -366,10 +369,15 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   /// forwards it over the loopback server to the page's `/aracmd` handler, which
   /// points the view at the coordinates directly (no name lookup). The provider
   /// always notifies, so recentring the same object twice still re-centres.
+  /// The name rides along so the page's frame-target label follows the view:
+  /// without it, a recentre after a framed goto leaves the framing overlay's
+  /// "Create Run" carrying the PREVIOUS object's name with this one's
+  /// coordinates (the page keeps the old name when a goto brings none).
   void _recentre() => ref.read(planetariumCommandProvider.notifier).send({
     'type': 'goto',
     'ra': _object.raDeg,
     'dec': _object.decDeg,
+    'name': _object.name,
   });
 
   /// Create a full imaging run for this object — cool/unpark/track/slew/

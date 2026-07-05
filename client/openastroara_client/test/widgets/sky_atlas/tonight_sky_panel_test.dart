@@ -307,6 +307,7 @@ void main() {
       'type': 'goto',
       'ra': _m31.raDeg,
       'dec': _m31.decDeg,
+      'name': 'Andromeda Galaxy',
     });
     // Centre-only: no selection claim — the row is not marked as framed.
     expect(container.read(selectedTonightObjectProvider), isNull);
@@ -519,6 +520,7 @@ void main() {
       'type': 'goto',
       'ra': _m31.raDeg,
       'dec': _m31.decDeg,
+      'name': 'Andromeda Galaxy',
     });
   });
 

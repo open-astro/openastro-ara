@@ -182,10 +182,13 @@ Map<String, dynamic> buildTargetBlock({
 }
 
 /// A copy of [root] with [targetBlock] appended as another target: inserted
-/// before a trailing Warm Camera when the session ends with one (the new
-/// target must still image before the camera warms up), else at the end.
-/// Throws [ArgumentError] when [root] isn't a container — the caller should
-/// fall back to creating a fresh run instead.
+/// before the trailing run of session-END steps (Warm Camera / Park Scope)
+/// when the session ends with any — the new target must still image before
+/// the camera warms up or the scope parks — else at the end. (An imported
+/// NINA sequence that wraps its end steps in an "End" CONTAINER is not
+/// detected — containers are indistinguishable from target blocks here; see
+/// design/PORT_TODO.md.) Throws [ArgumentError] when [root] isn't a
+/// container — the caller should fall back to creating a fresh run instead.
 Map<String, dynamic> appendTargetToRunBody(
     Map<String, dynamic> root, Map<String, dynamic> targetBlock) {
   if (!isContainer(root)) {
@@ -193,12 +196,17 @@ Map<String, dynamic> appendTargetToRunBody(
         root[r'$type'], 'root', 'the sequence root is not a container');
   }
   final children = childrenOf(root);
-  final insertAt =
-      (children.isNotEmpty && children.last[r'$type'] == warmCameraType)
-          ? children.length - 1
-          : children.length;
+  var insertAt = children.length;
+  while (insertAt > 0 && _isSessionEndStep(children[insertAt - 1])) {
+    insertAt--;
+  }
   return withChildren(root, [...children]..insert(insertAt, targetBlock));
 }
+
+/// A leaf step that belongs at the very end of a session — appending a target
+/// after it would image with a warm sensor / a parked mount.
+bool _isSessionEndStep(Map<String, dynamic> node) =>
+    node[r'$type'] == warmCameraType || node[r'$type'] == parkScopeType;
 
 /// Index of the target block named [targetName] among [root]'s children — the
 /// per-target container [buildTargetBlock] emits and [appendTargetToRunBody]
@@ -270,6 +278,8 @@ const String warmCameraType =
     'OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera, OpenAstroAra.Sequencer';
 const String unparkScopeType =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope, OpenAstroAra.Sequencer';
+const String parkScopeType =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope, OpenAstroAra.Sequencer';
 const String setTrackingType =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer';
 const String switchFilterType =
