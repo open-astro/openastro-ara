@@ -25,6 +25,11 @@ openastro-ara/                       (this repo)
 └── design/                          ← port playbook + tracking docs (not shipped)
 ```
 
+## Running
+
+- [`RUNNING.md`](RUNNING.md) — build & run the daemon + client from source on Linux, macOS, or Windows.
+- [`DEPLOY.md`](DEPLOY.md) — install a released build on a Raspberry Pi (production).
+
 ## License
 
 Split by directory (see `NOTICE.md` and `design/PORT_DECISIONS.md` 2026-07-01):
