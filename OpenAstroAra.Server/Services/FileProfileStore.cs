@@ -125,13 +125,21 @@ public sealed partial class FileProfileStore : IProfileStore {
         return next;
     }
 
-    public CameraElectronicsDto GetCameraElectronics() { lock (_lock) { return _snapshot.CameraElectronics; } }
-    public void PutCameraElectronics(CameraElectronicsDto value) => UpdateAndPersist(s => s with { CameraElectronics = value });
+    // IProfileStore promises a non-null section (the in-memory store returns new()).
+    // LoadOrDefaults back-fills a null-on-disk section, but a saved multi-profile
+    // snapshot with a null camera-electronics section is later pushed straight
+    // through Apply → PutCameraElectronics, so guard both the write (never store a
+    // null) and the read (belt-and-suspenders): a null here NRE'd the optimal-sub
+    // calculator (OptimalSubOverrides derefs it) and the GET body.
+    public CameraElectronicsDto GetCameraElectronics() { lock (_lock) { return _snapshot.CameraElectronics ?? new(); } }
+    public void PutCameraElectronics(CameraElectronicsDto value) => UpdateAndPersist(s => s with { CameraElectronics = value ?? new() });
 
     public CameraElectronicsDto UpdateCameraElectronics(Func<CameraElectronicsDto, CameraElectronicsDto?> update) {
         CameraElectronicsDto next;
         lock (_lock) {
-            var current = _snapshot.CameraElectronics;
+            // Coalesce like the getter: a saved snapshot can have left this null,
+            // and the auto-populate updater does `current with { … }` on it.
+            var current = _snapshot.CameraElectronics ?? new();
             var candidate = update(current);
             if (candidate is null || candidate == current) {
                 return current; // no change — no persist, no event

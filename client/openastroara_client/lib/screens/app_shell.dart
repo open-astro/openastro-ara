@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/app_shell_state.dart';
+import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
