@@ -11,22 +11,27 @@ WebGL/WASM planetarium renderer by Stellarium Labs SRL.
   query and drives the engine in-page (on-screen controls, object selection/GoTo) —
   there is no Dart→page JS bridge.
 - **This is a MODIFIED build of the engine.** The vendored `.wasm`/`.js` carry a
-  small source patch (clickable star pick-areas + a star-survey type-check relax)
-  on top of upstream, plus three build-config flags. **The complete corresponding
-  source is publicly hosted at the AGPL §13 fork:**
+  small source patch (clickable star pick-areas, a star-survey type-check relax,
+  a pre-first-frame font-registration fix and a float-arg hardening) on top of
+  upstream, plus four build-config flags. **The complete corresponding source is
+  publicly hosted at the AGPL §13 fork:**
   **https://github.com/open-astro/stellarium-web-engine** — branch `master`
   (upstream `525aa40` + the ARA patch commits), pinned by tag
-  [`ara-v1`](https://github.com/open-astro/stellarium-web-engine/releases/tag/ara-v1)
-  at commit `6bfebb5`, whose ancestry carries all four patch commits
+  [`ara-v2`](https://github.com/open-astro/stellarium-web-engine/releases/tag/ara-v2)
+  at commit `9d48a78d`, whose ancestry carries all seven patch commits
   (oldest → newest): `cf31725` (SConstruct: both export edits —
   `EXPORTED_FUNCTIONS=['_free','_malloc']` + `withStackSave`),
   `ba905ca` (stars.c: every star selectable), `a867caf` (stars.c: type-less
-  survey accepted), `6bfebb5` (stars.c: per-frame pick-area cap).
-  The same patch is also reproduced verbatim in
+  survey accepted), `6bfebb5` (stars.c: per-frame pick-area cap),
+  `e310ae69` (SConstruct: `STACK_SIZE=5242880`), `c66f13ae` (render_gl.c:
+  create the renderer when core_add_font runs before the first frame),
+  `9d48a78d` (args.c: deterministic 0 on a bad float arg; SConstruct: make
+  `mode=debug` buildable on emcc 3.1.x).
+  The same patch is also reproduced in
   [§ Source modifications](#source-modifications) below — apply it to a clean
   upstream checkout and run the build recipe to reproduce the exact artifacts.
   (§13 applies because the daemon conveys the engine to users over the network;
-  published 2026-07-01.)
+  published 2026-07-01, updated 2026-07-03.)
 
 ## How the vendored artifacts were built
 
@@ -38,11 +43,15 @@ to clone the published fork at the pinned tag, which already carries the patch
 and the SConstruct edits as commits:
 
 ```sh
-git clone --branch ara-v1 https://github.com/open-astro/stellarium-web-engine.git
+git clone --branch ara-v2 https://github.com/open-astro/stellarium-web-engine.git
 cd stellarium-web-engine
 docker run --rm -v "$PWD":/src -w /src emscripten/emsdk:3.1.51 \
   bash -lc "pip3 install scons && emscons scons -j8 mode=release werror=0"
 ```
+
+(Equivalently, without docker: install emsdk 3.1.51 + scons locally and run the
+same `emscons scons` line — the `ara-v2` artifacts were produced that way on
+macOS arm64; the wasm is fully deterministic given the emsdk version.)
 
 Or equivalently, from a clean upstream checkout:
 
@@ -57,7 +66,7 @@ docker run --rm -v "$PWD":/src -w /src emscripten/emsdk:3.1.51 \
 # → build/stellarium-web-engine.js, build/stellarium-web-engine.wasm
 ```
 
-Three build-config deviations from upstream's default `make js`:
+Four build-config deviations from upstream's default `make js`:
 
 1. **`EXPORTED_FUNCTIONS=['_free','_malloc']`.** Upstream's `SConstruct` lists
    `_free`/`_malloc` under `EXTRA_EXPORTED_RUNTIME_METHODS` with
@@ -83,16 +92,50 @@ Three build-config deviations from upstream's default `make js`:
    warning is harmless; the symbol is still emitted into the module.)
 3. **`werror=0`.** Modern emscripten/clang promotes some warnings in the
    vendored 2022-era C deps (e.g. K&R-style `zlib` prototypes) to errors.
+4. **`STACK_SIZE=5242880`** (the `ara-v2` fix). emscripten 3.1.27 dropped the
+   default wasm stack from 5 MB (`TOTAL_STACK`) to 64 KB and moved it FIRST in
+   linear memory. The engine was written against the old default: deep render
+   paths plus the re-entrant JS→wasm attribute calls its per-frame callbacks
+   make (obj getters, `ccall` string marshalling via `stackAlloc`) can exceed
+   64 KB, and with the stack-first layout the overflow traps as a fatal,
+   state-corrupting `memory access out of bounds` mid-frame — after which every
+   call into the module faults. In ARA this made the Catalogs overlay (a
+   geojson layer with a few hundred octagon features) freeze the whole
+   planetarium the moment NGC/IC was toggled on. Restoring the 5 MB stack the
+   engine was designed for fixes it (verified: 500-object overlays × 12
+   catalogs render fault-free).
 
 ## Source modifications
 
 To satisfy AGPL §1 ("complete corresponding source"), the source patch carried by
-the vendored binary is reproduced here verbatim. It touches one file,
-`src/modules/stars.c`, and makes rendered stars selectable by click (upstream only
-registers a hit-area for the few brightest), bounded by a per-frame budget so deep
-dense fields stay responsive, plus relaxes a star-survey `type` check so minimal
-upstream survey manifests load. Apply with `git apply` to a clean upstream checkout
-before building.
+the vendored binary is reproduced here. The pinned fork tag is authoritative;
+the diffs below summarise every change. The patch touches three files:
+
+- **`src/modules/stars.c`** — makes rendered stars selectable by click (upstream
+  only registers a hit-area for the few brightest), bounded by a per-frame budget
+  so deep dense fields stay responsive, plus relaxes a star-survey `type` check so
+  minimal upstream survey manifests load (diff below).
+- **`src/render_gl.c`** (`ara-v2`) — `core_add_font` now creates the renderer when
+  called before the first frame. The JS `setFont` glue calls in as soon as its
+  font fetch resolves, which on a local server beats the first `core_render`;
+  `core->rend` was still NULL and nanovg scribbled through the garbage read from
+  the bottom of linear memory — random boot-time heap corruption:
+
+  ```diff
+  @@ void core_add_font(renderer_t *rend, ...)
+  -    rend = rend ?: (void*)core->rend;
+  +    if (!rend) {
+  +        if (!core->rend)
+  +            core->rend = render_create();
+  +        rend = (void*)core->rend;
+  +    }
+  ```
+- **`src/args.c`** (`ara-v2`) — `args_vget`'s `TYPE_FLOAT` branch now writes a
+  deterministic `0` before its `assert(false)` on non-numeric json (a JS `NaN`
+  arrives as json `null`); release builds previously left the caller's output
+  double unwritten, storing stack garbage into the attribute being set.
+
+Apply with `git apply` to a clean upstream checkout before building.
 
 ```diff
 @@ struct stars {
