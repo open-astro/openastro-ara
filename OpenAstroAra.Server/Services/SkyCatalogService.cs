@@ -62,7 +62,7 @@ namespace OpenAstroAra.Server.Services {
 
         private sealed record DsoRow(
             string Name, double RaDeg, double DecDeg, double? Mag, string Type,
-            bool HasM, bool HasNgc, bool HasIc, bool HasCaldwell,
+            int? MessierNum, int? CaldwellNum,
             double? MajAxArcmin, double? MinAxArcmin, double? PosAngleDeg, double? SurfaceBrightness,
             string? CommonName);
 
@@ -70,11 +70,20 @@ namespace OpenAstroAra.Server.Services {
 
         // OpenNGC `Type` codes: G/GPair/GTrpl/GGroup galaxies, OCl open cluster, GCl globular,
         // PN planetary nebula, HII/EmN emission, RfN reflection, Neb/Cl+N nebula, SNR remnant.
+        //
+        // NGC/IC membership is the row's PRIMARY designation (the Name column). OpenNGC's `NGC`
+        // and `IC` COLUMNS are cross-identification fields ("this object also carries that other
+        // id"), NOT membership flags — e.g. NGC1027 carries IC='1824' while the actual IC0434 row
+        // has an empty IC column — so matching on them inverted both catalogs (the IC overlay was
+        // mostly NGC-named rows and vice versa). Messier/Caldwell have no rows of their own, so
+        // those two really are the cross-reference columns (M / "C NNN" in Identifiers).
         private static readonly IReadOnlyList<CatalogDef> Defs = new[] {
-            new CatalogDef("messier", "Messier", "Catalogs", r => r.HasM),
-            new CatalogDef("caldwell", "Caldwell", "Catalogs", r => r.HasCaldwell),
-            new CatalogDef("ngc", "NGC", "Catalogs", r => r.HasNgc),
-            new CatalogDef("ic", "IC", "Catalogs", r => r.HasIc),
+            new CatalogDef("messier", "Messier", "Catalogs", r => r.MessierNum is not null),
+            new CatalogDef("caldwell", "Caldwell", "Catalogs", r => r.CaldwellNum is not null),
+            new CatalogDef("ngc", "NGC", "Catalogs",
+                r => r.Name.StartsWith("NGC", StringComparison.Ordinal)),
+            new CatalogDef("ic", "IC", "Catalogs",
+                r => r.Name.StartsWith("IC", StringComparison.Ordinal)),
             new CatalogDef("galaxies", "Galaxies", "Types",
                 r => r.Type is "G" or "GPair" or "GTrpl" or "GGroup"),
             new CatalogDef("open-clusters", "Open clusters", "Types", r => r.Type is "OCl"),
@@ -110,7 +119,40 @@ namespace OpenAstroAra.Server.Services {
             if (limit is { } l) {
                 q = q.Take(Math.Max(0, l));
             }
-            return q.Select(r => new CatalogObjectDto(r.Name, r.RaDeg, r.DecDeg, r.Mag)).ToList();
+            return q.Select(r => new CatalogObjectDto(DisplayName(catalogId, r), r.RaDeg, r.DecDeg, r.Mag))
+                .ToList();
+        }
+
+        // The overlay label for a row, in the designation system of the catalog it was requested
+        // through: the Messier overlay says "M 31", not the row's primary id "NGC0224"; Caldwell
+        // says "C 14". Everything else shows the primary id in its conventional spelling
+        // ("NGC 224" / "IC 434"), not OpenNGC's zero-padded key.
+        private static string DisplayName(string catalogId, DsoRow r) => catalogId switch {
+            "messier" => $"M {r.MessierNum}",
+            "caldwell" => $"C {r.CaldwellNum}",
+            _ => PrettyDsoName(r.Name),
+        };
+
+        // "NGC0224" → "NGC 224", "IC0080 NED01" → "IC 80 NED01"; any other shape is returned
+        // unchanged. Purely presentational — GetAllDsos keeps the raw OpenNGC key.
+        private static string PrettyDsoName(string name) {
+            var prefixLen = name.StartsWith("NGC", StringComparison.Ordinal) ? 3
+                : name.StartsWith("IC", StringComparison.Ordinal) ? 2 : 0;
+            if (prefixLen == 0) {
+                return name;
+            }
+            var i = prefixLen;
+            while (i < name.Length && name[i] == '0') {
+                i++;
+            }
+            var j = i;
+            while (j < name.Length && char.IsAsciiDigit(name[j])) {
+                j++;
+            }
+            if (j == i) {
+                return name;   // no digits after the prefix — not a designation we understand
+            }
+            return $"{name[..prefixLen]} {name[i..j]}{name[j..]}";
         }
 
         public IReadOnlyList<DsoEntryDto>? GetAllDsos(CancellationToken ct) {
@@ -180,7 +222,7 @@ namespace OpenAstroAra.Server.Services {
             var cols = header.Split(';');     // OpenNGC is semicolon-separated
             int Idx(string n) => Array.IndexOf(cols, n);
             int iName = Idx("Name"), iType = Idx("Type"), iRa = Idx("RA"), iDec = Idx("Dec"),
-                iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"), iNgc = Idx("NGC"), iIc = Idx("IC"),
+                iV = Idx("V-Mag"), iB = Idx("B-Mag"), iM = Idx("M"),
                 iId = Idx("Identifiers"),
                 iMaj = Idx("MajAx"), iMin = Idx("MinAx"), iPa = Idx("PosAng"), iSb = Idx("SurfBr"),
                 iCommon = Idx("Common names");
@@ -206,8 +248,18 @@ namespace OpenAstroAra.Server.Services {
                     mag = b;
                 }
                 var type = iType >= 0 && f.Length > iType ? f[iType] : "";
+                // "Dup" rows are duplicate stubs (a second historical id pointing at another row —
+                // 651 of them) and "NonEx" rows are catalogued errors with no real object. Both
+                // would double-mark or mis-mark positions in every consumer (catalog overlays,
+                // Tonight's Sky ranking), and neither carries a Messier/Caldwell cross-reference
+                // that exists nowhere else, so drop them at parse.
+                if (type is "Dup" or "NonEx") {
+                    continue;
+                }
                 bool Has(int i) => i >= 0 && f.Length > i && !string.IsNullOrWhiteSpace(f[i]);
-                bool hasCaldwell = iId >= 0 && f.Length > iId && HasCaldwellId(f[iId]);
+                int? messier = iM >= 0 && f.Length > iM && int.TryParse(f[iM].Trim(),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var mNum) ? mNum : null;
+                int? caldwell = iId >= 0 && f.Length > iId ? TryGetCaldwellNum(f[iId]) : null;
                 // Optional measured columns — null when blank/absent (a row may carry size but no
                 // surface brightness, etc.), so a missing field is "unknown", not zero.
                 double? Num(int i) => i >= 0 && f.Length > i && TryNum(f[i], out var v) ? v : null;
@@ -217,7 +269,7 @@ namespace OpenAstroAra.Server.Services {
                 // so the `CommonName ?? Name` fallback actually kicks in (?? only tests null).
                 var firstCommon = Has(iCommon) ? f[iCommon].Split(',')[0].Trim() : "";
                 string? common = firstCommon.Length > 0 ? firstCommon : null;
-                list.Add(new DsoRow(f[iName], ra, dec, mag, type, Has(iM), Has(iNgc), Has(iIc), hasCaldwell,
+                list.Add(new DsoRow(f[iName], ra, dec, mag, type, messier, caldwell,
                     Num(iMaj), Num(iMin), Num(iPa), Num(iSb), common));
             }
             return list;
@@ -227,18 +279,21 @@ namespace OpenAstroAra.Server.Services {
             double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v);
 
         // Caldwell membership: OpenNGC lists it in the comma-separated Identifiers as "C NNN"
-        // (e.g. "C 020"). Require the space + all-digits tail so other C-prefixed ids don't match.
-        private static bool HasCaldwellId(string identifiers) {
+        // (e.g. "C 020"). Require the space + all-digits tail so other C-prefixed ids don't match;
+        // return the number so the overlay can label the row "C 20".
+        private static int? TryGetCaldwellNum(string identifiers) {
             foreach (var raw in identifiers.Split(',')) {
                 var t = raw.Trim();
                 if (t.Length > 2 && t[0] == 'C' && t[1] == ' ') {
                     var rest = t.Substring(2).Trim();
-                    if (rest.Length > 0 && rest.All(char.IsDigit)) {
-                        return true;
+                    if (rest.Length > 0 && rest.All(char.IsDigit) &&
+                        int.TryParse(rest, NumberStyles.None, CultureInfo.InvariantCulture,
+                            out var num)) {
+                        return num;
                     }
                 }
             }
-            return false;
+            return null;
         }
 
         // OpenNGC RA "HH:MM:SS.s" (hours) → decimal degrees.

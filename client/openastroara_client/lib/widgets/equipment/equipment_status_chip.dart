@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_device_status.dart';
 import '../../models/switch_device.dart';
-import '../../state/app_shell_state.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -47,18 +46,6 @@ StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
       loading: () => StatusLevel.info,
       error: (_, _) => StatusLevel.error,
     );
-
-/// The app-shell tab index of the **Options** (Settings) tab — where the
-/// equipment panels live. Named rather than a bare literal so a tab reorder is a
-/// one-line change (the command palette uses the same index, app_shell.dart).
-const int kOptionsTabIndex = 3;
-
-/// Open Settings → Options at [panelId]'s equipment panel — the device's full
-/// connect/disconnect/control surface (the same navigation the command palette uses).
-void openEquipmentPanel(WidgetRef ref, String panelId) {
-  ref.read(selectedSettingsPanelProvider.notifier).select(panelId);
-  ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
-}
 
 /// The §25.3 top-bar equipment chips, in device-type order: each shows live
 /// connection status (green dot when connected) and, on tap, jumps to that
@@ -154,7 +141,7 @@ class EquipmentStatusChip extends ConsumerWidget {
       icon: icon,
       label: label,
       status: level,
-      onTap: () => openEquipmentPanel(ref, panelId),
+      onTap: () => openSettingsPanel(ref, panelId),
     );
   }
 }
@@ -162,8 +149,11 @@ class EquipmentStatusChip extends ConsumerWidget {
 /// Maps the multi-instance Switch list to the chip dot: busy (amber) while an
 /// action — a connect/disconnect or a port write — is in flight ([acting], the
 /// §25.3 derived signal, since the daemon reports no per-port actuation state),
-/// else connected (green) when *any* switch is connected, else disconnected;
-/// loading → info, error → error. Pure → unit-testable.
+/// else connected (green) when *any* switch is connected, else error (red) when
+/// any device is in an error state (a failed auto-connect — matches how the
+/// single-instance chips surface a device error, so SW turns red alongside them
+/// instead of reading a misleading grey), else disconnected; loading → info,
+/// list-fetch error → error. Pure → unit-testable.
 StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async,
         {bool acting = false}) =>
     async.when(
@@ -171,7 +161,9 @@ StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async,
           ? StatusLevel.busy
           : list.any((s) => s.isConnected)
               ? StatusLevel.connected
-              : StatusLevel.disconnected,
+              : list.any((s) => s.connectionState == SwitchConnectionState.error)
+                  ? StatusLevel.error
+                  : StatusLevel.disconnected,
       loading: () => StatusLevel.info,
       error: (_, _) => StatusLevel.error,
     );
@@ -193,7 +185,7 @@ class SwitchStatusChip extends ConsumerWidget {
       icon: icon,
       label: label,
       status: level,
-      onTap: () => openEquipmentPanel(ref, 'eq.switch'),
+      onTap: () => openSettingsPanel(ref, 'eq.switch'),
     );
   }
 }

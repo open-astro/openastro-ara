@@ -59,7 +59,7 @@ public static class SequenceBodyInspector {
                 if (node.TryGetProperty("$type", out var typeProp) && typeProp.ValueKind == JsonValueKind.String) {
                     var typeName = typeProp.GetString() ?? string.Empty;
                     if (LooksLikeInstruction(typeName)) instructions++;
-                    if (LooksLikeTarget(typeName)) targets++;
+                    if (LooksLikeTarget(typeName) || IsSlewTargetContainer(typeName, node)) targets++;
                 }
                 foreach (var prop in node.EnumerateObject()) {
                     Walk(prop.Value, ref instructions, ref targets);
@@ -79,4 +79,28 @@ public static class SequenceBodyInspector {
 
     private static bool LooksLikeTarget(string typeName) =>
         typeName.Contains("DeepSkyObjectContainer", System.StringComparison.Ordinal);
+
+    /// <summary>The client's §36 multi-target night plans emit target blocks as plain
+    /// SequentialContainers each holding that target's own slew — count a container with a
+    /// DIRECT SlewScopeToRaDec child as a target so those plans don't list as "0 target(s)".
+    /// Direct children only: the session root holds no slew itself (its target blocks do),
+    /// so it is not double-counted; a DeepSkyObjectContainer that also carries a slew is
+    /// counted once via the short-circuit OR at the call site.</summary>
+    private static bool IsSlewTargetContainer(string typeName, JsonElement node) {
+        if (!typeName.Contains(".Container.", System.StringComparison.Ordinal)) return false;
+        if (!node.TryGetProperty("Items", out var items)) return false;
+        var values = items;
+        if (items.ValueKind == JsonValueKind.Object && !items.TryGetProperty("$values", out values)) {
+            return false;
+        }
+        if (values.ValueKind != JsonValueKind.Array) return false;
+        foreach (var child in values.EnumerateArray()) {
+            if (child.ValueKind == JsonValueKind.Object &&
+                child.TryGetProperty("$type", out var t) && t.ValueKind == JsonValueKind.String &&
+                (t.GetString() ?? string.Empty).Contains(".SequenceItem.Telescope.SlewScopeToRaDec", System.StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

@@ -9,6 +9,7 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_share_file.dart' show shareFileName;
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import 'sequence_delete.dart';
 import 'sequence_import.dart';
 
 /// §38 "Load sequence" picker. Lists the active server's saved sequences
@@ -73,6 +74,9 @@ class SequenceLoadDialog extends ConsumerWidget {
                       // §70.5: export this sequence to a shareable .araseq.json
                       // file. Doesn't select/pop — the user may export several.
                       _ExportSequenceButton(id: s.id, name: s.name),
+                      // Delete (with confirm). Doesn't pop either — the list
+                      // refreshes in place so several can be cleaned up in one go.
+                      _DeleteSequenceButton(id: s.id, name: s.name),
                     ],
                   ),
                   onTap: () {
@@ -227,6 +231,45 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
               width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.save_alt, size: 18),
       tooltip: 'Export…',
+      onPressed: _busy ? null : _run,
+    );
+  }
+}
+
+/// Per-sequence trash action — [confirmAndDeleteSequence] owns the whole flow
+/// (live run-state probe, Stop & Delete for an active run, selection/editor
+/// cleanup, list refresh). Stateful only for the re-entrancy disable; no busy
+/// spinner, because the busy window is mostly spent under the confirm dialog's
+/// modal barrier where a spinner is invisible (and its endless animation would
+/// wedge pumpAndSettle in tests).
+class _DeleteSequenceButton extends ConsumerStatefulWidget {
+  const _DeleteSequenceButton({required this.id, required this.name});
+  final String id;
+  final String name;
+
+  @override
+  ConsumerState<_DeleteSequenceButton> createState() =>
+      _DeleteSequenceButtonState();
+}
+
+class _DeleteSequenceButtonState extends ConsumerState<_DeleteSequenceButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    try {
+      await confirmAndDeleteSequence(context, ref,
+          id: widget.id, name: widget.name);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.delete_outline, size: 18),
+      tooltip: 'Delete…',
       onPressed: _busy ? null : _run,
     );
   }

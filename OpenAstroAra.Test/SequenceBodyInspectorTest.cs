@@ -113,5 +113,46 @@ namespace OpenAstroAra.Test {
             var stats = SequenceBodyInspector.Inspect(body);
             Assert.That(stats.InstructionCount, Is.EqualTo(0));
         }
+
+        [Test]
+        public void Inspect_counts_slew_holding_containers_as_targets() {
+            // §36 multi-target night plans: the client emits target blocks as plain
+            // SequentialContainers each holding that target's own slew. The session
+            // ROOT holds no slew directly (its target blocks do), so a two-target
+            // plan counts exactly 2 — the root and the inner "Imaging" loop
+            // containers contribute nothing.
+            var body = Parse("""
+                {
+                    "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+                    "Items": { "$values": [
+                        { "$type": "OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope, OpenAstroAra.Sequencer" },
+                        {
+                            "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+                            "Name": "M 42",
+                            "Items": { "$values": [
+                                { "$type": "OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer" },
+                                {
+                                    "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+                                    "Name": "Imaging",
+                                    "Items": { "$values": [
+                                        { "$type": "OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer" }
+                                    ] }
+                                }
+                            ] }
+                        },
+                        {
+                            "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+                            "Name": "M 31",
+                            "Items": { "$values": [
+                                { "$type": "OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer" }
+                            ] }
+                        }
+                    ] }
+                }
+                """);
+            var stats = SequenceBodyInspector.Inspect(body);
+            Assert.That(stats.TargetCount, Is.EqualTo(2),
+                "one per target block; neither the root nor the Imaging loop counts");
+        }
     }
 }

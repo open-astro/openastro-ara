@@ -1,8 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app_shell_state.dart';
+
 /// Settings navigation per §25.5.5. Phase 12h.1 ships the tree structure +
 /// the selected-panel id state. Phase 12h.3 wires the §61 smart-search
 /// ⌘K cross-cutting that uses this same tree to deep-link to any setting.
+
+/// The app-shell tab index of the **Options** (Settings) tab. Named rather
+/// than a bare literal so a tab reorder is a one-line change (the command
+/// palette uses the same index, app_shell.dart).
+const int kOptionsTabIndex = 3;
+
+/// Jump straight to the settings panel [panelId] (a [settingsTree] id):
+/// selects it and brings the Options tab forward — the same navigation the
+/// ⌘K command palette and the top-bar equipment chips use.
+void openSettingsPanel(WidgetRef ref, String panelId) {
+  ref.read(selectedSettingsPanelProvider.notifier).select(panelId);
+  ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+}
 
 class SettingsPanelInfo {
   final String id;

@@ -155,12 +155,65 @@ public sealed partial class FileProfileStore : IProfileStore {
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
         lock (_lock) {
-            _snapshot = mutate(_snapshot);
+            // NormalizeSections on EVERY write: IProfileStore promises non-null sections
+            // (the in-memory store defaults them), but a saved multi-profile snapshot
+            // whose section is null on disk gets pushed verbatim through
+            // ProfileStoreSnapshot.Apply → the Put* methods here on profile-select —
+            // which is how a null camera_electronics reached OptimalSubOverrides and
+            // 500'd /planning/optimal-sub (and the same path exists for every other
+            // section, e.g. a null optics → Optics().ApertureMm NRE). Normalizing at
+            // the one write choke-point keeps the invariant regardless of which Put
+            // the null arrives through.
+            _snapshot = NormalizeSections(mutate(_snapshot));
             Persist(_snapshot);
         }
         // Raised OUTSIDE _lock so a subscriber that reads back through the Get* methods can't
         // deadlock against the store.
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Coalesce every null section (a hand-edited <c>"section": null</c>, or an
+    /// older saved profile missing a later-added section) to <see cref="DefaultSnapshot"/>'s
+    /// value, plus the inner-list normalizations (a <c>"filter_set": {}</c> yields a DTO with
+    /// a null list). The nullable casts sidestep the "left operand is never null" NRT
+    /// warnings — the runtime values genuinely can be null here (Json.NET-style holes).</summary>
+    // Built once: the snapshot is a pure constant of immutable records, and
+    // profile-select pushes 16 back-to-back Puts through NormalizeSections —
+    // rebuilding it per write is deterministic wasted allocation.
+    private static readonly ProfileSnapshotDto CachedDefaults = DefaultSnapshot();
+
+    private static ProfileSnapshotDto NormalizeSections(ProfileSnapshotDto snap) {
+        var defaults = CachedDefaults;
+        var filterSet = (FilterSetDto?)snap.FilterSet ?? defaults.FilterSet;
+        if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
+            filterSet = defaults.FilterSet;
+        }
+        var wheelLabels = (FilterWheelLabelsDto?)snap.FilterWheelLabels ?? defaults.FilterWheelLabels;
+        if ((IReadOnlyList<string>?)wheelLabels.Labels is null) {
+            wheelLabels = defaults.FilterWheelLabels;
+        }
+        var stretch = (StretchDefaultsDto?)snap.StretchDefaults ?? defaults.StretchDefaults;
+        if ((StretchManualDefaultsDto?)stretch.ManualDefaultParams is null) {
+            stretch = stretch with { ManualDefaultParams = defaults.StretchDefaults.ManualDefaultParams };
+        }
+        return snap with {
+            ImagingDefaults = (ImagingDefaultsDto?)snap.ImagingDefaults ?? defaults.ImagingDefaults,
+            Storage = (StorageSettingsDto?)snap.Storage ?? defaults.Storage,
+            Notifications = (NotificationsSettingsDto?)snap.Notifications ?? defaults.Notifications,
+            Site = (SiteSettingsDto?)snap.Site ?? defaults.Site,
+            Filenames = (FilenamesSettingsDto?)snap.Filenames ?? defaults.Filenames,
+            SafetyPolicies = (SafetyPoliciesDto?)snap.SafetyPolicies ?? defaults.SafetyPolicies,
+            Autofocus = (AutofocusSettingsDto?)snap.Autofocus ?? defaults.Autofocus,
+            PlateSolve = (PlateSolveSettingsDto?)snap.PlateSolve ?? defaults.PlateSolve,
+            DiagnosticsMode = (DiagnosticsModeDto?)snap.DiagnosticsMode ?? defaults.DiagnosticsMode,
+            Phd2 = (Phd2SettingsDto?)snap.Phd2 ?? defaults.Phd2,
+            EquipmentConnection = (EquipmentConnectionDto?)snap.EquipmentConnection ?? defaults.EquipmentConnection,
+            StretchDefaults = stretch,
+            Optics = (OpticsSettingsDto?)snap.Optics ?? defaults.Optics,
+            CameraElectronics = (CameraElectronicsDto?)snap.CameraElectronics ?? defaults.CameraElectronics,
+            FilterSet = filterSet,
+            FilterWheelLabels = wheelLabels,
+        };
     }
 
     private void Persist(ProfileSnapshotDto snapshot) {
@@ -177,7 +230,7 @@ public sealed partial class FileProfileStore : IProfileStore {
     }
 
     private ProfileSnapshotDto LoadOrDefaults() {
-        var defaults = DefaultSnapshot();
+        var defaults = CachedDefaults;
         if (!File.Exists(_profilePath)) {
             // First boot — write the defaults out so the user can see
             // the schema even before they edit anything.
@@ -199,26 +252,9 @@ public sealed partial class FileProfileStore : IProfileStore {
             // Back-fill sections added after a profile.json was first written: a key
             // missing from an older file deserializes the (non-nullable) record
             // parameter to null rather than throwing, which would surface as a null
-            // GET body on upgrade. §36 optics is the first such section. The nullable
-            // cast sidesteps the "left operand is never null" NRT warning — the
-            // runtime value genuinely can be null here.
-            var optics = (OpticsSettingsDto?)loaded.Optics ?? defaults.Optics;
-            // NEXTGEN §4 sections (camera electronics + filter set) — same back-fill.
-            var electronics = (CameraElectronicsDto?)loaded.CameraElectronics ?? defaults.CameraElectronics;
-            var filterSet = (FilterSetDto?)loaded.FilterSet ?? defaults.FilterSet;
-            // FilterSetDto's list itself can be null from a hand-edited "filter_set": {} — normalize.
-            if ((IReadOnlyList<PlanningFilterDto>?)filterSet.Filters is null) {
-                filterSet = defaults.FilterSet;
-            }
-            // §37.4 slot labels — same back-fill + inner-list normalization.
-            var wheelLabels = (FilterWheelLabelsDto?)loaded.FilterWheelLabels ?? defaults.FilterWheelLabels;
-            if ((IReadOnlyList<string>?)wheelLabels.Labels is null) {
-                wheelLabels = defaults.FilterWheelLabels;
-            }
-            return loaded with {
-                Optics = optics, CameraElectronics = electronics, FilterSet = filterSet,
-                FilterWheelLabels = wheelLabels,
-            };
+            // GET body on upgrade — or an NRE in a consumer. One normalizer covers
+            // every section (shared with the write path, see UpdateAndPersist).
+            return NormalizeSections(loaded);
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             LogParseFailed(ex, _profilePath);
             return defaults;

@@ -8,8 +8,9 @@ import '../saved_server_state.dart';
 /// Auto-disposed so the list refetches (re-ranks for the current time) each time
 /// the Tonight's Sky view is opened; `ref.invalidate(tonightSkyProvider)` forces
 /// a manual refresh.
-final tonightSkyProvider =
-    FutureProvider.autoDispose<List<TonightSkyObject>>((ref) async {
+final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
+  ref,
+) async {
   // Await the saved-server list rather than collapsing a still-loading state to
   // []: that would resolve this provider to data([]) before the servers finished
   // loading and flash the "connect a server" empty state for a user who does have
@@ -25,3 +26,21 @@ final tonightSkyProvider =
   ref.onDispose(api.close);
   return api.fetch();
 });
+
+/// The Tonight's Sky row the user last tapped (by [TonightSkyObject.id]), or
+/// null when nothing is selected. Tapping a row frames that object on the
+/// planetarium; the highlight tells the user which row drove the atlas. Auto-
+/// disposed so the selection clears when the panel unmounts — a highlight that
+/// silently survived into the next open would claim a framing that is no
+/// longer on screen.
+class SelectedTonightObjectNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String id) => state = id;
+}
+
+final selectedTonightObjectProvider =
+    NotifierProvider.autoDispose<SelectedTonightObjectNotifier, String?>(
+      SelectedTonightObjectNotifier.new,
+    );

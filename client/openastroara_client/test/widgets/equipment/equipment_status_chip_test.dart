@@ -71,6 +71,37 @@ void main() {
       expect(switchChipLevel(AsyncError('x', StackTrace.empty)), StatusLevel.error);
     });
 
+    test('red when devices errored (failed connect) and none are connected', () {
+      // The list fetch succeeded but every device is in an error state (a failed
+      // auto-connect): the chip must read red like the single-instance chips do,
+      // not a misleading grey. Regression for the SW-stayed-grey report.
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.error),
+            dev(SwitchConnectionState.error),
+          ])),
+          StatusLevel.error);
+      // A mix of disconnected + errored (none connected) is still an error.
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.disconnected),
+            dev(SwitchConnectionState.error),
+          ])),
+          StatusLevel.error);
+      // But a live connection outranks a sibling's error — green wins.
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.error),
+            dev(SwitchConnectionState.connected),
+          ])),
+          StatusLevel.connected);
+      // An in-flight action still outranks the error state (amber).
+      expect(
+          switchChipLevel(AsyncData([dev(SwitchConnectionState.error)]),
+              acting: true),
+          StatusLevel.busy);
+    });
+
     test('§25.3 amber while an action is in flight, whatever the list says', () {
       // A port write on a connected switch...
       expect(

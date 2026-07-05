@@ -6,6 +6,7 @@ import '../../models/server.dart';
 import '../../services/optimal_sub_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
+import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 
 /// The TakeExposure `$type` — the node the advisor attaches to — and the
@@ -151,8 +152,28 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
         const SizedBox(width: 8),
         Text('Computing optimal sub…', style: dim),
       ]);
-    } else if (_unavailable != null) {
-      content = Text(_unavailable!, style: dim);
+    } else if (_unavailable case final unavailable?) {
+      // A 400 is always a fixable-configuration story (optics geometry or the
+      // filter set) — pair the daemon's explanation with the jump to the panel
+      // that fixes it, instead of leaving the user to hunt through Settings.
+      // Retry matters here: the Run tab lives in an IndexedStack, so coming
+      // back from Settings does NOT remount this widget — without it the stale
+      // "can't compute" would stick around after the user fixed the setup.
+      final filterProblem = unavailable.toLowerCase().contains('filter');
+      content = Row(children: [
+        Expanded(child: Text(unavailable, style: dim)),
+        TextButton(
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          onPressed: () => openSettingsPanel(
+              ref, filterProblem ? 'img.filterset' : 'img.optics'),
+          child: Text(filterProblem ? 'Open filter set' : 'Open optics'),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          onPressed: _fetch,
+          child: const Text('Retry'),
+        ),
+      ]);
     } else if (_error != null) {
       content = Row(children: [
         Expanded(child: Text("Couldn't compute the optimal sub.", style: dim)),

@@ -46,6 +46,8 @@ class _SaveClient implements SequenceClient {
   });
 
   @override
+  Future<bool> deleteSequence(String id) => throw UnimplementedError();
+  @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async {
     validatedBody = body;
     return validateResult;

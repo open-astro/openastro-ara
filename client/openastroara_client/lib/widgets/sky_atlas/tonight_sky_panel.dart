@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/sequence/slew_target_body.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
@@ -14,11 +14,15 @@ import '../../theme/ara_colors.dart';
 /// "worth shooting tonight" score (§36.8). Each row shows the score, the framing
 /// fit against your rig, tonight's dark window/transit/hours, a "why" score
 /// breakdown on expand, a recentre-the-planetarium action, and an add-to-sequence
-/// action. Recentre drives the planetarium over the `StellariumServer` loopback:
-/// it writes a `goto` command to [planetariumCommandProvider], which
-/// `StellariumView` forwards to the page's `/aracmd` handler (the §36 native
-/// webview has no Dart→page JS bridge, and `skyTargetProvider` isn't read by the
-/// planetarium). The panel docks beside the planetarium in `tonightsSky` mode.
+/// action. **Tapping the row frames the object**: it highlights the row (via
+/// [selectedTonightObjectProvider], so you can see which row drove the atlas)
+/// and sends a `frame: true` goto that opens the planetarium's framing overlay
+/// with the box landed on the object; the crosshair icon stays centre-only.
+/// Both ride the `StellariumServer` loopback: a `goto` command written to
+/// [planetariumCommandProvider] is forwarded by `StellariumView` to the page's
+/// `/aracmd` handler (the §36 native webview has no Dart→page JS bridge, and
+/// `skyTargetProvider` isn't read by the planetarium). The panel docks beside
+/// the planetarium in `tonightsSky` mode.
 /// §36.8 slice-4 — where "now" falls against an object's dark window, driving
 /// the timing line's at-a-glance treatment: **open** (shoot it now — green),
 /// **upcoming** (neutral, the default look), **passed** (dimmed — tonight's
@@ -112,8 +116,10 @@ class TonightSkyPanel extends ConsumerWidget {
                     ),
                     // Key by object id so the row's expand/collapse state follows the
                     // object, not the list slot, when the ranking reorders on refresh.
-                    itemBuilder: (_, i) =>
-                        _ObjectRow(key: ValueKey(objects[i].id), object: objects[i]),
+                    itemBuilder: (_, i) => _ObjectRow(
+                      key: ValueKey(objects[i].id),
+                      object: objects[i],
+                    ),
                   );
                 },
               ),
@@ -144,7 +150,8 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final theme = Theme.of(context);
     final mag = _object.magnitude;
     final magText = mag == null ? 'mag —' : 'mag ${mag.toStringAsFixed(1)}';
-    final subtitle = '${_typeLabel(_object.type)} · $magText · '
+    final subtitle =
+        '${_typeLabel(_object.type)} · $magText · '
         'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°';
     final timing = _timingLine(_object);
     // Best-window highlight (slice 4): advise-don't-dictate — the row is never
@@ -158,175 +165,203 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     // panel is shown — a bare read would let it dispose (closing its Dio) before
     // an in-flight create() resolves.
     final canAdd = ref.watch(sequenceApiProvider) != null;
+    // select() so a selection change rebuilds only the two rows whose
+    // highlight actually flipped, not every visible row.
+    final selected = ref
+        .watch(selectedTonightObjectProvider.select((id) => id == _object.id));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // No badge for a scoreless object (a pre-§36.8 server) — better a
-              // missing badge than a misleading "0".
-              if (_object.score != null) ...[
-                _ScoreBadge(score: _object.score!),
-                const SizedBox(width: 10),
+    return InkWell(
+      onTap: _frameOnAtlas,
+      child: Container(
+        // The highlight marks WHICH row drove the atlas (the framing box may sit
+        // in a starfield with no obvious landmark) — same selected-row treatment
+        // as the command palette / settings nav.
+        color: selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // No badge for a scoreless object (a pre-§36.8 server) — better a
+                // missing badge than a misleading "0".
+                if (_object.score != null) ...[
+                  _ScoreBadge(score: _object.score!),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_object.name, style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${_object.altitudeDeg.toStringAsFixed(0)}°',
+                  style: theme.textTheme.bodyMedium,
+                ),
               ],
-              Expanded(
+            ),
+            if (framingLabel != null ||
+                timing != null ||
+                _object.filterAdvice != null ||
+                _object.moonUpFraction != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  if (framingLabel != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _FramingChip(framing: _object.framing),
+                    ),
+                  if (_object.filterAdvice != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _FilterAdviceChip(advice: _object.filterAdvice!),
+                    ),
+                  if (_object.moonUpFraction != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _MoonChip(object: _object),
+                    ),
+                  if (timing != null)
+                    Expanded(
+                      child: Text(
+                        windowState == TonightWindowState.open
+                            ? 'now · $timing'
+                            : timing,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: switch (windowState) {
+                            TonightWindowState.open =>
+                              AraColors.accentConnected,
+                            TonightWindowState.passed => AraColors.textDisabled,
+                            _ => AraColors.textSecondary,
+                          },
+                          fontWeight: windowState == TonightWindowState.open
+                              ? FontWeight.w600
+                              : null,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            Row(
+              children: [
+                _busy
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        iconSize: 18,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Add to a new sequence',
+                        icon: const Icon(Icons.playlist_add),
+                        onPressed: canAdd ? _addToSequence : null,
+                      ),
+                IconButton(
+                  iconSize: 18,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Centre the planetarium on this object',
+                  icon: const Icon(Icons.my_location),
+                  onPressed: _recentre,
+                ),
+                const Spacer(),
+                if (hasReasons)
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: AraColors.textSecondary,
+                    ),
+                    onPressed: () =>
+                        setState(() => _showReasons = !_showReasons),
+                    child: Text(_showReasons ? 'Hide' : 'Why?'),
+                  ),
+              ],
+            ),
+            if (hasReasons && _showReasons)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_object.name, style: theme.textTheme.bodyMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AraColors.textSecondary),
-                    ),
+                    for (final r in reasons)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          '• $r',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    // NEXTGEN §1 — the filter-advice explanation + the per-filter
+                    // Optimal Sub, tucked into the Why? breakdown so the row stays
+                    // one-glance. The attribution is a design-doc requirement of
+                    // the permission to use the criterion.
+                    if (_object.adviceReason != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 2),
+                        child: Text(
+                          _object.adviceReason!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    if (_object.optimalSubS != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      Text(
+                        'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AraColors.textDisabled,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                '${_object.altitudeDeg.toStringAsFixed(0)}°',
-                style: theme.textTheme.bodyMedium,
-              ),
-            ],
-          ),
-          if (framingLabel != null ||
-              timing != null ||
-              _object.filterAdvice != null ||
-              _object.moonUpFraction != null) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if (framingLabel != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _FramingChip(framing: _object.framing),
-                  ),
-                if (_object.filterAdvice != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _FilterAdviceChip(advice: _object.filterAdvice!),
-                  ),
-                if (_object.moonUpFraction != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _MoonChip(object: _object),
-                  ),
-                if (timing != null)
-                  Expanded(
-                    child: Text(
-                      windowState == TonightWindowState.open
-                          ? 'now · $timing'
-                          : timing,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: switch (windowState) {
-                          TonightWindowState.open => AraColors.accentConnected,
-                          TonightWindowState.passed => AraColors.textDisabled,
-                          _ => AraColors.textSecondary,
-                        },
-                        fontWeight: windowState == TonightWindowState.open
-                            ? FontWeight.w600
-                            : null,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ],
-          Row(
-            children: [
-              _busy
-                  ? const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : IconButton(
-                      iconSize: 18,
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Add to a new sequence',
-                      icon: const Icon(Icons.playlist_add),
-                      onPressed: canAdd ? _addToSequence : null,
-                    ),
-              IconButton(
-                iconSize: 18,
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Centre the planetarium on this object',
-                icon: const Icon(Icons.my_location),
-                onPressed: _recentre,
-              ),
-              const Spacer(),
-              if (hasReasons)
-                TextButton(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: AraColors.textSecondary,
-                  ),
-                  onPressed: () =>
-                      setState(() => _showReasons = !_showReasons),
-                  child: Text(_showReasons ? 'Hide' : 'Why?'),
-                ),
-            ],
-          ),
-          if (hasReasons && _showReasons)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final r in reasons)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        '• $r',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  // NEXTGEN §1 — the filter-advice explanation + the per-filter
-                  // Optimal Sub, tucked into the Why? breakdown so the row stays
-                  // one-glance. The attribution is a design-doc requirement of
-                  // the permission to use the criterion.
-                  if (_object.adviceReason != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, bottom: 2),
-                      child: Text(
-                        _object.adviceReason!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  if (_object.optimalSubS != null) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                    Text(
-                      'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AraColors.textDisabled,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-        ],
+        ),
       ),
     );
+  }
+
+  /// Row tap: highlight this row and FRAME the object — a `goto` with
+  /// `frame: true` makes the page open the framing overlay and land the box on
+  /// the object (vs the crosshair icon's centre-only goto), so one tap goes
+  /// from "that looks good tonight" to a positioned frame ready for Create Run.
+  void _frameOnAtlas() {
+    ref.read(selectedTonightObjectProvider.notifier).select(_object.id);
+    ref.read(planetariumCommandProvider.notifier).send({
+      'type': 'goto',
+      'ra': _object.raDeg,
+      'dec': _object.decDeg,
+      'name': _object.name,
+      'frame': true,
+    });
   }
 
   /// Centre the planetarium on this object. Writes a `goto` command (J2000
@@ -334,36 +369,43 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   /// forwards it over the loopback server to the page's `/aracmd` handler, which
   /// points the view at the coordinates directly (no name lookup). The provider
   /// always notifies, so recentring the same object twice still re-centres.
+  /// The name rides along so the page's frame-target label follows the view:
+  /// without it, a recentre after a framed goto leaves the framing overlay's
+  /// "Create Run" carrying the PREVIOUS object's name with this one's
+  /// coordinates (the page keeps the old name when a goto brings none).
   void _recentre() => ref.read(planetariumCommandProvider.notifier).send({
-        'type': 'goto',
-        'ra': _object.raDeg,
-        'dec': _object.decDeg,
-      });
+    'type': 'goto',
+    'ra': _object.raDeg,
+    'dec': _object.decDeg,
+    'name': _object.name,
+  });
 
-  /// Create a new sequence named after this object containing a single slew to
-  /// its coordinates, then surface the outcome via a SnackBar. Mirrors the
-  /// `createSequenceFromTemplate` mounted/ref ordering.
+  /// Create a full imaging run for this object — cool/unpark/track/slew/
+  /// autofocus + a Take-Exposure loop sized to tonight's remaining dark window
+  /// from the user's Imaging Defaults ([createImagingRun]) — then jump to the
+  /// Run tab with it selected. Mirrors the `createSequenceFromTemplate`
+  /// mounted/ref ordering.
   Future<void> _addToSequence() async {
     if (_busy) return;
-    final api = ref.read(sequenceApiProvider);
-    if (api == null) return;
     final messenger = ScaffoldMessenger.of(context);
     final name = _object.name;
     setState(() => _busy = true);
+    ImagingRunResult? result;
     try {
-      final body = buildSlewTargetBody(
+      result = await createImagingRun(
+        ref,
         raDeg: _object.raDeg,
         decDeg: _object.decDeg,
         targetName: name,
+        remainingDarkHours: _object.remainingHours,
       );
-      await api.create(name, body);
     } catch (e, st) {
-      debugPrint('[planning] add-to-sequence failed: $e\n$st');
+      debugPrint('[planning] create-run failed: $e\n$st');
       if (mounted) {
         messenger.showSnackBar(
           const SnackBar(
             content: Text(
-              "Couldn't add to a sequence. Check the connection and try again.",
+              "Couldn't create the run. Check the connection and try again.",
             ),
             backgroundColor: AraColors.accentError,
           ),
@@ -375,33 +417,35 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     }
     // Gate on mounted before touching ref: the row can scroll out of the
     // ListView (disposing it) during the create await, leaving ref defunct.
-    if (!mounted) return;
-    // Refresh the library so the new sequence shows up in the Sequencer tab.
-    ref.invalidate(sequenceListProvider);
+    if (!mounted || result == null) return;
     messenger.showSnackBar(
-      SnackBar(content: Text('Added "$name" to a new sequence.')),
+      SnackBar(
+        content: Text(result.appended
+            ? 'Added "$name" to the open sequence.'
+            : 'Created an imaging run for "$name".'),
+      ),
     );
   }
 
   // Friendly names for both the starter catalog's plain types and the OpenNGC
   // codes the real catalog (and now the starter's emission targets) carry.
   static String _typeLabel(String t) => switch (t) {
-        'galaxy' || 'G' => 'Galaxy',
-        'GPair' => 'Galaxy pair',
-        'GTrpl' => 'Galaxy triplet',
-        'GGroup' => 'Galaxy group',
-        'nebula' || 'Neb' => 'Nebula',
-        'HII' || 'EmN' => 'Emission nebula',
-        'RfN' => 'Reflection nebula',
-        'PN' => 'Planetary nebula',
-        'SNR' => 'Supernova remnant',
-        'cluster' => 'Cluster',
-        'OCl' => 'Open cluster',
-        'GCl' => 'Globular cluster',
-        'Cl+N' => 'Cluster + nebula',
-        '' => 'Object',
-        _ => t[0].toUpperCase() + t.substring(1),
-      };
+    'galaxy' || 'G' => 'Galaxy',
+    'GPair' => 'Galaxy pair',
+    'GTrpl' => 'Galaxy triplet',
+    'GGroup' => 'Galaxy group',
+    'nebula' || 'Neb' => 'Nebula',
+    'HII' || 'EmN' => 'Emission nebula',
+    'RfN' => 'Reflection nebula',
+    'PN' => 'Planetary nebula',
+    'SNR' => 'Supernova remnant',
+    'cluster' => 'Cluster',
+    'OCl' => 'Open cluster',
+    'GCl' => 'Globular cluster',
+    'Cl+N' => 'Cluster + nebula',
+    '' => 'Object',
+    _ => t[0].toUpperCase() + t.substring(1),
+  };
 
   /// Compact local-time timing summary, e.g. "20:14–04:32 · 6.0 h dark ·
   /// 3.2 h left · transit 01:10". Null when the server sent no timing at all,
@@ -459,8 +503,8 @@ class _ScoreBadge extends StatelessWidget {
     final color = s >= 70
         ? AraColors.accentConnected
         : s >= 40
-            ? AraColors.accentInfo
-            : AraColors.textSecondary;
+        ? AraColors.accentInfo
+        : AraColors.textSecondary;
     return Container(
       width: 38,
       height: 38,
@@ -474,10 +518,10 @@ class _ScoreBadge extends StatelessWidget {
       ),
       child: Text(
         '$s',
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w600),
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -493,11 +537,11 @@ class _FramingChip extends StatelessWidget {
   /// null label — the parent gates on that to render no chip — so the label is
   /// defined exactly once and the chip + the row's gate can't drift apart.
   static (String?, Color) styleFor(TonightFraming f) => switch (f) {
-        TonightFraming.good => ('Fills frame', AraColors.accentConnected),
-        TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
-        TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
-        TonightFraming.unknown => (null, AraColors.textSecondary),
-      };
+    TonightFraming.good => ('Fills frame', AraColors.accentConnected),
+    TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
+    TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
+    TonightFraming.unknown => (null, AraColors.textSecondary),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -514,11 +558,11 @@ class _FramingChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
-        label,   // non-null: the early return above bails on a null label
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w500),
+        label, // non-null: the early return above bails on a null label
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -547,10 +591,10 @@ class _FilterAdviceChip extends StatelessWidget {
       ),
       child: Text(
         advice.label,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w500),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -579,7 +623,8 @@ class _MoonChip extends StatelessWidget {
     } else {
       // Either measurement can be absent independently (defensive parse) —
       // show what we have rather than dropping the chip.
-      label = '☾'
+      label =
+          '☾'
           '${sep == null ? '' : ' ${sep.toStringAsFixed(0)}°'}'
           '${illum == null ? '' : ' · ${illum.toStringAsFixed(0)}%'}';
       final harsh = (sep ?? 180) < 30 && (illum ?? 0) > 40;
@@ -594,10 +639,10 @@ class _MoonChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w500),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

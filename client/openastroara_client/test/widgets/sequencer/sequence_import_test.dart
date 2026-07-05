@@ -13,6 +13,8 @@ import 'package:openastroara/widgets/sequencer/sequence_import.dart';
 /// importNina returns a configured result (or throws); records what was sent.
 class _ImportClient implements SequenceClient {
   @override
+  Future<bool> deleteSequence(String id) => throw UnimplementedError();
+  @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   _ImportClient({this.result, this.throwOnImport = false});

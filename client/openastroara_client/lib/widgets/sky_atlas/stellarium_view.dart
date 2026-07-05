@@ -6,11 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_all/webview_all.dart' as wva;
 
-import '../../models/sequence/slew_target_body.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
 import '../../state/saved_server_state.dart';
-import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sky_atlas/site_location_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
@@ -177,24 +176,23 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     final name = (event['name'] as String?)?.trim();
     final targetName = (name == null || name.isEmpty) ? 'Target' : name;
     // NOTE: the page also sends `rotationDeg` (the framing position angle), but the
-    // sequence target built below is a SlewScopeToRaDec instruction, which has no PA
-    // field — carrying the framing PA into the Run needs a CenterAndRotate / rotator
-    // instruction. Tracked in the NINA sequencer-fidelity epic (design/PORT_TODO.md);
-    // until then the PA is deliberately not applied (the overlay is preview-only).
+    // run built below slews with a SlewScopeToRaDec, which has no PA field —
+    // carrying the framing PA into the Run needs CenterAndRotate, whose rotate
+    // half isn't ported yet (and which throws when a rotator IS connected).
+    // Tracked in the NINA sequencer-fidelity epic (design/PORT_TODO.md); until
+    // then the PA is deliberately not applied (the overlay is preview-only).
 
-    final api = ref.read(sequenceApiProvider);
     final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Connect to a server before creating a Run.'),
-        backgroundColor: AraColors.accentError,
-      ));
-      return;
-    }
+    ImagingRunResult? result;
     try {
-      await api.create(
-        targetName,
-        buildSlewTargetBody(raDeg: raDeg, decDeg: decDeg, targetName: targetName),
+      // A full imaging run (cool/unpark/track/slew/AF + exposure loop from the
+      // user's Imaging Defaults), selected + brought up in the Run tab — or,
+      // with a sequence already open, this target appended to it.
+      result = await createImagingRun(
+        ref,
+        raDeg: raDeg,
+        decDeg: decDeg,
+        targetName: targetName,
       );
     } catch (e, st) {
       debugPrint('[planning] framing create-run failed: $e\n$st');
@@ -207,9 +205,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       return;
     }
     if (!mounted) return;
-    ref.invalidate(sequenceListProvider);
+    if (result == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Connect to a server before creating a Run.'),
+        backgroundColor: AraColors.accentError,
+      ));
+      return;
+    }
     messenger.showSnackBar(
-      SnackBar(content: Text('Created a Run for "$targetName".')),
+      SnackBar(
+        content: Text(result.appended
+            ? 'Added "$targetName" to the open sequence.'
+            : 'Created an imaging run for "$targetName".'),
+      ),
     );
   }
 
