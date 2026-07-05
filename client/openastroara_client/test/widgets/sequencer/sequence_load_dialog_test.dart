@@ -7,6 +7,7 @@ import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_load_dialog.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
@@ -22,13 +23,28 @@ class _FakeListNotifier extends SequenceListNotifier {
 /// Minimal SequenceClient so sequenceApiProvider can be "connected" in toolbar
 /// tests without a live server.
 class _FakeClient implements SequenceClient {
+  final deleted = <String>[];
+  final aborted = <String>[];
+  bool throwOnDelete = false;
+
+  /// What getRunState reports; the stop-and-delete flow polls this, and
+  /// abort() flips it to stopped (modelling the daemon ending the run).
+  SequenceRunStateInfo? runState;
+
+  @override
+  Future<bool> deleteSequence(String id) async {
+    if (throwOnDelete) throw Exception('boom');
+    deleted.add(id);
+    return true;
+  }
+
   @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
   @override
-  Future<SequenceRunStateInfo?> getRunState(String id) async => null;
+  Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
   @override
@@ -50,7 +66,11 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override
-  Future<String> abort(String id) async => 'op';
+  Future<String> abort(String id) async {
+    aborted.add(id);
+    runState = const SequenceRunStateInfo(state: SequenceRunState.stopped);
+    return 'op';
+  }
   @override
   Future<String> stop(String id) async => 'op';
   @override
@@ -68,8 +88,13 @@ class _FakeClient implements SequenceClient {
   void close() {}
 }
 
-SequenceListItem _item(String id, String name) =>
-    SequenceListItem(id: id, name: name, instructionCount: 3, targetCount: 1);
+SequenceListItem _item(String id, String name, {SequenceRunState? runState}) =>
+    SequenceListItem(
+        id: id,
+        name: name,
+        instructionCount: 3,
+        targetCount: 1,
+        currentRunState: runState);
 
 void main() {
   Future<ProviderContainer> pumpDialog(
@@ -172,6 +197,117 @@ void main() {
     });
   });
 
+  group('SequenceLoadDialog delete', () {
+    Future<(ProviderContainer, _FakeClient)> pumpWithRow(
+      WidgetTester tester, {
+      SequenceRunState? runState,
+    }) async {
+      final client = _FakeClient();
+      final container = ProviderContainer(overrides: [
+        sequenceListProvider.overrideWith(() => _FakeListNotifier(
+            () async => [_item('s1', 'NGC7092', runState: runState)])),
+        sequenceApiProvider.overrideWithValue(client),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequenceLoadDialog())),
+      ));
+      await tester.pumpAndSettle();
+      return (container, client);
+    }
+
+    testWidgets(
+        'delete confirms, removes on the daemon, and clears the open selection',
+        (tester) async {
+      final (container, client) = await pumpWithRow(tester);
+      // The doomed sequence is the one open in the Run tab.
+      container.read(selectedSequenceIdProvider.notifier).select('s1');
+      container
+          .read(sequenceEditorProvider.notifier)
+          .load(SequenceDetail(id: 's1', name: 'NGC7092'));
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete sequence?'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(client.deleted, ['s1']);
+      expect(find.textContaining('Deleted "NGC7092"'), findsOneWidget);
+      // The Run tab must not keep editing a record that no longer exists.
+      expect(container.read(selectedSequenceIdProvider), isNull);
+      expect(container.read(sequenceEditorProvider), isNull);
+    });
+
+    testWidgets('cancelling the confirm deletes nothing', (tester) async {
+      final (_, client) = await pumpWithRow(tester);
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      // Two Cancels are on screen (the Load dialog's own + the confirm's);
+      // the confirm dialog's is the topmost route's — the last in the tree.
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel').last);
+      await tester.pumpAndSettle();
+      expect(client.deleted, isEmpty);
+      expect(find.text('NGC7092'), findsOneWidget);
+    });
+
+    testWidgets('a running sequence offers Stop & Delete: aborts, then deletes',
+        (tester) async {
+      final (_, client) =
+          await pumpWithRow(tester, runState: SequenceRunState.running);
+      client.runState =
+          const SequenceRunStateInfo(state: SequenceRunState.running);
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Stop the run and delete?'), findsOneWidget);
+      expect(find.textContaining('aborts the run'), findsOneWidget);
+      await tester.tap(find.text('Stop & Delete'));
+      await tester.pumpAndSettle();
+
+      // Abort first, delete only once the run reported over.
+      expect(client.aborted, ['s1']);
+      expect(client.deleted, ['s1']);
+      expect(find.textContaining('Deleted "NGC7092"'), findsOneWidget);
+    });
+
+    testWidgets('an idle sequence gets the plain confirm even when the list '
+        'row is stale-running', (tester) async {
+      // The row was fetched with a running badge, but the run has since ended
+      // — the live probe must downgrade the confirm to a plain delete.
+      final (_, client) =
+          await pumpWithRow(tester, runState: SequenceRunState.running);
+      client.runState =
+          const SequenceRunStateInfo(state: SequenceRunState.completed);
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete sequence?'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(client.aborted, isEmpty);
+      expect(client.deleted, ['s1']);
+    });
+
+    testWidgets('a failed delete keeps the row and shows the error',
+        (tester) async {
+      final (container, client) = await pumpWithRow(tester);
+      client.throwOnDelete = true;
+      container.read(selectedSequenceIdProvider.notifier).select('s1');
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining("Couldn't delete"), findsOneWidget);
+      expect(find.text('NGC7092'), findsOneWidget);
+      // A failed delete must NOT kick the sequence out of the Run tab.
+      expect(container.read(selectedSequenceIdProvider), 's1');
+    });
+  });
+
   group('SequencerToolbar Load button', () {
     Future<void> pumpToolbar(WidgetTester tester, {required bool connected}) async {
       final SequenceClient? client = connected ? _FakeClient() : null;
@@ -195,6 +331,47 @@ void main() {
     testWidgets('enabled once connected', (tester) async {
       await pumpToolbar(tester, connected: true);
       expect(loadButton(tester).onPressed, isNotNull);
+    });
+
+    testWidgets('Delete acts on the open sequence: disabled with none, '
+        'deletes + clears selection with one', (tester) async {
+      final client = _FakeClient();
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(client),
+        sequenceListProvider.overrideWith(
+            () => _FakeListNotifier(() async => [_item('s9', 'Veil Nebula')])),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      await tester.pump();
+
+      // No selection → the toolbar Delete is disabled.
+      TextButton deleteButton() => tester.widget<TextButton>(find.ancestor(
+          of: find.text('Delete'), matching: find.byType(TextButton)));
+      expect(deleteButton().onPressed, isNull);
+
+      container.read(selectedSequenceIdProvider.notifier).select('s9');
+      await tester.pumpAndSettle();
+      expect(deleteButton().onPressed, isNotNull);
+
+      // The toolbar row is horizontally scrollable and Delete sits past the
+      // test surface's 800px — bring it on screen before tapping.
+      await tester.ensureVisible(find.text('Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete sequence?'), findsOneWidget);
+      // Two "Delete" texts are on screen (toolbar + confirm); the confirm's is
+      // the topmost route's — the last in the tree.
+      await tester.tap(find.widgetWithText(TextButton, 'Delete').last);
+      await tester.pumpAndSettle();
+
+      expect(client.deleted, ['s9']);
+      expect(container.read(selectedSequenceIdProvider), isNull);
+      expect(find.textContaining('Deleted "Veil Nebula"'), findsOneWidget);
     });
 
     testWidgets('status line names the selected sequence', (tester) async {

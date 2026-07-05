@@ -7,6 +7,7 @@ import '../../services/sequence_api.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import 'sequence_delete.dart';
 import 'sequence_export.dart';
 import 'sequence_import.dart';
 import 'sequence_load_dialog.dart';
@@ -136,6 +137,17 @@ class SequencerToolbar extends ConsumerWidget {
                   // validator and report valid / the first problem.
                   onPressed:
                       canValidate ? () => _validate(context, ref) : null,
+                ),
+                _ToolButton(
+                  icon: Icons.delete_outline,
+                  label: 'Delete',
+                  // Delete the OPEN sequence right from the tab (the Load
+                  // dialog's per-row trash covers the rest). The shared flow
+                  // confirms, stop-and-deletes an active run, and clears the
+                  // selection + editor.
+                  onPressed: hasSelection
+                      ? () => _delete(context, ref, selectedId, selectedName)
+                      : null,
                 ),
                 const VerticalDivider(width: 16, indent: 8, endIndent: 8),
                 _ToolButton(
@@ -308,6 +320,21 @@ Future<void> _validate(BuildContext context, WidgetRef ref) async {
       content: Text("Couldn't validate the sequence. Check the connection and try again."),
       backgroundColor: AraColors.accentError,
     ));
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+/// Delete the open sequence via the shared confirm/stop-and-delete flow,
+/// bracketing the busy fence so the other toolbar commands (Run above all)
+/// can't fire against a sequence that's mid-deletion.
+Future<void> _delete(
+    BuildContext context, WidgetRef ref, String id, String? name) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    await confirmAndDeleteSequence(context, ref, id: id, name: name ?? '');
   } finally {
     busy.setBusy(false);
   }

@@ -14,6 +14,8 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 /// refresh-race ordering is fully controllable. Lifecycle ops are unused here.
 class _FakeSeqClient implements SequenceClient {
   @override
+  Future<bool> deleteSequence(String id) => throw UnimplementedError();
+  @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   final List<Completer<SequencePage>> calls = [];

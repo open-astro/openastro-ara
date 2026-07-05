@@ -12,6 +12,8 @@ import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 /// record which action fired so the gating wiring can be asserted.
 class _FakeClient implements SequenceClient {
   @override
+  Future<bool> deleteSequence(String id) => throw UnimplementedError();
+  @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   _FakeClient({this.runState, this.throwOnStart = false});

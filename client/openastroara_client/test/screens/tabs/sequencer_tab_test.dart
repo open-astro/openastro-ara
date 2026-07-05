@@ -32,6 +32,8 @@ Map<String, dynamic> _bodyFor(String id) => {
 
 class _FakeClient implements SequenceClient {
   @override
+  Future<bool> deleteSequence(String id) => throw UnimplementedError();
+  @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   @override

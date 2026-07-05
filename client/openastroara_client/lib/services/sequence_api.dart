@@ -72,6 +72,12 @@ abstract interface class SequenceClient {
     Map<String, dynamic>? body,
   });
 
+  /// Delete a saved sequence (`DELETE /{id}`, §38.5). Returns true on success,
+  /// false when the daemon doesn't know the id (404 — already gone, which for
+  /// a delete is the same outcome the user wanted). Throws on other transport
+  /// failures.
+  Future<bool> deleteSequence(String id);
+
   /// Dry-run the raw [body] through the daemon's schema validator (§38.5)
   /// without persisting — `POST /validate`. Returns whether it's valid and the
   /// first problem reason when not. Throws on transport failure / unexpected
@@ -321,6 +327,20 @@ class SequenceApi implements SequenceClient {
           'sequence update returned an unexpected body (${data.runtimeType})');
     }
     return SequenceDetail.fromJson(data);
+  }
+
+  @override
+  Future<bool> deleteSequence(String id) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    try {
+      await _dio.delete<void>('/api/v1/sequences/${Uri.encodeComponent(id)}');
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return false; // already gone
+      rethrow;
+    }
   }
 
   @override
