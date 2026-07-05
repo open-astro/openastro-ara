@@ -71,7 +71,25 @@ Future<bool> confirmAndDeleteSequence(
   if (confirmed != true || !context.mounted) return false;
 
   try {
-    if (active && !await _abortAndSettle(api, id)) {
+    // Re-probe AFTER the confirm: the dialog can sit open indefinitely, and the
+    // daemon's DELETE removes the file unconditionally — deleting under a run
+    // that started meanwhile would leave a ghost executor. If the user agreed
+    // to "Stop & Delete", stop whatever is running now; if they agreed to a
+    // PLAIN delete, don't silently abort a run they never consented to stop —
+    // bail and tell them.
+    var activeNow = false;
+    try {
+      activeNow = (await api.getRunState(id))?.state?.isActive ?? false;
+    } catch (_) {}
+    if (activeNow && !active) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('The sequence started running while the confirm was '
+              'open — nothing was deleted. Stop the run (or delete again) '
+              'to proceed.'),
+          backgroundColor: AraColors.accentError));
+      return false;
+    }
+    if (activeNow && !await _abortAndSettle(api, id)) {
       messenger.showSnackBar(const SnackBar(
           content: Text("Couldn't stop the run — the sequence was not "
               'deleted. Try again once it has stopped.'),

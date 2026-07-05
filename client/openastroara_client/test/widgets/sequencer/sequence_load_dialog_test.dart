@@ -290,6 +290,29 @@ void main() {
       expect(client.deleted, ['s1']);
     });
 
+    testWidgets('a run that starts while the confirm is open blocks the delete',
+        (tester) async {
+      // TOCTOU (#689 round-2): the confirm can sit open indefinitely and the
+      // daemon deletes unconditionally — a run that began meanwhile must NOT be
+      // silently aborted under a PLAIN delete confirm, nor deleted under a live
+      // executor. The post-confirm re-probe bails instead.
+      final (_, client) = await pumpWithRow(tester); // idle at probe time
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete sequence?'), findsOneWidget); // plain wording
+      client.runState =
+          const SequenceRunStateInfo(state: SequenceRunState.running);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Delete').last);
+      await tester.pumpAndSettle();
+
+      expect(client.deleted, isEmpty);
+      expect(client.aborted, isEmpty);
+      expect(find.textContaining('started running while the confirm was open'),
+          findsOneWidget);
+      expect(find.text('NGC7092'), findsOneWidget);
+    });
+
     testWidgets('a failed delete keeps the row and shows the error',
         (tester) async {
       final (container, client) = await pumpWithRow(tester);

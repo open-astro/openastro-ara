@@ -73,6 +73,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Applying_a_snapshot_with_null_optics_filterset_and_stretch_reads_non_null() {
+            // The #689 round-2 finding: the same Apply → Put bypass exists for EVERY
+            // section, not just camera electronics — a null optics reaches
+            // OptimalSubOverrides.Optics().ApertureMm, a null filter set reaches
+            // set.Filters, both NREs. The write-path normalizer must cover them all.
+            var dir = TempDir();
+            try {
+                var store = new FileProfileStore(dir);
+                ProfileStoreSnapshot.Apply(store, ProfileStoreSnapshot.Capture(store) with {
+                    Optics = null!,
+                    FilterSet = null!,
+                    StretchDefaults = null!,
+                });
+
+                Assert.Multiple(() => {
+                    Assert.That(store.GetOpticsSettings(), Is.Not.Null);
+                    Assert.That(store.GetOpticsSettings().ReducerFactor, Is.EqualTo(1.0),
+                        "the coalesced optics default keeps reducer 1.0 (never a zero multiplier)");
+                    Assert.That(store.GetFilterSet(), Is.Not.Null);
+                    Assert.That(store.GetFilterSet().Filters, Is.Not.Null,
+                        "the inner list normalizes too (a null list NREs the filter lookup)");
+                    Assert.That(store.GetStretchDefaults(), Is.Not.Null);
+                    Assert.That(store.GetStretchDefaults().ManualDefaultParams, Is.Not.Null);
+                });
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void Update_over_a_null_section_does_not_throw() {
             var dir = TempDir();
             try {
