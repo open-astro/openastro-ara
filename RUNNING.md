@@ -46,10 +46,22 @@ The build doesn't need CFITSIO, but the capture path resolves it at runtime
 (`DllNotFoundException: 'cfitsio'` means it's missing).
 
 - **Linux:** `sudo apt-get install libcfitsio-dev` (Debian/Ubuntu; pulls the runtime lib).
-- **macOS:** `brew install cfitsio`. The `CopyLibCfitsioMacOS` post-build target in
-  `OpenAstroAra.Server.csproj` copies the dylib into the app's native runtime dir on
-  every macOS build — needed because the .NET loader doesn't search `/opt/homebrew/lib`
-  and SIP strips `DYLD_*` vars. Just build after brew-installing and it works.
+- **macOS (Apple Silicon):** `brew install cfitsio`. The `CopyLibCfitsioMacOS`
+  post-build target in `OpenAstroAra.Server.csproj` copies the dylib into the app's
+  native runtime dir on every macOS build — needed because the .NET loader doesn't
+  search `/opt/homebrew/lib` and SIP strips `DYLD_*` vars. Just build after
+  brew-installing and it works.
+- **macOS (Intel):** the auto-copy target is Arm64-gated, so copy the dylib by hand
+  after `brew install cfitsio` (Homebrew lives at `/usr/local` on Intel, and the
+  loader probes the `osx-x64` runtime dir):
+
+  ```bash
+  BIN=OpenAstroAra.Server/bin/Debug/net10.0/runtimes/osx-x64/native   # or bin/Release/…
+  mkdir -p "$BIN"
+  cp -L /usr/local/lib/libcfitsio.dylib "$BIN/libcfitsio.dylib"
+  ```
+
+  Re-copy after a clean build (a clean wipes `bin/`).
 - **Windows:** untested — the deployment target is ARM64 Linux and daemon development
   happens on Linux/macOS. The client runs fine on Windows (below); if you want the
   daemon on the same machine, run it under WSL2 using the Linux steps, or put
