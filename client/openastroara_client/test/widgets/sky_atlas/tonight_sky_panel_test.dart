@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -11,11 +13,16 @@ import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
-/// Records create() calls; everything else is unused by this panel.
+/// Records create()/updateSequence() calls; the append path additionally reads
+/// [runState] (null = no active run) and [detail] (the open sequence's body).
 class _RecordingClient implements SequenceClient {
   String? createdName;
   Map<String, dynamic>? createdBody;
   bool throwOnCreate = false;
+  SequenceRunStateInfo? runState;
+  SequenceDetail? detail;
+  String? updatedId;
+  Map<String, dynamic>? updatedBody;
 
   @override
   Future<String> create(String name, Map<String, dynamic> body,
@@ -46,18 +53,23 @@ class _RecordingClient implements SequenceClient {
   @override
   Future<SequenceNode> getSequence(String id) => throw UnimplementedError();
   @override
-  Future<SequenceDetail> getSequenceDetail(String id) =>
-      throw UnimplementedError();
+  Future<SequenceDetail> getSequenceDetail(String id) async =>
+      detail ?? (throw UnimplementedError());
   @override
   Future<SequenceDetail> updateSequence(String id,
-          {String? name, String? description, Map<String, dynamic>? body}) =>
-      throw UnimplementedError();
+      {String? name, String? description, Map<String, dynamic>? body}) async {
+    updatedId = id;
+    updatedBody = body;
+    return SequenceDetail(id: id, name: name ?? '', body: body ?? const {});
+  }
+
+  @override
+  Future<bool> deleteSequence(String id) => throw UnimplementedError();
   @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) =>
       throw UnimplementedError();
   @override
-  Future<SequenceRunStateInfo?> getRunState(String id) =>
-      throw UnimplementedError();
+  Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
   @override
   Future<String> start(String id) => throw UnimplementedError();
   @override
@@ -125,7 +137,7 @@ Widget _host(_RecordingClient client,
     );
 
 void main() {
-  testWidgets('the add action creates a slew sequence named after the object',
+  testWidgets('the add action creates a full imaging run named after the object',
       (tester) async {
     final client = _RecordingClient();
     await tester.pumpWidget(_host(client));
@@ -139,7 +151,165 @@ void main() {
     expect(client.createdName, 'Andromeda Galaxy');
     final body = client.createdBody!;
     expect(body['schemaVersion'], 'openastroara-sequence-v1');
-    expect(find.textContaining('Added "Andromeda Galaxy"'), findsOneWidget);
+    // A real session, not a bare slew: the slew plus an imaging loop of
+    // TakeExposures are all in the created tree.
+    final json = body.toString();
+    expect(json, contains('SlewScopeToRaDec'));
+    expect(json, contains('TakeExposure'));
+    expect(json, contains('LoopCondition'));
+    expect(find.textContaining('Created an imaging run for "Andromeda Galaxy"'),
+        findsOneWidget);
+  });
+
+  // The append-path harness: a session for M 42 already open (selected), then
+  // the add action for Andromeda. Returns the container so tests can pre-set
+  // run state and inspect what happened.
+  Future<ProviderContainer> pumpWithOpenSequence(
+      WidgetTester tester, _RecordingClient client) async {
+    client.detail = SequenceDetail(
+      id: 'seq-open',
+      name: 'M 42',
+      body: buildImagingRunBody(
+        raDeg: 83.8,
+        decDeg: -5.4,
+        targetName: 'M 42',
+        exposureSeconds: 120,
+        frameCount: 48,
+        warmAtEnd: true,
+      ),
+    );
+    final container = ProviderContainer(overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      sequenceApiProvider.overrideWith((ref) => client),
+    ]);
+    addTearDown(container.dispose);
+    container.read(selectedSequenceIdProvider.notifier).select('seq-open');
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+    ));
+    await tester.pump(); // resolve the tonightSky future
+    return container;
+  }
+
+  testWidgets('with a sequence open, the add action appends the target to it',
+      (tester) async {
+    final client = _RecordingClient();
+    await pumpWithOpenSequence(tester, client);
+
+    await tester.tap(find.byIcon(Icons.playlist_add));
+    await tester.pump(); // run the append round-trip
+    await tester.pump(); // settle the SnackBar
+
+    // Patched, not created — ONE plan with both targets, the warm-up still last.
+    expect(client.createdName, isNull);
+    expect(client.updatedId, 'seq-open');
+    final names = childrenOf(client.updatedBody!).map((c) => c['Name']).toList();
+    expect(names, contains('M 42'));
+    expect(names, contains('Andromeda Galaxy'));
+    expect(names.indexOf('Andromeda Galaxy'), greaterThan(names.indexOf('M 42')));
+    expect((childrenOf(client.updatedBody!).last[r'$type'] as String),
+        contains('WarmCamera'));
+    expect(find.textContaining('Added "Andromeda Galaxy" to the open sequence'),
+        findsOneWidget);
+  });
+
+  testWidgets('an actively-running open sequence gets a fresh run instead',
+      (tester) async {
+    // Appending to a live run would edit a file the executor won't re-read —
+    // the target must land in a new sequence, not silently miss tonight.
+    final client = _RecordingClient()
+      ..runState = const SequenceRunStateInfo(
+          sequenceId: 'seq-open', state: SequenceRunState.running);
+    await pumpWithOpenSequence(tester, client);
+
+    await tester.tap(find.byIcon(Icons.playlist_add));
+    await tester.pump();
+    await tester.pump();
+
+    expect(client.updatedId, isNull);
+    expect(client.createdName, 'Andromeda Galaxy');
+    expect(find.textContaining('Created an imaging run for "Andromeda Galaxy"'),
+        findsOneWidget);
+  });
+
+  testWidgets('tapping the row sends a framing goto and highlights the row',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(TonightSkyPanel)));
+    // The framing goto carries the name (the page labels the frame with it)
+    // and frame:true (the page opens the framing overlay on the object).
+    expect(container.read(planetariumCommandProvider), {
+      'type': 'goto',
+      'ra': _m31.raDeg,
+      'dec': _m31.decDeg,
+      'name': 'Andromeda Galaxy',
+      'frame': true,
+    });
+    // The tapped row is remembered and painted selected, so the user can see
+    // which row drove the atlas.
+    expect(container.read(selectedTonightObjectProvider), 'M31');
+    final rowBox = tester.widget<Container>(find
+        .ancestor(of: find.text('Andromeda Galaxy'),
+            matching: find.byType(Container))
+        .first);
+    expect(rowBox.color, isNotNull);
+  });
+
+  testWidgets('framing a second row after the first still sends its goto',
+      (tester) async {
+    // Repro for "frame A, then frame B doesn't work": two sequential row taps
+    // must each deliver their own framing goto (the command bus re-fires on
+    // every non-null send, even when the page-side frame was toggled between).
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [_m31, _ngc]));
+    await tester.pump();
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(TonightSkyPanel)));
+
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pump();
+    expect(container.read(planetariumCommandProvider)?['ra'], _m31.raDeg);
+
+    // The StellariumView listener consumes + clears the bus after forwarding;
+    // model that so the second tap starts from a cleared bus like the real app.
+    container.read(planetariumCommandProvider.notifier).clear();
+    expect(container.read(planetariumCommandProvider), isNull);
+
+    await tester.tap(find.text('Orion Nebula'));
+    await tester.pump();
+    expect(container.read(planetariumCommandProvider), {
+      'type': 'goto',
+      'ra': _ngc.raDeg,
+      'dec': _ngc.decDeg,
+      'name': 'Orion Nebula',
+      'frame': true,
+    });
+    expect(container.read(selectedTonightObjectProvider), 'NGC1976');
+  });
+
+  testWidgets('the crosshair icon stays a centre-only goto (no frame key)',
+      (tester) async {
+    await tester.pumpWidget(_host(_RecordingClient()));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.my_location));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+        tester.element(find.byType(TonightSkyPanel)));
+    expect(container.read(planetariumCommandProvider), {
+      'type': 'goto',
+      'ra': _m31.raDeg,
+      'dec': _m31.decDeg,
+    });
+    // Centre-only: no selection claim — the row is not marked as framed.
+    expect(container.read(selectedTonightObjectProvider), isNull);
   });
 
   testWidgets('a create failure surfaces an error SnackBar', (tester) async {
@@ -151,7 +321,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.textContaining("Couldn't add to a sequence"), findsOneWidget);
+    expect(find.textContaining("Couldn't create the run"), findsOneWidget);
   });
 
   testWidgets('renders the score badge, framing chip and timing line',
