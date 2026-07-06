@@ -44,6 +44,34 @@ Map<String, dynamic> inputCoordinatesFromDeg(double raDeg, double decDeg) {
   };
 }
 
+/// The decimal-degree (raDeg, decDeg) of a NINA `InputCoordinates` JSON DOM —
+/// the inverse of [inputCoordinatesFromDeg]. Returns null when [coordinates]
+/// isn't a map carrying the numeric component fields.
+///
+/// NOTE THE UNITS: NINA decomposes RA in HOURS (H + M/60 + S/3600), so this
+/// multiplies by 15 to return DEGREES — the convention every planning API
+/// (`raDeg`, catalog `ra_deg`) uses. Passing raw RAHours downstream would
+/// silently produce plausible-but-wrong galactic latitudes and star counts.
+({double raDeg, double decDeg})? degFromInputCoordinates(Object? coordinates) {
+  if (coordinates is! Map) return null;
+  final rh = coordinates['RAHours'];
+  final rm = coordinates['RAMinutes'];
+  final rs = coordinates['RASeconds'];
+  final dd = coordinates['DecDegrees'];
+  final dm = coordinates['DecMinutes'];
+  final ds = coordinates['DecSeconds'];
+  if (rh is! num || rm is! num || rs is! num || dd is! num || dm is! num || ds is! num) {
+    return null;
+  }
+  final raHours = rh + rm / 60.0 + rs / 3600.0;
+  final raDeg = _normalizeRaDeg(raHours * 15.0);
+  final decMagnitude =
+      (dd + dm / 60.0 + ds / 3600.0).clamp(0.0, 90.0).toDouble();
+  final decDeg =
+      coordinates['NegativeDec'] == true ? -decMagnitude : decMagnitude;
+  return (raDeg: raDeg, decDeg: decDeg);
+}
+
 /// Fold [raDeg] into `[0, 360)`. For `double` operands Dart's `%` follows
 /// truncating division — the remainder takes the sign of the dividend, so
 /// `-15.0 % 360.0 == -15.0`, not `345.0` (unlike Dart's integer `%`, which is

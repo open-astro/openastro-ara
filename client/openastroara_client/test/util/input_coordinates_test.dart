@@ -91,4 +91,29 @@ void main() {
       expect(signed, closeTo(decDeg, 1e-6));
     });
   });
+
+  group('degFromInputCoordinates', () {
+    test('inverts inputCoordinatesFromDeg — RA back in DEGREES, not hours', () {
+      // M42: the doubly-important case (negative dec + RA where an hours/degrees
+      // mixup would be silent — 83.822° = 5.59 h, both "plausible" numbers).
+      const raDeg = 83.822, decDeg = -5.391;
+      final pos = degFromInputCoordinates(inputCoordinatesFromDeg(raDeg, decDeg));
+      expect(pos, isNotNull);
+      expect(pos!.raDeg, closeTo(raDeg, 1e-6));
+      expect(pos.decDeg, closeTo(decDeg, 1e-6));
+    });
+
+    test('a positive-dec position round-trips too', () {
+      final pos = degFromInputCoordinates(inputCoordinatesFromDeg(192.85948, 27.12825));
+      expect(pos!.raDeg, closeTo(192.85948, 1e-6));
+      expect(pos.decDeg, closeTo(27.12825, 1e-6));
+    });
+
+    test('non-map / missing-field shapes return null instead of throwing', () {
+      expect(degFromInputCoordinates(null), isNull);
+      expect(degFromInputCoordinates('not a map'), isNull);
+      expect(degFromInputCoordinates(<String, dynamic>{'RAHours': 5}), isNull,
+          reason: 'partial coordinate maps carry no trustworthy position');
+    });
+  });
 }
