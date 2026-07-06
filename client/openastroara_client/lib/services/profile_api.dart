@@ -202,7 +202,6 @@ class ProfileApi {
     return _cameraElectronicsFromJson(res.data ?? const {});
   }
 
-  /// GET the active profile's planning filter set (NEXTGEN §1/§4).
   /// GET the active profile's §36 custom terrain horizon (empty = none entered).
   Future<List<CustomHorizonPoint>> getCustomHorizon() async {
     final res = await _dio.get<Map<String, dynamic>>(
@@ -243,6 +242,7 @@ class ProfileApi {
     ];
   }
 
+  /// GET the active profile's planning filter set (NEXTGEN §1/§4).
   Future<FilterSetSettings> getFilterSet() async {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/filter-set',

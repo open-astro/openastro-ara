@@ -37,6 +37,7 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
   /// Sorting happens where indices are allowed to change wholesale: hydrate
   /// and the daemon's canonical echo on Save.
   void addPoint(double azimuthDeg, double altitudeDeg) {
+    if (!_validAzimuth(azimuthDeg) || !_validAltitude(altitudeDeg)) return;
     state = [
       ...state,
       CustomHorizonPoint(azimuthDeg: azimuthDeg, altitudeDeg: altitudeDeg),
@@ -49,8 +50,12 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
   }
 
   /// Edit a vertex IN PLACE — deliberately no re-sort (see [addPoint]).
+  /// Out-of-range values are rejected like the sibling site setters, so the
+  /// daemon's 422 range check is unreachable from this UI.
   void updateAt(int index, {double? azimuthDeg, double? altitudeDeg}) {
     if (index < 0 || index >= state.length) return;
+    if (azimuthDeg != null && !_validAzimuth(azimuthDeg)) return;
+    if (altitudeDeg != null && !_validAltitude(altitudeDeg)) return;
     final next = [...state];
     next[index] = next[index].copyWith(
       azimuthDeg: azimuthDeg,
@@ -68,6 +73,10 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
   Future<void> persistToServer(ProfileApi api) async {
     state = _sorted(await api.putCustomHorizon(state));
   }
+
+  // The daemon's CustomHorizonValidator bounds, mirrored client-side.
+  static bool _validAzimuth(double v) => !v.isNaN && v >= 0 && v <= 360;
+  static bool _validAltitude(double v) => !v.isNaN && v >= -10 && v <= 90;
 
   static List<CustomHorizonPoint> _sorted(List<CustomHorizonPoint> points) =>
       [...points]..sort((a, b) => a.azimuthDeg.compareTo(b.azimuthDeg));

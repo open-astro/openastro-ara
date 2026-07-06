@@ -65,6 +65,15 @@ void main() {
       n.removeAt(5);
       n.updateAt(-1, altitudeDeg: 1);
       expect(container.read(customHorizonProvider), hasLength(1));
+
+      // Out-of-range VALUES are rejected like the sibling site setters —
+      // the daemon's 422 range check is unreachable from this UI.
+      n.addPoint(400, 10);
+      n.addPoint(10, 95);
+      n.updateAt(0, azimuthDeg: -5);
+      n.updateAt(0, altitudeDeg: -20);
+      expect(container.read(customHorizonProvider), hasLength(1));
+      expect(container.read(customHorizonProvider).single.azimuthDeg, 270);
     });
 
     test(

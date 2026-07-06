@@ -56,8 +56,13 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
+    // Two sequential PUTs — track which committed so a partial failure
+    // reports honestly ("site saved; skyline failed") instead of implying
+    // the whole Save was rolled back (review r2).
+    var siteSaved = false;
     try {
       await ref.read(siteSettingsProvider.notifier).persistToServer(api);
+      siteSaved = true;
       await ref.read(customHorizonProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
@@ -65,7 +70,11 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = 'Save failed: $e');
+      setState(
+        () => _lastError = siteSaved
+            ? 'Site preferences saved, but the horizon skyline failed: $e'
+            : 'Save failed: $e',
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _saving = false);
