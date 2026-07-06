@@ -145,10 +145,17 @@ namespace OpenAstroAra.Test {
                 OnSafetyEvent = true, OnDiskSpaceLow = false,
                 OnSequencePaused = true, OnCriticalDiagnostic = false,
             };
-            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Safety), Is.True);
-            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Storage), Is.False);
-            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Sequence), Is.True);
-            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Equipment), Is.False);
+            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Safety, NotificationSeverity.Warning), Is.True);
+            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Storage, NotificationSeverity.Warning), Is.False);
+            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Sequence, NotificationSeverity.Warning), Is.True);
+            Assert.That(PushChannelService.TriggerAllows(s, NotificationCategory.Equipment, NotificationSeverity.Warning), Is.False);
+
+            // Sequence is two populations: with OnSequencePaused OFF, a Warning pause stays
+            // silenced, but a CRITICAL sequence event (checkpoint corruption) still pages via
+            // OnCriticalDiagnostic.
+            var pausedOff = s with { OnSequencePaused = false, OnCriticalDiagnostic = true };
+            Assert.That(PushChannelService.TriggerAllows(pausedOff, NotificationCategory.Sequence, NotificationSeverity.Warning), Is.False);
+            Assert.That(PushChannelService.TriggerAllows(pausedOff, NotificationCategory.Sequence, NotificationSeverity.Critical), Is.True);
             Assert.That(PushChannelService.SeverityAllows(NotificationSeverity.Info), Is.False);
             Assert.That(PushChannelService.SeverityAllows(NotificationSeverity.Warning), Is.True);
         }

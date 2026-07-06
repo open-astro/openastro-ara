@@ -59,13 +59,18 @@ public sealed partial class PushChannelService : IDisposable {
 
     /// <summary>Whether the per-trigger §54 toggles allow pushing this notification. The toggle
     /// set predates the push channels (it gates the in-app triggers), so the mapping is by
-    /// category: Safety → OnSafetyEvent, Storage → OnDiskSpaceLow, Sequence → OnSequencePaused
-    /// (the failure-ish sequence toggle — sequence.complete is Info and never reaches the
-    /// severity gate anyway), Equipment/Software/Alarm ride OnCriticalDiagnostic. Pure.</summary>
-    internal static bool TriggerAllows(NotificationsSettingsDto s, NotificationCategory category) => category switch {
+    /// category: Safety → OnSafetyEvent, Storage → OnDiskSpaceLow, Equipment/Software/Alarm ride
+    /// OnCriticalDiagnostic. Sequence is TWO populations sharing one category: pause-ish events
+    /// gate on OnSequencePaused, while a CRITICAL sequence event (the startup reconciler's
+    /// interrupted/corrupt-checkpoint alerts, a halted run) also passes via OnCriticalDiagnostic
+    /// — turning "notify on sequence paused" off must not silence checkpoint-corruption pages.
+    /// Pure.</summary>
+    internal static bool TriggerAllows(NotificationsSettingsDto s, NotificationCategory category,
+            NotificationSeverity severity) => category switch {
         NotificationCategory.Safety => s.OnSafetyEvent,
         NotificationCategory.Storage => s.OnDiskSpaceLow,
-        NotificationCategory.Sequence => s.OnSequencePaused,
+        NotificationCategory.Sequence => s.OnSequencePaused
+            || (severity == NotificationSeverity.Critical && s.OnCriticalDiagnostic),
         _ => s.OnCriticalDiagnostic,
     };
 
@@ -97,7 +102,7 @@ public sealed partial class PushChannelService : IDisposable {
             LogSettingsReadFailed(ex);
             return;
         }
-        if (!TriggerAllows(s, n.Category)) {
+        if (!TriggerAllows(s, n.Category, n.Severity)) {
             return;
         }
         var pushover = !string.IsNullOrWhiteSpace(s.PushoverToken)
@@ -141,7 +146,9 @@ public sealed partial class PushChannelService : IDisposable {
         // wire request-URI logging/tracing (HttpClientFactory logging handlers, OpenTelemetry
         // HTTP instrumentation) onto this client, or the token leaks into logs; the failure
         // logging below deliberately records only the exception, not the URI.
-        var uri = new Uri($"https://api.telegram.org/bot{s.TelegramBotToken.Trim()}/sendMessage");
+        // EscapeDataString hardens against copy-paste garbage (stray reserved characters would
+        // otherwise make new Uri() throw, silently dropping the push into the best-effort catch).
+        var uri = new Uri($"https://api.telegram.org/bot{Uri.EscapeDataString(s.TelegramBotToken.Trim())}/sendMessage");
         using var content = new FormUrlEncodedContent(new Dictionary<string, string> {
             ["chat_id"] = s.TelegramChatId.Trim(),
             ["text"] = $"ARA: {n.Title}\n{n.Message}",

@@ -45,6 +45,25 @@ void main() {
           'bot-xyz');
     });
 
+    test('§54 second-half channel fields default empty, trim, and copyWith-preserve', () {
+      final s0 = container.read(notificationsSettingsProvider);
+      expect(s0.pushoverUserKey, '');
+      expect(s0.telegramChatId, '');
+
+      final n = container.read(notificationsSettingsProvider.notifier);
+      n.setPushoverUserKey('  user-key-1 ');
+      n.setTelegramChatId(' 12345\n');
+      final s = container.read(notificationsSettingsProvider);
+      expect(s.pushoverUserKey, 'user-key-1');
+      expect(s.telegramChatId, '12345');
+
+      const a = NotificationsSettings(pushoverUserKey: 'uk', telegramChatId: 'ch');
+      final b = a.copyWith(inAppBanner: false);
+      expect(b.pushoverUserKey, 'uk',
+          reason: 'copyWith must carry the new fields like their token siblings');
+      expect(b.telegramChatId, 'ch');
+    });
+
     test('all 7 triggers can be disabled individually', () {
       final n = container.read(notificationsSettingsProvider.notifier);
       n.setOnSequenceComplete(false);
