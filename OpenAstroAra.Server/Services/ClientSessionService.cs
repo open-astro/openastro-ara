@@ -136,6 +136,15 @@ public sealed partial class ClientSessionService {
             var now = UtcNow();
             if (existingSessionId is Guid reclaimed && _current is not null && _current.Id == reclaimed) {
                 _current.LastSeenUtc = now;
+                // A takeover request pending against this holder can never be
+                // answered now — the connection.request frame went to the socket
+                // that just dropped (that drop is why the holder is re-claiming).
+                // The re-claim itself proves the holder is alive and wants the
+                // slot, so resolve the waiting connector as "reject" immediately
+                // instead of letting it spin down to a misleading unresponsive
+                // timeout. (Mirrors Disconnect, which resolves a pending dance
+                // as "allow" for the symmetric reason.)
+                _pending?.Tcs.TrySetResult("reject");
                 return new ConnectOutcome(ConnectOutcomeKind.Granted, _current.Id, _current.ConnectedUtc, null);
             }
             if (_pending is not null) {

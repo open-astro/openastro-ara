@@ -46,9 +46,7 @@ public static class ConnectionEndpoints {
                             statusCode: StatusCodes.Status422UnprocessableEntity,
                             detail: "Body must be { \"hostname\": \"<display name of the connecting client>\" }.");
                     }
-                    if (hostname.Length > MaxHostnameLength) {
-                        hostname = hostname[..MaxHostnameLength];
-                    }
+                    hostname = CapHostname(hostname);
                     var outcome = await sessions.ConnectAsync(hostname, body?.SessionId, ct);
                     return outcome.Kind switch {
                         ConnectOutcomeKind.Granted => Results.Ok(
@@ -96,5 +94,20 @@ public static class ConnectionEndpoints {
               .WithName("GetClientSession");
 
         return app;
+    }
+
+    /// <summary>Caps the display hostname at <see cref="MaxHostnameLength"/> UTF-16
+    /// units without splitting a surrogate pair — a dangling high surrogate would at
+    /// best mojibake in the holder's modal and at worst make the JSON serializer
+    /// throw mid-<c>connection.request</c>.</summary>
+    internal static string CapHostname(string hostname) {
+        if (hostname.Length <= MaxHostnameLength) {
+            return hostname;
+        }
+        var cut = MaxHostnameLength;
+        if (char.IsHighSurrogate(hostname[cut - 1])) {
+            cut--;
+        }
+        return hostname[..cut];
     }
 }

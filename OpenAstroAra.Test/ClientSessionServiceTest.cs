@@ -245,6 +245,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Reclaim_during_a_pending_takeover_rejects_the_waiting_connector() {
+            var svc = NewService();
+            var holderConn = new FakeConnection();
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
+            svc.BindSocket(holder.SessionId, holderConn);
+
+            // ipad.local starts the dance; the request frame goes to holderConn.
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
+            await WaitForFrameAsync(holderConn);
+
+            // The holder's socket drops mid-dance (that's why it re-claims) — the
+            // modal answer can never arrive, but the re-claim proves it's alive.
+            svc.UnbindSocket(holder.SessionId, holderConn);
+            var reclaim = await svc.ConnectAsync("mac.local", holder.SessionId, CancellationToken.None);
+            Assert.That(reclaim.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
+            Assert.That(reclaim.SessionId, Is.EqualTo(holder.SessionId));
+
+            // The waiting connector resolves immediately as Rejected — not a slow,
+            // misleading Unresponsive timeout.
+            var outcome = await connectTask;
+            Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Rejected));
+            Assert.That(outcome.CurrentHostname, Is.EqualTo("mac.local"));
+            Assert.That(svc.GetSession().Hostname, Is.EqualTo("mac.local"), "holder keeps the slot");
+        }
+
+        [Test]
+        public void CapHostname_is_surrogate_pair_safe() {
+            Assert.That(ConnectionEndpoints.CapHostname("mac.local"), Is.EqualTo("mac.local"));
+
+            var longAscii = new string('a', 100);
+            Assert.That(ConnectionEndpoints.CapHostname(longAscii), Has.Length.EqualTo(64));
+
+            // 'a' + 32 telescopes = 65 UTF-16 units with every surrogate pair at an
+            // ODD offset, so the 64-unit cut lands mid-pair — the cap must retreat
+            // to 63, not slice the pair.
+            var emoji = "a" + string.Concat(System.Linq.Enumerable.Repeat("\U0001F52D", 32));
+            var capped = ConnectionEndpoints.CapHostname(emoji);
+            Assert.That(capped, Has.Length.EqualTo(63));
+            Assert.That(char.IsHighSurrogate(capped[^1]), Is.False, "no dangling high surrogate");
+            // Round-trips through the same JSON path connection.request uses.
+            Assert.DoesNotThrow(() => System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(capped));
+        }
+
+        [Test]
         public async Task Stale_session_id_after_takeover_goes_through_the_normal_dance() {
             var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
             var svc = NewService(now);
