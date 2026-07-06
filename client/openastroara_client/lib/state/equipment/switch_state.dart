@@ -120,6 +120,9 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     if (api == null) return const <SwitchDevice>[];
     final issue = ++_readIssue;
     final devices = await api.getAll();
+    // The notifier may have been disposed during the await (server removed /
+    // last listener gone) — don't touch state on a torn-down notifier.
+    if (!ref.mounted) return devices;
     if (issue != _readIssue) {
       // A fresher WS-push refresh landed during this rebuild's read — keep it.
       if (state case AsyncData<List<SwitchDevice>>(:final value)) {
