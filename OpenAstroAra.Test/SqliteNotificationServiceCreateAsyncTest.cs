@@ -105,6 +105,88 @@ namespace OpenAstroAra.Test {
             Assert.That(unread.Items.Any(x => x.Id == id), Is.True);
         }
 
+        // ─── §58.10 — unattended-hours severity escalation at the CreateAsync chokepoint ───
+
+        // Winter solstice at lat 40 N, lon 0: local midnight has the sun ~73° below the horizon
+        // (deep astronomical darkness); local noon has it ~26° up. Both far from the −18° edge,
+        // so the tests never depend on almanac precision.
+        private static readonly DateTimeOffset WinterMidnightUtc = new(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+        private static readonly DateTimeOffset WinterNoonUtc = new(2026, 12, 21, 12, 0, 0, TimeSpan.Zero);
+
+        private SqliteNotificationService UnattendedAwareService(DateTimeOffset now, bool escalationEnabled = true) {
+            var profiles = new InMemoryProfileStore();
+            profiles.PutSiteSettings(profiles.GetSiteSettings() with { LatitudeDeg = 40, LongitudeDeg = 0 });
+            profiles.PutSafetyPolicies(profiles.GetSafetyPolicies() with { UnattendedEscalation = escalationEnabled });
+            return new SqliteNotificationService(_db, logger: null, profiles) { UtcNow = () => now };
+        }
+
+        [Test]
+        public async Task At_night_an_equipment_impacting_warning_lands_as_error_and_says_why() {
+            var svc = UnattendedAwareService(WinterMidnightUtc);
+            var id = Guid.NewGuid();
+            await svc.CreateAsync(Sample(id, NotificationSeverity.Warning, "Dew heater dropout"), CancellationToken.None);
+
+            var hit = (await svc.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == id);
+            Assert.That(hit.Severity, Is.EqualTo(NotificationSeverity.Error), "Warning bumps one level unattended");
+            Assert.That(hit.Message, Does.Contain("unattended hours"),
+                "morning triage must see WHY the severity is higher than the event usually carries");
+        }
+
+        [Test]
+        public async Task At_noon_the_same_warning_lands_untouched() {
+            var svc = UnattendedAwareService(WinterNoonUtc);
+            var id = Guid.NewGuid();
+            await svc.CreateAsync(Sample(id, NotificationSeverity.Warning, "Dew heater dropout"), CancellationToken.None);
+
+            var hit = (await svc.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == id);
+            Assert.That(hit.Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(hit.Message, Does.Not.Contain("unattended hours"));
+        }
+
+        [Test]
+        public async Task Critical_is_already_the_ceiling_and_gains_no_suffix() {
+            var svc = UnattendedAwareService(WinterMidnightUtc);
+            var id = Guid.NewGuid();
+            await svc.CreateAsync(Sample(id, NotificationSeverity.Critical, "Flip failed"), CancellationToken.None);
+
+            var hit = (await svc.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == id);
+            Assert.That(hit.Severity, Is.EqualTo(NotificationSeverity.Critical));
+            Assert.That(hit.Message, Does.Not.Contain("unattended hours"),
+                "an unchanged severity must not claim it was raised");
+        }
+
+        [Test]
+        public async Task Software_chatter_is_not_equipment_impacting_and_stays_put_at_night() {
+            var svc = UnattendedAwareService(WinterMidnightUtc);
+            var id = Guid.NewGuid();
+            var n = Sample(id, NotificationSeverity.Warning, "Update available") with {
+                Category = NotificationCategory.Software,
+            };
+            await svc.CreateAsync(n, CancellationToken.None);
+
+            var hit = (await svc.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == id);
+            Assert.That(hit.Severity, Is.EqualTo(NotificationSeverity.Warning));
+        }
+
+        [Test]
+        public async Task The_profile_toggle_disables_the_escalation() {
+            var svc = UnattendedAwareService(WinterMidnightUtc, escalationEnabled: false);
+            var id = Guid.NewGuid();
+            await svc.CreateAsync(Sample(id, NotificationSeverity.Warning, "Dew heater dropout"), CancellationToken.None);
+
+            var hit = (await svc.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == id);
+            Assert.That(hit.Severity, Is.EqualTo(NotificationSeverity.Warning));
+        }
+
+        [Test]
+        public async Task Without_a_profile_store_the_shim_is_inert() {
+            // The default fixture service has no profile store — a Warning at ANY hour lands as-is.
+            var id = Guid.NewGuid();
+            await _svc.CreateAsync(Sample(id, NotificationSeverity.Warning, "No profiles wired"), CancellationToken.None);
+            var hit = (await _svc.ListAsync(50, null, null, CancellationToken.None)).Items.First(x => x.Id == id);
+            Assert.That(hit.Severity, Is.EqualTo(NotificationSeverity.Warning));
+        }
+
         [Test]
         public async Task CreateAsync_after_seed_does_not_re_trigger_seed() {
             // EnsureSeededAsync should be no-op once any row exists, even one

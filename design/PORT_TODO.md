@@ -373,8 +373,19 @@ via a fresh read-modify-write (a policy edit during the wait isn't clobbered). *
 both profile stores clear the flag when the optics train genuinely changes (identical re-save keeps it) —
 optics is ARA's profile rig identity (mounts are Alpaca-discovered). Independent of `flip_safety_enabled`.
 
-Remaining: **§58.10 unattended-hours
-severity escalation** (+ §58.12 shutdown countdown), and the **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
+✅ **§58.10 unattended-hours severity escalation — DONE (2026-07-05)**: `UnattendedSeverity` (pure) +
+an escalation shim at the `SqliteNotificationService.CreateAsync` chokepoint, so EVERY producer gets the
+same treatment. Window = the spec's default, computed live: sun below −18° at the site (the same Meeus
+sun model Tonight's Sky uses — no stored clock times to drift; a user-set explicit window is a recorded
+follow-up). Scope = Equipment/Sequence/Storage/Safety (Software chatter stays put; Alarm is the target,
+not a source); bump = Warning→Error, Error→Critical (Critical is the ceiling, Info stays); escalated
+messages carry "(severity raised — unattended hours)" so morning triage reads the true fault class.
+Profile toggle `SafetyPoliciesDto.UnattendedEscalation` (default ON); best-effort — a profile/almanac
+fault posts at the original severity, never blocks the notification.
+
+Remaining: **§58.12 unattended-shutdown countdown** (needs the sequencer's `paused_awaiting_user` state —
+the engine currently halts rather than pauses on failures; build when pause-awaiting-input lands), and the
+**re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
 focuser-hardware blocker). Of the §58 profile block only `refocus_after_flip`/`guider_recal` mode enums
 remain un-modelled (they land with the refocus/recal orchestration they configure); `first_flip_confirmed` shipped with §58.8.
 
