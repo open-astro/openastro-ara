@@ -43,9 +43,14 @@ public static class OptimalSubOverrides {
     /// a fully-specified request never reads the profile. On success <c>Input</c> is non-null and
     /// <c>AssumedDefaults</c> lists the Tier-0-defaulted field names (possibly empty); on failure
     /// <c>Error</c> carries the human-readable 400 message. <c>StarField</c> is non-null iff the
-    /// request supplied a target position (<c>raDeg</c>/<c>decDeg</c>) — §3.1's opt-in.</summary>
+    /// request supplied a target position (<c>raDeg</c>/<c>decDeg</c>) — §3.1's opt-in — AND the
+    /// star inputs could be assembled; <c>StarUnavailableReason</c> carries the actionable
+    /// explanation when they couldn't (unset profile sensor dimensions). The ADVISORY degrading
+    /// must never fail the core window: clients pass a target whenever the sequence has one, so
+    /// a 400 here would break the Glover figure for every not-fully-set-up profile. Explicit
+    /// garbage (a supplied bad <c>sensorW</c>) still 400s per the validation above.</summary>
     public static (OptimalSubInputDto? Input, IReadOnlyList<string> AssumedDefaults, string? Error,
-            StarFieldContext? StarField) Build(
+            StarFieldContext? StarField, string? StarUnavailableReason) Build(
             Func<OpticsSettingsDto> getOptics,
             Func<CameraElectronicsDto> getElectronics,
             Func<SiteSettingsDto> getSite,
@@ -247,15 +252,18 @@ public static class OptimalSubOverrides {
 
         // ── §3.1 star-field context (only when a target was supplied) ─────────────────────
         StarFieldContext? starField = null;
+        string? starUnavailable = null;
         if (raDeg is { } targetRa && decDeg is { } targetDec) {
             // Sensor dimensions: request override → profile optics. Like the imaging-train
-            // geometry, there is no honest default — without them the FOV (and with it the
-            // star budget) is unknowable.
+            // geometry, there is no honest default — but the star bound is an ADVISORY rider,
+            // so an unset profile degrades it (with the actionable reason below) instead of
+            // failing the core Glover window the caller actually asked for.
             var mergedSensorW = sensorW ?? Optics().SensorWidthPx;
             var mergedSensorH = sensorH ?? Optics().SensorHeightPx;
             if (mergedSensorW < 1 || mergedSensorH < 1) {
-                return Fail("The star-count advice needs the sensor dimensions and they have no honest "
-                    + "default — set them up (Settings → Optics) or supply 'sensorW' and 'sensorH' directly.");
+                starUnavailable = "Star-count advice needs your sensor dimensions (no honest default) — "
+                    + "set them in Settings → Optics or supply 'sensorW' and 'sensorH'.";
+                return (input, assumed, null, null, starUnavailable);
             }
 
             // Seeing: request override → profile site → Tier-0 typical seeing (2.5″), tagged.
@@ -277,9 +285,9 @@ public static class OptimalSubOverrides {
             starField = new StarFieldContext(targetRa, targetDec, mergedSeeing, fovDeg2);
         }
 
-        return (input, assumed, null, starField);
+        return (input, assumed, null, starField, starUnavailable);
 
-        (OptimalSubInputDto?, IReadOnlyList<string>, string?, StarFieldContext?) Fail(string message) =>
-            (null, Array.Empty<string>(), message, null);
+        (OptimalSubInputDto?, IReadOnlyList<string>, string?, StarFieldContext?, string?) Fail(string message) =>
+            (null, Array.Empty<string>(), message, null, null);
     }
 }

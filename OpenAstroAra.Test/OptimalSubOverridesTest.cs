@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
         /// arguments override the request side. Returns the full §3.1-aware tuple — the
         /// 3-element <see cref="Build"/> wrapper serves the pre-existing tests.</summary>
         private static (OptimalSubInputDto? Input, IReadOnlyList<string> Assumed, string? Error,
-                StarFieldContext? StarField) BuildFull(
+                StarFieldContext? StarField, string? StarUnavailableReason) BuildFull(
                 OpticsSettingsDto? optics = null, CameraElectronicsDto? electronics = null,
                 SiteSettingsDto? site = null, FilterSetDto? filterSet = null,
                 string? filter = null, double? bandwidthNm = null,
@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
                 double? apertureMm = null, double? focalLengthMm = null, double? reducer = null,
                 double? pixelUm = null, double? skyMag = null, int? bortle = null,
                 double? noiseTolerancePct = null, double? headroom = null) {
-            var (input, assumed, error, _) = BuildFull(
+            var (input, assumed, error, _, _) = BuildFull(
                 optics, electronics, site, filterSet, filter, bandwidthNm,
                 readNoise, fullWell, ePerAdu, gain, qe,
                 apertureMm, focalLengthMm, reducer, pixelUm, skyMag, bortle,
@@ -228,14 +228,15 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void No_target_position_means_no_star_context() {
-            var (_, _, error, starField) = BuildFull();
+            var (_, _, error, starField, starUnavailable) = BuildFull();
             Assert.That(error, Is.Null);
             Assert.That(starField, Is.Null, "§3.1 is opt-in — absent target → pure Glover window");
+            Assert.That(starUnavailable, Is.Null);
         }
 
         [Test]
         public void A_target_position_assembles_the_star_context_from_the_profile() {
-            var (_, assumed, error, starField) = BuildFull(raDeg: 83.822, decDeg: -5.391);
+            var (_, assumed, error, starField, _) = BuildFull(raDeg: 83.822, decDeg: -5.391);
             Assert.That(error, Is.Null);
             Assert.That(starField, Is.Not.Null);
             Assert.That(starField!.RaDeg, Is.EqualTo(83.822));
@@ -249,7 +250,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Star_context_overrides_win_and_an_unset_site_seeing_is_tier0_tagged() {
-            var (_, assumed, error, starField) = BuildFull(
+            var (_, assumed, error, starField, _) = BuildFull(
                 site: Site() with { TypicalSeeingArcsec = 0 },
                 raDeg: 10, decDeg: 20, sensorW: 1000, sensorH: 800);
             Assert.That(error, Is.Null);
@@ -258,20 +259,28 @@ namespace OpenAstroAra.Test {
             // Overridden sensor dims shrink the FOV proportionally: (1000·800)/(6248·4176) of full.
             Assert.That(starField.FovDeg2, Is.EqualTo(7.57 * 1000.0 * 800 / (6248.0 * 4176)).Within(0.01));
 
-            var (_, _, _, seeingOverridden) = BuildFull(raDeg: 10, decDeg: 20, seeingArcsec: 4.0);
+            var (_, _, _, seeingOverridden, _) = BuildFull(raDeg: 10, decDeg: 20, seeingArcsec: 4.0);
             Assert.That(seeingOverridden!.SeeingArcsec, Is.EqualTo(4.0), "request seeing wins");
         }
 
         [Test]
-        public void A_target_without_sensor_dimensions_anywhere_is_a_400() {
+        public void A_target_without_sensor_dimensions_degrades_the_advisory_not_the_window() {
+            // The advisory is a rider: clients pass a target whenever the sequence has one, so an
+            // unset profile must NOT fail the Glover window — it explains itself via star_reason.
             var noSensor = ConfiguredOptics() with { SensorWidthPx = 0, SensorHeightPx = 0 };
-            var (_, _, error, _) = BuildFull(optics: noSensor, raDeg: 10, decDeg: 20);
-            Assert.That(error, Does.Contain("sensor dimensions"), "no honest default for the FOV");
+            var (input, _, error, starField, starUnavailable) =
+                BuildFull(optics: noSensor, raDeg: 10, decDeg: 20);
+            Assert.That(error, Is.Null, "the core window must still answer");
+            Assert.That(input, Is.Not.Null);
+            Assert.That(starField, Is.Null);
+            Assert.That(starUnavailable, Does.Contain("sensor dimensions"),
+                "the degrade explains exactly what to configure");
 
-            var (_, _, rescued, starField) = BuildFull(
+            var (_, _, rescued, rescuedField, rescuedReason) = BuildFull(
                 optics: noSensor, raDeg: 10, decDeg: 20, sensorW: 1000, sensorH: 800);
             Assert.That(rescued, Is.Null, "request-side dims rescue an unset profile");
-            Assert.That(starField, Is.Not.Null);
+            Assert.That(rescuedField, Is.Not.Null);
+            Assert.That(rescuedReason, Is.Null);
         }
 
         [Test]

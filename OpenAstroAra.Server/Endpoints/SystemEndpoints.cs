@@ -295,14 +295,15 @@ public static class SystemEndpoints {
                         [FromQuery] double? raDeg, [FromQuery] double? decDeg,
                         [FromQuery] double? seeingArcsec,
                         [FromQuery] int? sensorW, [FromQuery] int? sensorH) => {
-                    var (input, assumedDefaults, error, starField) = OptimalSubOverrides.Build(
-                        profiles.GetOpticsSettings, profiles.GetCameraElectronics,
-                        profiles.GetSiteSettings, profiles.GetFilterSet,
-                        filter, bandwidthNm,
-                        readNoise, fullWell, ePerAdu, gain, qe,
-                        apertureMm, focalLengthMm, reducer, pixelUm,
-                        skyMag, bortle, noiseTolerancePct, headroom,
-                        raDeg, decDeg, seeingArcsec, sensorW, sensorH);
+                    var (input, assumedDefaults, error, starField, starUnavailable) =
+                        OptimalSubOverrides.Build(
+                            profiles.GetOpticsSettings, profiles.GetCameraElectronics,
+                            profiles.GetSiteSettings, profiles.GetFilterSet,
+                            filter, bandwidthNm,
+                            readNoise, fullWell, ePerAdu, gain, qe,
+                            apertureMm, focalLengthMm, reducer, pixelUm,
+                            skyMag, bortle, noiseTolerancePct, headroom,
+                            raDeg, decDeg, seeingArcsec, sensorW, sensorH);
                     if (error is not null) {
                         return Results.Problem(error, statusCode: StatusCodes.Status400BadRequest);
                     }
@@ -311,6 +312,10 @@ public static class SystemEndpoints {
                         // §3.1 slice 3 — the star-detectability floor joins the window (advisory).
                         result = StarDetectabilityFloor.Augment(result, input!,
                             starField.SeeingArcsec, starField.RaDeg, starField.DecDeg, starField.FovDeg2);
+                    } else if (starUnavailable is not null) {
+                        // The advisory couldn't be assembled (unset sensor dims) — the Glover
+                        // window still answers; star_reason carries the actionable explanation.
+                        result = result with { StarReason = starUnavailable };
                     }
                     return Results.Ok(result with {
                         AssumedDefaults = assumedDefaults.Count > 0 ? assumedDefaults : null,
@@ -333,8 +338,9 @@ public static class SystemEndpoints {
                 "position ('raDeg' + 'decDeg', J2000 DEGREES — not RA hours) additionally computes the " +
                 "§3.1 star-detectability floor (star_floor_sec + predicted stars/sub + star_reason; " +
                 "limiting_bound may then report 'starfloor'): 'seeingArcsec' overrides the site's typical " +
-                "seeing, 'sensorW'/'sensorH' the optics' sensor dimensions (needed for the field of view; " +
-                "no default). Advisory only — nothing gates on it.");
+                "seeing, 'sensorW'/'sensorH' the optics' sensor dimensions (needed for the field of view). " +
+                "Unset sensor dimensions degrade the advisory — the Glover window still answers, with " +
+                "star_reason explaining what to configure. Advisory only — nothing gates on it.");
 
         planning.MapGet("/horizon",
                 (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {

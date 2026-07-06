@@ -79,7 +79,10 @@ public enum OptimalSubBound {
 /// <see cref="StarsRegistrationPerSub"/> are the predicted star counts at the FINAL
 /// recommendation for the SNR-5 detection and SNR-10 registration thresholds;
 /// <see cref="StarReason"/> is the human-readable tag (labelled when counts are extrapolated
-/// beyond the star catalog's mag-9 completeness). Advisory only — nothing gates on these.</para>
+/// beyond the star catalog's mag-9 completeness); it is also set ALONE (all other star fields
+/// null) when a target was supplied but the advisory couldn't be assembled — e.g. unset profile
+/// sensor dimensions — carrying the actionable explanation instead of failing the core window.
+/// Advisory only — nothing gates on these.</para>
 /// </summary>
 public sealed record OptimalSubResultDto(
     double SkyFluxEPerSecPerPx,
