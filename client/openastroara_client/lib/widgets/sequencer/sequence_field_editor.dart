@@ -93,6 +93,9 @@ class SequenceFieldEditor extends ConsumerWidget {
           key: ValueKey('${selectedPath.join(".")}/__optimalsub'),
           path: selectedPath,
           filterName: filterNameForExposure(editor!.body, selectedPath),
+          // §3.1 — the sequence's target (DSO container / preceding slew)
+          // opts the figure into the star-detectability advice.
+          targetPosition: targetPositionForExposure(editor.body, selectedPath),
         ),
     ];
 
