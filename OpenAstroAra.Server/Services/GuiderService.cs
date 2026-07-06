@@ -95,12 +95,16 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 return Task.FromResult<GuiderDto?>(null);
             }
             var (rmsTotal, rmsRa, rmsDec) = ComputeRms(_guideSteps);
+            var pixelScale = _guider.PixelScale;
             var runtime = new GuiderStateDto(
                 State: MapGuidingState(_guider.State),
                 RmsTotal: rmsTotal, // raw pixels over the recent guide-step window
                 RmsRa: rmsRa,
                 RmsDec: rmsDec,
-                CurrentProfile: _guider.SelectedProfile?.Name);
+                CurrentProfile: _guider.SelectedProfile?.Name,
+                RmsTotalArcsec: RmsArcsec(rmsTotal, pixelScale),
+                RmsRaArcsec: RmsArcsec(rmsRa, pixelScale),
+                RmsDecArcsec: RmsArcsec(rmsDec, pixelScale));
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }
@@ -320,6 +324,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         var n = steps.Count;
         return (Math.Sqrt((sumRa2 + sumDec2) / n), Math.Sqrt(sumRa2 / n), Math.Sqrt(sumDec2 / n));
     }
+
+    // §63 guider-a follow-up — the arcsec twin of a pixel RMS: scaled by the guider's reported
+    // pixel scale (arcsec/px), the unit guiding accuracy is conventionally quoted in. A scale of
+    // 0 means PHD2 hasn't reported one yet → arcsec unknown (null), never a fake 0″.
+    internal static double? RmsArcsec(double? rmsPixels, double pixelScaleArcsecPerPx) =>
+        rmsPixels is { } px && pixelScaleArcsecPerPx > 0 ? px * pixelScaleArcsecPerPx : null;
 
     private PHD2Guider RequireConnectedGuider() {
         lock (_gate) {
