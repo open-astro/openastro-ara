@@ -31,6 +31,19 @@ class OptimalSubResult {
   /// figure is built entirely from configured values.
   final List<String>? assumedDefaults;
 
+  /// §3.1 star-detectability fields — present only when the request carried a
+  /// target position (and the daemon is new enough); null otherwise.
+  /// [starFloorSec] is t_stars, the shortest sub predicted to reach the
+  /// registration star budget (null even with a target = a starved field);
+  /// when it binds, [limitingBound] reads `starfloor` and [recommendedSec]
+  /// already sits on it. [starReason] is the daemon's ready-made advisory
+  /// line, labelled when counts are extrapolated beyond the star catalog's
+  /// mag-9 completeness — render it verbatim.
+  final double? starFloorSec;
+  final double? starsDetectedPerSub;
+  final double? starsRegistrationPerSub;
+  final String? starReason;
+
   const OptimalSubResult({
     required this.skyFluxEPerSecPerPx,
     required this.floorSec,
@@ -39,6 +52,10 @@ class OptimalSubResult {
     required this.limitingBound,
     required this.recommendedSec,
     this.assumedDefaults,
+    this.starFloorSec,
+    this.starsDetectedPerSub,
+    this.starsRegistrationPerSub,
+    this.starReason,
   });
 
   static OptimalSubResult? fromJson(Map<String, dynamic> json) {
@@ -60,8 +77,14 @@ class OptimalSubResult {
         final List<dynamic> l => l.whereType<String>().toList(),
         _ => null,
       },
+      starFloorSec: _optDouble(json['star_floor_sec']),
+      starsDetectedPerSub: _optDouble(json['stars_detected_per_sub']),
+      starsRegistrationPerSub: _optDouble(json['stars_registration_per_sub']),
+      starReason: json['star_reason'] is String ? json['star_reason'] as String : null,
     );
   }
+
+  static double? _optDouble(Object? v) => v is num ? v.toDouble() : null;
 }
 
 /// The daemon rejected the request as un-computable (a 400 — e.g. the imaging
@@ -91,11 +114,17 @@ class OptimalSubApi {
   /// explicit [bandwidthNm]; both absent → the daemon's effective-broadband
   /// default (flagged in `assumed_defaults`).
   ///
+  /// [raDeg]/[decDeg] (J2000 decimal DEGREES — convert NINA's RA hours first,
+  /// see `degFromInputCoordinates`) opt into the §3.1 star-detectability
+  /// figures; supply both or neither. An older daemon ignores the extra
+  /// parameters and simply returns no star fields.
+  ///
   /// Returns null on a 404 — an older daemon without the endpoint, so the
   /// advisor simply doesn't render. Throws [OptimalSubUnavailable] with the
   /// daemon's message on a 400 (e.g. optics not yet configured); rethrows
   /// transport errors.
-  Future<OptimalSubResult?> get({String? filter, double? bandwidthNm}) async {
+  Future<OptimalSubResult?> get(
+      {String? filter, double? bandwidthNm, double? raDeg, double? decDeg}) async {
     // Blank-or-null filter → omit the parameter (the daemon's broadband default).
     final trimmedFilter = switch (filter?.trim()) {
       final f? when f.isNotEmpty => f,
@@ -107,6 +136,8 @@ class OptimalSubApi {
         queryParameters: {
           'filter': ?trimmedFilter,
           'bandwidthNm': ?bandwidthNm,
+          'raDeg': ?raDeg,
+          'decDeg': ?decDeg,
         },
       );
       return OptimalSubResult.fromJson(res.data ?? const {});
