@@ -577,10 +577,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
     // profile policy says abort. Best-effort by design: no profile store, an unprobeable volume,
     // or any probe fault means "don't block" — the §29 monitor owns reporting those conditions,
-    // and a broken probe must never cost the user a frame.
+    // and a broken probe must never cost the user a frame. internal (not private) so the wiring
+    // is testable without an Alpaca client (CaptureCoreAsync consults exactly this).
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-capture probe: a profile read or DriveInfo query can throw arbitrary IO/driver exceptions, and a probe fault must degrade to 'capture proceeds' rather than blocking or faulting the capture path. CA1031's log-and-recover boundary applies.")]
-    private bool PreCaptureDiskBlocked(out long freeBytes) {
+    internal bool PreCaptureDiskBlocked(out long freeBytes) {
         freeBytes = 0;
         try {
             if (_profileStore is null) {
