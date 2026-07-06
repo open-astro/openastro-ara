@@ -118,5 +118,98 @@ namespace OpenAstroAra.Test {
             var page = await svc.ListAsync(50, null, CancellationToken.None);
             Assert.That(page.Items[0].CurrentRunState, Is.Null);
         }
+
+        // ── §38 active-run mutation guard ───────────────────────────────────
+
+        private static Mock<ISequencerService> SequencerReporting(SequenceRunState? state) {
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.GetRunStateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .Returns<Guid, CancellationToken>((id, _) => Task.FromResult(
+                    state is null ? null : new SequenceRunStateDto(
+                        SequenceId: id, RunId: Guid.NewGuid(), State: state.Value,
+                        CurrentInstructionIndex: 0, CurrentTargetName: null,
+                        StartedUtc: DateTimeOffset.UtcNow, CompletedUtc: null,
+                        InstructionsCompleted: 0, InstructionsTotal: 1,
+                        CurrentInstructionDescription: null)));
+            return sequencer;
+        }
+
+        private static readonly SequenceUpdateRequestDto RenameRequest =
+            new(Name: "renamed", Description: null, Body: null);
+
+        [TestCase(SequenceRunState.Starting)]
+        [TestCase(SequenceRunState.Running)]
+        [TestCase(SequenceRunState.Paused)]
+        [TestCase(SequenceRunState.Aborting)]
+        public async Task Delete_with_an_active_run_is_refused_and_keeps_the_file(SequenceRunState state) {
+            var svc = new FileSequenceService(_profileDir, SequencerReporting(state).Object);
+            var dto = await svc.CreateAsync(BodyRequest("live"), null, CancellationToken.None);
+
+            var result = await svc.DeleteAsync(dto.Id, CancellationToken.None);
+
+            Assert.That(result, Is.EqualTo(SequenceDeleteResult.RunActive));
+            Assert.That(await svc.GetAsync(dto.Id, CancellationToken.None), Is.Not.Null,
+                "the executor's file must survive the refused delete");
+        }
+
+        [TestCase(SequenceRunState.Starting)]
+        [TestCase(SequenceRunState.Running)]
+        [TestCase(SequenceRunState.Paused)]
+        [TestCase(SequenceRunState.Aborting)]
+        public async Task Update_with_an_active_run_is_refused_and_leaves_the_body(SequenceRunState state) {
+            var svc = new FileSequenceService(_profileDir, SequencerReporting(state).Object);
+            var dto = await svc.CreateAsync(BodyRequest("live"), null, CancellationToken.None);
+
+            var result = await svc.UpdateAsync(dto.Id, RenameRequest, CancellationToken.None);
+
+            Assert.That(result.RunActive, Is.True);
+            Assert.That(result.Sequence, Is.Null);
+            var reloaded = await svc.GetAsync(dto.Id, CancellationToken.None);
+            Assert.That(reloaded!.Name, Is.EqualTo("live"), "no partial write on refusal");
+        }
+
+        [TestCase(SequenceRunState.Idle)]
+        [TestCase(SequenceRunState.Stopped)]
+        [TestCase(SequenceRunState.Completed)]
+        [TestCase(SequenceRunState.Failed)]
+        public async Task Terminal_or_idle_run_states_do_not_block_mutations(SequenceRunState state) {
+            var svc = new FileSequenceService(_profileDir, SequencerReporting(state).Object);
+            var dto = await svc.CreateAsync(BodyRequest("done"), null, CancellationToken.None);
+
+            var updated = await svc.UpdateAsync(dto.Id, RenameRequest, CancellationToken.None);
+            Assert.That(updated.RunActive, Is.False);
+            Assert.That(updated.Sequence!.Name, Is.EqualTo("renamed"));
+
+            Assert.That(await svc.DeleteAsync(dto.Id, CancellationToken.None),
+                Is.EqualTo(SequenceDeleteResult.Deleted));
+        }
+
+        [Test]
+        public async Task No_run_record_and_no_sequencer_both_allow_mutations() {
+            // Null run state (never started).
+            var svc = new FileSequenceService(_profileDir, SequencerReporting(null).Object);
+            var dto = await svc.CreateAsync(BodyRequest("fresh"), null, CancellationToken.None);
+            Assert.That(await svc.DeleteAsync(dto.Id, CancellationToken.None),
+                Is.EqualTo(SequenceDeleteResult.Deleted));
+
+            // No sequencer wired at all (early-startup construction order).
+            var bare = new FileSequenceService(_profileDir);
+            var dto2 = await bare.CreateAsync(BodyRequest("bare"), null, CancellationToken.None);
+            var updated = await bare.UpdateAsync(dto2.Id, RenameRequest, CancellationToken.None);
+            Assert.That(updated.Sequence!.Name, Is.EqualTo("renamed"));
+        }
+
+        [Test]
+        public async Task Unknown_id_maps_to_not_found_without_consulting_the_sequencer() {
+            var sequencer = SequencerReporting(SequenceRunState.Running);
+            var svc = new FileSequenceService(_profileDir, sequencer.Object);
+
+            Assert.That(await svc.DeleteAsync(Guid.NewGuid(), CancellationToken.None),
+                Is.EqualTo(SequenceDeleteResult.NotFound));
+            var updated = await svc.UpdateAsync(Guid.NewGuid(), RenameRequest, CancellationToken.None);
+            Assert.That(updated, Is.EqualTo(SequenceUpdateResult.NotFound));
+            sequencer.Verify(s => s.GetRunStateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never,
+                "a missing file is 404 regardless of run state");
+        }
     }
 }

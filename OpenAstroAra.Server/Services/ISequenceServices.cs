@@ -33,12 +33,36 @@ public interface ISequenceService {
     Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct);
     Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct);
     Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct);
-    Task<SequenceDto?> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct);
-    Task<bool> DeleteAsync(Guid id, CancellationToken ct);
+
+    /// <summary>§38 — mutating a sequence with an ACTIVE run is refused at the daemon
+    /// (the endpoint maps <c>RunActive</c> to 409): a second client or bare curl must
+    /// not rewrite the file out from under a live executor. The client's probe-first
+    /// guards remain UX sugar on top of this invariant.</summary>
+    Task<SequenceUpdateResult> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct);
+
+    /// <summary>§38 — same active-run refusal as <see cref="UpdateAsync"/>.</summary>
+    Task<SequenceDeleteResult> DeleteAsync(Guid id, CancellationToken ct);
+
     /// <summary>§70.5 share-export. Returns null for an unknown id (the endpoint maps
     /// that to 404); otherwise a share carrying the sequence body inline in
     /// <c>Manifest</c>, mirroring the profile-share contract.</summary>
     Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct);
+}
+
+/// <summary>§38 — outcome of a sequence delete. Split three ways (not a bool) so the
+/// endpoint can tell "gone" (404) from "refused: a live run owns this file" (409) —
+/// mirrors <see cref="PackageDeleteResult"/>.</summary>
+public enum SequenceDeleteResult {
+    Deleted,
+    NotFound,
+    RunActive,
+}
+
+/// <summary>§38 — outcome of a sequence update. <c>RunActive</c> = refused (409);
+/// otherwise <c>Sequence</c> is the updated dto, or null for an unknown id (404).</summary>
+public sealed record SequenceUpdateResult(SequenceDto? Sequence, bool RunActive) {
+    public static readonly SequenceUpdateResult NotFound = new(null, false);
+    public static readonly SequenceUpdateResult Refused = new(null, true);
 }
 
 /// <summary>

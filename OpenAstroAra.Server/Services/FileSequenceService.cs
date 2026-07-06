@@ -131,11 +131,12 @@ public sealed partial class FileSequenceService : ISequenceService {
         return Task.FromResult(dto);
     }
 
-    public Task<SequenceDto?> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) {
+    public async Task<SequenceUpdateResult> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) {
         var path = PathFor(id);
-        if (!File.Exists(path)) return Task.FromResult<SequenceDto?>(null);
+        if (!File.Exists(path)) return SequenceUpdateResult.NotFound;
+        if (await HasActiveRunAsync(id, ct)) return SequenceUpdateResult.Refused;
         var existing = TryLoadFile(path);
-        if (existing is null) return Task.FromResult<SequenceDto?>(null);
+        if (existing is null) return SequenceUpdateResult.NotFound;
         var updated = existing with {
             Name = request.Name ?? existing.Name,
             Description = request.Description ?? existing.Description,
@@ -143,20 +144,39 @@ public sealed partial class FileSequenceService : ISequenceService {
             ModifiedUtc = DateTimeOffset.UtcNow,
         };
         WriteFile(updated);
-        return Task.FromResult<SequenceDto?>(updated);
+        return new SequenceUpdateResult(updated, RunActive: false);
     }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken ct) {
+    public async Task<SequenceDeleteResult> DeleteAsync(Guid id, CancellationToken ct) {
         var path = PathFor(id);
-        if (!File.Exists(path)) return Task.FromResult(false);
+        if (!File.Exists(path)) return SequenceDeleteResult.NotFound;
+        if (await HasActiveRunAsync(id, ct)) return SequenceDeleteResult.RunActive;
         try {
             File.Delete(path);
-            return Task.FromResult(true);
+            return SequenceDeleteResult.Deleted;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogDeleteFailed(ex, id, path);
-            return Task.FromResult(false);
+            return SequenceDeleteResult.NotFound;
         }
     }
+
+    /// <summary>§38 — whether a live run currently owns this sequence's file. The
+    /// guard-then-mutate window that remains is microseconds (vs. the client's old
+    /// probe→request round-trip); closing it entirely would need a cross-service
+    /// mutation lock shared with <see cref="ISequencerService"/> run reservation,
+    /// which isn't warranted for a single-writer daemon.</summary>
+    private async Task<bool> HasActiveRunAsync(Guid id, CancellationToken ct) {
+        if (_sequencer is null) return false;
+        var runState = await _sequencer.GetRunStateAsync(id, ct);
+        return runState is not null && IsActiveRun(runState.State);
+    }
+
+    /// <summary>Active = the executor may still read/write against this sequence.
+    /// <c>Aborting</c> counts: the worker is winding down but not done with the file.
+    /// Terminal states (Completed/Failed/Stopped) and Idle do not block.</summary>
+    internal static bool IsActiveRun(SequenceRunState state) =>
+        state is SequenceRunState.Starting or SequenceRunState.Running
+            or SequenceRunState.Paused or SequenceRunState.Aborting;
 
     public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) {
         var path = PathFor(id);
