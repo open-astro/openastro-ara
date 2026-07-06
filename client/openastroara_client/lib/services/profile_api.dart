@@ -7,6 +7,7 @@ import '../models/profile_share_import_preview.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
+import '../state/settings/custom_horizon_state.dart';
 import '../state/settings/camera_electronics_state.dart';
 import '../state/settings/diagnostics_mode_state.dart';
 import '../state/settings/equipment_connection_state.dart';
@@ -33,12 +34,15 @@ class ProfileApi {
   final Dio _dio;
 
   ProfileApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 5),
-            ));
+            ),
+          );
 
   /// §37 multi-profile — list the known profiles + which one is active
   /// (`GET /api/v1/profiles`).
@@ -49,8 +53,10 @@ class ProfileApi {
 
   /// §37 multi-profile — rename a profile (`PUT /api/v1/profiles/{id}`).
   Future<void> renameProfile(String id, String name) async {
-    await _dio.put<void>('/api/v1/profiles/${Uri.encodeComponent(id)}',
-        data: {'name': name});
+    await _dio.put<void>(
+      '/api/v1/profiles/${Uri.encodeComponent(id)}',
+      data: {'name': name},
+    );
   }
 
   /// §37 multi-profile — make a profile active (`POST /api/v1/profiles/{id}/select`),
@@ -80,7 +86,8 @@ class ProfileApi {
       // A 2xx with no usable id (empty/garbled body) — fail loudly with the
       // status code rather than returning a profile whose id we can't address.
       throw StateError(
-          'createProfile got HTTP ${res.statusCode} with no profile id in the response body');
+        'createProfile got HTTP ${res.statusCode} with no profile id in the response body',
+      );
     }
     return meta;
   }
@@ -102,7 +109,8 @@ class ProfileApi {
   /// and returns what it'll create + what the recipient must re-enter. A file
   /// that isn't a recognized share surfaces as a Dio 422.
   Future<ProfileShareImportPreview> importPreview(
-      Map<String, dynamic> manifest) async {
+    Map<String, dynamic> manifest,
+  ) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/profiles/share-import',
       data: manifest,
@@ -111,7 +119,8 @@ class ProfileApi {
     // fromJson rejects as "missing import token" — the right surfaced error even
     // though it can't distinguish a null body from a token-less DTO.
     return ProfileShareImportPreview.fromJson(
-        res.data ?? const <String, dynamic>{});
+      res.data ?? const <String, dynamic>{},
+    );
   }
 
   /// §70 profile-share import — commit a previewed template into a new,
@@ -132,7 +141,8 @@ class ProfileApi {
       // trim() so a whitespace-only body (version skew) is rejected too, not just
       // an empty string — both are unaddressable ids.
       throw StateError(
-          'importCommit got HTTP ${res.statusCode} with no profile id in the response body');
+        'importCommit got HTTP ${res.statusCode} with no profile id in the response body',
+      );
     }
     return id;
   }
@@ -157,9 +167,7 @@ class ProfileApi {
 
   /// GET the active profile's optics section (§36 — FOV geometry inputs).
   Future<OpticsSettings> getOptics() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/optics',
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/optics');
     return _opticsFromJson(res.data ?? const {});
   }
 
@@ -184,12 +192,54 @@ class ProfileApi {
 
   /// PUT the active profile's camera-electronics section. Returns the daemon's
   /// echo (it validates ranges — e.g. QE peak must be in [0, 1]).
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics value) async {
+  Future<CameraElectronics> putCameraElectronics(
+    CameraElectronics value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/camera-electronics',
       data: _cameraElectronicsToJson(value),
     );
     return _cameraElectronicsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's §36 custom terrain horizon (empty = none entered).
+  Future<List<CustomHorizonPoint>> getCustomHorizon() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/custom-horizon',
+    );
+    return _customHorizonFromJson(res.data ?? const {});
+  }
+
+  /// PUT the skyline; the daemon canonicalizes (sort/dedupe/wrap, 422 on
+  /// out-of-range values) and echoes the canonical list.
+  Future<List<CustomHorizonPoint>> putCustomHorizon(
+    List<CustomHorizonPoint> points,
+  ) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/custom-horizon',
+      data: {
+        'points': [
+          for (final p in points)
+            {'azimuth_deg': p.azimuthDeg, 'altitude_deg': p.altitudeDeg},
+        ],
+      },
+    );
+    return _customHorizonFromJson(res.data ?? const {});
+  }
+
+  static List<CustomHorizonPoint> _customHorizonFromJson(
+    Map<String, dynamic> json,
+  ) {
+    final raw = json['points'];
+    if (raw is! List) return const [];
+    return [
+      for (final e in raw)
+        if (e is Map)
+          CustomHorizonPoint(
+            azimuthDeg: (e['azimuth_deg'] as num?)?.toDouble() ?? 0,
+            altitudeDeg: (e['altitude_deg'] as num?)?.toDouble() ?? 0,
+          ),
+    ];
   }
 
   /// GET the active profile's planning filter set (NEXTGEN §1/§4).
@@ -221,7 +271,9 @@ class ProfileApi {
 
   /// PUT the active profile's filter-wheel slot labels. Returns the daemon's
   /// echo (it trims each label; 400 on >32 slots or a label over 64 chars).
-  Future<FilterWheelLabels> putFilterWheelLabels(FilterWheelLabels value) async {
+  Future<FilterWheelLabels> putFilterWheelLabels(
+    FilterWheelLabels value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/filter-wheel/labels',
       data: {
@@ -231,20 +283,21 @@ class ProfileApi {
     return _filterWheelLabelsFromJson(res.data ?? const {});
   }
 
-  static FilterWheelLabels _filterWheelLabelsFromJson(Map<String, dynamic> json) {
+  static FilterWheelLabels _filterWheelLabelsFromJson(
+    Map<String, dynamic> json,
+  ) {
     final raw = json['labels'];
     // Defensive: a malformed/absent list keeps the reference defaults rather
     // than collapsing the wheel to zero slots.
     if (raw is! List || raw.isEmpty) return FilterWheelLabels();
     return FilterWheelLabels(
-        labels: [for (final e in raw) e is String ? e : '']);
+      labels: [for (final e in raw) e is String ? e : ''],
+    );
   }
 
   /// GET the active profile's storage-settings section.
   Future<StorageSettings> getStorageSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/storage',
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
     return _storageSettingsFromJson(res.data ?? const {});
   }
 
@@ -267,7 +320,8 @@ class ProfileApi {
 
   /// PUT the active profile's notifications-settings section.
   Future<NotificationsSettings> putNotificationsSettings(
-      NotificationsSettings value) async {
+    NotificationsSettings value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/notifications',
       data: _notificationsSettingsToJson(value),
@@ -277,9 +331,7 @@ class ProfileApi {
 
   /// GET the active profile's site-settings section.
   Future<SiteSettings> getSiteSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/site',
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/site');
     return _siteSettingsFromJson(res.data ?? const {});
   }
 
@@ -301,7 +353,9 @@ class ProfileApi {
   }
 
   /// PUT the active profile's filenames-settings section.
-  Future<FilenamesSettings> putFilenamesSettings(FilenamesSettings value) async {
+  Future<FilenamesSettings> putFilenamesSettings(
+    FilenamesSettings value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/filenames',
       data: _filenamesSettingsToJson(value),
@@ -311,9 +365,7 @@ class ProfileApi {
 
   /// GET the active profile's safety policies.
   Future<SafetyPolicies> getSafetyPolicies() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/safety',
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/safety');
     return _safetyPoliciesFromJson(res.data ?? const {});
   }
 
@@ -349,7 +401,9 @@ class ProfileApi {
   }
 
   /// PUT the active profile's autofocus settings.
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async {
+  Future<AutofocusSettings> putAutofocusSettings(
+    AutofocusSettings value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/autofocus',
       data: _autofocusSettingsToJson(value),
@@ -367,7 +421,8 @@ class ProfileApi {
 
   /// PUT the active profile's plate-solve settings.
   Future<PlateSolveSettings> putPlateSolveSettings(
-      PlateSolveSettings value) async {
+    PlateSolveSettings value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/plate-solve',
       data: _plateSolveSettingsToJson(value),
@@ -380,7 +435,9 @@ class ProfileApi {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/diagnostics-mode',
     );
-    return _diagnosticsModeFromString((res.data ?? const {})['mode'] as String?);
+    return _diagnosticsModeFromString(
+      (res.data ?? const {})['mode'] as String?,
+    );
   }
 
   /// PUT the active profile's diagnostics mode.
@@ -389,14 +446,14 @@ class ProfileApi {
       '/api/v1/profile/diagnostics-mode',
       data: {'mode': _diagnosticsModeToString(value)},
     );
-    return _diagnosticsModeFromString((res.data ?? const {})['mode'] as String?);
+    return _diagnosticsModeFromString(
+      (res.data ?? const {})['mode'] as String?,
+    );
   }
 
   /// GET the active profile's PHD2 settings.
   Future<Phd2Settings> getPhd2Settings() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/phd2',
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/phd2');
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
@@ -419,7 +476,8 @@ class ProfileApi {
 
   /// PUT the active profile's equipment auto-connect bools.
   Future<EquipmentConnectionSettings> putEquipmentConnection(
-      EquipmentConnectionSettings value) async {
+    EquipmentConnectionSettings value,
+  ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/equipment-connection',
       data: _equipmentConnectionToJson(value),
@@ -433,7 +491,9 @@ class ProfileApi {
 
   static ImagingDefaults _imagingDefaultsFromJson(Map<String, dynamic> j) =>
       ImagingDefaults(
-        defaultExposure: Duration(seconds: (j['exposure_seconds'] as num?)?.toInt() ?? 5),
+        defaultExposure: Duration(
+          seconds: (j['exposure_seconds'] as num?)?.toInt() ?? 5,
+        ),
         defaultGain: (j['gain'] as num?)?.toInt() ?? 100,
         defaultOffset: (j['offset'] as num?)?.toInt() ?? 50,
         defaultBin: (j['bin'] as num?)?.toInt() ?? 1,
@@ -445,15 +505,15 @@ class ProfileApi {
       );
 
   static Map<String, dynamic> _imagingDefaultsToJson(ImagingDefaults v) => {
-        'exposure_seconds': v.defaultExposure.inSeconds,
-        'gain': v.defaultGain,
-        'offset': v.defaultOffset,
-        'bin': v.defaultBin,
-        'frame_kind': v.defaultFrameKind.name,
-        'cooler_target_c': v.coolerTargetC,
-        'cooler_ramp_c_per_min': v.coolerRampRatePerMin,
-        'warmup_at_session_end': v.warmupAtSessionEnd,
-      };
+    'exposure_seconds': v.defaultExposure.inSeconds,
+    'gain': v.defaultGain,
+    'offset': v.defaultOffset,
+    'bin': v.defaultBin,
+    'frame_kind': v.defaultFrameKind.name,
+    'cooler_target_c': v.coolerTargetC,
+    'cooler_ramp_c_per_min': v.coolerRampRatePerMin,
+    'warmup_at_session_end': v.warmupAtSessionEnd,
+  };
 
   static FrameKind _frameKindFromString(String? s) {
     switch (s) {
@@ -489,13 +549,13 @@ class ProfileApi {
   }
 
   static Map<String, dynamic> _opticsToJson(OpticsSettings v) => {
-        'focal_length_mm': v.focalLengthMm,
-        'reducer_factor': v.reducerFactor,
-        'sensor_width_px': v.sensorWidthPx,
-        'sensor_height_px': v.sensorHeightPx,
-        'pixel_size_um': v.pixelSizeUm,
-        'aperture_mm': v.apertureMm,
-      };
+    'focal_length_mm': v.focalLengthMm,
+    'reducer_factor': v.reducerFactor,
+    'sensor_width_px': v.sensorWidthPx,
+    'sensor_height_px': v.sensorHeightPx,
+    'pixel_size_um': v.pixelSizeUm,
+    'aperture_mm': v.apertureMm,
+  };
 
   // ── Camera electronics + filter set JSON mapping (NEXTGEN §4) ──────────
 
@@ -512,60 +572,61 @@ class ProfileApi {
       );
 
   static Map<String, dynamic> _cameraElectronicsToJson(CameraElectronics v) => {
-        'sensor_name': v.sensorName,
-        'read_noise_e': v.readNoiseE,
-        'full_well_e': v.fullWellE,
-        'electrons_per_adu': v.electronsPerAdu,
-        'gain': v.gain,
-        'quantum_efficiency_peak': v.quantumEfficiencyPeak,
-        'auto_captured': v.autoCaptured,
-      };
+    'sensor_name': v.sensorName,
+    'read_noise_e': v.readNoiseE,
+    'full_well_e': v.fullWellE,
+    'electrons_per_adu': v.electronsPerAdu,
+    'gain': v.gain,
+    'quantum_efficiency_peak': v.quantumEfficiencyPeak,
+    'auto_captured': v.autoCaptured,
+  };
 
   static FilterSetSettings _filterSetFromJson(Map<String, dynamic> j) =>
       FilterSetSettings(
         filters: ((j['filters'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
-            .map((f) => PlanningFilter(
-                  name: (f['name'] as String?) ?? '',
-                  kind: FilterKind.fromWire(f['kind'] as String?),
-                  bandwidthNm: (f['bandwidth_nm'] as num?)?.toDouble() ?? 0,
-                ))
+            .map(
+              (f) => PlanningFilter(
+                name: (f['name'] as String?) ?? '',
+                kind: FilterKind.fromWire(f['kind'] as String?),
+                bandwidthNm: (f['bandwidth_nm'] as num?)?.toDouble() ?? 0,
+              ),
+            )
             .where((f) => f.name.isNotEmpty)
             .toList(),
       );
 
   static Map<String, dynamic> _filterSetToJson(FilterSetSettings v) => {
-        'filters': [
-          for (final f in v.filters)
-            {
-              'name': f.name,
-              'kind': f.kind.wire,
-              'bandwidth_nm': f.bandwidthNm,
-            },
-        ],
-      };
+    'filters': [
+      for (final f in v.filters)
+        {'name': f.name, 'kind': f.kind.wire, 'bandwidth_nm': f.bandwidthNm},
+    ],
+  };
 
-  static StorageSettings _storageSettingsFromJson(Map<String, dynamic> j) =>
-      StorageSettings(
-        saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
-        fileFormat: _fileFormatFromString(j['file_format'] as String?),
-        compression: _compressionFromString(j['compression'] as String?),
-        // Fallback matches the StorageSettings() constructor default
-        // (raw-string literal with `\\` double-backslash separators).
-        filenameTemplate: (j['filename_template'] as String?) ??
-            r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
-        minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num?)?.toInt() ?? 10,
-        minFreeDiskCriticalGb: (j['min_free_disk_critical_gb'] as num?)?.toInt() ?? 2,
-      );
+  static StorageSettings _storageSettingsFromJson(
+    Map<String, dynamic> j,
+  ) => StorageSettings(
+    saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
+    fileFormat: _fileFormatFromString(j['file_format'] as String?),
+    compression: _compressionFromString(j['compression'] as String?),
+    // Fallback matches the StorageSettings() constructor default
+    // (raw-string literal with `\\` double-backslash separators).
+    filenameTemplate:
+        (j['filename_template'] as String?) ??
+        r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+    minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num?)?.toInt() ?? 10,
+    minFreeDiskCriticalGb:
+        (j['min_free_disk_critical_gb'] as num?)?.toInt() ?? 2,
+  );
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {
-        'save_directory': v.saveDirectory,
-        'file_format': _fileFormatToString(v.fileFormat),
-        'compression': v.compression.name,
-        'filename_template': v.filenameTemplate,
-        'min_free_disk_warn_gb': v.minFreeDiskWarnGb,
-        'min_free_disk_critical_gb': v.minFreeDiskCriticalGb,
-      };
+    'save_directory': v.saveDirectory,
+    'file_format': _fileFormatToString(v.fileFormat),
+    'compression': v.compression.name,
+    'filename_template': v.filenameTemplate,
+    'min_free_disk_warn_gb': v.minFreeDiskWarnGb,
+    'min_free_disk_critical_gb': v.minFreeDiskCriticalGb,
+  };
 
   static StorageFileFormat _fileFormatFromString(String? s) {
     switch (s) {
@@ -609,82 +670,85 @@ class ProfileApi {
   // ── Equipment-connection JSON mapping ──────────────────────────────────
 
   static EquipmentConnectionSettings _equipmentConnectionFromJson(
-      Map<String, dynamic> j) {
+    Map<String, dynamic> j,
+  ) {
     bool read(String key, bool dflt) => (j[key] as bool?) ?? dflt;
-    return EquipmentConnectionSettings(autoConnectOnBoot: {
-      EquipmentDeviceType.camera: read('camera', true),
-      EquipmentDeviceType.mount: read('mount', true),
-      EquipmentDeviceType.focuser: read('focuser', true),
-      EquipmentDeviceType.filterWheel: read('filter_wheel', true),
-      EquipmentDeviceType.rotator: read('rotator', true),
-      EquipmentDeviceType.guider: read('guider', false),
-      EquipmentDeviceType.flatPanel: read('flat_panel', true),
-      EquipmentDeviceType.dome: read('dome', false),
-      EquipmentDeviceType.weather: read('weather', false),
-      EquipmentDeviceType.safetyMonitor: read('safety_monitor', true),
-      EquipmentDeviceType.switchDevice: read('switch', true),
-    });
+    return EquipmentConnectionSettings(
+      autoConnectOnBoot: {
+        EquipmentDeviceType.camera: read('camera', true),
+        EquipmentDeviceType.mount: read('mount', true),
+        EquipmentDeviceType.focuser: read('focuser', true),
+        EquipmentDeviceType.filterWheel: read('filter_wheel', true),
+        EquipmentDeviceType.rotator: read('rotator', true),
+        EquipmentDeviceType.guider: read('guider', false),
+        EquipmentDeviceType.flatPanel: read('flat_panel', true),
+        EquipmentDeviceType.dome: read('dome', false),
+        EquipmentDeviceType.weather: read('weather', false),
+        EquipmentDeviceType.safetyMonitor: read('safety_monitor', true),
+        EquipmentDeviceType.switchDevice: read('switch', true),
+      },
+    );
   }
 
   static Map<String, dynamic> _equipmentConnectionToJson(
-          EquipmentConnectionSettings v) =>
-      {
-        'camera': v.autoConnect(EquipmentDeviceType.camera),
-        'mount': v.autoConnect(EquipmentDeviceType.mount),
-        'focuser': v.autoConnect(EquipmentDeviceType.focuser),
-        'filter_wheel': v.autoConnect(EquipmentDeviceType.filterWheel),
-        'rotator': v.autoConnect(EquipmentDeviceType.rotator),
-        'guider': v.autoConnect(EquipmentDeviceType.guider),
-        'flat_panel': v.autoConnect(EquipmentDeviceType.flatPanel),
-        'dome': v.autoConnect(EquipmentDeviceType.dome),
-        'weather': v.autoConnect(EquipmentDeviceType.weather),
-        'safety_monitor': v.autoConnect(EquipmentDeviceType.safetyMonitor),
-        'switch': v.autoConnect(EquipmentDeviceType.switchDevice),
-      };
+    EquipmentConnectionSettings v,
+  ) => {
+    'camera': v.autoConnect(EquipmentDeviceType.camera),
+    'mount': v.autoConnect(EquipmentDeviceType.mount),
+    'focuser': v.autoConnect(EquipmentDeviceType.focuser),
+    'filter_wheel': v.autoConnect(EquipmentDeviceType.filterWheel),
+    'rotator': v.autoConnect(EquipmentDeviceType.rotator),
+    'guider': v.autoConnect(EquipmentDeviceType.guider),
+    'flat_panel': v.autoConnect(EquipmentDeviceType.flatPanel),
+    'dome': v.autoConnect(EquipmentDeviceType.dome),
+    'weather': v.autoConnect(EquipmentDeviceType.weather),
+    'safety_monitor': v.autoConnect(EquipmentDeviceType.safetyMonitor),
+    'switch': v.autoConnect(EquipmentDeviceType.switchDevice),
+  };
 
   // ── PHD2 settings JSON mapping ─────────────────────────────────────────
 
-  static Phd2Settings _phd2SettingsFromJson(Map<String, dynamic> j) =>
-      Phd2Settings(
-        host: (j['host'] as String?) ?? 'localhost',
-        port: (j['port'] as num?)?.toInt() ?? 4400,
-        phd2Profile: (j['phd2_profile'] as String?) ?? 'Default',
-        ditherEnabled: (j['dither_enabled'] as bool?) ?? true,
-        ditherEveryNFrames:
-            (j['dither_every_n_frames'] as num?)?.toInt() ?? 1,
-        ditherPixels: (j['dither_pixels'] as num?)?.toDouble() ?? 5.0,
-        settlePixels: (j['settle_pixels'] as num?)?.toDouble() ?? 1.5,
-        settleTimeSec: (j['settle_time_sec'] as num?)?.toInt() ?? 10,
-        settleTimeoutSec: (j['settle_timeout_sec'] as num?)?.toInt() ?? 60,
-        forceCalibrationEachSession:
-            (j['force_calibration_each_session'] as bool?) ?? false,
-        // §63.5 guider-engine config (defaults match the server's optional-field defaults).
-        guideFocalLength: (j['guide_focal_length'] as num?)?.toInt() ?? 0,
-        guidePixelSize: (j['guide_pixel_size'] as num?)?.toDouble() ?? 0,
-        raAggressiveness: (j['ra_aggressiveness'] as num?)?.toDouble() ?? 0.7,
-        decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
-        minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
-        decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
-      );
+  static Phd2Settings _phd2SettingsFromJson(
+    Map<String, dynamic> j,
+  ) => Phd2Settings(
+    host: (j['host'] as String?) ?? 'localhost',
+    port: (j['port'] as num?)?.toInt() ?? 4400,
+    phd2Profile: (j['phd2_profile'] as String?) ?? 'Default',
+    ditherEnabled: (j['dither_enabled'] as bool?) ?? true,
+    ditherEveryNFrames: (j['dither_every_n_frames'] as num?)?.toInt() ?? 1,
+    ditherPixels: (j['dither_pixels'] as num?)?.toDouble() ?? 5.0,
+    settlePixels: (j['settle_pixels'] as num?)?.toDouble() ?? 1.5,
+    settleTimeSec: (j['settle_time_sec'] as num?)?.toInt() ?? 10,
+    settleTimeoutSec: (j['settle_timeout_sec'] as num?)?.toInt() ?? 60,
+    forceCalibrationEachSession:
+        (j['force_calibration_each_session'] as bool?) ?? false,
+    // §63.5 guider-engine config (defaults match the server's optional-field defaults).
+    guideFocalLength: (j['guide_focal_length'] as num?)?.toInt() ?? 0,
+    guidePixelSize: (j['guide_pixel_size'] as num?)?.toDouble() ?? 0,
+    raAggressiveness: (j['ra_aggressiveness'] as num?)?.toDouble() ?? 0.7,
+    decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
+    minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
+    decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
+  );
 
   static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
-        'host': v.host,
-        'port': v.port,
-        'phd2_profile': v.phd2Profile,
-        'dither_enabled': v.ditherEnabled,
-        'dither_every_n_frames': v.ditherEveryNFrames,
-        'dither_pixels': v.ditherPixels,
-        'settle_pixels': v.settlePixels,
-        'settle_time_sec': v.settleTimeSec,
-        'settle_timeout_sec': v.settleTimeoutSec,
-        'force_calibration_each_session': v.forceCalibrationEachSession,
-        'guide_focal_length': v.guideFocalLength,
-        'guide_pixel_size': v.guidePixelSize,
-        'ra_aggressiveness': v.raAggressiveness,
-        'dec_aggressiveness': v.decAggressiveness,
-        'minimum_move': v.minimumMove,
-        'dec_guide_mode': v.decGuideMode,
-      };
+    'host': v.host,
+    'port': v.port,
+    'phd2_profile': v.phd2Profile,
+    'dither_enabled': v.ditherEnabled,
+    'dither_every_n_frames': v.ditherEveryNFrames,
+    'dither_pixels': v.ditherPixels,
+    'settle_pixels': v.settlePixels,
+    'settle_time_sec': v.settleTimeSec,
+    'settle_timeout_sec': v.settleTimeoutSec,
+    'force_calibration_each_session': v.forceCalibrationEachSession,
+    'guide_focal_length': v.guideFocalLength,
+    'guide_pixel_size': v.guidePixelSize,
+    'ra_aggressiveness': v.raAggressiveness,
+    'dec_aggressiveness': v.decAggressiveness,
+    'minimum_move': v.minimumMove,
+    'dec_guide_mode': v.decGuideMode,
+  };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────
 
@@ -713,22 +777,23 @@ class ProfileApi {
 
   // ── Plate-solve settings JSON mapping ──────────────────────────────────
 
-  static PlateSolveSettings _plateSolveSettingsFromJson(Map<String, dynamic> j) =>
-      PlateSolveSettings(
-        engine: _plateSolveEngineFromString(j['engine'] as String?),
-        pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap',
-        indexDownloadPath:
-            (j['index_download_path'] as String?) ?? '/var/lib/astap',
-        searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,
-        downsampleFactor: (j['downsample_factor'] as num?)?.toInt() ?? 2,
-        timeoutSeconds: (j['timeout_seconds'] as num?)?.toInt() ?? 60,
-        useBlindFallback: (j['use_blind_fallback'] as bool?) ?? true,
-        centerAfterSlew: (j['center_after_slew'] as bool?) ?? true,
-        syncToCoordinates: (j['sync_to_coordinates'] as bool?) ?? true,
-        maxIterations: (j['max_iterations'] as num?)?.toInt() ?? 5,
-        convergenceToleranceArcsec:
-            (j['convergence_tolerance_arcsec'] as num?)?.toDouble() ?? 60.0,
-      );
+  static PlateSolveSettings _plateSolveSettingsFromJson(
+    Map<String, dynamic> j,
+  ) => PlateSolveSettings(
+    engine: _plateSolveEngineFromString(j['engine'] as String?),
+    pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap',
+    indexDownloadPath:
+        (j['index_download_path'] as String?) ?? '/var/lib/astap',
+    searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,
+    downsampleFactor: (j['downsample_factor'] as num?)?.toInt() ?? 2,
+    timeoutSeconds: (j['timeout_seconds'] as num?)?.toInt() ?? 60,
+    useBlindFallback: (j['use_blind_fallback'] as bool?) ?? true,
+    centerAfterSlew: (j['center_after_slew'] as bool?) ?? true,
+    syncToCoordinates: (j['sync_to_coordinates'] as bool?) ?? true,
+    maxIterations: (j['max_iterations'] as num?)?.toInt() ?? 5,
+    convergenceToleranceArcsec:
+        (j['convergence_tolerance_arcsec'] as num?)?.toDouble() ?? 60.0,
+  );
 
   static Map<String, dynamic> _plateSolveSettingsToJson(PlateSolveSettings v) =>
       {
@@ -791,19 +856,19 @@ class ProfileApi {
       );
 
   static Map<String, dynamic> _autofocusSettingsToJson(AutofocusSettings v) => {
-        'method': _autofocusMethodToString(v.method),
-        'steps': v.steps,
-        'step_size': v.stepSize,
-        'exposure_seconds': v.exposureSeconds,
-        'binning': v.binning,
-        'af_filter': v.afFilter,
-        'run_after_filter_change': v.runAfterFilterChange,
-        'trigger_temp_delta_c': v.triggerTempDeltaC,
-        'trigger_hfr_drift_pct': v.triggerHfrDriftPct,
-        'every_n_hours': v.everyNHours,
-        'abort_sequence_on_af_failure': v.abortSequenceOnAfFailure,
-        'restore_position_on_failure': v.restorePositionOnFailure,
-      };
+    'method': _autofocusMethodToString(v.method),
+    'steps': v.steps,
+    'step_size': v.stepSize,
+    'exposure_seconds': v.exposureSeconds,
+    'binning': v.binning,
+    'af_filter': v.afFilter,
+    'run_after_filter_change': v.runAfterFilterChange,
+    'trigger_temp_delta_c': v.triggerTempDeltaC,
+    'trigger_hfr_drift_pct': v.triggerHfrDriftPct,
+    'every_n_hours': v.everyNHours,
+    'abort_sequence_on_af_failure': v.abortSequenceOnAfFailure,
+    'restore_position_on_failure': v.restorePositionOnFailure,
+  };
 
   static AutofocusMethod _autofocusMethodFromString(String? s) {
     switch (s) {
@@ -839,10 +904,13 @@ class ProfileApi {
         meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
         meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
         meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
-        onAltitudeLimit:
-            _altitudeLimitActionFromString(j['on_altitude_limit'] as String?),
+        onAltitudeLimit: _altitudeLimitActionFromString(
+          j['on_altitude_limit'] as String?,
+        ),
         parkIfNoMoreTargets: (j['park_if_no_more_targets'] as bool?) ?? true,
-        onGuiderLost: _guiderLostActionFromString(j['on_guider_lost'] as String?),
+        onGuiderLost: _guiderLostActionFromString(
+          j['on_guider_lost'] as String?,
+        ),
         guiderRetryTimeoutSec:
             (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
         skipTargetIfRecoveryFails:
@@ -858,25 +926,25 @@ class ProfileApi {
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
-        'on_unsafe': _unsafeActionToString(v.onUnsafe),
-        'auto_resume_when_safe': v.autoResumeWhenSafe,
-        'resume_delay_min': v.resumeDelayMin,
-        'meridian_flip_auto': v.meridianFlipAuto,
-        'meridian_pause_min': v.meridianPauseMin,
-        'meridian_recenter': v.meridianRecenter,
-        'meridian_recal_guider': v.meridianRecalGuider,
-        'on_altitude_limit': _altitudeLimitActionToString(v.onAltitudeLimit),
-        'park_if_no_more_targets': v.parkIfNoMoreTargets,
-        'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
-        'guider_retry_timeout_sec': v.guiderRetryTimeoutSec,
-        'skip_target_if_recovery_fails': v.skipTargetIfRecoveryFails,
-        // enum.name is 'warn'/'abort' — matches the server's OnDiskSpaceCritical values verbatim.
-        'on_disk_space_critical': v.onDiskSpaceCritical.name,
-        'flip_safety_enabled': v.flipSafetyEnabled,
-        'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
-        'first_flip_confirmed': v.firstFlipConfirmed,
-        'unattended_escalation': v.unattendedEscalation,
-      };
+    'on_unsafe': _unsafeActionToString(v.onUnsafe),
+    'auto_resume_when_safe': v.autoResumeWhenSafe,
+    'resume_delay_min': v.resumeDelayMin,
+    'meridian_flip_auto': v.meridianFlipAuto,
+    'meridian_pause_min': v.meridianPauseMin,
+    'meridian_recenter': v.meridianRecenter,
+    'meridian_recal_guider': v.meridianRecalGuider,
+    'on_altitude_limit': _altitudeLimitActionToString(v.onAltitudeLimit),
+    'park_if_no_more_targets': v.parkIfNoMoreTargets,
+    'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
+    'guider_retry_timeout_sec': v.guiderRetryTimeoutSec,
+    'skip_target_if_recovery_fails': v.skipTargetIfRecoveryFails,
+    // enum.name is 'warn'/'abort' — matches the server's OnDiskSpaceCritical values verbatim.
+    'on_disk_space_critical': v.onDiskSpaceCritical.name,
+    'flip_safety_enabled': v.flipSafetyEnabled,
+    'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
+    'first_flip_confirmed': v.firstFlipConfirmed,
+    'unattended_escalation': v.unattendedEscalation,
+  };
 
   static UnsafeAction _unsafeActionFromString(String? s) {
     switch (s) {
@@ -960,9 +1028,9 @@ class ProfileApi {
       );
 
   static Map<String, dynamic> _filenamesSettingsToJson(FilenamesSettings v) => {
-        'date_separator': _dateSeparatorToString(v.dateSeparator),
-        'compress_darks_and_bias': v.compressDarksAndBias,
-      };
+    'date_separator': _dateSeparatorToString(v.dateSeparator),
+    'compress_darks_and_bias': v.compressDarksAndBias,
+  };
 
   static DateSeparator _dateSeparatorFromString(String? s) {
     switch (s) {
@@ -1002,22 +1070,23 @@ class ProfileApi {
         bortleClass: (j['bortle_class'] as num?)?.toInt() ?? 6,
         typicalSeeingArcsec:
             (j['typical_seeing_arcsec'] as num?)?.toDouble() ?? 2.5,
-        twilightDefinition:
-            _twilightFromString(j['twilight_definition'] as String?),
+        twilightDefinition: _twilightFromString(
+          j['twilight_definition'] as String?,
+        ),
       );
 
   static Map<String, dynamic> _siteSettingsToJson(SiteSettings v) => {
-        'site_name': v.siteName,
-        'latitude_deg': v.latitudeDeg,
-        'longitude_deg': v.longitudeDeg,
-        'elevation_m': v.elevationM,
-        'time_zone': v.timeZone,
-        'use_custom_horizon': v.useCustomHorizon,
-        'default_horizon_altitude_deg': v.defaultHorizonAltitudeDeg,
-        'bortle_class': v.bortleClass,
-        'typical_seeing_arcsec': v.typicalSeeingArcsec,
-        'twilight_definition': v.twilightDefinition.name,
-      };
+    'site_name': v.siteName,
+    'latitude_deg': v.latitudeDeg,
+    'longitude_deg': v.longitudeDeg,
+    'elevation_m': v.elevationM,
+    'time_zone': v.timeZone,
+    'use_custom_horizon': v.useCustomHorizon,
+    'default_horizon_altitude_deg': v.defaultHorizonAltitudeDeg,
+    'bortle_class': v.bortleClass,
+    'typical_seeing_arcsec': v.typicalSeeingArcsec,
+    'twilight_definition': v.twilightDefinition.name,
+  };
 
   static TwilightDefinition _twilightFromString(String? s) {
     switch (s) {
@@ -1034,40 +1103,40 @@ class ProfileApi {
   // ── Notifications settings JSON mapping ────────────────────────────────
 
   static NotificationsSettings _notificationsSettingsFromJson(
-          Map<String, dynamic> j) =>
-      NotificationsSettings(
-        inAppBanner: (j['in_app_banner'] as bool?) ?? true,
-        osDesktop: (j['os_desktop'] as bool?) ?? true,
-        soundAlert: (j['sound_alert'] as bool?) ?? true,
-        pushoverToken: (j['pushover_token'] as String?) ?? '',
-        telegramBotToken: (j['telegram_bot_token'] as String?) ?? '',
-        pushoverUserKey: (j['pushover_user_key'] as String?) ?? '',
-        telegramChatId: (j['telegram_chat_id'] as String?) ?? '',
-        onSequenceComplete: (j['on_sequence_complete'] as bool?) ?? true,
-        onSequencePaused: (j['on_sequence_paused'] as bool?) ?? true,
-        onCriticalDiagnostic: (j['on_critical_diagnostic'] as bool?) ?? true,
-        onSafetyEvent: (j['on_safety_event'] as bool?) ?? true,
-        onAutofocusFailed: (j['on_autofocus_failed'] as bool?) ?? true,
-        onPlateSolveFailed: (j['on_plate_solve_failed'] as bool?) ?? true,
-        onDiskSpaceLow: (j['on_disk_space_low'] as bool?) ?? true,
-      );
+    Map<String, dynamic> j,
+  ) => NotificationsSettings(
+    inAppBanner: (j['in_app_banner'] as bool?) ?? true,
+    osDesktop: (j['os_desktop'] as bool?) ?? true,
+    soundAlert: (j['sound_alert'] as bool?) ?? true,
+    pushoverToken: (j['pushover_token'] as String?) ?? '',
+    telegramBotToken: (j['telegram_bot_token'] as String?) ?? '',
+    pushoverUserKey: (j['pushover_user_key'] as String?) ?? '',
+    telegramChatId: (j['telegram_chat_id'] as String?) ?? '',
+    onSequenceComplete: (j['on_sequence_complete'] as bool?) ?? true,
+    onSequencePaused: (j['on_sequence_paused'] as bool?) ?? true,
+    onCriticalDiagnostic: (j['on_critical_diagnostic'] as bool?) ?? true,
+    onSafetyEvent: (j['on_safety_event'] as bool?) ?? true,
+    onAutofocusFailed: (j['on_autofocus_failed'] as bool?) ?? true,
+    onPlateSolveFailed: (j['on_plate_solve_failed'] as bool?) ?? true,
+    onDiskSpaceLow: (j['on_disk_space_low'] as bool?) ?? true,
+  );
 
   static Map<String, dynamic> _notificationsSettingsToJson(
-          NotificationsSettings v) =>
-      {
-        'in_app_banner': v.inAppBanner,
-        'os_desktop': v.osDesktop,
-        'sound_alert': v.soundAlert,
-        'pushover_token': v.pushoverToken,
-        'telegram_bot_token': v.telegramBotToken,
-        'pushover_user_key': v.pushoverUserKey,
-        'telegram_chat_id': v.telegramChatId,
-        'on_sequence_complete': v.onSequenceComplete,
-        'on_sequence_paused': v.onSequencePaused,
-        'on_critical_diagnostic': v.onCriticalDiagnostic,
-        'on_safety_event': v.onSafetyEvent,
-        'on_autofocus_failed': v.onAutofocusFailed,
-        'on_plate_solve_failed': v.onPlateSolveFailed,
-        'on_disk_space_low': v.onDiskSpaceLow,
-      };
+    NotificationsSettings v,
+  ) => {
+    'in_app_banner': v.inAppBanner,
+    'os_desktop': v.osDesktop,
+    'sound_alert': v.soundAlert,
+    'pushover_token': v.pushoverToken,
+    'telegram_bot_token': v.telegramBotToken,
+    'pushover_user_key': v.pushoverUserKey,
+    'telegram_chat_id': v.telegramChatId,
+    'on_sequence_complete': v.onSequenceComplete,
+    'on_sequence_paused': v.onSequencePaused,
+    'on_critical_diagnostic': v.onCriticalDiagnostic,
+    'on_safety_event': v.onSafetyEvent,
+    'on_autofocus_failed': v.onAutofocusFailed,
+    'on_plate_solve_failed': v.onPlateSolveFailed,
+    'on_disk_space_low': v.onDiskSpaceLow,
+  };
 }

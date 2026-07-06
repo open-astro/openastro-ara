@@ -745,12 +745,25 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.site.use_custom_horizon',
     label: 'Use custom horizon polygon',
-    description: 'When on, target visibility uses the imported azimuth/altitude polygon (§36.8) instead of the flat default-altitude floor.',
+    description: 'When on, target visibility and the planning chart use your entered azimuth/altitude skyline (§36.8) instead of the flat default-altitude floor. Enter the skyline below the toggle.',
     keywords: ['horizon', 'custom', 'polygon', 'mask', 'obstruction', 'trees', 'building'],
     path: ['Settings', 'Safety', 'Site'],
     type: SettingType.bool(),
     defaultValue: false,
     profilePath: 'site.use_custom_horizon',
+  ),
+  // §36 custom skyline — one composite list setting (the panel embeds a
+  // vertex-list editor, not per-field rows). State lives in customHorizonProvider.
+  Setting(
+    id: 'safety.site.custom_horizon_points',
+    label: 'Custom horizon skyline',
+    description: 'Your measured skyline: the sky altitude of trees/buildings per compass bearing (azimuth 0-360°, altitude -10..90°). Tonight\'s Sky visibility windows and the chart horizon overlay interpolate between vertices. Stripped from shared profiles.',
+    keywords: ['horizon', 'skyline', 'obstruction', 'trees', 'building', 'azimuth', 'altitude', 'custom horizon', 'terrain'],
+    path: ['Settings', 'Safety', 'Site'],
+    type: SettingType.complex(),
+    defaultValue: null,
+    profilePath: 'custom_horizon.points',
+    relatedSettings: ['safety.site.use_custom_horizon'],
   ),
   Setting(
     id: 'safety.site.default_horizon_altitude_deg',
