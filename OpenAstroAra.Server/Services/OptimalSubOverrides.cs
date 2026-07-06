@@ -31,13 +31,26 @@ namespace OpenAstroAra.Server.Services;
 /// advise, don't dictate. The imaging-train geometry (aperture / focal length / pixel size) has
 /// no honest default: missing everywhere → a 400 telling the user to set up their optics.</para>
 /// </summary>
+/// <summary>§3.1 — the extra context the star-detectability floor needs beyond the calculator
+/// input: the target's J2000 position in DEGREES (the planning-DTO convention — never RA
+/// hours), the profile-snapshot seeing, and the single-frame field of view.</summary>
+public sealed record StarFieldContext(
+    double RaDeg, double DecDeg, double SeeingArcsec, double FovDeg2);
+
 public static class OptimalSubOverrides {
 
     /// <summary>Validate + assemble the calculator input. Profile sections are fetched lazily —
     /// a fully-specified request never reads the profile. On success <c>Input</c> is non-null and
     /// <c>AssumedDefaults</c> lists the Tier-0-defaulted field names (possibly empty); on failure
-    /// <c>Error</c> carries the human-readable 400 message.</summary>
-    public static (OptimalSubInputDto? Input, IReadOnlyList<string> AssumedDefaults, string? Error) Build(
+    /// <c>Error</c> carries the human-readable 400 message. <c>StarField</c> is non-null iff the
+    /// request supplied a target position (<c>raDeg</c>/<c>decDeg</c>) — §3.1's opt-in — AND the
+    /// star inputs could be assembled; <c>StarUnavailableReason</c> carries the actionable
+    /// explanation when they couldn't (unset profile sensor dimensions). The ADVISORY degrading
+    /// must never fail the core window: clients pass a target whenever the sequence has one, so
+    /// a 400 here would break the Glover figure for every not-fully-set-up profile. Explicit
+    /// garbage (a supplied bad <c>sensorW</c>) still 400s per the validation above.</summary>
+    public static (OptimalSubInputDto? Input, IReadOnlyList<string> AssumedDefaults, string? Error,
+            StarFieldContext? StarField, string? StarUnavailableReason) Build(
             Func<OpticsSettingsDto> getOptics,
             Func<CameraElectronicsDto> getElectronics,
             Func<SiteSettingsDto> getSite,
@@ -46,7 +59,9 @@ public static class OptimalSubOverrides {
             double? readNoise, double? fullWell, double? ePerAdu, int? gain, double? qe,
             double? apertureMm, double? focalLengthMm, double? reducer, double? pixelUm,
             double? skyMag, int? bortle,
-            double? noiseTolerancePct, double? headroom) {
+            double? noiseTolerancePct, double? headroom,
+            double? raDeg = null, double? decDeg = null, double? seeingArcsec = null,
+            int? sensorW = null, int? sensorH = null) {
         var assumed = new List<string>();
 
         // ── Per-field validation of supplied values (finite + range) ──────────────────────
@@ -95,6 +110,33 @@ public static class OptimalSubOverrides {
         }
         if (headroom is { } hr && !(double.IsFinite(hr) && hr > 0 && hr <= 1.0)) {
             return Fail("Query parameter 'headroom' must be a finite value in (0, 1].");
+        }
+
+        // ── §3.1 star-detectability opt-in: a target position + its supporting fields ──────
+        if ((raDeg is null) != (decDeg is null)) {
+            return Fail("Supply 'raDeg' and 'decDeg' together — the star-count advice needs a full target position.");
+        }
+        // J2000 DEGREES by contract (matching every planning DTO). Deliberately rejects values
+        // outside [0, 360) so a client that accidentally sends RA HOURS at least fails loudly
+        // for RA ≥ 360°-equivalent mistakes — a stray 0–24 h value is indistinguishable from a
+        // valid degree figure, hence the loud unit statement in the message.
+        if (raDeg is { } ra && !(double.IsFinite(ra) && ra is >= 0 and < 360)) {
+            return Fail("Query parameter 'raDeg' must be J2000 right ascension in DEGREES, in [0, 360) — not hours.");
+        }
+        if (decDeg is { } dec && !(double.IsFinite(dec) && Math.Abs(dec) <= 90)) {
+            return Fail("Query parameter 'decDeg' must be J2000 declination in degrees, within ±90.");
+        }
+        if (seeingArcsec is { } se && !(double.IsFinite(se) && se > 0 && se <= 20)) {
+            return Fail("Query parameter 'seeingArcsec' must be a finite FWHM in (0, 20] arcsec.");
+        }
+        if (sensorW is { } sw && sw < 1) {
+            return Fail("Query parameter 'sensorW' must be >= 1 (pixels).");
+        }
+        if (sensorH is { } sh && sh < 1) {
+            return Fail("Query parameter 'sensorH' must be >= 1 (pixels).");
+        }
+        if (raDeg is null && (seeingArcsec is not null || sensorW is not null || sensorH is not null)) {
+            return Fail("'seeingArcsec', 'sensorW' and 'sensorH' only apply to the star-count advice — supply 'raDeg' and 'decDeg' with them.");
         }
 
         // ── Mutually exclusive pairs ───────────────────────────────────────────────────────
@@ -187,8 +229,11 @@ public static class OptimalSubOverrides {
         }
 
         // ── Sky brightness: request skyMag → request bortle → profile Bortle ──────────────
+        // (Site is also the star-context seeing source below, so fetch it lazily once.)
+        SiteSettingsDto? site = null;
+        SiteSettingsDto Site() => site ??= getSite();
         var mergedSkyMag = skyMag
-            ?? OptimalSubCalculator.SkyMagFromBortle(bortle ?? getSite().BortleClass);
+            ?? OptimalSubCalculator.SkyMagFromBortle(bortle ?? Site().BortleClass);
 
         var input = new OptimalSubInputDto(
             ReadNoiseE: mergedReadNoise,
@@ -204,9 +249,45 @@ public static class OptimalSubOverrides {
             FilterBandwidthNm: bandwidth,
             NoiseTolerancePct: noiseTolerancePct ?? 5.0,
             SaturationHeadroomFraction: headroom ?? 0.8);
-        return (input, assumed, null);
 
-        (OptimalSubInputDto?, IReadOnlyList<string>, string?) Fail(string message) =>
-            (null, Array.Empty<string>(), message);
+        // ── §3.1 star-field context (only when a target was supplied) ─────────────────────
+        StarFieldContext? starField = null;
+        string? starUnavailable = null;
+        if (raDeg is { } targetRa && decDeg is { } targetDec) {
+            // Sensor dimensions: request override → profile optics. Like the imaging-train
+            // geometry, there is no honest default — but the star bound is an ADVISORY rider,
+            // so an unset profile degrades it (with the actionable reason below) instead of
+            // failing the core Glover window the caller actually asked for.
+            var mergedSensorW = sensorW ?? Optics().SensorWidthPx;
+            var mergedSensorH = sensorH ?? Optics().SensorHeightPx;
+            if (mergedSensorW < 1 || mergedSensorH < 1) {
+                starUnavailable = "Star-count advice needs your sensor dimensions (no honest default) — "
+                    + "set them in Settings → Optics or supply 'sensorW' and 'sensorH'.";
+                return (input, assumed, null, null, starUnavailable);
+            }
+
+            // Seeing: request override → profile site → Tier-0 typical seeing (2.5″), tagged.
+            double mergedSeeing;
+            if (seeingArcsec is { } seeingSupplied) {
+                mergedSeeing = seeingSupplied;
+            } else if (Site().TypicalSeeingArcsec > 0 && double.IsFinite(Site().TypicalSeeingArcsec)) {
+                mergedSeeing = Site().TypicalSeeingArcsec;
+            } else {
+                mergedSeeing = 2.5;
+                assumed.Add("seeing_arcsec");
+            }
+
+            // Single-frame FOV in deg² from the assembled train's plate scale — registration
+            // happens per sub, so no mosaic enlargement applies here.
+            var pixelScaleArcsec = 206.265 * mergedPixel / (mergedFocal * mergedReducer);
+            var fovDeg2 = (mergedSensorW * pixelScaleArcsec / 3600.0)
+                        * (mergedSensorH * pixelScaleArcsec / 3600.0);
+            starField = new StarFieldContext(targetRa, targetDec, mergedSeeing, fovDeg2);
+        }
+
+        return (input, assumed, null, starField, starUnavailable);
+
+        (OptimalSubInputDto?, IReadOnlyList<string>, string?, StarFieldContext?, string?) Fail(string message) =>
+            (null, Array.Empty<string>(), message, null, null);
     }
 }

@@ -690,6 +690,74 @@ namespace OpenAstroAra.Test {
             Assert.That(advised[0].OptimalSubS, Is.EqualTo(Math.Round(expected.RecommendedSec)));
         }
 
+        // ─── NEXTGEN §3.1 slice 3: the star-detectability "thin for registration" tag ───
+
+        // A rig whose ADVISED sub genuinely starves registration: a bright (Bortle 9) sky and a
+        // low-read-noise camera make the Glover floor short (shallow m_lim), and a 640×480 sensor
+        // at 2000 mm is a few-arcmin field — at the galactic pole that's ~11 predicted SNR-10
+        // stars, under the 20-star budget. Realistic setups rarely trip this; that's the point.
+        private static OpticsSettingsDto StarvedRig() => new(
+            FocalLengthMm: 2000, ReducerFactor: 1.0, SensorWidthPx: 640, SensorHeightPx: 480,
+            PixelSizeUm: 3.76, ApertureMm: 80);
+
+        private static CameraElectronicsDto LowNoiseElectronics() => new(
+            ReadNoiseE: 1.0, FullWellE: 50_000, ElectronsPerAdu: 0.78, Gain: 300);
+
+        // The north galactic pole as a catalog galaxy: b = +90° exactly (fewest stars), dec +27
+        // keeps it up in the dark from a lat-40 site. "G" → broadband advice (the L filter).
+        private static TonightSkyService.CatalogObject NgpGalaxy() =>
+            Obj("NGP", 192.85948, 27.12825, type: "G");
+
+        [Test]
+        public void A_starved_field_gets_the_thin_registration_tag_without_moving_the_score() {
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0) with { BortleClass = 9 };
+            var catalog = new[] { NgpGalaxy() };
+
+            var without = TonightSkyService.Rank(catalog, site, StarvedRig(), at, limit: 10,
+                filterSet: NbFilterSet());
+            var with = TonightSkyService.Rank(catalog, site, StarvedRig(), at, limit: 10,
+                filterSet: NbFilterSet(), electronics: LowNoiseElectronics());
+
+            Assert.That(with, Has.Count.EqualTo(1), "the NGP has a dark window on a December night");
+            Assert.That(with[0].ScoreReasons, Has.Some.Contains("thin for registration (+0)"),
+                "a starved field is flagged in the Why? breakdown");
+            Assert.That(with[0].Score, Is.EqualTo(without[0].Score),
+                "advisory-only: the star tag must never move a score");
+            Assert.That(without[0].ScoreReasons, Has.None.Contains("thin for registration"),
+                "no electronics → no advised sub → no star prediction to tag");
+        }
+
+        [Test]
+        public void A_healthy_star_budget_earns_no_tag() {
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0) with { BortleClass = 9 };
+            // Same train, full-frame sensor: ~0.28 deg² collects hundreds of SNR-10 stars.
+            var fullSensor = StarvedRig() with { SensorWidthPx = 6000, SensorHeightPx = 4000 };
+
+            var ranked = TonightSkyService.Rank(new[] { NgpGalaxy() }, site, fullSensor, at,
+                limit: 10, filterSet: NbFilterSet(), electronics: LowNoiseElectronics());
+
+            Assert.That(ranked[0].OptimalSubS, Is.Not.Null, "the advice figure still flows");
+            Assert.That(ranked[0].ScoreReasons, Has.None.Contains("thin for registration"),
+                "a healthy star budget isn't worth a line");
+        }
+
+        [Test]
+        public void The_star_tag_judges_the_single_frame_not_the_mosaic() {
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0) with { BortleClass = 9 };
+
+            // A 4×4 mosaic multiplies the PLANNING FOV 16× — but registration happens per sub,
+            // so the starved single frame must keep its tag.
+            var mosaic = TonightSkyService.Rank(new[] { NgpGalaxy() }, site, StarvedRig(), at,
+                limit: 10, mosaicTilesX: 4, mosaicTilesY: 4,
+                filterSet: NbFilterSet(), electronics: LowNoiseElectronics());
+
+            Assert.That(mosaic[0].ScoreReasons, Has.Some.Contains("thin for registration (+0)"),
+                "mosaic tiles must not inflate the per-sub star budget");
+        }
+
         // The no-optics train the advice tests use (framing Unknown for every object) — mirrors the
         // private TonightSkyService.NoOptics so the advice tests don't entangle framing.
         private static readonly OpticsSettingsDto NoOpticsForTest = new(0, 0, 0, 0, 0);

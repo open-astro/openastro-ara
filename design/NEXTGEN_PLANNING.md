@@ -167,11 +167,12 @@ spec model splits along a real seam:
 
 Net: **zero camera database required.** Ship Tier 0 day one; the rest is self-populating or optional.
 
-### 3.1 Star-detectability floor — design proposal (2026-07-02, awaiting maintainer sign-off)
+### 3.1 Star-detectability floor — SHIPPED (all 3 slices; maintainer signed off 2026-07-05)
 
-> Status: PROPOSAL. The Glover floor + saturation ceiling shipped in slice 1; this section pins
-> down the first "refinement" bound so it can be built design-first rather than improvised. No
-> code exists yet — the model choice below wants a maintainer yes/no before implementation.
+> Status: SHIPPED. Slices 1+2 (the solver + the gate-validated count model) landed 2026-07-02
+> deliberately unwired; the maintainer approved the feature 2026-07-05 ("ship it") and slice 3
+> wired it into the sub-exposure window + Tonight's Sky. The section below is the design of
+> record.
 
 **What it computes.** The shortest sub `t_stars` such that a sub is *usable by the pipeline*:
 enough stars register above the detection threshold to align/stack (and, for solve-per-sub
@@ -231,11 +232,17 @@ MEASURED AND PASSING**: pooled HYG densities computed from the sha-pinned canoni
 extrapolation ratios 1.17–1.67 — all inside the factor-2 trigger at every band, and the gate is
 re-derived + re-asserted in CI (`StarCountModelTest`) from the embedded grid so the proof is
 permanent. The shipped predictor anchors at the ACTUAL m = 9 densities and extrapolates with the
-validated slope (documented one-sided optimistic bias beyond m = 9). Also UNWIRED. 3) stays
-post-sign-off — wiring both into the sub-exposure window + Tonight's Sky reasons is the
-user-visible step, and the maintainer may still veto the whole feature by declining it:
-2) the count model + the HYG-validation test (the go/no-go gate for the whole feature);
-3) wire into the §3 window + Tonight's Sky reason tags.
+validated slope (documented one-sided optimistic bias beyond m = 9). 3) wiring —
+**SHIPPED (2026-07-05, maintainer sign-off given: "ship it")**: `StarDetectabilityFloor`
+composes both slices into `t_stars` (shortest sub reaching a 20-star SNR-10 registration
+budget; bisection, 1 h search bound) and folds it into the window as a floor bound —
+`GET /planning/optimal-sub` gains opt-in `raDeg`/`decDeg` (J2000 DEGREES, never RA hours)
++ `seeingArcsec`/`sensorW`/`sensorH` overrides, the response gains `star_floor_sec`,
+predicted SNR-5/SNR-10 stars per sub, a labelled `star_reason`, and `limiting_bound:
+starfloor` when stars (not read noise) bind; Tonight's Sky appends the zero-point
+"~N stars/sub at X s — thin for registration (+0)" tag over the SINGLE-FRAME FOV (mosaic
+tiles never inflate the per-sub budget), score byte-identical. Advisory throughout —
+nothing gates.
 
 **Satellite-trail ceiling: explicitly NOT proposed.** A defensible trail-rate model needs
 constellation-shell density by sky position, season and local time, and the publicly available

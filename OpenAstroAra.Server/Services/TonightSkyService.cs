@@ -239,14 +239,18 @@ public sealed class TonightSkyService : ITonightSkyService {
         var exposureConfigured = electronics is { ReadNoiseE: > 0, FullWellE: > 0 }
             && optics is { ApertureMm: > 0, FocalLengthMm: > 0, PixelSizeUm: > 0, ReducerFactor: > 0 };
         var skyMag = BortleZenithSkyMag(site.BortleClass);
-        var floorByApproach = new Dictionary<FilterApproach, double?>();
-        double? FloorFor(FilterApproach approach) {
-            if (floorByApproach.TryGetValue(approach, out var cached)) {
+        // Per-approach advice cache: the rounded floor for the DTO, plus (§3.1 slice 3) the
+        // UNROUNDED recommendation + assembled input so the star-count tag can evaluate the
+        // limiting magnitude at the exact advised sub (the rounded figure can be 0 s on a
+        // fast broadband rig, which the m_lim solver rightly rejects).
+        var adviceByApproach = new Dictionary<FilterApproach, (double? FloorSec, double RecommendedSec, OptimalSubInputDto? Input)>();
+        (double? FloorSec, double RecommendedSec, OptimalSubInputDto? Input) AdviceFor(FilterApproach approach) {
+            if (adviceByApproach.TryGetValue(approach, out var cached)) {
                 return cached;
             }
-            double? floor = null;
+            (double? FloorSec, double RecommendedSec, OptimalSubInputDto? Input) advice = (null, 0, null);
             if (exposureConfigured && FilterAdvice.RepresentativeFilter(adviceSet, approach) is { } filter) {
-                var result = OptimalSubCalculator.Compute(new OptimalSubInputDto(
+                var input = new OptimalSubInputDto(
                     ReadNoiseE: electronics!.ReadNoiseE,
                     FullWellE: electronics.FullWellE,
                     ElectronsPerAdu: Math.Max(0, electronics.ElectronsPerAdu),
@@ -259,11 +263,39 @@ public sealed class TonightSkyService : ITonightSkyService {
                         ? electronics.QuantumEfficiencyPeak
                         : OptimalSubCalculator.DefaultQuantumEfficiency,
                     SkyMagPerArcsec2: skyMag,
-                    FilterBandwidthNm: FilterAdvice.EffectiveBandwidthNm(filter)));
-                floor = Math.Round(result.RecommendedSec);
+                    FilterBandwidthNm: FilterAdvice.EffectiveBandwidthNm(filter));
+                var result = OptimalSubCalculator.Compute(input);
+                advice = (Math.Round(result.RecommendedSec), result.RecommendedSec, input);
             }
-            floorByApproach[approach] = floor;
-            return floor;
+            adviceByApproach[approach] = advice;
+            return advice;
+        }
+
+        // §3.1 slice 3 — star-detectability inputs for the "thin for registration" tag: the
+        // SINGLE-FRAME field of view (registration happens per sub, so the mosaic-enlarged
+        // planning FOV above must not inflate the star budget) and the profile-snapshot seeing.
+        // Both advisory-degrading like everything here: unusable values → no tag, never an error.
+        var (singleFrameWArcmin, singleFrameHArcmin) = FovArcmin(optics, 1, 1);
+        var singleFrameFovDeg2 = singleFrameWArcmin / 60.0 * (singleFrameHArcmin / 60.0);
+        var seeingArcsec = site.TypicalSeeingArcsec;
+        var starTagAvailable = exposureConfigured
+            && double.IsFinite(singleFrameFovDeg2) && singleFrameFovDeg2 > 0
+            && double.IsFinite(seeingArcsec) && seeingArcsec > 0;
+        // The registration-threshold limiting magnitude at each approach's advised sub is
+        // object-independent — memoize it alongside the advice.
+        var mLimByApproach = new Dictionary<FilterApproach, double?>();
+        double? RegistrationMLimFor(FilterApproach approach) {
+            if (mLimByApproach.TryGetValue(approach, out var cached)) {
+                return cached;
+            }
+            double? mLim = null;
+            var (_, recommendedSec, input) = AdviceFor(approach);
+            if (starTagAvailable && input is not null && recommendedSec > 0) {
+                mLim = StarDetectability.LimitingMagnitude(
+                    input, recommendedSec, seeingArcsec, StarDetectability.RegistrationSnr);
+            }
+            mLimByApproach[approach] = mLim;
+            return mLim;
         }
 
         // Score (the sort key) is the unrounded worth; id is the stable tie-break for an exact tie.
@@ -329,10 +361,26 @@ public sealed class TonightSkyService : ITonightSkyService {
                     is { } advised) {
                 advice = advised.Approach;
                 adviceReason = advised.Reason;
-                optimalSubS = FloorFor(advised.Approach);
+                optimalSubS = AdviceFor(advised.Approach).FloorSec;
                 var reasonList = new List<string>(reasons) {
                     $"{AdviceTag(advised.Approach)} recommended (+0)",
                 };
+
+                // §3.1 slice 3 — the star-detectability tag: predicted registration-quality
+                // stars in one advised sub over THIS object's field. Zero-point like the
+                // filter/moon advisories (visible in "Why?", never a score input), and only
+                // shown when thin — a healthy star budget isn't worth a line.
+                if (RegistrationMLimFor(advised.Approach) is { } mLim && optimalSubS is { } subS) {
+                    // Catalog RA/Dec are J2000 DEGREES (OpenNGC + the starter set) — the
+                    // ASCOM/telescope layer trades RA in HOURS; a stray hours value here would
+                    // silently yield a plausible-but-wrong galactic latitude and star count.
+                    var galacticLatDeg = StarCountModel.GalacticLatitudeDeg(o.RaDeg, o.DecDeg);
+                    var starsPerSub = StarCountModel.CumulativeStarsPerDeg2(mLim, galacticLatDeg)
+                        * singleFrameFovDeg2;
+                    if (starsPerSub < StarDetectabilityFloor.MinRegistrationStars) {
+                        reasonList.Add($"~{starsPerSub:0} stars/sub at {subS:0.#} s — thin for registration (+0)");
+                    }
+                }
                 reasons = reasonList;
             }
 
