@@ -95,6 +95,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void RmsArcsec_scales_by_pixel_scale_and_never_fakes_a_zero() {
+            // A 0.5 px RMS at 1.62 ″/px (a typical guide scope) reads 0.81″.
+            Assert.That(GuiderService.RmsArcsec(0.5, 1.62), Is.EqualTo(0.81).Within(1e-9));
+            Assert.That(GuiderService.RmsArcsec(null, 1.62), Is.Null, "no pixel RMS → no arcsec");
+            Assert.That(GuiderService.RmsArcsec(0.5, 0), Is.Null,
+                "PHD2 hasn't reported a scale yet — unknown, never a fake 0 arcsec");
+            Assert.That(GuiderService.RmsArcsec(0.5, -1), Is.Null);
+        }
+
+        [Test]
         public void Mediator_GetInfo_reports_disconnected_before_connect() {
             using var svc = NewService();
             // GuiderService also serves IGuiderMediator (§63 guider-c); GetInfo is the mediator member.
