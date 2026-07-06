@@ -66,6 +66,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // reads the stored body). A Func<> defers resolution past the DI cycle.
     private readonly Func<ISequenceService?>? _sequencesResolver;
     private readonly ActiveSequenceCheckpoint? _checkpoint;
+    private readonly IFrameRepository? _frames;
     private readonly SequenceBodyDeserializer _deserializer;
     private readonly ILogger<SequencerService> _logger;
     private readonly ConcurrentDictionary<Guid, RunState> _runs = new();
@@ -85,12 +86,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             IWsBroadcaster? ws = null,
             Func<ISequenceService?>? sequencesResolver = null,
             ActiveSequenceCheckpoint? checkpoint = null,
-            ILogger<SequencerService>? logger = null) {
+            ILogger<SequencerService>? logger = null,
+            IFrameRepository? frames = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
         _checkpoint = checkpoint;
         _logger = logger ?? NullLogger<SequencerService>.Instance;
+        _frames = frames;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -482,6 +485,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // Declared ahead of the try so the catch blocks can seal+drain it before
         // their terminal emits; null until the run body constructs it.
         CoalescingAsyncPublisher? progressPublisher = null;
+        // The run's §40 catalog session; null when no frame repository is wired
+        // or its creation failed. Closed in the finally on every terminal path.
+        Guid? captureSession = null;
         try {
             // If an abort/stop landed before this worker started (in the window
             // between StartAsync spawning it and it running), skip both the
@@ -510,6 +516,20 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     progressPublisher.Poke();
                     WriteCheckpointIfOwner(run, sequenceId);
                 });
+
+                // §40/§50 — this run owns its own catalog session: frames its
+                // instructions capture land grouped per-run instead of in the
+                // shared manual bucket. The id rides CaptureSessionScope
+                // (AsyncLocal), flowing through the whole awaited instruction
+                // chain into the camera's frame-register step with no mediator
+                // interface changes — and concurrent runs each see their own.
+                // Catalog trouble must never block imaging: creation failure
+                // logs and the run proceeds session-less (manual fallback).
+                captureSession = await TryOpenRunSessionAsync(run.Cts.Token);
+                if (captureSession is Guid sid) {
+                    CaptureSessionScope.Enter(sid);
+                    await EmitSessionAsync("session.started", sid);
+                }
 
                 // Real execution. Sequencer.Start runs MainContainer.Run with
                 // Initialize/Teardown and swallows OperationCanceledException, so
@@ -569,6 +589,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
         } finally {
+            if (captureSession is Guid endSid) {
+                // Scope off first (a late fire-and-forget register outside the
+                // scope falls back to manual rather than a closed run session),
+                // then stamp the end time — on EVERY terminal path.
+                CaptureSessionScope.Exit();
+                await TryEndRunSessionAsync(endSid);
+            }
             // §28 — terminal transition clears active/current.json (only if this
             // run still owns it); a missing file is the canonical "nothing
             // running" signal for §28.2.
@@ -578,6 +605,42 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // polling; Abort/Stop guard against touching a disposed CTS, and
             // PruneTerminalRuns bounds retention.
             run.DisposeCts();
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The catalog is best-effort from the run's perspective: a sessions-table fault must log and leave the run imaging (frames fall back to the manual bucket), never fail or delay execution. CA1031's log-and-recover boundary applies.")]
+    private async Task<Guid?> TryOpenRunSessionAsync(CancellationToken ct) {
+        if (_frames is null) return null;
+        try {
+            return await _frames.CreateRunSessionAsync(ct);
+        } catch (Exception ex) {
+            LogRunSessionFailed(ex);
+            return null;
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Same best-effort catalog boundary as TryOpenRunSessionAsync, on the teardown side.")]
+    private async Task TryEndRunSessionAsync(Guid sessionId) {
+        try {
+            await _frames!.EndSessionAsync(sessionId, CancellationToken.None);
+            await EmitSessionAsync("session.ended", sessionId);
+        } catch (Exception ex) {
+            LogRunSessionFailed(ex);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort; a broadcaster fault must not affect the run. Same boundary as EmitAsync.")]
+    private async Task EmitSessionAsync(string eventType, Guid sessionId) {
+        if (_ws is null) return;
+        try {
+            var payload = new JsonObject { ["session_id"] = sessionId.ToString() };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
+        } catch (Exception) {
+            // Best-effort; the in-catalog session is the source of truth.
         }
     }
 
@@ -606,6 +669,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§40 run-session catalog operation failed — the run continues; frames fall back to the manual session")]
+    private partial void LogRunSessionFailed(Exception ex);
 
     private sealed class RunState : IDisposable {
         // State is written from Abort/Stop (request threads), the background

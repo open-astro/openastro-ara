@@ -233,6 +233,36 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return task.WaitAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<Guid> CreateRunSessionAsync(CancellationToken ct) {
+        var sid = Guid.NewGuid();
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO sessions
+                (id, profile_id, sequence_json, started_at, ended_at,
+                 recovery_needed, last_completed_instruction_id,
+                 current_target_id, frame_count)
+            VALUES
+                ($id, NULL, NULL, $now, NULL, 0, NULL, NULL, 0);
+            """;
+        cmd.Parameters.AddWithValue("$id", sid.ToString());
+        cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return sid;
+    }
+
+    /// <inheritdoc />
+    public async Task EndSessionAsync(Guid sessionId, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        // ended_at IS NULL keeps this idempotent — a retry can't move the end time.
+        cmd.CommandText = "UPDATE sessions SET ended_at = $now WHERE id = $id AND ended_at IS NULL;";
+        cmd.Parameters.AddWithValue("$id", sessionId.ToString());
+        cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     private async Task<Guid> CreateManualCaptureSessionAsync() {
         try {
             var sid = Guid.NewGuid();

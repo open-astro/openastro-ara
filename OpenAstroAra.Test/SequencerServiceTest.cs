@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Hosting;
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Container;
@@ -53,11 +54,13 @@ namespace OpenAstroAra.Test {
             return doc.RootElement.Clone();
         }
 
-        private static SequencerService BuildService(Guid id, JsonElement? body, IWsBroadcaster? ws = null) {
+        private static SequencerService BuildService(Guid id, JsonElement? body, IWsBroadcaster? ws = null,
+                IFrameRepository? frames = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body);
-            return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null);
+            return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
+                frames: frames);
         }
 
         private static async Task<SequenceRunStateDto?> WaitForTerminalAsync(SequencerService svc, Guid id) {
@@ -132,6 +135,58 @@ namespace OpenAstroAra.Test {
             Assert.That(state.InstructionsTotal, Is.EqualTo(3), "3 leaf instructions");
             Assert.That(state.InstructionsCompleted, Is.EqualTo(3), "all completed");
             Assert.That(state.CurrentInstructionIndex, Is.Null, "nothing running at completion");
+        }
+
+        [Test]
+        public async Task Run_owns_a_capture_session_from_before_execution_to_terminal() {
+            // §40/§50 — the run opens its own catalog session, executes inside its
+            // ambient scope (probed at each WS emit: terminal events fire inside
+            // the scope, session.ended after it), and ends it on completion.
+            var id = Guid.NewGuid();
+            var sid = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sid);
+            var scopeAtEvent = new System.Collections.Concurrent.ConcurrentDictionary<string, Guid?>();
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(b => b.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+              .Returns<string, JsonElement, CancellationToken>((type, _, _) => {
+                  scopeAtEvent.TryAdd(type, CaptureSessionScope.Current);
+                  return Task.CompletedTask;
+              });
+
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "note" })),
+                ws: ws.Object, frames: frames.Object);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+
+            frames.Verify(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>()), Times.Once);
+            frames.Verify(f => f.EndSessionAsync(sid, It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(scopeAtEvent.Keys, Does.Contain("session.started"));
+            Assert.That(scopeAtEvent.Keys, Does.Contain("session.ended"));
+            Assert.That(scopeAtEvent["sequence.complete"], Is.EqualTo(sid),
+                "execution (and its terminal emit) runs inside the run's session scope");
+            Assert.That(scopeAtEvent["session.ended"], Is.Null,
+                "the scope is exited before the session is closed");
+            Assert.That(CaptureSessionScope.Current, Is.Null, "nothing leaks to the test flow");
+        }
+
+        [Test]
+        public async Task Catalog_failure_never_blocks_the_run() {
+            var id = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("catalog db locked"));
+
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "note" })),
+                frames: frames.Object);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "a sessions-table fault must not fail imaging");
+            frames.Verify(f => f.EndSessionAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never,
+                "no session was opened, none may be ended");
         }
 
         [Test]

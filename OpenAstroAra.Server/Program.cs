@@ -463,7 +463,11 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 () => sp.GetService<ISequenceService>(),
                 sp.GetService<ActiveSequenceCheckpoint>(),
-                sp.GetService<ILogger<SequencerService>>()));
+                sp.GetService<ILogger<SequencerService>>(),
+                // §40 — explicit: this factory lambda bypasses constructor
+                // activation, so the optional param must be passed by hand
+                // (the #711 CameraService lesson).
+                sp.GetService<IFrameRepository>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.

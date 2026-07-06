@@ -52,10 +52,24 @@ public interface IFrameRepository {
 
     /// <summary>
     /// §14e — id of the lazily-created "manual capture" session that REST-initiated exposures
-    /// attach to (sequence-run target sessions arrive with the capture-path engine wiring).
-    /// Idempotent per daemon lifetime.
+    /// attach to. Idempotent per daemon lifetime. Sequence runs do NOT use this — they open
+    /// their own per-run session (see <see cref="CreateRunSessionAsync"/> + CaptureSessionScope).
     /// </summary>
     Task<Guid> EnsureManualCaptureSessionAsync(CancellationToken ct);
+
+    /// <summary>
+    /// §40/§50 — open a fresh catalog session for one sequence run, so the run's frames group
+    /// per-run in the library and stats instead of joining the shared manual bucket. The
+    /// session's display/target name is derived at read time from its frames (per §28.1), so
+    /// no name is stored here.
+    /// </summary>
+    Task<Guid> CreateRunSessionAsync(CancellationToken ct);
+
+    /// <summary>
+    /// §40/§50 — stamp a run session's end time (idempotent: only a still-open session is
+    /// touched). Called from the run worker's teardown on every terminal path.
+    /// </summary>
+    Task EndSessionAsync(Guid sessionId, CancellationToken ct);
 
     Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct);
     Task<FrameDto?> GetAsync(Guid id, CancellationToken ct);
