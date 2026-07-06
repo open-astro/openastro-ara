@@ -142,7 +142,12 @@ public sealed record SafetyPoliciesDto(
     // the tripod. Set true by the executor after that first announced flip; reset to false
     // when the optics train changes (the ARA equivalent of the spec's "equipment change in
     // the profile" — see FileProfileStore.PutOpticsSettings).
-    bool FirstFlipConfirmed = false);
+    bool FirstFlipConfirmed = false,
+    // §58.10 — bump equipment-impacting notification severities one level (Warning→Error,
+    // Error→Critical) while the site sits in astronomical darkness, so the §35.5 alarm
+    // behaviour engages earlier for a sleeping user. Default ON per the spec's unattended
+    // posture; see UnattendedSeverity.
+    bool UnattendedEscalation = true);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

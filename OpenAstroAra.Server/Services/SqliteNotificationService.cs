@@ -16,6 +16,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -37,10 +38,18 @@ public sealed partial class SqliteNotificationService : INotificationService {
 
     private readonly IAraDatabase _db;
     private readonly ILogger<SqliteNotificationService> _logger;
+    // §58.10 — optional so tests and any profile-less composition keep working; without a
+    // profile store the escalation shim is inert.
+    private readonly IProfileStore? _profiles;
 
-    public SqliteNotificationService(IAraDatabase db, ILogger<SqliteNotificationService>? logger) {
+    // Injectable clock so the §58.10 unattended-window check is testable at pinned instants.
+    internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
+
+    public SqliteNotificationService(IAraDatabase db, ILogger<SqliteNotificationService>? logger,
+            IProfileStore? profiles = null) {
         _db = db;
         _logger = logger ?? NullLogger<SqliteNotificationService>.Instance;
+        _profiles = profiles;
     }
 
     /// <summary>
@@ -175,9 +184,50 @@ public sealed partial class SqliteNotificationService : INotificationService {
     }
 
     public async Task CreateAsync(NotificationDto notification, CancellationToken ct) {
+        notification = EscalateIfUnattended(notification);
         await using var conn = _db.OpenConnection();
         await InsertAsync(conn, notification, ct);
     }
+
+    /// <summary>§58.10 — bump an equipment-impacting notification one severity level while the
+    /// site sits in astronomical darkness (the profile's unattended posture, default ON). Sits
+    /// at the single producer chokepoint so every equipment/sequence/storage/safety source gets
+    /// the same treatment. Best-effort: any fault in the profile read or the sun math must
+    /// never block the notification itself — the un-escalated original is always better than
+    /// nothing.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Escalation is a best-effort decoration at the notification chokepoint: a profile-store or almanac fault must degrade to the original severity, never block the notification being reported. CA1031's log-and-recover boundary applies.")]
+    private NotificationDto EscalateIfUnattended(NotificationDto notification) {
+        try {
+            if (_profiles is null || !UnattendedSeverity.IsEquipmentImpacting(notification.Category)) {
+                return notification;
+            }
+            if (!_profiles.GetSafetyPolicies().UnattendedEscalation
+                || !UnattendedSeverity.IsUnattended(_profiles.GetSiteSettings(), UtcNow())) {
+                return notification;
+            }
+            var bumped = UnattendedSeverity.Escalate(notification.Severity);
+            if (bumped == notification.Severity) {
+                return notification;
+            }
+            LogUnattendedEscalation(notification.Severity, bumped, notification.Title);
+            // The message says why the severity is higher than the event usually carries, so a
+            // morning triage doesn't read a bumped Warning as a genuinely worse fault class.
+            return notification with {
+                Severity = bumped,
+                Message = notification.Message + " (severity raised — unattended hours)",
+            };
+        } catch (Exception ex) {
+            LogEscalationCheckFailed(ex);
+            return notification;
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§58.10 unattended hours: '{Title}' escalated {From} → {To}")]
+    private partial void LogUnattendedEscalation(NotificationSeverity from, NotificationSeverity to, string title);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§58.10 unattended-escalation check failed; posting the notification at its original severity")]
+    private partial void LogEscalationCheckFailed(Exception ex);
 
     public async Task<NotificationPreferenceDto> SetPreferencesAsync(NotificationPreferenceDto preferences, CancellationToken ct) {
         var json = JsonSerializer.Serialize(preferences,
