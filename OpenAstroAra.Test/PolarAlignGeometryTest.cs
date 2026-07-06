@@ -89,6 +89,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Two_point_fit_handles_pointings_more_than_ninety_degrees_from_the_axis() {
+            // The review's counterexample: axis at the true NCP, seed star at Dec −30° (θ = 120°
+            // — a routine southern-declination choice while aligning north). The cosθ sign is
+            // not recoverable from the chord, and the ghost axis line even reproduces the
+            // rotation — the nearest-pole disambiguation must still return the NCP, not the
+            // ~67°-away ghost the original single-sign construction picked.
+            AssertFitRecovers(axisRa: 0, axisDec: 90, pointRa: 0, pointDec: -30, rotationDeg: 60, north: true);
+            // The same regime on a realistically misaligned axis, both hemispheres.
+            AssertFitRecovers(30, 89.5, 100, -30, 60, true);
+            AssertFitRecovers(120, -89.3, 40, 25, 60, north: false);
+        }
+
+        [Test]
+        public void Two_point_fit_refuses_an_axis_far_from_the_target_pole() {
+            // An axis 60° from the pole violates the §45 rough-alignment precondition — the fit
+            // must refuse rather than hand the bullseye a number it can't distinguish from the
+            // ghost line.
+            var axis = Unit(0, 30);
+            var p1 = Unit(80, 60);
+            var p2 = Rotate(p1, axis, 60);
+            var (ra1, dec1) = RaDec(p1);
+            var (ra2, dec2) = RaDec(p2);
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                PolarAlignGeometry.FitAxisTwoPoint(ra1, dec1, ra2, dec2, 60, true));
+        }
+
+        [Test]
         public void Two_point_fit_rejects_degenerate_inputs() {
             Assert.Throws<ArgumentOutOfRangeException>(() =>
                 PolarAlignGeometry.FitAxisTwoPoint(100, 50, 100, 50, 60, true),

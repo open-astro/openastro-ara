@@ -65,32 +65,97 @@ public static class PolarAlignGeometry {
                 "the two pointings coincide — no axis information (did the mount actually slew?)");
         }
 
-        // Cone half-angle from the chord + commanded rotation.
+        // Cone half-angle from the chord + commanded rotation. Only |sin θ| is recoverable
+        // here — the SIGN of cos θ is not (a pointing can legitimately sit more than 90° from
+        // the axis, e.g. a southern-declination seed star while aligning to the NCP), so both
+        // signs are carried as candidates and resolved by the reproduction check below.
         var sinTheta = chord / (2.0 * Math.Sin(Deg2Rad(rotationDeg) / 2.0));
         if (sinTheta > 1.0 + 1e-9) {
             throw new ArgumentOutOfRangeException(nameof(rotationDeg),
                 "the pointings are further apart than the commanded rotation allows — a solve is bad or the mount over-slewed");
         }
         sinTheta = Math.Min(sinTheta, 1.0);
-        var cosTheta = Math.Sqrt(1.0 - sinTheta * sinTheta);
+        var cosThetaMagnitude = Math.Sqrt(1.0 - sinTheta * sinTheta);
 
         // The axis lies in the bisector plane: span of the angular midpoint m̂ and the
         // great-circle pole ĝ = normalize(P₁×P₂). A·P₁ = cosθ and ĝ·P₁ = 0 fix the mix angle:
         // cos γ = cosθ / (m̂·P₁), where m̂·P₁ = cos(c/2) for the pointing separation c.
+        //
+        // Both cosθ signs × both sinγ signs give up to four candidates, and — a real, provable
+        // ambiguity — ALL of them rotate P₁ onto P₂ when the slew DIRECTION is unknown (each
+        // candidate line's two ends reproduce with opposite senses, and the wrong-cosθ "ghost"
+        // line satisfies the same chord-on-cone relation because sin θ is shared). Two pointings
+        // + an unsigned Δ genuinely admit two axis LINES. What disambiguates is the routine's
+        // own premise (§45 step 2: "roughly point your mount at the celestial pole"): the
+        // physical axis is near the target pole, the ghost line is its reflection through the
+        // pointing plane and sits far from it. So: verify reproduction (rejects numerically
+        // inconsistent solves), pick the candidate nearest the target pole, and REFUSE the
+        // answer if even that one is beyond the rough-alignment bound — a wrong pick here would
+        // send the bullseye chasing a garbage axis.
         var mid = Normalize(Add(p1, p2));
         var g = Normalize(Cross(p1, p2));
         var cosHalfC = Dot(mid, p1);
-        var cosGamma = Math.Clamp(cosTheta / cosHalfC, -1.0, 1.0);
-        var sinGamma = Math.Sqrt(1.0 - cosGamma * cosGamma);
 
-        var a1 = Add(Scale(mid, cosGamma), Scale(g, sinGamma));
-        var a2 = Add(Scale(mid, cosGamma), Scale(g, -sinGamma));
-
-        // Disambiguate: a roughly polar-aligned mount's axis sits in the target celestial
-        // hemisphere; its mirror twin is the reflection through the pointing plane.
+        (double X, double Y, double Z)? best = null;
         var poleSign = northernHemisphere ? 1.0 : -1.0;
-        var axis = a1.Z * poleSign >= a2.Z * poleSign ? a1 : a2;
-        return RaDec(axis);
+        foreach (var cosTheta in new[] { cosThetaMagnitude, -cosThetaMagnitude }) {
+            var cosGammaRaw = cosTheta / cosHalfC;
+            if (Math.Abs(cosGammaRaw) > 1.0 + 1e-9) {
+                continue; // no real axis with this cosθ sign for these pointings
+            }
+            var cosGamma = Math.Clamp(cosGammaRaw, -1.0, 1.0);
+            var sinGamma = Math.Sqrt(1.0 - cosGamma * cosGamma);
+            foreach (var mix in new[] { sinGamma, -sinGamma }) {
+                var candidate = Add(Scale(mid, cosGamma), Scale(g, mix));
+                if (!ReproducesRotation(p1, p2, candidate, rotationDeg)) {
+                    continue;
+                }
+                if (best is null || candidate.Z * poleSign > best.Value.Z * poleSign) {
+                    best = candidate;
+                }
+            }
+        }
+        if (best is null) {
+            throw new ArgumentOutOfRangeException(nameof(rotationDeg),
+                "no axis reproduces the commanded rotation between these pointings — a solve is bad");
+        }
+        // The rough-alignment sanity bound: a mount whose axis fits >30° from the target pole
+        // either isn't roughly polar-aligned yet (the §45 workflow's explicit precondition) or
+        // this is the ghost line — both mean the number must not be trusted or displayed.
+        if (best.Value.Z * poleSign < CosRoughAlignmentBound) {
+            throw new ArgumentOutOfRangeException(nameof(northernHemisphere),
+                "the fitted axis is more than 30° from the target celestial pole — rough-align the mount at the pole first (or the solves are inconsistent)");
+        }
+        return RaDec(best.Value);
+    }
+
+    // cos(30°) — the §45 rough-alignment precondition, generous against real setups (users
+    // start within a few degrees; the ghost axis line typically sits tens of degrees out).
+    private static readonly double CosRoughAlignmentBound = Math.Cos(30.0 * Math.PI / 180.0);
+
+    // True when rotating p1 about the candidate axis by ±angleDeg lands on p2 (the slew
+    // direction is not an input, so either sense counts). All four algebraic candidates pass
+    // this for exact inputs (see the ambiguity note above) — the check's job is rejecting
+    // numerically inconsistent solve pairs, not picking the winner.
+    private static bool ReproducesRotation(
+            (double X, double Y, double Z) p1, (double X, double Y, double Z) p2,
+            (double X, double Y, double Z) axis, double angleDeg) {
+        return Norm(Subtract(RotateAbout(p1, axis, angleDeg), p2)) < 1e-6
+            || Norm(Subtract(RotateAbout(p1, axis, -angleDeg), p2)) < 1e-6;
+    }
+
+    // Rodrigues rotation of v about the unit axis k by angleDeg.
+    private static (double X, double Y, double Z) RotateAbout(
+            (double X, double Y, double Z) v, (double X, double Y, double Z) k, double angleDeg) {
+        var a = Deg2Rad(angleDeg);
+        var cos = Math.Cos(a);
+        var sin = Math.Sin(a);
+        var cross = Cross(k, v);
+        var dot = Dot(k, v);
+        return (
+            v.X * cos + cross.X * sin + k.X * dot * (1 - cos),
+            v.Y * cos + cross.Y * sin + k.Y * dot * (1 - cos),
+            v.Z * cos + cross.Z * sin + k.Z * dot * (1 - cos));
     }
 
     /// <summary>
