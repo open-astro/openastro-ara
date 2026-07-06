@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/instruction_catalog.dart' show slewScopeToRaDecType;
 import '../../models/sequence/nina_dom.dart';
 import '../../models/server.dart';
 import '../../services/optimal_sub_api.dart';
@@ -8,6 +9,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/input_coordinates.dart';
 
 /// The TakeExposure `$type` — the node the advisor attaches to — and the
 /// SwitchFilter `$type` it scans sibling instructions for. Mirrors the
@@ -16,6 +18,10 @@ const String takeExposureType =
     'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
 const String _switchFilterType =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
+const String _deepSkyObjectContainerType =
+    'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer';
+const String _centerAndRotateType =
+    'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 
 /// The filter name a TakeExposure at [path] runs under, or null: the nearest
 /// preceding SwitchFilter among its container siblings (NINA executes a
@@ -39,6 +45,51 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
   return name;
 }
 
+/// §3.1 — the target position (J2000 decimal DEGREES) in effect for a
+/// TakeExposure at [path], or null when the sequence names none. Pure —
+/// exposed for tests.
+///
+/// Mirrors NINA's top-to-bottom execution the same way [filterNameForExposure]
+/// does, level by level from the root: a Deep Sky Object container's
+/// `Target.InputCoordinates` applies to everything inside it, and a preceding
+/// `SlewScopeToRaDec` / `CenterAndRotate` sibling's `Coordinates` applies to
+/// what follows. Deeper context wins over outer, and among siblings the last
+/// one before the exposure wins. A zeroed position (RA 0h 0m 0s, Dec +0° 0′ 0″
+/// — the catalog default of a freshly-added instruction) is treated as
+/// not-set-yet rather than "the celestial equator at RA 0".
+({double raDeg, double decDeg})? targetPositionForExposure(
+    Map<String, dynamic> body, NodePath path) {
+  ({double raDeg, double decDeg})? found = _dsoTarget(body);
+  for (var depth = 0; depth < path.length; depth++) {
+    final parent = nodeAt(body, path.sublist(0, depth));
+    if (parent == null) return found;
+    final siblings = childrenOf(parent);
+    final index = path[depth];
+    for (var i = 0; i < index && i < siblings.length; i++) {
+      final type = siblings[i][r'$type'];
+      if (type == slewScopeToRaDecType || type == _centerAndRotateType) {
+        found = _nonZero(degFromInputCoordinates(siblings[i]['Coordinates'])) ?? found;
+      }
+    }
+    if (index < siblings.length) {
+      // The container the path descends into next (its own Target outranks a
+      // same-level preceding slew — it wraps the exposure more tightly).
+      found = _dsoTarget(siblings[index]) ?? found;
+    }
+  }
+  return found;
+}
+
+({double raDeg, double decDeg})? _dsoTarget(Map<String, dynamic> node) {
+  if (node[r'$type'] != _deepSkyObjectContainerType) return null;
+  final target = node['Target'];
+  if (target is! Map) return null;
+  return _nonZero(degFromInputCoordinates(target['InputCoordinates']));
+}
+
+({double raDeg, double decDeg})? _nonZero(({double raDeg, double decDeg})? pos) =>
+    pos != null && pos.raDeg == 0 && pos.decDeg == 0 ? null : pos;
+
 /// NEXTGEN §5 — the per-filter "Optimal Sub" advisor under a TakeExposure's
 /// fields: the Glover read-noise floor (criterion popularised by Dr. Robin
 /// Glover, SharpCap — attributed per the recorded permission) intersected
@@ -50,7 +101,8 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
 /// Renders nothing against a pre-slice-2 daemon (404) and a quiet one-line
 /// message when the daemon can't compute (400 — e.g. aperture not set up).
 class OptimalSubAdvisor extends ConsumerStatefulWidget {
-  const OptimalSubAdvisor({super.key, required this.path, required this.filterName});
+  const OptimalSubAdvisor(
+      {super.key, required this.path, required this.filterName, this.targetPosition});
 
   /// The TakeExposure node's path (the Apply target).
   final NodePath path;
@@ -58,6 +110,11 @@ class OptimalSubAdvisor extends ConsumerStatefulWidget {
   /// The filter in effect for this exposure (see [filterNameForExposure]);
   /// null → the daemon's broadband default (flagged as assumed).
   final String? filterName;
+
+  /// The target position in effect for this exposure, J2000 decimal DEGREES
+  /// (see [targetPositionForExposure]) — opts into the §3.1 star-detectability
+  /// figures. Null → the pure Glover window, exactly as before.
+  final ({double raDeg, double decDeg})? targetPosition;
 
   @override
   ConsumerState<OptimalSubAdvisor> createState() => _OptimalSubAdvisorState();
@@ -83,7 +140,10 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
   @override
   void didUpdateWidget(covariant OptimalSubAdvisor old) {
     super.didUpdateWidget(old);
-    if (old.filterName != widget.filterName) _fetch();
+    if (old.filterName != widget.filterName ||
+        old.targetPosition != widget.targetPosition) {
+      _fetch();
+    }
   }
 
   Future<void> _fetch() async {
@@ -99,7 +159,12 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       _unavailable = null;
     });
     try {
-      final result = await api.get(filter: widget.filterName);
+      final result = await api.get(
+        filter: widget.filterName,
+        // Already DEGREES (targetPositionForExposure converts NINA's RA hours).
+        raDeg: widget.targetPosition?.raDeg,
+        decDeg: widget.targetPosition?.decDeg,
+      );
       if (!mounted || seq != _fetchSeq) return; // superseded — drop the stale response
       setState(() {
         _result = result;
@@ -185,11 +250,15 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       ]);
     } else if (_result case final r?) {
       final saturationLimited = !r.viable;
+      final starLimited = r.limitingBound == 'starfloor';
       final headline = saturationLimited
           ? 'Saturation-limited: ${_fmt(r.recommendedSec)} max '
               '(the sky fills the well before read noise is swamped)'
-          : 'Optimal Sub: ${_fmt(r.recommendedSec)}'
-              '  (usable window ${_fmt(r.floorSec)} – ${_fmt(r.ceilingSec)})';
+          : starLimited
+              ? 'Optimal Sub: ${_fmt(r.recommendedSec)}  (star-limited — '
+                  'read-noise floor ${_fmt(r.floorSec)}, ceiling ${_fmt(r.ceilingSec)})'
+              : 'Optimal Sub: ${_fmt(r.recommendedSec)}'
+                  '  (usable window ${_fmt(r.floorSec)} – ${_fmt(r.ceilingSec)})';
       final assumed = r.assumedDefaults ?? const [];
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +268,9 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
               child: Text(
                 headline,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: saturationLimited ? AraColors.accentBusy : AraColors.textPrimary,
+                  color: saturationLimited || starLimited
+                      ? AraColors.accentBusy
+                      : AraColors.textPrimary,
                 ),
               ),
             ),
@@ -211,6 +282,10 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
           ]),
           if (widget.filterName != null)
             Text('For filter "${widget.filterName}"', style: dim),
+          // §3.1 — the daemon's ready-made star-detectability line (predicted
+          // stars/sub, thin-field warning, or the set-up-your-sensor hint).
+          if (r.starReason case final starReason?)
+            Text(starReason, style: dim),
           if (assumed.isNotEmpty)
             Text(
               'Using generic defaults for ${assumed.map(_assumedLabel).join(", ")} — '
