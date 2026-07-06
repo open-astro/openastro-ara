@@ -343,12 +343,20 @@ public sealed record GuiderDto(
     EquipmentConnectionState State,
     GuiderStateDto Runtime);
 
+/// <summary>Guider runtime snapshot. <c>RmsTotal/Ra/Dec</c> are raw PIXELS over the recent
+/// guide-step window; the <c>*Arcsec</c> twins are the same figures scaled by the guider's
+/// reported pixel scale (the unit guiding accuracy is conventionally quoted in) — null whenever
+/// the pixel RMS is null or the guider hasn't reported a positive pixel scale yet (§63 guider-a
+/// follow-up: "also expose arcsec via PixelScale").</summary>
 public sealed record GuiderStateDto(
     string State,    // "stopped" | "calibrating" | "guiding" | "paused" | "star_lost" | "dithering"
     double? RmsTotal,
     double? RmsRa,
     double? RmsDec,
-    string? CurrentProfile);
+    string? CurrentProfile,
+    double? RmsTotalArcsec = null,
+    double? RmsRaArcsec = null,
+    double? RmsDecArcsec = null);
 
 public sealed record GuiderConnectRequestDto(string Host = "localhost", int Port = 4400);
 
