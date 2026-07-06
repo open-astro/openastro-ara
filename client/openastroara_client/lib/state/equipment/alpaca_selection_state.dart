@@ -24,5 +24,8 @@ class AlpacaSelectionNotifier
   DiscoveredDevice? selectedFor(EquipmentDeviceType type) => state[type];
 }
 
-final alpacaSelectionProvider = NotifierProvider<AlpacaSelectionNotifier,
-    Map<EquipmentDeviceType, DiscoveredDevice>>(AlpacaSelectionNotifier.new);
+final alpacaSelectionProvider =
+    NotifierProvider<
+      AlpacaSelectionNotifier,
+      Map<EquipmentDeviceType, DiscoveredDevice>
+    >(AlpacaSelectionNotifier.new);

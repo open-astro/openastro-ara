@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/camera_status.dart';
+import '../settings/equipment_connection_state.dart';
 import '../../models/server.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
@@ -11,20 +12,26 @@ import 'equipment_device_state.dart';
 /// reads the same endpoint only for the Optics-tab sensor geometry.)
 final cameraStatusApiFactoryProvider =
     Provider<EquipmentDeviceClient<CameraStatus> Function(AraServer)>(
-  (ref) => (server) => EquipmentDeviceApi<CameraStatus>(
-        server,
-        path: 'camera',
-        fromJson: CameraStatus.fromJson,
-      ),
-);
+      (ref) =>
+          (server) => EquipmentDeviceApi<CameraStatus>(
+            server,
+            path: 'camera',
+            fromJson: CameraStatus.fromJson,
+          ),
+    );
 
 /// Camera client bound to the **active** server, or `null` when none is saved.
-final cameraStatusApiProvider =
-    Provider<EquipmentDeviceClient<CameraStatus>?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+final cameraStatusApiProvider = Provider<EquipmentDeviceClient<CameraStatus>?>((
+  ref,
+) {
+  final server = ref.watch(
+    savedServersProvider.select(
+      (async) => async.maybeWhen(
         data: (list) => list.isEmpty ? null : list.last,
         orElse: () => null,
-      )));
+      ),
+    ),
+  );
   if (server == null) return null;
   final api = ref.watch(cameraStatusApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -36,6 +43,9 @@ final cameraStatusApiProvider =
 /// generic core.
 class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
   @override
+  EquipmentDeviceType get deviceType => EquipmentDeviceType.camera;
+
+  @override
   EquipmentDeviceClient<CameraStatus>? watchClient() =>
       ref.watch(cameraStatusApiProvider);
 
@@ -45,12 +55,15 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
 
   /// Turn the cooler on/off and, when on, set the target CCD temperature (°C).
   Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) =>
-      performAction((api) => api.command('cooler', {
-            'enabled': enabled,
-            'target_temperature_c': targetTemperatureC,
-          }));
+      performAction(
+        (api) => api.command('cooler', {
+          'enabled': enabled,
+          'target_temperature_c': targetTemperatureC,
+        }),
+      );
 }
 
 final cameraStatusProvider =
     AsyncNotifierProvider<CameraStatusNotifier, CameraStatus?>(
-        CameraStatusNotifier.new);
+      CameraStatusNotifier.new,
+    );

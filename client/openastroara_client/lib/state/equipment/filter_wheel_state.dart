@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
+import '../settings/equipment_connection_state.dart';
 import '../../models/server.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
@@ -10,30 +11,38 @@ import 'equipment_device_state.dart';
 /// in tests so a pure fake can be injected.
 final filterWheelApiFactoryProvider =
     Provider<EquipmentDeviceClient<FilterWheelStatus> Function(AraServer)>(
-  (ref) => (server) => EquipmentDeviceApi<FilterWheelStatus>(
-        server,
-        path: 'filterwheel',
-        fromJson: FilterWheelStatus.fromJson,
-      ),
-);
+      (ref) =>
+          (server) => EquipmentDeviceApi<FilterWheelStatus>(
+            server,
+            path: 'filterwheel',
+            fromJson: FilterWheelStatus.fromJson,
+          ),
+    );
 
 /// FilterWheel client bound to the **active** server, or `null` when none saved.
 final filterWheelApiProvider =
     Provider<EquipmentDeviceClient<FilterWheelStatus>?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
-  if (server == null) return null;
-  final api = ref.watch(filterWheelApiFactoryProvider)(server);
-  ref.onDispose(api.close);
-  return api;
-});
+      final server = ref.watch(
+        savedServersProvider.select(
+          (async) => async.maybeWhen(
+            data: (list) => list.isEmpty ? null : list.last,
+            orElse: () => null,
+          ),
+        ),
+      );
+      if (server == null) return null;
+      final api = ref.watch(filterWheelApiFactoryProvider)(server);
+      ref.onDispose(api.close);
+      return api;
+    });
 
 /// Live filter-wheel status for the active server (or `null` when none is
 /// connected), plus a [changeFilter] control. Connect/disconnect + the
 /// liveness/busy poll come from the generic core.
 class FilterWheelNotifier extends EquipmentDeviceNotifier<FilterWheelStatus> {
+  @override
+  EquipmentDeviceType get deviceType => EquipmentDeviceType.filterWheel;
+
   @override
   EquipmentDeviceClient<FilterWheelStatus>? watchClient() =>
       ref.watch(filterWheelApiProvider);
@@ -50,4 +59,5 @@ class FilterWheelNotifier extends EquipmentDeviceNotifier<FilterWheelStatus> {
 
 final filterWheelProvider =
     AsyncNotifierProvider<FilterWheelNotifier, FilterWheelStatus?>(
-        FilterWheelNotifier.new);
+      FilterWheelNotifier.new,
+    );

@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/discovered_device.dart';
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart';
+import '../settings/equipment_connection_state.dart';
+import '../ws/ws_providers.dart';
 
 /// Shared connect / disconnect / refresh / settle engine for the single-instance
 /// equipment devices (everything except the multi-instance Switch). A subclass
@@ -60,6 +62,10 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// subscribe, or an action would re-trigger build()).
   EquipmentDeviceClient<T>? readClient();
 
+  /// Which device the daemon's §60.9 `equipment.*` events must match for this
+  /// notifier to react (the events carry the lowercase `device_type` token).
+  EquipmentDeviceType get deviceType;
+
   @override
   Future<T?> build() async {
     // Reset the in-flight guards on a server change: a stale guard from the old
@@ -84,6 +90,20 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     ref.onCancel(_cancelLive);
     ref.onResume(() {
       if (ref.mounted) refresh();
+    });
+    // §60.9 push — an equipment.state_changed for THIS device type triggers an
+    // immediate re-read instead of waiting out the next poll tick. Only the
+    // state_changed event is watched (the connected/disconnected/failed aliases
+    // duplicate the same transition and would double the refresh). The full
+    // status still comes from REST — the event only says the state machine
+    // moved — and both polls stay as fallback for daemons predating the events.
+    ref.listen(wsEventsProvider, (previous, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'equipment.state_changed') return;
+      final eventType = DiscoveredDevice.tryParseDeviceType(
+        event.payload['device_type'],
+      );
+      if (eventType == deviceType) refresh();
     });
     final api = watchClient();
     if (api == null) return null;
@@ -120,9 +140,9 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// for actions that begin a `connecting` transition (i.e. connect itself).
   @protected
   Future<bool> performAction(
-          Future<void> Function(EquipmentDeviceClient<T> api) action,
-          {bool pollAfter = false}) =>
-      _act(action, pollAfter: pollAfter);
+    Future<void> Function(EquipmentDeviceClient<T> api) action, {
+    bool pollAfter = false,
+  }) => _act(action, pollAfter: pollAfter);
 
   // Run a 202-Accepted action then re-read against the SAME client (a mid-action
   // server switch must not redirect the follow-up read). A failed action is
@@ -133,8 +153,9 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // that first re-read can't leave the device un-polled — the poll reads it to
   // settlement on its own.
   Future<bool> _act(
-      Future<void> Function(EquipmentDeviceClient<T> api) action,
-      {bool pollAfter = false}) async {
+    Future<void> Function(EquipmentDeviceClient<T> api) action, {
+    bool pollAfter = false,
+  }) async {
     if (_acting) return false;
     final api = readClient();
     if (api == null) return false;
