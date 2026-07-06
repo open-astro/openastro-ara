@@ -380,10 +380,11 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         if (safety is not { FlipSafetyEnabled: true }) {
             var result = await centeringService.CenterOnTarget(target, null, progress, token);
             if (result == null || !result.Success) {
-                // Warning, not Error: without the safety layers re-centering stays best-effort and
-                // does not halt the flip (same severity as the best-effort dome sync). §58.7 still
-                // surfaces it — the night continues on an unverified pointing, which the user
-                // should hear about before the morning's subs turn out framed on nothing.
+                // LOG at Warning (not Logger.Error): without the safety layers re-centering stays
+                // best-effort and does not halt the flip (same log severity as the best-effort
+                // dome sync). The §58.7 NOTIFICATION is deliberately a notch higher (Error): the
+                // night continues on an unverified pointing, which the user should hear about
+                // before the morning's subs turn out framed on nothing.
                 Logger.Warning("Meridian Flip - Re-center after the flip failed. Continuing without it.");
                 await Notify(NotificationSeverity.Error, "Post-flip re-center failed",
                     "The plate-solve re-center after the meridian flip failed; imaging continues on an "
