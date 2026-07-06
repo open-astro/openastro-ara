@@ -40,6 +40,15 @@ public static class SequenceEndpoints {
             statusCode: StatusCodes.Status501NotImplemented,
             detail: $"{endpoint} is part of Phase 7's incremental implementation ({section}). Stub registered so the OpenAPI surface is stable; service wiring lands per area.");
 
+    /// <summary>§38 — a live executor owns this sequence's file; mutations are
+    /// refused until the run reaches a terminal state (stop/abort it first).</summary>
+    private static IResult RunActiveProblem(Guid id, string verb) =>
+        Results.Problem(
+            type: "https://openastro.net/errors/sequence-run-active",
+            title: "Sequence has an active run",
+            statusCode: StatusCodes.Status409Conflict,
+            detail: $"Sequence {id} cannot be {verb} while its run is active. Stop or abort the run first.");
+
     public static IEndpointRouteBuilder MapSequenceEndpoints(this IEndpointRouteBuilder app) {
         var seq = app.MapGroup("/api/v1/sequences").WithTags("Sequences");
 
@@ -90,22 +99,27 @@ public static class SequenceEndpoints {
                         var (valid, reason) = SequenceSchemaValidator.Validate(request.Body.Value);
                         if (!valid) return Results.UnprocessableEntity(new { error = reason });
                     }
-                    var dto = await svc.UpdateAsync(id, request, ct);
-                    return dto is null ? Results.NotFound() : Results.Ok(dto);
+                    var result = await svc.UpdateAsync(id, request, ct);
+                    if (result.RunActive) return RunActiveProblem(id, "updated");
+                    return result.Sequence is null ? Results.NotFound() : Results.Ok(result.Sequence);
                 })
            .Accepts<SequenceUpdateRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status409Conflict)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("UpdateSequence");
 
         seq.MapDelete("/{id:guid}",
-                async (Guid id, ISequenceService svc, CancellationToken ct) => {
-                    var ok = await svc.DeleteAsync(id, ct);
-                    return ok ? Results.NoContent() : Results.NotFound();
-                })
+                async (Guid id, ISequenceService svc, CancellationToken ct) =>
+                    await svc.DeleteAsync(id, ct) switch {
+                        SequenceDeleteResult.Deleted => Results.NoContent(),
+                        SequenceDeleteResult.RunActive => RunActiveProblem(id, "deleted"),
+                        _ => Results.NotFound(),
+                    })
            .Produces(StatusCodes.Status204NoContent)
            .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("DeleteSequence");
 
         // Phase 13.13 — Lifecycle wired to ISequencerService.
