@@ -48,6 +48,55 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Connection_lifecycle_publishes_the_equipment_events() {
+            // §60.9 — SetState is the choke point: Connecting → (Error on the
+            // unreachable device) → Disconnected each publish, with the notable
+            // states also emitting their alias event; a same-state re-set does not.
+            var broadcaster = new RecordingWsBroadcaster();
+            using var svc = new TelescopeService(
+                events: new EquipmentEventPublisher(broadcaster));
+            var dead = new DiscoveredDeviceDto(
+                "uid-evt", "Unreachable Mount", DeviceType.Telescope, "127.0.0.1", "127.0.0.1", 1, 0, false);
+
+            await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
+            Assert.That(broadcaster.Snapshot(), Is.EqualTo(ConnectingOnly),
+                "Connecting has no alias event");
+
+            await PollUntilNotConnectingAsync(svc);
+            Assert.That(broadcaster.Snapshot(), Is.EqualTo(ThroughError),
+                "the unreachable device ends in Error + its alias");
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            var afterDisconnect = broadcaster.Snapshot();
+            Assert.That(afterDisconnect, Is.EqualTo(ThroughDisconnect));
+
+            // Dedupe guard: a second disconnect is a same-state re-set → silent.
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            Assert.That(broadcaster.Snapshot(), Is.EqualTo(afterDisconnect));
+        }
+
+        private static readonly string[] ConnectingOnly = { "equipment.state_changed" };
+        private static readonly string[] ThroughError = {
+            "equipment.state_changed",
+            "equipment.state_changed", "equipment.connection_failed",
+        };
+        private static readonly string[] ThroughDisconnect = {
+            "equipment.state_changed",
+            "equipment.state_changed", "equipment.connection_failed",
+            "equipment.state_changed", "equipment.disconnected",
+        };
+
+        private sealed class RecordingWsBroadcaster : IWsBroadcaster {
+            private readonly System.Collections.Generic.List<string> _events = new();
+            public long CurrentSequence => _events.Count;
+            public string[] Snapshot() { lock (_events) { return _events.ToArray(); } }
+            public Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct) {
+                lock (_events) { _events.Add(eventType); }
+                return Task.CompletedTask;
+            }
+        }
+
+        [Test]
         public async Task DisconnectAsync_after_a_failed_connect_returns_to_Disconnected() {
             using var svc = new TelescopeService();
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.Telescope, "127.0.0.1", "127.0.0.1", 1, 0, false);

@@ -56,6 +56,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private static readonly CameraStateDto IdleRuntime = new("idle", null, null, false, null);
 
     private readonly ILogger<CameraService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private readonly IFrameRepository? _frames;
@@ -81,8 +82,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         IFrameRepository? frames = null,
         IProfileStore? profileStore = null,
         string? fallbackFramesDir = null,
-        IFocuserMediator? focuser = null) {
+        IFocuserMediator? focuser = null,
+        EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
+        _events = events;
         _frames = frames;
         _profileStore = profileStore;
         _fallbackFramesDir = fallbackFramesDir;
@@ -1047,7 +1050,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     // Caller must hold _gate.
     private void SetState(EquipmentConnectionState state) {
+        if (_state == state) {
+            return;
+        }
         _state = state;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.Camera, _device?.UniqueId, _device?.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

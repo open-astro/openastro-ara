@@ -61,6 +61,7 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         new(null, null, null, null, null, null, null, null, null);
 
     private readonly ILogger<ObservingConditionsService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaObservingConditions? _client;
@@ -73,8 +74,9 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     private long _connectGeneration;
     private bool _disposed;
 
-    public ObservingConditionsService(ILogger<ObservingConditionsService>? logger = null) {
+    public ObservingConditionsService(ILogger<ObservingConditionsService>? logger = null, EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<ObservingConditionsService>.Instance;
+        _events = events;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -302,8 +304,14 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
+        if (_state == state) {
+            return;
+        }
         _state = state;
         _lastTransition = DateTimeOffset.UtcNow;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.ObservingConditions, _device?.UniqueId, _device?.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

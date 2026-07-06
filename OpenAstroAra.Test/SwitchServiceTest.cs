@@ -97,6 +97,37 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Slot_replacement_publishes_the_superseded_devices_teardown() {
+            // §60.9 — a WS subscriber tracking state deltas must see the displaced
+            // device go away (equipment.disconnected for uid-A) before the
+            // replacement starts connecting, not a silent vanish.
+            var events = new System.Collections.Generic.List<(string Type, string? DeviceId)>();
+            var broadcaster = new Moq.Mock<IWsBroadcaster>();
+            broadcaster
+                .Setup(b => b.PublishAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<System.Text.Json.JsonElement>(), Moq.It.IsAny<CancellationToken>()))
+                .Returns<string, System.Text.Json.JsonElement, CancellationToken>((type, payload, _) => {
+                    lock (events) {
+                        events.Add((type, payload.GetProperty("device_id").GetString()));
+                    }
+                    return Task.CompletedTask;
+                });
+            using var svc = new SwitchService(events: new EquipmentEventPublisher(broadcaster.Object));
+
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-A", 0)), null, CancellationToken.None);
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-B", 0)), null, CancellationToken.None);
+            await PollUntilNotConnectingAsync(svc, 0);
+
+            (string, string?)[] snapshot;
+            lock (events) { snapshot = events.ToArray(); }
+            Assert.That(snapshot, Does.Contain(("equipment.disconnected", "uid-A")),
+                "the superseded connection's teardown must be visible on the stream");
+            var aGone = System.Array.IndexOf(snapshot, ("equipment.disconnected", "uid-A"));
+            var bConnecting = System.Array.FindIndex(snapshot,
+                e => e is ("equipment.state_changed", "uid-B"));
+            Assert.That(aGone, Is.LessThan(bConnecting), "teardown precedes the replacement's Connecting");
+        }
+
+        [Test]
         public async Task DisconnectAsync_after_a_failed_connect_returns_to_Disconnected() {
             using var svc = new SwitchService();
             await svc.ConnectAsync(new ConnectRequestDto(Dead("uid", 0)), null, CancellationToken.None);

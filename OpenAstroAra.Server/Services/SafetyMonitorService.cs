@@ -54,6 +54,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
     private readonly ILogger<SafetyMonitorService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaSafetyMonitor? _client;
@@ -71,8 +72,9 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     private long _connectGeneration;
     private bool _disposed;
 
-    public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null) {
+    public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null, EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<SafetyMonitorService>.Instance;
+        _events = events;
         // The refresh loop runs for the service lifetime; each tick is a no-op unless Connected.
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
@@ -325,8 +327,14 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
+        if (_state == state) {
+            return;
+        }
         _state = state;
         _lastTransition = DateTimeOffset.UtcNow;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.SafetyMonitor, _device?.UniqueId, _device?.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

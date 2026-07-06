@@ -51,6 +51,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
     private readonly ILogger<SwitchService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     // Connected (and recently-disconnected) switches keyed by AlpacaDeviceNumber. Mutated only under
@@ -75,8 +76,9 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         public int DeviceNumber => Device.AlpacaDeviceNumber;
     }
 
-    public SwitchService(ILogger<SwitchService>? logger = null) {
+    public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<SwitchService>.Instance;
+        _events = events;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -133,6 +135,10 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                     // switch per number, so the new device takes the slot. Logged so it isn't silent.
                     LogSwitchNumberCollision(device.AlpacaDeviceNumber, existing.Device.Name, device.Name);
                 }
+                // §60.9 — surface the superseded connection's teardown before the
+                // replacement's Connecting, so a WS subscriber tracking state deltas
+                // sees the old device go away instead of it silently vanishing.
+                SetState(existing, EquipmentConnectionState.Disconnected);
                 DisposeClientLocked(existing);
             }
             conn = new SwitchConnection { Device = device };
@@ -387,9 +393,16 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     }
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
-    private static void SetState(SwitchConnection conn, EquipmentConnectionState state) {
+    // Instance (not static) since §60.9: transitions publish equipment.* events.
+    private void SetState(SwitchConnection conn, EquipmentConnectionState state) {
+        if (conn.State == state) {
+            return;
+        }
         conn.State = state;
         conn.LastTransition = DateTimeOffset.UtcNow;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

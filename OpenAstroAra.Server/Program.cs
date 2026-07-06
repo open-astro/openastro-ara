@@ -189,6 +189,11 @@ public partial class Program {
         // types (§52). All Gets return null → 404; Connects/Disconnects/
         // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
         // land per-device in the real-infra phase + Phase 14.
+        // §60.9 — the equipment.* connection events (state_changed + the
+        // connected/disconnected/connection_failed aliases). Every device
+        // service below takes this via its optional ctor param and publishes
+        // from its SetState choke point.
+        builder.Services.AddSingleton<EquipmentEventPublisher>();
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
@@ -405,7 +410,11 @@ public partial class Program {
                 fallbackFramesDir: System.IO.Path.Combine(profileDir, "frames"),
                 // §38: snapshot the connected focuser's position at capture so the
                 // FITS FOCUSPOS header + catalog column feed the §50.4 view.
-                focuser: sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>()));
+                focuser: sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(),
+                // §60.9 — explicit here because this factory lambda bypasses the
+                // constructor activation that injects the optional param for the
+                // other device services. Forgetting it silences camera events.
+                events: sp.GetRequiredService<EquipmentEventPublisher>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).

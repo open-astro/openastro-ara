@@ -40,6 +40,7 @@ public sealed partial class DomeService : IDomeService, IDisposable {
     private static readonly DomeStateDto IdleRuntime = new("idle", null, false, false, false);
 
     private readonly ILogger<DomeService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaDome? _client;
@@ -56,8 +57,9 @@ public sealed partial class DomeService : IDomeService, IDisposable {
     private long _connectGeneration;
     private bool _disposed;
 
-    public DomeService(ILogger<DomeService>? logger = null) {
+    public DomeService(ILogger<DomeService>? logger = null, EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<DomeService>.Instance;
+        _events = events;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -363,7 +365,13 @@ public sealed partial class DomeService : IDomeService, IDisposable {
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
+        if (_state == state) {
+            return;
+        }
         _state = state;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.Dome, _device?.UniqueId, _device?.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

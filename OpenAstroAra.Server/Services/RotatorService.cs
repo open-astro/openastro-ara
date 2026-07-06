@@ -38,6 +38,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     private static readonly RotatorStateDto IdleRuntime = new("idle", null, null, false);
 
     private readonly ILogger<RotatorService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaRotator? _client;
@@ -49,8 +50,9 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     private long _connectGeneration;
     private bool _disposed;
 
-    public RotatorService(ILogger<RotatorService>? logger = null) {
+    public RotatorService(ILogger<RotatorService>? logger = null, EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<RotatorService>.Instance;
+        _events = events;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -359,7 +361,13 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
+        if (_state == state) {
+            return;
+        }
         _state = state;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.Rotator, _device?.UniqueId, _device?.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
