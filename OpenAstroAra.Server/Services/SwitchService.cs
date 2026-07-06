@@ -135,6 +135,10 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                     // switch per number, so the new device takes the slot. Logged so it isn't silent.
                     LogSwitchNumberCollision(device.AlpacaDeviceNumber, existing.Device.Name, device.Name);
                 }
+                // §60.9 — surface the superseded connection's teardown before the
+                // replacement's Connecting, so a WS subscriber tracking state deltas
+                // sees the old device go away instead of it silently vanishing.
+                SetState(existing, EquipmentConnectionState.Disconnected);
                 DisposeClientLocked(existing);
             }
             conn = new SwitchConnection { Device = device };

@@ -410,7 +410,11 @@ public partial class Program {
                 fallbackFramesDir: System.IO.Path.Combine(profileDir, "frames"),
                 // §38: snapshot the connected focuser's position at capture so the
                 // FITS FOCUSPOS header + catalog column feed the §50.4 view.
-                focuser: sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>()));
+                focuser: sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(),
+                // §60.9 — explicit here because this factory lambda bypasses the
+                // constructor activation that injects the optional param for the
+                // other device services. Forgetting it silences camera events.
+                events: sp.GetRequiredService<EquipmentEventPublisher>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
