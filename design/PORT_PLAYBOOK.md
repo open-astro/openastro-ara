@@ -30,7 +30,7 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 
 ## Port completion status — v0.0.1 section checklist
 
-**Maintained going forward; cross-reference `design/PORT_PROGRESS.md` Completed section for per-PR detail.** Updated 2026-06-11 (after #356).
+**Maintained going forward; cross-reference `design/PORT_PROGRESS.md` Completed section for per-PR detail.** Updated 2026-07-06 (after #706).
 
 Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where status needs confirming) · ⬜ pending / placeholder service · 🚫 deferred to v0.1.0 (§55) · ⚙️ agent operating rule, not a shippable feature.
 
@@ -41,43 +41,43 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - ✅ **§9** Phase 5 API contract (`openapi.yaml`) · ✅ **§10** Phases 6-9 endpoints (141 routes) · ✅ **§11** Phase 10 smoke test.
 - ✅ **§12** Phases 11-13 Flutter client (shell, 7 tabs, wizard, settings; mobile → §41/v0.1.0).
 - 🟡 **§13** RPi deployment — DEPLOY.md + .deb-in-CI done; actual Pi install + smoke = **physical-blocked** (PORT_TODO).
-- 🟡 **§14** Testing — 14a-d + 14e sim pinning (#321) done; ~750 unit tests; integration tests gated on sims/hardware.
+- 🟡 **§14** Testing — 14a-d + 14e sim pinning (#321) done; ~1,590 server + ~1,340 client tests; integration tests gated on sims/hardware.
 - ✅ **§15** Build + verification gate (analyzer gate warnings=errors + CI smoke gate) · ✅ **§17** Fork hygiene / MPL headers / NOTICE.md.
 - 🚫 **§21** Localization — en-only for v0.0.1 (non-English stripped 0.5e/f); i18n is v0.1.0.
 - ✅ **§23** Quick reference (+ §23.1 macOS dev-run) · ✅ **§25** Visual design — NINA UX cloned (placeholder icons).
 - 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 in-memory render **fully un-stubbed (#354–#358):** RenderBitmapSource/RenderImage, GetThumbnail, ReRender, Stretch, full-res Debayer, **DetectStars/UpdateAnalysis (from-scratch `StarDetector` — median+MAD threshold → blobs → flux-weighted centroid + HFR, no OpenCvSharp4)**. Only **libraw RAW decode** still pending (PORT_TODO).
-- ⬜ **§27** Single-client connection policy — close-code 4004 takeover deferred (§60.9 notes).
+- ✅ **§27** Single-client connection policy — connect handshake + idempotent re-claim + 4004 takeover, server #705 + WILMA client #706 (2026-07-06): `ClientSessionService` slot with 30s modal / 60s dead-holder sweep, WS client→server half (X-Ara-Session bind, app-level ping/pong, connection.request/response), takeover + session-transferred modals.
 - ✅ **§28** Sequence durability + crash recovery (SQLite catalog + §28.2/.7/.8).
-- 🟡 **§29** Storage / disk-space policy — storage settings + save-dir resolution done; active disk-space mgmt = verify.
+- ✅ **§29** Storage / disk-space policy — storage settings + save-dir resolution + `DiskSpaceMonitor` (warn/critical levels, hard-stop abort → diagnostic → notification) + the §29 pre-capture critical-block gate (#702).
 - ✅ **§30** First-run + launch flow (`phase-11-complete`, mDNS + handshake).
 - 🟡 **§31** Time + location sync — site settings round-trip done; full waterfall = verify.
 - ✅ **§32** Network resilience (§60.9 WS resume + 30/60s heartbeat, #172-176).
 - 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates = v0.1.0.
 - 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); apt.openastro.net = post-v0.0.1.
 - ✅ **§35** Safety policies (editable per-profile, #94).
-- 🚫 **§36** Sky imagery + Data Manager — `PlaceholderDataManagerService`; v0.1.0.
+- ✅ **§36** Sky imagery + Data Manager — real Data Manager (packages, downloads, catalog reads) + §36 planetarium native-webview (#611) + catalog overlay drawer/persistence/labels (#639/#640/#650) + §36.8 Tonight's Sky planner (#612-#660). Sharpless/Herschel overlays remain data-blocked.
 - ✅ **§37** Profile setup wizard (18-screen + round-trip persistence).
 - ✅ **§38** Sequence format + NINA import + real execution engine (#319-320).
-- 🟡 **§39** Calibration + auto-flats — `Placeholder{Calibration,DarkLibrary,AutoFlats}Service`; sequencer-driven frame types partial; dark-library = guider-e-4.
+- ✅ **§39** Calibration + dark library — full epic #670-#688 (2026-07-02): widened schema, flats/darks as generated sequences, calibration screen + library + bulk ops + Resume Target + stats CSV + previews + live `frame.complete` refresh.
 - ✅ **§40** Captured-image library (list/preview/thumbnail/download, bulk ops, hfr-analysis).
 - 🚫 **§41** Mobile companion — iOS/Android deferred (§18.G), v0.1.0.
 - 🟡 **§42** Hardware fault recovery — guider-d crash-recovery (#351) done; per-equipment §42.2 fault flow partial.
-- 🚫 **§43** Backup + restore · 🚫 **§44** Real-time backup stream — `PlaceholderBackup*Service`; v0.1.0.
-- ⬜ **§45** Polar alignment — `PlaceholderPolarAlignService`; drives the guider's polar-align API (pending).
+- ✅ **§43** Backup + restore — real `BackupService` (zip snapshots, §43-2 validated restore with atomic swap, snapshot download). · 🚫 **§44** Real-time backup stream — `PlaceholderBackupStreamService`; v0.1.0.
+- 🟡 **§45** Polar alignment — phase 1 landed (#703): `PolarAlignGeometry` two-point RA-axis fit (nearest-pole disambiguation + 30° refusal guard, Bennett refraction, alt/az error split) + the guider-fork RPC classes (capture_single_frame / centroids / pa_session). Phases 2+ (daemon FITS spike, live flow) need the guider daemon running; `PlaceholderPolarAlignService` still registered until then.
 - ✅ **§46** Notifications (SQLite, #201/203).
 - 🚫 **§47** Mosaic imaging — `PlaceholderMosaicService`; v0.1.0.
-- 🟡 **§48** Auto-flats + dark library — placeholders; real impl = guider-e-4 + sequencer.
+- 🟡 **§48** Auto-flats + dark library — dark library + matching-flats generation shipped inside the §39 epic (flats/darks as generated sequences); the dedicated `IAutoFlatsService` remains a thin stub superseded by that design (end-of-session auto-flats prompt flow = the remaining sliver).
 - ✅ **§49** API doc serving (Scalar UI) · ✅ **§50** Session analytics + Stats (SQLite, 8 views) · ✅ **§51** Real-time diagnostics (SQLite).
 - ✅ **§52** Mount Alpaca-only (AlpacaTelescope + sequencer mediator).
 - 🟡 **§53** Accessibility — baseline; full WCAG audit = ongoing.
-- 🚫 **§54** Bug report submission — `PlaceholderBugReportService`; v0.1.0.
+- ✅ **§54** Bug report + push channels — real `IBugReportService` (logs + profile + system-info bundle, §70-stripped) and Pushover/Telegram push forwarding of Warning+ notifications (#704).
 - ✅ **§56** Migrating from NINA (`.json` import).
 - 🟡 **§57** Stop Mount + slew safety — telescope abort/park done; full slew-safety policy = verify.
-- 🟡 **§58** Meridian flip — decision-logic trigger (#362) + the real §58.4 orchestration executor (#366, replacing the throwing placeholder + wiring the trigger into the sequencer factory) + the side-of-pier projection test matrix all landed; **functionally complete for the attended/auto flip, and the §58.9 four-layer unattended safety landed 2026-07-01** (#629 Layers 1+2: pre-flip flight check + in-slew watchdog; Layers 3+4 PR: hard post-flip plate-solve verification gate ±2° + park-on-failure safe rest; profile toggle `flip_safety_enabled` default ON + `expected_flip_slew_seconds`). Remaining: §58.7 notifications, §58.8 first-flip confirm, §58.10–12 (severity escalation / unattended-shutdown countdown), and refocus-after-flip (focuser-gated) — deferred → PORT_TODO. · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; remaining: the live focuser V-curve sweep + AF-sequence wiring (focuser-gated physical blocker), and Smart Focus (§59.2-4, likely v0.1.0).
+- 🟡 **§58** Meridian flip — decision-logic trigger (#362) + the real §58.4 orchestration executor (#366, replacing the throwing placeholder + wiring the trigger into the sequencer factory) + the side-of-pier projection test matrix all landed; **functionally complete for the attended/auto flip, and the §58.9 four-layer unattended safety landed 2026-07-01** (#629 Layers 1+2: pre-flip flight check + in-slew watchdog; Layers 3+4 PR: hard post-flip plate-solve verification gate ±2° + park-on-failure safe rest; profile toggle `flip_safety_enabled` default ON + `expected_flip_slew_seconds`). §58.7 flip notifications, §58.8 first-flip confirm (+ daemon-owned rearm #701), and §58.10 dark-hours severity escalation (#700) landed 2026-07-05/06; remaining: §58.12 unattended-shutdown countdown (needs a sequencer paused_awaiting_user state — engine halts, doesn't pause) and refocus-after-flip (focuser-gated) — PORT_TODO. · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; remaining: the live focuser V-curve sweep + AF-sequence wiring (focuser-gated physical blocker), and Smart Focus (§59.2-4, likely v0.1.0).
 - ✅ **§60** API conventions (pagination, Idempotency-Key, RFC7807, 202-Accepted, WS envelope).
 - ✅ **§61** Smart settings search (⌘K, #110-123) · ✅ **§62** Dither policy.
-- 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) + e-2 §63.5 profile push (#371/#372/#373) + e-3 §63.4 profile-name mapping (#375 RPC classes + slug helper; e-3b connect select-or-create wiring) done; e-3c collision-disambiguation/length-cap + e-4 dark-library + §63.3 active-poll pending.
-- ⬜ **§64** Live View / Loop — §2105-gated; v0.1.0 scope.
+- 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) + e-2 §63.5 profile push (#371/#372/#373) + e-3 §63.4 profile-name mapping (#375 RPC classes + slug helper; e-3b connect select-or-create wiring) done; e-3c length-cap CLOSED 2026-07-06 (the fork stores profile names as wxConfig VALUES — no cap exists; collision disambiguation unnecessary); e-4 dark-library superseded by the §39 daemon-side library; §63.3 active-poll pending.
+- ✅ **§64** Live View / Loop — camera `/liveview/start|stop` + status DTOs + drain-on-stop semantics shipped (was stale-listed as gated; verified against code 2026-07-05).
 - ✅ **§65** Image stretching + preview API (7 algorithms, variant cache, OSC colour #349; AutoStf bug fixed #354).
 - ✅ **§66** Server concurrency model · ✅ **§67** Security model (trusted-LAN no-auth; remote = v0.1.0).
 - 🟡 **§68** AlpacaBridge integration — Alpaca discovery/connect/drive done; full bridge contract = verify.
