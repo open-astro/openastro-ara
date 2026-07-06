@@ -284,6 +284,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Reclaim_after_a_committed_allow_is_denied_not_granted() {
+            var svc = NewService();
+            var holderConn = new FakeConnection();
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
+            svc.BindSocket(holder.SessionId, holderConn);
+
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
+            await WaitForFrameAsync(holderConn);
+
+            // The holder's user clicks Allow; the hand-off is now committed even
+            // though the connector's continuation may not have swapped the slot yet.
+            Assert.That(svc.TryCompleteTakeover(RequestIdOf(holderConn), "allow"), Is.True);
+
+            // The holder's client auto-re-claims (its socket dropped right after the
+            // click). Whatever the interleaving with the swap, it must NEVER be told
+            // Granted — the most recent truthful answer is "you gave the slot away".
+            var reclaim = await svc.ConnectAsync("mac.local", holder.SessionId, CancellationToken.None);
+            Assert.That(reclaim.Kind, Is.Not.EqualTo(ConnectOutcomeKind.Granted),
+                "a 200 here would be contradicted moments later by the 4004 kick");
+
+            var outcome = await connectTask;
+            Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
+            Assert.That(svc.GetSession().Hostname, Is.EqualTo("ipad.local"),
+                "the allowed connector ends up holding the slot");
+        }
+
+        [Test]
         public void CapHostname_is_surrogate_pair_safe() {
             Assert.That(ConnectionEndpoints.CapHostname("mac.local"), Is.EqualTo("mac.local"));
 

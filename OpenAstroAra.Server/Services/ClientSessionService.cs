@@ -116,7 +116,17 @@ public sealed partial class ClientSessionService {
         public IWsClientConnection? Socket { get; set; }
     }
 
-    private sealed record PendingTakeover(string RequestId, TaskCompletionSource<string> Tcs);
+    private sealed class PendingTakeover {
+        public required string RequestId { get; init; }
+        public required string RequesterHostname { get; init; }
+        public required TaskCompletionSource<string> Tcs { get; init; }
+
+        /// <summary>The winning answer, recorded under the service lock at the
+        /// moment the TCS resolves — the lock-ordered source of truth for the
+        /// re-claim guard (reading Tcs.Task.Result would trip CA1849 and isn't
+        /// needed).</summary>
+        public string? Answer { get; set; }
+    }
 
     /// <summary>§27.1 connect flow. A matching <paramref name="existingSessionId"/> is
     /// an idempotent re-claim (same session back, no dance — even one the liveness rule
@@ -137,19 +147,33 @@ public sealed partial class ClientSessionService {
         lock (_lock) {
             var now = UtcNow();
             if (existingSessionId is Guid reclaimed && _current is not null && _current.Id == reclaimed) {
+                // If a takeover against this holder was ALREADY answered "allow",
+                // the hand-off is committed — the connector's continuation is about
+                // to swap the slot (TrySetResult below would be a no-op). Re-granting
+                // here would tell this client 200 moments before its socket gets the
+                // 4004 kick: contradictory signals for the "who controls the
+                // telescope" answer. Deny the re-claim instead; the client clears
+                // its cached session and stays a plain event-stream subscriber.
+                if (_pending is not null && string.Equals(_pending.Answer, "allow", StringComparison.Ordinal)) {
+                    return new ConnectOutcome(ConnectOutcomeKind.Rejected, Guid.Empty, now, _pending.RequesterHostname);
+                }
                 _current.LastSeenUtc = now;
                 // Keep /server/session and future connection.request frames
                 // consistent with what this connect's 200 echoes back.
                 _current.Hostname = hostname;
-                // A takeover request pending against this holder can never be
-                // answered now — the connection.request frame went to the socket
-                // that just dropped (that drop is why the holder is re-claiming).
-                // The re-claim itself proves the holder is alive and wants the
-                // slot, so resolve the waiting connector as "reject" immediately
-                // instead of letting it spin down to a misleading unresponsive
-                // timeout. (Mirrors Disconnect, which resolves a pending dance
-                // as "allow" for the symmetric reason.)
-                _pending?.Tcs.TrySetResult("reject");
+                // A takeover request still awaiting an answer can never get one
+                // now — the connection.request frame went to the socket that just
+                // dropped (that drop is why the holder is re-claiming). The
+                // re-claim itself proves the holder is alive and wants the slot,
+                // so resolve the waiting connector as "reject" immediately instead
+                // of letting it spin down to a misleading unresponsive timeout.
+                // (Mirrors Disconnect, which resolves a pending dance as "allow"
+                // for the symmetric reason.) All resolutions happen under this
+                // lock, so the guard above and this reject are totally ordered
+                // with the holder's real answer — exactly one wins.
+                if (_pending is not null && _pending.Tcs.TrySetResult("reject")) {
+                    _pending.Answer = "reject";
+                }
                 return new ConnectOutcome(ConnectOutcomeKind.Granted, _current.Id, _current.ConnectedUtc, null);
             }
             if (_pending is not null) {
@@ -170,7 +194,11 @@ public sealed partial class ClientSessionService {
             }
             holderSocket = _current.Socket;
             holderHostname = _current.Hostname;
-            _pending = new PendingTakeover(requestId, tcs);
+            _pending = new PendingTakeover {
+                RequestId = requestId,
+                RequesterHostname = hostname,
+                Tcs = tcs,
+            };
         }
 
         // Deliver + await OUTSIDE the lock: the send and the modal answer both take
@@ -222,15 +250,18 @@ public sealed partial class ClientSessionService {
     /// owned the slot (now free). A takeover request pending against the released
     /// holder resolves as "allow" — the slot the connector asked for just opened up.</summary>
     public bool Disconnect(Guid sessionId) {
-        PendingTakeover? pending;
         lock (_lock) {
             if (_current is null || _current.Id != sessionId) {
                 return false;
             }
             _current = null;
-            pending = _pending;
+            // Resolved INSIDE the lock so pending-takeover resolution is totally
+            // ordered with the re-claim guard in ConnectAsync (safe: the TCS runs
+            // continuations asynchronously, never inline under this lock).
+            if (_pending is not null && _pending.Tcs.TrySetResult("allow")) {
+                _pending.Answer = "allow";
+            }
         }
-        pending?.Tcs.TrySetResult("allow");
         LogSlotReleased(sessionId);
         return true;
     }
@@ -290,16 +321,24 @@ public sealed partial class ClientSessionService {
     }
 
     /// <summary>Resolves the in-flight takeover with the holder's answer. False when
-    /// no request with that id is pending (stale/duplicate response — ignored).</summary>
+    /// no request with that id is pending (stale/duplicate response — ignored).
+    /// Resolution happens INSIDE the lock so it is totally ordered with the re-claim
+    /// guard in <see cref="ConnectAsync"/>: either the holder's answer lands first
+    /// (and a subsequent re-claim sees the committed "allow" and is denied) or the
+    /// re-claim's "reject" lands first (and this answer is a no-op) — never both
+    /// winning. Safe because the TCS runs continuations asynchronously, never
+    /// inline under this lock.</summary>
     public bool TryCompleteTakeover(string requestId, string action) {
-        PendingTakeover? pending;
         lock (_lock) {
             if (_pending is null || !string.Equals(_pending.RequestId, requestId, StringComparison.Ordinal)) {
                 return false;
             }
-            pending = _pending;
+            if (_pending.Tcs.TrySetResult(action)) {
+                _pending.Answer = action;
+                return true;
+            }
+            return false;
         }
-        return pending.Tcs.TrySetResult(action);
     }
 
     private ConnectOutcome TakeSlotLocked(string hostname, DateTimeOffset now) {
