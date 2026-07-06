@@ -36,6 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Added
+- **§27 — single-client policy in WILMA (client half).** WILMA now claims the control slot on connect (and silently re-claims its own session after a Wi-Fi blip), answers the daemon's takeover requests with an "X wants to connect — Allow / Keep me connected" modal, and treats WebSocket close 4004 as "Session transferred": a modal explains another client took control (the running sequence is unaffected) and reconnecting is an explicit button, never automatic. Denied or unavailable claims degrade gracefully — the live event stream keeps working against older daemons and while another client holds control.
 - **§27 — single-client policy: connect handshake + 4004 takeover (server).** The daemon now serves one controlling client at a time: `POST /api/v1/server/connect` claims the slot (a live holder gets a `connection.request` modal over its WebSocket and can allow or reject the takeover; a holder silent for 60 s is swept automatically), `POST /api/v1/server/disconnect` releases it, and `GET /api/v1/server/session` shows who is connected. A displaced client's WebSocket is closed with code 4004. Pre-§27 clients that never call `connect` are unaffected — the event stream and REST keep working unchanged.
 
 ### Fixed

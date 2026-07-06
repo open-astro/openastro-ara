@@ -6,28 +6,45 @@ import '../../models/server.dart';
 import '../../models/ws_event.dart';
 import '../../services/ws_event_stream.dart';
 import '../saved_server_state.dart';
+import 'client_session_state.dart';
 
 /// Builds the §60.9 event-stream client for a server. Overridable in tests so a
 /// fake socket connector can be injected (the default hits a real WebSocket).
-final wsEventStreamFactoryProvider = Provider<WsEventStream Function(AraServer)>(
-  (ref) => (server) => WsEventStream(server),
-);
+/// The §27 claim hook posts /server/connect before every dial so the socket
+/// binds to the control session (see [clientSessionProvider]).
+final wsEventStreamFactoryProvider =
+    Provider<WsEventStream Function(AraServer)>(
+      (ref) =>
+          (server) => WsEventStream(
+            server,
+            claimSession: () =>
+                ref.read(clientSessionProvider.notifier).claim(server),
+          ),
+    );
 
 /// The §60.9 WS event-stream for the **active** server (`savedServers.last`).
 /// Lives as long as it's watched; `ref.onDispose` tears the socket down. Returns
 /// null when no server is saved yet. Auto-disposed when no consumer watches it.
 final wsEventStreamProvider = Provider.autoDispose<WsEventStream?>((ref) {
-  final servers = ref.watch(savedServersProvider).maybeWhen(
-        data: (list) => list,
-        orElse: () => const <AraServer>[],
-      );
+  final servers = ref
+      .watch(savedServersProvider)
+      .maybeWhen(data: (list) => list, orElse: () => const <AraServer>[]);
   if (servers.isEmpty) return null;
-  final stream = ref.watch(wsEventStreamFactoryProvider)(servers.last);
+  final server = servers.last;
+  final stream = ref.watch(wsEventStreamFactoryProvider)(server);
+  // Captured NOW: ref must not be used inside onDispose, and the session
+  // notifier is a root (non-autoDispose) provider that outlives this one.
+  final session = ref.read(clientSessionProvider.notifier);
   stream.connect();
   // dispose() is async; onDispose takes a void callback, so the teardown
   // (final `disconnected`, controller closes) runs fire-and-forget — explicit
   // via unawaited. On a server-list change the old stream is torn down here.
-  ref.onDispose(() => unawaited(stream.dispose()));
+  // §27: releasing the control slot pairs with closing the socket in the same
+  // teardown — the daemon never sees a released session with a live bound WS.
+  ref.onDispose(() {
+    unawaited(session.release(server));
+    unawaited(stream.dispose());
+  });
   return stream;
 });
 
@@ -41,7 +58,9 @@ final wsEventStreamProvider = Provider.autoDispose<WsEventStream?>((ref) {
 /// [wsEventStreamProvider]) would be silently dropped and the consumer could be
 /// stuck on a stale state. Subscribing first then emitting the current value
 /// (no await between them) closes that gap atomically.
-final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>((ref) {
+final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>((
+  ref,
+) {
   final stream = ref.watch(wsEventStreamProvider);
   if (stream == null) return Stream.value(WsConnectionState.disconnected);
   final controller = StreamController<WsConnectionState>();
@@ -52,11 +71,21 @@ final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>(
   // otherwise hit a closed controller and throw StateError.
   controller.onListen = () {
     sub = stream.connectionStates.listen(
-      (s) { if (!controller.isClosed) controller.add(s); },
-      onError: (Object e, StackTrace st) { if (!controller.isClosed) controller.addError(e, st); },
-      onDone: () { if (!controller.isClosed) controller.close(); },
+      (s) {
+        if (!controller.isClosed) controller.add(s);
+      },
+      onError: (Object e, StackTrace st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      },
+      onDone: () {
+        if (!controller.isClosed) controller.close();
+      },
     );
-    if (!controller.isClosed) controller.add(stream.connectionState); // current value, after subscribing
+    if (!controller.isClosed) {
+      controller.add(
+        stream.connectionState,
+      ); // current value, after subscribing
+    }
     controller.onCancel = () => sub?.cancel();
   };
   ref.onDispose(() {
@@ -70,9 +99,11 @@ final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>(
 /// and dots watch this so a killed/unreachable server doesn't keep showing stale
 /// "connected" green — once the link is anything but connected (connecting /
 /// reconnecting / disconnected) the last device statuses can't be trusted.
-final serverLinkUpProvider = Provider.autoDispose<bool>((ref) =>
-    ref.watch(wsConnectionStateProvider).asData?.value ==
-    WsConnectionState.connected);
+final serverLinkUpProvider = Provider.autoDispose<bool>(
+  (ref) =>
+      ref.watch(wsConnectionStateProvider).asData?.value ==
+      WsConnectionState.connected,
+);
 
 /// Broadcast of every event from the active server's stream. Feature providers
 /// filter by [WsEvent.type]. An empty stream when no server is saved.
@@ -80,3 +111,13 @@ final wsEventsProvider = StreamProvider.autoDispose<WsEvent>((ref) {
   final stream = ref.watch(wsEventStreamProvider);
   return stream?.events ?? const Stream<WsEvent>.empty();
 });
+
+/// §27 takeover requests from the daemon (another WILMA wants the control
+/// slot; this client is the current holder). The app shell listens and shows
+/// the Allow / Keep-me-connected modal. Empty when no server is saved.
+final wsTakeoverRequestsProvider =
+    StreamProvider.autoDispose<WsConnectionRequest>((ref) {
+      final stream = ref.watch(wsEventStreamProvider);
+      return stream?.connectionRequests ??
+          const Stream<WsConnectionRequest>.empty();
+    });
