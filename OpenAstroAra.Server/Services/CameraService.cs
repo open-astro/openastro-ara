@@ -635,7 +635,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     }
 
     private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null) {
-        var sessionId = await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
+        // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
+        // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
+        // the run worker); everything else — the REST snapshot path — falls back
+        // to the shared manual-capture bucket as before.
+        var sessionId = CaptureSessionScope.Current
+            ?? await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
         double? ccdTemp;
         lock (_gate) {
@@ -643,7 +648,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // not a fabricated 0.0 (the same honesty rule as gain, #670).
             ccdTemp = _runtime.CcdTemperature; // _runtime is written under _gate; read it there too
         }
-        await _frames.InsertAsync(new FrameDto(
+        await _frames!.InsertAsync(new FrameDto(
             Id: frameId,
             SessionId: sessionId,
             TargetName: targetName,
