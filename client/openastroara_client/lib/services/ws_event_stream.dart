@@ -80,12 +80,16 @@ enum WsConnectionState {
 /// diagnostics) is layered on top by consumers of [events].
 class WsEventStream {
   static const String wsVersion = '1';
+  // Capped at 10s (not the classic 30s): the dominant real-world outage is a
+  // daemon restart or a Wi-Fi blip measured in seconds, and a 30s ceiling made
+  // the comeback lag up to half a minute after the server was already back.
+  // 10s keeps the idle-retry cost trivial (one dial per 10s against a dead
+  // host) while roughly tripling reconnect snappiness after longer outages.
   static const List<Duration> defaultBackoff = [
     Duration(seconds: 1),
     Duration(seconds: 2),
     Duration(seconds: 5),
     Duration(seconds: 10),
-    Duration(seconds: 30),
   ];
 
   /// §60.9 close code for the §27 single-client takeover.
@@ -320,7 +324,7 @@ class WsEventStream {
       // A resume-response is a trusted server control frame (not arbitrary
       // garbage), so resetting backoff on it is safe — and necessary: against an
       // idle server that emits no events, this is the only signal that a reconnect
-      // succeeded, so without it the backoff counter would ratchet to its 30s
+      // succeeded, so without it the backoff counter would ratchet to its 10s
       // ceiling across drops even though the server is healthy.
       _reconnectAttempt = 0;
       // The server rejected our resume token (expired / invalid — `resumed:false`
