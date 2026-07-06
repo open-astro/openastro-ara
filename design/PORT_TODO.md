@@ -356,9 +356,13 @@ sequence). The enhanced **§58.9 four-layer unattended-safety pipeline** is a de
 - **Layer 4 — safe-rest state on any failure**: park (if `CanPark`) else stop tracking + stop guider; §35.5
   looping alarm audio. The executor instead re-enables tracking (NINA behaviour) to keep the target.
 
-Also follow-ups: **§58.7 failure notifications** (the executor logs via `Logger`; wiring `INotificationService`
-for the slew-retry/solve-fail/guider-recal-fail Critical/Urgent notifications is deferred to avoid coupling the
-unit-testable core to the notification surface), **§58.8 first-flip 60 s confirmation**, **§58.10 unattended-hours
+Also follow-ups: ✅ **§58.7 failure notifications — DONE (2026-07-05)**: `NotifyCritical` generalized to
+`Notify(severity, …)`; a failed flip now notifies **Critical in BOTH modes** (previously only under the §58.9
+safety layers — a safety-off failure halted the sequence silently), with the guider-restore outcome folded in
+("could NOT be resumed" when the best-effort resume also failed); the best-effort re-center failure notifies
+Error ("imaging continues on an unverified pointing") and a failed post-flip autofocus notifies Warning
+("focus may have drifted"). All best-effort — a notification-store fault never masks the flip fault. Remaining:
+**§58.8 first-flip 60 s confirmation**, **§58.10 unattended-hours
 severity escalation**, and the **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
 focuser-hardware blocker). The §58 profile block (`refocus_after_flip` policy, `guider_recal` mode,
 `first_flip_confirmed`) is not yet on ARA's profile model — these land with the profile-schema extension.

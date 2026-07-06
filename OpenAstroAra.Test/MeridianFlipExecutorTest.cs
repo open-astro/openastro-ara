@@ -673,6 +673,101 @@ namespace OpenAstroAra.Test {
             Assert.That(published.Single().Message, Does.Contain("tracking was stopped"));
         }
 
+        // ─── §58.7 — failure notifications on the BASELINE (safety-off) paths ───
+
+        [Test]
+        public async Task A_failed_flip_notifies_critically_even_without_the_safety_layers() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false));
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            var n = published.Single();
+            Assert.That(n.Severity, Is.EqualTo(NotificationSeverity.Critical),
+                "an unattended sequence just halted — the user must hear it in BOTH modes");
+            Assert.That(n.Message, Does.Contain("halted"));
+            Assert.That(n.Message, Does.Not.Contain("could NOT be resumed"),
+                "the guider resume succeeded here, so the message must not cry wolf");
+        }
+
+        [Test]
+        public async Task An_early_failure_does_not_claim_a_tracking_restore_or_an_unresumed_guider() {
+            // StopAutoguider throws BEFORE PassMeridian: tracking was never disabled and guiding
+            // was never stopped — the message must not claim a restore that never ran, nor cry
+            // wolf about a guider that was never stopped in the first place.
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false));
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("PHD2 hiccup"));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never,
+                "tracking was never touched — no disable, no restore");
+            var n = published.Single();
+            Assert.That(n.Message, Does.Contain("never disabled"));
+            Assert.That(n.Message, Does.Not.Contain("could NOT be resumed"));
+        }
+
+        [Test]
+        public async Task The_failure_notification_reports_an_unresumable_guider() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false));
+            telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            guider.Setup(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("PHD2 is gone"));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(published.Single().Message, Does.Contain("could NOT be resumed"),
+                "'restored but unguided' and 'restored' are different mornings");
+        }
+
+        [Test]
+        public async Task A_best_effort_recenter_failure_notifies_but_does_not_fail_the_flip() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false));
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "without the safety layers re-centering stays best-effort");
+            var n = published.Single();
+            Assert.That(n.Severity, Is.EqualTo(NotificationSeverity.Error));
+            Assert.That(n.Message, Does.Contain("unverified pointing"));
+        }
+
+        [Test]
+        public async Task A_failed_post_flip_autofocus_notifies_a_warning_and_continues() {
+            SetupProfile(recenter: false, autoFocus: true);
+            SetupSafety(Safety(enabled: false));
+            var autofocus = new Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>();
+            autofocus.Setup(a => a.RunAutofocusAsync(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            var sut = new MeridianFlipExecutor(profileService.Object, telescope.Object, guider.Object,
+                centering.Object, dome.Object, domeFollower.Object, profileStore.Object,
+                notifications.Object, reconnector.Object, camera.Object, focuser.Object, autofocus.Object);
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "per §58.7 a re-focus failure never aborts the night");
+            var n = published.Single();
+            Assert.That(n.Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(n.Message, Does.Contain("focus may have drifted"));
+        }
+
         /// <summary>A healthy tracking mount whose pier side flips east→west when MeridianFlip is
         /// called — so safety tests that should PASS the pier-side gate do.</summary>
         private void SetupHealthyTrackingMount() {
