@@ -568,6 +568,30 @@ transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEven
   (+tests); the probe is best-effort (no store / unprobeable volume / probe fault → capture proceeds — a
   broken probe must never cost a frame).
 
+## §45 polar alignment — phase 1 groundwork shipped (2026-07-06)
+
+The guider fork carries the full §45 API (openastro-guider design/POLAR_ALIGNMENT_DESIGN.md:
+capture_single_frame with save-path, get_star_centroids, the set_pa_session/get_pa_session camera
+LEASE, plus the in-guider static-PA tool) — the old "polar-align awaits the daemon's API" blocker is
+GONE. Ownership split per that doc §4: ARA owns the routine (state machine, ASTAP solve, refraction/
+precession geometry, mount RA slews via Alpaca); the guider provides capture + centroids + the lease.
+
+**Shipped (phase 1):** `PHD2Methods.PolarAlign.cs` — serialization-locked named-object requests
+(`Phd2CaptureSolverFrame` = the fork's FULL capture_single_frame surface (the NINA-era
+`Phd2CaptureSingleFrame` in the ISO-8859-1 PHD2Methods.cs has exposure+subframe only and is not
+byte-edited; NB that file greps as BINARY — search it with python, not grep), `Phd2GetStarCentroids`,
+`Phd2SetPaSession`/`Phd2GetPaSession`); `PolarAlignGeometry` — the ARA-owned math proven on synthetic
+skies (2-point RA-axis fit with cone-geometry disambiguation + degenerate-input rejection, Bennett
+refraction, alt/az error decomposition against the APPARENT refracted pole, meridian-mirror symmetry,
+end-to-end 25'-misalignment round-trip). Coordinates are APPARENT-of-date degrees — precess solver
+J2000 output first (arcmin-scale since J2000).
+
+**Remaining phases (per the guider doc §12):** the daemon spike (verify capture_single_frame emits a
+solver-ready FITS — needs the guider running; measure the per-solve error budget to pick 2-pt vs
+3-pt), then the PolarAlignService state machine (replace PlaceholderPolarAlignService: preflight/
+lease → 2-frame seed with Alpaca RA slews avoiding the meridian → live adjust loop → verify +
+hand-back restore), endpoints (§45.9 paths), WS events, and the WILMA bullseye/arrows screen.
+
 ## §63.6 guider-e-4 — dark-library push (2026-06-12)
 **Shipped:** e-4a — named-object RPC request classes (`PHD2Methods.DarkLibrary.cs`): `build_dark_library`
 (`frame_count` 1..50 def 5, optional `min/max_exposure_ms`, `clear_existing`, optional `notes`, `load_after`
