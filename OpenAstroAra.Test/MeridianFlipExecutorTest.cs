@@ -688,8 +688,12 @@ namespace OpenAstroAra.Test {
             SetupSafety(Safety(firstFlipConfirmed: false));
             SetupHealthyTrackingMount();
             SafetyPoliciesDto? persisted = null;
-            profileStore.Setup(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()))
-                .Callback<SafetyPoliciesDto>(v => persisted = v);
+            profileStore.Setup(p => p.UpdateSafetyPolicies(It.IsAny<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>()))
+                .Returns<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>(f => {
+                    // Apply the executor's transform to the armed policies, like the real store would.
+                    persisted = f(Safety(firstFlipConfirmed: false));
+                    return persisted!;
+                });
             var sut = CreateSafetySUT();
 
             var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
@@ -714,7 +718,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.True);
             Assert.That(published, Is.Empty, "a confirmed profile's flip is silent");
-            profileStore.Verify(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()), Times.Never);
+            profileStore.Verify(p => p.UpdateSafetyPolicies(It.IsAny<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>()), Times.Never);
         }
 
         [Test]
@@ -744,7 +748,7 @@ namespace OpenAstroAra.Test {
 
             Assert.CatchAsync<OperationCanceledException>(
                 () => sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, cts.Token));
-            profileStore.Verify(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()), Times.Never,
+            profileStore.Verify(p => p.UpdateSafetyPolicies(It.IsAny<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>()), Times.Never,
                 "an unconsented window must not confirm");
             telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never,
                 "the announce runs before any state is touched");

@@ -734,7 +734,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             + "Later flips will run without this wait.");
         await Task.Delay(FirstFlipConfirmWait, token);
         try {
-            profileStore.PutSafetyPolicies(profileStore.GetSafetyPolicies() with { FirstFlipConfirmed = true });
+            // Atomic read-modify-write under the store lock (a Get→Put pair could lose a
+            // concurrent policy edit made during the 60 s wait to a stale snapshot).
+            profileStore.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = true });
         } catch (Exception ex) {
             Logger.Error("Meridian Flip - Persisting first_flip_confirmed failed; the next flip will announce again.", ex);
         }

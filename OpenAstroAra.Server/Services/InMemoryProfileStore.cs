@@ -163,6 +163,21 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    public SafetyPoliciesDto UpdateSafetyPolicies(Func<SafetyPoliciesDto, SafetyPoliciesDto?> update) {
+        SafetyPoliciesDto next;
+        lock (_lock) {
+            var current = _safety;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no event
+            }
+            next = candidate;
+            _safety = next;
+        }
+        RaiseChanged();
+        return next;
+    }
+
     // Defaults match AutofocusSettings() constructor.
     private AutofocusSettingsDto _autofocus = new(
         Method: "hfr_v_curve",

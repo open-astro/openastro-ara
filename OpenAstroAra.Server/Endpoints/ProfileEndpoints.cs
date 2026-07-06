@@ -132,8 +132,10 @@ public static class ProfileEndpoints {
             // be silently cleared and the announce would repeat — the exact behaviour §58.8
             // exists to prevent). The stored value always wins; re-arming goes through the
             // dedicated endpoint below.
-            var merged = PreserveDaemonOwnedSafetyFields(body, store.GetSafetyPolicies());
-            store.PutSafetyPolicies(merged);
+            // Atomic read-merge-write under the store lock: a Get→Put pair from here could
+            // lose a concurrent executor confirmation / re-arm to a stale snapshot — the exact
+            // lost-update class this merge exists to close.
+            var merged = store.UpdateSafetyPolicies(current => PreserveDaemonOwnedSafetyFields(body, current));
             return Results.Ok(merged);
         })
             .Accepts<SafetyPoliciesDto>("application/json")
@@ -146,10 +148,8 @@ public static class ProfileEndpoints {
         // §58.8 — the one-way re-arm: clears first_flip_confirmed so the NEXT flip announces
         // again (after re-balancing or a rig change the optics-based auto-reset can't see).
         // Deliberately no inverse endpoint: only the flip executor ever confirms a flip.
-        profile.MapPost("/safety/first-flip/rearm", (IProfileStore store) => {
-            store.PutSafetyPolicies(store.GetSafetyPolicies() with { FirstFlipConfirmed = false });
-            return Results.Ok(store.GetSafetyPolicies());
-        })
+        profile.MapPost("/safety/first-flip/rearm", (IProfileStore store) =>
+            Results.Ok(store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = false })))
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
             .WithName("RearmFirstFlipAnnounce")
             .WithSummary("Re-arm the §58.8 one-time first-flip announce (clears first_flip_confirmed). " +
