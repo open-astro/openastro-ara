@@ -47,11 +47,12 @@ class DiscoveredDevice {
     );
   }
 
-  static EquipmentDeviceType _parseType(Object? raw) {
-    // Daemon returns the enum as lowercase-concatenated (matching the URL
-    // path segment): `camera`, `filterwheel`, `safetymonitor`, etc. Map back
-    // to `EquipmentDeviceType` — the client uses camelCase variants like
-    // `filterWheel`, `safetyMonitor`.
+  /// Tolerant daemon-token → type lookup (lowercase-concatenated tokens like
+  /// `filterwheel`, `safetymonitor`, plus historic aliases). Null for an
+  /// unknown token — WS handlers use this so a stray `equipment.*` frame from
+  /// a newer daemon is IGNORED, never asserted on (see _parseType for the
+  /// strict discovery-path variant).
+  static EquipmentDeviceType? tryParseDeviceType(Object? raw) {
     final s = raw?.toString().toLowerCase() ?? '';
     switch (s) {
       case 'camera':
@@ -68,6 +69,7 @@ class DiscoveredDevice {
       case 'guider':
         return EquipmentDeviceType.guider;
       case 'covercalibrator':
+      case 'flatdevice': // the §60.9 equipment.* events' token (DeviceType.FlatDevice)
       case 'flatpanel':
       case 'flat':
         return EquipmentDeviceType.flatPanel;
@@ -82,12 +84,18 @@ class DiscoveredDevice {
       case 'switch':
         return EquipmentDeviceType.switchDevice;
       default:
-        // Fallback so a stray daemon value doesn't crash the chooser, but
-        // assert in debug builds so future daemon-added types surface
-        // immediately rather than silently misclassifying as camera.
-        assert(false, 'Unknown device type from daemon: $s');
-        return EquipmentDeviceType.camera;
+        return null;
     }
+  }
+
+  static EquipmentDeviceType _parseType(Object? raw) {
+    final parsed = tryParseDeviceType(raw);
+    if (parsed != null) return parsed;
+    // Fallback so a stray daemon value doesn't crash the chooser, but
+    // assert in debug builds so future daemon-added types surface
+    // immediately rather than silently misclassifying as camera.
+    assert(false, 'Unknown device type from daemon: $raw');
+    return EquipmentDeviceType.camera;
   }
 
   /// URL path segment used by `/api/v1/equipment/discover/{type}`. Matches
@@ -125,15 +133,15 @@ class DiscoveredDevice {
   /// matches the discovery URL segment for every type. Named for its one use (the
   /// connect endpoint) so a future divergent connect body doesn't silently reuse it.
   Map<String, dynamic> toConnectRequestJson() => <String, dynamic>{
-        'unique_id': uniqueId,
-        'name': name,
-        'type': pathSegmentFor(deviceType),
-        'host_name': hostName,
-        'ip_address': ipAddress,
-        'ip_port': ipPort,
-        'alpaca_device_number': alpacaDeviceNumber,
-        'use_https': useHttps,
-      };
+    'unique_id': uniqueId,
+    'name': name,
+    'type': pathSegmentFor(deviceType),
+    'host_name': hostName,
+    'ip_address': ipAddress,
+    'ip_port': ipPort,
+    'alpaca_device_number': alpacaDeviceNumber,
+    'use_https': useHttps,
+  };
 
   @override
   bool operator ==(Object other) =>

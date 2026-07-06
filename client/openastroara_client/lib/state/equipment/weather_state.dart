@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/server.dart';
+import '../settings/equipment_connection_state.dart';
 import '../../models/weather_status.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
@@ -10,21 +11,27 @@ import 'equipment_device_state.dart';
 /// on a server. Overridable in tests so a pure fake can be injected.
 final weatherApiFactoryProvider =
     Provider<EquipmentDeviceClient<WeatherStatus> Function(AraServer)>(
-  (ref) => (server) => EquipmentDeviceApi<WeatherStatus>(
-        server,
-        path: 'observingconditions',
-        fromJson: WeatherStatus.fromJson,
-      ),
-);
+      (ref) =>
+          (server) => EquipmentDeviceApi<WeatherStatus>(
+            server,
+            path: 'observingconditions',
+            fromJson: WeatherStatus.fromJson,
+          ),
+    );
 
 /// Weather client bound to the **active** server (`savedServers.last`), or `null`
 /// when no server is saved.
-final weatherApiProvider =
-    Provider<EquipmentDeviceClient<WeatherStatus>?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+final weatherApiProvider = Provider<EquipmentDeviceClient<WeatherStatus>?>((
+  ref,
+) {
+  final server = ref.watch(
+    savedServersProvider.select(
+      (async) => async.maybeWhen(
         data: (list) => list.isEmpty ? null : list.last,
         orElse: () => null,
-      )));
+      ),
+    ),
+  );
   if (server == null) return null;
   final api = ref.watch(weatherApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -35,6 +42,9 @@ final weatherApiProvider =
 /// Connect/disconnect + the background liveness poll come from the generic core.
 class WeatherNotifier extends EquipmentDeviceNotifier<WeatherStatus> {
   @override
+  EquipmentDeviceType get deviceType => EquipmentDeviceType.weather;
+
+  @override
   EquipmentDeviceClient<WeatherStatus>? watchClient() =>
       ref.watch(weatherApiProvider);
 
@@ -43,5 +53,6 @@ class WeatherNotifier extends EquipmentDeviceNotifier<WeatherStatus> {
       ref.read(weatherApiProvider);
 }
 
-final weatherProvider =
-    AsyncNotifierProvider<WeatherNotifier, WeatherStatus?>(WeatherNotifier.new);
+final weatherProvider = AsyncNotifierProvider<WeatherNotifier, WeatherStatus?>(
+  WeatherNotifier.new,
+);

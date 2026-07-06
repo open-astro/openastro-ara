@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/mount_status.dart';
+import '../settings/equipment_connection_state.dart';
 import '../../models/server.dart';
 import '../../services/equipment_device_api.dart';
 import '../saved_server_state.dart';
@@ -10,19 +11,24 @@ import 'equipment_device_state.dart';
 /// Overridable in tests so a pure fake can be injected.
 final mountApiFactoryProvider =
     Provider<EquipmentDeviceClient<MountStatus> Function(AraServer)>(
-  (ref) => (server) => EquipmentDeviceApi<MountStatus>(
-        server,
-        path: 'telescope',
-        fromJson: MountStatus.fromJson,
-      ),
-);
+      (ref) =>
+          (server) => EquipmentDeviceApi<MountStatus>(
+            server,
+            path: 'telescope',
+            fromJson: MountStatus.fromJson,
+          ),
+    );
 
 /// Mount client bound to the **active** server, or `null` when none is saved.
 final mountApiProvider = Provider<EquipmentDeviceClient<MountStatus>?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+  final server = ref.watch(
+    savedServersProvider.select(
+      (async) => async.maybeWhen(
         data: (list) => list.isEmpty ? null : list.last,
         orElse: () => null,
-      )));
+      ),
+    ),
+  );
   if (server == null) return null;
   final api = ref.watch(mountApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -34,11 +40,15 @@ final mountApiProvider = Provider<EquipmentDeviceClient<MountStatus>?>((ref) {
 /// liveness/busy poll come from the generic core.
 class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   @override
+  EquipmentDeviceType get deviceType => EquipmentDeviceType.mount;
+
+  @override
   EquipmentDeviceClient<MountStatus>? watchClient() =>
       ref.watch(mountApiProvider);
 
   @override
-  EquipmentDeviceClient<MountStatus>? readClient() => ref.read(mountApiProvider);
+  EquipmentDeviceClient<MountStatus>? readClient() =>
+      ref.read(mountApiProvider);
 
   /// Start/stop sidereal tracking.
   Future<bool> setTracking(bool enabled) =>
@@ -82,5 +92,6 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   Future<bool> abortSlew() => performAction((api) => api.command('abort'));
 }
 
-final mountProvider =
-    AsyncNotifierProvider<MountNotifier, MountStatus?>(MountNotifier.new);
+final mountProvider = AsyncNotifierProvider<MountNotifier, MountStatus?>(
+  MountNotifier.new,
+);

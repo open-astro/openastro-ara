@@ -5,6 +5,8 @@ import '../../models/server.dart';
 import '../../models/switch_device.dart';
 import '../../services/switch_api.dart';
 import '../saved_server_state.dart';
+import '../settings/equipment_connection_state.dart';
+import '../ws/ws_providers.dart';
 
 /// Builds a [SwitchClient] for a server. Overridable in tests so a pure fake can
 /// be injected (the default constructs a real Dio-backed [SwitchApi]).
@@ -19,10 +21,15 @@ final switchApiFactoryProvider = Provider<SwitchClient Function(AraServer)>(
 /// drift: the §25.3 acting reset only works because it fires on exactly the
 /// change that rebuilds the API (abandoning any in-flight action).
 final _activeSwitchServerProvider = Provider<AraServer?>(
-    (ref) => ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-          data: (list) => list.isEmpty ? null : list.last,
-          orElse: () => null,
-        ))));
+  (ref) => ref.watch(
+    savedServersProvider.select(
+      (async) => async.maybeWhen(
+        data: (list) => list.isEmpty ? null : list.last,
+        orElse: () => null,
+      ),
+    ),
+  ),
+);
 
 /// [SwitchClient] bound to the **active** server (`savedServers.last`), or `null`
 /// when no server is saved.
@@ -66,8 +73,9 @@ class SwitchActingNotifier extends Notifier<bool> {
   void set(bool v) => state = v;
 }
 
-final switchActingProvider =
-    NotifierProvider<SwitchActingNotifier, bool>(SwitchActingNotifier.new);
+final switchActingProvider = NotifierProvider<SwitchActingNotifier, bool>(
+  SwitchActingNotifier.new,
+);
 
 class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // Serializes manual refresh() so rapid taps don't stack concurrent getAll()s;
@@ -83,6 +91,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // stale data over a new server's result.
   int _generation = 0;
 
+  // Latest-issued-read-wins guard shared by build() and refresh() — see
+  // EquipmentDeviceNotifier._readIssue for the §60.9 race this closes.
+  int _readIssue = 0;
+
   @override
   Future<List<SwitchDevice>> build() async {
     // Reset BOTH in-flight guards on a server change: a stale _acting from an
@@ -91,9 +103,33 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     _refreshing = false;
     _acting = false;
     _generation++;
+    // §60.9 push — the Switch list has NO poll fallback (pull-on-demand only),
+    // so this is the only way a daemon-side switch transition (another client
+    // connecting one, a slot replacement, a drop) reaches an open panel without
+    // a manual refresh. Only state_changed is watched — the aliases duplicate
+    // the same transition.
+    ref.listen(wsEventsProvider, (previous, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'equipment.state_changed') return;
+      final eventType = DiscoveredDevice.tryParseDeviceType(
+        event.payload['device_type'],
+      );
+      if (eventType == EquipmentDeviceType.switchDevice) refresh();
+    });
     final api = ref.watch(switchApiProvider);
     if (api == null) return const <SwitchDevice>[];
-    return api.getAll();
+    final issue = ++_readIssue;
+    final devices = await api.getAll();
+    // The notifier may have been disposed during the await (server removed /
+    // last listener gone) — don't touch state on a torn-down notifier.
+    if (!ref.mounted) return devices;
+    if (issue != _readIssue) {
+      // A fresher WS-push refresh landed during this rebuild's read — keep it.
+      if (state case AsyncData<List<SwitchDevice>>(:final value)) {
+        return value;
+      }
+    }
+    return devices;
   }
 
   // connect/disconnect/setValue run the 202-Accepted request then re-read the
@@ -105,7 +141,8 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // of every other switch. The UI wraps each control to surface the error; the
   // list keeps showing the last-read devices. (List-READ failures still surface as
   // the provider's AsyncError, since a list we can't read can't be shown.)
-  Future<bool> connect(DiscoveredDevice device) => _act((api) => api.connect(device));
+  Future<bool> connect(DiscoveredDevice device) =>
+      _act((api) => api.connect(device));
 
   Future<bool> disconnect(int deviceNumber) =>
       _act((api) => api.disconnect(deviceNumber));
@@ -118,12 +155,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     required int deviceNumber,
     required int portId,
     required double value,
-  }) =>
-      _act((api) => api.setValue(
-            deviceNumber: deviceNumber,
-            portId: portId,
-            value: value,
-          ));
+  }) => _act(
+    (api) =>
+        api.setValue(deviceNumber: deviceNumber, portId: portId, value: value),
+  );
 
   // Run a 202-Accepted action then re-read the list against the SAME client (a
   // mid-action server switch must not redirect the follow-up read). A failed
@@ -168,6 +203,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       _refreshing = true;
     }
     final gen = _generation;
+    final issue = ++_readIssue;
     try {
       final api = client ?? ref.read(switchApiProvider);
       // Keep the prior data visible while reloading (don't flash blank).
@@ -175,7 +211,9 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
         if (api == null) return const <SwitchDevice>[];
         return api.getAll();
       });
-      if (ref.mounted && gen == _generation) state = next;
+      if (ref.mounted && gen == _generation && issue == _readIssue) {
+        state = next;
+      }
     } finally {
       // Clear the manual-refresh flag ONLY when no rebuild happened mid-flight.
       // The guard is deliberate, NOT an unconditional reset: if the server changed
@@ -191,4 +229,5 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
 
 final switchListProvider =
     AsyncNotifierProvider<SwitchListNotifier, List<SwitchDevice>>(
-        SwitchListNotifier.new);
+      SwitchListNotifier.new,
+    );

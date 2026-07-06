@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/focuser_status.dart';
+import '../settings/equipment_connection_state.dart';
 import '../../models/server.dart';
 import '../../services/autofocus_api.dart';
 import '../../services/equipment_device_api.dart';
@@ -11,24 +12,30 @@ import 'equipment_device_state.dart';
 /// tests so a pure fake can be injected.
 final focuserApiFactoryProvider =
     Provider<EquipmentDeviceClient<FocuserStatus> Function(AraServer)>(
-  (ref) => (server) => EquipmentDeviceApi<FocuserStatus>(
-        server,
-        path: 'focuser',
-        fromJson: FocuserStatus.fromJson,
-      ),
-);
+      (ref) =>
+          (server) => EquipmentDeviceApi<FocuserStatus>(
+            server,
+            path: 'focuser',
+            fromJson: FocuserStatus.fromJson,
+          ),
+    );
 
 /// Builds the §59 manual-autofocus client. Overridable in tests.
 final autofocusApiFactoryProvider = Provider<AutofocusApi Function(AraServer)>(
-  (ref) => (server) => DioAutofocusApi(server),
+  (ref) =>
+      (server) => DioAutofocusApi(server),
 );
 
 /// Autofocus client bound to the **active** server, or `null` when none is saved.
 final autofocusApiProvider = Provider<AutofocusApi?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+  final server = ref.watch(
+    savedServersProvider.select(
+      (async) => async.maybeWhen(
         data: (list) => list.isEmpty ? null : list.last,
         orElse: () => null,
-      )));
+      ),
+    ),
+  );
   if (server == null) return null;
   final api = ref.watch(autofocusApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -36,12 +43,17 @@ final autofocusApiProvider = Provider<AutofocusApi?>((ref) {
 });
 
 /// Focuser client bound to the **active** server, or `null` when none is saved.
-final focuserApiProvider =
-    Provider<EquipmentDeviceClient<FocuserStatus>?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+final focuserApiProvider = Provider<EquipmentDeviceClient<FocuserStatus>?>((
+  ref,
+) {
+  final server = ref.watch(
+    savedServersProvider.select(
+      (async) => async.maybeWhen(
         data: (list) => list.isEmpty ? null : list.last,
         orElse: () => null,
-      )));
+      ),
+    ),
+  );
   if (server == null) return null;
   final api = ref.watch(focuserApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -52,6 +64,9 @@ final focuserApiProvider =
 /// plus a [move] control. Connect/disconnect + the liveness poll come from the
 /// generic core.
 class FocuserNotifier extends EquipmentDeviceNotifier<FocuserStatus> {
+  @override
+  EquipmentDeviceType get deviceType => EquipmentDeviceType.focuser;
+
   @override
   EquipmentDeviceClient<FocuserStatus>? watchClient() =>
       ref.watch(focuserApiProvider);
@@ -65,11 +80,14 @@ class FocuserNotifier extends EquipmentDeviceNotifier<FocuserStatus> {
   /// re-read reflects the new state. [useTempComp] applies the device's
   /// temperature compensation for this move.
   Future<bool> move(int targetPosition, {bool useTempComp = false}) =>
-      performAction((api) => api.command(
-            'move',
-            {'target_position': targetPosition, 'use_temp_comp': useTempComp},
-          ));
+      performAction(
+        (api) => api.command('move', {
+          'target_position': targetPosition,
+          'use_temp_comp': useTempComp,
+        }),
+      );
 }
 
-final focuserProvider =
-    AsyncNotifierProvider<FocuserNotifier, FocuserStatus?>(FocuserNotifier.new);
+final focuserProvider = AsyncNotifierProvider<FocuserNotifier, FocuserStatus?>(
+  FocuserNotifier.new,
+);
