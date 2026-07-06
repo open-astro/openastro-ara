@@ -106,7 +106,18 @@ public sealed partial class FileProfileStore : IProfileStore {
     public void PutEquipmentConnection(EquipmentConnectionDto value) => UpdateAndPersist(s => s with { EquipmentConnection = value });
 
     public OpticsSettingsDto GetOpticsSettings() { lock (_lock) { return _snapshot.Optics; } }
-    public void PutOpticsSettings(OpticsSettingsDto value) => UpdateAndPersist(s => s with { Optics = value });
+    public void PutOpticsSettings(OpticsSettingsDto value) => UpdateAndPersist(s => WithOptics(s, value));
+
+    // §58.8 — a genuine optics-train change invalidates the first-flip confirmation: the safety
+    // net assumes the rig hasn't changed since the user watched a flip succeed, and the optics
+    // section is the ARA profile's rig identity (mounts are Alpaca-discovered, not profile
+    // fields). An identical re-save keeps the confirmation. Shared by the Put and Update paths.
+    private static ProfileSnapshotDto WithOptics(ProfileSnapshotDto s, OpticsSettingsDto value) {
+        var safety = value != s.Optics && s.SafetyPolicies.FirstFlipConfirmed
+            ? s.SafetyPolicies with { FirstFlipConfirmed = false }
+            : s.SafetyPolicies;
+        return s with { Optics = value, SafetyPolicies = safety };
+    }
 
     public OpticsSettingsDto UpdateOpticsSettings(Func<OpticsSettingsDto, OpticsSettingsDto?> update) {
         OpticsSettingsDto next;
@@ -117,7 +128,7 @@ public sealed partial class FileProfileStore : IProfileStore {
                 return current; // no change — no persist, no event
             }
             next = candidate;
-            _snapshot = _snapshot with { Optics = next };
+            _snapshot = WithOptics(_snapshot, next);
             Persist(_snapshot);
         }
         // Outside _lock, mirroring UpdateAndPersist, so a Changed subscriber that reads back can't deadlock.

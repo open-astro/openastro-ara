@@ -266,7 +266,14 @@ public sealed class InMemoryProfileStore : IProfileStore {
     }
 
     public void PutOpticsSettings(OpticsSettingsDto value) {
-        lock (_lock) { _optics = value; }
+        lock (_lock) {
+            // §58.8 — mirror FileProfileStore: an optics-train change invalidates the
+            // first-flip confirmation; an identical re-save keeps it.
+            if (value != _optics && _safety.FirstFlipConfirmed) {
+                _safety = _safety with { FirstFlipConfirmed = false };
+            }
+            _optics = value;
+        }
         RaiseChanged();
     }
 

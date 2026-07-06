@@ -134,7 +134,15 @@ public sealed record SafetyPoliciesDto(
     // §58.9 — the expected flip-slew duration (seconds). Alpaca has no slew-duration estimate API,
     // so this profile figure stands in for the spec's "mount estimate": the Layer-2 watchdog's hard
     // timeout is min(3 × this, 5 minutes).
-    int ExpectedFlipSlewSeconds = 90);
+    int ExpectedFlipSlewSeconds = 90,
+    // §58.8 — the first-flip confirmation safety net: false (a fresh profile / a changed rig)
+    // means the NEXT flip announces itself with a critical notification and a 60 s
+    // proceed-on-timeout window instead of flipping silently — the one failure mode that
+    // actually breaks gear is a new profile with a wrong pause value flipping the OTA into
+    // the tripod. Set true by the executor after that first announced flip; reset to false
+    // when the optics train changes (the ARA equivalent of the spec's "equipment change in
+    // the profile" — see FileProfileStore.PutOpticsSettings).
+    bool FirstFlipConfirmed = false);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

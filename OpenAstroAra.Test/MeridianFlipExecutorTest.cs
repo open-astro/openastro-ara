@@ -118,14 +118,19 @@ namespace OpenAstroAra.Test {
         private Mock<IFocuserMediator> focuser = null!;
         private List<NotificationDto> published = null!;
 
-        /// <summary>A safety-policies DTO with §58.9 enabled and everything else at inert values.</summary>
-        private static SafetyPoliciesDto Safety(bool enabled = true, int expectedSlewSeconds = 90, bool recalGuider = false) =>
+        /// <summary>A safety-policies DTO with §58.9 enabled and everything else at inert values.
+        /// <c>firstFlipConfirmed</c> defaults TRUE here (unlike the DTO's false) so the many
+        /// existing layer tests exercise their own concern without the §58.8 announce+wait in
+        /// front; the dedicated §58.8 tests opt into false.</summary>
+        private static SafetyPoliciesDto Safety(bool enabled = true, int expectedSlewSeconds = 90,
+                bool recalGuider = false, bool firstFlipConfirmed = true) =>
             new(OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
                 MeridianFlipAuto: true, MeridianPauseMin: 5, MeridianRecenter: true,
                 MeridianRecalGuider: recalGuider, OnAltitudeLimit: "skip_target",
                 ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
                 GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true,
-                FlipSafetyEnabled: enabled, ExpectedFlipSlewSeconds: expectedSlewSeconds);
+                FlipSafetyEnabled: enabled, ExpectedFlipSlewSeconds: expectedSlewSeconds,
+                FirstFlipConfirmed: firstFlipConfirmed);
 
         /// <summary>Site at lat 40 N with a 20° horizon floor. The default <see cref="SafeTarget"/>
         /// (dec 89°) is circumpolar with min altitude ≈ 39° — above the floor at ANY sidereal time,
@@ -167,6 +172,7 @@ namespace OpenAstroAra.Test {
                 WatchdogHardCap = TimeSpan.FromSeconds(30),
                 ReconnectPollInterval = TimeSpan.FromMilliseconds(10),
                 ReconnectWait = TimeSpan.FromMilliseconds(60),
+                FirstFlipConfirmWait = TimeSpan.FromMilliseconds(30),
             };
 
         private static IProgress<ApplicationStatus> Progress => new Progress<ApplicationStatus>();
@@ -671,6 +677,77 @@ namespace OpenAstroAra.Test {
             Assert.That(callLog.Last(), Is.EqualTo("SetTracking(False)"),
                 "safe rest ends with tracking OFF — the §58.4 restore-to-tracking path must not run");
             Assert.That(published.Single().Message, Does.Contain("tracking was stopped"));
+        }
+
+        // ─── §58.8 — the first-flip confirmation safety net ───
+
+        [Test]
+        public async Task The_first_flip_announces_waits_out_the_window_and_persists_the_confirmation() {
+            // recenter off: the §58.9 Layer-3 solve gate is another test's concern.
+            SetupProfile(recenter: false);
+            SetupSafety(Safety(firstFlipConfirmed: false));
+            SetupHealthyTrackingMount();
+            SafetyPoliciesDto? persisted = null;
+            profileStore.Setup(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()))
+                .Callback<SafetyPoliciesDto>(v => persisted = v);
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(published[0].Title, Does.Contain("First meridian flip"),
+                "the announce fires BEFORE any flip state is touched");
+            Assert.That(published[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
+            Assert.That(persisted, Is.Not.Null, "the window elapsing counts as consent");
+            Assert.That(persisted!.FirstFlipConfirmed, Is.True,
+                "subsequent flips must run without the announce");
+        }
+
+        [Test]
+        public async Task A_confirmed_profile_flips_without_the_announce() {
+            SetupProfile(recenter: false);
+            SetupSafety(Safety());   // firstFlipConfirmed defaults true in the test helper
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(published, Is.Empty, "a confirmed profile's flip is silent");
+            profileStore.Verify(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()), Times.Never);
+        }
+
+        [Test]
+        public async Task The_announce_is_independent_of_the_flip_safety_toggle() {
+            // §58.8 is its own net — a rig that turned the §58.9 layers off (misreporting pier
+            // side) still gets the one-time first-flip announce.
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false, firstFlipConfirmed: false));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(published.Single().Title, Does.Contain("First meridian flip"));
+        }
+
+        [Test]
+        public void Stopping_the_sequence_during_the_window_leaves_the_flag_unconfirmed() {
+            // The user's "no" is cancellation: it propagates as CANCELLED (not a failed flip),
+            // nothing was touched, and the flag stays false so the next attempt announces again.
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(firstFlipConfirmed: false));
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            Assert.CatchAsync<OperationCanceledException>(
+                () => sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, cts.Token));
+            profileStore.Verify(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()), Times.Never,
+                "an unconsented window must not confirm");
+            telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never,
+                "the announce runs before any state is touched");
         }
 
         // ─── §58.7 — failure notifications on the BASELINE (safety-off) paths ───
