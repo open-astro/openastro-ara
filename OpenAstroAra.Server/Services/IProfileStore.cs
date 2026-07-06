@@ -109,4 +109,8 @@ public interface IProfileStore {
 
     FilterWheelLabelsDto GetFilterWheelLabels();
     void PutFilterWheelLabels(FilterWheelLabelsDto value);
+
+    /// <summary>§36 custom terrain horizon (sorted az/alt skyline; empty = none entered).</summary>
+    CustomHorizonDto GetCustomHorizon();
+    void PutCustomHorizon(CustomHorizonDto value);
 }

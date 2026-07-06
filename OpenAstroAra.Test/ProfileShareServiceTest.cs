@@ -108,7 +108,10 @@ public class ProfileShareServiceTest {
             new PlanningFilterDto(Name: "Donor L-eXtreme", Kind: FilterKind.Duo, BandwidthNm: 7),
         ]),
         // Kept on export: filter names are gear facts, not host/secret/location data.
-        FilterWheelLabels: new(["L", "Ha", "", "OIII"]));
+        FilterWheelLabels: new(["L", "Ha", "", "OIII"]),
+        // §36 custom terrain horizon — a distinctive skyline (a terrain
+        // fingerprint identifies the site) that must be stripped whole.
+        CustomHorizon: new([new CustomHorizonPointDto(123.75, 41.5)]));
 
     [Test]
     public async Task Export_strips_paths_secrets_location_and_network() {
@@ -193,6 +196,18 @@ public class ProfileShareServiceTest {
         rig.GetProperty("guide_scope_focal_length_mm").GetInt32().Should().Be(240);
 
         manifest.GetProperty("schema_version").GetString().Should().Be("profile-share-v1");
+    }
+
+    [Test]
+    public async Task Export_strips_the_custom_horizon_skyline() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
+        var settings = share!.Manifest.GetProperty("settings");
+        // The section survives as a shape (recipient re-enters their own skyline),
+        // but the donor's terrain vertices are gone.
+        settings.GetProperty("custom_horizon").GetProperty("points").GetArrayLength().Should().Be(0);
+        share.Manifest.GetRawText().Should().NotContain("123.75",
+            "the donor skyline azimuth is location-revealing terrain data");
     }
 
     [Test]

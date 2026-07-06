@@ -104,6 +104,30 @@ public static class ProfileEndpoints {
             .WithName("PutSiteSettings")
             .WithSummary("Replace the active profile's site preferences.");
 
+        profile.MapGet("/custom-horizon", (IProfileStore store) =>
+                Results.Ok(store.GetCustomHorizon()))
+            .Produces<CustomHorizonDto>(StatusCodes.Status200OK)
+            .WithName("GetCustomHorizon")
+            .WithSummary("Get the active profile's custom terrain horizon (empty points = none entered).");
+
+        profile.MapPut("/custom-horizon", (CustomHorizonDto body, IProfileStore store) => {
+            var (normalized, error) = CustomHorizonValidator.Normalize(body);
+            if (error is not null) {
+                return Results.Problem(
+                    type: "https://openastro.net/errors/validation",
+                    title: "Invalid custom horizon",
+                    statusCode: StatusCodes.Status422UnprocessableEntity,
+                    detail: error);
+            }
+            store.PutCustomHorizon(normalized!);
+            return Results.Ok(normalized);
+        })
+            .Accepts<CustomHorizonDto>("application/json")
+            .Produces<CustomHorizonDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("PutCustomHorizon")
+            .WithSummary("Replace the active profile's custom terrain horizon (points are sorted by azimuth; azimuth 0-360, altitude -10..90, max 361 points).");
+
         profile.MapGet("/filenames", (IProfileStore store) =>
                 Results.Ok(store.GetFilenamesSettings()))
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)

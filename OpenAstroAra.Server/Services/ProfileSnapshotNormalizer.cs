@@ -58,6 +58,10 @@ public static class ProfileSnapshotNormalizer {
         if ((IReadOnlyList<string>?)wheelLabels.Labels is null) {
             wheelLabels = defaults.FilterWheelLabels;
         }
+        var customHorizon = (CustomHorizonDto?)snap.CustomHorizon ?? defaults.CustomHorizon!;
+        if ((IReadOnlyList<CustomHorizonPointDto>?)customHorizon.Points is null) {
+            customHorizon = defaults.CustomHorizon!;
+        }
         var stretch = (StretchDefaultsDto?)snap.StretchDefaults ?? defaults.StretchDefaults;
         if ((StretchManualDefaultsDto?)stretch.ManualDefaultParams is null) {
             stretch = stretch with { ManualDefaultParams = defaults.StretchDefaults.ManualDefaultParams };
@@ -79,6 +83,7 @@ public static class ProfileSnapshotNormalizer {
             CameraElectronics = (CameraElectronicsDto?)snap.CameraElectronics ?? defaults.CameraElectronics,
             FilterSet = filterSet,
             FilterWheelLabels = wheelLabels,
+            CustomHorizon = customHorizon,
         };
     }
 
@@ -150,5 +155,7 @@ public static class ProfileSnapshotNormalizer {
         // auto-captures; planning falls back to Tier-0 defaults and says so.
         CameraElectronics: new(),
         FilterSet: new(Filters: []),
-        FilterWheelLabels: FilterWheelLabelsDto.Default);
+        FilterWheelLabels: FilterWheelLabelsDto.Default,
+        // §36 custom terrain horizon — empty until the user enters a skyline.
+        CustomHorizon: new(Points: []));
 }

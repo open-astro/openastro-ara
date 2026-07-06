@@ -98,6 +98,20 @@ public sealed record SiteSettingsDto(
     double TypicalSeeingArcsec,
     string TwilightDefinition);
 
+/// <summary>§36 custom terrain horizon — one skyline vertex: the sky altitude at an
+/// azimuth (compass degrees, 0 = north, clockwise). The profile stores the user's
+/// measured skyline; consumers interpolate between vertices (wrapping 360→0).</summary>
+public sealed record CustomHorizonPointDto(double AzimuthDeg, double AltitudeDeg);
+
+/// <summary>§36 custom terrain horizon profile. Empty <see cref="Points"/> = none
+/// entered — consumers fall back to the flat
+/// <see cref="SiteSettingsDto.DefaultHorizonAltitudeDeg"/> even when
+/// <see cref="SiteSettingsDto.UseCustomHorizon"/> is on (and flag it, see
+/// HorizonDto.CustomHorizonIgnored). Points are stored sorted by azimuth; the PUT
+/// endpoint sorts and validates. Location-revealing terrain data: stripped on
+/// §70 profile share like the site coordinates.</summary>
+public sealed record CustomHorizonDto(IReadOnlyList<CustomHorizonPointDto> Points);
+
 /// <summary>
 /// §29.2 filenames settings — date-token separator + dark/bias
 /// compression toggle. (The main filename template + format live in

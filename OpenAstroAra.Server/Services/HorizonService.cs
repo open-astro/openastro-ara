@@ -41,30 +41,41 @@ public sealed class HorizonService : IHorizonService {
     }
 
     public HorizonDto GetHorizon(DateTimeOffset atUtc) =>
-        Compute(_profileStore.GetSiteSettings(), atUtc);
+        Compute(_profileStore.GetSiteSettings(), atUtc, _profileStore.GetCustomHorizon());
 
     /// <summary>Pure projection: the horizon curve + zenith + cardinals for <paramref name="site"/>
-    /// at <paramref name="atUtc"/>. The horizon altitude is the profile's
-    /// <see cref="SiteSettingsDto.DefaultHorizonAltitudeDeg"/> (flat all the way round for now).</summary>
-    internal static HorizonDto Compute(SiteSettingsDto site, DateTimeOffset atUtc) {
+    /// at <paramref name="atUtc"/>. With <c>UseCustomHorizon</c> on and a non-empty
+    /// <paramref name="customHorizon"/> skyline, each azimuth sample sits at the interpolated
+    /// terrain altitude; otherwise the flat <see cref="SiteSettingsDto.DefaultHorizonAltitudeDeg"/>
+    /// all the way round. <c>HorizonAltitudeDeg</c> always reports the flat default (the custom
+    /// shape lives in the per-point altitudes).</summary>
+    internal static HorizonDto Compute(SiteSettingsDto site, DateTimeOffset atUtc,
+            CustomHorizonDto? customHorizon = null) {
         var lat = site.LatitudeDeg;
         var horizonAlt = site.DefaultHorizonAltitudeDeg;
         var lst = TonightSkyService.LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
+        var skyline = site.UseCustomHorizon && customHorizon is { Points.Count: > 0 }
+            ? customHorizon.Points
+            : null;
+
+        double AltitudeAt(double azimuthDeg) => skyline is null
+            ? horizonAlt
+            : CustomHorizonValidator.AltitudeAtAzimuth(skyline, azimuthDeg);
 
         var points = new List<HorizonPointDto>();
         for (var az = 0; az <= 360; az += AzimuthStepDeg) {
             // Wrap the final vertex exactly onto the first so the polyline closes without a seam gap.
             var azimuth = az == 360 ? 0.0 : az;
-            var (ra, dec) = TonightSkyService.EquatorialFromAltAz(horizonAlt, azimuth, lat, lst);
+            var (ra, dec) = TonightSkyService.EquatorialFromAltAz(AltitudeAt(azimuth), azimuth, lat, lst);
             points.Add(new HorizonPointDto(ra, dec, azimuth));
         }
 
         var (zenithRa, zenithDec) = TonightSkyService.EquatorialFromAltAz(90.0, 0.0, lat, lst);
         var cardinals = new List<CardinalPointDto> {
-            Cardinal("N", 0.0, horizonAlt, lat, lst),
-            Cardinal("E", 90.0, horizonAlt, lat, lst),
-            Cardinal("S", 180.0, horizonAlt, lat, lst),
-            Cardinal("W", 270.0, horizonAlt, lat, lst),
+            Cardinal("N", 0.0, AltitudeAt(0.0), lat, lst),
+            Cardinal("E", 90.0, AltitudeAt(90.0), lat, lst),
+            Cardinal("S", 180.0, AltitudeAt(180.0), lat, lst),
+            Cardinal("W", 270.0, AltitudeAt(270.0), lat, lst),
         };
 
         return new HorizonDto(
@@ -74,9 +85,9 @@ public sealed class HorizonService : IHorizonService {
             Zenith: new HorizonPointDto(zenithRa, zenithDec, 0.0),
             Points: points,
             Cardinals: cardinals,
-            // This slice always serves the flat DefaultHorizonAltitudeDeg; flag it when the profile
-            // actually wants a custom terrain horizon so a later slice can warn without a schema break.
-            CustomHorizonIgnored: site.UseCustomHorizon);
+            // False when the requested custom skyline is actually being served; true
+            // only for the requested-but-empty case (UseCustomHorizon on, no points).
+            CustomHorizonIgnored: site.UseCustomHorizon && skyline is null);
     }
 
     private static CardinalPointDto Cardinal(string label, double azDeg, double altDeg, double latDeg, double lstDeg) {

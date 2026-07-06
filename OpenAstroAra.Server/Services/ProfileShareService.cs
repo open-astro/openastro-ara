@@ -155,6 +155,9 @@ public sealed class ProfileShareService : IProfileShareService {
             PushoverToken = "", TelegramBotToken = "",
             PushoverUserKey = "", TelegramChatId = "",
         },
+        // §36 custom terrain horizon is location-revealing terrain data (a skyline
+        // fingerprints the site) — strip it entirely, same stance as the coordinates.
+        CustomHorizon = new CustomHorizonDto(Points: []),
         // Strip donor location (lat/long/elevation/timezone/name); keep sky-quality
         // judgement (bortle/seeing/twilight/horizon) as informational context.
         Site = s.Site with {

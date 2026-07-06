@@ -40,7 +40,8 @@ public static class ProfileStoreSnapshot {
         Optics: s.GetOpticsSettings(),
         CameraElectronics: s.GetCameraElectronics(),
         FilterSet: s.GetFilterSet(),
-        FilterWheelLabels: s.GetFilterWheelLabels());
+        FilterWheelLabels: s.GetFilterWheelLabels(),
+        CustomHorizon: s.GetCustomHorizon());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -63,5 +64,8 @@ public static class ProfileStoreSnapshot {
         s.PutCameraElectronics(snap.CameraElectronics);
         s.PutFilterSet(snap.FilterSet);
         s.PutFilterWheelLabels(snap.FilterWheelLabels);
+        // Normalized snapshots always carry a non-null horizon; the fallback keeps
+        // Apply safe for a hand-built DTO that skipped the optional param.
+        s.PutCustomHorizon(snap.CustomHorizon ?? new CustomHorizonDto(Points: []));
     }
 }

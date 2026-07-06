@@ -391,6 +391,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // §36 custom terrain horizon — empty until entered.
+    private CustomHorizonDto _customHorizon = new(Points: []);
+
+    public CustomHorizonDto GetCustomHorizon() {
+        lock (_lock) { return _customHorizon; }
+    }
+
+    public void PutCustomHorizon(CustomHorizonDto value) {
+        lock (_lock) { _customHorizon = value; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(
