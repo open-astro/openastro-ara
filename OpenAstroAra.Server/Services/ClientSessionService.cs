@@ -116,12 +116,15 @@ public sealed partial class ClientSessionService {
 
     private sealed record PendingTakeover(string RequestId, TaskCompletionSource<string> Tcs);
 
-    /// <summary>§27.1 connect flow. Free (or dead-holder) slot → Granted immediately.
-    /// Live holder → sends <c>connection.request</c> over the holder's bound WS and
-    /// awaits the holder's answer up to <see cref="RequestTimeout"/>. Cancellation of
-    /// <paramref name="ct"/> (the new client gave up / request aborted) cleans up the
-    /// pending request and rethrows.</summary>
-    public async Task<ConnectOutcome> ConnectAsync(string hostname, CancellationToken ct) {
+    /// <summary>§27.1 connect flow. A matching <paramref name="existingSessionId"/> is
+    /// an idempotent re-claim (same session back, no dance — even one the liveness rule
+    /// already considers dead, as long as nobody else claimed the slot in between: the
+    /// slot is still that client's). Otherwise: free (or dead-holder) slot → Granted
+    /// immediately; live holder → sends <c>connection.request</c> over the holder's
+    /// bound WS and awaits the holder's answer up to <see cref="RequestTimeout"/>.
+    /// Cancellation of <paramref name="ct"/> (the new client gave up / request aborted)
+    /// cleans up the pending request and rethrows.</summary>
+    public async Task<ConnectOutcome> ConnectAsync(string hostname, Guid? existingSessionId, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostname);
         var requestId = Guid.NewGuid().ToString("N");
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -131,6 +134,10 @@ public sealed partial class ClientSessionService {
 
         lock (_lock) {
             var now = UtcNow();
+            if (existingSessionId is Guid reclaimed && _current is not null && _current.Id == reclaimed) {
+                _current.LastSeenUtc = now;
+                return new ConnectOutcome(ConnectOutcomeKind.Granted, _current.Id, _current.ConnectedUtc, null);
+            }
             if (_pending is not null) {
                 return new ConnectOutcome(ConnectOutcomeKind.Busy, Guid.Empty, now, _current?.Hostname);
             }

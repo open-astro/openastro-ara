@@ -81,7 +81,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Connect_on_free_slot_is_granted_immediately() {
             var svc = NewService();
-            var outcome = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var outcome = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
 
             Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
             Assert.That(outcome.SessionId, Is.Not.EqualTo(Guid.Empty));
@@ -105,10 +105,10 @@ namespace OpenAstroAra.Test {
         public async Task Takeover_allow_grants_new_client_and_closes_old_socket_with_4004() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             Assert.That(svc.BindSocket(holder.SessionId, holderConn), Is.True);
 
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             // The holder receives the connection.request frame with the new hostname.
             await WaitForFrameAsync(holderConn);
             using (var doc = JsonDocument.Parse(holderConn.LastFrame())) {
@@ -132,10 +132,10 @@ namespace OpenAstroAra.Test {
         public async Task Takeover_reject_returns_rejected_with_holder_hostname_and_keeps_holder() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(holderConn);
             svc.TryCompleteTakeover(RequestIdOf(holderConn), "reject");
             var outcome = await connectTask;
@@ -150,10 +150,10 @@ namespace OpenAstroAra.Test {
         public async Task Takeover_timeout_returns_unresponsive_and_keeps_holder() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
-            var outcome = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var outcome = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
 
             Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Unresponsive));
             Assert.That(outcome.CurrentHostname, Is.EqualTo("mac.local"));
@@ -164,10 +164,10 @@ namespace OpenAstroAra.Test {
         public async Task Takeover_send_failure_returns_unresponsive_without_granting() {
             var svc = NewService();
             var holderConn = new FakeConnection { FailSends = true };
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
-            var outcome = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var outcome = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
 
             Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Unresponsive));
             Assert.That(svc.GetSession().Hostname, Is.EqualTo("mac.local"));
@@ -177,19 +177,19 @@ namespace OpenAstroAra.Test {
         public async Task Second_concurrent_connect_during_pending_takeover_is_busy() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
-            var first = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var first = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(holderConn);
-            var second = await svc.ConnectAsync("phone.local", CancellationToken.None);
+            var second = await svc.ConnectAsync("phone.local", null, CancellationToken.None);
             Assert.That(second.Kind, Is.EqualTo(ConnectOutcomeKind.Busy));
 
             svc.TryCompleteTakeover(RequestIdOf(holderConn), "reject");
             await first;
 
             // Pending cleared → a later attempt gets the full dance again (times out here).
-            var third = await svc.ConnectAsync("phone.local", CancellationToken.None);
+            var third = await svc.ConnectAsync("phone.local", null, CancellationToken.None);
             Assert.That(third.Kind, Is.EqualTo(ConnectOutcomeKind.Unresponsive),
                 "after the pending request resolves, the next attempt is no longer Busy");
         }
@@ -198,17 +198,67 @@ namespace OpenAstroAra.Test {
         public async Task Stale_or_wrong_request_id_does_not_complete_takeover() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
             Assert.That(svc.TryCompleteTakeover("nope", "allow"), Is.False, "no pending request at all");
 
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(holderConn);
             Assert.That(svc.TryCompleteTakeover("wrong-id", "allow"), Is.False);
             var outcome = await connectTask;
             Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Unresponsive),
                 "a wrong request id must not grant the slot");
+        }
+
+        // ── idempotent re-claim ─────────────────────────────────────────────
+
+        [Test]
+        public async Task Reclaim_with_own_session_id_regrants_without_a_dance() {
+            var svc = NewService();
+            var holderConn = new FakeConnection();
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
+            svc.BindSocket(holder.SessionId, holderConn);
+
+            // Same client reconnecting after a Wi-Fi blip: presents its session id.
+            var reclaim = await svc.ConnectAsync("mac.local", holder.SessionId, CancellationToken.None);
+
+            Assert.That(reclaim.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
+            Assert.That(reclaim.SessionId, Is.EqualTo(holder.SessionId), "same session, not a new one");
+            Assert.That(holderConn.SentFrames, Is.Empty, "no connection.request modal for a re-claim");
+            Assert.That(holderConn.CloseCode, Is.Null);
+        }
+
+        [Test]
+        public async Task Reclaim_revives_a_dead_but_unclaimed_session() {
+            var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
+            var svc = NewService(now);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
+
+            // 90 s of silence — past DeadAfter, but nobody else claimed the slot.
+            svc.UtcNow = () => now.AddSeconds(90);
+            var reclaim = await svc.ConnectAsync("mac.local", holder.SessionId, CancellationToken.None);
+
+            Assert.That(reclaim.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
+            Assert.That(reclaim.SessionId, Is.EqualTo(holder.SessionId));
+            Assert.That(svc.GetSession().Connected, Is.True, "re-claim refreshed liveness");
+        }
+
+        [Test]
+        public async Task Stale_session_id_after_takeover_goes_through_the_normal_dance() {
+            var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
+            var svc = NewService(now);
+            var oldHolder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
+            // mac.local goes silent; ipad.local sweeps the dead slot.
+            svc.UtcNow = () => now.AddSeconds(61);
+            var newHolder = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
+            Assert.That(newHolder.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
+
+            // mac.local comes back presenting its OLD id — that's a foreign connect
+            // now (holder has no bound socket and is fresh, so: unresponsive).
+            var comeback = await svc.ConnectAsync("mac.local", oldHolder.SessionId, CancellationToken.None);
+            Assert.That(comeback.Kind, Is.EqualTo(ConnectOutcomeKind.Unresponsive));
+            Assert.That(svc.GetSession().Hostname, Is.EqualTo("ipad.local"), "the thief keeps the slot");
         }
 
         // ── liveness / dead holder ──────────────────────────────────────────
@@ -217,15 +267,15 @@ namespace OpenAstroAra.Test {
         public async Task Holder_with_no_bound_socket_within_grace_is_unresponsive_then_dead_after_60s() {
             var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
             var svc = NewService(now);
-            await svc.ConnectAsync("mac.local", CancellationToken.None);
+            await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             // No WS ever bound. 30 s in: still within the DeadAfter grace.
             svc.UtcNow = () => now.AddSeconds(30);
-            var early = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var early = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             Assert.That(early.Kind, Is.EqualTo(ConnectOutcomeKind.Unresponsive));
 
             // 61 s in: dead — the slot sweeps to the new client with no dance.
             svc.UtcNow = () => now.AddSeconds(61);
-            var late = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var late = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             Assert.That(late.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
             Assert.That(svc.GetSession().Hostname, Is.EqualTo("ipad.local"));
         }
@@ -235,12 +285,12 @@ namespace OpenAstroAra.Test {
             var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
             var svc = NewService(now);
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
             // A frozen app whose OS-level socket stays open: no frames for > 60 s.
             svc.UtcNow = () => now.AddSeconds(61);
-            var outcome = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var outcome = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
 
             Assert.That(outcome.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
             await WaitUntilAsync(() => holderConn.CloseCode is not null);
@@ -252,14 +302,14 @@ namespace OpenAstroAra.Test {
             var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
             var svc = NewService(now);
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
             // Pong at t+50s resets the silence window.
             svc.UtcNow = () => now.AddSeconds(50);
             svc.RecordActivity(holder.SessionId);
             svc.UtcNow = () => now.AddSeconds(100); // only 50 s since the pong
-            var outcome = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var outcome = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
 
             Assert.That(outcome.Kind, Is.Not.EqualTo(ConnectOutcomeKind.Granted),
                 "a ponging holder must not be swept");
@@ -271,7 +321,7 @@ namespace OpenAstroAra.Test {
             var now = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
             var svc = NewService(now);
             var conn1 = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, conn1);
 
             // Wi-Fi blip at t+10s: socket unbinds; the 60 s countdown starts there.
@@ -291,7 +341,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Stale_socket_unbind_does_not_detach_the_replacement() {
             var svc = NewService();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             var oldConn = new FakeConnection();
             var newConn = new FakeConnection();
             svc.BindSocket(holder.SessionId, oldConn);
@@ -301,7 +351,7 @@ namespace OpenAstroAra.Test {
             svc.UnbindSocket(holder.SessionId, oldConn);
 
             // The takeover dance still reaches the (still-bound) new socket.
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(newConn);
             svc.TryCompleteTakeover(RequestIdOf(newConn), "reject");
             var outcome = await connectTask;
@@ -311,7 +361,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task BindSocket_with_unknown_session_id_is_refused() {
             var svc = NewService();
-            await svc.ConnectAsync("mac.local", CancellationToken.None);
+            await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             Assert.That(svc.BindSocket(Guid.NewGuid(), new FakeConnection()), Is.False);
         }
 
@@ -320,7 +370,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Disconnect_releases_the_slot_only_for_the_owning_session() {
             var svc = NewService();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
 
             Assert.That(svc.Disconnect(Guid.NewGuid()), Is.False, "wrong id must not release");
             Assert.That(svc.GetSession().Connected, Is.True);
@@ -328,7 +378,7 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.Disconnect(holder.SessionId), Is.True);
             Assert.That(svc.GetSession().Connected, Is.False);
 
-            var next = await svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var next = await svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             Assert.That(next.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
         }
 
@@ -336,10 +386,10 @@ namespace OpenAstroAra.Test {
         public async Task Disconnect_during_pending_takeover_grants_the_waiting_connector() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(holderConn);
             // The holder quits gracefully instead of answering the modal.
             Assert.That(svc.Disconnect(holder.SessionId), Is.True);
@@ -355,10 +405,10 @@ namespace OpenAstroAra.Test {
         public async Task HandleClientFrame_routes_connection_response_to_the_pending_takeover() {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
 
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(holderConn);
             var frame = $"{{\"type\":\"connection.response\",\"request_id\":\"{RequestIdOf(holderConn)}\",\"action\":\"allow\"}}";
             WebSocketEndpoints.HandleClientFrame(Encoding.UTF8.GetBytes(frame), svc);
@@ -377,9 +427,9 @@ namespace OpenAstroAra.Test {
         public async Task HandleClientFrame_is_permissive(string payload) {
             var svc = NewService();
             var holderConn = new FakeConnection();
-            var holder = await svc.ConnectAsync("mac.local", CancellationToken.None);
+            var holder = await svc.ConnectAsync("mac.local", null, CancellationToken.None);
             svc.BindSocket(holder.SessionId, holderConn);
-            var connectTask = svc.ConnectAsync("ipad.local", CancellationToken.None);
+            var connectTask = svc.ConnectAsync("ipad.local", null, CancellationToken.None);
             await WaitForFrameAsync(holderConn);
 
             Assert.DoesNotThrow(() =>

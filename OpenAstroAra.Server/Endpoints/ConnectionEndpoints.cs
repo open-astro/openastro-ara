@@ -49,7 +49,7 @@ public static class ConnectionEndpoints {
                     if (hostname.Length > MaxHostnameLength) {
                         hostname = hostname[..MaxHostnameLength];
                     }
-                    var outcome = await sessions.ConnectAsync(hostname, ct);
+                    var outcome = await sessions.ConnectAsync(hostname, body?.SessionId, ct);
                     return outcome.Kind switch {
                         ConnectOutcomeKind.Granted => Results.Ok(
                             new ClientConnectResponseDto(outcome.SessionId, hostname, outcome.ConnectedAt)),

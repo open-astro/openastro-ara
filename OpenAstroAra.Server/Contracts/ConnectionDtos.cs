@@ -31,8 +31,13 @@ namespace OpenAstroAra.Server.Contracts;
 
 /// <summary>Body of <c>POST /api/v1/server/connect</c>. The hostname identifies the
 /// connecting client to the current holder's takeover modal ("ipad.local wants to
-/// connect") — it is display-only, never used for addressing.</summary>
-public sealed record ClientConnectRequestDto(string? Hostname);
+/// connect") — it is display-only, never used for addressing. <c>SessionId</c> is the
+/// caller's PREVIOUS session id, if it has one: when it still matches the current
+/// holder the connect is an idempotent re-claim (same session back, no takeover
+/// dance) — without this, a client whose WS dropped in a Wi-Fi blip would be treated
+/// as a foreign takeover attempt and locked out of its own slot by the 60 s
+/// unresponsive-holder grace.</summary>
+public sealed record ClientConnectRequestDto(string? Hostname, Guid? SessionId);
 
 /// <summary>Success shape of <c>POST /api/v1/server/connect</c>. The session id is the
 /// caller's capability for <c>disconnect</c> and for binding its WS upgrade
