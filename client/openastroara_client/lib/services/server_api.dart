@@ -55,7 +55,16 @@ class ServerApi {
         options: Options(receiveTimeout: const Duration(seconds: 40)),
       );
       final data = res.data ?? <String, dynamic>{};
-      return SessionClaim.granted(data['session_id'] as String? ?? '');
+      final grantedId = data['session_id'] as String?;
+      if (grantedId == null || grantedId.trim().isEmpty) {
+        // A 200 without a session id is server misbehavior; treating it as
+        // granted would bind the WS with an empty X-Ara-Session and later
+        // "release" an empty id. Degrade to denied instead.
+        return const SessionClaim.denied(
+          'The server accepted the connection but returned no session id.',
+        );
+      }
+      return SessionClaim.granted(grantedId);
     } on DioException catch (e) {
       final res = e.response;
       if (res?.statusCode == 409) {

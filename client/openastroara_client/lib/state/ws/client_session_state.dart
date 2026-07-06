@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,6 +40,10 @@ class ClientSessionNotifier extends Notifier<ClientSessionState> {
   ServerApi Function(AraServer)? _apiFactory;
   String? _sessionId;
 
+  /// Bumped by [release]. A claim that was in flight when a release ran must
+  /// not resurrect the session it comes back with — see [claim].
+  int _releaseEpoch = 0;
+
   @override
   ClientSessionState build() {
     _apiFactory = ref.read(serverApiFactoryProvider);
@@ -50,19 +55,30 @@ class ClientSessionNotifier extends Notifier<ClientSessionState> {
   /// caller connects unbound either way.
   Future<String?> claim(AraServer server) async {
     final api = ref.read(serverApiFactoryProvider)(server);
+    final epochBefore = _releaseEpoch;
     try {
       final result = await api.connectClient(
         hostname: _localHostname(),
         sessionId: _sessionId,
       );
+      if (_releaseEpoch != epochBefore) {
+        // release() ran while the server was deciding (stream teardown / server
+        // switch mid-claim). Adopting this grant would orphan it — no socket
+        // will bind it and nothing would release it again (only the daemon's
+        // 60 s sweep). Hand it straight back instead.
+        if (result.granted) {
+          unawaited(_bestEffortDisconnect(api, result.sessionId!));
+        }
+        return null;
+      }
       if (result.granted) {
         _sessionId = result.sessionId;
-        state = ClientSessionState(sessionId: result.sessionId);
+        _setState(ClientSessionState(sessionId: result.sessionId));
         return result.sessionId;
       }
       // Denied: our cached id (if any) is stale — someone else holds the slot.
       _sessionId = null;
-      state = ClientSessionState(deniedReason: result.deniedReason);
+      _setState(ClientSessionState(deniedReason: result.deniedReason));
       return null;
     } on Exception {
       // Older daemon without §27 (404), network fault mid-reconnect, etc. —
@@ -73,22 +89,35 @@ class ClientSessionNotifier extends Notifier<ClientSessionState> {
   }
 
   /// Gracefully release the slot (stream teardown / server switch / app exit).
-  /// Best-effort, and safe to call while the container is disposing.
+  /// Best-effort, and safe to call while the container is disposing. Also
+  /// fences any claim still in flight (see [claim]'s epoch check).
   Future<void> release(AraServer server) async {
+    _releaseEpoch++;
     final id = _sessionId;
     final apiFactory = _apiFactory;
     if (id == null || apiFactory == null) return;
     _sessionId = null;
+    _setState(const ClientSessionState());
+    await _bestEffortDisconnect(apiFactory(server), id);
+  }
+
+  Future<void> _bestEffortDisconnect(ServerApi api, String sessionId) async {
     try {
-      state = const ClientSessionState();
-    } on StateError {
-      // Container teardown: the notifier is already disposed and nobody
-      // observes state anymore — the field reset above is what matters.
-    }
-    try {
-      await apiFactory(server).disconnectClient(id);
+      await api.disconnectClient(sessionId);
     } on Exception {
       // Already taken over / daemon gone — either way the slot isn't ours.
+    }
+  }
+
+  /// State assignment that tolerates the disposed-mid-teardown case: provider
+  /// onDispose callbacks (which drive [release], and can resolve an in-flight
+  /// [claim]) may run after this notifier is disposed, when `state` throws.
+  /// The plain-field mirrors above are the source of truth by then.
+  void _setState(ClientSessionState next) {
+    try {
+      state = next;
+    } on StateError {
+      // Container teardown: nobody observes state anymore.
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -153,5 +155,61 @@ void main() {
 
       expect(api.released, isEmpty);
     });
+
+    test(
+      'a release during an in-flight claim hands the late grant back',
+      () async {
+        final api = _BlockingServerApi();
+        final container = ProviderContainer(
+          overrides: [serverApiFactoryProvider.overrideWithValue((_) => api)],
+        );
+        addTearDown(container.dispose);
+        final notifier = container.read(clientSessionProvider.notifier);
+
+        // The claim goes out; the server is "deciding" (can block up to ~30s).
+        final claimFuture = notifier.claim(server);
+        await pumpEventQueue();
+
+        // Teardown runs release() while the claim is still pending.
+        await notifier.release(server);
+
+        // The server then grants — too late. The grant must not be adopted...
+        api.pending.complete(const SessionClaim.granted('sid-late'));
+        final sid = await claimFuture;
+        await pumpEventQueue();
+
+        expect(sid, isNull);
+        expect(
+          container.read(clientSessionProvider).holdsSlot,
+          isFalse,
+          reason: 'nothing may resurrect a session after release',
+        );
+        // ...and must be handed straight back, not left for the 60s dead sweep.
+        expect(api.released, ['sid-late']);
+      },
+    );
   });
+}
+
+/// A claim that blocks until the test completes [pending] — models the server
+/// holding the connect open while the current holder answers the modal.
+class _BlockingServerApi implements ServerApi {
+  final Completer<SessionClaim> pending = Completer<SessionClaim>();
+  final List<String> released = [];
+
+  @override
+  Future<SessionClaim> connectClient({
+    required String hostname,
+    String? sessionId,
+  }) => pending.future;
+
+  @override
+  Future<bool> disconnectClient(String sessionId) async {
+    released.add(sessionId);
+    return true;
+  }
+
+  @override
+  Future<ServerInfo> getInfo() async =>
+      const ServerInfo(name: 'fake', version: 'x', apiVersion: 'x');
 }
