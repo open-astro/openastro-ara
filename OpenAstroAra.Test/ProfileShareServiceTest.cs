@@ -34,6 +34,8 @@ namespace OpenAstroAra.Test;
 public class ProfileShareServiceTest {
     private const string PushSecret = "PUSHOVER-TOKEN-DO-NOT-LEAK";
     private const string TelegramSecret = "TELEGRAM-TOKEN-DO-NOT-LEAK";
+    private const string PushUserKeySecret = "PUSHOVER-USERKEY-DO-NOT-LEAK";
+    private const string TelegramChatSecret = "TELEGRAM-CHATID-DO-NOT-LEAK";
     private static readonly Guid ProfileId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     /// A donor snapshot whose strip-target fields hold recognizable sentinel
@@ -50,6 +52,7 @@ public class ProfileShareServiceTest {
         Notifications: new(
             InAppBanner: true, OsDesktop: true, SoundAlert: true,
             PushoverToken: PushSecret, TelegramBotToken: TelegramSecret,
+            PushoverUserKey: PushUserKeySecret, TelegramChatId: TelegramChatSecret,
             OnSequenceComplete: true, OnSequencePaused: true, OnCriticalDiagnostic: true,
             OnSafetyEvent: true, OnAutofocusFailed: true, OnPlateSolveFailed: true,
             OnDiskSpaceLow: true),
@@ -201,6 +204,8 @@ public class ProfileShareServiceTest {
         var raw = share!.Manifest.GetRawText();
         raw.Should().NotContain(PushSecret);
         raw.Should().NotContain(TelegramSecret);
+        raw.Should().NotContain(PushUserKeySecret);
+        raw.Should().NotContain(TelegramChatSecret);
     }
 
     [Test]
@@ -217,7 +222,7 @@ public class ProfileShareServiceTest {
         // since a bare substring scan for a number like "4401" would false-positive
         // on any future field that happens to contain those digits.
         string[] mustNotAppear = {
-            PushSecret, TelegramSecret,
+            PushSecret, TelegramSecret, PushUserKeySecret, TelegramChatSecret,
             @"C:\Astro\Captures", @"C:\Program Files\astap\astap.exe", @"C:\astap\db",
             "Joey's backyard", "America/Los_Angeles",
             "guidepi.local", "Donor PHD2 profile",

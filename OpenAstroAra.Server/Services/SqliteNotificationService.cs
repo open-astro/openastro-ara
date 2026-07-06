@@ -45,11 +45,15 @@ public sealed partial class SqliteNotificationService : INotificationService {
     // Injectable clock so the §58.10 unattended-window check is testable at pinned instants.
     internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
+    // §54 — optional push forwarder; without it (tests, minimal composition) nothing pushes.
+    private readonly PushChannelService? _push;
+
     public SqliteNotificationService(IAraDatabase db, ILogger<SqliteNotificationService>? logger,
-            IProfileStore? profiles = null) {
+            IProfileStore? profiles = null, PushChannelService? push = null) {
         _db = db;
         _logger = logger ?? NullLogger<SqliteNotificationService>.Instance;
         _profiles = profiles;
+        _push = push;
     }
 
     /// <summary>
@@ -187,6 +191,11 @@ public sealed partial class SqliteNotificationService : INotificationService {
         notification = EscalateIfUnattended(notification);
         await using var conn = _db.OpenConnection();
         await InsertAsync(conn, notification, ct);
+        // §54 — forward to any configured push channels AFTER the insert (the in-app feed is
+        // the source of truth) and after the §58.10 escalation (the pushed severity matches
+        // what the user will see in the feed). Fire-and-forget: a provider outage never
+        // delays the notification chokepoint.
+        _push?.ForwardInBackground(notification);
     }
 
     /// <summary>§58.10 — bump an equipment-impacting notification one severity level while the

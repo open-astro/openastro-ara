@@ -149,8 +149,12 @@ public sealed class ProfileShareService : IProfileShareService {
         Storage = s.Storage with { SaveDirectory = "", FilenameTemplate = "" },
         // Strip ASTAP executable + index paths (host-specific).
         PlateSolve = s.PlateSolve with { PathOrEndpoint = "", IndexDownloadPath = "" },
-        // Strip secrets — push/telegram tokens must never travel in a share file.
-        Notifications = s.Notifications with { PushoverToken = "", TelegramBotToken = "" },
+        // Strip secrets — push/telegram credentials must never travel in a share file
+        // (BOTH halves of each channel: token + user key, bot token + chat id).
+        Notifications = s.Notifications with {
+            PushoverToken = "", TelegramBotToken = "",
+            PushoverUserKey = "", TelegramChatId = "",
+        },
         // Strip donor location (lat/long/elevation/timezone/name); keep sky-quality
         // judgement (bortle/seeing/twilight/horizon) as informational context.
         Site = s.Site with {

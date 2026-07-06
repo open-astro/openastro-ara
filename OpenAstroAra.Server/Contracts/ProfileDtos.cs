@@ -73,7 +73,13 @@ public sealed record NotificationsSettingsDto(
     bool OnSafetyEvent,
     bool OnAutofocusFailed,
     bool OnPlateSolveFailed,
-    bool OnDiskSpaceLow);
+    bool OnDiskSpaceLow,
+    // §54 push channels (v0.1.0 fence lifted 2026-07-06) — both services need TWO values:
+    // Pushover an application token (PushoverToken above) + the USER key; Telegram a bot token
+    // (TelegramBotToken above) + the CHAT id. A channel sends only when both of its values are
+    // non-empty. Optional ctor defaults keep an older profile.json deserializing.
+    string PushoverUserKey = "",
+    string TelegramChatId = "");
 
 /// <summary>
 /// §37.12 site preferences — location + horizon + observing conditions.
