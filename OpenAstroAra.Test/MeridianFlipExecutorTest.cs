@@ -695,6 +695,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_early_failure_does_not_claim_a_tracking_restore_or_an_unresumed_guider() {
+            // StopAutoguider throws BEFORE PassMeridian: tracking was never disabled and guiding
+            // was never stopped — the message must not claim a restore that never ran, nor cry
+            // wolf about a guider that was never stopped in the first place.
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false));
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("PHD2 hiccup"));
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never,
+                "tracking was never touched — no disable, no restore");
+            var n = published.Single();
+            Assert.That(n.Message, Does.Contain("never disabled"));
+            Assert.That(n.Message, Does.Not.Contain("could NOT be resumed"));
+        }
+
+        [Test]
         public async Task The_failure_notification_reports_an_unresumable_guider() {
             SetupProfile(recenter: true);
             SetupSafety(Safety(enabled: false));

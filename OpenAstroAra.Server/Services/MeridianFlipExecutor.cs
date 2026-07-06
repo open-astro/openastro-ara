@@ -271,9 +271,14 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 }
                 // §58.7 — the failure must reach the user in BOTH modes, not only under the
                 // §58.9 safety layers: an unattended sequence just halted. Fold the guider
-                // outcome in — "restored but unguided" and "restored" are different mornings.
+                // outcome in — "restored but unguided" and "restored" are different mornings —
+                // and only claim a tracking restore that actually ran (a failure before
+                // PassMeridian never touched tracking, so "restored" would overstate it).
+                var trackingClause = trackingDisabled
+                    ? "Tracking was restored best-effort"
+                    : "Tracking was never disabled (the failure occurred before the meridian wait)";
                 await NotifyCritical("Meridian flip failed",
-                    $"{ex.Message} Tracking was restored best-effort and the sequence has been halted."
+                    $"{ex.Message} {trackingClause} and the sequence has been halted."
                     + (guiderResumed ? string.Empty : " The guider could NOT be resumed — the mount is unguided."));
             }
             return false;
