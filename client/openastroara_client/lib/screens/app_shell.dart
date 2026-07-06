@@ -6,6 +6,7 @@ import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/command_palette.dart';
+import '../widgets/connection_policy_listener.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/ws_connection_indicator.dart';
@@ -38,7 +39,11 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   static const _tabs = <_TabSpec>[
     _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
-    _TabSpec(icon: Icons.play_circle_outline, label: 'Run', body: SequencerTab()),
+    _TabSpec(
+      icon: Icons.play_circle_outline,
+      label: 'Run',
+      body: SequencerTab(),
+    ),
     _TabSpec(icon: Icons.camera_alt, label: 'Live', body: ImagingTab()),
     _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
   ];
@@ -72,70 +77,79 @@ class _AppShellState extends ConsumerState<AppShell> {
     // settings panel) to the actual tab order — a reorder of _tabs that forgets
     // to update the constant trips this in debug instead of silently navigating
     // to the wrong tab.
-    assert(_tabs[kOptionsTabIndex].label == 'Options',
-        'kOptionsTabIndex must point at the Options tab — update it if _tabs is reordered.');
+    assert(
+      _tabs[kOptionsTabIndex].label == 'Options',
+      'kOptionsTabIndex must point at the Options tab — update it if _tabs is reordered.',
+    );
     return Scaffold(
-      body: SafeArea(
-        child: CallbackShortcuts(
-          // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
-          // is reachable regardless of host platform.
-          bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
-                showCommandPalette(context),
-            const SingleActivator(LogicalKeyboardKey.keyK, control: true): () =>
-                showCommandPalette(context),
-          },
-          child: Focus(
-            autofocus: true,
-            child: Column(
-              children: [
-                const _TopEquipmentBar(),
-                Expanded(
-                  child: Row(
-                    children: [
-                      NavigationRail(
-                        selectedIndex: selectedTab,
-                        onDestinationSelected: (i) => ref
-                            .read(selectedTabIndexProvider.notifier)
-                            .select(i),
-                        labelType: NavigationRailLabelType.all,
-                        destinations: [
-                          for (final t in _tabs)
-                            NavigationRailDestination(
-                              icon: Icon(t.icon),
-                              label: Text(t.label),
-                            ),
-                        ],
-                      ),
-                      const VerticalDivider(width: 1, thickness: 1),
-                      // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
-                      // once built, is KEPT ALIVE and merely hidden when another is
-                      // selected. Critical for the Planning/Sky Atlas tab: its native
-                      // webview must persist — tearing it down on a tab-switch and
-                      // re-creating it reloads the planetarium and loses atlas state.
-                      //
-                      // Lazy build: an unvisited tab renders an empty placeholder
-                      // instead of its real body, so we DON'T run every tab's
-                      // initState at startup (no eager API/poll calls before the
-                      // user even opens that tab). A tab builds the first time it's
-                      // selected (it's in _builtTabs) and stays alive thereafter —
-                      // so the atlas still persists across switches once opened.
-                      Expanded(
-                        child: IndexedStack(
-                          index: selectedTab,
-                          children: [
-                            for (var i = 0; i < _tabs.length; i++)
-                              liveTabs.contains(i)
-                                  ? _tabs[i].body
-                                  : const SizedBox.shrink(),
+      // §27 — daemon-initiated connection-policy modals (takeover request /
+      // session transferred) listen here, at the always-alive shell level.
+      body: ConnectionPolicyListener(
+        child: SafeArea(
+          child: CallbackShortcuts(
+            // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
+            // is reachable regardless of host platform.
+            bindings: <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+                  showCommandPalette(context),
+              const SingleActivator(
+                LogicalKeyboardKey.keyK,
+                control: true,
+              ): () =>
+                  showCommandPalette(context),
+            },
+            child: Focus(
+              autofocus: true,
+              child: Column(
+                children: [
+                  const _TopEquipmentBar(),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        NavigationRail(
+                          selectedIndex: selectedTab,
+                          onDestinationSelected: (i) => ref
+                              .read(selectedTabIndexProvider.notifier)
+                              .select(i),
+                          labelType: NavigationRailLabelType.all,
+                          destinations: [
+                            for (final t in _tabs)
+                              NavigationRailDestination(
+                                icon: Icon(t.icon),
+                                label: Text(t.label),
+                              ),
                           ],
                         ),
-                      ),
-                    ],
+                        const VerticalDivider(width: 1, thickness: 1),
+                        // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
+                        // once built, is KEPT ALIVE and merely hidden when another is
+                        // selected. Critical for the Planning/Sky Atlas tab: its native
+                        // webview must persist — tearing it down on a tab-switch and
+                        // re-creating it reloads the planetarium and loses atlas state.
+                        //
+                        // Lazy build: an unvisited tab renders an empty placeholder
+                        // instead of its real body, so we DON'T run every tab's
+                        // initState at startup (no eager API/poll calls before the
+                        // user even opens that tab). A tab builds the first time it's
+                        // selected (it's in _builtTabs) and stays alive thereafter —
+                        // so the atlas still persists across switches once opened.
+                        Expanded(
+                          child: IndexedStack(
+                            index: selectedTab,
+                            children: [
+                              for (var i = 0; i < _tabs.length; i++)
+                                liveTabs.contains(i)
+                                    ? _tabs[i].body
+                                    : const SizedBox.shrink(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const _BottomStatusBar(),
-              ],
+                  const _BottomStatusBar(),
+                ],
+              ),
             ),
           ),
         ),
