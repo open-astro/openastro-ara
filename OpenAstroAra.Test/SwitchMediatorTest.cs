@@ -132,5 +132,47 @@ namespace OpenAstroAra.Test {
             Assert.That(SwitchService.WritablePortIdAt(snapshots, 2), Is.Null);
             Assert.That(SwitchService.WritablePortIdAt(System.Array.Empty<SwitchPortSnapshot>(), 0), Is.Null);
         }
+
+        // ── §10.6 PR3: the device-targeted capability surface ────────────────────────────
+
+        [Test]
+        public void Targeted_GetInfo_before_connect_reports_not_connected_for_any_device() {
+            using var svc = new SwitchService();
+            Assert.That(((ISwitchDeviceTargeting)svc).GetInfo(-1).Connected, Is.False, "primary");
+            Assert.That(((ISwitchDeviceTargeting)svc).GetInfo(0).Connected, Is.False, "exact device 0");
+            Assert.That(((ISwitchDeviceTargeting)svc).GetInfo(7).Connected, Is.False, "exact device 7");
+        }
+
+        [Test]
+        public void Targeted_GetInfo_after_Dispose_reports_not_connected_without_throwing() {
+            var svc = new SwitchService();
+            svc.Dispose();
+            Assert.That(((ISwitchDeviceTargeting)svc).GetInfo(3).Connected, Is.False);
+        }
+
+        [Test]
+        public void Targeted_SetSwitchValue_when_not_connected_completes_without_throwing() {
+            using var svc = new SwitchService();
+            Assert.DoesNotThrowAsync(() => ((ISwitchDeviceTargeting)svc)
+                .SetSwitchValue(2, 0, 1.0, progress: null!, CancellationToken.None));
+        }
+
+        [Test]
+        public void Targeted_SetSwitchValue_after_Dispose_completes_without_throwing() {
+            var svc = new SwitchService();
+            svc.Dispose();
+            Assert.DoesNotThrowAsync(() => ((ISwitchDeviceTargeting)svc)
+                .SetSwitchValue(2, 0, 1.0, progress: null!, CancellationToken.None));
+        }
+
+        [Test]
+        public void Parameterless_GetInfo_is_exactly_the_primary_case_of_the_targeted_overload() {
+            using var svc = new SwitchService();
+            var viaMediator = ((ISwitchMediator)svc).GetInfo();
+            var viaTargeting = ((ISwitchDeviceTargeting)svc).GetInfo(-1);
+            Assert.That(viaMediator.Connected, Is.EqualTo(viaTargeting.Connected));
+            Assert.That(viaMediator.Name, Is.EqualTo(viaTargeting.Name));
+            Assert.That(viaMediator.WritableSwitches?.Count, Is.EqualTo(viaTargeting.WritableSwitches?.Count));
+        }
     }
 }

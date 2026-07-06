@@ -22,7 +22,16 @@ import 'nina_dom.dart' show conditionsWrapperType, itemsWrapperType, triggersWra
 
 /// The palette groups instructions by the equipment/concern they drive.
 /// `container` holds the nesting building-blocks (sequential/parallel sets).
-enum InstructionCategory { camera, filterWheel, focuser, telescope, guider, utility, container }
+enum InstructionCategory {
+  camera,
+  filterWheel,
+  focuser,
+  telescope,
+  guider,
+  switchDevice,
+  utility,
+  container,
+}
 
 /// Display title for a category section header.
 extension InstructionCategoryLabel on InstructionCategory {
@@ -32,6 +41,7 @@ extension InstructionCategoryLabel on InstructionCategory {
         InstructionCategory.focuser => 'Focuser',
         InstructionCategory.telescope => 'Telescope',
         InstructionCategory.guider => 'Guider',
+        InstructionCategory.switchDevice => 'Switch',
         InstructionCategory.utility => 'Utility',
         InstructionCategory.container => 'Containers',
       };
@@ -522,6 +532,29 @@ const List<InstructionDef> instructionCatalog = [
     label: 'Dither',
     category: InstructionCategory.guider,
     icon: Icons.scatter_plot_outlined,
+  ),
+  // ── Switch ─────────────────────────────────────────────────────────────────
+  // §10.6 Switch multi-instance PR3 — drives one writable port of a power-box /
+  // switch hub. SwitchIndex addresses the WRITABLE-port collection (the order the
+  // Settings → Equipment → Switch panel lists writable ports), not the raw ASCOM
+  // port id. AlpacaDeviceNumber picks the hub when several are connected; -1 (the
+  // default every NINA import carries, since NINA has no such field) = the
+  // lowest-numbered one.
+  InstructionDef(
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Switch.SetSwitchValue, OpenAstroAra.Sequencer',
+    label: 'Set Switch Value',
+    category: InstructionCategory.switchDevice,
+    icon: Icons.toggle_on_outlined,
+    fields: [
+      // No min bound: the clamped editor's formatters reject a leading minus
+      // (catalog assert), while the free signed field parses -1 fine; anything
+      // below -1 normalizes to -1 on the daemon (the C# setter clamps).
+      InstructionField('AlpacaDeviceNumber', 'Switch device (-1 = first)',
+          InstructionFieldType.integer, defaultValue: -1),
+      InstructionField('SwitchIndex', 'Writable port #', InstructionFieldType.integer,
+          defaultValue: 0, min: 0),
+      InstructionField('Value', 'Value', InstructionFieldType.number, defaultValue: 0.0),
+    ],
   ),
   // ── Utility ────────────────────────────────────────────────────────────────
   InstructionDef(
