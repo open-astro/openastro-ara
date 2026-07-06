@@ -189,6 +189,11 @@ public partial class Program {
         // types (§52). All Gets return null → 404; Connects/Disconnects/
         // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
         // land per-device in the real-infra phase + Phase 14.
+        // §60.9 — the equipment.* connection events (state_changed + the
+        // connected/disconnected/connection_failed aliases). Every device
+        // service below takes this via its optional ctor param and publishes
+        // from its SetState choke point.
+        builder.Services.AddSingleton<EquipmentEventPublisher>();
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live

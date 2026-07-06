@@ -42,6 +42,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private static readonly TelescopeStateDto IdleRuntime = new("idle", null, null, false, false, false);
 
     private readonly ILogger<TelescopeService> _logger;
+    private readonly EquipmentEventPublisher? _events;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaTelescope? _client;
@@ -62,8 +63,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private long _connectGeneration;
     private bool _disposed;
 
-    public TelescopeService(ILogger<TelescopeService>? logger = null) {
+    public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null) {
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
+        _events = events;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -569,7 +571,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
+        if (_state == state) {
+            return;
+        }
         _state = state;
+        // Callers hold the service lock; the publisher's synchronous part only
+        // serializes a small payload and hands off (see EquipmentEventPublisher).
+        _events?.StateChanged(DeviceType.Telescope, _device?.UniqueId, _device?.Name, state);
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
