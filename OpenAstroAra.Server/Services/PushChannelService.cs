@@ -81,30 +81,29 @@ public sealed partial class PushChannelService : IDisposable {
         if (_disposed || !SeverityAllows(notification.Severity)) {
             return;
         }
-        NotificationsSettingsDto settings;
-        try {
-            settings = _profiles.GetNotificationsSettings();
-        } catch (Exception ex) when (ex is not OutOfMemoryException) {
-            LogSettingsReadFailed(ex);
-            return;
-        }
-        if (!TriggerAllows(settings, notification.Category)) {
-            return;
-        }
-
-        var pushover = !string.IsNullOrWhiteSpace(settings.PushoverToken)
-            && !string.IsNullOrWhiteSpace(settings.PushoverUserKey);
-        var telegram = !string.IsNullOrWhiteSpace(settings.TelegramBotToken)
-            && !string.IsNullOrWhiteSpace(settings.TelegramChatId);
-        if (!pushover && !telegram) {
-            return;
-        }
-        _ = Task.Run(() => SendAllAsync(notification, settings, pushover, telegram), CancellationToken.None);
+        // EVERYTHING else — including the profile read — runs off the caller's path, so the
+        // notification chokepoint (capture path / flip executor / monitors) never waits on the
+        // store lock, let alone a provider.
+        _ = Task.Run(() => SendAllAsync(notification), CancellationToken.None);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Push delivery is best-effort by contract: an HTTP/provider fault must be logged and dropped, never propagated back toward the notification chokepoint (capture path / flip executor). CA1031's log-and-recover boundary applies.")]
-    private async Task SendAllAsync(NotificationDto n, NotificationsSettingsDto s, bool pushover, bool telegram) {
+        Justification = "Push delivery is best-effort by contract: a profile-read or HTTP/provider fault must be logged and dropped, never propagated back toward the notification chokepoint (capture path / flip executor). CA1031's log-and-recover boundary applies.")]
+    private async Task SendAllAsync(NotificationDto n) {
+        NotificationsSettingsDto s;
+        try {
+            s = _profiles.GetNotificationsSettings();
+        } catch (Exception ex) {
+            LogSettingsReadFailed(ex);
+            return;
+        }
+        if (!TriggerAllows(s, n.Category)) {
+            return;
+        }
+        var pushover = !string.IsNullOrWhiteSpace(s.PushoverToken)
+            && !string.IsNullOrWhiteSpace(s.PushoverUserKey);
+        var telegram = !string.IsNullOrWhiteSpace(s.TelegramBotToken)
+            && !string.IsNullOrWhiteSpace(s.TelegramChatId);
         if (pushover) {
             try {
                 await SendPushoverAsync(n, s).ConfigureAwait(false);
@@ -137,7 +136,11 @@ public sealed partial class PushChannelService : IDisposable {
     }
 
     private async Task SendTelegramAsync(NotificationDto n, NotificationsSettingsDto s) {
-        // https://core.telegram.org/bots/api#sendmessage — the bot token is a URL path segment.
+        // https://core.telegram.org/bots/api#sendmessage — the bot token is a URL path segment
+        // BY TELEGRAM'S OWN DESIGN (there is no header/body alternative). Defensive note: never
+        // wire request-URI logging/tracing (HttpClientFactory logging handlers, OpenTelemetry
+        // HTTP instrumentation) onto this client, or the token leaks into logs; the failure
+        // logging below deliberately records only the exception, not the URI.
         var uri = new Uri($"https://api.telegram.org/bot{s.TelegramBotToken.Trim()}/sendMessage");
         using var content = new FormUrlEncodedContent(new Dictionary<string, string> {
             ["chat_id"] = s.TelegramChatId.Trim(),
