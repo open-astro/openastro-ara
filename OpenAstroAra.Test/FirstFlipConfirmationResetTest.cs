@@ -42,6 +42,20 @@ namespace OpenAstroAra.Test {
             store.PutOpticsSettings(optics with { FocalLengthMm = optics.FocalLengthMm + 100 });
             Assert.That(store.GetSafetyPolicies().FirstFlipConfirmed, Is.False,
                 "a changed optics train invalidates the first-flip confirmation");
+
+            // The FUNCTIONAL Update path must reset too — the camera-connect auto-populate
+            // (CameraService.MaybeAutoPopulateOptics) writes sensor dimensions through
+            // UpdateOpticsSettings, and a swapped camera is exactly the rig change the
+            // §58.8 net re-arms on.
+            store.PutSafetyPolicies(store.GetSafetyPolicies() with { FirstFlipConfirmed = true });
+            var unchanged = store.UpdateOpticsSettings(current => current);
+            Assert.That(store.GetSafetyPolicies().FirstFlipConfirmed, Is.True,
+                "a no-op Update (same reference / null) is not an equipment change");
+            Assert.That(unchanged, Is.EqualTo(store.GetOpticsSettings()));
+
+            store.UpdateOpticsSettings(current => current with { SensorWidthPx = current.SensorWidthPx + 1 });
+            Assert.That(store.GetSafetyPolicies().FirstFlipConfirmed, Is.False,
+                "an optics change through the Update path must reset like the Put path");
         }
 
         [Test]

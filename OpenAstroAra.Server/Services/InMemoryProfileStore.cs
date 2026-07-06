@@ -267,12 +267,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutOpticsSettings(OpticsSettingsDto value) {
         lock (_lock) {
-            // §58.8 — mirror FileProfileStore: an optics-train change invalidates the
-            // first-flip confirmation; an identical re-save keeps it.
-            if (value != _optics && _safety.FirstFlipConfirmed) {
-                _safety = _safety with { FirstFlipConfirmed = false };
-            }
-            _optics = value;
+            SetOpticsLocked(value);
         }
         RaiseChanged();
     }
@@ -286,10 +281,22 @@ public sealed class InMemoryProfileStore : IProfileStore {
                 return current; // no change — no event
             }
             next = candidate;
-            _optics = next;
+            SetOpticsLocked(next);
         }
         RaiseChanged();
         return next;
+    }
+
+    // §58.8 — mirror FileProfileStore.WithOptics: an optics-train change invalidates the
+    // first-flip confirmation; an identical re-save keeps it. Shared by the Put AND Update
+    // paths — the camera-connect auto-populate (CameraService.MaybeAutoPopulateOptics) writes
+    // through Update, and a swapped camera is exactly the rig change the safety net re-arms
+    // on. Caller holds _lock.
+    private void SetOpticsLocked(OpticsSettingsDto value) {
+        if (value != _optics && _safety.FirstFlipConfirmed) {
+            _safety = _safety with { FirstFlipConfirmed = false };
+        }
+        _optics = value;
     }
 
     // Defaults match EquipmentConnectionSettings() constructor: camera +
