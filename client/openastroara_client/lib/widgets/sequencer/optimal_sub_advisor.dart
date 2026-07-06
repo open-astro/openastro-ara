@@ -56,7 +56,10 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
 /// what follows. Deeper context wins over outer, and among siblings the last
 /// one before the exposure wins. A zeroed position (RA 0h 0m 0s, Dec +0° 0′ 0″
 /// — the catalog default of a freshly-added instruction) is treated as
-/// not-set-yet rather than "the celestial equator at RA 0".
+/// not-set-yet rather than "the celestial equator at RA 0", and a slew with
+/// `Inherited: true` is skipped entirely — NINA resolves it from the enclosing
+/// target at runtime, so its own `Coordinates` may be stale leftovers from
+/// before the toggle (the DSO container's Target is the truth in that case).
 ({double raDeg, double decDeg})? targetPositionForExposure(
     Map<String, dynamic> body, NodePath path) {
   ({double raDeg, double decDeg})? found = _dsoTarget(body);
@@ -66,9 +69,11 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
     final siblings = childrenOf(parent);
     final index = path[depth];
     for (var i = 0; i < index && i < siblings.length; i++) {
-      final type = siblings[i][r'$type'];
-      if (type == slewScopeToRaDecType || type == _centerAndRotateType) {
-        found = _nonZero(degFromInputCoordinates(siblings[i]['Coordinates'])) ?? found;
+      final sibling = siblings[i];
+      final type = sibling[r'$type'];
+      if ((type == slewScopeToRaDecType || type == _centerAndRotateType) &&
+          sibling['Inherited'] != true) {
+        found = _nonZero(degFromInputCoordinates(sibling['Coordinates'])) ?? found;
       }
     }
     if (index < siblings.length) {

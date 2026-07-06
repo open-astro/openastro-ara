@@ -178,6 +178,52 @@ void main() {
           reason: 'RA 0h Dec 0° is the catalog default, not a chosen target');
     });
 
+    test('an Inherited slew with stale coordinates yields to the DSO target', () {
+      // NINA resolves Inherited: true from the enclosing target at runtime; the
+      // node's own Coordinates may be leftovers from before the toggle and must
+      // not shadow the container's actual target.
+      const centerType =
+          'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
+      final body = {
+        r'$type': dsoType,
+        'Target': {
+          'TargetName': 'M42',
+          'InputCoordinates': inputCoordinatesFromDeg(83.822, -5.391),
+        },
+        'Items': items([
+          {
+            r'$type': centerType,
+            'Inherited': true,
+            'Coordinates': inputCoordinatesFromDeg(200.0, 50.0), // stale
+          },
+          {r'$type': takeExposureType, 'ExposureTime': 10.0},
+        ]),
+      };
+      final pos = targetPositionForExposure(body, [1]);
+      expect(pos!.raDeg, closeTo(83.822, 1e-6),
+          reason: 'the inherited slew is skipped; the DSO target is the truth');
+      expect(pos.decDeg, closeTo(-5.391, 1e-6));
+    });
+
+    test('a non-inherited CenterAndRotate names the position like a slew', () {
+      const centerType =
+          'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
+      final body = {
+        r'$type': 'X.Seq',
+        'Items': items([
+          {
+            r'$type': centerType,
+            'Inherited': false,
+            'Coordinates': inputCoordinatesFromDeg(150.0, 20.0),
+          },
+          {r'$type': takeExposureType, 'ExposureTime': 10.0},
+        ]),
+      };
+      final pos = targetPositionForExposure(body, [1]);
+      expect(pos!.raDeg, closeTo(150.0, 1e-6));
+      expect(pos.decDeg, closeTo(20.0, 1e-6));
+    });
+
     test('no coordinates anywhere → null (pure Glover window)', () {
       expect(targetPositionForExposure(smartExposureDetail().body, [1]), isNull);
     });
