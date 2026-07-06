@@ -45,14 +45,18 @@ public sealed record OptimalSubInputDto(
 /// Glover floor is reachable and is the recommendation (the subtle bound: too short is invisible;
 /// longer buys no further read-noise gain). <see cref="SaturationCeiling"/> — the sky-background
 /// saturation ceiling sits <i>below</i> the floor, so the window is collapsed and the ceiling is
-/// the best available. <see cref="None"/> is the unset/default sentinel only (a default-constructed
+/// the best available. <see cref="StarFloor"/> — §3.1: the star-detectability floor exceeds the
+/// Glover floor, so stars (not read noise) are the binding lower bound; only produced when the
+/// request supplied a target (<c>raDeg</c>/<c>decDeg</c>), so pre-§3.1 clients never see it.
+/// <see cref="None"/> is the unset/default sentinel only (a default-constructed
 /// DTO) — <c>OptimalSubCalculator.Compute</c> never returns it; downstream switches need not treat
 /// it as a computed outcome. Serialized all-lowercase per the §60.6 enum convention
-/// (<c>none</c>/<c>readnoisefloor</c>/<c>saturationceiling</c>).</summary>
+/// (<c>none</c>/<c>readnoisefloor</c>/<c>saturationceiling</c>/<c>starfloor</c>).</summary>
 public enum OptimalSubBound {
     None,
     ReadNoiseFloor,
     SaturationCeiling,
+    StarFloor,
 }
 
 /// <summary>
@@ -65,6 +69,17 @@ public enum OptimalSubBound {
 /// ceiling wins, <see cref="LimitingBound"/> says so. <see cref="AssumedDefaults"/> names every
 /// input the calculator endpoint had to default (snake_case field names) so advice stays
 /// transparent — null when all inputs were explicit (e.g. from the pure calculator).
+/// <para><b>§3.1 star-detectability fields</b> — populated only when the request supplied a
+/// target position (<c>raDeg</c>/<c>decDeg</c>), null otherwise (fully backward-compatible).
+/// <see cref="StarFloorSec"/> is <c>t_stars</c>, the shortest sub predicted to contain the
+/// advisory registration star budget (null = a starved field even at the search bound). When it
+/// exceeds the Glover floor it becomes the effective floor and <see cref="RecommendedSec"/> moves
+/// up to it (still capped by the ceiling) with <see cref="LimitingBound"/> =
+/// <see cref="OptimalSubBound.StarFloor"/>. <see cref="StarsDetectedPerSub"/> /
+/// <see cref="StarsRegistrationPerSub"/> are the predicted star counts at the FINAL
+/// recommendation for the SNR-5 detection and SNR-10 registration thresholds;
+/// <see cref="StarReason"/> is the human-readable tag (labelled when counts are extrapolated
+/// beyond the star catalog's mag-9 completeness). Advisory only — nothing gates on these.</para>
 /// </summary>
 public sealed record OptimalSubResultDto(
     double SkyFluxEPerSecPerPx,
@@ -73,4 +88,8 @@ public sealed record OptimalSubResultDto(
     bool Viable,
     OptimalSubBound LimitingBound,
     double RecommendedSec,
-    IReadOnlyList<string>? AssumedDefaults = null);
+    IReadOnlyList<string>? AssumedDefaults = null,
+    double? StarFloorSec = null,
+    double? StarsDetectedPerSub = null,
+    double? StarsRegistrationPerSub = null,
+    string? StarReason = null);
