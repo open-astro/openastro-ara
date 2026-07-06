@@ -207,7 +207,19 @@ namespace OpenAstroAra.Server.Services {
             _last = level;
         }
 
-        private static long? TryGetFreeBytes(string saveDir) {
+        /// <summary>§29 — the free-space decision for the per-frame pre-capture check: block the
+        /// capture only when the volume is CRITICALLY low AND the profile's policy is "abort"
+        /// (an exposure that can't be saved is wasted sky time). The "warn" default never blocks
+        /// — the monitor's own notification path owns telling the user. Pure.</summary>
+        public static bool PreCaptureShouldBlock(long freeBytes, int warnGb, int criticalGb, string? onDiskSpaceCritical) {
+            var (lowBytes, criticalBytes) = ResolveThresholdBytes(warnGb, criticalGb);
+            return Evaluate(freeBytes, lowBytes, criticalBytes) == DiskSpaceLevel.Critical
+                && ShouldAbortSequence(onDiskSpaceCritical);
+        }
+
+        // internal (not private): the §29 per-frame pre-capture check in CameraService probes the
+        // same save volume the monitor watches, with the same longest-prefix root resolution.
+        internal static long? TryGetFreeBytes(string saveDir) {
             // Windows drive letters are case-insensitive (DriveInfo uppercases "D:\" but the save dir may be
             // "d:\..."); POSIX paths are case-sensitive. Match both the prefix test and the drive lookup the same way.
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;

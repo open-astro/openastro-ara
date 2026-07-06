@@ -353,6 +353,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
     private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+        // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
+        // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
+        // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
+        // is critically low AND the profile's OnDiskSpaceCritical policy is "abort"; the "warn"
+        // default never blocks (the monitor's own notification path owns telling the user).
+        if (PreCaptureDiskBlocked(out var freeBytes)) {
+            LogPreCaptureDiskBlocked(frameId, freeBytes);
+            return false;
+        }
         var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
         if (exposed is null) {
             return false; // abandoned (disconnect/supersede) or not-ready — already logged
@@ -563,6 +572,37 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         fits.Complete(); // §28.7 atomic finish
         return path;
+    }
+
+    // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
+    // profile policy says abort. Best-effort by design: no profile store, an unprobeable volume,
+    // or any probe fault means "don't block" — the §29 monitor owns reporting those conditions,
+    // and a broken probe must never cost the user a frame. internal (not private) so the wiring
+    // is testable without an Alpaca client (CaptureCoreAsync consults exactly this).
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort pre-capture probe: a profile read or DriveInfo query can throw arbitrary IO/driver exceptions, and a probe fault must degrade to 'capture proceeds' rather than blocking or faulting the capture path. CA1031's log-and-recover boundary applies.")]
+    internal bool PreCaptureDiskBlocked(out long freeBytes) {
+        freeBytes = 0;
+        try {
+            if (_profileStore is null) {
+                return false;
+            }
+            var storage = _profileStore.GetStorageSettings();
+            if (string.IsNullOrWhiteSpace(storage.SaveDirectory)) {
+                return false; // fallback-dir captures are dev-box territory — the monitor doesn't watch it either
+            }
+            var free = DiskSpaceMonitor.TryGetFreeBytes(storage.SaveDirectory);
+            if (free is null) {
+                return false;
+            }
+            freeBytes = free.Value;
+            return DiskSpaceMonitor.PreCaptureShouldBlock(free.Value,
+                storage.MinFreeDiskWarnGb, storage.MinFreeDiskCriticalGb,
+                _profileStore.GetSafetyPolicies().OnDiskSpaceCritical);
+        } catch (Exception ex) {
+            LogPreCaptureDiskProbeFailed(ex);
+            return false;
+        }
     }
 
     // Save-directory resolution: the user's §29 storage setting when present AND creatable, else
@@ -1083,4 +1123,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Camera during teardown")]
     private partial void LogTeardownIgnored(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "§29 pre-capture check blocked frame {FrameId}: save volume critically low ({FreeBytes} bytes free) and OnDiskSpaceCritical=abort — the exposure never started")]
+    private partial void LogPreCaptureDiskBlocked(Guid frameId, long freeBytes);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§29 pre-capture disk probe failed — capture proceeds (the disk monitor owns reporting)")]
+    private partial void LogPreCaptureDiskProbeFailed(Exception ex);
 }
