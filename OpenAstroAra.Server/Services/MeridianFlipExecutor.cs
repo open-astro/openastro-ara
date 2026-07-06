@@ -202,6 +202,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                     var focused = await autofocusExecutor.RunAutofocusAsync(progress, token);
                     if (!focused) {
                         Logger.Warning("Meridian Flip - post-flip autofocus failed; continuing the flip recovery (per §58.7 re-focus failures do not abort the night).");
+                        await Notify(NotificationSeverity.Warning, "Post-flip autofocus failed",
+                            "The re-focus after the meridian flip failed (the focuser was restored to its "
+                            + "pre-sweep position); imaging continues and focus may have drifted.");
                     }
                 }
             }
@@ -254,9 +257,11 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 // mount keeps the target rather than drifting. Only resume a guider we actually
                 // stopped: if StopAutoguider itself threw, guiding was never stopped, so a resume
                 // would be spurious (and log a misleading "resume also failed").
+                var guiderResumed = !guidingStopped;
                 if (guidingStopped) {
                     try {
                         await ResumeAutoguider(progress, CancellationToken.None);
+                        guiderResumed = true;
                     } catch (Exception resumeEx) {
                         Logger.Error("Meridian Flip - Resuming the guider after a flip error also failed.", resumeEx);
                     }
@@ -264,6 +269,12 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 if (trackingDisabled) {
                     TryRestoreTracking();
                 }
+                // §58.7 — the failure must reach the user in BOTH modes, not only under the
+                // §58.9 safety layers: an unattended sequence just halted. Fold the guider
+                // outcome in — "restored but unguided" and "restored" are different mornings.
+                await NotifyCritical("Meridian flip failed",
+                    $"{ex.Message} Tracking was restored best-effort and the sequence has been halted."
+                    + (guiderResumed ? string.Empty : " The guider could NOT be resumed — the mount is unguided."));
             }
             return false;
         } finally {
@@ -370,8 +381,13 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             var result = await centeringService.CenterOnTarget(target, null, progress, token);
             if (result == null || !result.Success) {
                 // Warning, not Error: without the safety layers re-centering stays best-effort and
-                // does not halt the flip (same severity as the best-effort dome sync).
+                // does not halt the flip (same severity as the best-effort dome sync). §58.7 still
+                // surfaces it — the night continues on an unverified pointing, which the user
+                // should hear about before the morning's subs turn out framed on nothing.
                 Logger.Warning("Meridian Flip - Re-center after the flip failed. Continuing without it.");
+                await Notify(NotificationSeverity.Error, "Post-flip re-center failed",
+                    "The plate-solve re-center after the meridian flip failed; imaging continues on an "
+                    + "unverified pointing. Enable the §58.9 flip-safety layers to make this a hard gate.");
             }
             return;
         }
@@ -685,9 +701,16 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
     /// <summary>Best-effort critical notification (§58.9 → §35.5 alarm on connected WILMA
     /// devices). Swallows its own failure — alerting must never mask the flip fault itself.</summary>
+    private Task NotifyCritical(string title, string message) =>
+        Notify(NotificationSeverity.Critical, title, message);
+
+    /// <summary>§58.7 — best-effort flip notification at any severity (Critical = the §35.5
+    /// alarm-worthy failures; Error = the "continuing degraded" paths an unattended user must
+    /// hear about come morning). Swallows its own failure — alerting must never mask the flip
+    /// fault itself.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Notification publish is best-effort from failure paths: a notification-store fault must not mask the flip failure being reported. CA1031's log-and-recover boundary applies.")]
-    private async Task NotifyCritical(string title, string message) {
+    private async Task Notify(NotificationSeverity severity, string title, string message) {
         if (notifications is null) {
             return;
         }
@@ -695,7 +718,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             await notifications.CreateAsync(new NotificationDto(
                 Id: Guid.NewGuid(),
                 PostedUtc: UtcNow(),
-                Severity: NotificationSeverity.Critical,
+                Severity: severity,
                 Category: NotificationCategory.Safety,
                 Title: title,
                 Message: message,
@@ -706,7 +729,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 RelatedEntityType: "meridian_flip",
                 RelatedEntityId: null), CancellationToken.None);
         } catch (Exception ex) {
-            Logger.Error("Meridian Flip - Publishing the critical flip-safety notification failed.", ex);
+            Logger.Error("Meridian Flip - Publishing the flip notification failed.", ex);
         }
     }
 
