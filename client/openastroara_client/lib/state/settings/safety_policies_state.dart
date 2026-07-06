@@ -182,7 +182,13 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
   /// a local-only mutation deferred to Save could clobber or be clobbered by
   /// an overnight flip. State refreshes from the daemon's echoed policies.
   Future<void> rearmFirstFlip(ProfileApi api) async {
-    state = await api.rearmFirstFlip();
+    final echoed = await api.rearmFirstFlip();
+    // Patch ONLY the daemon-owned flag into local state: the echo carries the
+    // PERSISTED policies, and replacing the whole object would silently
+    // discard any unsaved edits staged in the panel — the same stale-snapshot
+    // clobber class the server-side merge closes for the daemon-owned field,
+    // mirrored here for the thirteen user-owned ones.
+    state = state.copyWith(firstFlipConfirmed: echoed.firstFlipConfirmed);
   }
 
   Future<void> hydrateFromServer(ProfileApi api) async {

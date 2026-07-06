@@ -99,6 +99,15 @@ void main() {
           isFalse);
       expect(container.read(safetyPoliciesProvider).firstFlipConfirmed, isFalse,
           reason: 'fresh state mirrors the daemon default — announce armed');
+
+      // The re-arm patch shape: only the flag moves; staged panel edits on the
+      // other fields survive (rearmFirstFlip patches via copyWith rather than
+      // replacing state with the daemon's persisted echo).
+      const staged = SafetyPolicies(resumeDelayMin: 42, firstFlipConfirmed: true);
+      final patched = staged.copyWith(firstFlipConfirmed: false);
+      expect(patched.firstFlipConfirmed, isFalse);
+      expect(patched.resumeDelayMin, 42,
+          reason: 'unsaved edits must not be clobbered by the re-arm echo');
     });
   });
 }
