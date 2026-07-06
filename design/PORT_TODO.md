@@ -361,11 +361,22 @@ Also follow-ups: ✅ **§58.7 failure notifications — DONE (2026-07-05)**: `No
 safety layers — a safety-off failure halted the sequence silently), with the guider-restore outcome folded in
 ("could NOT be resumed" when the best-effort resume also failed); the best-effort re-center failure notifies
 Error ("imaging continues on an unverified pointing") and a failed post-flip autofocus notifies Warning
-("focus may have drifted"). All best-effort — a notification-store fault never masks the flip fault. Remaining:
-**§58.8 first-flip 60 s confirmation**, **§58.10 unattended-hours
-severity escalation**, and the **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
-focuser-hardware blocker). The §58 profile block (`refocus_after_flip` policy, `guider_recal` mode,
-`first_flip_confirmed`) is not yet on ARA's profile model — these land with the profile-schema extension.
+("focus may have drifted"). All best-effort — a notification-store fault never masks the flip fault.
+
+✅ **§58.8 first-flip 60 s confirmation — DONE (2026-07-05)**: `SafetyPoliciesDto.FirstFlipConfirmed`
+(default false — every existing profile announces its next flip once); the executor announces the
+profile's FIRST flip with a Critical notification and a proceed-on-timeout window (`FirstFlipConfirmWait`,
+spec 60 s, test-shrinkable), runs AFTER the Layer-1 flight check (announcing a flip Layer 1 would refuse
+is noise) and BEFORE any state is touched; the user's "no" is stopping the sequence (cancel propagates,
+flag stays false, next attempt announces again); the elapsed window persists `first_flip_confirmed: true`
+via a fresh read-modify-write (a policy edit during the wait isn't clobbered). **Reset on rig change**:
+both profile stores clear the flag when the optics train genuinely changes (identical re-save keeps it) —
+optics is ARA's profile rig identity (mounts are Alpaca-discovered). Independent of `flip_safety_enabled`.
+
+Remaining: **§58.10 unattended-hours
+severity escalation** (+ §58.12 shutdown countdown), and the **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
+focuser-hardware blocker). Of the §58 profile block only `refocus_after_flip`/`guider_recal` mode enums
+remain un-modelled (they land with the refocus/recal orchestration they configure); `first_flip_confirmed` shipped with §58.8.
 
 ### IDomeFollower.TriggerTelescopeSync has no cancellation token ✅ DONE (2026-06-12)
 `IDomeFollower.TriggerTelescopeSync` now takes a `CancellationToken` (matching `WaitForDomeSynchronization(token)`

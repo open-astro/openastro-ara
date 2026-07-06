@@ -83,6 +83,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     internal TimeSpan WatchdogHardCap { get; set; } = TimeSpan.FromMinutes(5);
     internal TimeSpan ReconnectPollInterval { get; set; } = TimeSpan.FromSeconds(2);
     internal TimeSpan ReconnectWait { get; set; } = TimeSpan.FromSeconds(30);
+    // §58.8 — the first-flip proceed-on-timeout window (spec: ~60 s).
+    internal TimeSpan FirstFlipConfirmWait { get; set; } = TimeSpan.FromSeconds(60);
     // Injectable clock for the Layer-1 altitude prediction (tests pin the instant).
     internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
@@ -169,6 +171,14 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 $"Pre-flip flight check failed: {failReason} The mount was left tracking in its pre-flip state and the sequence has been halted.");
             return false;
         }
+
+        // §58.8 — first-flip confirmation safety net: the very first flip on this profile
+        // announces itself and gives the user a proceed-on-timeout window instead of flipping
+        // silently. Runs AFTER the flight check (announcing a flip that Layer 1 would refuse is
+        // noise) and BEFORE any state is touched, so a user who stops the sequence during the
+        // window leaves the mount exactly as it was. A cancel during the wait propagates as
+        // CANCELLED (the flag stays false — the next attempt announces again).
+        await ConfirmFirstFlip(safety, token);
 
         // Track what we actually touched so the catch blocks only undo real state changes: don't resume a
         // guider we never stopped, don't "restore" tracking we never disabled (either would log a misleading
@@ -702,6 +712,31 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         } catch (Exception ex) {
             Logger.Error("Meridian Flip - Safe rest: stopping tracking also failed.", ex);
             return "parking and stopping tracking both failed — check the mount.";
+        }
+    }
+
+    /// <summary>§58.8 — announce the profile's FIRST flip and wait out the proceed-on-timeout
+    /// window, then persist <c>first_flip_confirmed</c> so subsequent flips run silently. The
+    /// user's "no" is stopping the sequence during the window (cancellation propagates and the
+    /// flag stays false, so the next attempt announces again). No-ops without the profile store
+    /// (legacy construction) or once confirmed. The flag is re-read at persist time so a policy
+    /// edit made during the wait isn't clobbered by a stale snapshot.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Persisting the confirmation flag is best-effort: a briefly-unwritable profile file must not fail an otherwise-good flip — the only cost of a swallowed persist fault is announcing again before the next flip. CA1031's log-and-recover boundary applies.")]
+    private async Task ConfirmFirstFlip(SafetyPoliciesDto? safety, CancellationToken token) {
+        if (profileStore is null || safety is null || safety.FirstFlipConfirmed) {
+            return;
+        }
+        Logger.Info($"Meridian Flip - First flip on this profile (§58.8): announcing, then proceeding in {FirstFlipConfirmWait.TotalSeconds:0}s unless the sequence is stopped.");
+        await NotifyCritical("First meridian flip on this profile",
+            $"About to run this profile's FIRST meridian flip in {FirstFlipConfirmWait.TotalSeconds:0} seconds. "
+            + "Verify the flip pause settings are safe for this rig — stop the sequence now if you want to check. "
+            + "Later flips will run without this wait.");
+        await Task.Delay(FirstFlipConfirmWait, token);
+        try {
+            profileStore.PutSafetyPolicies(profileStore.GetSafetyPolicies() with { FirstFlipConfirmed = true });
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Persisting first_flip_confirmed failed; the next flip will announce again.", ex);
         }
     }
 
