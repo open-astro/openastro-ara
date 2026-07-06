@@ -169,6 +169,67 @@ public class FileProfileRepositoryTest {
     }
 
     [Test]
+    public void ReadFile_backfills_null_sections_from_an_older_saved_snapshot() {
+        // A profile saved before newer sections existed: its JSON simply lacks
+        // those keys, so they deserialize to null. Simulate by rewriting the
+        // seeded profile's file with a snapshot that carries ONLY a site section.
+        var id = _repo.ActiveId!.Value;
+        var path = Path.Combine(_dir, "profiles", id.ToString("N") + ".json");
+        File.Exists(path).Should().BeTrue("the seeded profile persists to disk");
+        var meta = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path))
+            .RootElement.GetProperty("meta").GetRawText();
+        File.WriteAllText(path, $$"""
+            {
+              "meta": {{meta}},
+              "settings": {
+                "site": { "site_name": "Old Yard", "latitude_deg": 12.5 }
+              }
+            }
+            """);
+
+        var stored = _repo.GetProfile(id)!;
+
+        // The section that WAS present survives...
+        stored.Settings.Site.SiteName.Should().Be("Old Yard");
+        stored.Settings.Site.LatitudeDeg.Should().Be(12.5);
+        // ...and every missing section is back-filled instead of shipping null on
+        // the wire (GET /profiles/{id}, profile-share export) or NRE'ing consumers.
+        stored.Settings.CameraElectronics.Should().NotBeNull();
+        stored.Settings.Optics.Should().NotBeNull();
+        stored.Settings.FilterSet.Should().NotBeNull();
+        stored.Settings.FilterSet.Filters.Should().NotBeNull();
+        stored.Settings.FilterWheelLabels.Should().NotBeNull();
+        stored.Settings.Notifications.Should().NotBeNull();
+        stored.Settings.SafetyPolicies.Should().NotBeNull();
+        stored.Settings.StretchDefaults.Should().NotBeNull();
+        stored.Settings.StretchDefaults.ManualDefaultParams.Should().NotBeNull();
+        stored.Settings.ImagingDefaults.Should().NotBeNull();
+        stored.Settings.Storage.Should().NotBeNull();
+        stored.Settings.Filenames.Should().NotBeNull();
+        stored.Settings.Autofocus.Should().NotBeNull();
+        stored.Settings.PlateSolve.Should().NotBeNull();
+        stored.Settings.DiagnosticsMode.Should().NotBeNull();
+        stored.Settings.Phd2.Should().NotBeNull();
+        stored.Settings.EquipmentConnection.Should().NotBeNull();
+    }
+
+    [Test]
+    public void ReadFile_backfills_a_snapshot_that_is_entirely_missing() {
+        // Pathological hand-edited file: no settings object at all.
+        var id = _repo.ActiveId!.Value;
+        var path = Path.Combine(_dir, "profiles", id.ToString("N") + ".json");
+        var meta = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path))
+            .RootElement.GetProperty("meta").GetRawText();
+        File.WriteAllText(path, $$"""{ "meta": {{meta}} }""");
+
+        var stored = _repo.GetProfile(id)!;
+
+        stored.Settings.Should().NotBeNull();
+        stored.Settings.Site.Should().NotBeNull();
+        stored.Settings.CameraElectronics.Should().NotBeNull();
+    }
+
+    [Test]
     public void Reopen_restores_the_active_profile_into_the_live_store() {
         var b = _repo.Create("B", settings: null, makeActive: true);
         SetLatitude(77);
