@@ -5,6 +5,7 @@ import '../../models/calibration/calibration_models.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/calibration/calibration_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/library/load_more_button.dart';
 
@@ -25,15 +26,14 @@ class CalibrationScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Calibration'),
-          bottom: const TabBar(tabs: [
-            Tab(text: 'Sessions'),
-            Tab(text: 'Dark Library'),
-          ]),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Sessions'),
+              Tab(text: 'Dark Library'),
+            ],
+          ),
         ),
-        body: const TabBarView(children: [
-          _SessionsTab(),
-          _DarkLibraryTab(),
-        ]),
+        body: const TabBarView(children: [_SessionsTab(), _DarkLibraryTab()]),
       ),
     );
   }
@@ -44,7 +44,7 @@ class CalibrationScreen extends StatelessWidget {
 void openGeneratedSequence(BuildContext context, WidgetRef ref, String id) {
   ref.invalidate(sequenceListProvider);
   ref.read(selectedSequenceIdProvider.notifier).select(id);
-  ref.read(selectedTabIndexProvider.notifier).select(1); // Run tab
+  ref.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
   Navigator.of(context).popUntil((route) => route.isFirst);
 }
 
@@ -68,7 +68,8 @@ class _SessionsTab extends ConsumerWidget {
         }
         if (list.isEmpty) {
           return const _EmptyNote(
-              'No imaging sessions with light frames yet — capture some lights first.');
+            'No imaging sessions with light frames yet — capture some lights first.',
+          );
         }
         final hasMore = ref.read(calibrationSessionsProvider.notifier).hasMore;
         // Lazy builder: paged catalogs can grow well past 200 cards (r3).
@@ -82,9 +83,11 @@ class _SessionsTab extends ConsumerWidget {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: LoadMoreButton(onLoadMore: () => ref
-                        .read(calibrationSessionsProvider.notifier)
-                        .loadMore()),
+                    child: LoadMoreButton(
+                      onLoadMore: () => ref
+                          .read(calibrationSessionsProvider.notifier)
+                          .loadMore(),
+                    ),
                   ),
                 );
               }
@@ -115,10 +118,12 @@ class _SessionCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${_dateLabel()} — ${session.targetName}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              '${_dateLabel()} — ${session.targetName}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
             Text(
               [
@@ -126,32 +131,42 @@ class _SessionCard extends ConsumerWidget {
                 for (final f in session.filtersUsed)
                   '${f.filterName} ${f.lightFrameCount}×${_secondsLabel(f.meanExposureSeconds)}',
               ].join(' · '),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
             const SizedBox(height: 8),
-            Row(children: [
-              _CoverageBadge(label: 'Flats', covered: session.matchingFlatsAvailable),
-              const SizedBox(width: 8),
-              _CoverageBadge(label: 'Darks', covered: session.matchingDarksAvailable),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  builder: (_) => MatchingFlatsDialog(
-                    sessionId: session.id,
-                    targetName: session.targetName,
-                    filterNames: [
-                      for (final f in session.filtersUsed) f.filterName
-                    ],
-                  ),
+            Row(
+              children: [
+                _CoverageBadge(
+                  label: 'Flats',
+                  covered: session.matchingFlatsAvailable,
                 ),
-                icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-                label: const Text('Capture Matching Flats'),
-              ),
-            ]),
+                const SizedBox(width: 8),
+                _CoverageBadge(
+                  label: 'Darks',
+                  covered: session.matchingDarksAvailable,
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => MatchingFlatsDialog(
+                      sessionId: session.id,
+                      targetName: session.targetName,
+                      filterNames: [
+                        for (final f in session.filtersUsed) f.filterName,
+                      ],
+                    ),
+                  ),
+                  icon: const Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 16,
+                  ),
+                  label: const Text('Capture Matching Flats'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -160,7 +175,9 @@ class _SessionCard extends ConsumerWidget {
 }
 
 String _secondsLabel(double seconds) {
-  final text = seconds.toStringAsFixed(seconds == seconds.roundToDouble() ? 0 : 1);
+  final text = seconds.toStringAsFixed(
+    seconds == seconds.roundToDouble() ? 0 : 1,
+  );
   return '${text}s';
 }
 
@@ -178,15 +195,23 @@ class _CoverageBadge extends StatelessWidget {
         border: Border.all(color: color),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(covered ? Icons.check : Icons.priority_high, size: 12, color: color),
-        const SizedBox(width: 4),
-        Text(covered ? '$label matched' : '$label needed',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: color)),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            covered ? Icons.check : Icons.priority_high,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            covered ? '$label matched' : '$label needed',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: color),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -261,10 +286,13 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
         });
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s).'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"${result.generatedSequenceName}" saved — ${result.totalFlatFrames} flats across ${widget.filterNames.length} filter(s).',
+          ),
+        ),
+      );
       openGeneratedSequence(context, ref, id);
     } on Exception catch (e) {
       if (!mounted) return;
@@ -287,10 +315,9 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
           Text(
             'Generates a flat sequence replaying this session\'s state per '
             'filter ($filters): wheel position, focus, gain and offset.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -304,16 +331,18 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Target ADU (advisory)',
-              helperText: 'Panel brightness/exposure tuning stays manual for now',
+              helperText:
+                  'Panel brightness/exposure tuning stays manual for now',
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(_error!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AraColors.accentError)),
+            Text(
+              _error!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+            ),
           ],
         ],
       ),
@@ -326,7 +355,10 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
           onPressed: _busy ? null : _generate,
           child: _busy
               ? const SizedBox(
-                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Generate & open'),
         ),
       ],
@@ -350,7 +382,9 @@ class _DarkLibraryTab extends ConsumerWidget {
       ),
       data: (state) {
         if (state == null) {
-          return const _EmptyNote('Connect to a server to see its dark library.');
+          return const _EmptyNote(
+            'Connect to a server to see its dark library.',
+          );
         }
         return RefreshIndicator(
           onRefresh: () =>
@@ -362,8 +396,9 @@ class _DarkLibraryTab extends ConsumerWidget {
               const SizedBox(height: 12),
               if (state.entries.isEmpty)
                 const _EmptyNote(
-                    'No dark frames catalogued yet — request a build below, then '
-                    'run the generated sequence on a cloudy night with the scope covered.')
+                  'No dark frames catalogued yet — request a build below, then '
+                  'run the generated sequence on a cloudy night with the scope covered.',
+                )
               else
                 ...state.entries.map((e) => _DarkEntryRow(entry: e)),
               const Divider(height: 32),
@@ -385,26 +420,31 @@ class _DarkStatusHeader extends ConsumerWidget {
     final progress = state.totalCombinations == 0
         ? null
         : '${state.completedCombinations}/${state.totalCombinations} combinations';
-    return Row(children: [
-      Text('Status: ${state.status}',
-          style: Theme.of(context).textTheme.titleSmall),
-      if (progress != null) ...[
-        const SizedBox(width: 8),
-        Text(progress,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AraColors.textSecondary)),
-      ],
-      const Spacer(),
-      if (state.generatedSequenceId != null)
-        TextButton.icon(
-          onPressed: () => openGeneratedSequence(
-              context, ref, state.generatedSequenceId!),
-          icon: const Icon(Icons.playlist_play, size: 16),
-          label: const Text('Open build sequence'),
+    return Row(
+      children: [
+        Text(
+          'Status: ${state.status}',
+          style: Theme.of(context).textTheme.titleSmall,
         ),
-    ]);
+        if (progress != null) ...[
+          const SizedBox(width: 8),
+          Text(
+            progress,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+          ),
+        ],
+        const Spacer(),
+        if (state.generatedSequenceId != null)
+          TextButton.icon(
+            onPressed: () =>
+                openGeneratedSequence(context, ref, state.generatedSequenceId!),
+            icon: const Icon(Icons.playlist_play, size: 16),
+            label: const Text('Open build sequence'),
+          ),
+      ],
+    );
   }
 }
 
@@ -423,7 +463,8 @@ class _DarkEntryRow extends StatelessWidget {
       dense: true,
       leading: const Icon(Icons.dark_mode_outlined, size: 18),
       title: Text(
-          '${_secondsLabel(entry.exposureSeconds)} · $gain · ${entry.temperatureC.toStringAsFixed(0)}°C'),
+        '${_secondsLabel(entry.exposureSeconds)} · $gain · ${entry.temperatureC.toStringAsFixed(0)}°C',
+      ),
       subtitle: Text('${entry.frameCount} frames · $size MB · newest $date'),
     );
   }
@@ -478,7 +519,9 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
     final gains = _parseDoubles(_gains.text);
     final frames = int.tryParse(_frames.text.trim());
     if (exposures == null || exposures.isEmpty) {
-      setState(() => _error = 'Exposures: comma-separated seconds, e.g. 60, 300');
+      setState(
+        () => _error = 'Exposures: comma-separated seconds, e.g. 60, 300',
+      );
       return;
     }
     if (gains == null || temps == null) {
@@ -502,18 +545,24 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
       _error = null;
     });
     try {
-      await api.buildDarkLibrary(DarkLibraryBuildRequest(
-        exposureSecondsList: exposures,
-        gainList: gains.map((g) => g.round()).toList(),
-        targetTemperatureCList: temps,
-        framesPerCombination: frames,
-        reuseExistingFrames: _reuse,
-      ));
+      await api.buildDarkLibrary(
+        DarkLibraryBuildRequest(
+          exposureSecondsList: exposures,
+          gainList: gains.map((g) => g.round()).toList(),
+          targetTemperatureCList: temps,
+          framesPerCombination: frames,
+          reuseExistingFrames: _reuse,
+        ),
+      );
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Build sequence generated — open it from the status row above.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Build sequence generated — open it from the status row above.',
+          ),
+        ),
+      );
       await ref.read(darkLibraryStatusProvider.notifier).refresh();
     } on Exception catch (e) {
       if (!mounted) return;
@@ -529,20 +578,24 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Build dark library', style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          'Build dark library',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
         const SizedBox(height: 4),
         Text(
           'Generates a ready-to-run sequence covering every exposure × gain × '
           'temperature combination. Leave temperatures empty to capture at ambient.',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _exposures,
-          decoration: const InputDecoration(labelText: 'Exposures (s, comma-separated)'),
+          decoration: const InputDecoration(
+            labelText: 'Exposures (s, comma-separated)',
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -564,7 +617,9 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
         TextField(
           controller: _frames,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Frames per combination'),
+          decoration: const InputDecoration(
+            labelText: 'Frames per combination',
+          ),
         ),
         CheckboxListTile(
           value: _reuse,
@@ -577,17 +632,21 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(_error!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AraColors.accentError)),
+            child: Text(
+              _error!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+            ),
           ),
         FilledButton.icon(
           onPressed: _busy ? null : _submit,
           icon: _busy
               ? const SizedBox(
-                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Icon(Icons.build_outlined, size: 16),
           label: const Text('Generate build sequence'),
         ),
@@ -607,12 +666,13 @@ class _EmptyNote extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Center(
-        child: Text(message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AraColors.textSecondary)),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+        ),
       ),
     );
   }

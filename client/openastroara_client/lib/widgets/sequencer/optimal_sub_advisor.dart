@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/sequence/instruction_catalog.dart' show slewScopeToRaDecType;
+import '../../models/sequence/instruction_catalog.dart'
+    show slewScopeToRaDecType, switchFilterType;
 import '../../models/sequence/nina_dom.dart';
 import '../../models/server.dart';
 import '../../services/optimal_sub_api.dart';
@@ -11,13 +12,9 @@ import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/input_coordinates.dart';
 
-/// The TakeExposure `$type` — the node the advisor attaches to — and the
-/// SwitchFilter `$type` it scans sibling instructions for. Mirrors the
-/// instruction catalog's entries (no named constants exist there).
-const String takeExposureType =
-    'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
-const String _switchFilterType =
-    'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
+// TakeExposure (the node the advisor attaches to) and SwitchFilter (the
+// sibling it scans for) come from the instruction catalog's named constants;
+// the two below are advisor-only scan targets with no catalog entry.
 const String _deepSkyObjectContainerType =
     'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer';
 const String _centerAndRotateType =
@@ -36,7 +33,7 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
   String? name;
   for (var i = 0; i < exposureIndex && i < siblings.length; i++) {
     final sibling = siblings[i];
-    if (sibling[r'$type'] == _switchFilterType) {
+    if (sibling[r'$type'] == switchFilterType) {
       final filter = sibling['Filter'];
       final n = filter is Map<String, dynamic> ? filter['Name'] : null;
       if (n is String && n.trim().isNotEmpty) name = n.trim();
@@ -61,7 +58,9 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
 /// target at runtime, so its own `Coordinates` may be stale leftovers from
 /// before the toggle (the DSO container's Target is the truth in that case).
 ({double raDeg, double decDeg})? targetPositionForExposure(
-    Map<String, dynamic> body, NodePath path) {
+  Map<String, dynamic> body,
+  NodePath path,
+) {
   ({double raDeg, double decDeg})? found = _dsoTarget(body);
   for (var depth = 0; depth < path.length; depth++) {
     final parent = nodeAt(body, path.sublist(0, depth));
@@ -73,7 +72,8 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
       final type = sibling[r'$type'];
       if ((type == slewScopeToRaDecType || type == _centerAndRotateType) &&
           sibling['Inherited'] != true) {
-        found = _nonZero(degFromInputCoordinates(sibling['Coordinates'])) ?? found;
+        found =
+            _nonZero(degFromInputCoordinates(sibling['Coordinates'])) ?? found;
       }
     }
     if (index < siblings.length) {
@@ -92,8 +92,9 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
   return _nonZero(degFromInputCoordinates(target['InputCoordinates']));
 }
 
-({double raDeg, double decDeg})? _nonZero(({double raDeg, double decDeg})? pos) =>
-    pos != null && pos.raDeg == 0 && pos.decDeg == 0 ? null : pos;
+({double raDeg, double decDeg})? _nonZero(
+  ({double raDeg, double decDeg})? pos,
+) => pos != null && pos.raDeg == 0 && pos.decDeg == 0 ? null : pos;
 
 /// NEXTGEN §5 — the per-filter "Optimal Sub" advisor under a TakeExposure's
 /// fields: the Glover read-noise floor (criterion popularised by Dr. Robin
@@ -106,8 +107,12 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
 /// Renders nothing against a pre-slice-2 daemon (404) and a quiet one-line
 /// message when the daemon can't compute (400 — e.g. aperture not set up).
 class OptimalSubAdvisor extends ConsumerStatefulWidget {
-  const OptimalSubAdvisor(
-      {super.key, required this.path, required this.filterName, this.targetPosition});
+  const OptimalSubAdvisor({
+    super.key,
+    required this.path,
+    required this.filterName,
+    this.targetPosition,
+  });
 
   /// The TakeExposure node's path (the Apply target).
   final NodePath path;
@@ -170,7 +175,9 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
         raDeg: widget.targetPosition?.raDeg,
         decDeg: widget.targetPosition?.decDeg,
       );
-      if (!mounted || seq != _fetchSeq) return; // superseded — drop the stale response
+      if (!mounted || seq != _fetchSeq) {
+        return; // superseded — drop the stale response
+      }
       setState(() {
         _result = result;
         _hidden = result == null; // 404 → feature not on this daemon
@@ -199,7 +206,11 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     // NINA-fidelity contract of this advisor.
     ref
         .read(sequenceEditorProvider.notifier)
-        .setNodeField(widget.path, 'ExposureTime', r.recommendedSec.roundToDouble());
+        .setNodeField(
+          widget.path,
+          'ExposureTime',
+          r.recommendedSec.roundToDouble(),
+        );
   }
 
   @override
@@ -212,16 +223,23 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     ref.watch(optimalSubApiProvider);
     if (_hidden) return const SizedBox.shrink();
     final theme = Theme.of(context);
-    final dim = theme.textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
+    final dim = theme.textTheme.bodySmall?.copyWith(
+      color: AraColors.textSecondary,
+    );
 
     final Widget content;
     if (_loading) {
-      content = Row(children: [
-        const SizedBox(
-            width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-        const SizedBox(width: 8),
-        Text('Computing optimal sub…', style: dim),
-      ]);
+      content = Row(
+        children: [
+          const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text('Computing optimal sub…', style: dim),
+        ],
+      );
     } else if (_unavailable case final unavailable?) {
       // A 400 is always a fixable-configuration story (optics geometry or the
       // filter set) — pair the daemon's explanation with the jump to the panel
@@ -230,67 +248,78 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       // back from Settings does NOT remount this widget — without it the stale
       // "can't compute" would stick around after the user fixed the setup.
       final filterProblem = unavailable.toLowerCase().contains('filter');
-      content = Row(children: [
-        Expanded(child: Text(unavailable, style: dim)),
-        TextButton(
-          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-          onPressed: () => openSettingsPanel(
-              ref, filterProblem ? 'img.filterset' : 'img.optics'),
-          child: Text(filterProblem ? 'Open filter set' : 'Open optics'),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-          onPressed: _fetch,
-          child: const Text('Retry'),
-        ),
-      ]);
+      content = Row(
+        children: [
+          Expanded(child: Text(unavailable, style: dim)),
+          TextButton(
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: () => openSettingsPanel(
+              ref,
+              filterProblem ? 'img.filterset' : 'img.optics',
+            ),
+            child: Text(filterProblem ? 'Open filter set' : 'Open optics'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: _fetch,
+            child: const Text('Retry'),
+          ),
+        ],
+      );
     } else if (_error != null) {
-      content = Row(children: [
-        Expanded(child: Text("Couldn't compute the optimal sub.", style: dim)),
-        TextButton(
-          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-          onPressed: _fetch,
-          child: const Text('Retry'),
-        ),
-      ]);
+      content = Row(
+        children: [
+          Expanded(
+            child: Text("Couldn't compute the optimal sub.", style: dim),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: _fetch,
+            child: const Text('Retry'),
+          ),
+        ],
+      );
     } else if (_result case final r?) {
       final saturationLimited = !r.viable;
       final starLimited = r.limitingBound == 'starfloor';
       final headline = saturationLimited
           ? 'Saturation-limited: ${_fmt(r.recommendedSec)} max '
-              '(the sky fills the well before read noise is swamped)'
+                '(the sky fills the well before read noise is swamped)'
           : starLimited
-              ? 'Optimal Sub: ${_fmt(r.recommendedSec)}  (star-limited — '
-                  'read-noise floor ${_fmt(r.floorSec)}, ceiling ${_fmt(r.ceilingSec)})'
-              : 'Optimal Sub: ${_fmt(r.recommendedSec)}'
-                  '  (usable window ${_fmt(r.floorSec)} – ${_fmt(r.ceilingSec)})';
+          ? 'Optimal Sub: ${_fmt(r.recommendedSec)}  (star-limited — '
+                'read-noise floor ${_fmt(r.floorSec)}, ceiling ${_fmt(r.ceilingSec)})'
+          : 'Optimal Sub: ${_fmt(r.recommendedSec)}'
+                '  (usable window ${_fmt(r.floorSec)} – ${_fmt(r.ceilingSec)})';
       final assumed = r.assumedDefaults ?? const [];
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(
-              child: Text(
-                headline,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: saturationLimited || starLimited
-                      ? AraColors.accentBusy
-                      : AraColors.textPrimary,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  headline,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: saturationLimited || starLimited
+                        ? AraColors.accentBusy
+                        : AraColors.textPrimary,
+                  ),
                 ),
               ),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-              onPressed: _apply,
-              child: const Text('Apply'),
-            ),
-          ]),
+              TextButton(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: _apply,
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
           if (widget.filterName != null)
             Text('For filter "${widget.filterName}"', style: dim),
           // §3.1 — the daemon's ready-made star-detectability line (predicted
           // stars/sub, thin-field warning, or the set-up-your-sensor hint).
-          if (r.starReason case final starReason?)
-            Text(starReason, style: dim),
+          if (r.starReason case final starReason?) Text(starReason, style: dim),
           if (assumed.isNotEmpty)
             Text(
               'Using generic defaults for ${assumed.map(_assumedLabel).join(", ")} — '
@@ -299,8 +328,10 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
             ),
           Text(
             'Criterion popularised by Dr. Robin Glover (SharpCap)',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: AraColors.textDisabled, fontSize: 10),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AraColors.textDisabled,
+              fontSize: 10,
+            ),
           ),
         ],
       );
@@ -326,12 +357,12 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       : '${(seconds / 60).toStringAsFixed(seconds >= 600 ? 0 : 1)} min';
 
   static String _assumedLabel(String field) => switch (field) {
-        'read_noise_e' => 'read noise',
-        'full_well_e' => 'full well',
-        'quantum_efficiency' => 'QE',
-        'filter_bandwidth_nm' => 'filter bandwidth',
-        _ => field,
-      };
+    'read_noise_e' => 'read noise',
+    'full_well_e' => 'full well',
+    'quantum_efficiency' => 'QE',
+    'filter_bandwidth_nm' => 'filter bandwidth',
+    _ => field,
+  };
 }
 
 /// The active server's Optimal-Sub API, or null with no server. AutoDispose +

@@ -87,7 +87,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         _eventSub = server.events.listen(_onPageEvent);
         // The page self-initialises from these query params: the observer site, and
         // the daemon API base it fetches Tonight's-Sky / posts GoTo to.
-        final site = ref.read(siteLocationProvider).asData?.value ??
+        final site =
+            ref.read(siteLocationProvider).asData?.value ??
             await ref.read(siteLocationProvider.future);
         if (!mounted) return;
         final servers = await ref.read(savedServersProvider.future);
@@ -99,13 +100,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         // layer + catalog choices survive relaunch.
         final savedPrefs = await _prefsService.load();
         if (!mounted) return;
-        final query = {
-          'lat': (site?.latitudeDeg ?? 0).toString(),
-          'lon': (site?.longitudeDeg ?? 0).toString(),
-          'elev': (site?.elevationM ?? 0).toString(),
-          'api': api,
-          'prefs': jsonEncode(savedPrefs),
-        }.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
+        final query =
+            {
+                  'lat': (site?.latitudeDeg ?? 0).toString(),
+                  'lon': (site?.longitudeDeg ?? 0).toString(),
+                  'elev': (site?.elevationM ?? 0).toString(),
+                  'api': api,
+                  'prefs': jsonEncode(savedPrefs),
+                }.entries
+                .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+                .join('&');
         url = '${server.baseUrl}/index.html?$query';
       } catch (e, st) {
         debugPrint('StellariumView: asset server / site read failed: $e\n$st');
@@ -197,34 +201,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     } catch (e, st) {
       debugPrint('[planning] framing create-run failed: $e\n$st');
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text("Couldn't create the Run. Check the connection and try again."),
-          backgroundColor: AraColors.accentError,
-        ));
+        showImagingRunFeedback(messenger, targetName: targetName, failed: true);
       }
       return;
     }
     if (!mounted) return;
-    if (result == null) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Connect to a server before creating a Run.'),
-        backgroundColor: AraColors.accentError,
-      ));
-      return;
-    }
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(result.appended
-            ? 'Added "$targetName" to the open sequence.'
-            : 'Created an imaging run for "$targetName".'),
-      ),
-    );
+    showImagingRunFeedback(messenger, targetName: targetName, result: result);
   }
 
   // The webview can't receive keyboard text or a JS-bridge call, so the typed
   // search lives in Flutter and reaches the planetarium page through the loopback
   // server's one-shot command channel (the page polls it).
-  void _pushCmd(Map<String, Object?> cmd) => _server?.pushCommand(jsonEncode(cmd));
+  void _pushCmd(Map<String, Object?> cmd) =>
+      _server?.pushCommand(jsonEncode(cmd));
 
   void _submitSearch() {
     final q = _searchCtrl.text.trim();
@@ -288,8 +277,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                 if (tonightOpen)
                   const DecoratedBox(
                     decoration: BoxDecoration(
-                      border:
-                          Border(left: BorderSide(color: AraColors.border)),
+                      border: Border(left: BorderSide(color: AraColors.border)),
                     ),
                     child: TonightSkyPanel(),
                   ),
@@ -342,11 +330,15 @@ class _SearchBar extends StatelessWidget {
                 hintText:
                     'Search — M42, NGC 7000, Vega, Jupiter, 05:35 -05:23…',
                 hintStyle: const TextStyle(
-                    fontSize: 13, color: AraColors.textSecondary),
+                  fontSize: 13,
+                  color: AraColors.textSecondary,
+                ),
                 filled: true,
                 fillColor: AraColors.bgPrimary,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
                   borderSide: const BorderSide(color: AraColors.border),
@@ -384,9 +376,9 @@ class _Loading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const ColoredBox(
-        color: AraColors.bgPrimary,
-        child: Center(child: CircularProgressIndicator()),
-      );
+    color: AraColors.bgPrimary,
+    child: Center(child: CircularProgressIndicator()),
+  );
 }
 
 class _Unavailable extends StatelessWidget {
@@ -394,30 +386,31 @@ class _Unavailable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        color: AraColors.bgPrimary,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.public_off, size: 96, color: AraColors.textDisabled),
-              const SizedBox(height: 12),
-              Text('Planetarium unavailable',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  'The embedded planetarium renderer could not start on this host. '
-                  'Reopen the app; if it persists, check that a system WebView is available.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AraColors.textSecondary),
-                ),
-              ),
-            ],
+    color: AraColors.bgPrimary,
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.public_off, size: 96, color: AraColors.textDisabled),
+          const SizedBox(height: 12),
+          Text(
+            'Planetarium unavailable',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-        ),
-      );
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              'The embedded planetarium renderer could not start on this host. '
+              'Reopen the app; if it persists, check that a system WebView is available.',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

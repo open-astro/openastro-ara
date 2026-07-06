@@ -31,7 +31,9 @@ class SequenceFieldEditor extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final editor = ref.watch(sequenceEditorProvider);
     final path = editor?.selectedPath;
-    final node = (editor != null && path != null) ? nodeAt(editor.body, path) : null;
+    final node = (editor != null && path != null)
+        ? nodeAt(editor.body, path)
+        : null;
 
     if (node == null || path == null) {
       return const _Placeholder('Select an instruction to edit its settings.');
@@ -50,7 +52,10 @@ class SequenceFieldEditor extends ConsumerWidget {
       Text(
         nodeLabel(node),
         style: const TextStyle(
-            color: AraColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+          color: AraColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       const SizedBox(height: 12),
       if (container) ...[
@@ -102,9 +107,13 @@ class SequenceFieldEditor extends ConsumerWidget {
     // A placeholder only when there's nothing else to show — never for a
     // container (its Name editor is the setting).
     if (editable.isEmpty && !container) {
-      children.add(_Placeholder(def == null
-          ? 'This instruction has no editable fields here.'
-          : 'No settings — this instruction runs as-is.'));
+      children.add(
+        _Placeholder(
+          def == null
+              ? 'This instruction has no editable fields here.'
+              : 'No settings — this instruction runs as-is.',
+        ),
+      );
     }
 
     return ListView(padding: const EdgeInsets.all(12), children: children);
@@ -128,8 +137,9 @@ class _NameEditor extends StatefulWidget {
 }
 
 class _NameEditorState extends State<_NameEditor> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.name);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.name,
+  );
 
   @override
   void didUpdateWidget(_NameEditor old) {
@@ -150,21 +160,25 @@ class _NameEditorState extends State<_NameEditor> {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Name',
-              style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
-          const SizedBox(height: 4),
-          TextField(
-            key: const Key('container_name'),
-            controller: _controller,
-            style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-            decoration:
-                const InputDecoration(isDense: true, border: OutlineInputBorder()),
-            onChanged: widget.onChanged,
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Name',
+        style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+      ),
+      const SizedBox(height: 4),
+      TextField(
+        key: const Key('container_name'),
+        controller: _controller,
+        style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+        decoration: const InputDecoration(
+          isDense: true,
+          border: OutlineInputBorder(),
+        ),
+        onChanged: widget.onChanged,
+      ),
+    ],
+  );
 }
 
 /// A container's loop-**Conditions** editor: a header with an "add" menu, then a
@@ -172,7 +186,10 @@ class _NameEditorState extends State<_NameEditor> {
 /// the controller's condition ops, addressed by `(containerPath, index)`. Shown
 /// only for a selected container (a leaf carries no conditions).
 class _ConditionsSection extends ConsumerWidget {
-  const _ConditionsSection({required this.containerPath, required this.conditions});
+  const _ConditionsSection({
+    required this.containerPath,
+    required this.conditions,
+  });
 
   final NodePath containerPath;
   final List<Map<String, dynamic>> conditions;
@@ -185,23 +202,39 @@ class _ConditionsSection extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Text('Conditions',
-                style: TextStyle(
-                    color: AraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            const Text(
+              'Conditions',
+              style: TextStyle(
+                color: AraColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const Spacer(),
             PopupMenuButton<ConditionDef>(
               tooltip: 'Add condition',
-              icon: const Icon(Icons.add, size: 20, color: AraColors.textSecondary),
+              icon: const Icon(
+                Icons.add,
+                size: 20,
+                color: AraColors.textSecondary,
+              ),
               onSelected: (def) => notifier.addConditionTo(containerPath, def),
               itemBuilder: (_) => [
                 for (final def in conditionCatalog)
                   PopupMenuItem<ConditionDef>(
                     value: def,
-                    child: Row(children: [
-                      Icon(def.icon, size: 18),
-                      const SizedBox(width: 8),
-                      Flexible(child: Text(def.label, overflow: TextOverflow.ellipsis)),
-                    ]),
+                    child: Row(
+                      children: [
+                        Icon(def.icon, size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            def.label,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -210,8 +243,10 @@ class _ConditionsSection extends ConsumerWidget {
         if (conditions.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text('No loop conditions — the container runs once.',
-                style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+            child: Text(
+              'No loop conditions — the container runs once.',
+              style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+            ),
           )
         else
           for (var i = 0; i < conditions.length; i++)
@@ -245,7 +280,10 @@ class _ConditionCard extends ConsumerWidget {
     final notifier = ref.read(sequenceEditorProvider.notifier);
     final type = condition[r'$type'];
     final def = type is String ? conditionForType(type) : null;
-    final label = def?.label ?? (type is String ? shortTypeName(type) : null) ?? 'Condition';
+    final label =
+        def?.label ??
+        (type is String ? shortTypeName(type) : null) ??
+        'Condition';
     final fields = def?.fields.where((f) => f.editable).toList() ?? const [];
 
     return Container(
@@ -260,17 +298,27 @@ class _ConditionCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Icon(def?.icon ?? Icons.rule, size: 16, color: AraColors.textSecondary),
+              Icon(
+                def?.icon ?? Icons.rule,
+                size: 16,
+                color: AraColors.textSecondary,
+              ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(label,
-                    style: const TextStyle(color: AraColors.textPrimary, fontSize: 12)),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AraColors.textPrimary,
+                    fontSize: 12,
+                  ),
+                ),
               ),
               IconButton(
                 tooltip: 'Remove condition',
                 icon: const Icon(Icons.delete_outline, size: 18),
                 visualDensity: VisualDensity.compact,
-                onPressed: () => notifier.removeConditionFrom(containerPath, index),
+                onPressed: () =>
+                    notifier.removeConditionFrom(containerPath, index),
               ),
             ],
           ),
@@ -278,12 +326,18 @@ class _ConditionCard extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: _FieldControl(
-                key: ValueKey('${containerPath.join(".")}/cond/$index/${field.key}'),
+                key: ValueKey(
+                  '${containerPath.join(".")}/cond/$index/${field.key}',
+                ),
                 field: field,
                 value: condition[field.key],
                 enabled: field.enabledWhen?.call(condition) ?? true,
-                onChanged: (v) =>
-                    notifier.setConditionFieldOn(containerPath, index, field.key, v),
+                onChanged: (v) => notifier.setConditionFieldOn(
+                  containerPath,
+                  index,
+                  field.key,
+                  v,
+                ),
               ),
             ),
         ],
@@ -309,23 +363,39 @@ class _TriggersSection extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Text('Triggers',
-                style: TextStyle(
-                    color: AraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+            const Text(
+              'Triggers',
+              style: TextStyle(
+                color: AraColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const Spacer(),
             PopupMenuButton<TriggerDef>(
               tooltip: 'Add trigger',
-              icon: const Icon(Icons.add, size: 20, color: AraColors.textSecondary),
+              icon: const Icon(
+                Icons.add,
+                size: 20,
+                color: AraColors.textSecondary,
+              ),
               onSelected: (def) => notifier.addTriggerTo(containerPath, def),
               itemBuilder: (_) => [
                 for (final def in triggerCatalog)
                   PopupMenuItem<TriggerDef>(
                     value: def,
-                    child: Row(children: [
-                      Icon(def.icon, size: 18),
-                      const SizedBox(width: 8),
-                      Flexible(child: Text(def.label, overflow: TextOverflow.ellipsis)),
-                    ]),
+                    child: Row(
+                      children: [
+                        Icon(def.icon, size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            def.label,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -334,8 +404,10 @@ class _TriggersSection extends ConsumerWidget {
         if (triggers.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text('No triggers.',
-                style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+            child: Text(
+              'No triggers.',
+              style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+            ),
           )
         else
           for (var i = 0; i < triggers.length; i++)
@@ -370,7 +442,10 @@ class _TriggerCard extends ConsumerWidget {
     final notifier = ref.read(sequenceEditorProvider.notifier);
     final type = trigger[r'$type'];
     final def = type is String ? triggerForType(type) : null;
-    final label = def?.label ?? (type is String ? shortTypeName(type) : null) ?? 'Trigger';
+    final label =
+        def?.label ??
+        (type is String ? shortTypeName(type) : null) ??
+        'Trigger';
     final fields = def?.fields.where((f) => f.editable).toList() ?? const [];
 
     return Container(
@@ -385,17 +460,27 @@ class _TriggerCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Icon(def?.icon ?? Icons.bolt_outlined, size: 16, color: AraColors.textSecondary),
+              Icon(
+                def?.icon ?? Icons.bolt_outlined,
+                size: 16,
+                color: AraColors.textSecondary,
+              ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(label,
-                    style: const TextStyle(color: AraColors.textPrimary, fontSize: 12)),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AraColors.textPrimary,
+                    fontSize: 12,
+                  ),
+                ),
               ),
               IconButton(
                 tooltip: 'Remove trigger',
                 icon: const Icon(Icons.delete_outline, size: 18),
                 visualDensity: VisualDensity.compact,
-                onPressed: () => notifier.removeTriggerFrom(containerPath, index),
+                onPressed: () =>
+                    notifier.removeTriggerFrom(containerPath, index),
               ),
             ],
           ),
@@ -403,12 +488,18 @@ class _TriggerCard extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: _FieldControl(
-                key: ValueKey('${containerPath.join(".")}/trig/$index/${field.key}'),
+                key: ValueKey(
+                  '${containerPath.join(".")}/trig/$index/${field.key}',
+                ),
                 field: field,
                 value: trigger[field.key],
                 enabled: field.enabledWhen?.call(trigger) ?? true,
-                onChanged: (v) =>
-                    notifier.setTriggerFieldOn(containerPath, index, field.key, v),
+                onChanged: (v) => notifier.setTriggerFieldOn(
+                  containerPath,
+                  index,
+                  field.key,
+                  v,
+                ),
               ),
             ),
         ],
@@ -446,7 +537,10 @@ class _FieldControl extends StatelessWidget {
         ? control
         : Opacity(
             opacity: 0.5,
-            child: Semantics(enabled: false, child: IgnorePointer(child: control)),
+            child: Semantics(
+              enabled: false,
+              child: IgnorePointer(child: control),
+            ),
           );
   }
 
@@ -456,10 +550,7 @@ class _FieldControl extends StatelessWidget {
         return Row(
           children: [
             Expanded(child: _label()),
-            Switch(
-              value: value == true,
-              onChanged: enabled ? onChanged : null,
-            ),
+            Switch(value: value == true, onChanged: enabled ? onChanged : null),
           ],
         );
       case InstructionFieldType.intEnum:
@@ -504,66 +595,83 @@ class _FieldControl extends StatelessWidget {
         );
       case InstructionFieldType.number:
         if (field.min != null || field.max != null) {
-          return _labelled(_NumField(
-            // A non-num (missing/corrupt) stored value falls back to the lower
-            // bound (or 0) so the control still renders; the model is corrected
-            // on the first edit (_NumField clamps + corrects the display).
-            value: value is num ? value as num : (field.min ?? 0),
-            isInt: false,
-            min: field.min,
-            max: field.max,
-            enabled: enabled,
-            onChanged: (v) => onChanged(v.toDouble()),
-          ));
+          return _labelled(
+            _NumField(
+              // A non-num (missing/corrupt) stored value falls back to the lower
+              // bound (or 0) so the control still renders; the model is corrected
+              // on the first edit (_NumField clamps + corrects the display).
+              value: value is num ? value as num : (field.min ?? 0),
+              isInt: false,
+              min: field.min,
+              max: field.max,
+              enabled: enabled,
+              onChanged: (v) => onChanged(v.toDouble()),
+            ),
+          );
         }
-        return _labelled(_textField(
-          initial: value == null ? '' : '$value',
-          keyboard: const TextInputType.numberWithOptions(decimal: true, signed: true),
-          parse: (s) => double.tryParse(s),
-        ));
+        return _labelled(
+          _textField(
+            initial: value == null ? '' : '$value',
+            keyboard: const TextInputType.numberWithOptions(
+              decimal: true,
+              signed: true,
+            ),
+            parse: (s) => double.tryParse(s),
+          ),
+        );
       case InstructionFieldType.integer:
         if (field.min != null || field.max != null) {
-          return _labelled(_NumField(
-            // Same defensive fallback as the number case above.
-            value: value is num ? value as num : (field.min ?? 0),
-            isInt: true,
-            min: field.min,
-            max: field.max,
-            enabled: enabled,
-            onChanged: (v) => onChanged(v.toInt()),
-          ));
+          return _labelled(
+            _NumField(
+              // Same defensive fallback as the number case above.
+              value: value is num ? value as num : (field.min ?? 0),
+              isInt: true,
+              min: field.min,
+              max: field.max,
+              enabled: enabled,
+              onChanged: (v) => onChanged(v.toInt()),
+            ),
+          );
         }
-        return _labelled(_textField(
-          initial: value == null ? '' : '$value',
-          keyboard: const TextInputType.numberWithOptions(signed: true),
-          parse: (s) => int.tryParse(s),
-        ));
+        return _labelled(
+          _textField(
+            initial: value == null ? '' : '$value',
+            keyboard: const TextInputType.numberWithOptions(signed: true),
+            parse: (s) => int.tryParse(s),
+          ),
+        );
       case InstructionFieldType.text:
-        return _labelled(_textField(
-          initial: value is String ? value as String : '',
-          keyboard: TextInputType.text,
-          parse: (s) => s,
-        ));
+        return _labelled(
+          _textField(
+            initial: value is String ? value as String : '',
+            keyboard: TextInputType.text,
+            parse: (s) => s,
+          ),
+        );
       case InstructionFieldType.binning:
         return _labelled(_binningEditor());
       case InstructionFieldType.coordinates:
-        return _labelled(_CoordinatesEditor(
-          fieldKey: field.key,
-          value: value,
-          enabled: enabled,
-          onChanged: onChanged,
-        ));
+        return _labelled(
+          _CoordinatesEditor(
+            fieldKey: field.key,
+            value: value,
+            enabled: enabled,
+            onChanged: onChanged,
+          ),
+        );
       case InstructionFieldType.waitLoopData:
-        return _labelled(_WaitLoopDataEditor(
-          fieldKey: field.key,
-          value: value,
-          // Fall back to THIS condition's own catalogued Comparator default
-          // (AltitudeCondition → LessThan, AboveHorizon → GreaterThan) for a body
-          // that arrives without one, rather than a fixed GreaterThan bias.
-          fallbackComparator: _comparatorOf(field.defaultValue),
-          enabled: enabled,
-          onChanged: onChanged,
-        ));
+        return _labelled(
+          _WaitLoopDataEditor(
+            fieldKey: field.key,
+            value: value,
+            // Fall back to THIS condition's own catalogued Comparator default
+            // (AltitudeCondition → LessThan, AboveHorizon → GreaterThan) for a body
+            // that arrives without one, rather than a fixed GreaterThan bias.
+            fallbackComparator: _comparatorOf(field.defaultValue),
+            enabled: enabled,
+            onChanged: onChanged,
+          ),
+        );
       case InstructionFieldType.timeProvider:
         // null (custom clock time) or a {$type} sky-event provider object. A
         // controlled `value:` (not FormField.initialValue, which only seeds on
@@ -586,7 +694,9 @@ class _FieldControl extends StatelessWidget {
           ),
         );
       case InstructionFieldType.filter:
-        return _labelled(_FilterEditor(value: value, enabled: enabled, onChanged: onChanged));
+        return _labelled(
+          _FilterEditor(value: value, enabled: enabled, onChanged: onChanged),
+        );
     }
   }
 
@@ -605,12 +715,14 @@ class _FieldControl extends StatelessWidget {
     final bin = value is Map ? value as Map : const {};
     final x = bin['X'] is int ? bin['X'] as int : 1;
     final y = bin['Y'] is int ? bin['Y'] as int : 1;
-    final type = bin[r'$type'] is String ? bin[r'$type'] as String : defaultBinning[r'$type'];
+    final type = bin[r'$type'] is String
+        ? bin[r'$type'] as String
+        : defaultBinning[r'$type'];
     Map<String, dynamic> withAxis({int? newX, int? newY}) => <String, dynamic>{
-          r'$type': type,
-          'X': newX ?? x,
-          'Y': newY ?? y,
-        };
+      r'$type': type,
+      'X': newX ?? x,
+      'Y': newY ?? y,
+    };
     return Row(
       children: [
         SizedBox(
@@ -646,27 +758,31 @@ class _FieldControl extends StatelessWidget {
     required String initial,
     required TextInputType keyboard,
     required Object? Function(String) parse,
-  }) =>
-      TextFormField(
-        initialValue: initial,
-        enabled: enabled,
-        keyboardType: keyboard,
-        style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-        decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
-        onChanged: (s) {
-          final parsed = parse(s);
-          // Ignore an in-progress invalid number (e.g. '' or '-'); commit valid.
-          if (parsed != null) onChanged(parsed);
-        },
-      );
+  }) => TextFormField(
+    initialValue: initial,
+    enabled: enabled,
+    keyboardType: keyboard,
+    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+    decoration: const InputDecoration(
+      isDense: true,
+      border: OutlineInputBorder(),
+    ),
+    onChanged: (s) {
+      final parsed = parse(s);
+      // Ignore an in-progress invalid number (e.g. '' or '-'); commit valid.
+      if (parsed != null) onChanged(parsed);
+    },
+  );
 
-  Widget _label() =>
-      Text(field.label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12));
+  Widget _label() => Text(
+    field.label,
+    style: const TextStyle(color: AraColors.textSecondary, fontSize: 12),
+  );
 
   Widget _labelled(Widget control) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [_label(), const SizedBox(height: 4), control],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [_label(), const SizedBox(height: 4), control],
+  );
 }
 
 /// `SwitchFilter.Filter` picker. Sources the filter names from the configured
@@ -681,14 +797,15 @@ class _FieldControl extends StatelessWidget {
 /// silently dropped. When no slots are labelled, an instruction to configure
 /// them is shown instead of an empty dropdown.
 class _FilterEditor extends ConsumerWidget {
-  const _FilterEditor({required this.value, required this.onChanged, this.enabled = true});
+  const _FilterEditor({
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
 
   final Object? value;
   final ValueChanged<Object?> onChanged;
   final bool enabled;
-
-  static const String _filterInfoType =
-      'OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -725,8 +842,10 @@ class _FilterEditor extends ConsumerWidget {
     return DropdownButton<String>(
       value: storedName,
       isExpanded: true,
-      hint: const Text('Select a filter',
-          style: TextStyle(color: AraColors.textSecondary, fontSize: 13)),
+      hint: const Text(
+        'Select a filter',
+        style: TextStyle(color: AraColors.textSecondary, fontSize: 13),
+      ),
       dropdownColor: AraColors.bgPanel,
       items: [
         for (final name in items)
@@ -738,11 +857,9 @@ class _FilterEditor extends ConsumerWidget {
               // there's no slot to resolve a position from, so the value stands.
               final slot = slots.where((s) => s.name == name);
               if (slot.isEmpty) return;
-              onChanged(<String, dynamic>{
-                r'$type': _filterInfoType,
-                '_name': slot.first.name,
-                '_position': slot.first.position,
-              });
+              onChanged(
+                buildFilterInfo(slot.first.name, position: slot.first.position),
+              );
             }
           : null,
     );
@@ -773,12 +890,20 @@ class _CoordinatesEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = value is Map ? value as Map : const {};
-    final type = c[r'$type'] is String ? c[r'$type'] as String : defaultCoordinates[r'$type'];
+    final type = c[r'$type'] is String
+        ? c[r'$type'] as String
+        : defaultCoordinates[r'$type'];
     int ri(String k) => c[k] is num ? (c[k] as num).toInt() : 0;
     double rd(String k) => c[k] is num ? (c[k] as num).toDouble() : 0.0;
     final neg = c['NegativeDec'] == true;
     Map<String, dynamic> coord({
-      int? raH, int? raM, double? raS, bool? negDec, int? decD, int? decM, double? decS,
+      int? raH,
+      int? raM,
+      double? raS,
+      bool? negDec,
+      int? decD,
+      int? decM,
+      double? decS,
     }) {
       var dd = decD ?? ri('DecDegrees');
       var dm = decM ?? ri('DecMinutes');
@@ -802,16 +927,38 @@ class _CoordinatesEditor extends StatelessWidget {
         'DecSeconds': ds,
       };
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _axisRow('RA', [
-          _NumField(key: Key('${fieldKey}_ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
-              enabled: enabled, onChanged: (v) => onChanged(coord(raH: v.toInt()))),
-          _NumField(key: Key('${fieldKey}_ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
-              enabled: enabled, onChanged: (v) => onChanged(coord(raM: v.toInt()))),
-          _NumField(key: Key('${fieldKey}_ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
-              enabled: enabled, onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
+          _NumField(
+            key: Key('${fieldKey}_ra_h'),
+            value: ri('RAHours'),
+            isInt: true,
+            min: 0,
+            max: 23,
+            enabled: enabled,
+            onChanged: (v) => onChanged(coord(raH: v.toInt())),
+          ),
+          _NumField(
+            key: Key('${fieldKey}_ra_m'),
+            value: ri('RAMinutes'),
+            isInt: true,
+            min: 0,
+            max: 59,
+            enabled: enabled,
+            onChanged: (v) => onChanged(coord(raM: v.toInt())),
+          ),
+          _NumField(
+            key: Key('${fieldKey}_ra_s'),
+            value: rd('RASeconds'),
+            isInt: false,
+            min: 0,
+            max: 59.999,
+            enabled: enabled,
+            onChanged: (v) => onChanged(coord(raS: v.toDouble())),
+          ),
         ]),
         const SizedBox(height: 6),
         _axisRow('Dec', [
@@ -819,44 +966,66 @@ class _CoordinatesEditor extends StatelessWidget {
             negative: neg,
             onChanged: enabled ? (n) => onChanged(coord(negDec: n)) : null,
           ),
-          _NumField(key: Key('${fieldKey}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
-              enabled: enabled, onChanged: (v) => onChanged(coord(decD: v.toInt()))),
+          _NumField(
+            key: Key('${fieldKey}_dec_d'),
+            value: ri('DecDegrees'),
+            isInt: true,
+            min: 0,
+            max: 90,
+            enabled: enabled,
+            onChanged: (v) => onChanged(coord(decD: v.toInt())),
+          ),
           // At the ±90° pole, minutes/seconds must be 0 — disable them so the
           // constraint is visible (rather than silently snapping back on edit).
-          _NumField(key: Key('${fieldKey}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
-              enabled: enabled && ri('DecDegrees') < 90,
-              onChanged: (v) => onChanged(coord(decM: v.toInt()))),
-          _NumField(key: Key('${fieldKey}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
-              enabled: enabled && ri('DecDegrees') < 90,
-              onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
+          _NumField(
+            key: Key('${fieldKey}_dec_m'),
+            value: ri('DecMinutes'),
+            isInt: true,
+            min: 0,
+            max: 59,
+            enabled: enabled && ri('DecDegrees') < 90,
+            onChanged: (v) => onChanged(coord(decM: v.toInt())),
+          ),
+          _NumField(
+            key: Key('${fieldKey}_dec_s'),
+            value: rd('DecSeconds'),
+            isInt: false,
+            min: 0,
+            max: 59.999,
+            enabled: enabled && ri('DecDegrees') < 90,
+            onChanged: (v) => onChanged(coord(decS: v.toDouble())),
+          ),
         ]),
       ],
     );
   }
 
   static Widget _axisRow(String label, List<Widget> fields) => Row(
-        children: [
-          SizedBox(
-            width: 32,
-            child: Text(label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+    children: [
+      SizedBox(
+        width: 32,
+        child: Text(
+          label,
+          style: const TextStyle(color: AraColors.textSecondary, fontSize: 12),
+        ),
+      ),
+      // Scroll the H/M/S group horizontally so the (wider) Dec row with its
+      // sign toggle can't overflow a narrow side pane.
+      Expanded(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < fields.length; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                SizedBox(width: 44, child: fields[i]),
+              ],
+            ],
           ),
-          // Scroll the H/M/S group horizontally so the (wider) Dec row with its
-          // sign toggle can't overflow a narrow side pane.
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < fields.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    SizedBox(width: 44, child: fields[i]),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
 /// Composite editor over a nested `WaitLoopData` object (the altitude
@@ -891,7 +1060,9 @@ class _WaitLoopDataEditor extends StatelessWidget {
     final data = value is Map
         ? Map<String, dynamic>.from(value as Map)
         : const <String, dynamic>{};
-    final type = data[r'$type'] is String ? data[r'$type'] as String : waitLoopDataType;
+    final type = data[r'$type'] is String
+        ? data[r'$type'] as String
+        : waitLoopDataType;
     // `is num` (not `is int`), matching the Offset/coordinate reads — a JSON
     // serializer may emit the enum as `1.0`, which `is int` would miss. Falls
     // back to this condition's own default comparator (not a fixed GreaterThan).
@@ -903,25 +1074,33 @@ class _WaitLoopDataEditor extends StatelessWidget {
     // can't assert "no matching item". The RAW value is preserved on write-back
     // below, so touching an unrelated field never silently flips the comparator —
     // only an explicit pick changes it. (fallbackComparator is always 1 or 3.)
-    final comparator =
-        altitudeComparators.containsKey(rawComparator) ? rawComparator : fallbackComparator;
-    final offset = data['Offset'] is num ? (data['Offset'] as num).toDouble() : 0.0;
+    final comparator = altitudeComparators.containsKey(rawComparator)
+        ? rawComparator
+        : fallbackComparator;
+    final offset = data['Offset'] is num
+        ? (data['Offset'] as num).toDouble()
+        : 0.0;
     final coords = data['Coordinates'];
 
-    Map<String, dynamic> withData({int? newComparator, double? newOffset, Object? newCoords}) =>
-        <String, dynamic>{
-          r'$type': type,
-          'Coordinates': newCoords ?? coords ?? defaultCoordinates,
-          'Offset': newOffset ?? offset,
-          // Preserve the stored comparator unless the user explicitly picks one.
-          'Comparator': newComparator ?? rawComparator,
-        };
+    Map<String, dynamic> withData({
+      int? newComparator,
+      double? newOffset,
+      Object? newCoords,
+    }) => <String, dynamic>{
+      r'$type': type,
+      'Coordinates': newCoords ?? coords ?? defaultCoordinates,
+      'Offset': newOffset ?? offset,
+      // Preserve the stored comparator unless the user explicitly picks one.
+      'Comparator': newComparator ?? rawComparator,
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Comparison',
-            style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+        const Text(
+          'Comparison',
+          style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+        ),
         const SizedBox(height: 4),
         DropdownButton<int>(
           key: Key('${fieldKey}_comparator'),
@@ -939,8 +1118,10 @@ class _WaitLoopDataEditor extends StatelessWidget {
               : null,
         ),
         const SizedBox(height: 8),
-        const Text('Offset (°)',
-            style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+        const Text(
+          'Offset (°)',
+          style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+        ),
         const SizedBox(height: 4),
         // Controlled (like the coordinates fields) so the display tracks an
         // external state change; signed + clamped to the altitude domain (±90°:
@@ -957,8 +1138,10 @@ class _WaitLoopDataEditor extends StatelessWidget {
           onChanged: (v) => onChanged(withData(newOffset: v.toDouble())),
         ),
         const SizedBox(height: 8),
-        const Text('Coordinates',
-            style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+        const Text(
+          'Coordinates',
+          style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+        ),
         const SizedBox(height: 4),
         _CoordinatesEditor(
           fieldKey: '${fieldKey}_coords',
@@ -977,10 +1160,12 @@ class _Placeholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(text,
-            style: const TextStyle(color: AraColors.textSecondary, fontSize: 13)),
-      );
+    padding: const EdgeInsets.all(16),
+    child: Text(
+      text,
+      style: const TextStyle(color: AraColors.textSecondary, fontSize: 13),
+    ),
+  );
 }
 
 /// A controlled non-negative numeric field (int or double) clamped to an
@@ -1015,7 +1200,9 @@ class _NumField extends StatefulWidget {
 }
 
 class _NumFieldState extends State<_NumField> {
-  late final TextEditingController _controller = TextEditingController(text: _fmt(widget.value));
+  late final TextEditingController _controller = TextEditingController(
+    text: _fmt(widget.value),
+  );
 
   String _fmt(num v) {
     // Display the in-range value (same clamp as on commit), so an out-of-range
@@ -1082,22 +1269,27 @@ class _NumFieldState extends State<_NumField> {
 
   @override
   Widget build(BuildContext context) => TextField(
-        controller: _controller,
-        enabled: widget.enabled,
-        keyboardType:
-            TextInputType.numberWithOptions(decimal: !widget.isInt, signed: widget.signed),
-        inputFormatters: [
-          widget.isInt && !widget.signed
-              ? FilteringTextInputFormatter.digitsOnly
-              // Digits with at most one decimal point (and an optional leading
-              // minus when signed) — rejects the keystroke that would add a
-              // second `.`/`-` (keeping the field, not blanking it).
-              : _SingleDecimalFormatter(isInt: widget.isInt, signed: widget.signed),
-        ],
-        style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-        decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
-        onChanged: _onChanged,
-      );
+    controller: _controller,
+    enabled: widget.enabled,
+    keyboardType: TextInputType.numberWithOptions(
+      decimal: !widget.isInt,
+      signed: widget.signed,
+    ),
+    inputFormatters: [
+      widget.isInt && !widget.signed
+          ? FilteringTextInputFormatter.digitsOnly
+          // Digits with at most one decimal point (and an optional leading
+          // minus when signed) — rejects the keystroke that would add a
+          // second `.`/`-` (keeping the field, not blanking it).
+          : _SingleDecimalFormatter(isInt: widget.isInt, signed: widget.signed),
+    ],
+    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+    decoration: const InputDecoration(
+      isDense: true,
+      border: OutlineInputBorder(),
+    ),
+    onChanged: _onChanged,
+  );
 }
 
 /// Allows a number with at most one `.` (omitted when [isInt]) and an optional
@@ -1121,8 +1313,10 @@ class _SingleDecimalFormatter extends TextInputFormatter {
       : (signed ? _decSigned : _decUnsigned);
 
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
-      _pattern.hasMatch(newValue.text) ? newValue : oldValue;
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) => _pattern.hasMatch(newValue.text) ? newValue : oldValue;
 }
 
 /// A compact `+ / −` toggle for the declination sign.
@@ -1134,16 +1328,16 @@ class _SignToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => OutlinedButton(
-        onPressed: onChanged == null ? null : () => onChanged!(!negative),
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.zero,
-          // shrinkWrap drops the default ~48px of hidden touch padding that would
-          // overlap the adjacent field; the explicit 36² minimum keeps it large
-          // enough to tap reliably while staying inside its 44px row slot.
-          minimumSize: const Size(36, 36),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          foregroundColor: AraColors.textPrimary,
-        ),
-        child: Text(negative ? '−' : '+', style: const TextStyle(fontSize: 16)),
-      );
+    onPressed: onChanged == null ? null : () => onChanged!(!negative),
+    style: OutlinedButton.styleFrom(
+      padding: EdgeInsets.zero,
+      // shrinkWrap drops the default ~48px of hidden touch padding that would
+      // overlap the adjacent field; the explicit 36² minimum keeps it large
+      // enough to tap reliably while staying inside its 44px row slot.
+      minimumSize: const Size(36, 36),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: AraColors.textPrimary,
+    ),
+    child: Text(negative ? '−' : '+', style: const TextStyle(fontSize: 16)),
+  );
 }

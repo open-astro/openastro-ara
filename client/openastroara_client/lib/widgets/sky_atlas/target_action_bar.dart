@@ -33,7 +33,8 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
     if (target == null) return const SizedBox.shrink();
 
     final mount = ref.watch(mountProvider).asData?.value;
-    final mountReady = mount != null &&
+    final mountReady =
+        mount != null &&
         mount.connectionState == EquipmentConnectionState.connected &&
         !mount.isBusy;
 
@@ -42,8 +43,11 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
     // grafts it in, and disappears again once it's removed. Only the open
     // (edited) sequence is inspected — an unopened sequence's membership isn't
     // known here without a fetch, and Remove acts on what's on screen anyway.
-    final inOpenSequence = ref.watch(sequenceEditorProvider.select((s) =>
-        s != null && indexOfTargetBlock(s.body, target.name) >= 0));
+    final inOpenSequence = ref.watch(
+      sequenceEditorProvider.select(
+        (s) => s != null && indexOfTargetBlock(s.body, target.name) >= 0,
+      ),
+    );
 
     return Material(
       color: AraColors.bgPanel,
@@ -51,23 +55,32 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            const Icon(Icons.my_location, size: 18, color: AraColors.accentInfo),
+            const Icon(
+              Icons.my_location,
+              size: 18,
+              color: AraColors.accentInfo,
+            ),
             const SizedBox(width: 8),
             Flexible(
               child: Text.rich(
-                TextSpan(children: [
-                  TextSpan(
+                TextSpan(
+                  children: [
+                    TextSpan(
                       text: target.name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  TextSpan(
-                      text: '   ${_fmtRa(target.raDeg)}  ${_fmtDec(target.decDeg)}',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextSpan(
+                      text:
+                          '   ${_fmtRa(target.raDeg)}  ${_fmtDec(target.decDeg)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                          fontFeatures: const [FontFeature.tabularFigures()])),
-                ]),
+                        color: AraColors.textSecondary,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -109,11 +122,15 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
           .read(mountProvider.notifier)
           .slewTo(target.raDeg / 15.0, target.decDeg);
       if (mounted) {
-        messenger.showSnackBar(SnackBar(
-          content: Text(ok
-              ? 'Slewing to ${target.name}…'
-              : "Couldn't start the slew. Check the mount."),
-        ));
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              ok
+                  ? 'Slewing to ${target.name}…'
+                  : "Couldn't start the slew. Check the mount.",
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -135,17 +152,20 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
         decDeg: target.decDeg,
         targetName: target.name,
       );
-      if (mounted && result != null) {
-        messenger.showSnackBar(SnackBar(
-            content: Text(result.appended
-                ? 'Added "${target.name}" to the open sequence.'
-                : 'Created an imaging run for "${target.name}".')));
+      if (mounted) {
+        showImagingRunFeedback(
+          messenger,
+          targetName: target.name,
+          result: result,
+        );
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(
-            content: Text(
-                "Couldn't create the run. Check the connection and try again.")));
+        showImagingRunFeedback(
+          messenger,
+          targetName: target.name,
+          failed: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -158,8 +178,10 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
-      final outcome =
-          await removeTargetFromSequence(ref, targetName: target.name);
+      final outcome = await removeTargetFromSequence(
+        ref,
+        targetName: target.name,
+      );
       if (!mounted) return;
       final message = switch (outcome) {
         RemoveTargetOutcome.removed =>
@@ -176,9 +198,13 @@ class _TargetActionBarState extends ConsumerState<TargetActionBar> {
       messenger.showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(const SnackBar(
+        messenger.showSnackBar(
+          const SnackBar(
             content: Text(
-                "Couldn't update the sequence. Check the connection and try again.")));
+              "Couldn't update the sequence. Check the connection and try again.",
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);

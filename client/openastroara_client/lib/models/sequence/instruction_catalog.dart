@@ -18,7 +18,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'nina_dom.dart' show conditionsWrapperType, itemsWrapperType, triggersWrapperType;
+import 'nina_dom.dart'
+    show conditionsWrapperType, itemsWrapperType, triggersWrapperType;
 
 /// The palette groups instructions by the equipment/concern they drive.
 /// `container` holds the nesting building-blocks (sequential/parallel sets).
@@ -36,15 +37,15 @@ enum InstructionCategory {
 /// Display title for a category section header.
 extension InstructionCategoryLabel on InstructionCategory {
   String get label => switch (this) {
-        InstructionCategory.camera => 'Camera',
-        InstructionCategory.filterWheel => 'Filter Wheel',
-        InstructionCategory.focuser => 'Focuser',
-        InstructionCategory.telescope => 'Telescope',
-        InstructionCategory.guider => 'Guider',
-        InstructionCategory.switchDevice => 'Switch',
-        InstructionCategory.utility => 'Utility',
-        InstructionCategory.container => 'Containers',
-      };
+    InstructionCategory.camera => 'Camera',
+    InstructionCategory.filterWheel => 'Filter Wheel',
+    InstructionCategory.focuser => 'Focuser',
+    InstructionCategory.telescope => 'Telescope',
+    InstructionCategory.guider => 'Guider',
+    InstructionCategory.switchDevice => 'Switch',
+    InstructionCategory.utility => 'Utility',
+    InstructionCategory.container => 'Containers',
+  };
 }
 
 /// The editor control an [InstructionField] renders as, and how its default is
@@ -119,7 +120,14 @@ const Map<int, String> trackingModeLabels = {
 };
 
 /// The recognised `ImageType` values (TakeExposure).
-const List<String> imageTypes = ['LIGHT', 'FLAT', 'DARK', 'BIAS', 'DARKFLAT', 'SNAPSHOT'];
+const List<String> imageTypes = [
+  'LIGHT',
+  'FLAT',
+  'DARK',
+  'BIAS',
+  'DARKFLAT',
+  'SNAPSHOT',
+];
 
 /// One serialized, editable field on an instruction node.
 @immutable
@@ -182,31 +190,45 @@ class InstructionField {
     this.min,
     this.max,
     this.enabledWhen,
-  })  : assert(
-          enumLabels == null || enumValues == null,
-          'a field is either an intEnum (enumLabels) or a stringEnum (enumValues), '
-          'never both — setting both is an ambiguous authoring mistake.',
-        ),
-        assert(type != InstructionFieldType.intEnum || enumLabels != null,
-            'an intEnum field must provide enumLabels'),
-        assert(type != InstructionFieldType.stringEnum || enumValues != null,
-            'a stringEnum field must provide enumValues'),
-        assert(min == null || max == null || min <= max,
-            'a field\'s min must be <= its max'),
-        assert((min == null && max == null) ||
-            type == InstructionFieldType.number ||
-            type == InstructionFieldType.integer,
-            'min/max only apply to a number or integer field'),
-        // The numeric text formatters reject "-", so a negative min would trap
-        // the user at 0. Tombstone until the formatters allow a leading minus.
-        assert(min == null || min >= 0,
-            'negative min unsupported — the numeric field formatters reject "-"'),
-        // A const default must already be in range (the field only snaps on the
-        // first edit, so an out-of-range default would open invalid).
-        assert(defaultValue is! num || min == null || defaultValue >= min,
-            'defaultValue must be >= min'),
-        assert(defaultValue is! num || max == null || defaultValue <= max,
-            'defaultValue must be <= max');
+  }) : assert(
+         enumLabels == null || enumValues == null,
+         'a field is either an intEnum (enumLabels) or a stringEnum (enumValues), '
+         'never both — setting both is an ambiguous authoring mistake.',
+       ),
+       assert(
+         type != InstructionFieldType.intEnum || enumLabels != null,
+         'an intEnum field must provide enumLabels',
+       ),
+       assert(
+         type != InstructionFieldType.stringEnum || enumValues != null,
+         'a stringEnum field must provide enumValues',
+       ),
+       assert(
+         min == null || max == null || min <= max,
+         'a field\'s min must be <= its max',
+       ),
+       assert(
+         (min == null && max == null) ||
+             type == InstructionFieldType.number ||
+             type == InstructionFieldType.integer,
+         'min/max only apply to a number or integer field',
+       ),
+       // The numeric text formatters reject "-", so a negative min would trap
+       // the user at 0. Tombstone until the formatters allow a leading minus.
+       assert(
+         min == null || min >= 0,
+         'negative min unsupported — the numeric field formatters reject "-"',
+       ),
+       // A const default must already be in range (the field only snaps on the
+       // first edit, so an out-of-range default would open invalid).
+       assert(
+         defaultValue is! num || min == null || defaultValue >= min,
+         'defaultValue must be >= min',
+       ),
+       assert(
+         defaultValue is! num || max == null || defaultValue <= max,
+         'defaultValue must be <= max',
+       );
 }
 
 /// One draggable instruction in the palette.
@@ -250,8 +272,10 @@ class InstructionDef {
     this.fields = const [],
     this.strategyType,
     this.defaultName,
-  }) : assert(strategyType != null || defaultName == null,
-            'defaultName only applies to a container (set strategyType too)');
+  }) : assert(
+         strategyType != null || defaultName == null,
+         'defaultName only applies to a container (set strategyType too)',
+       );
 
   /// A fresh raw-body node for this instruction: `$type`, each field at its
   /// (deep-cloned) default, plus the base-item fields every `SequenceItem`
@@ -279,13 +303,18 @@ class InstructionDef {
     // _buildContainer would otherwise silently drop on a leaf — fails fast.
     if (strategyType == null && defaultName != null) {
       throw StateError(
-          'InstructionDef($label) sets defaultName without strategyType (only containers carry a Name)');
+        'InstructionDef($label) sets defaultName without strategyType (only containers carry a Name)',
+      );
     }
     if (isContainer) return _buildContainer();
     // A field may not reuse a base key build() writes itself (it would be
     // silently clobbered). Shared with the condition/trigger catalogs.
-    checkNoReservedFieldKeys('InstructionDef($label)', fields,
-        const {r'$type', 'Parent', 'ErrorBehavior', 'Attempts'});
+    checkNoReservedFieldKeys('InstructionDef($label)', fields, const {
+      r'$type',
+      'Parent',
+      'ErrorBehavior',
+      'Attempts',
+    });
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
@@ -304,30 +333,30 @@ class InstructionDef {
   /// editor can nest children into a just-added container immediately via
   /// `nina_dom` (which appends to `Items.$values`).
   Map<String, dynamic> _buildContainer() => <String, dynamic>{
-        r'$type': type,
-        'Strategy': <String, dynamic>{r'$type': strategyType},
-        // The two current containers reuse their palette label as the NINA
-        // default Name. If a future container's NINA default name diverges from
-        // its palette label, set `defaultName` explicitly so the right name
-        // round-trips into NINA.
-        'Name': defaultName ?? label,
-        'Conditions': <String, dynamic>{
-          r'$type': conditionsWrapperType,
-          r'$values': <dynamic>[],
-        },
-        'IsExpanded': true,
-        'Items': <String, dynamic>{
-          r'$type': itemsWrapperType,
-          r'$values': <dynamic>[],
-        },
-        'Triggers': <String, dynamic>{
-          r'$type': triggersWrapperType,
-          r'$values': <dynamic>[],
-        },
-        'Parent': null,
-        'ErrorBehavior': 0,
-        'Attempts': 1,
-      };
+    r'$type': type,
+    'Strategy': <String, dynamic>{r'$type': strategyType},
+    // The two current containers reuse their palette label as the NINA
+    // default Name. If a future container's NINA default name diverges from
+    // its palette label, set `defaultName` explicitly so the right name
+    // round-trips into NINA.
+    'Name': defaultName ?? label,
+    'Conditions': <String, dynamic>{
+      r'$type': conditionsWrapperType,
+      r'$values': <dynamic>[],
+    },
+    'IsExpanded': true,
+    'Items': <String, dynamic>{
+      r'$type': itemsWrapperType,
+      r'$values': <dynamic>[],
+    },
+    'Triggers': <String, dynamic>{
+      r'$type': triggersWrapperType,
+      r'$values': <dynamic>[],
+    },
+    'Parent': null,
+    'ErrorBehavior': 0,
+    'Attempts': 1,
+  };
 }
 
 /// Throws a [StateError] if any of [fields] uses a key in [reserved] — a base
@@ -335,10 +364,15 @@ class InstructionDef {
 /// clobber. Shared by the instruction / condition / trigger catalogs so all
 /// three guard their reserved base keys identically. [owner] labels the throw.
 void checkNoReservedFieldKeys(
-    String owner, List<InstructionField> fields, Set<String> reserved) {
+  String owner,
+  List<InstructionField> fields,
+  Set<String> reserved,
+) {
   for (final f in fields) {
     if (reserved.contains(f.key)) {
-      throw StateError('$owner field "${f.key}" collides with a reserved base key');
+      throw StateError(
+        '$owner field "${f.key}" collides with a reserved base key',
+      );
     }
   }
 }
@@ -358,7 +392,8 @@ Object? deepCloneJson(Object? value) {
       'instruction default maps must be String-keyed JSON fragments; got ${value.runtimeType}',
     );
     return <String, dynamic>{
-      for (final entry in value.entries) entry.key as String: deepCloneJson(entry.value),
+      for (final entry in value.entries)
+        entry.key as String: deepCloneJson(entry.value),
     };
   }
   if (value is List) {
@@ -380,82 +415,183 @@ const String sequentialContainerType =
 const String slewScopeToRaDecType =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
 
+/// The remaining `$type`s the Planning tab's imaging-run builder assembles
+/// (and the Optimal-Sub advisor / field editors match on) — promoted here so
+/// the catalog stays the single source of truth for every wire literal (the
+/// [slewScopeToRaDecType] pattern; previously duplicated in
+/// `imaging_run_body.dart` and `optimal_sub_advisor.dart`).
+const String takeExposureType =
+    'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
+const String coolCameraType =
+    'OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera, OpenAstroAra.Sequencer';
+const String warmCameraType =
+    'OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera, OpenAstroAra.Sequencer';
+const String unparkScopeType =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope, OpenAstroAra.Sequencer';
+const String parkScopeType =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope, OpenAstroAra.Sequencer';
+const String setTrackingType =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer';
+const String switchFilterType =
+    'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
+const String runAutofocusType =
+    'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer';
+
+/// The daemon `FilterInfo` `$type` — the value shape of `SwitchFilter.Filter`.
+/// Build instances with [buildFilterInfo] so the `{_name, _position}` wire
+/// shape can't drift between emitters.
+const String filterInfoType =
+    'OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core';
+
+/// The `SwitchFilter.Filter` payload. [position] `-1` tells the daemon's
+/// `MatchFilter` to match by name and not trust a stale slot index (the same
+/// contract the daemon's own sequence builder emits); pass a real slot only
+/// when one is authoritatively known (e.g. picked from the connected wheel).
+Map<String, dynamic> buildFilterInfo(String name, {int position = -1}) =>
+    <String, dynamic>{
+      r'$type': filterInfoType,
+      '_name': name,
+      '_position': position,
+    };
+
 const List<InstructionDef> instructionCatalog = [
   // ── Camera ────────────────────────────────────────────────────────────────
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer',
+    type: takeExposureType,
     label: 'Take Exposure',
     category: InstructionCategory.camera,
     icon: Icons.camera_alt_outlined,
     fields: [
-      InstructionField('ExposureTime', 'Exposure (s)', InstructionFieldType.number, defaultValue: 1.0),
+      InstructionField(
+        'ExposureTime',
+        'Exposure (s)',
+        InstructionFieldType.number,
+        defaultValue: 1.0,
+      ),
       // -1 is the NINA sentinel for "use the camera's profile default" (not 0).
-      InstructionField('Gain', 'Gain', InstructionFieldType.integer, defaultValue: -1),
-      InstructionField('Offset', 'Offset', InstructionFieldType.integer, defaultValue: -1),
-      InstructionField('Binning', 'Binning', InstructionFieldType.binning, defaultValue: defaultBinning),
-      InstructionField('ImageType', 'Image type', InstructionFieldType.stringEnum,
-          defaultValue: 'LIGHT', enumValues: imageTypes),
-      InstructionField('ExposureCount', 'Exposure count', InstructionFieldType.integer,
-          defaultValue: 0, editable: false),
+      InstructionField(
+        'Gain',
+        'Gain',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+      InstructionField(
+        'Offset',
+        'Offset',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+      InstructionField(
+        'Binning',
+        'Binning',
+        InstructionFieldType.binning,
+        defaultValue: defaultBinning,
+      ),
+      InstructionField(
+        'ImageType',
+        'Image type',
+        InstructionFieldType.stringEnum,
+        defaultValue: 'LIGHT',
+        enumValues: imageTypes,
+      ),
+      InstructionField(
+        'ExposureCount',
+        'Exposure count',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        editable: false,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera, OpenAstroAra.Sequencer',
+    type: coolCameraType,
     label: 'Cool Camera',
     category: InstructionCategory.camera,
     icon: Icons.ac_unit_outlined,
     fields: [
-      InstructionField('Temperature', 'Target (°C)', InstructionFieldType.number, defaultValue: 0.0),
+      InstructionField(
+        'Temperature',
+        'Target (°C)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
+      ),
       // A 5-minute ramp by default — a 0-min duration tells the daemon to jump
       // straight to the target, which thermally shocks the sensor.
-      InstructionField('Duration', 'Duration (min)', InstructionFieldType.number, defaultValue: 5.0),
+      InstructionField(
+        'Duration',
+        'Duration (min)',
+        InstructionFieldType.number,
+        defaultValue: 5.0,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera, OpenAstroAra.Sequencer',
+    type: warmCameraType,
     label: 'Warm Camera',
     category: InstructionCategory.camera,
     icon: Icons.wb_sunny_outlined,
     fields: [
       // 5-minute ramp by default (gentle warm-up), as with Cool Camera.
-      InstructionField('Duration', 'Duration (min)', InstructionFieldType.number, defaultValue: 5.0),
+      InstructionField(
+        'Duration',
+        'Duration (min)',
+        InstructionFieldType.number,
+        defaultValue: 5.0,
+      ),
     ],
   ),
   // ── Filter Wheel ────────────────────────────────────────────────────────────
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer',
+    type: switchFilterType,
     label: 'Switch Filter',
     category: InstructionCategory.filterWheel,
     icon: Icons.filter_b_and_w_outlined,
     fields: [
       // FilterInfo, resolved from the connected wheel in the editor (Phase 2);
       // `null` is a placeholder the user must replace before save (Phase 3).
-      InstructionField('Filter', 'Filter', InstructionFieldType.filter,
-          defaultValue: null, requiresUserInput: true),
+      InstructionField(
+        'Filter',
+        'Filter',
+        InstructionFieldType.filter,
+        defaultValue: null,
+        requiresUserInput: true,
+      ),
     ],
   ),
   // ── Focuser ────────────────────────────────────────────────────────────────
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, OpenAstroAra.Sequencer',
     label: 'Move Focuser (absolute)',
     category: InstructionCategory.focuser,
     icon: Icons.center_focus_strong_outlined,
     fields: [
-      InstructionField('Position', 'Position', InstructionFieldType.integer, defaultValue: 0),
+      InstructionField(
+        'Position',
+        'Position',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserRelative, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserRelative, OpenAstroAra.Sequencer',
     label: 'Move Focuser (relative)',
     category: InstructionCategory.focuser,
     icon: Icons.center_focus_weak_outlined,
     fields: [
-      InstructionField('RelativePosition', 'Steps', InstructionFieldType.integer, defaultValue: 0),
+      InstructionField(
+        'RelativePosition',
+        'Steps',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+      ),
     ],
   ),
   // §38 NINA import — run an autofocus routine. No serialized fields.
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer',
+    type: runAutofocusType,
     label: 'Run Autofocus',
     category: InstructionCategory.focuser,
     icon: Icons.center_focus_strong_outlined,
@@ -467,59 +603,94 @@ const List<InstructionDef> instructionCatalog = [
     category: InstructionCategory.telescope,
     icon: Icons.my_location_outlined,
     fields: [
-      InstructionField('Coordinates', 'Coordinates', InstructionFieldType.coordinates,
-          defaultValue: defaultCoordinates),
-      InstructionField('Inherited', 'Inherit from target', InstructionFieldType.boolean, defaultValue: false),
+      InstructionField(
+        'Coordinates',
+        'Coordinates',
+        InstructionFieldType.coordinates,
+        defaultValue: defaultCoordinates,
+      ),
+      InstructionField(
+        'Inherited',
+        'Inherit from target',
+        InstructionFieldType.boolean,
+        defaultValue: false,
+      ),
     ],
   ),
   // §38 NINA import — center-and-rotate: slew + plate-solve to centre, then rotate to PositionAngle.
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer',
     label: 'Center and Rotate',
     category: InstructionCategory.telescope,
     icon: Icons.crop_rotate_outlined,
     fields: [
-      InstructionField('Coordinates', 'Coordinates', InstructionFieldType.coordinates,
-          defaultValue: defaultCoordinates),
-      InstructionField('PositionAngle', 'Position angle (°)', InstructionFieldType.number, defaultValue: 0.0),
-      InstructionField('Inherited', 'Inherit from target', InstructionFieldType.boolean, defaultValue: false),
+      InstructionField(
+        'Coordinates',
+        'Coordinates',
+        InstructionFieldType.coordinates,
+        defaultValue: defaultCoordinates,
+      ),
+      InstructionField(
+        'PositionAngle',
+        'Position angle (°)',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
+      ),
+      InstructionField(
+        'Inherited',
+        'Inherit from target',
+        InstructionFieldType.boolean,
+        defaultValue: false,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer',
+    type: setTrackingType,
     label: 'Set Tracking',
     category: InstructionCategory.telescope,
     icon: Icons.track_changes_outlined,
     fields: [
-      InstructionField('TrackingMode', 'Mode', InstructionFieldType.intEnum,
-          defaultValue: 0, enumLabels: trackingModeLabels),
+      InstructionField(
+        'TrackingMode',
+        'Mode',
+        InstructionFieldType.intEnum,
+        defaultValue: 0,
+        enumLabels: trackingModeLabels,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope, OpenAstroAra.Sequencer',
+    type: parkScopeType,
     label: 'Park Scope',
     category: InstructionCategory.telescope,
     icon: Icons.local_parking_outlined,
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope, OpenAstroAra.Sequencer',
+    type: unparkScopeType,
     label: 'Unpark Scope',
     category: InstructionCategory.telescope,
     icon: Icons.exit_to_app_outlined,
   ),
   // ── Guider ─────────────────────────────────────────────────────────────────
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer',
     label: 'Start Guiding',
     category: InstructionCategory.guider,
     icon: Icons.play_circle_outline,
     fields: [
-      InstructionField('ForceCalibration', 'Force calibration', InstructionFieldType.boolean,
-          defaultValue: false),
+      InstructionField(
+        'ForceCalibration',
+        'Force calibration',
+        InstructionFieldType.boolean,
+        defaultValue: false,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Guider.StopGuiding, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Guider.StopGuiding, OpenAstroAra.Sequencer',
     label: 'Stop Guiding',
     category: InstructionCategory.guider,
     icon: Icons.stop_circle_outlined,
@@ -528,7 +699,8 @@ const List<InstructionDef> instructionCatalog = [
   // `[JsonProperty]`); the "after N exposures" / settle parameters live on the
   // dither *trigger*, not this instruction.
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer',
     label: 'Dither',
     category: InstructionCategory.guider,
     icon: Icons.scatter_plot_outlined,
@@ -541,7 +713,8 @@ const List<InstructionDef> instructionCatalog = [
   // default every NINA import carries, since NINA has no such field) = the
   // lowest-numbered one.
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Switch.SetSwitchValue, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Switch.SetSwitchValue, OpenAstroAra.Sequencer',
     label: 'Set Switch Value',
     category: InstructionCategory.switchDevice,
     icon: Icons.toggle_on_outlined,
@@ -549,46 +722,93 @@ const List<InstructionDef> instructionCatalog = [
       // No min bound: the clamped editor's formatters reject a leading minus
       // (catalog assert), while the free signed field parses -1 fine; anything
       // below -1 normalizes to -1 on the daemon (the C# setter clamps).
-      InstructionField('AlpacaDeviceNumber', 'Switch device (-1 = first)',
-          InstructionFieldType.integer, defaultValue: -1),
-      InstructionField('SwitchIndex', 'Writable port #', InstructionFieldType.integer,
-          defaultValue: 0, min: 0),
-      InstructionField('Value', 'Value', InstructionFieldType.number, defaultValue: 0.0),
+      InstructionField(
+        'AlpacaDeviceNumber',
+        'Switch device (-1 = first)',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+      InstructionField(
+        'SwitchIndex',
+        'Writable port #',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        min: 0,
+      ),
+      InstructionField(
+        'Value',
+        'Value',
+        InstructionFieldType.number,
+        defaultValue: 0.0,
+      ),
     ],
   ),
   // ── Utility ────────────────────────────────────────────────────────────────
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer',
     label: 'Wait (duration)',
     category: InstructionCategory.utility,
     icon: Icons.hourglass_empty_outlined,
     fields: [
       // `Time` is a plain `double` of seconds in the C# class (not a
       // TimeSpan-serialized string), so a bare number is the correct shape.
-      InstructionField('Time', 'Seconds', InstructionFieldType.number, defaultValue: 1.0),
+      InstructionField(
+        'Time',
+        'Seconds',
+        InstructionFieldType.number,
+        defaultValue: 1.0,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTime, OpenAstroAra.Sequencer',
     label: 'Wait (until time)',
     category: InstructionCategory.utility,
     icon: Icons.schedule_outlined,
     // All four are `[JsonProperty] public int` in the C# WaitForTime class
     // (not double/TimeSpan), so `integer` fields match the on-disk shape.
     fields: [
-      InstructionField('Hours', 'Hour', InstructionFieldType.integer, defaultValue: 0),
-      InstructionField('Minutes', 'Minute', InstructionFieldType.integer, defaultValue: 0),
-      InstructionField('Seconds', 'Second', InstructionFieldType.integer, defaultValue: 0),
-      InstructionField('MinutesOffset', 'Offset (min)', InstructionFieldType.integer, defaultValue: 0),
+      InstructionField(
+        'Hours',
+        'Hour',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+      ),
+      InstructionField(
+        'Minutes',
+        'Minute',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+      ),
+      InstructionField(
+        'Seconds',
+        'Second',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+      ),
+      InstructionField(
+        'MinutesOffset',
+        'Offset (min)',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+      ),
     ],
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer',
     label: 'Annotation',
     category: InstructionCategory.utility,
     icon: Icons.sticky_note_2_outlined,
     fields: [
-      InstructionField('Text', 'Note', InstructionFieldType.text, defaultValue: ''),
+      InstructionField(
+        'Text',
+        'Note',
+        InstructionFieldType.text,
+        defaultValue: '',
+      ),
     ],
   ),
   // ── Containers ───────────────────────────────────────────────────────────
@@ -605,7 +825,8 @@ const List<InstructionDef> instructionCatalog = [
         'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
   ),
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.Container.ParallelContainer, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Container.ParallelContainer, OpenAstroAra.Sequencer',
     label: 'Parallel Instruction Set',
     category: InstructionCategory.container,
     icon: Icons.call_split,
@@ -639,7 +860,8 @@ const List<InstructionDef> instructionCatalog = [
 /// The catalog grouped by category, preserving declaration order, with empty
 /// categories omitted. Built once for the palette UI. Both the outer map and
 /// each inner list are unmodifiable so the singleton can't be corrupted.
-final Map<InstructionCategory, List<InstructionDef>> instructionCatalogByCategory = () {
+final Map<InstructionCategory, List<InstructionDef>>
+instructionCatalogByCategory = () {
   final grouped = <InstructionCategory, List<InstructionDef>>{};
   for (final def in instructionCatalog) {
     (grouped[def.category] ??= <InstructionDef>[]).add(def);

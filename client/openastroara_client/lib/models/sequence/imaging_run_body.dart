@@ -119,7 +119,10 @@ Map<String, dynamic> buildTargetBlock({
 }) {
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
-        exposureSeconds, 'exposureSeconds', 'must be > 0 (daemon rejects it)');
+      exposureSeconds,
+      'exposureSeconds',
+      'must be > 0 (daemon rejects it)',
+    );
   }
   if (frameCount < 1) {
     throw ArgumentError.value(frameCount, 'frameCount', 'must be >= 1');
@@ -152,7 +155,8 @@ Map<String, dynamic> buildTargetBlock({
     final afTriggerDef = triggerForType(autofocusAfterExposuresType);
     if (afTriggerDef == null) {
       throw StateError(
-          'AutofocusAfterExposures missing from the trigger catalog');
+        'AutofocusAfterExposures missing from the trigger catalog',
+      );
     }
     final afTrigger = afTriggerDef.build()
       ..['AfterExposures'] = autofocusEveryNExposures;
@@ -163,14 +167,7 @@ Map<String, dynamic> buildTargetBlock({
     _item(slewScopeToRaDecType)
       ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg),
     if (filterName != null && filterName.trim().isNotEmpty)
-      _item(switchFilterType)
-        ..['Filter'] = <String, dynamic>{
-          r'$type': filterInfoType,
-          // Match by name; -1 tells the daemon's MatchFilter not to trust a
-          // stale slot index (same contract the daemon's own builder emits).
-          '_name': filterName.trim(),
-          '_position': -1,
-        },
+      _item(switchFilterType)..['Filter'] = buildFilterInfo(filterName.trim()),
     if (autofocusAtStart) _item(runAutofocusType),
     imaging,
   ];
@@ -190,10 +187,15 @@ Map<String, dynamic> buildTargetBlock({
 /// design/PORT_TODO.md.) Throws [ArgumentError] when [root] isn't a
 /// container — the caller should fall back to creating a fresh run instead.
 Map<String, dynamic> appendTargetToRunBody(
-    Map<String, dynamic> root, Map<String, dynamic> targetBlock) {
+  Map<String, dynamic> root,
+  Map<String, dynamic> targetBlock,
+) {
   if (!isContainer(root)) {
     throw ArgumentError.value(
-        root[r'$type'], 'root', 'the sequence root is not a container');
+      root[r'$type'],
+      'root',
+      'the sequence root is not a container',
+    );
   }
   final children = childrenOf(root);
   var insertAt = children.length;
@@ -232,7 +234,9 @@ int indexOfTargetBlock(Map<String, dynamic> root, String targetName) {
 /// session-wide steps (cool / unpark / tracking / warm) untouched. Null when
 /// no such block exists (nothing to remove).
 Map<String, dynamic>? removeTargetFromRunBody(
-    Map<String, dynamic> root, String targetName) {
+  Map<String, dynamic> root,
+  String targetName,
+) {
   final index = indexOfTargetBlock(root, targetName);
   if (index < 0) return null;
   return withChildren(root, childrenOf(root)..removeAt(index));
@@ -268,30 +272,6 @@ int defaultFrameCount(
   return math.max(minFrames, math.min(maxFrames, fits));
 }
 
-// The instruction `$type`s this builder assembles (single source of truth is
-// the catalogs; these mirror the same literal strings for lookup).
-const String takeExposureType =
-    'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
-const String coolCameraType =
-    'OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera, OpenAstroAra.Sequencer';
-const String warmCameraType =
-    'OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera, OpenAstroAra.Sequencer';
-const String unparkScopeType =
-    'OpenAstroAra.Sequencer.SequenceItem.Telescope.UnparkScope, OpenAstroAra.Sequencer';
-const String parkScopeType =
-    'OpenAstroAra.Sequencer.SequenceItem.Telescope.ParkScope, OpenAstroAra.Sequencer';
-const String setTrackingType =
-    'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer';
-const String switchFilterType =
-    'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
-const String runAutofocusType =
-    'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer';
-const String loopConditionType =
-    'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer';
-const String autofocusAfterExposuresType =
-    'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer';
-
-/// The daemon `FilterInfo` `$type` — `SwitchFilter.Filter`'s value shape
-/// (mirrors the sequencer field editor's `_FilterEditor`).
-const String filterInfoType =
-    'OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core';
+// The `$type` constants this builder assembles all live in the catalogs
+// (instruction_catalog / condition_catalog / trigger_catalog) — imported
+// above, no local mirrors.

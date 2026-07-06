@@ -167,8 +167,9 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final canAdd = ref.watch(sequenceApiProvider) != null;
     // select() so a selection change rebuilds only the two rows whose
     // highlight actually flipped, not every visible row.
-    final selected = ref
-        .watch(selectedTonightObjectProvider.select((id) => id == _object.id));
+    final selected = ref.watch(
+      selectedTonightObjectProvider.select((id) => id == _object.id),
+    );
 
     return InkWell(
       onTap: _frameOnAtlas,
@@ -402,14 +403,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     } catch (e, st) {
       debugPrint('[planning] create-run failed: $e\n$st');
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Couldn't create the run. Check the connection and try again.",
-            ),
-            backgroundColor: AraColors.accentError,
-          ),
-        );
+        showImagingRunFeedback(messenger, targetName: name, failed: true);
       }
       return;
     } finally {
@@ -417,14 +411,8 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     }
     // Gate on mounted before touching ref: the row can scroll out of the
     // ListView (disposing it) during the create await, leaving ref defunct.
-    if (!mounted || result == null) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(result.appended
-            ? 'Added "$name" to the open sequence.'
-            : 'Created an imaging run for "$name".'),
-      ),
-    );
+    if (!mounted) return;
+    showImagingRunFeedback(messenger, targetName: name, result: result);
   }
 
   // Friendly names for both the starter catalog's plain types and the OpenNGC
