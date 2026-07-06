@@ -166,6 +166,40 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
             if (v != null) n.setExpectedFlipSlewSeconds(v);
           },
         ),
+        SettingsSwitchRow(
+          label: 'Louder alerts during dark hours (§58.10)',
+          hint: 'While the site sits in astronomical darkness, '
+              'equipment-impacting warnings ride one severity level higher so '
+              'the alarm behaviour engages earlier for a sleeping user.',
+          value: s.unattendedEscalation,
+          onChanged: n.setUnattendedEscalation,
+        ),
+        // §58.8 — first-flip announce status + manual re-arm. The daemon owns
+        // the flag (set after the first announced flip, cleared automatically
+        // on an optics change); the panel offers only the one-way re-arm, so
+        // there is no way to silently skip the announce.
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            Expanded(
+              child: Text(
+                s.firstFlipConfirmed
+                    ? 'First-flip announce (§58.8): already ran — later flips '
+                        'are silent. Re-arm after re-balancing or a rig change.'
+                    : 'First-flip announce (§58.8): armed — the next meridian '
+                        'flip alerts and waits 60 s before proceeding.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              key: const Key('rearm_first_flip'),
+              onPressed:
+                  s.firstFlipConfirmed ? n.rearmFirstFlipAnnounce : null,
+              child: const Text('Re-arm'),
+            ),
+          ]),
+        ),
         const SettingsSectionHeader('On altitude limit'),
         SettingsDropdownRow<AltitudeLimitAction>(
           label: 'Action',

@@ -45,6 +45,16 @@ class SafetyPolicies {
   // min(3 × this, 5 min).
   final int expectedFlipSlewSeconds;
 
+  // §58.8 — whether this profile's one-time first-flip announce has already
+  // run (true = later flips are silent). The daemon sets it after the first
+  // announced flip and clears it on an optics change; the panel shows the
+  // state and offers a manual re-arm (set back to false).
+  final bool firstFlipConfirmed;
+
+  // §58.10 — bump equipment-impacting notification severities one level while
+  // the site sits in astronomical darkness. Default on.
+  final bool unattendedEscalation;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -61,6 +71,8 @@ class SafetyPolicies {
     this.onDiskSpaceCritical = DiskSpaceCriticalAction.warn,
     this.flipSafetyEnabled = true,
     this.expectedFlipSlewSeconds = 90,
+    this.firstFlipConfirmed = false,
+    this.unattendedEscalation = true,
   });
 
   SafetyPolicies copyWith({
@@ -79,6 +91,8 @@ class SafetyPolicies {
     DiskSpaceCriticalAction? onDiskSpaceCritical,
     bool? flipSafetyEnabled,
     int? expectedFlipSlewSeconds,
+    bool? firstFlipConfirmed,
+    bool? unattendedEscalation,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -101,6 +115,9 @@ class SafetyPolicies {
         flipSafetyEnabled: flipSafetyEnabled ?? this.flipSafetyEnabled,
         expectedFlipSlewSeconds:
             expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
+        firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
+        unattendedEscalation:
+            unattendedEscalation ?? this.unattendedEscalation,
       );
 }
 
@@ -132,6 +149,14 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
 
   void setFlipSafetyEnabled(bool v) =>
       state = state.copyWith(flipSafetyEnabled: v);
+
+  void setUnattendedEscalation(bool v) =>
+      state = state.copyWith(unattendedEscalation: v);
+
+  /// §58.8 — re-arm the one-time first-flip announce (e.g. after re-balancing
+  /// or any rig change the optics-based auto-reset can't see).
+  void rearmFirstFlipAnnounce() =>
+      state = state.copyWith(firstFlipConfirmed: false);
 
   void setExpectedFlipSlewSeconds(int v) {
     if (v <= 0) return; // the daemon's watchdog needs a positive expectation

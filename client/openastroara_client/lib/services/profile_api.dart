@@ -839,6 +839,8 @@ class ProfileApi {
         flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
         expectedFlipSlewSeconds:
             (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
+        firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+        unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -858,6 +860,8 @@ class ProfileApi {
         'on_disk_space_critical': v.onDiskSpaceCritical.name,
         'flip_safety_enabled': v.flipSafetyEnabled,
         'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
+        'first_flip_confirmed': v.firstFlipConfirmed,
+        'unattended_escalation': v.unattendedEscalation,
       };
 
   static UnsafeAction _unsafeActionFromString(String? s) {

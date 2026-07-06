@@ -79,5 +79,29 @@ void main() {
       expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical,
           DiskSpaceCriticalAction.abort);
     });
+
+    test('§58.10 unattended escalation defaults on + toggles', () {
+      final n = container.read(safetyPoliciesProvider.notifier);
+      expect(container.read(safetyPoliciesProvider).unattendedEscalation, isTrue);
+      n.setUnattendedEscalation(false);
+      expect(container.read(safetyPoliciesProvider).unattendedEscalation, isFalse);
+    });
+
+    test('§58.8 re-arm clears the confirmation and is idempotent', () {
+      // Model-level: re-arm on a confirmed profile clears the flag. (There is
+      // deliberately NO client-side path that sets it true — only the daemon's
+      // executor confirms a flip; the notifier only exposes the one-way clear.)
+      const confirmed = SafetyPolicies(firstFlipConfirmed: true);
+      expect(confirmed.firstFlipConfirmed, isTrue);
+      expect(confirmed.copyWith(firstFlipConfirmed: false).firstFlipConfirmed,
+          isFalse);
+
+      final n = container.read(safetyPoliciesProvider.notifier);
+      expect(container.read(safetyPoliciesProvider).firstFlipConfirmed, isFalse,
+          reason: 'fresh state mirrors the daemon default — announce armed');
+      n.rearmFirstFlipAnnounce();
+      expect(container.read(safetyPoliciesProvider).firstFlipConfirmed, isFalse,
+          reason: 're-arming an already-armed profile is a harmless no-op');
+    });
   });
 }
