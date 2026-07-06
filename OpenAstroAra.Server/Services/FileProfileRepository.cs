@@ -280,7 +280,20 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     private StoredProfileDto? ReadFile(Guid id) {
         try {
             var json = File.ReadAllText(FilePath(id));
-            return JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.StoredProfileDto);
+            var stored = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.StoredProfileDto);
+            if (stored is null) {
+                return null;
+            }
+            // Normalize where the nulls are born: a saved snapshot written before a
+            // section existed deserializes that section to null, and this read feeds
+            // GET /api/v1/profiles/{id}, profile-share export, AND profile-select's
+            // Apply → Put* push into the active store. The store re-normalizes on its
+            // own write path, but the first two would otherwise ship
+            // `"camera_electronics": null` (etc.) on the wire. (#689 follow-up.)
+            return stored with {
+                Settings = ProfileSnapshotNormalizer.Normalize(
+                    (ProfileSnapshotDto?)stored.Settings ?? ProfileSnapshotNormalizer.Defaults),
+            };
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             LogLoadFailed(ex, FilePath(id));
             return null;

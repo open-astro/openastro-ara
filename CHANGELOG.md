@@ -41,6 +41,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **§27 — single-client policy: connect handshake + 4004 takeover (server).** The daemon now serves one controlling client at a time: `POST /api/v1/server/connect` claims the slot (a live holder gets a `connection.request` modal over its WebSocket and can allow or reject the takeover; a holder silent for 60 s is swept automatically), `POST /api/v1/server/disconnect` releases it, and `GET /api/v1/server/session` shows who is connected. A displaced client's WebSocket is closed with code 4004. Pre-§27 clients that never call `connect` are unaffected — the event stream and REST keep working unchanged.
 
 ### Fixed
+- **§37 — older saved profiles no longer ship `null` sections on the wire.** A profile saved before newer settings sections existed (camera electronics, optics, filter set, …) used to return those sections as `null` from `GET /api/v1/profiles/{id}` and in profile-share exports; every snapshot read now back-fills missing sections with defaults at the source, matching what the active-profile store already did.
 - **§28 — unknown sensor temperature is recorded honestly.** A camera that reports no CCD temperature now records "unknown" instead of a fabricated 0.0°C (existing databases upgrade in place; dark-matching for uncooled cameras keeps working across old and new recordings), and exports/views show a blank instead of a fake reading.
 
 ### Fixed
