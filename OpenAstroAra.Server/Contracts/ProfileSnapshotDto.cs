@@ -60,4 +60,9 @@ public sealed record ProfileSnapshotDto(
     OpticsSettingsDto Optics,
     CameraElectronicsDto CameraElectronics,
     FilterSetDto FilterSet,
-    FilterWheelLabelsDto FilterWheelLabels);
+    FilterWheelLabelsDto FilterWheelLabels,
+    // §36 custom terrain horizon. Appended as an OPTIONAL param (like #704's
+    // notifications fields) so existing positional constructions and older
+    // profile.json files keep working; ProfileSnapshotNormalizer back-fills
+    // null to the empty horizon.
+    CustomHorizonDto? CustomHorizon = null);

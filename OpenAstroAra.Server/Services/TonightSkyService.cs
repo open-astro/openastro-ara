@@ -63,7 +63,8 @@ public sealed class TonightSkyService : ITonightSkyService {
             // NEXTGEN §1 filter advice inputs — fetched once per request. Advice degrades
             // gracefully: an empty filter set → no advice; unset electronics/aperture → no
             // optimal-sub figure (the advice string still flows).
-            _profileStore.GetFilterSet(), _profileStore.GetCameraElectronics());
+            _profileStore.GetFilterSet(), _profileStore.GetCameraElectronics(),
+            _profileStore.GetCustomHorizon());
 
     /// <summary>The candidate set: the installed OpenNGC catalog culled to the realistically-shootable
     /// objects, or the hardcoded starter <see cref="Catalog"/> when openngc-dso isn't installed (or the
@@ -174,7 +175,8 @@ public sealed class TonightSkyService : ITonightSkyService {
     internal static IReadOnlyList<TonightSkyObjectDto> Rank(
             IReadOnlyList<CatalogObject> catalog, SiteSettingsDto site, OpticsSettingsDto optics,
             DateTimeOffset atUtc, int limit, int mosaicTilesX = 1, int mosaicTilesY = 1,
-            FilterSetDto? filterSet = null, CameraElectronicsDto? electronics = null) {
+            FilterSetDto? filterSet = null, CameraElectronicsDto? electronics = null,
+            CustomHorizonDto? customHorizon = null) {
         var horizon = site.DefaultHorizonAltitudeDeg;
         var lat = site.LatitudeDeg;
         var lon = site.LongitudeDeg;
@@ -211,6 +213,26 @@ public sealed class TonightSkyService : ITonightSkyService {
         var sinLat = Math.Sin(Deg2Rad(lat));
         var cosLat = Math.Cos(Deg2Rad(lat));
         var sinHorizon = Math.Sin(Deg2Rad(horizon));
+
+        // §36 custom terrain horizon — when the profile turns it on AND a skyline
+        // was entered, "above the horizon" becomes per-azimuth. A 361-entry sin
+        // lookup (one per whole azimuth degree, [360] duplicating [0] for the
+        // wrap) keeps the per-sample sin-comparison trick; 1 degree of azimuth is
+        // far finer than the 5-minute time grain resolves near the horizon.
+        // horizonMin bounds the culmination pre-filter below: clearing the
+        // skyline's LOWEST notch is necessary (not sufficient) to ever be up.
+        var customPoints = site.UseCustomHorizon ? customHorizon?.Points : null;
+        double[]? sinHorizonLut = null;
+        var horizonMin = horizon;
+        if (customPoints is { Count: > 0 }) {
+            sinHorizonLut = new double[361];
+            horizonMin = double.MaxValue;
+            for (var azDeg = 0; azDeg <= 360; azDeg++) {
+                var skyline = CustomHorizonValidator.AltitudeAtAzimuth(customPoints, azDeg);
+                sinHorizonLut[azDeg] = Math.Sin(Deg2Rad(skyline));
+                horizonMin = Math.Min(horizonMin, skyline);
+            }
+        }
 
         // §36.8 slice-4 moon advisory (display-only, deliberately NOT a score input — weighting is a
         // recorded follow-up for the user to tune). The moon's position per night sample is
@@ -305,7 +327,7 @@ public sealed class TonightSkyService : ITonightSkyService {
             // Cheap pre-filter: an object whose geometric upper culmination never clears the site horizon
             // can never be up, so skip the costly ±12 h scan for it entirely.
             var peakAltDeg = MaxAltitudeDeg(o.DecDeg, lat);
-            if (peakAltDeg < horizon) {
+            if (peakAltDeg < horizonMin) {
                 continue;
             }
 
@@ -315,9 +337,18 @@ public sealed class TonightSkyService : ITonightSkyService {
             var sinDec = Math.Sin(Deg2Rad(o.DecDeg));
             var cosDec = Math.Cos(Deg2Rad(o.DecDeg));
             for (var i = 0; i < sampleCount; i++) {
-                var cosH = Math.Cos(Deg2Rad(sampleLstDeg[i] - o.RaDeg));
+                var hDeg = sampleLstDeg[i] - o.RaDeg;
+                var cosH = Math.Cos(Deg2Rad(hDeg));
                 var sinAlt = sinDec * sinLat + cosDec * cosLat * cosH;
-                up[i] = sinAlt >= sinHorizon && sunIsDown[i];
+                if (sinHorizonLut is null) {
+                    up[i] = sinAlt >= sinHorizon && sunIsDown[i];
+                } else {
+                    // Per-azimuth skyline: index the LUT by the object's compass
+                    // bearing at this sample (rounding to 1 degree matches the
+                    // LUT grain; Round(359.6) = 360 lands on the wrap entry).
+                    var azDeg = AzimuthFromHourAngleDeg(o.DecDeg, lat, hDeg);
+                    up[i] = sinAlt >= sinHorizonLut[(int)Math.Round(azDeg)] && sunIsDown[i];
+                }
             }
 
             // Window tonight = the LONGEST qualifying dark run in the span, always — not the run that
@@ -705,6 +736,20 @@ public sealed class TonightSkyService : ITonightSkyService {
         var h = Deg2Rad(hourAngleDeg);
         var sinAlt = Math.Sin(dec) * Math.Sin(lat) + Math.Cos(dec) * Math.Cos(lat) * Math.Cos(h);
         return Rad2Deg(Math.Asin(Math.Clamp(sinAlt, -1.0, 1.0)));
+    }
+
+    /// <summary>Compass azimuth (deg from north, increasing eastward, [0,360)) of an object at hour
+    /// angle <paramref name="hourAngleDeg"/> seen from <paramref name="latDeg"/>:
+    /// az = atan2(−sin H · cos δ, sin δ · cos φ − cos δ · sin φ · cos H). The horizontal companion of
+    /// <see cref="AltitudeFromHourAngleDeg"/>, used to index the §36 custom-horizon skyline.</summary>
+    internal static double AzimuthFromHourAngleDeg(double decDeg, double latDeg, double hourAngleDeg) {
+        var dec = Deg2Rad(decDeg);
+        var lat = Deg2Rad(latDeg);
+        var h = Deg2Rad(hourAngleDeg);
+        var az = Math.Atan2(
+            -Math.Sin(h) * Math.Cos(dec),
+            Math.Sin(dec) * Math.Cos(lat) - Math.Cos(dec) * Math.Sin(lat) * Math.Cos(h));
+        return Mod360(Rad2Deg(az));
     }
 
     /// <summary>The equatorial (J2000) coordinates of the point at horizontal altitude/azimuth

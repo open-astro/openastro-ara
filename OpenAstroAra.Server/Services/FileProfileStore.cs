@@ -179,6 +179,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     public FilterWheelLabelsDto GetFilterWheelLabels() { lock (_lock) { return _snapshot.FilterWheelLabels; } }
     public void PutFilterWheelLabels(FilterWheelLabelsDto value) => UpdateAndPersist(s => s with { FilterWheelLabels = value });
 
+    public CustomHorizonDto GetCustomHorizon() { lock (_lock) { return _snapshot.CustomHorizon!; } }
+    public void PutCustomHorizon(CustomHorizonDto value) => UpdateAndPersist(s => s with { CustomHorizon = value });
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
