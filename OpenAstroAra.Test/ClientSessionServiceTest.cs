@@ -245,6 +245,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Reclaim_refreshes_the_reported_hostname() {
+            var svc = NewService();
+            var holder = await svc.ConnectAsync("old-name.local", null, CancellationToken.None);
+
+            // Same client, renamed between reconnects (rename / DHCP / mDNS change).
+            var reclaim = await svc.ConnectAsync("new-name.local", holder.SessionId, CancellationToken.None);
+
+            Assert.That(reclaim.Kind, Is.EqualTo(ConnectOutcomeKind.Granted));
+            Assert.That(svc.GetSession().Hostname, Is.EqualTo("new-name.local"),
+                "/server/session must match what the re-claim's 200 echoed");
+        }
+
+        [Test]
         public async Task Reclaim_during_a_pending_takeover_rejects_the_waiting_connector() {
             var svc = NewService();
             var holderConn = new FakeConnection();

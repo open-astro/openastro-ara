@@ -263,6 +263,15 @@ public static partial class WebSocketEndpoints {
                     } catch (Exception ex) when (ex is WebSocketException or InvalidOperationException or ObjectDisposedException) {
                         LogPingLoopEnded(logger, ex);
                     }
+                    // The ping loop is this bound socket's only traffic-independent
+                    // probe: it notices the socket leaving Open (e.g. the §27
+                    // takeover half-close of a displaced holder) within one
+                    // heartbeat even when no events flow. Tear the whole handler
+                    // down with it — otherwise the send loop blocks on an idle
+                    // liveStream and the receive loop on a zombie ReceiveAsync
+                    // until ambient traffic or a transport timeout, leaking the
+                    // displaced connection's handler indefinitely.
+                    try { await cts.CancelAsync(); } catch (ObjectDisposedException) { /* handler already finished */ }
                 }, ct);
             }
 

@@ -108,7 +108,9 @@ public sealed partial class ClientSessionService {
 
     private sealed class Session {
         public required Guid Id { get; init; }
-        public required string Hostname { get; init; }
+        // Settable: a re-claim refreshes it (a client's reported hostname can
+        // change across reconnects — rename, DHCP/mDNS change).
+        public required string Hostname { get; set; }
         public required DateTimeOffset ConnectedUtc { get; init; }
         public DateTimeOffset LastSeenUtc { get; set; }
         public IWsClientConnection? Socket { get; set; }
@@ -136,6 +138,9 @@ public sealed partial class ClientSessionService {
             var now = UtcNow();
             if (existingSessionId is Guid reclaimed && _current is not null && _current.Id == reclaimed) {
                 _current.LastSeenUtc = now;
+                // Keep /server/session and future connection.request frames
+                // consistent with what this connect's 200 echoes back.
+                _current.Hostname = hostname;
                 // A takeover request pending against this holder can never be
                 // answered now — the connection.request frame went to the socket
                 // that just dropped (that drop is why the holder is re-claiming).
