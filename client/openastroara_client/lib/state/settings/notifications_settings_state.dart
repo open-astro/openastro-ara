@@ -12,6 +12,11 @@ class NotificationsSettings {
   final bool osDesktop;
   final bool soundAlert;
   final String pushoverToken;
+  // §54 push channels — each service needs TWO values: Pushover app token +
+  // USER key; Telegram bot token + CHAT id. A channel only sends when both
+  // of its values are set on the daemon.
+  final String pushoverUserKey;
+  final String telegramChatId;
   final String telegramBotToken;
 
   // Triggers.
@@ -28,6 +33,8 @@ class NotificationsSettings {
     this.osDesktop = true,
     this.soundAlert = true,
     this.pushoverToken = '',
+    this.pushoverUserKey = '',
+    this.telegramChatId = '',
     this.telegramBotToken = '',
     this.onSequenceComplete = true,
     this.onSequencePaused = true,
@@ -43,6 +50,8 @@ class NotificationsSettings {
     bool? osDesktop,
     bool? soundAlert,
     String? pushoverToken,
+    String? pushoverUserKey,
+    String? telegramChatId,
     String? telegramBotToken,
     bool? onSequenceComplete,
     bool? onSequencePaused,
@@ -57,6 +66,8 @@ class NotificationsSettings {
         osDesktop: osDesktop ?? this.osDesktop,
         soundAlert: soundAlert ?? this.soundAlert,
         pushoverToken: pushoverToken ?? this.pushoverToken,
+        pushoverUserKey: pushoverUserKey ?? this.pushoverUserKey,
+        telegramChatId: telegramChatId ?? this.telegramChatId,
         telegramBotToken: telegramBotToken ?? this.telegramBotToken,
         onSequenceComplete: onSequenceComplete ?? this.onSequenceComplete,
         onSequencePaused: onSequencePaused ?? this.onSequencePaused,
@@ -78,6 +89,10 @@ class NotificationsSettingsNotifier extends Notifier<NotificationsSettings> {
   void setSoundAlert(bool v) => state = state.copyWith(soundAlert: v);
   void setPushoverToken(String s) =>
       state = state.copyWith(pushoverToken: s.trim());
+  void setPushoverUserKey(String s) =>
+      state = state.copyWith(pushoverUserKey: s.trim());
+  void setTelegramChatId(String s) =>
+      state = state.copyWith(telegramChatId: s.trim());
   void setTelegramBotToken(String s) =>
       state = state.copyWith(telegramBotToken: s.trim());
   void setOnSequenceComplete(bool v) =>

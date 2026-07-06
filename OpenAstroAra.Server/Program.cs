@@ -123,6 +123,9 @@ public partial class Program {
         // §46.5 SqliteNotificationService — persistent log table + JSON-blob
         // preferences in app_config. EnsureSeededAsync runs after IAraDatabase
         // init for first-time seed of the 3 fixture notifications.
+        // §54 push channels — forwards Warning+ notifications to Pushover/Telegram when the
+        // profile carries both of a channel's values; inert otherwise.
+        builder.Services.AddSingleton<PushChannelService>();
         builder.Services.AddSingleton<INotificationService, SqliteNotificationService>();
         // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
         // (Yellow health + 1 open issue + 3-event history); SetMode stores

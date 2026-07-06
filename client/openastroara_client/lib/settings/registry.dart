@@ -588,6 +588,17 @@ const List<Setting> settingsRegistry = [
     profilePath: 'notifications.pushover_token',
   ),
   Setting(
+    id: 'session.notifications.pushover_user_key',
+    label: 'Pushover user key',
+    description: 'Your Pushover USER key (from your Pushover dashboard). Warning-or-worse notifications push to your phone when both this and the app token are set — critical events ride high priority and bypass device quiet hours.',
+    keywords: ['pushover', 'user', 'key', 'phone', 'mobile', 'push', 'remote', 'overnight'],
+    path: ['Settings', 'Session', 'Notifications'],
+    type: SettingType.string(),
+    defaultValue: '',
+    profilePath: 'notifications.pushover_user_key',
+    relatedSettings: ['session.notifications.pushover_token'],
+  ),
+  Setting(
     id: 'session.notifications.telegram_bot_token',
     label: 'Telegram bot token',
     description: 'Telegram bot token for sending messages to your chat. Leave empty to disable.',
@@ -596,6 +607,17 @@ const List<Setting> settingsRegistry = [
     type: SettingType.string(),
     defaultValue: '',
     profilePath: 'notifications.telegram_bot_token',
+  ),
+  Setting(
+    id: 'session.notifications.telegram_chat_id',
+    label: 'Telegram chat ID',
+    description: 'The chat ID your Telegram bot messages (get it from @userinfobot). Warning-or-worse notifications send when both this and the bot token are set.',
+    keywords: ['telegram', 'chat', 'id', 'bot', 'remote', 'mobile', 'push', 'overnight'],
+    path: ['Settings', 'Session', 'Notifications'],
+    type: SettingType.string(),
+    defaultValue: '',
+    profilePath: 'notifications.telegram_chat_id',
+    relatedSettings: ['session.notifications.telegram_bot_token'],
   ),
   // Triggers.
   Setting(

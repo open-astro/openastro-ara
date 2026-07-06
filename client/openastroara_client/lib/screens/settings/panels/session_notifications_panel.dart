@@ -109,13 +109,22 @@ class _SessionNotificationsPanelState
           onChanged: n.setSoundAlert,
         ),
         EditableTextRow(
-          label: 'Pushover token',
+          label: 'Pushover app token',
           helpKey: 'session.notifications.pushover_token',
           hint: 'Empty = disabled',
           currentValue: s.pushoverToken,
           getCanonical: () =>
               ref.read(notificationsSettingsProvider).pushoverToken,
           parse: n.setPushoverToken,
+        ),
+        EditableTextRow(
+          label: 'Pushover user key',
+          helpKey: 'session.notifications.pushover_user_key',
+          hint: 'Both Pushover fields must be set for pushes to send',
+          currentValue: s.pushoverUserKey,
+          getCanonical: () =>
+              ref.read(notificationsSettingsProvider).pushoverUserKey,
+          parse: n.setPushoverUserKey,
         ),
         EditableTextRow(
           label: 'Telegram bot token',
@@ -125,6 +134,15 @@ class _SessionNotificationsPanelState
           getCanonical: () =>
               ref.read(notificationsSettingsProvider).telegramBotToken,
           parse: n.setTelegramBotToken,
+        ),
+        EditableTextRow(
+          label: 'Telegram chat ID',
+          helpKey: 'session.notifications.telegram_chat_id',
+          hint: 'Both Telegram fields must be set for pushes to send',
+          currentValue: s.telegramChatId,
+          getCanonical: () =>
+              ref.read(notificationsSettingsProvider).telegramChatId,
+          parse: n.setTelegramChatId,
         ),
         const SettingsSectionHeader('Trigger on'),
         SettingsSwitchRow(
