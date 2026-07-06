@@ -54,6 +54,14 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   // stale data over a new server's result.
   int _generation = 0;
 
+  // Monotonic per-read issue number, shared by build() and refresh(). A read's
+  // result applies only if it is still the LATEST issued read when it resolves:
+  // a §60.9 WS-push refresh fired while build()'s own read was in flight would
+  // otherwise land its fresher status first, then be clobbered when the pending
+  // (staler, issued-before-the-transition) build read completes — the generation
+  // guard can't catch that, both reads share the generation.
+  int _readIssue = 0;
+
   /// The API client bound to the **active** server, read with `ref.watch` so a
   /// server change rebuilds the notifier. Returns `null` when no server is active.
   EquipmentDeviceClient<T>? watchClient();
@@ -107,10 +115,21 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     });
     final api = watchClient();
     if (api == null) return null;
+    final issue = ++_readIssue;
     final status = await api.getStatus();
     // The notifier may have been disposed during the await — don't arm a (briefly)
     // stale timer.
-    if (ref.mounted) _syncPolls(status);
+    if (!ref.mounted) return status;
+    if (issue != _readIssue) {
+      // A fresher read (a WS-push refresh racing this rebuild) already landed —
+      // returning ours would silently revert the panel to a pre-transition
+      // status until the next poll tick. Keep the fresher value.
+      if (state case AsyncData<T?>(:final value)) {
+        _syncPolls(value);
+        return value;
+      }
+    }
+    _syncPolls(status);
     return status;
   }
 
@@ -192,6 +211,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
       _refreshing = true;
     }
     final gen = _generation;
+    final issue = ++_readIssue;
     try {
       final api = client ?? readClient();
       // AsyncValue.guard captures the read into data/error rather than throwing;
@@ -201,7 +221,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
         if (api == null) return null;
         return api.getStatus();
       });
-      if (ref.mounted && gen == _generation) {
+      if (ref.mounted && gen == _generation && issue == _readIssue) {
         state = next;
         // Re-evaluate the polls only on a SUCCESSFUL read. A transient read error
         // (mid-connect or mid-liveness) must NOT cancel the timer — it should keep

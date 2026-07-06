@@ -91,6 +91,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   // stale data over a new server's result.
   int _generation = 0;
 
+  // Latest-issued-read-wins guard shared by build() and refresh() — see
+  // EquipmentDeviceNotifier._readIssue for the §60.9 race this closes.
+  int _readIssue = 0;
+
   @override
   Future<List<SwitchDevice>> build() async {
     // Reset BOTH in-flight guards on a server change: a stale _acting from an
@@ -114,7 +118,15 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
     });
     final api = ref.watch(switchApiProvider);
     if (api == null) return const <SwitchDevice>[];
-    return api.getAll();
+    final issue = ++_readIssue;
+    final devices = await api.getAll();
+    if (issue != _readIssue) {
+      // A fresher WS-push refresh landed during this rebuild's read — keep it.
+      if (state case AsyncData<List<SwitchDevice>>(:final value)) {
+        return value;
+      }
+    }
+    return devices;
   }
 
   // connect/disconnect/setValue run the 202-Accepted request then re-read the
@@ -188,6 +200,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       _refreshing = true;
     }
     final gen = _generation;
+    final issue = ++_readIssue;
     try {
       final api = client ?? ref.read(switchApiProvider);
       // Keep the prior data visible while reloading (don't flash blank).
@@ -195,7 +208,9 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
         if (api == null) return const <SwitchDevice>[];
         return api.getAll();
       });
-      if (ref.mounted && gen == _generation) state = next;
+      if (ref.mounted && gen == _generation && issue == _readIssue) {
+        state = next;
+      }
     } finally {
       // Clear the manual-refresh flag ONLY when no rebuild happened mid-flight.
       // The guard is deliberate, NOT an unconditional reset: if the server changed
