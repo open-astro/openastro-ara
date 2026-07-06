@@ -1,21 +1,20 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_api.dart';
 import '../../services/sequence_api.dart';
+import '../../theme/ara_colors.dart';
 import '../app_shell_state.dart';
 import '../saved_server_state.dart';
 import '../settings/autofocus_settings_state.dart';
 import '../settings/imaging_defaults_state.dart';
+import '../settings/settings_nav.dart';
 import 'sequence_editor_state.dart';
 import 'sequence_list_state.dart';
-
-/// The Run tab's index in the left rail (Planning / Run / Live / Options).
-const int kRunTabIndex = 1;
 
 /// What [createImagingRun] did with the target: [appended] tells the caller's
 /// SnackBar whether the target joined the already-open sequence or got a
@@ -24,6 +23,46 @@ class ImagingRunResult {
   final String sequenceId;
   final bool appended;
   const ImagingRunResult(this.sequenceId, {required this.appended});
+}
+
+/// §36 — the ONE feedback surface for [createImagingRun]'s outcome. The three
+/// planning call sites (target action bar, Tonight's Sky row, framing overlay)
+/// each used to rebuild these SnackBars and had already drifted: only the
+/// framing overlay said anything on the no-server case, and only some styled
+/// errors. Callers gate on their own `mounted` before invoking.
+void showImagingRunFeedback(
+  ScaffoldMessengerState messenger, {
+  required String targetName,
+  ImagingRunResult? result,
+  bool failed = false,
+}) {
+  if (failed) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Couldn't create the run. Check the connection and try again.",
+        ),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
+  } else if (result == null) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Connect to a server before creating a run.'),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
+  } else {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.appended
+              ? 'Added "$targetName" to the open sequence.'
+              : 'Created an imaging run for "$targetName".',
+        ),
+      ),
+    );
+  }
 }
 
 /// §36 Planning → one-tap "set up a real run": put the target into a complete
@@ -172,10 +211,9 @@ Future<RemoveTargetOutcome> removeTargetFromSequence(
 /// active server's profile (imaging defaults + autofocus). No server → no-op;
 /// a transport failure keeps the notifiers' current state.
 Future<void> _hydratePlanningSettings(ProviderContainer container) async {
-  final servers = container.read(savedServersProvider).maybeWhen(
-        data: (list) => list,
-        orElse: () => const [],
-      );
+  final servers = container
+      .read(savedServersProvider)
+      .maybeWhen(data: (list) => list, orElse: () => const []);
   if (servers.isEmpty) return;
   // Most-recently-saved server is the de-facto active one — same convention
   // as the settings panels' own hydration.

@@ -72,7 +72,11 @@ class TriggerDef {
   /// Base keys `build` writes itself — a field may not reuse one (it would be
   /// silently clobbered below). Includes `$type`, which is written before the
   /// field loop, so a field keyed `$type` would overwrite the discriminator.
-  static const Set<String> _reservedKeys = {r'$type', 'Parent', 'TriggerRunner'};
+  static const Set<String> _reservedKeys = {
+    r'$type',
+    'Parent',
+    'TriggerRunner',
+  };
 
   /// A fresh raw-body trigger node: `$type`, each field at its (deep-cloned)
   /// default, the base `Parent: null`, and a fresh empty `TriggerRunner`
@@ -85,9 +89,11 @@ class TriggerDef {
       throw StateError('TriggerDef($label) has duplicate field keys');
     }
     checkNoReservedFieldKeys('TriggerDef($label)', fields, _reservedKeys);
-    final containerDef = instructionForType(sequentialContainerType) ??
+    final containerDef =
+        instructionForType(sequentialContainerType) ??
         (throw StateError(
-            'TriggerDef: SequentialContainer not found in the instruction catalog'));
+          'TriggerDef: SequentialContainer not found in the instruction catalog',
+        ));
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
@@ -99,44 +105,68 @@ class TriggerDef {
 }
 
 /// The triggers, in display order.
+/// The assembly-qualified `$type` of the Autofocus-After-Exposures trigger —
+/// the single source of truth, reused by the Planning tab's imaging-run
+/// builder for the AF cadence.
+const String autofocusAfterExposuresType =
+    'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer';
+
 const List<TriggerDef> triggerCatalog = [
   // The meridian flip — the canonical trigger. No serialized fields: the flip
   // timing/side-of-pier parameters live in the profile, not the sequence.
   TriggerDef(
-    type: 'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
     label: 'Meridian Flip',
     icon: Icons.flip_camera_android_outlined,
   ),
   // Re-connect a device if it drops mid-run. SelectedDevice is one of the
   // ConnectEquipment device names; default "Camera" (the C# constructor default).
   TriggerDef(
-    type: 'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer',
     label: 'Reconnect Device',
     icon: Icons.cable_outlined,
     fields: [
-      InstructionField('SelectedDevice', 'Device', InstructionFieldType.stringEnum,
-          defaultValue: 'Camera', enumValues: reconnectDeviceNames),
+      InstructionField(
+        'SelectedDevice',
+        'Device',
+        InstructionFieldType.stringEnum,
+        defaultValue: 'Camera',
+        enumValues: reconnectDeviceNames,
+      ),
     ],
   ),
   // §38 NINA import — dither every N exposures (the most common trigger in real plans, one per
   // Smart Exposure). AfterExposures is the cadence; the C# default is 1.
   TriggerDef(
-    type: 'OpenAstroAra.Sequencer.Trigger.Guider.DitherAfterExposures, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Trigger.Guider.DitherAfterExposures, OpenAstroAra.Sequencer',
     label: 'Dither After Exposures',
     icon: Icons.scatter_plot_outlined,
     fields: [
-      InstructionField('AfterExposures', 'After exposures', InstructionFieldType.integer,
-          defaultValue: 1, min: 1),
+      InstructionField(
+        'AfterExposures',
+        'After exposures',
+        InstructionFieldType.integer,
+        defaultValue: 1,
+        min: 1,
+      ),
     ],
   ),
   // §38 NINA import — run autofocus every N exposures (the autofocus sibling of the dither trigger).
   TriggerDef(
-    type: 'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer',
+    type: autofocusAfterExposuresType,
     label: 'Autofocus After Exposures',
     icon: Icons.center_focus_strong_outlined,
     fields: [
-      InstructionField('AfterExposures', 'After exposures', InstructionFieldType.integer,
-          defaultValue: 1, min: 1),
+      InstructionField(
+        'AfterExposures',
+        'After exposures',
+        InstructionFieldType.integer,
+        defaultValue: 1,
+        min: 1,
+      ),
     ],
   ),
 ];

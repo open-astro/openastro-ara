@@ -11,6 +11,12 @@ import '../app_shell_state.dart';
 /// palette uses the same index, app_shell.dart).
 const int kOptionsTabIndex = 3;
 
+/// The app-shell tab index of the **Run** (sequencer) tab — used by every
+/// "...and jump to the Run tab" flow (Planning's create-run, the calibration
+/// screen's generated sequences). Guarded by the same app_shell assert as
+/// [kOptionsTabIndex] so a rail reorder can't silently strand these jumps.
+const int kRunTabIndex = 1;
+
 /// Jump straight to the settings panel [panelId] (a [settingsTree] id):
 /// selects it and brings the Options tab forward — the same navigation the
 /// ⌘K command palette and the top-bar equipment chips use.
@@ -51,14 +57,42 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
     panels: <SettingsPanelInfo>[
       SettingsPanelInfo(id: 'eq.camera', label: 'Camera', groupId: 'equipment'),
       SettingsPanelInfo(id: 'eq.mount', label: 'Mount', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.focuser', label: 'Focuser', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.filterwheel', label: 'Filter Wheel', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.rotator', label: 'Rotator', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.guider', label: 'Guider (PHD2)', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.flat', label: 'Flat Panel', groupId: 'equipment'),
+      SettingsPanelInfo(
+        id: 'eq.focuser',
+        label: 'Focuser',
+        groupId: 'equipment',
+      ),
+      SettingsPanelInfo(
+        id: 'eq.filterwheel',
+        label: 'Filter Wheel',
+        groupId: 'equipment',
+      ),
+      SettingsPanelInfo(
+        id: 'eq.rotator',
+        label: 'Rotator',
+        groupId: 'equipment',
+      ),
+      SettingsPanelInfo(
+        id: 'eq.guider',
+        label: 'Guider (PHD2)',
+        groupId: 'equipment',
+      ),
+      SettingsPanelInfo(
+        id: 'eq.flat',
+        label: 'Flat Panel',
+        groupId: 'equipment',
+      ),
       SettingsPanelInfo(id: 'eq.dome', label: 'Dome', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.weather', label: 'Weather', groupId: 'equipment'),
-      SettingsPanelInfo(id: 'eq.safety', label: 'Safety Monitor', groupId: 'equipment'),
+      SettingsPanelInfo(
+        id: 'eq.weather',
+        label: 'Weather',
+        groupId: 'equipment',
+      ),
+      SettingsPanelInfo(
+        id: 'eq.safety',
+        label: 'Safety Monitor',
+        groupId: 'equipment',
+      ),
       SettingsPanelInfo(id: 'eq.switch', label: 'Switch', groupId: 'equipment'),
     ],
   ),
@@ -66,52 +100,116 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
     id: 'imaging',
     label: 'Imaging',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'img.defaults', label: 'Defaults', groupId: 'imaging'),
-      SettingsPanelInfo(id: 'img.optics', label: 'Optics (FOV)', groupId: 'imaging'),
-      SettingsPanelInfo(id: 'img.electronics', label: 'Camera electronics', groupId: 'imaging'),
-      SettingsPanelInfo(id: 'img.filterset', label: 'Filter set', groupId: 'imaging'),
-      SettingsPanelInfo(id: 'img.autofocus', label: 'Autofocus', groupId: 'imaging'),
-      SettingsPanelInfo(id: 'img.platesolve', label: 'Plate Solving', groupId: 'imaging'),
+      SettingsPanelInfo(
+        id: 'img.defaults',
+        label: 'Defaults',
+        groupId: 'imaging',
+      ),
+      SettingsPanelInfo(
+        id: 'img.optics',
+        label: 'Optics (FOV)',
+        groupId: 'imaging',
+      ),
+      SettingsPanelInfo(
+        id: 'img.electronics',
+        label: 'Camera electronics',
+        groupId: 'imaging',
+      ),
+      SettingsPanelInfo(
+        id: 'img.filterset',
+        label: 'Filter set',
+        groupId: 'imaging',
+      ),
+      SettingsPanelInfo(
+        id: 'img.autofocus',
+        label: 'Autofocus',
+        groupId: 'imaging',
+      ),
+      SettingsPanelInfo(
+        id: 'img.platesolve',
+        label: 'Plate Solving',
+        groupId: 'imaging',
+      ),
     ],
   ),
   SettingsGroup(
     id: 'session',
     label: 'Session',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'session.storage', label: 'Storage', groupId: 'session'),
-      SettingsPanelInfo(id: 'session.filenames', label: 'File saving + naming', groupId: 'session'),
-      SettingsPanelInfo(id: 'session.notifications', label: 'Notifications', groupId: 'session'),
+      SettingsPanelInfo(
+        id: 'session.storage',
+        label: 'Storage',
+        groupId: 'session',
+      ),
+      SettingsPanelInfo(
+        id: 'session.filenames',
+        label: 'File saving + naming',
+        groupId: 'session',
+      ),
+      SettingsPanelInfo(
+        id: 'session.notifications',
+        label: 'Notifications',
+        groupId: 'session',
+      ),
     ],
   ),
   SettingsGroup(
     id: 'safety',
     label: 'Safety',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'safety.policies', label: 'Policies', groupId: 'safety'),
-      SettingsPanelInfo(id: 'safety.diagnostics', label: 'Diagnostics mode', groupId: 'safety'),
-      SettingsPanelInfo(id: 'safety.site', label: 'Site preferences', groupId: 'safety'),
+      SettingsPanelInfo(
+        id: 'safety.policies',
+        label: 'Policies',
+        groupId: 'safety',
+      ),
+      SettingsPanelInfo(
+        id: 'safety.diagnostics',
+        label: 'Diagnostics mode',
+        groupId: 'safety',
+      ),
+      SettingsPanelInfo(
+        id: 'safety.site',
+        label: 'Site preferences',
+        groupId: 'safety',
+      ),
     ],
   ),
   SettingsGroup(
     id: 'skyatlas',
     label: 'Sky Atlas',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'sky.data', label: 'Data Manager', groupId: 'skyatlas'),
+      SettingsPanelInfo(
+        id: 'sky.data',
+        label: 'Data Manager',
+        groupId: 'skyatlas',
+      ),
     ],
   ),
   SettingsGroup(
     id: 'profile',
     label: 'Profile',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'profile.active', label: 'Active profile', groupId: 'profile'),
-      SettingsPanelInfo(id: 'profile.wizard', label: 'Run wizard again', groupId: 'profile'),
+      SettingsPanelInfo(
+        id: 'profile.active',
+        label: 'Active profile',
+        groupId: 'profile',
+      ),
+      SettingsPanelInfo(
+        id: 'profile.wizard',
+        label: 'Run wizard again',
+        groupId: 'profile',
+      ),
     ],
   ),
   SettingsGroup(
     id: 'system',
     label: 'System',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'app.monitoring', label: 'Monitoring', groupId: 'system'),
+      SettingsPanelInfo(
+        id: 'app.monitoring',
+        label: 'Monitoring',
+        groupId: 'system',
+      ),
       SettingsPanelInfo(id: 'app.changelog', label: 'About', groupId: 'system'),
     ],
   ),
@@ -122,7 +220,11 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
     id: 'support',
     label: 'Support',
     panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(id: 'support.logs', label: 'Logs & bug report', groupId: 'support'),
+      SettingsPanelInfo(
+        id: 'support.logs',
+        label: 'Logs & bug report',
+        groupId: 'support',
+      ),
     ],
   ),
 ];
@@ -135,7 +237,8 @@ class SelectedSettingsPanelNotifier extends Notifier<String> {
 
 final selectedSettingsPanelProvider =
     NotifierProvider<SelectedSettingsPanelNotifier, String>(
-        SelectedSettingsPanelNotifier.new);
+      SelectedSettingsPanelNotifier.new,
+    );
 
 class HighlightedSettingNotifier extends Notifier<String?> {
   @override
@@ -152,8 +255,8 @@ class HighlightedSettingNotifier extends Notifier<String?> {
 
 final highlightedSettingProvider =
     NotifierProvider<HighlightedSettingNotifier, String?>(
-        HighlightedSettingNotifier.new);
-
+      HighlightedSettingNotifier.new,
+    );
 
 SettingsPanelInfo? findPanelInfo(String id) {
   for (final g in settingsTree) {

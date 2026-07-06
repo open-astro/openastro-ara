@@ -30,6 +30,12 @@ import 'instruction_catalog.dart'
 /// The assembly-qualified `$type` of the altitude conditions' nested `Data`
 /// object (`LoopForAltitudeBase.Data`). Grounded against
 /// `OpenAstroAra.Sequencer/SequenceItem/Utility/WaitLoopData.cs`.
+/// The assembly-qualified `$type` of the Loop condition — the single source
+/// of truth, reused by the Planning tab's imaging-run builder for the
+/// TakeExposure frame loop.
+const String loopConditionType =
+    'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer';
+
 const String waitLoopDataType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitLoopData, OpenAstroAra.Sequencer';
 
@@ -71,15 +77,24 @@ const Map<String, dynamic> aboveHorizonConditionData = {
 /// fields, so each is just `{$type}`.
 const Map<String, String?> timeProviders = {
   'Custom time': null,
-  'Sunset': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunsetProvider, OpenAstroAra.Sequencer',
-  'Sunrise': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunriseProvider, OpenAstroAra.Sequencer',
-  'Civil Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDuskProvider, OpenAstroAra.Sequencer',
-  'Civil Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDawnProvider, OpenAstroAra.Sequencer',
-  'Nautical Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDuskProvider, OpenAstroAra.Sequencer',
-  'Nautical Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDawnProvider, OpenAstroAra.Sequencer',
-  'Astronomical Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider, OpenAstroAra.Sequencer',
-  'Astronomical Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DawnProvider, OpenAstroAra.Sequencer',
-  'Meridian': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.MeridianProvider, OpenAstroAra.Sequencer',
+  'Sunset':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunsetProvider, OpenAstroAra.Sequencer',
+  'Sunrise':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunriseProvider, OpenAstroAra.Sequencer',
+  'Civil Dusk':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDuskProvider, OpenAstroAra.Sequencer',
+  'Civil Dawn':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDawnProvider, OpenAstroAra.Sequencer',
+  'Nautical Dusk':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDuskProvider, OpenAstroAra.Sequencer',
+  'Nautical Dawn':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDawnProvider, OpenAstroAra.Sequencer',
+  'Astronomical Dusk':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider, OpenAstroAra.Sequencer',
+  'Astronomical Dawn':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DawnProvider, OpenAstroAra.Sequencer',
+  'Meridian':
+      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.MeridianProvider, OpenAstroAra.Sequencer',
 };
 
 /// Build a `SelectedProvider` value from a [timeProviders] label: null (custom
@@ -87,7 +102,10 @@ const Map<String, String?> timeProviders = {
 /// known key; the assert catches a future catalog typo (a label not in the map
 /// would otherwise silently fall back to custom time).
 Map<String, dynamic>? timeProviderValue(String label) {
-  assert(timeProviders.containsKey(label), 'unknown time-provider label: $label');
+  assert(
+    timeProviders.containsKey(label),
+    'unknown time-provider label: $label',
+  );
   final type = timeProviders[label];
   return type == null ? null : <String, dynamic>{r'$type': type};
 }
@@ -157,7 +175,10 @@ class ConditionDef {
       throw StateError('ConditionDef($label) has duplicate field keys');
     }
     // A field may not reuse a base key build() writes itself.
-    checkNoReservedFieldKeys('ConditionDef($label)', fields, const {r'$type', 'Parent'});
+    checkNoReservedFieldKeys('ConditionDef($label)', fields, const {
+      r'$type',
+      'Parent',
+    });
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
@@ -173,28 +194,57 @@ const List<ConditionDef> conditionCatalog = [
   // CompletedIterations is a [JsonProperty] runtime counter (like TakeExposure's
   // ExposureCount): emitted at its default but hidden from the editor.
   ConditionDef(
-    type: 'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
+    type: loopConditionType,
     label: 'Loop (iterations)',
     icon: Icons.repeat,
     fields: [
-      InstructionField('Iterations', 'Iterations', InstructionFieldType.integer,
-          defaultValue: 2, min: 1),
-      InstructionField('CompletedIterations', 'Completed', InstructionFieldType.integer,
-          defaultValue: 0, editable: false),
+      InstructionField(
+        'Iterations',
+        'Iterations',
+        InstructionFieldType.integer,
+        defaultValue: 2,
+        min: 1,
+      ),
+      InstructionField(
+        'CompletedIterations',
+        'Completed',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        editable: false,
+      ),
     ],
   ),
   // Run a container for a fixed wall-clock duration (HH:MM:SS). Default 1 minute
   // (the C# constructor default), all three are `[JsonProperty] public int`.
   ConditionDef(
-    type: 'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer',
     label: 'For a duration',
     icon: Icons.timelapse_outlined,
     fields: [
-      InstructionField('Hours', 'Hours', InstructionFieldType.integer, defaultValue: 0, min: 0),
-      InstructionField('Minutes', 'Minutes', InstructionFieldType.integer,
-          defaultValue: 1, min: 0, max: 59),
-      InstructionField('Seconds', 'Seconds', InstructionFieldType.integer,
-          defaultValue: 0, min: 0, max: 59),
+      InstructionField(
+        'Hours',
+        'Hours',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        min: 0,
+      ),
+      InstructionField(
+        'Minutes',
+        'Minutes',
+        InstructionFieldType.integer,
+        defaultValue: 1,
+        min: 0,
+        max: 59,
+      ),
+      InstructionField(
+        'Seconds',
+        'Seconds',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        min: 0,
+        max: 59,
+      ),
     ],
   ),
   // Loop a container until the target's altitude crosses a threshold. Data is a
@@ -202,27 +252,47 @@ const List<ConditionDef> conditionCatalog = [
   // HasDsoParent is a [JsonProperty] the daemon recomputes from the parent DSO
   // context on load, so it's emitted at its default but hidden from the editor.
   ConditionDef(
-    type: 'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer',
     label: 'Until altitude',
     icon: Icons.height,
     fields: [
-      InstructionField('Data', 'Target', InstructionFieldType.waitLoopData,
-          defaultValue: altitudeConditionData),
-      InstructionField('HasDsoParent', 'Has DSO parent', InstructionFieldType.boolean,
-          defaultValue: false, editable: false),
+      InstructionField(
+        'Data',
+        'Target',
+        InstructionFieldType.waitLoopData,
+        defaultValue: altitudeConditionData,
+      ),
+      InstructionField(
+        'HasDsoParent',
+        'Has DSO parent',
+        InstructionFieldType.boolean,
+        defaultValue: false,
+        editable: false,
+      ),
     ],
   ),
   // Loop a container until the target is above the (custom) horizon. Same shape
   // as AltitudeCondition; the offset is added to the horizon altitude.
   ConditionDef(
-    type: 'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
     label: 'Until above horizon',
     icon: Icons.terrain_outlined,
     fields: [
-      InstructionField('Data', 'Target', InstructionFieldType.waitLoopData,
-          defaultValue: aboveHorizonConditionData),
-      InstructionField('HasDsoParent', 'Has DSO parent', InstructionFieldType.boolean,
-          defaultValue: false, editable: false),
+      InstructionField(
+        'Data',
+        'Target',
+        InstructionFieldType.waitLoopData,
+        defaultValue: aboveHorizonConditionData,
+      ),
+      InstructionField(
+        'HasDsoParent',
+        'Has DSO parent',
+        InstructionFieldType.boolean,
+        defaultValue: false,
+        editable: false,
+      ),
     ],
   ),
   // Run a container until a clock time or a sky event (sunset, civil dusk, …).
@@ -230,26 +300,57 @@ const List<ConditionDef> conditionCatalog = [
   // (Custom time); for a sky-event provider they're computed at runtime, and
   // MinutesOffset shifts the result. All four are `[JsonProperty] public int`.
   ConditionDef(
-    type: 'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
+    type:
+        'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
     label: 'Until a time',
     icon: Icons.schedule_outlined,
     fields: [
-      InstructionField('SelectedProvider', 'When', InstructionFieldType.timeProvider,
-          defaultValue: null),
+      InstructionField(
+        'SelectedProvider',
+        'When',
+        InstructionFieldType.timeProvider,
+        defaultValue: null,
+      ),
       // H/M/S are the clock time only in Custom-time mode; under a sky-event
       // provider the daemon computes them, so they grey out (enabledWhen).
-      InstructionField('Hours', 'Hour', InstructionFieldType.integer,
-          defaultValue: 0, min: 0, max: 23, enabledWhen: timeConditionUsesClock),
-      InstructionField('Minutes', 'Minute', InstructionFieldType.integer,
-          defaultValue: 0, min: 0, max: 59, enabledWhen: timeConditionUsesClock),
-      InstructionField('Seconds', 'Second', InstructionFieldType.integer,
-          defaultValue: 0, min: 0, max: 59, enabledWhen: timeConditionUsesClock),
+      InstructionField(
+        'Hours',
+        'Hour',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        min: 0,
+        max: 23,
+        enabledWhen: timeConditionUsesClock,
+      ),
+      InstructionField(
+        'Minutes',
+        'Minute',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        min: 0,
+        max: 59,
+        enabledWhen: timeConditionUsesClock,
+      ),
+      InstructionField(
+        'Seconds',
+        'Second',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        min: 0,
+        max: 59,
+        enabledWhen: timeConditionUsesClock,
+      ),
       // Deliberately unbounded (and signed via the free integer field): a
       // sky-event offset is a relative shift in either direction (e.g. -15 =
       // "15 min before sunset"); NINA imposes no ceiling on it. Greyed in
       // Custom-time mode — the daemon only applies it under a provider.
-      InstructionField('MinutesOffset', 'Offset (min)', InstructionFieldType.integer,
-          defaultValue: 0, enabledWhen: timeConditionUsesProvider),
+      InstructionField(
+        'MinutesOffset',
+        'Offset (min)',
+        InstructionFieldType.integer,
+        defaultValue: 0,
+        enabledWhen: timeConditionUsesProvider,
+      ),
     ],
   ),
 ];
