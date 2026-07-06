@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added
+- **§27 — single-client policy: connect handshake + 4004 takeover (server).** The daemon now serves one controlling client at a time: `POST /api/v1/server/connect` claims the slot (a live holder gets a `connection.request` modal over its WebSocket and can allow or reject the takeover; a holder silent for 60 s is swept automatically), `POST /api/v1/server/disconnect` releases it, and `GET /api/v1/server/session` shows who is connected. A displaced client's WebSocket is closed with code 4004. Pre-§27 clients that never call `connect` are unaffected — the event stream and REST keep working unchanged.
+
 ### Fixed
 - **§28 — unknown sensor temperature is recorded honestly.** A camera that reports no CCD temperature now records "unknown" instead of a fabricated 0.0°C (existing databases upgrade in place; dark-matching for uncooled cameras keeps working across old and new recordings), and exports/views show a blank instead of a fake reading.
 

@@ -152,6 +152,9 @@ public partial class Program {
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
+        // §27 single-client policy — owns the controlling session slot, the takeover
+        // dance (connection.request/response over WS), and holder liveness.
+        builder.Services.AddSingleton<ClientSessionService>();
         // §28 — image plate-solving. The factory builds the configured solver backend (ASTAP / Platesolve);
         // PlateSolveService wraps the image-in → solution-out path. The §28 centering loop + §58.4 flip
         // recenter build on this.
@@ -651,6 +654,7 @@ public partial class Program {
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
         // functional today). /api/v1/server/info already lives directly in this file.
         app.MapServerStateEndpoints();
+        app.MapConnectionEndpoints(); // §27 — connect/disconnect/session (single-client policy)
         app.MapNotificationEndpoints();
         app.MapStatsEndpoints();
         app.MapClientSettingsEndpoints();

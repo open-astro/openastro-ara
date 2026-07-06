@@ -79,6 +79,12 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(LiveViewStartRequestDto))]
 [JsonSerializable(typeof(LiveViewStatusDto))]
 [JsonSerializable(typeof(ConnectRequestDto))]
+// §27 single-client connection policy (connect/disconnect/session + the WS
+// takeover control frames).
+[JsonSerializable(typeof(ClientConnectRequestDto))]
+[JsonSerializable(typeof(ClientConnectResponseDto))]
+[JsonSerializable(typeof(ClientDisconnectRequestDto))]
+[JsonSerializable(typeof(ClientSessionInfoDto))]
 [JsonSerializable(typeof(DarkLibraryBuildRequestDto))]
 [JsonSerializable(typeof(DarkLibraryEntryDto))]
 [JsonSerializable(typeof(DarkLibraryStateDto))]
@@ -237,6 +243,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(BatchJobDto))]
 [JsonSerializable(typeof(WsResumeRequestDto))]
 [JsonSerializable(typeof(WsResumeResponseDto))]
+[JsonSerializable(typeof(WsConnectionRequestDto))]
+[JsonSerializable(typeof(WsClientFrameDto))]
 // /api/v1/ws/catalog response shape (defined inline in WebSocketEndpoints).
 [JsonSerializable(typeof(WsCatalogResponse))]
 // Concrete CursorPage<T> instantiations — one per paginated endpoint.
