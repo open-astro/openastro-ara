@@ -126,13 +126,34 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's safety policies.");
 
         profile.MapPut("/safety", (SafetyPoliciesDto body, IProfileStore store) => {
-            store.PutSafetyPolicies(body);
-            return Results.Ok(body);
+            // §58.8 — FirstFlipConfirmed is DAEMON-owned, not client-editable: the flip executor
+            // sets it out-of-band whenever a first flip actually runs, so a client Save PUTting
+            // back a stale hydrate must never clobber it (an overnight flip's confirmation would
+            // be silently cleared and the announce would repeat — the exact behaviour §58.8
+            // exists to prevent). The stored value always wins; re-arming goes through the
+            // dedicated endpoint below.
+            var merged = PreserveDaemonOwnedSafetyFields(body, store.GetSafetyPolicies());
+            store.PutSafetyPolicies(merged);
+            return Results.Ok(merged);
         })
             .Accepts<SafetyPoliciesDto>("application/json")
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
             .WithName("PutSafetyPolicies")
-            .WithSummary("Replace the active profile's safety policies.");
+            .WithSummary("Replace the active profile's safety policies. first_flip_confirmed is " +
+                "daemon-owned and ignored on PUT (the stored value is preserved and echoed) — " +
+                "use POST /safety/first-flip/rearm to re-arm the §58.8 announce.");
+
+        // §58.8 — the one-way re-arm: clears first_flip_confirmed so the NEXT flip announces
+        // again (after re-balancing or a rig change the optics-based auto-reset can't see).
+        // Deliberately no inverse endpoint: only the flip executor ever confirms a flip.
+        profile.MapPost("/safety/first-flip/rearm", (IProfileStore store) => {
+            store.PutSafetyPolicies(store.GetSafetyPolicies() with { FirstFlipConfirmed = false });
+            return Results.Ok(store.GetSafetyPolicies());
+        })
+            .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .WithName("RearmFirstFlipAnnounce")
+            .WithSummary("Re-arm the §58.8 one-time first-flip announce (clears first_flip_confirmed). " +
+                "Returns the updated safety policies.");
 
         profile.MapGet("/autofocus", (IProfileStore store) =>
                 Results.Ok(store.GetAutofocusSettings()))
@@ -383,4 +404,13 @@ public static class ProfileEndpoints {
 
         return app;
     }
+
+    /// <summary>§58.8 — the safety-policies PUT merge: daemon-owned fields keep their STORED
+    /// value regardless of what the client sent. Today that is only <c>FirstFlipConfirmed</c>
+    /// (set out-of-band by the flip executor when a first flip actually runs; a stale panel
+    /// hydrate PUT back later must not clobber an overnight confirmation). Extracted so the
+    /// ownership rule is unit-testable without a web host.</summary>
+    internal static SafetyPoliciesDto PreserveDaemonOwnedSafetyFields(
+        SafetyPoliciesDto incoming, SafetyPoliciesDto stored) =>
+        incoming with { FirstFlipConfirmed = stored.FirstFlipConfirmed };
 }

@@ -154,9 +154,11 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
       state = state.copyWith(unattendedEscalation: v);
 
   /// §58.8 — re-arm the one-time first-flip announce (e.g. after re-balancing
-  /// or any rig change the optics-based auto-reset can't see).
-  void rearmFirstFlipAnnounce() =>
-      state = state.copyWith(firstFlipConfirmed: false);
+  /// or any rig change the optics-based auto-reset can't see). Goes straight
+  /// to the daemon's dedicated endpoint — the flag is DAEMON-owned (the flip
+  /// executor sets it out-of-band, and the general safety PUT ignores it), so
+  /// a local-only mutation deferred to Save could clobber or be clobbered by
+  /// an overnight flip. State refreshes from the daemon's echoed policies.
 
   void setExpectedFlipSlewSeconds(int v) {
     if (v <= 0) return; // the daemon's watchdog needs a positive expectation
@@ -179,6 +181,10 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
       state = state.copyWith(skipTargetIfRecoveryFails: v);
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
+
+  Future<void> rearmFirstFlip(ProfileApi api) async {
+    state = await api.rearmFirstFlip();
+  }
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getSafetyPolicies();

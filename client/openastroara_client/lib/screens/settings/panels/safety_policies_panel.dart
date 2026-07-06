@@ -68,6 +68,26 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
     }
   }
 
+  Future<void> _rearmFirstFlip() async {
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('No active server — connect to a daemon first.')));
+      return;
+    }
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).rearmFirstFlip(api);
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(
+          content: Text('First-flip announce re-armed — the next flip will '
+              'alert and wait 60 s.')));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Re-arm failed: $e')));
+    }
+  }
+
   ProfileApi? _api() {
     final servers = ref.read(savedServersProvider).maybeWhen(
           data: (list) => list,
@@ -194,8 +214,10 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
             const SizedBox(width: 8),
             OutlinedButton(
               key: const Key('rearm_first_flip'),
-              onPressed:
-                  s.firstFlipConfirmed ? n.rearmFirstFlipAnnounce : null,
+              // Immediate daemon round-trip (not deferred to Save): the flag
+              // is daemon-owned and the general Save deliberately can't touch
+              // it, so the button is the only client-side path — one-way.
+              onPressed: s.firstFlipConfirmed ? _rearmFirstFlip : null,
               child: const Text('Re-arm'),
             ),
           ]),
