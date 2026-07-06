@@ -52,6 +52,15 @@ public interface IProfileStore {
     SafetyPoliciesDto GetSafetyPolicies();
     void PutSafetyPolicies(SafetyPoliciesDto value);
 
+    /// <summary>
+    /// Atomically read-modify-write the safety-policies section — same contract as
+    /// <see cref="UpdateOpticsSettings"/> (null from <paramref name="update"/> = no write, no
+    /// change event; the transform runs under the store lock so keep it pure and fast). Used by
+    /// the §58.8 daemon-owned-field merge on PUT, the re-arm endpoint, and the flip executor's
+    /// confirmation write, so none of them can lose a concurrent update to a stale snapshot.
+    /// </summary>
+    SafetyPoliciesDto UpdateSafetyPolicies(Func<SafetyPoliciesDto, SafetyPoliciesDto?> update);
+
     AutofocusSettingsDto GetAutofocusSettings();
     void PutAutofocusSettings(AutofocusSettingsDto value);
 

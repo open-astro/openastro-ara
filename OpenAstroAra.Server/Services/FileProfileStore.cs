@@ -90,6 +90,23 @@ public sealed partial class FileProfileStore : IProfileStore {
     public SafetyPoliciesDto GetSafetyPolicies() { lock (_lock) { return _snapshot.SafetyPolicies; } }
     public void PutSafetyPolicies(SafetyPoliciesDto value) => UpdateAndPersist(s => s with { SafetyPolicies = value });
 
+    public SafetyPoliciesDto UpdateSafetyPolicies(Func<SafetyPoliciesDto, SafetyPoliciesDto?> update) {
+        SafetyPoliciesDto next;
+        lock (_lock) {
+            var current = _snapshot.SafetyPolicies;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no persist, no event
+            }
+            next = candidate;
+            _snapshot = _snapshot with { SafetyPolicies = next };
+            Persist(_snapshot);
+        }
+        // Outside _lock, mirroring UpdateAndPersist, so a Changed subscriber that reads back can't deadlock.
+        Changed?.Invoke(this, EventArgs.Empty);
+        return next;
+    }
+
     public AutofocusSettingsDto GetAutofocusSettings() { lock (_lock) { return _snapshot.Autofocus; } }
     public void PutAutofocusSettings(AutofocusSettingsDto value) => UpdateAndPersist(s => s with { Autofocus = value });
 

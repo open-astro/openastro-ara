@@ -317,11 +317,25 @@ class ProfileApi {
     return _safetyPoliciesFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's safety policies.
+  /// PUT the active profile's safety policies. `first_flip_confirmed` is
+  /// daemon-owned and ignored server-side on PUT (the stored value is
+  /// preserved and echoed back) — a stale panel Save can never clobber a
+  /// confirmation an overnight flip set; re-arming goes through
+  /// [rearmFirstFlip].
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
       data: _safetyPoliciesToJson(value),
+    );
+    return _safetyPoliciesFromJson(res.data ?? const {});
+  }
+
+  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
+  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
+  /// executor ever confirms a flip). Returns the updated policies.
+  Future<SafetyPolicies> rearmFirstFlip() async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profile/safety/first-flip/rearm',
     );
     return _safetyPoliciesFromJson(res.data ?? const {});
   }
@@ -839,6 +853,8 @@ class ProfileApi {
         flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
         expectedFlipSlewSeconds:
             (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
+        firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+        unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -858,6 +874,8 @@ class ProfileApi {
         'on_disk_space_critical': v.onDiskSpaceCritical.name,
         'flip_safety_enabled': v.flipSafetyEnabled,
         'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
+        'first_flip_confirmed': v.firstFlipConfirmed,
+        'unattended_escalation': v.unattendedEscalation,
       };
 
   static UnsafeAction _unsafeActionFromString(String? s) {

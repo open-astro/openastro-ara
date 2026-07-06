@@ -45,6 +45,16 @@ class SafetyPolicies {
   // min(3 × this, 5 min).
   final int expectedFlipSlewSeconds;
 
+  // §58.8 — whether this profile's one-time first-flip announce has already
+  // run (true = later flips are silent). The daemon sets it after the first
+  // announced flip and clears it on an optics change; the panel shows the
+  // state and offers a manual re-arm (set back to false).
+  final bool firstFlipConfirmed;
+
+  // §58.10 — bump equipment-impacting notification severities one level while
+  // the site sits in astronomical darkness. Default on.
+  final bool unattendedEscalation;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -61,6 +71,8 @@ class SafetyPolicies {
     this.onDiskSpaceCritical = DiskSpaceCriticalAction.warn,
     this.flipSafetyEnabled = true,
     this.expectedFlipSlewSeconds = 90,
+    this.firstFlipConfirmed = false,
+    this.unattendedEscalation = true,
   });
 
   SafetyPolicies copyWith({
@@ -79,6 +91,8 @@ class SafetyPolicies {
     DiskSpaceCriticalAction? onDiskSpaceCritical,
     bool? flipSafetyEnabled,
     int? expectedFlipSlewSeconds,
+    bool? firstFlipConfirmed,
+    bool? unattendedEscalation,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -101,6 +115,9 @@ class SafetyPolicies {
         flipSafetyEnabled: flipSafetyEnabled ?? this.flipSafetyEnabled,
         expectedFlipSlewSeconds:
             expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
+        firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
+        unattendedEscalation:
+            unattendedEscalation ?? this.unattendedEscalation,
       );
 }
 
@@ -133,6 +150,9 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
   void setFlipSafetyEnabled(bool v) =>
       state = state.copyWith(flipSafetyEnabled: v);
 
+  void setUnattendedEscalation(bool v) =>
+      state = state.copyWith(unattendedEscalation: v);
+
   void setExpectedFlipSlewSeconds(int v) {
     if (v <= 0) return; // the daemon's watchdog needs a positive expectation
     state = state.copyWith(expectedFlipSlewSeconds: v);
@@ -154,6 +174,22 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
       state = state.copyWith(skipTargetIfRecoveryFails: v);
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
+
+  /// §58.8 — re-arm the one-time first-flip announce (e.g. after re-balancing
+  /// or any rig change the optics-based auto-reset can't see). Goes straight
+  /// to the daemon's dedicated endpoint — the flag is DAEMON-owned (the flip
+  /// executor sets it out-of-band, and the general safety PUT ignores it), so
+  /// a local-only mutation deferred to Save could clobber or be clobbered by
+  /// an overnight flip. State refreshes from the daemon's echoed policies.
+  Future<void> rearmFirstFlip(ProfileApi api) async {
+    final echoed = await api.rearmFirstFlip();
+    // Patch ONLY the daemon-owned flag into local state: the echo carries the
+    // PERSISTED policies, and replacing the whole object would silently
+    // discard any unsaved edits staged in the panel — the same stale-snapshot
+    // clobber class the server-side merge closes for the daemon-owned field,
+    // mirrored here for the thirteen user-owned ones.
+    state = state.copyWith(firstFlipConfirmed: echoed.firstFlipConfirmed);
+  }
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getSafetyPolicies();

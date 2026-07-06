@@ -79,5 +79,35 @@ void main() {
       expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical,
           DiskSpaceCriticalAction.abort);
     });
+
+    test('§58.10 unattended escalation defaults on + toggles', () {
+      final n = container.read(safetyPoliciesProvider.notifier);
+      expect(container.read(safetyPoliciesProvider).unattendedEscalation, isTrue);
+      n.setUnattendedEscalation(false);
+      expect(container.read(safetyPoliciesProvider).unattendedEscalation, isFalse);
+    });
+
+    test('§58.8 the flag is daemon-owned — the model carries it, nothing local mutates it', () {
+      // Model-level round-trip only: the notifier deliberately has NO local
+      // mutation for firstFlipConfirmed in either direction — re-arm goes
+      // through ProfileApi.rearmFirstFlip (the daemon's dedicated endpoint)
+      // and the general safety PUT is ignored server-side for this field, so
+      // a stale panel Save can neither clear nor set a confirmation.
+      const confirmed = SafetyPolicies(firstFlipConfirmed: true);
+      expect(confirmed.firstFlipConfirmed, isTrue);
+      expect(confirmed.copyWith(firstFlipConfirmed: false).firstFlipConfirmed,
+          isFalse);
+      expect(container.read(safetyPoliciesProvider).firstFlipConfirmed, isFalse,
+          reason: 'fresh state mirrors the daemon default — announce armed');
+
+      // The re-arm patch shape: only the flag moves; staged panel edits on the
+      // other fields survive (rearmFirstFlip patches via copyWith rather than
+      // replacing state with the daemon's persisted echo).
+      const staged = SafetyPolicies(resumeDelayMin: 42, firstFlipConfirmed: true);
+      final patched = staged.copyWith(firstFlipConfirmed: false);
+      expect(patched.firstFlipConfirmed, isFalse);
+      expect(patched.resumeDelayMin, 42,
+          reason: 'unsaved edits must not be clobbered by the re-arm echo');
+    });
   });
 }

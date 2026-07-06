@@ -59,6 +59,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_safety_PUT_merge_preserves_the_stored_confirmation_both_ways() {
+            // §58.8 — FirstFlipConfirmed is daemon-owned: a client PUT carrying a stale value
+            // (either direction) must not move the stored one. Everything else is client-editable
+            // and flows through.
+            var stored = new SafetyPoliciesDto(
+                OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 5, MeridianRecenter: true,
+                MeridianRecalGuider: true, OnAltitudeLimit: "skip_target",
+                ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true,
+                FirstFlipConfirmed: true);
+            var staleIncoming = stored with { FirstFlipConfirmed = false, ResumeDelayMin = 20 };
+
+            var merged = OpenAstroAra.Server.Endpoints.ProfileEndpoints
+                .PreserveDaemonOwnedSafetyFields(staleIncoming, stored);
+            Assert.That(merged.FirstFlipConfirmed, Is.True,
+                "a stale hydrate PUT back after an overnight flip must not clear the confirmation");
+            Assert.That(merged.ResumeDelayMin, Is.EqualTo(20), "client-editable fields flow through");
+
+            var armedStored = stored with { FirstFlipConfirmed = false };
+            var optimisticIncoming = stored with { FirstFlipConfirmed = true };
+            Assert.That(OpenAstroAra.Server.Endpoints.ProfileEndpoints
+                    .PreserveDaemonOwnedSafetyFields(optimisticIncoming, armedStored).FirstFlipConfirmed,
+                Is.False,
+                "nor can a client PUT ever CONFIRM a flip — only the executor does that");
+        }
+
+        [Test]
         public void InMemory_store_resets_on_optics_change_only() =>
             AssertResetSemantics(new InMemoryProfileStore());
 
