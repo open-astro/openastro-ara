@@ -30,12 +30,17 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
   @override
   List<CustomHorizonPoint> build() => const [];
 
-  /// Stage a new vertex locally (persisted on the panel's Save).
+  /// Stage a new vertex locally (persisted on the panel's Save). Appended,
+  /// not inserted sorted: row indices must stay STABLE while the user edits —
+  /// the panel's editable rows bind to their index, so reordering mid-edit
+  /// would rebind a just-edited field to a different vertex (review r1).
+  /// Sorting happens where indices are allowed to change wholesale: hydrate
+  /// and the daemon's canonical echo on Save.
   void addPoint(double azimuthDeg, double altitudeDeg) {
-    state = _sorted([
+    state = [
       ...state,
       CustomHorizonPoint(azimuthDeg: azimuthDeg, altitudeDeg: altitudeDeg),
-    ]);
+    ];
   }
 
   void removeAt(int index) {
@@ -43,6 +48,7 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
     state = [...state]..removeAt(index);
   }
 
+  /// Edit a vertex IN PLACE — deliberately no re-sort (see [addPoint]).
   void updateAt(int index, {double? azimuthDeg, double? altitudeDeg}) {
     if (index < 0 || index >= state.length) return;
     final next = [...state];
@@ -50,7 +56,7 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
       azimuthDeg: azimuthDeg,
       altitudeDeg: altitudeDeg,
     );
-    state = _sorted(next);
+    state = next;
   }
 
   Future<void> hydrateFromServer(ProfileApi api) async {

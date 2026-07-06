@@ -38,34 +38,34 @@ void main() {
       for (final p in pts) (p.azimuthDeg, p.altitudeDeg),
     ];
 
-    test(
-      'add/update keep the list sorted by azimuth; remove drops the row',
-      () {
-        final n = container.read(customHorizonProvider.notifier);
+    test('add/update keep row indices STABLE; remove drops the row', () {
+      final n = container.read(customHorizonProvider.notifier);
 
-        n.addPoint(180, 40);
-        n.addPoint(10, 15);
-        expect(shape(container.read(customHorizonProvider)), [
-          (10.0, 15.0),
-          (180.0, 40.0),
-        ]);
+      n.addPoint(180, 40);
+      n.addPoint(10, 15);
+      // NOT sorted while editing: the panel's editable rows bind to their
+      // index, so reordering mid-edit would rebind a just-edited field to a
+      // different vertex. Sorting happens on hydrate + the Save echo.
+      expect(shape(container.read(customHorizonProvider)), [
+        (180.0, 40.0),
+        (10.0, 15.0),
+      ]);
 
-        // Editing an azimuth re-sorts (the row can move).
-        n.updateAt(0, azimuthDeg: 270);
-        expect(shape(container.read(customHorizonProvider)), [
-          (180.0, 40.0),
-          (270.0, 15.0),
-        ]);
+      // Editing an azimuth keeps the row where the user is editing it.
+      n.updateAt(0, azimuthDeg: 270);
+      expect(shape(container.read(customHorizonProvider)), [
+        (270.0, 40.0),
+        (10.0, 15.0),
+      ]);
 
-        n.removeAt(1);
-        expect(shape(container.read(customHorizonProvider)), [(180.0, 40.0)]);
+      n.removeAt(1);
+      expect(shape(container.read(customHorizonProvider)), [(270.0, 40.0)]);
 
-        // Out-of-range indices are ignored, not thrown.
-        n.removeAt(5);
-        n.updateAt(-1, altitudeDeg: 1);
-        expect(container.read(customHorizonProvider), hasLength(1));
-      },
-    );
+      // Out-of-range indices are ignored, not thrown.
+      n.removeAt(5);
+      n.updateAt(-1, altitudeDeg: 1);
+      expect(container.read(customHorizonProvider), hasLength(1));
+    });
 
     test(
       'hydrate sorts the served skyline; persist sends staged and adopts the echo',

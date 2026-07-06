@@ -88,18 +88,19 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('horizon_point_0')), findsOneWidget);
 
-    // A second staged vertex at a lower azimuth sorts ahead of the first.
+    // A second staged vertex appends; editing the first row edits THAT row
+    // (indices stay stable while editing — sorting waits for the Save echo).
     container.read(customHorizonProvider.notifier).addPoint(120, 35);
     container.read(customHorizonProvider.notifier).updateAt(0, azimuthDeg: 200);
     await tester.pump();
     final points = container.read(customHorizonProvider);
-    expect(points.first.azimuthDeg, 120);
-    expect(points.last.azimuthDeg, 200);
+    expect(points.first.azimuthDeg, 200);
+    expect(points.last.azimuthDeg, 120);
     expect(find.byKey(const ValueKey('horizon_point_1')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('remove_horizon_point_0')));
     await tester.pump();
     expect(container.read(customHorizonProvider), hasLength(1));
-    expect(container.read(customHorizonProvider).single.azimuthDeg, 200);
+    expect(container.read(customHorizonProvider).single.azimuthDeg, 120);
   });
 }
