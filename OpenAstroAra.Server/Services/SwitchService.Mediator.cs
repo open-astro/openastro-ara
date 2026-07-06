@@ -55,7 +55,7 @@ internal readonly record struct SwitchPortSnapshot(
 /// ASCOM port id — the wrappers preserve the cache order so the index→port mapping is stable
 /// between the Validate that selected the switch and the Execute that writes it.
 /// </summary>
-public sealed partial class SwitchService : ISwitchMediator {
+public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTargeting {
 
     // Wall-clock ceiling for the blocking ASCOM write: switch writes are prompt (a relay/PWM set),
     // so a call that exceeds this is a hung driver, not a slow device. Cancellation cuts it short.
@@ -68,25 +68,38 @@ public sealed partial class SwitchService : ISwitchMediator {
     /// read their <c>Value</c> live from the cache (so a stored reference stays current as the
     /// 2s refresh ticks), while their range/step fields are the snapshot's (static per ASCOM).
     /// </summary>
-    public SwitchInfo GetInfo() {
+    public SwitchInfo GetInfo() => GetInfo(alpacaDeviceNumber: -1);
+
+    /// <summary>§10.6 PR3 — per-device snapshot for the Sequencer's device-targeted
+    /// <c>SetSwitchValue</c>. <c>-1</c> = the primary (lowest-numbered) device, so the
+    /// parameterless <see cref="GetInfo()"/> is exactly this method's default case.</summary>
+    public SwitchInfo GetInfo(int alpacaDeviceNumber) {
         lock (_gate) {
-            var primary = _disposed ? null : PrimaryConnectionLocked();
-            var snapshots = primary?.CachedSnapshots ?? Array.Empty<SwitchPortSnapshot>();
+            var target = _disposed ? null : TargetConnectionLocked(alpacaDeviceNumber);
+            var snapshots = target?.CachedSnapshots ?? Array.Empty<SwitchPortSnapshot>();
             var (writable, readonlySwitches) = BuildSwitchCollections(this, snapshots);
             return new SwitchInfo {
-                Connected = primary is not null,
-                Name = primary?.Device.Name ?? string.Empty,
-                DeviceId = primary?.Device.UniqueId ?? string.Empty,
+                Connected = target is not null,
+                Name = target?.Device.Name ?? string.Empty,
+                DeviceId = target?.Device.UniqueId ?? string.Empty,
                 WritableSwitches = writable,
                 ReadonlySwitches = readonlySwitches,
             };
         }
     }
 
-    // The connection the single-target sequencer surface (GetInfo + SetSwitchValue) operates on: the
-    // connected switch with the lowest AlpacaDeviceNumber (deterministic). With one switch this is that
-    // switch; per-device sequencer targeting is a follow-up. Caller holds _gate.
-    private SwitchConnection? PrimaryConnectionLocked() {
+    // The connection a sequencer call operates on: -1 (or any negative) selects the connected
+    // switch with the lowest AlpacaDeviceNumber (deterministic — the pre-PR3 "primary" behaviour
+    // and the compatible default of an instruction that names no device); >= 0 selects exactly
+    // that device number, connected-only (a named-but-absent device resolves to null, which the
+    // callers degrade on rather than falling back to a DIFFERENT switch — writing port 3 of the
+    // wrong power hub is worse than skipping the write). Caller holds _gate.
+    private SwitchConnection? TargetConnectionLocked(int alpacaDeviceNumber) {
+        if (alpacaDeviceNumber >= 0) {
+            return _connections.TryGetValue(alpacaDeviceNumber, out var exact)
+                && exact.State == EquipmentConnectionState.Connected && exact.Client is not null
+                ? exact : null;
+        }
         SwitchConnection? primary = null;
         foreach (var conn in _connections.Values) {
             if (conn.State == EquipmentConnectionState.Connected && conn.Client is not null
@@ -96,6 +109,9 @@ public sealed partial class SwitchService : ISwitchMediator {
         }
         return primary;
     }
+
+    // Retained name for the cache-wrapper members below that always mean "the primary".
+    private SwitchConnection? PrimaryConnectionLocked() => TargetConnectionLocked(-1);
 
     // Splits the cached ports into NINA's writable/read-only collections, preserving cache order so
     // SetSwitchValue's collection index stays aligned with what Validate showed. Extracted (internal,
@@ -122,13 +138,20 @@ public sealed partial class SwitchService : ISwitchMediator {
     /// (e.g. a disconnect between Validate and Execute) degrades gracefully instead of faulting the
     /// run. Genuine sequencer cancellation propagates.
     /// </summary>
-    public async Task SetSwitchValue(short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+    public Task SetSwitchValue(short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) =>
+        SetSwitchValue(alpacaDeviceNumber: -1, switchIndex, value, progress, ct);
+
+    /// <summary>§10.6 PR3 — the device-targeted write behind an instruction that names a specific
+    /// switch. <c>-1</c> = primary (the single-target overload's behaviour); a named-but-absent
+    /// device degrades to the same logged no-op as not-connected — never a fallback to a different
+    /// device.</summary>
+    public async Task SetSwitchValue(int alpacaDeviceNumber, short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) {
         AlpacaSwitch? client;
         short portId;
         lock (_gate) {
-            var primary = _disposed ? null : PrimaryConnectionLocked();
-            client = primary?.Client;
-            var id = primary is null ? null : WritablePortIdAt(primary.CachedSnapshots, switchIndex);
+            var target = _disposed ? null : TargetConnectionLocked(alpacaDeviceNumber);
+            client = target?.Client;
+            var id = target is null ? null : WritablePortIdAt(target.CachedSnapshots, switchIndex);
             if (client is null || id is null) {
                 LogSwitchWriteSkipped(switchIndex);
                 return;

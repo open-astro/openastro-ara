@@ -57,7 +57,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
         public override object Clone() {
             return new SetSwitchValue(this) {
                 SwitchIndex = SwitchIndex,
-                Value = Value
+                Value = Value,
+                AlpacaDeviceNumber = AlpacaDeviceNumber
             };
         }
 
@@ -96,6 +97,25 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
             }
         }
 
+        private int alpacaDeviceNumber = -1;
+
+        /// <summary>ARA §10.6 (Switch multi-instance PR3) — which switch device this instruction
+        /// targets when several are connected. <c>-1</c> (the default, and the value every
+        /// pre-PR3 / NINA-imported sequence deserializes to since the property is absent from
+        /// their JSON) = the primary (lowest-numbered) device, i.e. the exact pre-PR3 behaviour.
+        /// Values below -1 normalize to -1. Routed through <see cref="ISwitchDeviceTargeting"/>
+        /// when the mediator supports it; a mediator without the capability keeps the
+        /// single-target path regardless.</summary>
+        [JsonProperty]
+        public int AlpacaDeviceNumber {
+            get => alpacaDeviceNumber;
+            set {
+                alpacaDeviceNumber = Math.Max(-1, value);
+                Validate();
+                RaisePropertyChanged();
+            }
+        }
+
         private IWritableSwitch? selectedSwitch;
 
         [JsonIgnore]
@@ -119,6 +139,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
         }
 
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            // A named device routes through the ARA targeting capability; -1 (or a mediator
+            // without the capability, e.g. the headless stub) keeps the single-target path.
+            if (alpacaDeviceNumber >= 0 && switchMediator is ISwitchDeviceTargeting targeting) {
+                return targeting.SetSwitchValue(alpacaDeviceNumber, switchIndex, Value, progress, token);
+            }
             return switchMediator.SetSwitchValue(switchIndex, Value, progress, token);
         }
 
@@ -135,7 +160,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
         public bool Validate() {
             try {
                 var i = new List<string>();
-                var info = switchMediator.GetInfo();
+                // Validate against the SAME device Execute will write (targeted when named and
+                // the mediator has the capability; primary otherwise).
+                var info = alpacaDeviceNumber >= 0 && switchMediator is ISwitchDeviceTargeting targeting
+                    ? targeting.GetInfo(alpacaDeviceNumber)
+                    : switchMediator.GetInfo();
                 if (info?.Connected != true) {
                     //When switch gets disconnected the real list will be changed to the dummy list
                     if (!(WritableSwitches.FirstOrDefault() is DummySwitch)) {
@@ -186,7 +215,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(SetSwitchValue)}, SwitchIndex {SwitchIndex}, Value: {Value}";
+            return $"Category: {Category}, Item: {nameof(SetSwitchValue)}, Device: {AlpacaDeviceNumber}, SwitchIndex {SwitchIndex}, Value: {Value}";
         }
     }
 }
