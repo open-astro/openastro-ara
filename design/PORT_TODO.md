@@ -533,10 +533,12 @@ needs byte-preserving edits. The connect-path swap used the Edit tool safely; md
   Chose the deterministic id-suffix over the PORT_TODO sketch's "store the resolved `PHD2ProfileName` back on the
   ARA profile" because the Equipment-layer guider has read-only `IProfileService` and can't persist a profile
   mutation back through `IProfileStore` — the id-suffix needs no stored state. +tests.
-- **Slug length cap (from #375 review).** No length cap; the daemon docs don't state a max profile-name length,
-  so a cap would be a guess (and truncation reintroduces the collision above). Find the real openastro-guider
-  limit (read the daemon source / test an over-long `create_profile`) and cap there if one exists, paired with
-  the disambiguator so truncated names stay unique.
+- ✅ **Slug length cap — RESOLVED: no cap needed (2026-07-06, from the fork source).** Read
+  open-astro/openastro-guider: `create_profile` (src/event_server.cpp ~2057) validates only non-empty +
+  uniqueness, and `PhdConfig::CreateProfile` (src/phdconfig.cpp 518-538) stores the name as a wxConfig
+  VALUE at `/profile/{id}/name` — not as a config path/group key — so neither length nor slashes can
+  corrupt the config tree, and wxFileConfig values have no meaningful length limit. A gratuitous cap
+  would only reintroduce the truncation-collision risk the id-suffix disambiguator solved. Nothing to do.
 - **Send-time validation done; copy-source still latent.** e-3b guards the empty name at the send site (and the
   resolver never yields one). ARA never sets a clone source, so `create_profile`'s mutually-exclusive
   `copy_from`/`copy_from_id` stay unset by construction — if a future caller ever sets a copy source, enforce
@@ -559,9 +561,12 @@ transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEven
   `ISequencerService.AbortActiveRunsAsync` to halt running sequences + fires a critical notification. ("Pause"
   was considered but the headless engine's `PauseAsync` is still a deferred no-op, so only warn/abort ship; add
   "pause" when the engine grows a real pause hook.)
-- **Per-frame pre-capture check.** The monitor polls on an interval (60 s); a burst of large frames could fill
-  the disk between ticks. A cheap pre-capture free-space check in the capture path (warn/skip) would tighten the
-  window — fold into the §42.2 capture-path hardening rather than the standalone monitor.
+- ✅ **Per-frame pre-capture check — DONE (2026-07-06).** `CaptureCoreAsync` gates each frame BEFORE the
+  shutter opens: when the configured save volume is CRITICALLY low AND `OnDiskSpaceCritical=abort`, the
+  capture is blocked (an exposure that can't be saved is wasted sky time); the "warn" default never blocks —
+  the monitor's notification path owns reporting. Pure decision in `DiskSpaceMonitor.PreCaptureShouldBlock`
+  (+tests); the probe is best-effort (no store / unprobeable volume / probe fault → capture proceeds — a
+  broken probe must never cost a frame).
 
 ## §63.6 guider-e-4 — dark-library push (2026-06-12)
 **Shipped:** e-4a — named-object RPC request classes (`PHD2Methods.DarkLibrary.cs`): `build_dark_library`

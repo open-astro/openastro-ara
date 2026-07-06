@@ -209,5 +209,23 @@ namespace OpenAstroAra.Test {
             sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(captured!.AutoActionTaken, Is.False);
         }
+
+        // ─── §29 — the per-frame pre-capture block decision ───
+
+        [Test]
+        public void PreCapture_blocks_only_on_critical_AND_abort_policy() {
+            // Critically low + abort → block before the shutter opens.
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, "abort"), Is.True);
+            // The 'warn' default NEVER blocks — the monitor's notification path owns reporting.
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, "warn"), Is.False);
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 10, 2, null), Is.False,
+                "an unset/unknown policy degrades to the safe warn-only behaviour");
+            // Merely LOW (not critical) never blocks even under abort.
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(5 * Gib, 10, 2, "abort"), Is.False);
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(50 * Gib, 10, 2, "abort"), Is.False);
+            // A mis-set threshold pair falls back to the 10/2 defaults, same as Evaluate.
+            Assert.That(DiskSpaceMonitor.PreCaptureShouldBlock(1 * Gib, 2, 10, "abort"), Is.True,
+                "inverted pair -> built-in 10/2 defaults -> 1 GiB is critical");
+        }
     }
 }
