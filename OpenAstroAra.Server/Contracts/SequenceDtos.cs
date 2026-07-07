@@ -174,9 +174,10 @@ public sealed record SequenceShareDto(
     // route to GET (mirrors ProfileShareDto.DownloadUrl).
     Uri? DownloadUrl);
 
-/// <summary>POST /api/v1/sequences/{id}/auto-flats-decision body per §48.</summary>
-public sealed record AutoFlatsDecisionRequestDto(
-    Guid SequenceRunId,
-    bool ConfirmRun,
-    int? OverrideFlatFrameCount,
-    int? OverrideExposureMs);
+/// <summary>POST /api/v1/sequences/{id}/autoflats body — §48.1: the user's answer to
+/// the "capture calibration tonight?" prompt. Choice: <c>panel_at_end</c> |
+/// <c>sky_at_twilight</c> | <c>later</c>. Remember=true persists the choice as the
+/// profile's calibration_capture_default ("later" persists as "never" per §48.2).
+/// Replaces the Phase-7 sketch shape (run id / overrides) inside the no-consumer
+/// window — the decide endpoint lands with this DTO.</summary>
+public sealed record AutoFlatsDecisionRequestDto(string Choice, bool Remember);

@@ -290,7 +290,9 @@ public partial class Program {
         // ISequenceTemplateService + ISequenceImportService are wired later
         // (after profileDir is resolved) so they can use the §38.2 sequences
         // subdirs.
-        builder.Services.AddSingleton<IAutoFlatsService, PlaceholderAutoFlatsService>();
+        // §48 — the SequencerService singleton also serves the auto-flats decision
+        // seam (§8.1 one-singleton pattern), replacing the Phase-13.15 placeholder.
+        builder.Services.AddSingleton<IAutoFlatsService>(sp => sp.GetRequiredService<SequencerService>());
         // Phase 13.17 — §60.9 WS broadcaster + event channel placeholders.
         // Single InMemoryWsServices instance backs both interfaces so the
         // publish + consume sides share state. The /api/v1/ws upgrade
@@ -520,7 +522,12 @@ public partial class Program {
                 // (the #711 CameraService lesson).
                 sp.GetService<IFrameRepository>(),
                 // §58.12 — same lesson: pass the countdown service by hand.
-                sp.GetService<UnattendedShutdownService>()));
+                sp.GetService<UnattendedShutdownService>(),
+                // §48 — auto-flats prompt flow deps (profile default, the §39.5
+                // generator via resolver to avoid a construction cycle, notifications).
+                sp.GetService<IProfileStore>(),
+                () => sp.GetService<ICalibrationService>(),
+                sp.GetService<INotificationService>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.

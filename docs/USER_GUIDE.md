@@ -90,6 +90,11 @@ View** runs a fast framing/focus loop when you need to point or focus by eye.
 
 Ara assumes you're asleep while it works:
 
+- **End-of-session flats**: starting a run asks "capture calibration tonight?" (or applies your
+  remembered preference). Answer yes-panel and, when the run completes, ARA generates a
+  matching-flats sequence from tonight's session — each filter at tonight's exact focus, gain,
+  and offset — and starts it immediately; answer yes-sky and the sequence is generated ready to
+  run at twilight. You can always capture matching flats later from the Image Library instead.
 - **Safety monitor reactions**: with an Alpaca SafetyMonitor connected, the daemon polls it every
   10 seconds and reacts the moment it reports unsafe, per **Settings → Safety → Policies → "When
   conditions turn unsafe"**: pause the sequence + stop guiding + park (the default), park only,

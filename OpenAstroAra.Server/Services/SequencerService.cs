@@ -94,7 +94,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             ActiveSequenceCheckpoint? checkpoint = null,
             ILogger<SequencerService>? logger = null,
             IFrameRepository? frames = null,
-            UnattendedShutdownService? unattendedShutdown = null) {
+            UnattendedShutdownService? unattendedShutdown = null,
+            IProfileStore? profileStore = null,
+            Func<ICalibrationService?>? calibrationResolver = null,
+            INotificationService? notifications = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -102,6 +105,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _logger = logger ?? NullLogger<SequencerService>.Instance;
         _frames = frames;
         _unattendedShutdown = unattendedShutdown;
+        _profileStore = profileStore;
+        _calibrationResolver = calibrationResolver;
+        _notifications = notifications;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -127,6 +133,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // null-Worker shutdown window). The body load + deserialize + §28
         // checkpoint claim run inside the worker, off the request path.
         run.Worker = Task.Run(() => LoadAndRunAsync(id, run), CancellationToken.None);
+        // §48.1 — surface the calibrate-tonight prompt (or apply the profile
+        // default) once the run is genuinely launched.
+        _ = Task.Run(() => AnnounceAutoFlatsAsync(id, run), CancellationToken.None);
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey));
     }
 
@@ -707,6 +716,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // then stamp the end time — on EVERY terminal path.
                 CaptureSessionScope.Exit();
                 await TryEndRunSessionAsync(endSid);
+                // §48.1 — a COMPLETED run with a "capture tonight" answer kicks off
+                // the end-of-session flats (generated from this very session's
+                // frames via the §39.5 machinery). Aborted/stopped/failed runs
+                // never do: the user ended the night on their own terms.
+                if (run.State == SequenceRunState.Completed && run.AutoFlatsChoice is { } flatsChoice) {
+                    _ = Task.Run(() => ExecuteAutoFlatsAsync(sequenceId, endSid, flatsChoice), CancellationToken.None);
+                }
             }
             // §28 — terminal transition clears active/current.json (only if this
             // run still owns it); a missing file is the canonical "nothing
@@ -816,6 +832,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// container before execution and driven by Pause/Resume.
         /// </summary>
         public OpenAstroAra.Sequencer.Utility.PauseGate Gate { get; } = new();
+        // §48.1 — the run's "capture calibration tonight?" answer:
+        // "panel_at_end" | "sky_at_twilight" | null (later / undecided / never).
+        public string? AutoFlatsChoice { get; set; }
         public int? CurrentInstructionIndex { get; private set; }   // wired with instruction-level hooks (deferred)
         public string? CurrentInstructionDescription { get; private set; }
         public int InstructionsCompleted { get; private set; }            // wired with instruction-level hooks (deferred)
