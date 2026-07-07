@@ -178,6 +178,35 @@ void main() {
           reason: 'the recommended (not-installed) package seeds the empty selection');
     });
 
+    testWidgets('an explicit Clear survives navigating away and back (no re-seed)', (tester) async {
+      const rec = DataPackage(
+          id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);
+      final container = ProviderContainer(overrides: [
+        dataManagerPackagesProvider.overrideWith(
+            () => _FakePackages(() async => [rec, pkgA])),
+      ]);
+      addTearDown(container.dispose);
+      Widget screen() => UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: Scaffold(body: ScreenSkyData())),
+          );
+      await tester.pumpWidget(screen());
+      await tester.pumpAndSettle();
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.skyDataDownloadIds, {'r'}, reason: 'first visit seeds');
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+      expect(draft.skyDataDownloadIds, isEmpty);
+      // Navigate away (unmount) and back (a brand-new State object).
+      await tester.pumpWidget(UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SizedBox()))));
+      await tester.pumpWidget(screen());
+      await tester.pumpAndSettle();
+      expect(draft.skyDataDownloadIds, isEmpty,
+          reason: 'the seed flag lives on the draft — an explicit Clear is final');
+    });
+
     testWidgets('an existing selection is never clobbered by the recommended seed', (tester) async {
       const rec = DataPackage(
           id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);

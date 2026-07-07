@@ -32,11 +32,6 @@ class ScreenSkyData extends ConsumerStatefulWidget {
 }
 
 class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
-  // §37.6 — the recommended preset is seeded ONCE per screen visit, and only
-  // into an untouched (empty) selection: a user who cleared their picks or
-  // navigated back with an explicit set keeps exactly what they chose.
-  bool _seededRecommended = false;
-
   @override
   Widget build(BuildContext context) {
     // Watch (not read) the controller so this screen rebuilds if the draft object
@@ -69,12 +64,18 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
             if (available.isEmpty) {
               return _Message('All sky-data packages are already installed.');
             }
-            if (!_seededRecommended) {
-              _seededRecommended = true;
+            // §37.6 — seed the recommended preset ONCE per wizard session, into
+            // an untouched (empty) selection only. The flag lives on the DRAFT
+            // (#728 review): this State is rebuilt on every back/forward visit,
+            // so a widget-local flag would re-seed over an explicit Clear.
+            final draft = ref.read(wizardControllerProvider).draft;
+            if (!draft.skyDataRecommendedSeeded) {
+              draft.skyDataRecommendedSeeded = true;
               if (selected.isEmpty) {
                 // Mutating the draft set during build is safe here: `selected` IS
                 // the rendered source and the change happens before the checkboxes
-                // read it below (no setState needed — same-frame consistency).
+                // read it below (no setState needed — same-frame consistency; the
+                // draft's doc comment records that consumers read it directly).
                 selected.addAll(
                     available.where((p) => p.recommended).map((p) => p.id));
               }
