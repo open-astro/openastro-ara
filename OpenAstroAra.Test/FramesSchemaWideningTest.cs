@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
             await using var ver = check.CreateCommand();
             ver.CommandText = "SELECT version FROM schema_version;";
             Assert.That(Convert.ToInt64(await ver.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture),
-                Is.EqualTo(3), "the sentinel pass introduces schema_version=3 (the #670 commitment)");
+                Is.EqualTo(4), "schema_version reflects the newest pass (§44 backup-stream columns bumped it to 4)");
 
             Assert.DoesNotThrowAsync(() => new SqliteAraDatabase(_dir, logger: null).InitializeAsync(CancellationToken.None));
         }
