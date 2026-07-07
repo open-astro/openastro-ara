@@ -252,7 +252,19 @@ public partial class Program {
         builder.Services.AddSingleton<GuiderRecoveryCoordinator>();
         // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's
         // IGuiderMediator (§8.1; the mediator alias is registered below, replacing HeadlessGuiderMediator).
-        builder.Services.AddSingleton<GuiderService>();
+        builder.Services.AddSingleton<GuiderService>(sp =>
+            new GuiderService(
+                sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                sp.GetRequiredService<GuiderRecoveryCoordinator>(),
+                sp.GetRequiredService<ILogger<GuiderService>>(),
+                sp.GetRequiredService<IGuiderProcessSupervisor>(),
+                sp.GetService<IWsBroadcaster>(),
+                // §42.2 fault-flow deps — factory lambda bypasses constructor
+                // activation, so optional params are passed by hand (#711 lesson);
+                // the sequencer resolver breaks the construction cycle.
+                sp.GetService<IProfileStore>(),
+                () => sp.GetService<ISequencerService>(),
+                sp.GetService<INotificationService>()));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
         // Phase 13.13 — §38 sequence CRUD + runtime control.

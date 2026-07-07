@@ -61,7 +61,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - ✅ **§39** Calibration + dark library — full epic #670-#688 (2026-07-02): widened schema, flats/darks as generated sequences, calibration screen + library + bulk ops + Resume Target + stats CSV + previews + live `frame.complete` refresh.
 - ✅ **§40** Captured-image library (list/preview/thumbnail/download, bulk ops, hfr-analysis).
 - 🚫 **§41** Mobile companion — iOS/Android deferred (§18.G), v0.1.0.
-- 🟡 **§42** Hardware fault recovery — guider-d crash-recovery (#351) done; per-equipment §42.2 fault flow partial.
+- 🟡 **§42** Hardware fault recovery — guider-d crash-recovery (#351) done; the §42.2 guider-lost row is ENFORCED (2026-07-07: link drop mid-run → on_guider_lost pause/skip/abort via the §35 bulk-pause machinery); the rest of the §42.2 matrix (camera/mount/focuser/EFW rows) + §42.3 generalized hot-reconnect remain follow-ups.
 - ✅ **§43** Backup + restore — real `BackupService` (zip snapshots, §43-2 validated restore with atomic swap, snapshot download). · 🚫 **§44** Real-time backup stream — `PlaceholderBackupStreamService`; v0.1.0.
 - 🟡 **§45** Polar alignment — phase 1 landed (#703): `PolarAlignGeometry` two-point RA-axis fit (nearest-pole disambiguation + 30° refusal guard, Bennett refraction, alt/az error split) + the guider-fork RPC classes (capture_single_frame / centroids / pa_session). Phases 2+ (daemon FITS spike, live flow) need the guider daemon running; `PlaceholderPolarAlignService` still registered until then.
 - ✅ **§46** Notifications (SQLite, #201/203).

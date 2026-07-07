@@ -51,6 +51,9 @@ public static class WsEventCatalog {
     public const string TelescopeParkChanged = "telescope.park_changed";
     public const string GuiderState = "guider.state";
     public const string GuiderDitherComplete = "guider.dither_complete";
+    // §42.2 — the mid-sequence guider fault flow reports the executed
+    // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
+    public const string GuiderFaultActionTaken = "guider.fault_action_taken";
 
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
@@ -159,7 +162,7 @@ public static class WsEventCatalog {
         EquipmentConnectionFailed, EquipmentDiscoveryRefreshed,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
-        GuiderState, GuiderDitherComplete,
+        GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
         SequenceStarted, SequencePaused, SequenceResumed, SequenceAborted,

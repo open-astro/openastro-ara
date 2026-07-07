@@ -372,6 +372,25 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return Task.FromResult(resumed);
     }
 
+    public Task<int> SkipActiveRunsAsync(CancellationToken ct) {
+        // §42.2 skip_target — daemon-automated (no NotifyUserActivity). Mirrors
+        // SkipAsync's semantics per run: cancel the currently-running items so
+        // the engine advances; a no-op for suspended/terminal runs.
+        var skipped = 0;
+        foreach (var id in _runs.Keys) {
+            ct.ThrowIfCancellationRequested();
+            if (!_runs.TryGetValue(id, out var run)) {
+                continue;
+            }
+            if (run.State != SequenceRunState.Running) {
+                continue;
+            }
+            run.Root?.SkipCurrentRunningItems();
+            skipped++;
+        }
+        return Task.FromResult(skipped);
+    }
+
     /// <summary>
     /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
     /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via

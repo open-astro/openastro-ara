@@ -161,6 +161,44 @@ namespace OpenAstroAra.Test {
                 "a dropped guider link did not surface as the Error state");
         }
 
+        [Test]
+        public async Task A_mid_session_link_drop_pauses_the_running_sequence_per_policy() {
+            // §42.2 end-to-end through the real client: the guider daemon drops the
+            // socket mid-session and the fault flow executes the profile's
+            // on_guider_lost policy (default pause_and_retry) against the sequencer —
+            // the previously notify-only gap. Policy mapping details are unit-covered
+            // by GuiderFaultReactionTest; this asserts the drop actually triggers it.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
+                OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
+                OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false));
+            var sequencer = new Mock<ISequencerService>();
+            var pauseRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => pauseRequested.TrySetResult())
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: profiles.Object, sequencerResolver: () => sequencer.Object,
+                notifications: Mock.Of<INotificationService>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1).ConfigureAwait(false), Is.True,
+                "the persistent event-stream connection never settled, so there was nothing to drop");
+
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected at least one live connection to drop");
+            Assert.That(await Task.WhenAny(pauseRequested.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(pauseRequested.Task),
+                "the link drop never reached the §42.2 fault flow (PauseActiveRunsAsync was not called)");
+        }
+
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try {
