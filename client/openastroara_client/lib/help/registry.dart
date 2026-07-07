@@ -33,6 +33,31 @@ const Map<String, Help> helpRegistry = {
   // companion `equipment.alpacabridge.version` entry from the playbook is MOOT:
   // the §68.1 version gate was removed (Alpaca has no version endpoint by
   // design — user decision 2026-06-21), so there is no version to explain.
+  'session.storage.backup_stream': Help(
+    key: 'session.storage.backup_stream',
+    title: 'Real-time frame backup',
+    body: 'When enabled, this desktop pulls every newly-captured FITS from the daemon as the '
+        'night runs: it claims the single backup-stream slot, downloads each frame, verifies '
+        'its SHA-256 checksum, stores it under your backup folder, and confirms back to the '
+        'daemon. If your imaging drive dies overnight, everything already streamed is safe '
+        'here — the worst case is losing the one frame being captured at the moment of '
+        'failure. Only one desktop can stream from a daemon at a time; enabling it here '
+        'while another desktop holds the slot shows who has it. Transfers pause while an '
+        'exposure is downloading from the camera so they never compete for the daemon\'s '
+        'bandwidth at the wrong moment.',
+    relatedSettings: ['session.storage.backup_stream_folder', 'session.storage.backup_retention_count'],
+    keywords: ['backup', 'stream', 'mirror', 'sync', 'drive', 'failure', 'fits', 'sha256'],
+  ),
+  'session.storage.backup_stream_folder': Help(
+    key: 'session.storage.backup_stream_folder',
+    title: 'Backup folder',
+    body: 'Streamed frames land here, organized by server and imaging session: '
+        '<folder>/<server>/<session-id>/<frame-id>.fits. Pick a drive with room for a full '
+        'night of frames; if it fills, the stream surfaces the problem and stops pulling '
+        '(the daemon keeps the queue, so re-enabling resumes where it left off).',
+    relatedSettings: ['session.storage.backup_stream'],
+    keywords: ['backup', 'folder', 'path', 'destination', 'storage'],
+  ),
   'equipment.alpacabridge.troubleshoot': Help(
     key: 'equipment.alpacabridge.troubleshoot',
     title: 'AlpacaBridge not detected?',
