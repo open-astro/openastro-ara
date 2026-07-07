@@ -98,13 +98,29 @@ namespace OpenAstroAra.Server.Services {
         // it's cancelled the moment the 202 response is sent, before the worker has done anything.
         private readonly CancellationTokenSource _shutdown = new();
 
-        public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null) {
+        // §43-2b(b) — how much remote archive the daemon will accept before refusing the
+        // restore. Config areas are KBs; the cap only exists so a wrong/hostile URL can't
+        // fill the disk. Internal test seam (shrink to exercise the cap without a big file).
+        internal long MaxRemoteArchiveBytes { get; set; } = 512L * 1024 * 1024;
+
+        // §43-2b(b) — read-progress watchdog for the remote download (the DataManagerService
+        // pattern): the deadline re-arms on every byte, so a healthy transfer never trips it,
+        // but a peer that accepts the connection and then stalls (headers OR body) is cancelled
+        // instead of holding the single clone slot — and with it EVERY future restore — hostage
+        // until a daemon restart. Internal test seam.
+        internal TimeSpan RemoteIdleTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
+        private readonly IBackupSourceFetcher? _remoteFetcher;
+
+        public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null,
+                IBackupSourceFetcher? remoteFetcher = null) {
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
             ArgumentNullException.ThrowIfNull(logger);
             _profileDir = profileDir;
             _backupsDir = Path.Combine(profileDir, BackupsDirName);
             _logger = logger;
             _restorer = restorer ?? new DefaultBackupRestorer();
+            _remoteFetcher = remoteFetcher;
         }
 
         // Registered as a DI singleton, so the container disposes this on host shutdown.
@@ -416,12 +432,6 @@ namespace OpenAstroAra.Server.Services {
         public Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
 
-            // §43-2a: restore from a LOCAL snapshot only — the source URL must be our own snapshot-download route.
-            // Restoring from an arbitrary/remote URL (e.g. §44 cloud backup) is a separate slice.
-            var id = ParseLocalSnapshotId(request.BackupSourceUrl)
-                ?? throw new BackupRestoreSourceUnsupportedException(
-                    "Restore source must be a local snapshot URL (/api/v1/backup/snapshot/{id}/download).");
-
             // §43-1 backups carry the two config areas; frame-metadata/logs aren't captured yet, so those flags are
             // honoured only insofar as the archive contains them (it won't) — they're no-ops, not errors.
             if (!request.RestoreProfiles && !request.RestoreSequences) {
@@ -429,12 +439,36 @@ namespace OpenAstroAra.Server.Services {
                     "No restorable area selected — set restore_profiles and/or restore_sequences.");
             }
 
+            // The DTO declares the URL non-nullable, but the JSON deserializer doesn't enforce that at runtime —
+            // a body with "backup_source_url": null must stay the clean 422 it was pre-remote-support, not an NRE.
+            if (request.BackupSourceUrl is null) {
+                throw new BackupRestoreSourceUnsupportedException("backup_source_url is required.");
+            }
+
+            // §43-2b(b) — source discrimination. A RELATIVE URL is always local (that's the shape
+            // ListSnapshots hands out and the client echoes back). An ABSOLUTE http(s) URL whose
+            // path parses as our snapshot route AND whose id exists on disk stays local too (the
+            // pre-(b) parser was host-blind — a client that resolved the relative URL against the
+            // daemon base keeps working). Any other absolute http(s) URL is a REMOTE source:
+            // download → checksum → restore, on the worker. Everything else stays 422.
+            var parsed = ParseLocalSnapshotId(request.BackupSourceUrl);
+            string? zipPath = parsed is { } localId ? FindZipPath(localId) : null;
+            if (zipPath is null && IsRemoteSource(request.BackupSourceUrl)) {
+                return Task.FromResult(BeginRemoteRestore(request, idempotencyKey));
+            }
+            if (parsed is not { } id) {
+                throw new BackupRestoreSourceUnsupportedException(
+                    "Restore source must be a local snapshot URL (/api/v1/backup/snapshot/{id}/download) "
+                    + "or a remote http(s) backup archive URL.");
+            }
+
             // §43-2b: validate cheaply + SYNCHRONOUSLY (so unknown-snapshot 404 and corrupt-archive 422 still surface
             // as HTTP errors before the 202), then run the slow, live-config-mutating extract+swap on a background
             // worker and report its progress via the poll-able clone-status. The 202/operation-id wire contract was
             // already in place for exactly this.
-            var zipPath = FindZipPath(id)
-                ?? throw new BackupSnapshotNotFoundException($"No backup snapshot {id} to restore from.");
+            if (zipPath is null) {
+                throw new BackupSnapshotNotFoundException($"No backup snapshot {id} to restore from.");
+            }
 
             // Fast-fail a concurrent restore BEFORE the (relatively) expensive checksum hash: a restore already in
             // flight can't proceed regardless of this archive's validity, so 409 wins over a would-be 422 and we skip
@@ -464,6 +498,130 @@ namespace OpenAstroAra.Server.Services {
                 OperationType: "backup.restore-zip",
                 AcceptedUtc: DateTimeOffset.UtcNow,
                 IdempotencyKey: idempotencyKey));
+        }
+
+        // §43-2b(b) — a remote source is any absolute http(s) URL (that didn't resolve to a local snapshot).
+        // Plain http is deliberately allowed: the typical source is another LAN daemon and v0.0.1 has no TLS
+        // (§2.3); integrity rides on the request's REQUIRED sha256, not the transport.
+        private static bool IsRemoteSource(Uri url) =>
+            url.IsAbsoluteUri
+            && (string.Equals(url.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal)
+                || string.Equals(url.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal));
+
+        // Sync half of a remote restore: cheap validation (fetcher present, sha256 well-formed, no concurrent
+        // restore) so the caller still gets a crisp HTTP error, then claim the clone slot and hand the slow
+        // download+verify+swap to the worker. Mirrors the local flow's shape exactly.
+        private OperationAcceptedDto BeginRemoteRestore(RestoreRequestDto request, string? idempotencyKey) {
+            if (_remoteFetcher is null) {
+                throw new BackupRestoreSourceUnsupportedException(
+                    "This daemon has no remote backup fetcher configured — only local snapshot restores are available.");
+            }
+            // The out-of-band checksum is MANDATORY for remote sources (the local manifest warn-and-proceed
+            // fallback does not apply here — an unvalidated remote archive must never reach the live-config swap).
+            if (request.Sha256 is not { Length: 64 } sha || !sha.All(Uri.IsHexDigit)) {
+                throw new BackupRestoreSourceUnsupportedException(
+                    "A remote restore requires sha256: the expected SHA-256 of the archive as 64 hex characters "
+                    + "(shown in the source daemon's snapshot list).");
+            }
+            if (RestoreInProgress()) {
+                throw new BackupRestoreInProgressException("A restore is already in progress.");
+            }
+            var opId = Guid.NewGuid();
+            lock (_cloneLock) {
+                if (_clone.State == RunningState) {
+                    throw new BackupRestoreInProgressException("A restore is already in progress.");
+                }
+                _clone = new CloneState(RunningState, null, null, "Downloading…");
+            }
+            _ = Task.Run(() => RunRemoteRestoreAsync(opId, request), CancellationToken.None);
+            LogRemoteRestoreStarted(opId, request.BackupSourceUrl);
+            return new OperationAcceptedDto(
+                OperationId: opId,
+                OperationType: "backup.restore-zip",
+                AcceptedUtc: DateTimeOffset.UtcNow,
+                IdempotencyKey: idempotencyKey);
+        }
+
+        // Remote-restore worker: download the archive to a staged temp (the orphan sweep's .tmp-*.zip pattern, so
+        // a hard kill mid-download is reclaimed at next boot), verify it against the request's sha256, then hand
+        // the verified file to the SAME extract+swap worker a local restore uses. A download/verify failure lands
+        // in the failed clone-status; RunRestoreAsync owns the terminal state for everything after.
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Top-level fire-and-forget worker (same contract as RunRestoreAsync): every download/verify " +
+                "failure must land in the 'failed' clone-status rather than escape as an unobserved task exception.")]
+        private async Task RunRemoteRestoreAsync(Guid opId, RestoreRequestDto request) {
+            var tempPath = Path.Combine(_backupsDir,
+                TempPrefix + "restore-" + opId.ToString("N", CultureInfo.InvariantCulture) + ZipExtension);
+            try {
+                try {
+                    Directory.CreateDirectory(_backupsDir);
+                    await DownloadAndVerifyAsync(request.BackupSourceUrl, request.Sha256!, tempPath, _shutdown.Token).ConfigureAwait(false);
+                } catch (Exception ex) {
+                    SetClone(new CloneState(FailedState, null, null, ex.Message));
+                    LogRemoteRestoreFailed(opId, ex);
+                    return;
+                }
+                await RunRestoreAsync(opId, tempPath, request).ConfigureAwait(false);
+            } finally {
+                TryDelete(tempPath);
+            }
+        }
+
+        // Streams the remote archive to disk while hashing it, bounded three ways: by the advertised
+        // Content-Length (refuse before the first byte), by actual bytes received (a server that lies about —
+        // or omits — the length still can't fill the disk), and by the RemoteIdleTimeout read-progress watchdog
+        // (a peer that stalls on headers or mid-body is cancelled — MaxRemoteArchiveBytes bounds volume, not time,
+        // and the backup-source HttpClient deliberately has no Timeout).
+        private async Task DownloadAndVerifyAsync(Uri source, string expectedSha256, string tempPath, CancellationToken ct) {
+            using var idleCts = new CancellationTokenSource();
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, idleCts.Token);
+            var linkedCt = linked.Token;
+            try {
+                // Arm BEFORE OpenAsync so the header-wait phase is bounded too (the DataManagerService pattern).
+                idleCts.CancelAfter(RemoteIdleTimeout);
+                await using var fetch = await _remoteFetcher!.OpenAsync(source, linkedCt).ConfigureAwait(false);
+                if (fetch.TotalBytes is { } advertised && advertised > MaxRemoteArchiveBytes) {
+                    throw new InvalidOperationException(
+                        $"Remote backup archive advertises {advertised} bytes — over this daemon's {MaxRemoteArchiveBytes}-byte cap; not restored.");
+                }
+                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                long received = 0;
+                var stagedOk = false;
+                try {
+                    await using (var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None)) {
+                        var buffer = new byte[81920];
+                        int read;
+                        idleCts.CancelAfter(RemoteIdleTimeout); // fresh deadline for the body; re-armed per read below.
+                        while ((read = await fetch.Content.ReadAsync(buffer, linkedCt).ConfigureAwait(false)) > 0) {
+                            idleCts.CancelAfter(RemoteIdleTimeout);
+                            received += read;
+                            if (received > MaxRemoteArchiveBytes) {
+                                throw new InvalidOperationException(
+                                    $"Remote backup archive exceeded this daemon's {MaxRemoteArchiveBytes}-byte cap mid-download; not restored.");
+                            }
+                            hash.AppendData(buffer, 0, read);
+                            await file.WriteAsync(buffer.AsMemory(0, read), linkedCt).ConfigureAwait(false);
+                        }
+                    }
+                    var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
+                    if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+                        throw new BackupCorruptException(
+                            "The downloaded backup archive failed its checksum and was not restored (transfer corruption, or the wrong sha256).");
+                    }
+                    stagedOk = true;
+                } finally {
+                    // Never leave a failed/oversize/corrupt download staged; the sweep would reclaim it at next
+                    // boot, but there is no reason to hold disk until then.
+                    if (!stagedOk) {
+                        TryDelete(tempPath);
+                    }
+                }
+            } catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested) {
+                // The watchdog fired (not a daemon shutdown): report the stall as the restore failure — the
+                // clone slot must free up for the next attempt instead of wedging until a process restart.
+                throw new InvalidOperationException(
+                    $"Remote backup download stalled (no data received for {RemoteIdleTimeout.TotalSeconds:F0}s); not restored.");
+            }
         }
 
         // The restore worker: extract + atomically swap the validated archive into the live profile, driving the
@@ -609,6 +767,12 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} started from snapshot {BackupId}")]
         partial void LogRestoreStarted(Guid operationId, Guid backupId);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} started from remote source {Source}")]
+        partial void LogRemoteRestoreStarted(Guid operationId, Uri source);
+
+        [LoggerMessage(Level = LogLevel.Error, Message = "Backup restore {OperationId} failed downloading/verifying its remote source")]
+        partial void LogRemoteRestoreFailed(Guid operationId, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Error, Message = "Backup restore {OperationId} failed")]
         partial void LogRestoreFailed(Guid operationId, Exception ex);

@@ -831,9 +831,17 @@ Deferred to **§43-2**:
   / corrupt archive. **§43-2b(a) DONE 2026-06-15:** the restore now runs on a background worker (202 returns
   immediately; cheap validation — source/area/snapshot-exists/checksum — stays synchronous so 404/422 surface before
   the 202), `GetCloneStatusAsync` drives a real `idle→running→done/failed` state machine, and a concurrent restore is
-  refused **409**. An `IBackupRestorer` seam makes the worker states testable (block/throw). STILL OPEN for **§43-2b**:
-  (b) accept a **remote/cloud** `BackupSourceUrl` (re-download then restore) — currently only a local snapshot-download
-  URL is accepted; (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs` flags) once §43-1 create
+  refused **409**. An `IBackupRestorer` seam makes the worker states testable (block/throw). **§43-2b(b) DONE
+  2026-07-06:** an absolute http(s) `BackupSourceUrl` is now a REMOTE source — the worker downloads it to a staged
+  `.tmp-restore-*.zip` (orphan-sweep pattern, so a hard kill mid-download is reclaimed at next boot), verifies it
+  against the request's new **required** `sha256` field (out-of-band checksum per the manifest-bypass note below —
+  the local warn-and-proceed manifest fallback deliberately does NOT apply to remote sources), then reuses the same
+  extract+swap worker. Plain http is allowed by design (LAN daemon-to-daemon, no TLS in v0.0.1 — integrity rides on
+  the sha256, not the transport); size-capped both by advertised Content-Length and actual bytes received (512 MiB
+  default, internal test seam); host-blind absolute URLs naming an on-disk snapshot still restore locally (pre-(b)
+  compat). `IBackupSourceFetcher` seam + `HttpBackupSourceFetcher` (redirects off, mirroring sky-data). The client
+  "restore from another daemon" UI is a future slice — the server contract is ready. STILL OPEN for **§43-2b**:
+  (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs` flags) once §43-1 create
   captures them. **§43-2b(d) DONE 2026-06-15:** the client Backup screen now polls `clone-status` after the restore POST
   (`CloneStatus` model + `cloneStatus()` API + `awaitRestoreTerminal()`) and shows the real terminal outcome — including
   a worker-side failure the 202 couldn't reveal — instead of a premature "complete". §43-2a landed in the restore PR
@@ -873,7 +881,11 @@ Deferred to **§43-2**:
   which may hold device credentials. Bolting auth onto one route would be inconsistent and ineffective (the same data
   leaks via `/api/v1/profile/*`). If the daemon is ever exposed beyond a trusted LAN, API auth must be a **cross-cutting
   middleware** decision (PRODUCT-SCOPE / user-authoritative), not per-endpoint. Surfaced 2026-06-13 by the §43-1
-  round-4 review.
+  round-4 review. **Addendum (2026-07-06, §43-2b(b) remote-restore review):** the remote `BackupSourceUrl` fetch is a
+  NEW arbitrary-outbound-GET capability — any client that can reach the API can make the daemon GET any http(s) URL
+  (an SSRF/reachability-oracle surface via the differentiated clone-status failure messages). Accepted as intentional
+  within the same trusted-LAN threat model (a LAN peer can already reach those targets directly); if the daemon ever
+  gets auth/remote exposure, revisit alongside it (host/IP allowlist or confirm-on-daemon for remote restores).
 - **Stats catalog: light-frame partial index — RESOLVED 2026-06-15.** Added `idx_frames_light_captured` on
   `frames(captured_utc) WHERE frame_type = 'light'` (additive + idempotent in `SqliteAraDatabase.InitializeAsync`), with
   an EXPLAIN-QUERY-PLAN test asserting the planner uses it for the light-frame, captured_utc-ordered queries. This covers
