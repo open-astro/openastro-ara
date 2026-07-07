@@ -87,6 +87,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.GuidingStopped, Is.True);
                 Assert.That(result.ParkRequested, Is.True);
                 Assert.That(result.FlatPanelLightOff, Is.True);
+                Assert.That(result.FailedRungs, Is.Empty);
             });
             sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
             camera.Verify(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -119,6 +120,8 @@ namespace OpenAstroAra.Test {
 
             Assert.Multiple(() => {
                 Assert.That(result.ParkRequested, Is.False, "the result reports the failed rung honestly");
+                Assert.That(result.FailedRungs, Has.Count.EqualTo(1).And.Contains("park"),
+                    "an attempted-but-faulted rung is named; the untouched rungs are not");
                 Assert.That(result.FlatPanelLightOff, Is.True, "the rung AFTER the dead device still runs");
                 Assert.That(result.GuidingStopped, Is.True);
             });
@@ -138,6 +141,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.GuidingStopped, Is.False);
                 Assert.That(result.ParkRequested, Is.False);
                 Assert.That(result.FlatPanelLightOff, Is.False);
+                Assert.That(result.FailedRungs, Is.Empty,
+                    "absent devices are not failures — a headless daemon must not scream");
             });
         }
 

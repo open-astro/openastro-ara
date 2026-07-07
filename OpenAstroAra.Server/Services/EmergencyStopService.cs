@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -27,6 +28,8 @@ namespace OpenAstroAra.Server.Services;
 /// show the stop banner while the daemon works.
 /// </summary>
 public sealed partial class EmergencyStopService {
+    private enum RungOutcome { Done, Failed, NotAvailable }
+
     private readonly ICameraService? _camera;
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly IGuiderService? _guider;
@@ -73,7 +76,8 @@ public sealed partial class EmergencyStopService {
                 ExposureAborted: false,
                 GuidingStopped: false,
                 ParkRequested: false,
-                FlatPanelLightOff: false);
+                FlatPanelLightOff: false,
+                FailedRungs: Array.Empty<string>());
         }
         try {
             return await ExecuteCoreAsync().ConfigureAwait(false);
@@ -88,18 +92,34 @@ public sealed partial class EmergencyStopService {
         // — same contract as the §35.4 safety.unsafe event.
         await PublishAsync(WsEventCatalog.SafetyEmergencyStop, new JsonObject()).ConfigureAwait(false);
 
-        var runsAborted = await AbortRunsQuietlyAsync().ConfigureAwait(false);
-        var exposureAborted = await RungAsync("abort exposure",
+        // Failed = attempted but faulted; a device that isn't connected at all
+        // is NOT a failure (a rig without a flat panel must not yell about it).
+        var failedRungs = new List<string>();
+
+        var (runsAborted, abortRunsOutcome) = await AbortRunsQuietlyAsync().ConfigureAwait(false);
+        if (abortRunsOutcome is RungOutcome.Failed) { failedRungs.Add("abort_runs"); }
+        var exposureOutcome = await RungAsync("abort exposure",
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
-        var guidingStopped = await RungAsync("stop guiding",
+        if (exposureOutcome is RungOutcome.Failed) { failedRungs.Add("abort_exposure"); }
+        var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
-        var parkRequested = await RungAsync("park mount",
+        if (guidingOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guiding"); }
+        var parkOutcome = await RungAsync("park mount",
             _telescope is null ? null : async ct => await _telescope.ParkAsync(new ParkRequestDto("emergency_stop"), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
-        var flatLightOff = await RungAsync("flat panel light off",
+        if (parkOutcome is RungOutcome.Failed) { failedRungs.Add("park"); }
+        var flatOutcome = await RungAsync("flat panel light off",
             _flatDevice is null ? null : async ct => await _flatDevice.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: false), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (flatOutcome is RungOutcome.Failed) { failedRungs.Add("flat_panel_light_off"); }
+
+        var exposureAborted = exposureOutcome is RungOutcome.Done;
+        var guidingStopped = guidingOutcome is RungOutcome.Done;
+        var parkRequested = parkOutcome is RungOutcome.Done;
+        var flatLightOff = flatOutcome is RungOutcome.Done;
 
         LogCompleted(runsAborted, exposureAborted, guidingStopped, parkRequested, flatLightOff);
 
+        var failedRungsJson = new JsonArray();
+        foreach (var rung in failedRungs) { failedRungsJson.Add(rung); }
         await PublishAsync(WsEventCatalog.SafetyActionTaken, new JsonObject {
             ["action"] = "emergency_stop",
             ["runs_aborted"] = runsAborted,
@@ -107,6 +127,7 @@ public sealed partial class EmergencyStopService {
             ["guiding_stopped"] = guidingStopped,
             ["park_requested"] = parkRequested,
             ["flat_panel_light_off"] = flatLightOff,
+            ["failed_rungs"] = failedRungsJson,
         }).ConfigureAwait(false);
 
         await NotifyQuietlyAsync(
@@ -114,8 +135,11 @@ public sealed partial class EmergencyStopService {
             (runsAborted > 0 ? $"{runsAborted} running sequence(s) aborted, " : "No sequence was running, ")
             + (exposureAborted ? "the in-flight exposure was aborted, " : string.Empty)
             + (guidingStopped ? "guiding was stopped, " : string.Empty)
-            + (parkRequested ? "the mount was told to park" : "the mount could not be reached — verify it manually")
-            + (flatLightOff ? ", and the flat panel light was switched off." : ".")).ConfigureAwait(false);
+            + (parkRequested ? "the mount was told to park" : "no connected mount was parked")
+            + (flatLightOff ? ", and the flat panel light was switched off" : string.Empty) + "."
+            + (failedRungs.Count > 0
+                ? $" ATTENTION: {failedRungs.Count} step(s) FAILED ({string.Join(", ", failedRungs)}) — check the rig manually."
+                : string.Empty)).ConfigureAwait(false);
 
         return new EmergencyStopResultDto(
             AlreadyInProgress: false,
@@ -123,38 +147,39 @@ public sealed partial class EmergencyStopService {
             ExposureAborted: exposureAborted,
             GuidingStopped: guidingStopped,
             ParkRequested: parkRequested,
-            FlatPanelLightOff: flatLightOff);
+            FlatPanelLightOff: flatLightOff,
+            FailedRungs: failedRungs);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort rung: the run abort must never block the hardware rungs behind it; logged, never rethrown.")]
-    private async Task<int> AbortRunsQuietlyAsync() {
+    private async Task<(int Aborted, RungOutcome Outcome)> AbortRunsQuietlyAsync() {
         try {
             var sequencer = _sequencerResolver?.Invoke();
             if (sequencer is null) {
-                return 0;
+                return (0, RungOutcome.NotAvailable);
             }
-            return await sequencer.AbortActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+            return (await sequencer.AbortActiveRunsAsync(CancellationToken.None).ConfigureAwait(false), RungOutcome.Done);
         } catch (Exception ex) {
             LogRungFailed("abort runs", ex);
-            return 0;
+            return (0, RungOutcome.Failed);
         }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort rung: a dead device must never block the remaining rungs; the result DTO carries the honest false, logged, never rethrown.")]
-    private async Task<bool> RungAsync(string rung, Func<CancellationToken, Task>? action) {
+    private async Task<RungOutcome> RungAsync(string rung, Func<CancellationToken, Task>? action) {
         if (action is null) {
-            return false;
+            return RungOutcome.NotAvailable;
         }
         try {
             // CancellationToken.None deliberately: the caller disconnecting
             // must not cancel a half-finished stop.
             await action(CancellationToken.None).ConfigureAwait(false);
-            return true;
+            return RungOutcome.Done;
         } catch (Exception ex) {
             LogRungFailed(rung, ex);
-            return false;
+            return RungOutcome.Failed;
         }
     }
 

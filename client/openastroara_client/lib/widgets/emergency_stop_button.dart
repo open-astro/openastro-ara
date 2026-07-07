@@ -77,6 +77,17 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
     }
   }
 
+  /// Wire tokens → operator-facing failure phrases. Every attempted-but-
+  /// failed rung is loud — a hung guider that kept correcting is exactly as
+  /// dangerous as an unparked mount, so no rung fails silently.
+  static const _failurePhrases = <String, String>{
+    'abort_runs': 'SEQUENCE ABORT FAILED (the run may still be executing)',
+    'abort_exposure': 'EXPOSURE ABORT FAILED',
+    'stop_guiding': 'GUIDING MAY STILL BE ACTIVE (stop failed)',
+    'park': 'MOUNT PARK FAILED — verify it manually',
+    'flat_panel_light_off': 'FLAT PANEL LIGHT-OFF FAILED',
+  };
+
   static String _summarize(EmergencyStopResult r) {
     if (r.alreadyInProgress) {
       return 'An emergency stop is already running — no second volley sent.';
@@ -87,12 +98,16 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton> {
           : 'no sequence was running',
       if (r.exposureAborted) 'exposure aborted',
       if (r.guidingStopped) 'guiding stopped',
-      r.parkRequested
-          ? 'mount told to park'
-          : 'MOUNT NOT REACHED — verify it manually',
+      if (r.parkRequested) 'mount told to park',
       if (r.flatPanelLightOff) 'flat panel light off',
     ];
-    return 'Emergency stop executed: ${parts.join(', ')}.';
+    final failures = r.failedRungs
+        .map((rung) => _failurePhrases[rung] ?? '$rung FAILED')
+        .toList(growable: false);
+    final summary = 'Emergency stop executed: ${parts.join(', ')}.';
+    return failures.isEmpty
+        ? summary
+        : '$summary CHECK THE RIG: ${failures.join('; ')}.';
   }
 
   @override

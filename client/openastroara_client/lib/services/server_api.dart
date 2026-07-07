@@ -134,6 +134,11 @@ class EmergencyStopResult {
   final bool parkRequested;
   final bool flatPanelLightOff;
 
+  /// Rungs that were ATTEMPTED and faulted (wire tokens: abort_runs,
+  /// abort_exposure, stop_guiding, park, flat_panel_light_off). A device
+  /// that isn't connected reads false above but is NOT listed here.
+  final List<String> failedRungs;
+
   const EmergencyStopResult({
     required this.alreadyInProgress,
     required this.runsAborted,
@@ -141,6 +146,7 @@ class EmergencyStopResult {
     required this.guidingStopped,
     required this.parkRequested,
     required this.flatPanelLightOff,
+    this.failedRungs = const [],
   });
 
   factory EmergencyStopResult.fromJson(Map<String, dynamic> json) =>
@@ -151,6 +157,9 @@ class EmergencyStopResult {
         guidingStopped: json['guiding_stopped'] == true,
         parkRequested: json['park_requested'] == true,
         flatPanelLightOff: json['flat_panel_light_off'] == true,
+        failedRungs: json['failed_rungs'] is List
+            ? (json['failed_rungs'] as List).whereType<String>().toList(growable: false)
+            : const [],
       );
 }
 

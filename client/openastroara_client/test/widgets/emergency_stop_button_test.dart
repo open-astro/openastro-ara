@@ -90,16 +90,17 @@ void main() {
       expect(find.textContaining('mount told to park'), findsOneWidget);
     });
 
-    testWidgets('an unreachable mount is called out, not papered over',
+    testWidgets('every attempted-but-failed rung is called out, not papered over',
         (tester) async {
       await pumpButton(tester);
       fake.result = const EmergencyStopResult(
         alreadyInProgress: false,
         runsAborted: 0,
         exposureAborted: false,
-        guidingStopped: true,
+        guidingStopped: false,
         parkRequested: false,
         flatPanelLightOff: false,
+        failedRungs: ['stop_guiding', 'park'],
       );
 
       await tester.tap(find.text('Emergency Stop'));
@@ -107,8 +108,12 @@ void main() {
       await tester.tap(find.text('EMERGENCY STOP'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('MOUNT NOT REACHED'), findsOneWidget,
-          reason: 'a failed park rung must be loud — the user must go look');
+      expect(find.textContaining('CHECK THE RIG'), findsOneWidget,
+          reason: 'failed rungs must be loud — the user must go look');
+      expect(find.textContaining('MOUNT PARK FAILED'), findsOneWidget);
+      expect(find.textContaining('GUIDING MAY STILL BE ACTIVE'), findsOneWidget,
+          reason: 'a hung guider is as dangerous as an unparked mount — '
+              'no rung fails silently');
     });
   });
 }
