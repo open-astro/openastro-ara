@@ -497,7 +497,13 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             }
         }
         await _camera.SetCoolerAsync(false, null, CancellationToken.None).ConfigureAwait(false);
-        summary.Append($"Cooler warmed from {startTemp:F0}°C and switched off. ");
+        // Be honest about WHICH condition ended the ramp: a hard-cap exit cut
+        // the cooler off short of the target — the abrupt-ish cutoff the ramp
+        // exists to soften — and the morning summary must not read like a
+        // completed warm-up (the sensor may still have been cold at power cut).
+        summary.Append(setpoint >= WarmTargetC
+            ? $"Cooler warmed from {startTemp:F0}°C and switched off. "
+            : $"Cooler warm-up HIT THE {WarmHardCap.TotalMinutes:F0}-minute cap at {setpoint:F0}°C set-point (target {WarmTargetC:F0}°C) — switched off early. ");
         return true;
     }
 

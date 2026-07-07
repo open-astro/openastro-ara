@@ -429,6 +429,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_ramp_cut_by_the_hard_cap_says_so_instead_of_claiming_completion() {
+            // r6 — a slow ramp against a big delta can hit the 30-min cap short
+            // of the +10 °C target; the summary must flag the early cutoff, not
+            // read like a finished warm-up.
+            using var sut = CreateSUT();
+            sut.WarmTimeScale = 600;                       // 1 "minute" = 100 ms per step...
+            sut.WarmHardCap = TimeSpan.FromMilliseconds(150); // ...but the cap fires after ~1 step
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
+
+            lock (coolerCalls) {
+                Assert.That(coolerCalls[^1].on, Is.False, "cooler still ends OFF");
+                var last = coolerCalls.FindLast(c => c.on);
+                Assert.That(last.target, Is.LessThan(UnattendedShutdownService.WarmTargetC),
+                    "the cap fired short of the target");
+            }
+            Assert.That(published[0].Message, Does.Contain("cap"));
+            Assert.That(published[0].Message, Does.Contain("switched off early"));
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once,
+                "the camera still disconnects — the warm-up step ended, however it ended");
+        }
+
+        [Test]
         public async Task Cooler_already_off_skips_the_ramp_but_camera_still_disconnects() {
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Camera(coolerOn: false, temperature: 15));
