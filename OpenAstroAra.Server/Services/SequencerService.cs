@@ -350,14 +350,24 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (run.State == SequenceRunState.PausedAwaitingUser) {
                 continue;
             }
+            var released = false;
             if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
+                released = true;
+            } else if (run.State == SequenceRunState.Running) {
+                // Pause was requested but the run never reached a boundary — the
+                // disarm below genuinely un-pauses it, so it counts as released.
+                released = true;
             }
             // Always disarm — also cancels a pause that was requested but never
-            // reached a boundary (state still Running); harmless on terminal runs.
+            // reached a boundary; harmless on terminal runs (which don't count:
+            // the returned figure feeds the safety.action_taken runs_resumed
+            // payload and must not overstate — #731 review).
             run.Gate.Resume();
-            resumed++;
+            if (released) {
+                resumed++;
+            }
         }
         return Task.FromResult(resumed);
     }

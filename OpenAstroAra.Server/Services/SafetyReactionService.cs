@@ -224,8 +224,16 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             var ids = await PauseActiveRunsAsync().ConfigureAwait(false);
             pausedRuns = ids.Count;
             lock (_lock) {
-                _pausedRunIds.Clear();
-                _pausedRunIds.AddRange(ids);
+                // UNION, never clear: on a second unsafe reaction (unsafe → safe,
+                // resume armed → unsafe again) the still-paused run is excluded
+                // from the fresh ids (the bulk pause skips already-paused runs),
+                // so clearing here would orphan it from auto-resume tracking
+                // forever (#731 review).
+                foreach (var id in ids) {
+                    if (!_pausedRunIds.Contains(id)) {
+                        _pausedRunIds.Add(id);
+                    }
+                }
             }
         } else if (action is UnsafeAction.AbortAndPark) {
             abortedRuns = await AbortActiveRunsAsync().ConfigureAwait(false);
@@ -324,6 +332,31 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             }
 
             var unparked = await UnparkAndWaitQuietlyAsync(cts.Token).ConfigureAwait(false);
+
+            // Re-check AFTER the (up to 90 s) unpark wait: a relapse to unsafe in
+            // that window cancels cts / flips _lastSafe, and resuming then would
+            // release the run into unsafe conditions — the exact failure this
+            // feature exists to prevent (#731 review). On abort: restore the ids
+            // to tracking (union — the relapse reaction's own bulk pause skipped
+            // these already-paused runs) and counter our own unpark with a fresh
+            // best-effort park; the run stays paused for the next safe window.
+            bool proceed;
+            lock (_lock) {
+                proceed = !_disposed && !cts.IsCancellationRequested && _lastSafe == true;
+                if (!proceed) {
+                    foreach (var id in ids) {
+                        if (!_pausedRunIds.Contains(id)) {
+                            _pausedRunIds.Add(id);
+                        }
+                    }
+                }
+            }
+            if (!proceed) {
+                await ParkQuietlyAsync().ConfigureAwait(false);
+                LogResumeCancelled();
+                return;
+            }
+
             var resumed = await ResumeRunsAsync(ids).ConfigureAwait(false);
             LogAutoResumed(resumed, unparked);
 

@@ -260,10 +260,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Relapse_to_unsafe_cancels_the_pending_resume() {
+        public async Task Relapse_to_unsafe_cancels_the_pending_resume_and_tracking_survives_the_flap() {
+            // Mirrors the REAL bulk-pause contract: the run pauses on the first
+            // unsafe; the second unsafe's bulk pause finds it already Paused and
+            // returns EMPTY (the #731 review blind spot) — tracking must survive
+            // the flap so a later durable safe window still resumes the run.
+            var runId = Guid.NewGuid();
+            var pauseCalls = 0;
             sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
-            service.ResumeDelayFromMinutes = _ => TimeSpan.FromMinutes(10); // long — must never fire
+                .ReturnsAsync(() => ++pauseCalls == 1 ? new List<Guid> { runId } : new List<Guid>());
+            IReadOnlyCollection<Guid>? resumedIds = null;
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback<IReadOnlyCollection<Guid>, CancellationToken>((ids, _) => resumedIds = ids)
+                .ReturnsAsync(1);
+            service.ResumeDelayFromMinutes = _ => TimeSpan.FromMinutes(10); // long — must never fire during the flap
 
             SetMonitor(safe: false);
             await service.TickAsync();
@@ -276,6 +286,59 @@ namespace OpenAstroAra.Test {
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
             await Task.Delay(100);
             sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            // Conditions clear durably: the resume must fire with the ORIGINAL run
+            // id — the flap's empty bulk-pause result must not have orphaned it.
+            service.ResumeDelayFromMinutes = _ => TimeSpan.FromMilliseconds(30);
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => resumedIds is not null);
+            Assert.That(resumedIds, Is.EquivalentTo(new[] { runId }));
+        }
+
+        [Test]
+        public async Task Relapse_during_the_unpark_wait_aborts_the_resume_and_keeps_tracking() {
+            // The countdown elapses and the unpark wait begins (mount keeps
+            // reporting Parked so the read-back loop spins); conditions relapse
+            // to unsafe MID-WAIT. The resume must abort — no run released into
+            // unsafe conditions (#731 review) — and the ids must survive for the
+            // next durable safe window.
+            var runId = Guid.NewGuid();
+            var pauseCalls = 0;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ++pauseCalls == 1 ? new List<Guid> { runId } : new List<Guid>());
+            IReadOnlyCollection<Guid>? resumedIds = null;
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback<IReadOnlyCollection<Guid>, CancellationToken>((ids, _) => resumedIds = ids)
+                .ReturnsAsync(1);
+            var stillParked = true;
+            telescope.Setup(t => t.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => new TelescopeDto("t1", "Mount", EquipmentConnectionState.Connected, null,
+                    new TelescopeStateDto(stillParked ? "parked" : "tracking", null, null, Tracking: !stillParked, Parked: stillParked, AtHome: false)));
+            var unparkRequested = 0;
+            telescope.Setup(t => t.UnparkAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => Interlocked.Increment(ref unparkRequested))
+                .ReturnsAsync(Accepted);
+            service.UnparkTimeout = TimeSpan.FromSeconds(5); // long enough that the relapse always lands mid-wait
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => Volatile.Read(ref unparkRequested) >= 1);
+
+            // Relapse mid-unpark-wait: the countdown's cts cancels; the resume must not proceed.
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            await Task.Delay(150);
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            // Durable safe window afterwards: the retained id resumes for real.
+            stillParked = false;
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => resumedIds is not null);
+            Assert.That(resumedIds, Is.EquivalentTo(new[] { runId }));
         }
 
         [Test]
