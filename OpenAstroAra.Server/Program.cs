@@ -353,11 +353,16 @@ public partial class Program {
         // hard-killed mid-extract (a daemon crash) — a graceful drain can't catch that case. Best-effort + synchronous
         // (a handful of dirs); real package dirs are untouched (catalog ids never start with '.').
         SkyDataInstaller.SweepStaleScratch(skyDataRoot);
-        builder.Services.AddSingleton<IDataManagerService>(sp =>
+        builder.Services.AddSingleton<DataManagerService>(sp =>
             new DataManagerService(skyDataRoot,
                 sp.GetRequiredService<ISkyDataFetcher>(),
                 sp.GetRequiredService<IWsBroadcaster>(),
                 sp.GetRequiredService<ILogger<DataManagerService>>()));
+        builder.Services.AddSingleton<IDataManagerService>(sp => sp.GetRequiredService<DataManagerService>());
+        // The same singleton as a hosted service so its StopAsync drains in-flight downloads on a
+        // graceful daemon stop (§36-2b(b)) — cancel + await, so the workers' own finally paths
+        // reclaim their staging dirs instead of abandoning them for the next boot's sweep.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<DataManagerService>());
         // §36 Catalogs — derives Messier/NGC/IC + type-filter overlays from the installed OpenNGC catalog.
         builder.Services.AddSingleton<ISkyCatalogService>(_ => new SkyCatalogService(skyDataRoot));
 
