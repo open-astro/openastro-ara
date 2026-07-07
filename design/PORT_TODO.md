@@ -48,8 +48,11 @@ for the feature to be user-visible end-to-end (§44.7/§44.8):
   section, and the settings/help registry entries all landed. Local bookkeeping is the files
   themselves (the daemon's queue is the source of truth) — the §44.7 local SQLite is unnecessary
   for v0.0.1 and recorded as superseded.
-- **Progress surfaces (remaining)**: footer indicator, dashboard tile, per-frame 🟢/⚪ sync icon in
-  the library (the Settings status line covers pending/synced today).
+- ✅ **Progress surfaces — DONE (2026-07-07).** Footer chip (`BackupStreamChip` on the bottom
+  status bar: hidden while disabled, pending count while draining, up-to-date/attention states)
+  + per-frame cloud badge in the library (`FrameListItemDto.SyncedAt` → tri-state thumbnail icon;
+  no badge on rigs without a stream so absence never reads as "unprotected"). The stats-dashboard
+  tile was dropped as redundant with the always-visible footer chip.
 - **§44.4 token-bucket bandwidth limit (remaining)**: the capture-aware pause shipped; the
   configurable Mbps cap + first-connect throughput measurement are still open (client-side).
 - **Puller minors (from the #736 round-4 review, accepted as non-blocking)**: (1) reset `active`

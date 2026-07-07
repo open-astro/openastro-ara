@@ -54,6 +54,10 @@ class LibraryFrameItem {
   final int? starCount;
   final int rating;
 
+  /// §44 — when the backup stream confirmed this frame stored on the target
+  /// desktop; null = not mirrored yet (or no stream configured).
+  final DateTime? syncedAt;
+
   const LibraryFrameItem({
     required this.id,
     required this.frameType,
@@ -63,6 +67,7 @@ class LibraryFrameItem {
     required this.hfr,
     required this.starCount,
     required this.rating,
+    this.syncedAt,
   });
 
   factory LibraryFrameItem.fromJson(Map<String, dynamic> json) {
@@ -75,6 +80,7 @@ class LibraryFrameItem {
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       hfr: (json['hfr'] as num?)?.toDouble(),
       starCount: (json['star_count'] as num?)?.toInt(),
+      syncedAt: DateTime.tryParse(json['synced_at'] as String? ?? ''),
       rating: (json['rating'] as num?)?.toInt() ?? 0,
     );
   }
