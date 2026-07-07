@@ -268,6 +268,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_park_that_THROWS_still_gets_tracking_stopped() {
+            // r1 — the 90 s park cap fires as an OperationCanceledException, not
+            // a false return; the fallback must still run (a tracking,
+            // unattended mount is the exact outcome this feature prevents).
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new OperationCanceledException("park timed out"));
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
+
+            telescope.Verify(t => t.SetTrackingEnabled(false), Times.Once);
+            Assert.That(published[0].Message, Does.Contain("tracking stopped instead"));
+        }
+
+        [Test]
+        public async Task A_new_awaiting_user_entry_during_a_running_ladder_is_dropped() {
+            // r1 — the disarm happens before the (up to ~30 min) ladder; a
+            // second failure landing in that window must NOT start a second
+            // countdown/ladder against the same shared rig. Stall the ladder at
+            // the warm-up read to hold it mid-flight deterministically.
+            var gate = new TaskCompletionSource<CameraDto?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).Returns(gate.Task);
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(
+                () => guider.Invocations.Count > 0,
+                "the ladder is mid-flight (guider step reached)");
+
+            sut.NotifyRunPausedAwaitingUser(SeqId, Guid.NewGuid());
+            Assert.That(sut.IsCountingDown, Is.False,
+                "no second clock while the first ladder still runs");
+
+            gate.SetResult(Camera(coolerOn: false, temperature: 15)); // release
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "first ladder completes");
+            await Task.Delay(200);
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once);
+            lock (published) Assert.That(published, Has.Count.EqualTo(1), "exactly one ladder ran");
+        }
+
+        [Test]
         public async Task A_dead_device_mid_ladder_does_not_stop_the_rest() {
             focuser.Setup(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("focuser driver crashed"));

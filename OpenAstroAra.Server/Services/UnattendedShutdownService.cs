@@ -84,9 +84,13 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     // awaiting-user entry while a countdown is already running joins it (the
     // first failure started the clock; the user is equally absent for both).
     private CancellationTokenSource? _pending;
+    // True from the moment an elapsed countdown disarms itself until its ladder
+    // finishes. A second awaiting-user entry in that window is dropped: the
+    // ladder already puts the SHARED rig to bed, and two concurrent ladders
+    // would race the same mediators (and cross-stamp each other's summary).
+    private bool _executing;
     private Task? _worker;
     private Guid _sequenceId;
-    private Guid _runId;
 
     // ─── test seams (the ClientSessionService knob pattern) ───
     /// <summary>Maps the profile's wait_minutes to the actual delay; tests compress it.</summary>
@@ -160,10 +164,12 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         var wait = WaitFromMinutes(Math.Max(1, safety?.UnattendedShutdownWaitMinutes ?? 10));
 
         lock (_lock) {
-            if (_pending is not null) return; // first failure already started the clock
+            // First failure already started the clock, or its ladder is still
+            // putting the rig to bed — either way the user is equally absent
+            // and the (idempotent) ladder covers the shared equipment once.
+            if (_pending is not null || _executing) return;
             _pending = new CancellationTokenSource();
             _sequenceId = sequenceId;
-            _runId = runId;
             var token = _pending.Token;
             _worker = Task.Run(() => CountdownAsync(sequenceId, runId, wait, token), CancellationToken.None);
         }
@@ -199,35 +205,41 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             return; // the user came back
         }
 
-        // The window elapsed. Disarm ourselves so a later awaiting-user entry
-        // can start a fresh countdown (idempotent ladder steps make a re-run
-        // after a re-pause harmless).
+        // The window elapsed. Disarm the pending slot but hold _executing so a
+        // later awaiting-user entry can NOT start a second countdown while this
+        // ladder (up to ~30 min of cooler warm-up) is still running against the
+        // shared rig; a fresh countdown becomes possible again once it ends.
         lock (_lock) {
             _pending?.Dispose();
             _pending = null;
+            _executing = true;
         }
 
-        // Re-verify the run is STILL awaiting the user: a resume/abort that
-        // raced the timer's last tick (or any path that didn't route through
-        // NotifyUserActivity) must not shut a now-running rig down.
         try {
-            var state = _sequencerResolver?.Invoke() is { } seq
-                ? await seq.GetRunStateAsync(sequenceId, CancellationToken.None).ConfigureAwait(false)
-                : null;
-            if (state is null || state.RunId != runId || state.State != SequenceRunState.PausedAwaitingUser) {
-                LogCountdownStale(sequenceId, state?.State);
+            // Re-verify the run is STILL awaiting the user: a resume/abort that
+            // raced the timer's last tick (or any path that didn't route through
+            // NotifyUserActivity) must not shut a now-running rig down.
+            try {
+                var state = _sequencerResolver?.Invoke() is { } seq
+                    ? await seq.GetRunStateAsync(sequenceId, CancellationToken.None).ConfigureAwait(false)
+                    : null;
+                if (state is null || state.RunId != runId || state.State != SequenceRunState.PausedAwaitingUser) {
+                    LogCountdownStale(sequenceId, state?.State);
+                    return;
+                }
+            } catch (Exception ex) {
+                // Can't confirm the run still needs the shutdown → do nothing. A
+                // wrong no-op leaves equipment running (recoverable, and the §58.10
+                // escalation already made the failure loud); a wrong shutdown
+                // tears down a rig that resumed imaging.
+                LogStateRecheckFailed(sequenceId, ex);
                 return;
             }
-        } catch (Exception ex) {
-            // Can't confirm the run still needs the shutdown → do nothing. A
-            // wrong no-op leaves equipment running (recoverable, and the §58.10
-            // escalation already made the failure loud); a wrong shutdown
-            // tears down a rig that resumed imaging.
-            LogStateRecheckFailed(sequenceId, ex);
-            return;
-        }
 
-        await ExecuteShutdownAsync().ConfigureAwait(false);
+            await ExecuteShutdownAsync(sequenceId).ConfigureAwait(false);
+        } finally {
+            lock (_lock) { _executing = false; }
+        }
     }
 
     /// <summary>
@@ -236,8 +248,8 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown.")]
-    internal async Task ExecuteShutdownAsync() {
-        LogShutdownStarted(_sequenceId);
+    internal async Task ExecuteShutdownAsync(Guid sequenceId) {
+        LogShutdownStarted(sequenceId);
         var summary = new System.Text.StringBuilder();
 
         // 1 — stop the guider.
@@ -251,15 +263,25 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             summary.Append("Guider stop FAILED. ");
         }
 
-        // 2 — park the mount (or stop tracking). Same moves as §58.9 SafeRest;
-        // both are idempotent when that safe rest already ran.
+        // 2 — park the mount (or stop tracking). Same moves as §58.9 SafeRest,
+        // including its two-stage shape: the park attempt gets its OWN catch so
+        // a park that fails by THROWING (the 90 s timeout cancels the token)
+        // still falls through to the tracking-stop — a tracking, unattended
+        // mount is the exact outcome this feature exists to prevent. Both moves
+        // are idempotent when safe rest already ran.
         try {
             if (_telescope is not null) {
                 var mount = _telescope.GetInfo();
+                var parked = false;
                 if (mount.CanPark && !mount.AtPark) {
-                    using var parkCts = new CancellationTokenSource(ParkTimeout);
-                    var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>();
-                    if (await _telescope.ParkTelescope(progress, parkCts.Token).ConfigureAwait(false)) {
+                    try {
+                        using var parkCts = new CancellationTokenSource(ParkTimeout);
+                        var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>();
+                        parked = await _telescope.ParkTelescope(progress, parkCts.Token).ConfigureAwait(false);
+                    } catch (Exception ex) {
+                        LogStepFailed("park-mount", ex);
+                    }
+                    if (parked) {
                         summary.Append("Mount parked. ");
                     } else {
                         _telescope.SetTrackingEnabled(false);
@@ -273,7 +295,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
                 }
             }
         } catch (Exception ex) {
-            LogStepFailed("park-mount", ex);
+            LogStepFailed("mount-rest", ex);
             summary.Append("Mount park/tracking-stop FAILED. ");
         }
 
@@ -297,7 +319,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         }
 
         var summaryText = summary.ToString();
-        LogShutdownComplete(_sequenceId, summaryText);
+        LogShutdownComplete(sequenceId, summaryText);
 
         // 6 — tell the (eventual) morning user what happened. Warning, not
         // Critical: stable now, no new siren (§58.10 may bump it to Error
@@ -318,7 +340,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
                     DismissedUtc: null,
                     Payload: null,
                     RelatedEntityType: "sequence",
-                    RelatedEntityId: _sequenceId.ToString()), CancellationToken.None).ConfigureAwait(false);
+                    RelatedEntityId: sequenceId.ToString()), CancellationToken.None).ConfigureAwait(false);
             }
         } catch (Exception ex) {
             LogStepFailed("summary-notification", ex);
