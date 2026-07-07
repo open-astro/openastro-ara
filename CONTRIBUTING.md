@@ -27,7 +27,9 @@ export), and recent diagnostics into one zip. Strip anything you consider privat
 OpenAstroAra.Server/           ← ASP.NET Core daemon (.NET 10), REST + WebSocket on :5555
 OpenAstroAra.{Core,Astrometry,Profile,Image,Equipment,Sequencer,PlateSolving}/
                                ← libraries inherited from NINA (MPL-2.0, headers preserved)
+OpenAstroAra.{Fits,Stretch}/   ← Ara-original imaging libraries (FITS IO, display stretch)
 OpenAstroAra.Test/             ← NUnit server tests
+OpenAstroAra.TestHarness/      ← §42.2 virtual-observatory bench (fault-injection fakes)
 client/openastroara_client/    ← WILMA, the Flutter client (AGPL-3.0)
 design/                        ← the port playbook + append-only decision/TODO logs
 ```
