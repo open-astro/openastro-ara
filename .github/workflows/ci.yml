@@ -65,7 +65,7 @@ jobs:
           for f in \
             design/PORT_PLAYBOOK.md \
             design/COMMIT-PR-RULES.md \
-            design/GAPS-ARA.md \
+            design/README.md \
           ; do
             if [ ! -s "$f" ]; then
               echo "::error file=$f::Required design doc missing or empty"

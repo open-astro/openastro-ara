@@ -1,6 +1,14 @@
 # GAPS-ARA — Open Items Tracking
 
-**Purpose:** comprehensive list of things discussed during planning that aren't yet in [`PORT_PLAYBOOK.md`](PORT_PLAYBOOK.md), or that are partially covered and need a dedicated section. As each is discussed and baked, it moves to **Resolved** with a pointer to the playbook section.
+> **📦 ARCHIVED (2026-07-07).** This was the design-phase gap tracker (May 2026 review passes).
+> Every item is resolved into the playbook except four v0.1.0+ deferrals, all of which are
+> already carried by [`PORT_PLAYBOOK.md`](../PORT_PLAYBOOK.md) §55's roadmap tables (TLS/remote
+> access, multi-device WILMA settings sync, comet motion tracking) or are outside ARA Core's
+> scope entirely (AlpacaBridge PWM switch levels — ARA already consumes the full Alpaca
+> `ISwitch` surface). Kept verbatim as the record of *why* dozens of design decisions were
+> made. Do not add new items here — open work goes in [`PORT_TODO.md`](../PORT_TODO.md).
+
+**Purpose:** comprehensive list of things discussed during planning that aren't yet in [`PORT_PLAYBOOK.md`](../PORT_PLAYBOOK.md), or that are partially covered and need a dedicated section. As each is discussed and baked, it moves to **Resolved** with a pointer to the playbook section.
 
 **Convention:** check the box when resolved. Status notes inline. New items added to the bottom of their tier.
 

@@ -4,8 +4,8 @@ Ara is two programs: a **daemon** that runs at the telescope all night (Raspberr
 reference platform) and **WILMA**, the client app you plan and monitor from (Windows, iOS, Linux,
 macOS, Android). The daemon owns the session — close the laptop, imaging keeps going.
 
-Installation is covered elsewhere: [`DEPLOY.md`](../DEPLOY.md) for putting a release on a Pi,
-[`RUNNING.md`](../RUNNING.md) for building from source. This guide starts at "both are installed."
+Installation is covered elsewhere: [`DEPLOY.md`](DEPLOY.md) for putting a release on a Pi,
+[`RUNNING.md`](RUNNING.md) for building from source. This guide starts at "both are installed."
 
 Throughout WILMA, **⌘K / Ctrl-K** searches every setting by keyword, and the **?** affordances open
 contextual help — when this guide says "find the X setting," search is the fast way there.

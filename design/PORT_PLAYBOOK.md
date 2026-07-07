@@ -53,7 +53,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - 🟡 **§31** Time + location sync — site settings round-trip done; full waterfall = verify.
 - ✅ **§32** Network resilience (§60.9 WS resume + 30/60s heartbeat, #172-176).
 - 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates = v0.1.0.
-- 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); apt.openastro.net = post-v0.0.1.
+- 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); releases ship via apt.openastro.net (user decision 2026-07-07, reversing the earlier post-v0.0.1 deferral) — the repo publish pipeline (reprepro/aptly on tag push per §34.5) is still to build.
 - ✅ **§35** Safety policies (editable per-profile, #94).
 - ✅ **§36** Sky imagery + Data Manager — real Data Manager (packages, downloads, catalog reads) + §36 planetarium native-webview (#611) + catalog overlay drawer/persistence/labels (#639/#640/#650) + §36.8 Tonight's Sky planner (#612-#660). Sharpless/Herschel overlays remain data-blocked.
 - ✅ **§37** Profile setup wizard (18-screen + round-trip persistence).
@@ -95,18 +95,21 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 ```
 openastro-ara/                              (repo root, default branch: master)
 ├── README.md  NOTICE.md  LICENSE.txt  COPYING  AUTHORS
-├── DEPLOY.md  RELEASE_NOTES.md  3rd-party-licenses.txt
+├── CHANGELOG.md  CONTRIBUTING.md  3rd-party-licenses.txt
+├── docs/   (USER_GUIDE.md, RUNNING.md, DEPLOY.md, RELEASE_NOTES.md)
 ├── global.json  OpenAstroAra.sln  .gitignore  Dockerfile
 ├── .github/workflows/   (ci.yml, release.yml)
 │
 ├── design/                                 ← working/design docs (NOT shipped)
+│   ├── README.md                           ← index of the design docs + where "what's left" lives
 │   ├── PORT_PLAYBOOK.md                    ← this file
-│   ├── GAPS-ARA.md                         ← gap-tracking
-│   ├── COMMIT-PR-RULES.md                  ← per-PR strategy (in progress)
+│   ├── COMMIT-PR-RULES.md                  ← per-PR strategy
 │   ├── PORT_DECISIONS.md                   ← created Phase 0.5 (append-only log)
 │   ├── PORT_TODO.md                        ← created Phase 0.5
 │   ├── PORT_PROGRESS.md                    ← created Phase 0.5
-│   └── API_CONTRACT.md                     ← created Phase 5
+│   ├── API_CONTRACT.md                     ← created Phase 5
+│   ├── PHD2-GAP.md  TONIGHT_SKY.md  NEXTGEN_PLANNING.md   ← integration/feature specs
+│   └── archive/                            ← closed-out docs (GAPS-ARA.md, HANDOFF.md)
 │
 ├── OpenAstroAra.Core/                      ← server-side .NET projects at repo root
 ├── OpenAstroAra.Astrometry/                  (kept at root, matching NINA's layout —

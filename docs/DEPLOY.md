@@ -6,14 +6,19 @@ The Flutter client (`OpenAstroAra.Client`) runs on macOS, iOS, Android, Windows,
 
 ---
 
-## Quick start (`.deb` install)
+## Quick start (APT install)
+
+The daemon is released through the OpenAstro APT repository at **apt.openastro.net** (playbook §34).
 
 ```bash
-# 1. Download the .deb for your release
-wget https://github.com/open-astro/openastro-ara/releases/download/v0.0.1-ara.1/openastroara-server_0.0.1-ara.1_arm64.deb
+# 1. Add the OpenAstro APT repo (one-time)
+curl -fsSL https://apt.openastro.net/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/openastro.gpg
+echo "deb [signed-by=/usr/share/keyrings/openastro.gpg] https://apt.openastro.net stable main" \
+  | sudo tee /etc/apt/sources.list.d/openastro.list
+sudo apt update
 
 # 2. Install (apt resolves libcfitsio10 transitively)
-sudo apt install ./openastroara-server_0.0.1-ara.1_arm64.deb
+sudo apt install openastroara-server
 
 # 3. The systemd unit auto-starts on first install
 sudo systemctl status openastroara-server
@@ -23,6 +28,14 @@ curl http://$(hostname -s).local:5555/healthz   # expect "ok"
 ```
 
 That's it. The Flutter client auto-discovers the daemon via mDNS (`_openastroara._tcp.local`) on the same LAN.
+
+The install also pulls in the sibling packages the full experience expects — the AlpacaBridge
+equipment hub and the guider daemon — via apt Recommends; pass `--no-install-recommends` for a
+daemon-only install.
+
+**Offline / one-off install:** every release's `.deb` also lives in the repo pool
+(`https://apt.openastro.net/pool/main/o/openastroara-server/`) — download it on another machine
+and `sudo apt install ./openastroara-server_<version>_arm64.deb` on the Pi.
 
 ---
 
@@ -102,14 +115,17 @@ curl http://localhost:5555/api/v1/server/state | jq
 
 ## Updating
 
-The daemon does NOT auto-update. New releases come from GitHub Releases.
+The daemon does NOT auto-update. New releases land on apt.openastro.net and install like any
+other package:
 
 ```bash
-sudo systemctl stop openastroara-server
-sudo apt install ./openastroara-server_<new-version>_arm64.deb
-# systemd unit + DB schema migrations apply automatically on next start
-sudo systemctl start openastroara-server
+sudo apt update
+sudo apt install --only-upgrade openastroara-server
+# systemd unit + DB schema migrations apply automatically on restart
 ```
+
+Don't upgrade while a sequence is running — finish or stop the run first (the client warns via
+the §34.7 imminent-restart event when a restart is pending).
 
 Settings persist via `profile.json` + the SQLite catalog at `/var/lib/openastroara/` — neither is touched by upgrade.
 
@@ -172,4 +188,4 @@ The captures volume isn't ext4. See [Storage setup](#storage-setup-required).
 **Captures fail with "storage.unavailable"**
 USB drive unmounted or read-only. `mount | grep /media/openastroara` to verify. If `errors=remount-ro` triggered, run `sudo fsck -y /dev/sdaN` and `sudo mount -o remount,rw /media/openastroara`.
 
-See [`design/PORT_PLAYBOOK.md`](design/PORT_PLAYBOOK.md) §13 + §29 for deeper detail.
+See [`design/PORT_PLAYBOOK.md`](../design/PORT_PLAYBOOK.md) §13 + §29 for deeper detail.

@@ -9,7 +9,7 @@ ensures alignment with the design docs under `design/` and avoids duplicate work
 ## Ways to contribute
 
 - Fixing bugs and implementing features (see `design/PORT_TODO.md` for the tracked queue)
-- Improving documentation (`docs/USER_GUIDE.md`, `RUNNING.md`, `DEPLOY.md`)
+- Improving documentation (`docs/USER_GUIDE.md`, `docs/RUNNING.md`, `docs/DEPLOY.md`)
 - Reporting bugs — ideally with the in-app bundle (see below)
 - Reporting device quirks (the `driver-quirk-report` issue template)
 - Testing on hardware we don't have: the maintainers' rig is camera-only, so focuser / rotator /
@@ -39,7 +39,7 @@ code) and `design/COMMIT-PR-RULES.md` (the PR/review discipline) before a non-tr
 
 ## Building and running
 
-`RUNNING.md` covers building the daemon and client from source on Linux/macOS/Windows.
+`docs/RUNNING.md` covers building the daemon and client from source on Linux/macOS/Windows.
 Quick version:
 
 ```bash
