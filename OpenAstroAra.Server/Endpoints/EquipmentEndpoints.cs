@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -35,6 +36,17 @@ public static class EquipmentEndpoints {
 
     public static IEndpointRouteBuilder MapEquipmentEndpoints(this IEndpointRouteBuilder app) {
         var equipment = app.MapGroup("/api/v1/equipment").WithTags("Equipment");
+        // §58.12 — any explicit equipment COMMAND (connect, slew, park, cooler,
+        // Stop Mount, ...) is the user back at the rig: cancel a pending
+        // unattended-shutdown countdown. GETs are excluded on purpose — WILMA's
+        // background status polling must never masquerade as attention.
+        equipment.AddEndpointFilter(async (ctx, next) => {
+            if (!HttpMethods.IsGet(ctx.HttpContext.Request.Method)) {
+                ctx.HttpContext.RequestServices.GetService<UnattendedShutdownService>()
+                    ?.NotifyUserActivity("equipment." + ctx.HttpContext.Request.Method);
+            }
+            return await next(ctx);
+        });
 
         // Discovery (shared across device types) — already functional via
         // AlpacaEquipmentDiscoveryService since Phase 6.

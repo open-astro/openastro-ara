@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -39,7 +40,12 @@ public static class NotificationEndpoints {
             .WithName("ListNotifications");
 
         notifications.MapPost("/{id:guid}/dismiss",
-                async (Guid id, [FromBody] NotificationActionRequestDto request, INotificationService svc, CancellationToken ct) => {
+                async (Guid id, [FromBody] NotificationActionRequestDto request, INotificationService svc,
+                        HttpContext http, CancellationToken ct) => {
+                    // §58.12 — dismissing a notification is the playbook's "tap
+                    // [Acknowledge]": the user is back, cancel any shutdown countdown.
+                    http.RequestServices.GetService<UnattendedShutdownService>()
+                        ?.NotifyUserActivity("notification.dismiss");
                     var updated = await svc.DismissAsync(id, request, ct);
                     return updated is null ? Results.NotFound() : Results.Ok(updated);
                 })
@@ -49,7 +55,10 @@ public static class NotificationEndpoints {
             .WithName("DismissNotification");
 
         notifications.MapPost("/{id:guid}/mark-read",
-                async (Guid id, INotificationService svc, CancellationToken ct) => {
+                async (Guid id, INotificationService svc, HttpContext http, CancellationToken ct) => {
+                    // §58.12 — reading the failure counts as attention too.
+                    http.RequestServices.GetService<UnattendedShutdownService>()
+                        ?.NotifyUserActivity("notification.mark-read");
                     var updated = await svc.MarkReadAsync(id, ct);
                     return updated is null ? Results.NotFound() : Results.Ok(updated);
                 })
