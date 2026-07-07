@@ -14,6 +14,28 @@ the other design docs.
 
 ---
 
+## §44 backup stream — the WILMA client half (2026-07-07, after the server PR)
+
+The server half shipped (`BackupStreamService`: slot/queue/ack + lazy sha256 + schema v4). Remaining
+for the feature to be user-visible end-to-end (§44.7/§44.8):
+
+- **WILMA puller**: Settings → Backup → "Stream new frames to this device" toggle → claim → poll
+  queue (also nudged by the existing `frame.complete` WS event) → download via `/frames/{id}/download`
+  → sha256 verify → ack; local layout `~/Documents/OpenAstroAra/Backups/<pi-hostname>/…` + the
+  §44.7 local SQLite bookkeeping.
+- **Progress surfaces**: footer indicator, dashboard tile, per-frame 🟢/⚪ sync icon in the library.
+- **§44.4 throttling**: token-bucket bandwidth limit + capture-aware backoff driven by the
+  `exposure.started`/`frame.complete` events (client-side — the server serves as fast as asked).
+- **Settings/help registry entries** for the new toggles (merge-gated when the panel lands).
+
+## §63.3 watch-items (from the #733 review, accepted as-is)
+
+- **`_recovering` spans the auto-reconnect grace window** — a second guider crash mid-window skips the
+  coordinator's backoff tree (mitigated: each reconnect attempt's `EnsureGuiderReachableAsync` re-issues
+  `RequestStart` when unreachable). Split the pass token if field behavior warrants.
+- **2 s per-call ping connection churn while guiding** — consistent with PHD2Guider's per-call RPC
+  transport; if churn ever shows against the real daemon, a keepalive RPC socket is the optimization.
+
 ## §35 unsafe-reaction engine — follow-ups (2026-07-07, after the SafetyReactionService PR)
 
 The §35.4 core shipped: `SafetyReactionService` (SafetyMonitor 10 s poll → `on_unsafe` policy

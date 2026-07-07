@@ -272,25 +272,77 @@ public static class ImageEndpoints {
             .WithName("GetSessionHfrAnalysis");
 
         // ─── Backup stream (§44) — Phase 13.10 wired to IBackupStreamService ───
-        var backup = app.MapGroup("/api/v1/backup/stream").WithTags("BackupStream");
+        // §44.5 — the backup-stream control surface. The FITS bytes themselves ride the
+        // existing GET /api/v1/frames/{id}/download; these routes manage the single
+        // target slot + the pending queue + acks.
+        var backup = app.MapGroup("/api/v1/server/backup-stream").WithTags("BackupStream");
 
-        backup.MapPost("/subscribe",
-                async (IBackupStreamService svc, CancellationToken ct) => {
-                    var sub = await svc.SubscribeAsync(ct);
-                    return Results.Created($"/api/v1/backup/stream/sub/{sub.SubscriptionId}", value: sub);
-                })
-              .Produces<BackupSubscriptionDto>(StatusCodes.Status201Created)
-              .WithName("SubscribeBackupStream");
+        backup.MapGet("/status",
+                async (IBackupStreamService svc, CancellationToken ct) => Results.Ok(await svc.GetStatusAsync(ct)))
+              .Produces<BackupStreamStatusDto>(StatusCodes.Status200OK)
+              .WithName("GetBackupStreamStatus");
 
         backup.MapPost("/claim",
-                async ([FromBody] BackupClaimRequestDto request, IBackupStreamService svc, CancellationToken ct) => {
-                    var frame = await svc.ClaimAsync(request, ct);
-                    return frame is null ? Results.NotFound() : Results.Ok(frame);
+                async ([FromBody] BackupStreamClaimRequestDto request, IBackupStreamService svc, CancellationToken ct) => {
+                    if (string.IsNullOrWhiteSpace(request?.Hostname)) {
+                        return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
+                            title: "hostname required", type: "https://openastro.net/problems/backup-stream-hostname-required");
+                    }
+                    var result = await svc.ClaimAsync(request, ct);
+                    if (result is not null) {
+                        return Results.Ok(result);
+                    }
+                    var holder = (svc as BackupStreamService)?.ActiveTargetSnapshot;
+                    return Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                        title: "another WILMA is already streaming",
+                        detail: holder,
+                        type: "https://openastro.net/problems/backup-stream-slot-held");
                 })
-            .Accepts<BackupClaimRequestDto>("application/json")
-            .Produces<BackupFrameDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithName("ClaimBackupFrame");
+              .Accepts<BackupStreamClaimRequestDto>("application/json")
+              .Produces<BackupStreamClaimResultDto>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status409Conflict)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+              .WithName("ClaimBackupStream");
+
+        backup.MapPost("/release",
+                async ([FromBody] BackupStreamClaimRequestDto request, IBackupStreamService svc, CancellationToken ct) =>
+                    await svc.ReleaseAsync(request, ct) ? Results.NoContent() : Results.NotFound())
+              .Accepts<BackupStreamClaimRequestDto>("application/json")
+              .Produces(StatusCodes.Status204NoContent)
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .WithName("ReleaseBackupStream");
+
+        backup.MapGet("/queue",
+                async (string hostname, int? limit, IBackupStreamService svc, CancellationToken ct) => {
+                    var queue = await svc.GetQueueAsync(hostname, limit ?? 100, ct);
+                    return queue is null
+                        ? Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                            title: "caller does not hold the backup-stream slot",
+                            type: "https://openastro.net/problems/backup-stream-not-holder")
+                        : Results.Ok(queue);
+                })
+              .Produces<System.Collections.Generic.IReadOnlyList<BackupStreamQueueEntryDto>>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status409Conflict)
+              .WithName("GetBackupStreamQueue");
+
+        backup.MapPost("/ack",
+                async (string hostname, [FromBody] BackupStreamAckRequestDto request, IBackupStreamService svc, CancellationToken ct) =>
+                    await svc.AckAsync(hostname, request, ct) switch {
+                        BackupStreamAckResult.Acked => Results.NoContent(),
+                        BackupStreamAckResult.NotHolder => Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                            title: "caller does not hold the backup-stream slot",
+                            type: "https://openastro.net/problems/backup-stream-not-holder"),
+                        BackupStreamAckResult.UnverifiedRefused => Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
+                            title: "unverified ack refused — re-download and verify the sha256, then ack",
+                            type: "https://openastro.net/problems/backup-stream-unverified-ack"),
+                        _ => Results.NotFound(),
+                    })
+              .Accepts<BackupStreamAckRequestDto>("application/json")
+              .Produces(StatusCodes.Status204NoContent)
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .ProducesProblem(StatusCodes.Status409Conflict)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+              .WithName("AckBackupStreamFrame");
 
         return app;
     }

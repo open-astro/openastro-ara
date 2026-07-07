@@ -182,7 +182,9 @@ public partial class Program {
         // calibration / secrets / paths); import preview+commit remain placeholder
         // until the import sub-PR. Depends on IProfileRepository (registered below).
         builder.Services.AddSingleton<IProfileShareService, ProfileShareService>();
-        builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
+        // §44 — real backup stream: single-target slot + pending queue + ack over the
+        // frames catalog (sha256 lazily cached per frame on first queue serve).
+        builder.Services.AddSingleton<IBackupStreamService, BackupStreamService>();
         // §43 IBackupService is registered below, after profileDir is resolved (the real BackupService is
         // disk-backed: snapshots live under {profileDir}/backups).
         // Phase 13.12 — placeholder equipment services for all 12 device
