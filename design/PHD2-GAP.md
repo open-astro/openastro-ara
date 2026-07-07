@@ -6,6 +6,16 @@
 
 **Status as of 2026-05-21:** identified during the §63 baking session. No issues opened on openastro-phd2 yet. Pick back up after ARA's other Tier 1 gaps are closed.
 
+**Status update 2026-07-07 — Path A EXECUTED.** Upstream PR **open-astro/openastro-guider#57** (the repo was
+renamed from openastro-phd2) implements all three real gaps + the 7 doc clarifications: `DarkLibraryBuild*` /
+`DefectMapBuild*` progress events (started / per-frame / complete / failed, with per-artifact partial-count field
+names), `EquipmentDisconnected`/`EquipmentReconnected` structured camera-fault events (with the reconnect-throttle
+caveat documented), and `get_version` extended with `overlap_support` + `fork:"openastro-guider"` (the RPC already
+existed undocumented; the `Version` event also gained a `Fork` key). Merge awaits maintainer review. Review-found
+pre-existing daemon issues were filed as openastro-guider#58–61. ARA-side adoption of the new events (progress bar
+in the calibration dialog, structured fault routing, get_version handshake) is follow-up work in THIS repo once
+#57 merges — note the event-PascalCase vs RPC-snake_case fork-key casing.
+
 ---
 
 ## Summary
