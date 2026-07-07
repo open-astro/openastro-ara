@@ -73,6 +73,19 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['session.storage.backup_stream'],
     keywords: ['backup', 'folder', 'path', 'destination', 'storage'],
   ),
+  'session.storage.backup_stream_mbps': Help(
+    key: 'session.storage.backup_stream_mbps',
+    title: 'Backup bandwidth cap',
+    body: 'Caps the backup stream\'s AVERAGE download rate in megabits per second; 0 means '
+        'unlimited. Each frame still transfers at full link speed — the puller then waits '
+        'before fetching the next one until the session average is back under your cap. '
+        'This rides on top of the capture-aware pause (transfers already hold while an '
+        'exposure is downloading from the camera), so a cap is mainly useful on shared or '
+        'metered links. The status line above shows the link speed measured on the '
+        'session\'s first pull to help you pick a sensible number.',
+    relatedSettings: ['session.storage.backup_stream'],
+    keywords: ['bandwidth', 'cap', 'mbps', 'throttle', 'network'],
+  ),
   'equipment.alpacabridge.troubleshoot': Help(
     key: 'equipment.alpacabridge.troubleshoot',
     title: 'AlpacaBridge not detected?',

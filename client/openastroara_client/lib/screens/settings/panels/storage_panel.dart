@@ -254,7 +254,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
                     'being captured when it failed.',
                 onChanged: (v) => n.setEnabled(v),
               ),
-              if (stream.enabled)
+              if (stream.enabled) ...[
                 EditableTextRow(
                   label: 'Backup folder',
                   helpKey: 'session.storage.backup_stream_folder',
@@ -262,6 +262,18 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
                   getCanonical: () => ref.read(backupStreamProvider).localRoot,
                   parse: n.setLocalRoot,
                 ),
+                EditableTextRow(
+                  label: 'Bandwidth cap (Mbps, 0 = unlimited)',
+                  helpKey: 'session.storage.backup_stream_mbps',
+                  currentValue: stream.maxMbps.toString(),
+                  getCanonical: () =>
+                      ref.read(backupStreamProvider).maxMbps.toString(),
+                  parse: (str) {
+                    final v = int.tryParse(str);
+                    if (v != null) n.setMaxMbps(v);
+                  },
+                ),
+              ],
               // The problem line renders even when disabled — an auto-disable
               // (another desktop took the slot) must explain itself, not just
               // silently flip the toggle off.
@@ -273,7 +285,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
                         (stream.active
                             ? 'Streaming — ${stream.pendingCount} pending, '
                                 '${stream.syncedThisSession} synced this session '
-                                '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB).'
+                                '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB)'
+                                '${stream.measuredMbps != null ? ', link ≈ ${stream.measuredMbps!.toStringAsFixed(0)} Mbps' : ''}.'
                             : 'Starting…'),
                     style: TextStyle(
                       color: stream.problem != null

@@ -26,6 +26,15 @@ class BackupStreamState {
   final int syncedThisSession;
   final int syncedBytesThisSession;
 
+  /// §44.4 — average-rate ceiling for pulls, in Mbps; 0 = unlimited. Applied
+  /// as inter-frame pacing (a frame downloads at link speed, then the loop
+  /// waits until the average is back under the cap).
+  final int maxMbps;
+
+  /// §44.4 — the link throughput observed on this session's first pull
+  /// (Mbps), for the settings status line; null until one frame has moved.
+  final double? measuredMbps;
+
   /// Human-readable why-not when the stream isn't healthy (slot held
   /// elsewhere, disk trouble, transport error) — null when healthy. Survives
   /// an auto-disable so the panel can explain why the toggle switched off.
@@ -38,6 +47,8 @@ class BackupStreamState {
     this.pendingCount = 0,
     this.syncedThisSession = 0,
     this.syncedBytesThisSession = 0,
+    this.maxMbps = 0,
+    this.measuredMbps,
     this.problem,
   });
 
@@ -48,6 +59,8 @@ class BackupStreamState {
     int? pendingCount,
     int? syncedThisSession,
     int? syncedBytesThisSession,
+    int? maxMbps,
+    double? measuredMbps,
     String? problem,
     bool clearProblem = false,
   }) =>
@@ -58,6 +71,8 @@ class BackupStreamState {
         pendingCount: pendingCount ?? this.pendingCount,
         syncedThisSession: syncedThisSession ?? this.syncedThisSession,
         syncedBytesThisSession: syncedBytesThisSession ?? this.syncedBytesThisSession,
+        maxMbps: maxMbps ?? this.maxMbps,
+        measuredMbps: measuredMbps ?? this.measuredMbps,
         problem: clearProblem ? null : (problem ?? this.problem),
       );
 }
@@ -99,6 +114,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   Future<String> Function()? defaultRootResolver;
   Duration pollInterval = const Duration(seconds: 15);
 
+  /// §44.4 pacing sleep — a seam so tests assert requested delays instead of
+  /// actually waiting.
+  Future<void> Function(Duration) pacer = (d) => Future<void>.delayed(d);
+
   BackupStreamClient? _client;
   String? _clientServerId;
 
@@ -128,10 +147,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     final saved = await ref.read(backupStreamPrefsProvider).load();
     // A user toggle that raced ahead of this async load wins.
     if (_userTouched) return;
-    if (saved.root.isEmpty && !saved.enabled) return;
+    if (saved.root.isEmpty && !saved.enabled && saved.maxMbps == 0) return;
     state = state.copyWith(
       localRoot: saved.root.isEmpty ? null : saved.root,
       enabled: saved.enabled,
+      maxMbps: saved.maxMbps,
     );
     if (saved.enabled) {
       // Resume rides the first timer tick instead of claiming immediately —
@@ -142,9 +162,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   }
 
   void _persist() {
-    unawaited(ref
-        .read(backupStreamPrefsProvider)
-        .save(enabled: state.enabled, root: state.localRoot));
+    unawaited(ref.read(backupStreamPrefsProvider).save(
+        enabled: state.enabled, root: state.localRoot, maxMbps: state.maxMbps));
   }
 
   String get _hostname => (hostnameResolver ?? () => Platform.localHostname)();
@@ -186,6 +205,14 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     _persist();
     _startLoop();
     await _tick();
+  }
+
+  /// §44.4 settings field entry point; 0 = unlimited.
+  void setMaxMbps(int mbps) {
+    if (mbps < 0) return;
+    _userTouched = true;
+    state = state.copyWith(maxMbps: mbps);
+    _persist();
   }
 
   /// Settings folder field entry point.
@@ -297,9 +324,22 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // Null sha = the daemon hasn't hashed it yet (per-page budget) —
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
+        final pullStarted = DateTime.now();
         var error = await _pullVerifyStore(client, entry);
         if (error != null) {
           error = await _pullVerifyStore(client, entry); // one retry
+        }
+        if (error == null) {
+          final elapsed = DateTime.now().difference(pullStarted);
+          _recordThroughput(entry.sizeBytes, elapsed);
+          final floor = paceFloor(entry.sizeBytes, state.maxMbps);
+          if (floor > elapsed) {
+            // §44.4 inter-frame pacing: the frame moved at link speed; wait
+            // until the session average is back under the cap before the
+            // next pull. Re-checked flags below keep a mid-wait disable safe.
+            await pacer(floor - elapsed);
+            if (!state.enabled || !state.active) return;
+          }
         }
         if (error != null) {
           // Surface it and move on — the queue is oldest-first and an
@@ -384,6 +424,22 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   /// segment blindly — strip separators + parent-dir tokens.
   static String _sanitize(String segment) =>
       segment.replaceAll(RegExp(r'[/\\]'), '_').replaceAll('..', '_');
+
+  /// §44.4 — the minimum wall-clock a [bytes]-sized pull may occupy under a
+  /// [mbps] average-rate cap. Zero cap (or degenerate sizes) = no floor.
+  static Duration paceFloor(int bytes, int mbps) {
+    if (mbps <= 0 || bytes <= 0) return Duration.zero;
+    return Duration(microseconds: (bytes * 8 / mbps).round());
+  }
+
+  void _recordThroughput(int bytes, Duration elapsed) {
+    if (state.measuredMbps != null || bytes <= 0 || elapsed.inMicroseconds <= 0) {
+      return;
+    }
+    // First pull of the session doubles as the §44.4 link measurement.
+    state = state.copyWith(
+        measuredMbps: bytes * 8 / elapsed.inMicroseconds);
+  }
 
   void _stopLoop() {
     _pollTimer?.cancel();
