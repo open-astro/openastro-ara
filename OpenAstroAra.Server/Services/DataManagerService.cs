@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -44,7 +45,7 @@ namespace OpenAstroAra.Server.Services {
     /// Each package installs into <c>{dataRoot}/{packageId}/</c>. Only catalog ids map to a directory,
     /// so a caller-supplied <c>packageId</c> can never escape the data root (no path traversal).
     /// </summary>
-    public sealed partial class DataManagerService : IDataManagerService {
+    public sealed partial class DataManagerService : IDataManagerService, IHostedService {
 
         /// <summary>
         /// The canonical file name a bare-CSV catalog package installs as, so the §36 catalog consumer can read
@@ -283,8 +284,10 @@ namespace OpenAstroAra.Server.Services {
                     }
                     var job = new DownloadJob(downloadId, pkg.Id);
                     _downloads[downloadId] = job;
-                    // Fire the worker on the thread pool; it owns the job's lifecycle + cleanup.
-                    _ = Task.Run(() => RunDownloadAsync(job, pkg), CancellationToken.None);
+                    // Fire the worker on the thread pool; it owns the job's lifecycle + cleanup. The task is
+                    // kept on the job so the §36-2b(b) shutdown drain can await it (not to observe its result —
+                    // the worker reports its own outcome via WS events and never throws past its catch-all).
+                    job.Worker = Task.Run(() => RunDownloadAsync(job, pkg), CancellationToken.None);
                     LogDownloadStarted(pkg.Id, downloadId);
                     return Task.FromResult(Accepted("data-manager.download", idempotencyKey, downloadId));
                 }
@@ -578,6 +581,40 @@ namespace OpenAstroAra.Server.Services {
 
         // One in-flight download: the cancellation source the worker observes plus thread-shared progress counters
         // (read by GetStateAsync from another thread, hence Volatile/Interlocked access).
+        // §36-2b(b) — graceful-shutdown drain. Registered as a hosted service purely for StopAsync:
+        // cancel every in-flight download's CTS, then await the workers inside the host's shutdown
+        // window, so a graceful stop ends with the staging dirs reclaimed by the workers' own finally
+        // paths instead of abandoned mid-extract (the boot-time SweepStaleScratch still covers a hard
+        // kill, which no drain can catch).
+        Task IHostedService.StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Shutdown must never throw. Workers own their failure reporting (WS events + logs); this await exists only to hold the host open while they wind down.")]
+        async Task IHostedService.StopAsync(CancellationToken cancellationToken) {
+            var jobs = _downloads.Values.Where(j => !j.Completed).ToList();
+            if (jobs.Count == 0) {
+                return;
+            }
+            foreach (var job in jobs) {
+                try {
+                    await job.Cts.CancelAsync().ConfigureAwait(false);
+                } catch (ObjectDisposedException) {
+                    // The worker finished (and disposed its job) in this instant — nothing to cancel.
+                }
+            }
+            var workers = jobs.Where(j => j.Worker is not null).Select(j => j.Worker!).ToList();
+            LogShutdownDrain(jobs.Count);
+            try {
+                // Bounded by the host's shutdown window; the workers' cancellation paths emit their
+                // own download.failed("cancelled") events and reclaim their staging dirs.
+                await Task.WhenAll(workers).WaitAsync(cancellationToken).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                // Host deadline hit — the boot sweep reclaims whatever the unfinished workers leave.
+            } catch (Exception) {
+                // Worker outcomes are reported by the workers themselves; belt-and-braces only.
+            }
+        }
+
         private sealed class DownloadJob : IDisposable {
             public DownloadJob(Guid id, string packageId) {
                 Id = id;
@@ -592,6 +629,10 @@ namespace OpenAstroAra.Server.Services {
             public long LastEmitTick;
             public long LastIdleResetTick;
             public volatile bool Completed;
+            // The worker task driving this job — awaited by the shutdown drain. Assigned immediately
+            // after the job is registered; a drain racing that one-statement window just skips the
+            // await (the cancel still lands, so the worker exits promptly anyway).
+            public Task? Worker;
 
             public void Dispose() => Cts.Dispose();
         }
@@ -686,6 +727,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data manager WS publish of '{EventType}' failed")]
         partial void LogPublishFailed(string eventType, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data Manager draining {Count} in-flight download(s) for shutdown")]
+        partial void LogShutdownDrain(int count);
     }
 
     /// <summary>Thrown by <see cref="DataManagerService.DownloadAsync"/> when the requested package id is not in the

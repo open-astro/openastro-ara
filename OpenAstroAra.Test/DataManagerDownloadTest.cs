@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
@@ -384,6 +385,41 @@ namespace OpenAstroAra.Test {
                 e.Payload.TryGetProperty("error", out var err) && err.GetString() == "stalled"));
             Assert.That(stalled, Is.True, "a transfer with no progress within the idle timeout is cancelled as stalled");
             Assert.That(Directory.Exists(Path.Combine(_root, PackageId)), Is.False, "a stalled download installs nothing");
+        }
+
+        [Test]
+        public async Task Shutdown_drain_cancels_and_awaits_in_flight_downloads() {
+            using var release = new SemaphoreSlim(0, 1);
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("data")));
+            var fetcher = new FakeSkyDataFetcher(async ct => {
+                await release.WaitAsync(ct); // never released — hangs until the drain cancels it.
+                return archive;
+            });
+            var ws = new CapturingBroadcaster();
+            var svc = NewService(fetcher, ws);
+
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 1);
+
+            // §36-2b(b): a graceful stop cancels AND awaits the worker — by the time StopAsync
+            // returns, the worker's own teardown has already run (event emitted, job reclaimed);
+            // nothing is left running detached behind the daemon's exit.
+            await ((IHostedService)svc).StopAsync(CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(ws.Events.Any(e =>
+                    e.EventType == WsEventCatalog.DataManagerDownloadFailed &&
+                    e.Payload.TryGetProperty("error", out var err) && err.GetString() == "cancelled"),
+                    Is.True, "the drained worker reported its cancellation before StopAsync returned");
+                Assert.That(svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads, Is.Empty);
+                Assert.That(Directory.Exists(Path.Combine(_root, PackageId)), Is.False, "a drained download installs nothing");
+            });
+        }
+
+        [Test]
+        public async Task Shutdown_drain_with_nothing_in_flight_is_a_no_op() {
+            var svc = NewService(new UnusedFetcher(), new CapturingBroadcaster());
+            await ((IHostedService)svc).StopAsync(CancellationToken.None); // must not hang or throw
         }
 
         [Test]
