@@ -252,7 +252,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             }
             throw;
         } catch (Exception ex) {
-            // A failed flip halts the sequence (the trigger throws on our false return).
+            // A failed flip suspends the sequence: the trigger arms the pause gate as
+            // AwaitingUser on our false return (§58.12), so the run sits resumable once
+            // the user sorts the rig out (it halts outright only when no gate is wired).
             Logger.Error("Meridian Flip - Failed.", ex);
             if (safety is { FlipSafetyEnabled: true }) {
                 // §58.9 Layer 4 — safe rest: the guider stays STOPPED (PHD2 corrections on a
@@ -261,7 +263,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 // the user may resume if conditions allow.
                 var rest = await SafeRest(progress);
                 await NotifyCritical("Meridian flip failed",
-                    $"{ex.Message} §58.9 safe rest: {rest} The guider is stopped, the cooler keeps running, and the sequence has been halted.");
+                    $"{ex.Message} §58.9 safe rest: {rest} The guider is stopped, the cooler keeps running, and the sequence is paused awaiting your attention.");
             } else {
                 // Baseline (§58.4) best-effort restore: resume guiding + re-enable tracking so the
                 // mount keeps the target rather than drifting. Only resume a guider we actually
@@ -280,15 +282,15 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                     TryRestoreTracking();
                 }
                 // §58.7 — the failure must reach the user in BOTH modes, not only under the
-                // §58.9 safety layers: an unattended sequence just halted. Fold the guider
-                // outcome in — "restored but unguided" and "restored" are different mornings —
-                // and only claim a tracking restore that actually ran (a failure before
-                // PassMeridian never touched tracking, so "restored" would overstate it).
+                // §58.9 safety layers: an unattended sequence just stopped imaging. Fold the
+                // guider outcome in — "restored but unguided" and "restored" are different
+                // mornings — and only claim a tracking restore that actually ran (a failure
+                // before PassMeridian never touched tracking, so "restored" would overstate it).
                 var trackingClause = trackingDisabled
                     ? "Tracking was restored best-effort"
                     : "Tracking was never disabled (the failure occurred before the meridian wait)";
                 await NotifyCritical("Meridian flip failed",
-                    $"{ex.Message} {trackingClause} and the sequence has been halted."
+                    $"{ex.Message} {trackingClause} and the sequence is paused awaiting your attention."
                     + (guiderResumed ? string.Empty : " The guider could NOT be resumed — the mount is unguided."));
             }
             return false;

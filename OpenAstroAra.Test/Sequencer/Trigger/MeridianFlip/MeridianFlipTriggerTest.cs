@@ -19,8 +19,10 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -175,16 +177,55 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         }
 
         [Test]
-        public void Execute_throws_when_the_executor_reports_failure() {
+        public void Execute_throws_when_the_executor_reports_failure_and_no_pause_gate_is_wired() {
+            // No root/gate reachable (standalone execution): the only safe halt is
+            // the old throw → Failed path. Continuing un-flipped is never an option.
             var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
             telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(coords);
             telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1, Coordinates = coords });
             executorMock
                 .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(false); // failure must halt the sequence, not continue un-flipped
+                .ReturnsAsync(false);
             var sut = CreateSUT();
             Assert.ThrowsAsync<InvalidOperationException>(
                 () => sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        [Test]
+        public async Task Execute_pauses_the_run_awaiting_user_instead_of_throwing_when_a_gate_is_wired() {
+            // §58.12 — with the run's pause gate reachable through the root, a failed
+            // flip arms it as AwaitingUser (the executor has already safe-rested the
+            // mount and notified) instead of failing the whole run. The engine then
+            // suspends before the next instruction; resume re-attempts the flip.
+            var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(coords);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1, Coordinates = coords });
+            executorMock
+                .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            var gate = new PauseGate();
+            var root = new SequenceRootContainer { PauseGate = gate };
+
+            var sut = CreateSUT();
+            await sut.Execute(root, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(gate.IsPauseRequested, Is.True, "the failed flip must arm the gate");
+            Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
+        }
+
+        [Test]
+        public void Execute_still_throws_on_failure_when_the_root_has_no_gate() {
+            // A root without a wired gate (pause unavailable) must keep the halt path.
+            var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(coords);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1, Coordinates = coords });
+            executorMock
+                .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            var root = new SequenceRootContainer(); // PauseGate stays null
+
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => CreateSUT().Execute(root, new Progress<ApplicationStatus>(), CancellationToken.None));
         }
 
         [Test]

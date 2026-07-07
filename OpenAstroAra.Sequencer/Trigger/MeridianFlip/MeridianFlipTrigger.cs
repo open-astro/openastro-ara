@@ -166,10 +166,21 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
 
             var success = await executor.MeridianFlip(target, timeToFlip, progress, token);
             if (!success) {
-                // A failed flip must halt the sequence, not continue un-flipped — by the next ShouldTrigger the
-                // mount may be past its flip window, the very OTA-collision risk the design guards against.
-                // (lastFlipTime is left unset so the dedup guard wouldn't suppress a retry either way.)
+                // A failed flip must not continue un-flipped — by the next ShouldTrigger the mount may be past
+                // its flip window, the very OTA-collision risk the design guards against. §58.12: instead of
+                // failing the whole run, arm the pause gate as AwaitingUser so the engine suspends before the
+                // next instruction and the user can resume once the rig is sorted (the resumed run re-evaluates
+                // this trigger fresh at the next boundary, so the flip is re-attempted — including its §58.9
+                // flight check). The executor has already put the mount in safe rest and fired the Critical
+                // notification. (lastFlipTime is left unset so the dedup guard wouldn't suppress a retry.)
                 Logger.Error("Meridian Flip - The flip executor reported failure.");
+                var root = ItemUtility.GetRootContainer(this.Parent) ?? ItemUtility.GetRootContainer(context);
+                if ((root as IPauseGateHost)?.PauseGate is { } gate) {
+                    Logger.Error("Meridian Flip - Pausing the sequence awaiting user attention (§58.12).");
+                    gate.RequestPause(PauseKind.AwaitingUser);
+                    return;
+                }
+                // No gate wired (standalone container) — fall back to halting the run.
                 throw new InvalidOperationException("Meridian flip failed: the executor reported failure.");
             }
             // Record the successful flip so the dedup guard skips a redundant re-flip for the same target.

@@ -769,8 +769,8 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.False);
             var n = published.Single();
             Assert.That(n.Severity, Is.EqualTo(NotificationSeverity.Critical),
-                "an unattended sequence just halted — the user must hear it in BOTH modes");
-            Assert.That(n.Message, Does.Contain("halted"));
+                "an unattended sequence just stopped imaging — the user must hear it in BOTH modes");
+            Assert.That(n.Message, Does.Contain("paused awaiting your attention"));
             Assert.That(n.Message, Does.Not.Contain("could NOT be resumed"),
                 "the guider resume succeeded here, so the message must not cry wolf");
         }

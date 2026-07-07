@@ -173,10 +173,14 @@ public sealed partial class FileSequenceService : ISequenceService {
 
     /// <summary>Active = the executor may still read/write against this sequence.
     /// <c>Aborting</c> counts: the worker is winding down but not done with the file.
-    /// Terminal states (Completed/Failed/Stopped) and Idle do not block.</summary>
+    /// Both paused flavors count: the suspended worker resumes into this file
+    /// (§58.12's awaiting-user pause included — a rig failure must not make the
+    /// sequence deletable mid-run). Terminal states (Completed/Failed/Stopped)
+    /// and Idle do not block.</summary>
     internal static bool IsActiveRun(SequenceRunState state) =>
         state is SequenceRunState.Starting or SequenceRunState.Running
-            or SequenceRunState.Paused or SequenceRunState.Aborting;
+            or SequenceRunState.Paused or SequenceRunState.PausedAwaitingUser
+            or SequenceRunState.Aborting;
 
     public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) {
         var path = PathFor(id);
