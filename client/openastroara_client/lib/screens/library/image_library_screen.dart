@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -560,9 +562,12 @@ class _FrameStrip extends ConsumerWidget {
                   imageUrl: api?.thumbnailUrl(f.id),
                   selected: selection.contains(f.id),
                   selectionMode: inSelectionMode,
-                  // §44 badge only when a backup stream is configured — no
-                  // badge must not read as "unprotected" on rigs without one.
-                  synced: backupConfigured ? f.syncedAt != null : null,
+                  // §44 badge only when a backup stream is configured, and
+                  // "protected" only when mirrored to THIS desktop — sync is
+                  // per-target, another machine's mirror doesn't cover us.
+                  synced: frameSyncedForThisDesktop(f,
+                      backupConfigured: backupConfigured,
+                      hostname: Platform.localHostname),
                   onTap: () {
                     if (inSelectionMode) {
                       ref.read(librarySelectionProvider.notifier).toggle(f.id);

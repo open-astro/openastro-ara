@@ -349,7 +349,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var sql = """
             SELECT id, session_id, target_name, frame_type, filter_name,
                    exposure_seconds, captured_utc, hfr, star_count,
-                   quality_score_json, rating, synced_at
+                   quality_score_json, rating, synced_at, sync_target
             FROM frames
             WHERE 1=1
             """;
@@ -393,7 +393,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 Rating: reader.GetInt32(10),
                 SyncedAt: await reader.IsDBNullAsync(11, ct)
                     ? null
-                    : DateTimeOffset.Parse(reader.GetString(11))));
+                    : DateTimeOffset.Parse(reader.GetString(11)),
+                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12)));
         }
         var hasMore = await reader.ReadAsync(ct);  // the pageSize+1 row
         var nextCursor = hasMore ? (offset + pageSize).ToString() : null;

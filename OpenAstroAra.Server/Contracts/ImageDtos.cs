@@ -85,9 +85,13 @@ public sealed record FrameListItemDto(
     double? CompositeQualityScore,
     int Rating,
     // §44 — when this frame was confirmed stored on the backup-stream target
-    // (null = not yet mirrored). Optional + last so existing constructions
-    // stay source-compatible.
-    DateTimeOffset? SyncedAt = null);
+    // (null = not yet mirrored), and WHICH target: sync is per-desktop (a
+    // takeover re-queues everything for the new target), so a client must
+    // compare SyncTarget against its own hostname before rendering the frame
+    // as protected. Optional + last so existing constructions stay
+    // source-compatible.
+    DateTimeOffset? SyncedAt = null,
+    string? SyncTarget = null);
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
 public sealed record FramePreviewRequestDto(
