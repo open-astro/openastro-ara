@@ -44,7 +44,6 @@ public sealed partial class GuiderService {
     // Guarded by _gate. One §42.2 reaction per disconnect episode; cleared by
     // SetStateLocked on the next successful connect.
     private bool _faultReactionLatched;
-    private Task? _faultReactionWorker;
 
     internal enum GuiderLostAction { PauseAndRetry, SkipTarget, AbortSequence }
 
@@ -72,7 +71,11 @@ public sealed partial class GuiderService {
             return;
         }
         _faultReactionLatched = true;
-        _faultReactionWorker = Task.Run(() => ReactToGuidingLossAsync(), CancellationToken.None);
+        // Fire-and-forget one-shot: ReactToGuidingLossAsync owns no disposables,
+        // catches everything itself, and each rung uses CancellationToken.None
+        // deliberately (a daemon shutdown mid-reaction should still finish
+        // pausing the run — the sequencer's own shutdown path wins regardless).
+        _ = Task.Run(() => ReactToGuidingLossAsync(), CancellationToken.None);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
