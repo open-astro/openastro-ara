@@ -865,8 +865,14 @@ Deferred to **§43-2**:
 - **Area selectors beyond profiles+sequences.** §43-1 captures the two config areas only. The frame-metadata and log
   areas from the §43 selector set (and the `RestoreRequestDto.RestoreFrameMetadata`/`RestoreLogs` flags) arrive with the
   restore work in §43-2.
-- **No retention/pruning.** Backups accumulate under `{profileDir}/backups/` indefinitely; there's no cap or
-  age-based prune. Low priority — add a retention policy (keep-N / keep-days) if disk growth becomes a concern.
+- ✅ **Retention/pruning — DONE (2026-07-06).** `storage.backup_retention_count` (default 20, 0 = keep everything,
+  negative rejected 400 at the PUT): after every successful create — still under the create/restore gate, so a
+  prune can't interleave with a restore's extract+swap — snapshots beyond the count are pruned oldest-first by
+  manifest CreatedUtc, manifest deleted BEFORE zip (the reverse of the create-reveal order, so a reader never
+  lists a manifest whose archive is gone). Best-effort: a profile-read fault falls back to the default, an
+  unreadable manifest's pair is left alone (deleting on a parse error could destroy a good archive), and no prune
+  fault ever fails the create that just succeeded. WILMA: Settings → Session → Storage "Keep backup snapshots"
+  (+ settings/help registry entries).
 - **Orphan-archive boot sweep — RESOLVED 2026-06-15.** `BackupService.SweepOrphans(profileDir)` runs at startup in
   `Program.cs` (mirroring §36-2c `SweepStaleScratch`, before the daemon accepts requests so no create can race it) and
   reclaims **both** crash-only leaks under `{profileDir}/backups/`: every `.tmp-*.zip` from a create hard-killed before

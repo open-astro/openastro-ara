@@ -65,6 +65,13 @@ public static class ProfileEndpoints {
                     detail: "min_free_disk_critical_gb must be >= 1 and strictly below min_free_disk_warn_gb.",
                     statusCode: StatusCodes.Status400BadRequest);
             }
+            // §43-2b retention — 0 means keep everything; negative is meaningless, reject at write so the
+            // stored profile always matches what the pruner enforces.
+            if (body.BackupRetentionCount < 0) {
+                return Results.Problem(
+                    detail: "backup_retention_count must be >= 0 (0 keeps every snapshot).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             store.PutStorageSettings(body);
             return Results.Ok(body);
         })

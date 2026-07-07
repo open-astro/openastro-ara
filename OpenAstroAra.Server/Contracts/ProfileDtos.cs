@@ -52,7 +52,12 @@ public sealed record StorageSettingsDto(
     // uses the default for a missing key). The monitor reads these live; DiskSpaceMonitor falls back to its own
     // 10/2 defaults if a stored pair is non-positive or inverted.
     int MinFreeDiskWarnGb = 10,
-    int MinFreeDiskCriticalGb = 2);
+    int MinFreeDiskCriticalGb = 2,
+    // §43-2b — how many backup snapshots to keep under {profileDir}/backups/. After every successful
+    // create, older snapshots beyond this count are pruned (zip + manifest, oldest first). 0 = keep
+    // everything (the pre-retention behaviour). Optional ctor default so older profile.json files
+    // still deserialize.
+    int BackupRetentionCount = 20);
 
 /// <summary>
 /// §54 notifications settings — channel toggles + per-channel tokens +

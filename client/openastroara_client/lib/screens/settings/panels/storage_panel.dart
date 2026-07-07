@@ -200,6 +200,18 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
             if (gb != null) n.setMinFreeDiskCriticalGb(gb);
           },
         ),
+        const SettingsSectionHeader('Backups (§43)'),
+        EditableNumberRow(
+          label: 'Keep backup snapshots',
+          helpKey: 'session.storage.backup_retention_count',
+          currentValue: s.backupRetentionCount.toString(),
+          getCanonical: () =>
+              ref.read(storageSettingsProvider).backupRetentionCount.toString(),
+          parse: (v) {
+            final count = int.tryParse(v.trim());
+            if (count != null) n.setBackupRetentionCount(count);
+          },
+        ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(

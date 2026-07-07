@@ -111,9 +111,12 @@ namespace OpenAstroAra.Server.Services {
         internal TimeSpan RemoteIdleTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
         private readonly IBackupSourceFetcher? _remoteFetcher;
+        // §43-2b retention — read live per create so a settings change applies to the next backup
+        // without a restart. Null (tests / minimal wiring) → the DTO default applies.
+        private readonly IProfileStore? _profiles;
 
         public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null,
-                IBackupSourceFetcher? remoteFetcher = null) {
+                IBackupSourceFetcher? remoteFetcher = null, IProfileStore? profiles = null) {
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
             ArgumentNullException.ThrowIfNull(logger);
             _profileDir = profileDir;
@@ -121,6 +124,7 @@ namespace OpenAstroAra.Server.Services {
             _logger = logger;
             _restorer = restorer ?? new DefaultBackupRestorer();
             _remoteFetcher = remoteFetcher;
+            _profiles = profiles;
         }
 
         // Registered as a DI singleton, so the container disposes this on host shutdown.
@@ -217,6 +221,61 @@ namespace OpenAstroAra.Server.Services {
                 TryDelete(zipPath);
                 TryDelete(manifestPath);
                 throw;
+            }
+
+            // §43-2b retention — runs after the reveal, still under the caller's _gate (so it can't
+            // interleave with another create or with a restore's extract+swap). Best-effort: a prune
+            // fault must never fail the backup that just succeeded.
+            PruneOldSnapshots();
+        }
+
+        /// <summary>Keeps the newest <c>storage.backup_retention_count</c> snapshots (by manifest
+        /// CreatedUtc, the ListSnapshots ordering) and deletes the rest — manifest FIRST, then zip,
+        /// the reverse of the create-reveal order, so a reader never sees a manifest naming a
+        /// deleted archive. 0 (or an unreadable profile reporting nothing) with a negative value
+        /// disables pruning; no profile store → the DTO default (20). Best-effort per file.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Retention is best-effort by design: a prune fault (locked file, torn manifest, profile read error) must never fail the create that just succeeded. Faults are logged, not swallowed silently.")]
+        private void PruneOldSnapshots() {
+            try {
+                // Mirrors StorageSettingsDto's ctor default — the value a null store or failed read falls to.
+                const int DefaultBackupRetention = 20;
+                var keep = DefaultBackupRetention;
+                try {
+                    var configured = _profiles?.GetStorageSettings().BackupRetentionCount;
+                    if (configured is { } v) keep = v;
+                } catch (Exception ex) {
+                    LogPolicyReadFailedForPrune(ex);
+                }
+                if (keep <= 0) return; // 0 = keep everything (negative treated the same, defensively)
+
+                var manifests = Directory.GetFiles(_backupsDir, ZipPrefix + "*" + ManifestExtension, SearchOption.TopDirectoryOnly);
+                if (manifests.Length <= keep) return;
+                var dated = new List<(string ManifestPath, DateTimeOffset CreatedUtc)>(manifests.Length);
+                foreach (var manifestPath in manifests) {
+                    try {
+                        var manifest = JsonSerializer.Deserialize(
+                            File.ReadAllText(manifestPath), AraJsonSerializerContext.Default.BackupManifest);
+                        if (manifest is not null) {
+                            dated.Add((manifestPath, manifest.CreatedUtc));
+                        }
+                    } catch (Exception) {
+                        // Unreadable manifest — leave the pair alone (the orphan sweep story owns torn
+                        // artifacts); deleting on a parse error could destroy a good archive.
+                    }
+                }
+                var pruned = 0;
+                foreach (var (manifestPath, _) in dated.OrderByDescending(m => m.CreatedUtc).Skip(keep)) {
+                    var zipPath = manifestPath[..^ManifestExtension.Length] + ZipExtension;
+                    TryDelete(manifestPath); // manifest first — never a listed-but-missing archive
+                    TryDelete(zipPath);
+                    pruned++;
+                }
+                if (pruned > 0) {
+                    LogSnapshotsPruned(pruned, keep);
+                }
+            } catch (Exception ex) {
+                LogPruneFailed(ex);
             }
         }
 
@@ -770,6 +829,15 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} started from remote source {Source}")]
         partial void LogRemoteRestoreStarted(Guid operationId, Uri source);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Backup retention pruned {Count} snapshot(s) beyond the keep-{Keep} policy")]
+        partial void LogSnapshotsPruned(int count, int keep);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Backup retention could not read the storage settings — using the default keep count")]
+        partial void LogPolicyReadFailedForPrune(Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Backup retention prune failed — the new snapshot is unaffected")]
+        partial void LogPruneFailed(Exception ex);
 
         [LoggerMessage(Level = LogLevel.Error, Message = "Backup restore {OperationId} failed downloading/verifying its remote source")]
         partial void LogRemoteRestoreFailed(Guid operationId, Exception ex);

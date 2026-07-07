@@ -565,6 +565,16 @@ const List<Setting> settingsRegistry = [
     defaultValue: 2,
     profilePath: 'storage.min_free_disk_critical_gb',
   ),
+  Setting(
+    id: 'session.storage.backup_retention_count',
+    label: 'Keep backup snapshots',
+    description: 'How many configuration backups the daemon keeps. After each new backup, older snapshots beyond this count are deleted automatically. 0 keeps every backup forever.',
+    keywords: ['backup', 'retention', 'prune', 'snapshots', 'keep', 'storage', 'cleanup', 'disk'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.intRange(min: 0, max: 1000),
+    defaultValue: 20,
+    profilePath: 'storage.backup_retention_count',
+  ),
 
   // §54 Notifications — 12 fields (5 channels + 7 triggers). State lives in
   // `notificationsSettingsProvider`.
