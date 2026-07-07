@@ -99,6 +99,11 @@ public interface IDomeService {
     Task<OperationAcceptedDto> ParkAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> OpenShutterAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> CloseShutterAsync(string? idempotencyKey, CancellationToken ct);
+    // §25.5.5 — the remaining Alpaca dome motions (caps for all four were already in DomeCapabilitiesDto).
+    Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> AbortSlewAsync(string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> SetParkAsync(string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> SyncToAzimuthAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 public interface ISwitchService {

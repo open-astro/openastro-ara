@@ -37,7 +37,10 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>Read-once dome capability flags cached for the <see cref="IDomeMediator"/> snapshot.</summary>
 internal readonly record struct DomeCaps(
-    bool CanSetShutter, bool CanSetAzimuth, bool CanSyncAzimuth, bool CanPark, bool CanFindHome);
+    bool CanSetShutter, bool CanSetAzimuth, bool CanSyncAzimuth, bool CanPark, bool CanFindHome,
+    // §25.5.5 — gates the "set park position" control (distinct from CanPark: a dome can be
+    // parkable at a factory position without accepting a new one).
+    bool CanSetPark);
 
 /// <summary>
 /// §14e — the real <see cref="DomeService"/> also serves the Sequencer's <see cref="IDomeMediator"/>

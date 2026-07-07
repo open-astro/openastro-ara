@@ -118,14 +118,32 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
               child: const Text('Close shutter'),
             ),
           ]),
-        if (caps?.canPark ?? false)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: OutlinedButton(
-              onPressed: s.isBusy ? null : () => _run('park', ref.read(domeProvider.notifier).park),
-              child: const Text('Park'),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(spacing: 8, runSpacing: 4, children: [
+            if (caps?.canPark ?? false)
+              OutlinedButton(
+                onPressed: s.isBusy ? null : () => _run('park', ref.read(domeProvider.notifier).park),
+                child: const Text('Park'),
+              ),
+            if (caps?.canSetPark ?? false)
+              OutlinedButton(
+                onPressed: s.isBusy ? null : () => _run('set park position', ref.read(domeProvider.notifier).setPark),
+                child: const Text('Set park here'),
+              ),
+            if (caps?.canFindHome ?? false)
+              OutlinedButton(
+                onPressed: s.isBusy ? null : () => _run('find home', ref.read(domeProvider.notifier).findHome),
+                child: const Text('Find home'),
+              ),
+            // Deliberately NOT disabled while busy — stopping a moving dome is
+            // exactly when you need it (§57 panic-stop shape).
+            OutlinedButton(
+              onPressed: () => _run('stop', ref.read(domeProvider.notifier).abortSlew),
+              child: const Text('Stop'),
             ),
-          ),
+          ]),
+        ),
         if (caps?.canSetAzimuth ?? false)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -150,6 +168,13 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
                 onPressed: s.isBusy ? null : _slew,
                 child: const Text('Slew'),
               ),
+              if (caps?.canSyncAzimuth ?? false) ...[
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: s.isBusy ? null : _sync,
+                  child: const Text('Sync'),
+                ),
+              ],
             ]),
           ),
       ],
@@ -172,6 +197,18 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
       return;
     }
     await _run('slew', () => ref.read(domeProvider.notifier).slew(v));
+  }
+
+  Future<void> _sync() async {
+    final messenger = ScaffoldMessenger.of(context);
+    // Same [0, 360) rule as _slew — sync re-labels the current position, no motion.
+    final v = double.tryParse(_az.text.trim());
+    if (v == null || v < 0 || v >= 360) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Enter an azimuth from 0 up to (not including) 360.')));
+      return;
+    }
+    await _run('sync', () => ref.read(domeProvider.notifier).syncToAzimuth(v));
   }
 
   Future<void> _run(String verb, Future<bool> Function() action) async {

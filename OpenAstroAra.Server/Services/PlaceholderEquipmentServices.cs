@@ -133,6 +133,14 @@ public sealed class PlaceholderDomeService : IDomeService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.slew", idempotencyKey));
     public Task<OperationAcceptedDto> ParkAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.park", idempotencyKey));
+    public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.findhome", idempotencyKey));
+    public Task<OperationAcceptedDto> AbortSlewAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.abort", idempotencyKey));
+    public Task<OperationAcceptedDto> SetParkAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.setpark", idempotencyKey));
+    public Task<OperationAcceptedDto> SyncToAzimuthAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.sync", idempotencyKey));
     public Task<OperationAcceptedDto> OpenShutterAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("dome.shutter.open", idempotencyKey));
     public Task<OperationAcceptedDto> CloseShutterAsync(string? idempotencyKey, CancellationToken ct) =>

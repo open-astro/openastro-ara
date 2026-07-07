@@ -8,6 +8,9 @@ class DomeCapabilities {
   final bool canSyncAzimuth;
   final bool canPark;
   final bool canFindHome;
+  // §25.5.5 — "set park position" is distinct from canPark (a dome can be parkable
+  // at a factory position without accepting a new one). Absent on pre-slice daemons → false.
+  final bool canSetPark;
 
   const DomeCapabilities({
     required this.canSetShutter,
@@ -15,6 +18,7 @@ class DomeCapabilities {
     required this.canSyncAzimuth,
     required this.canPark,
     required this.canFindHome,
+    this.canSetPark = false,
   });
 
   factory DomeCapabilities.fromJson(Map<String, dynamic> json) => DomeCapabilities(
@@ -23,6 +27,7 @@ class DomeCapabilities {
         canSyncAzimuth: json['can_sync_azimuth'] as bool? ?? false,
         canPark: json['can_park'] as bool? ?? false,
         canFindHome: json['can_find_home'] as bool? ?? false,
+        canSetPark: json['can_set_park'] as bool? ?? false,
       );
 
   @override
@@ -33,11 +38,12 @@ class DomeCapabilities {
           other.canSetAzimuth == canSetAzimuth &&
           other.canSyncAzimuth == canSyncAzimuth &&
           other.canPark == canPark &&
-          other.canFindHome == canFindHome);
+          other.canFindHome == canFindHome &&
+          other.canSetPark == canSetPark);
 
   @override
   int get hashCode => Object.hash(
-      canSetShutter, canSetAzimuth, canSyncAzimuth, canPark, canFindHome);
+      canSetShutter, canSetAzimuth, canSyncAzimuth, canPark, canFindHome, canSetPark);
 }
 
 /// Live status of the connected ASCOM Dome
