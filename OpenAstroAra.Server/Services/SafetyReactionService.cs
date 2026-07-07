@@ -201,10 +201,6 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                 (null, null) => null,
                 _ => (monitorSafe ?? true) && (weatherSafe ?? true),
             };
-            lock (_lock) {
-                _lastBreaches = breaches;
-                _lastMonitorUnsafe = monitorSafe == false;
-            }
 
             Transition transition;
             lock (_lock) {
@@ -242,7 +238,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             switch (transition) {
                 case Transition.BecameUnsafe:
                     try {
-                        await ReactToUnsafeAsync(dto).ConfigureAwait(false);
+                        await ReactToUnsafeAsync(dto, breaches, monitorSafe == false).ConfigureAwait(false);
                     } finally {
                         lock (_lock) { _reacting = false; }
                     }
@@ -257,11 +253,6 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     }
 
     // ─── unsafe reaction ───
-
-    // Why the tick's verdict went unsafe, captured for the event/notification
-    // (guarded by _lock; read once at reaction time).
-    private IReadOnlyList<string> _lastBreaches = Array.Empty<string>();
-    private bool _lastMonitorUnsafe;
 
     /// <summary>
     /// §35.1 threshold evaluation — pure so tests drive it directly. A sensor
@@ -291,19 +282,16 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         return breaches;
     }
 
-    private async Task ReactToUnsafeAsync(SafetyMonitorDto? monitor) {
+    // breaches/monitorUnsafe ride in as the FIRING tick's own locals — an
+    // overlapping slow tick must not be able to re-attribute the reasons
+    // (round-2 review race).
+    private async Task ReactToUnsafeAsync(SafetyMonitorDto? monitor, IReadOnlyList<string> breaches, bool monitorUnsafe) {
         var policy = ReadPolicies();
         var action = ParseAction(policy?.OnUnsafe);
         if (policy is not null && ParseActionIsFallback(policy.OnUnsafe)) {
             LogUnknownActionToken(policy.OnUnsafe);
         }
 
-        IReadOnlyList<string> breaches;
-        bool monitorUnsafe;
-        lock (_lock) {
-            breaches = _lastBreaches;
-            monitorUnsafe = _lastMonitorUnsafe;
-        }
         var reasons = new List<string>();
         if (monitorUnsafe) { reasons.Add("safety monitor reports unsafe"); }
         reasons.AddRange(breaches);
@@ -720,7 +708,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     Task IHostedService.StartAsync(CancellationToken cancellationToken) {
         lock (_lock) {
-            if (!_disposed && _safetyMonitor is not null) {
+            // Weather-only operation is first-class (§35.1): the timer runs
+            // when EITHER source exists, mirroring TickAsync's own bail-out.
+            if (!_disposed && (_safetyMonitor is not null || _weather is not null)) {
                 _timer = new Timer(OnTick, null, PollInterval, PollInterval);
             }
         }
