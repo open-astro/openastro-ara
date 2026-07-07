@@ -361,12 +361,3 @@ public sealed partial class PlaceholderSequenceImportService : ISequenceImportSe
     private partial void LogPersistImportFailed(Exception ex, string name);
 }
 
-/// <summary>
-/// Phase 13.15 — placeholder <see cref="IAutoFlatsService"/>. Returns
-/// 202 OperationAccepted; real impl pauses the sequence run until the
-/// user's decision arrives per §48.
-/// </summary>
-public sealed class PlaceholderAutoFlatsService : IAutoFlatsService {
-    public Task<OperationAcceptedDto> ProvideDecisionAsync(Guid sequenceId, AutoFlatsDecisionRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.auto-flats.decide", idempotencyKey));
-}

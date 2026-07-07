@@ -155,6 +155,10 @@ public sealed record SafetyPoliciesDto(
     // fail). Default ON: the layers protect a sleeping user and cost nothing when everything is
     // healthy; a rig whose driver misreports pier side can turn it off. Optional ctor defaults keep
     // an older profile.json deserializing.
+    // §48.2 — the sequence-start "capture calibration tonight?" behaviour:
+    // "ask" (default — WILMA prompts each run) | "panel_at_end" | "sky_at_twilight"
+    // | "never". Optional ctor default keeps an older profile.json deserializing.
+    string CalibrationCaptureDefault = "ask",
     bool FlipSafetyEnabled = true,
     // §58.9 — the expected flip-slew duration (seconds). Alpaca has no slew-duration estimate API,
     // so this profile figure stands in for the spec's "mount estimate": the Layer-2 watchdog's hard

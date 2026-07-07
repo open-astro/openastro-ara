@@ -14,6 +14,28 @@ the other design docs.
 
 ---
 
+## Flaky bench test — AlpacaFaultProxy header-forward (observed 2026-07-07, CI linux)
+
+`PassThrough_forwards_inbound_request_headers_to_the_upstream` failed once on the #735 CI run with
+`ObjectDisposedException: HttpListenerResponse` — a teardown race in the bench proxy (the upstream
+fake's response object disposed while the forward was still writing). Pre-existing, unrelated to
+the PR's diff; passes locally and on re-run. Fix when touched next: guard the proxy's response
+write against a disposed listener (catch ObjectDisposedException alongside the existing
+HttpListenerException handling in `AlpacaFaultProxy.ForwardAsync`).
+
+## §48 auto-flats — follow-ups (2026-07-07, after the server prompt-flow PR)
+
+- **WILMA client slice**: the §48.1 prompt dialog (listens for `sequence.auto_flats_prompt`,
+  POSTs `/sequences/{id}/auto-flats-decision`, "don't ask again" checkbox) + Settings →
+  Calibration panel exposing `calibration_capture_default` (+ settings/help registry entries,
+  merge-gated with the panel).
+- **§48.3/§48.4 native flat instructions (v0.1.0)**: NINA's FlatPanelFlats/SkyFlats were never
+  ported; v0.0.1's automation is the §39.5 generated sequence (fixed 1 s starting exposure,
+  advisory TargetAdu). The native instructions bring auto-exposure-to-ADU, flat-panel
+  brightness control, and twilight-timed sky flats — at which point "sky_at_twilight" can
+  auto-start instead of generate-and-notify, and the §48.7 flat_panel/sky_flat profile blocks
+  land WITH them (enforcement-first).
+
 ## §44 backup stream — the WILMA client half (2026-07-07, after the server PR)
 
 The server half shipped (`BackupStreamService`: slot/queue/ack + lazy sha256 + schema v4). Remaining

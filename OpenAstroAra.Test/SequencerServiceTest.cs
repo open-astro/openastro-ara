@@ -57,12 +57,34 @@ namespace OpenAstroAra.Test {
 
         private static SequencerService BuildService(Guid id, JsonElement? body, IWsBroadcaster? ws = null,
                 IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
-                UnattendedShutdownService? unattendedShutdown = null) {
+                UnattendedShutdownService? unattendedShutdown = null,
+                IProfileStore? profileStore = null, ICalibrationService? calibration = null,
+                INotificationService? notifications = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
-                frames: frames, unattendedShutdown: unattendedShutdown);
+                frames: frames, unattendedShutdown: unattendedShutdown,
+                profileStore: profileStore, calibrationResolver: () => calibration, notifications: notifications);
+        }
+
+        private static Mock<IProfileStore> ProfileWithCaptureDefault(string token) {
+            var store = new Mock<IProfileStore>();
+            store.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
+                OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
+                OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false,
+                CalibrationCaptureDefault: token));
+            return store;
+        }
+
+        private static async Task WaitForEventAsync(RecordingWsBroadcaster ws, string type) {
+            for (var i = 0; i < 100; i++) {
+                if (ws.Events.Contains(type)) return;
+                await Task.Delay(50);
+            }
+            Assert.That(ws.Events, Does.Contain(type));
         }
 
         private static async Task<SequenceRunStateDto?> WaitForTerminalAsync(SequencerService svc, Guid id) {
@@ -366,6 +388,94 @@ namespace OpenAstroAra.Test {
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
             Assert.That(ws.Events, Does.Contain("sequence.resumed"));
+        }
+
+        [Test]
+        public async Task Start_with_ask_default_emits_the_auto_flats_prompt() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "one" })), ws,
+                profileStore: ProfileWithCaptureDefault("ask").Object);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.auto_flats_prompt");
+        }
+
+        [Test]
+        public async Task Profile_panel_at_end_generates_and_starts_flats_after_completion() {
+            // §48.1 end-to-end: the profile default auto-decides (Decided event,
+            // source=profile), the run completes with its catalog session, and
+            // the §39.5 generator is invoked + the flats run is kicked off.
+            var id = Guid.NewGuid();
+            var sessionId = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sessionId);
+            frames.Setup(f => f.EndSessionAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var calibration = new Mock<ICalibrationService>();
+            var generated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            calibration.Setup(c => c.GenerateMatchingFlatsAsync(sessionId, It.IsAny<MatchingFlatsRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => generated.TrySetResult())
+                .ReturnsAsync(new GeneratedFlatSequenceDto(sessionId, Guid.NewGuid(), "Flats — tonight", 30,
+                    Array.Empty<GeneratedFlatStepDto>()));
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "one" })), ws,
+                frames: frames.Object, profileStore: ProfileWithCaptureDefault("panel_at_end").Object,
+                calibration: calibration.Object, notifications: notifications.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            Assert.That(await Task.WhenAny(generated.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(generated.Task),
+                "completion of a panel_at_end run must invoke the §39.5 generator with the run's session");
+            await WaitForEventAsync(ws, "sequence.auto_flats_decided");
+            Assert.That(ws.Events, Does.Not.Contain("sequence.auto_flats_prompt"), "a profile default never prompts");
+        }
+
+        [Test]
+        public async Task An_aborted_run_never_triggers_end_of_session_flats() {
+            var id = Guid.NewGuid();
+            var sessionId = Guid.NewGuid();
+            var frames = new Mock<IFrameRepository>();
+            frames.Setup(f => f.CreateRunSessionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(sessionId);
+            frames.Setup(f => f.EndSessionAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var calibration = new Mock<ICalibrationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 3600 })),
+                new RecordingWsBroadcaster(), frames: frames.Object,
+                profileStore: ProfileWithCaptureDefault("panel_at_end").Object, calibration: calibration.Object);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            await Task.Delay(200);
+
+            calibration.Verify(c => c.GenerateMatchingFlatsAsync(It.IsAny<Guid>(), It.IsAny<MatchingFlatsRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+                Times.Never, "the user ended the night on their own terms — no auto-flats");
+        }
+
+        [Test]
+        public async Task ProvideDecision_records_the_choice_and_remember_persists_the_profile() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var store = ProfileWithCaptureDefault("ask");
+            SafetyPoliciesDto? persisted = null;
+            store.Setup(p => p.PutSafetyPolicies(It.IsAny<SafetyPoliciesDto>()))
+                .Callback<SafetyPoliciesDto>(p => persisted = p);
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 3600 })), ws,
+                profileStore: store.Object);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+
+            await svc.ProvideDecisionAsync(id, new AutoFlatsDecisionRequestDto("panel_at_end", Remember: true), null, CancellationToken.None);
+            await WaitForEventAsync(ws, "sequence.auto_flats_decided");
+            Assert.That(persisted?.CalibrationCaptureDefault, Is.EqualTo("panel_at_end"));
+
+            Assert.ThrowsAsync<ArgumentException>(() =>
+                svc.ProvideDecisionAsync(id, new AutoFlatsDecisionRequestDto("do_a_barrel_roll", Remember: false), null, CancellationToken.None));
+
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
         }
 
         [Test]

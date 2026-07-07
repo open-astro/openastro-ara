@@ -66,7 +66,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - 🟡 **§45** Polar alignment — phase 1 landed (#703): `PolarAlignGeometry` two-point RA-axis fit (nearest-pole disambiguation + 30° refusal guard, Bennett refraction, alt/az error split) + the guider-fork RPC classes (capture_single_frame / centroids / pa_session). Phases 2+ (daemon FITS spike, live flow) need the guider daemon running; `PlaceholderPolarAlignService` still registered until then.
 - ✅ **§46** Notifications (SQLite, #201/203).
 - 🚫 **§47** Mosaic imaging — `PlaceholderMosaicService`; v0.1.0.
-- 🟡 **§48** Auto-flats + dark library — dark library + matching-flats generation shipped inside the §39 epic (flats/darks as generated sequences); the dedicated `IAutoFlatsService` remains a thin stub superseded by that design (end-of-session auto-flats prompt flow = the remaining sliver).
+- 🟡 **§48** Auto-flats + dark library — dark library + matching-flats generation shipped inside the §39 epic; the §48.1/.2 prompt flow is ENFORCED server-side (2026-07-07: `calibration_capture_default` + prompt/decide/auto-execute on completion via §39.5, `IAutoFlatsService` served by the SequencerService singleton). Remaining: the WILMA prompt dialog + Settings → Calibration panel (client slice), §48.3/.4 native FlatPanelFlats/SkyFlats instructions with auto-exposure + twilight timing (v0.1.0 — §39.5 generation is the v0.0.1 automation).
 - ✅ **§49** API doc serving (Scalar UI) · ✅ **§50** Session analytics + Stats (SQLite, 8 views) · ✅ **§51** Real-time diagnostics (SQLite).
 - ✅ **§52** Mount Alpaca-only (AlpacaTelescope + sequencer mediator).
 - 🟡 **§53** Accessibility — baseline; full WCAG audit = ongoing.
