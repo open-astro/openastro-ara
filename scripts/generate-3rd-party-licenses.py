@@ -143,6 +143,11 @@ _NUGET_OVERRIDES_CI = {k.lower(): (k, v) for k, v in NUGET_OVERRIDES.items()}
 # version's LICENSE and updates the pin. The set is also self-enforcing both
 # ways (unmapped direct dep / dead entry → hard fail).
 PUB_LICENSES: dict[str, dict[str, str]] = {
+    "audioplayers": {
+        "version": "6.8.1",
+        "license": "MIT",
+        "copyright": "Copyright (c) 2017 Luan Nico and the Blue Fire team",
+    },
     "collection": {
         "version": "1.19.1",
         "license": "BSD-3-Clause",

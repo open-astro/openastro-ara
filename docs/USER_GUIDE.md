@@ -102,6 +102,11 @@ Ara assumes you're asleep while it works:
   the in-flight exposure, stop guiding, park the mount, and switch the flat panel light off — then
   reports honestly what each step did (an unreachable mount is called out loudly so you go check,
   never papered over). A panicked double-press is ignored while the first stop is running.
+- **Audible alarm**: when anything above reports UNSAFE, WILMA pops a safety modal at once and,
+  after a short silent delay (default 5 s — silence it from the screen before it ever rings),
+  loops an alarm tone at full volume until you silence it or conditions clear. Pick the tone and
+  delay under **Settings → Session → Notifications**; the master switch is the "Sound alert"
+  toggle there.
 - **Safety monitor reactions**: with an Alpaca SafetyMonitor connected, the daemon polls it every
   10 seconds and reacts the moment it reports unsafe, per **Settings → Safety → Policies → "When
   conditions turn unsafe"**: pause the sequence + stop guiding + park (the default), park only,

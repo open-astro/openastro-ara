@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/alarm/safety_alarm_state.dart';
 import '../../../state/settings/notifications_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -108,6 +109,40 @@ class _SessionNotificationsPanelState
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
         ),
+        if (s.soundAlert)
+          Consumer(builder: (context, ref, _) {
+            final alarm = ref.watch(safetyAlarmProvider);
+            final an = ref.read(safetyAlarmProvider.notifier);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EditableNumberRow(
+                  label: 'Alarm delay (s of silent popup first)',
+                  helpKey: 'session.notifications.alarm_delay',
+                  currentValue: alarm.delaySec.toString(),
+                  getCanonical: () =>
+                      ref.read(safetyAlarmProvider).delaySec.toString(),
+                  parse: (str) {
+                    final v = int.tryParse(str);
+                    if (v != null) an.setDelaySec(v);
+                  },
+                ),
+                SettingsDropdownRow<String>(
+                  label: 'Alarm tone',
+                  helpKey: 'session.notifications.alarm_tone',
+                  value: alarm.tone,
+                  items: const {
+                    'siren': 'Two-tone siren',
+                    'beeps': 'Urgent beeps',
+                    'chime': 'Rising chime',
+                  },
+                  onChanged: (v) {
+                    if (v != null) an.setTone(v);
+                  },
+                ),
+              ],
+            );
+          }),
         EditableTextRow(
           label: 'Pushover app token',
           helpKey: 'session.notifications.pushover_token',

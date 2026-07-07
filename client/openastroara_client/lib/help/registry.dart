@@ -33,6 +33,29 @@ const Map<String, Help> helpRegistry = {
   // companion `equipment.alpacabridge.version` entry from the playbook is MOOT:
   // the §68.1 version gate was removed (Alpaca has no version endpoint by
   // design — user decision 2026-06-21), so there is no version to explain.
+  'session.notifications.alarm_delay': Help(
+    key: 'session.notifications.alarm_delay',
+    title: 'Safety alarm delay',
+    body: 'When the daemon reports UNSAFE (safety monitor, weather threshold, or an '
+        'emergency stop), WILMA pops the safety modal immediately but waits this many '
+        'seconds before the tone starts looping at full volume — if you are at the screen '
+        'you can silence it before it ever rings; if you are asleep, it rings. The daemon '
+        'fires the event BEFORE its reaction runs, so the alarm and the park happen in '
+        'parallel. Conditions clearing (safety.safe) auto-silences.',
+    relatedSettings: ['session.notifications.alarm_tone'],
+    keywords: ['alarm', 'delay', 'safety', 'unsafe', 'siren'],
+  ),
+  'session.notifications.alarm_tone': Help(
+    key: 'session.notifications.alarm_tone',
+    title: 'Safety alarm tone',
+    body: 'The bundled tone the safety alarm loops until silenced: a two-tone siren '
+        '(default, hardest to sleep through), urgent triple beeps, or a gentler rising '
+        'chime. Device-local — the desktop in your bedroom and the one in the observatory '
+        'can each pick their own. Volume is forced to maximum while the alarm rings; a '
+        'muted safety alarm defeats its purpose.',
+    relatedSettings: ['session.notifications.alarm_delay'],
+    keywords: ['alarm', 'tone', 'siren', 'beeps', 'chime'],
+  ),
   'session.calibration.capture_default': Help(
     key: 'session.calibration.capture_default',
     title: 'End-of-night calibration capture',
