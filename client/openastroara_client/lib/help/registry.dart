@@ -111,6 +111,47 @@ const Map<String, Help> helpRegistry = {
         'safest default for unattended imaging.',
     relatedSettings: ['safety.policies.on_unsafe'],
   ),
+  'safety.policies.weather_triggers': Help(
+    key: 'safety.policies.weather_triggers',
+    title: 'Weather-station thresholds',
+    body: 'With an ObservingConditions weather station connected, Ara can react to the '
+        'numbers, not just a boolean safety monitor: wind (sustained or gust) over your '
+        'km/h limit, humidity over your % limit, or ambient temperature closing to within '
+        'your dew-delta of the dew point each make conditions UNSAFE — the same reaction '
+        'as the safety monitor ("When conditions turn unsafe" runs, and the alert names '
+        'exactly which threshold tripped). A sensor your station does not report simply '
+        'skips its check. Auto-resume waits for the weather to clear too: conditions must '
+        'read safe on every source before the countdown starts. Off by default.',
+    relatedSettings: ['safety.policies.max_wind_kmh', 'safety.policies.max_humidity_pct', 'safety.policies.min_dew_delta_c', 'safety.policies.on_unsafe'],
+    keywords: ['weather', 'thresholds', 'wind', 'humidity', 'dew', 'station', 'unsafe'],
+  ),
+  'safety.policies.max_wind_kmh': Help(
+    key: 'safety.policies.max_wind_kmh',
+    title: 'Maximum wind',
+    body: 'Wind above this — sustained speed or gust, whichever reads worse — is a breach. '
+        'Guiding usually degrades well before gear is at risk; 36 km/h (10 m/s) is a '
+        'conservative default for a covered rig, lower it for long focal lengths.',
+    relatedSettings: ['safety.policies.weather_triggers'],
+    keywords: ['wind', 'gust', 'speed', 'threshold'],
+  ),
+  'safety.policies.max_humidity_pct': Help(
+    key: 'safety.policies.max_humidity_pct',
+    title: 'Maximum humidity',
+    body: 'Relative humidity above this is a breach — sustained high humidity is '
+        'condensation territory for optics and electronics even before fog forms.',
+    relatedSettings: ['safety.policies.weather_triggers', 'safety.policies.min_dew_delta_c'],
+    keywords: ['humidity', 'moisture', 'condensation', 'threshold'],
+  ),
+  'safety.policies.min_dew_delta_c': Help(
+    key: 'safety.policies.min_dew_delta_c',
+    title: 'Minimum dew delta',
+    body: 'When the ambient temperature drops to within this many °C of the dew point, '
+        'dew is about to form on your optics. 2 °C is a sensible floor; raise it if your '
+        'corrector plate fogs early. Needs a station reporting both temperature and dew '
+        'point — otherwise the check is skipped.',
+    relatedSettings: ['safety.policies.weather_triggers'],
+    keywords: ['dew', 'dew point', 'fog', 'delta', 'condensation'],
+  ),
   'safety.policies.auto_resume': Help(
     key: 'safety.policies.auto_resume',
     title: 'Auto-resume',

@@ -73,10 +73,14 @@ The §35.4 core shipped: `SafetyReactionService` (SafetyMonitor 10 s poll → `o
 pause/abort + stop-guiding + park, `safety.unsafe` before the action, auto-resume-when-safe with
 the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up):
 
-- **§35.1 granular weather-threshold triggers** — wind km/h, humidity %, dew-delta °C via the
-  connected ObservingConditions device, each with its own action + threshold profile fields. Add
-  the fields WITH their enforcement (the enforcement-first rule) — the reaction plumbing to reuse
-  is in place now.
+- ✅ **§35.1 granular weather-threshold triggers — DONE (2026-07-07).** Wind km/h (worse of
+  sustained/gust), humidity %, dew-delta °C over the connected ObservingConditions device,
+  evaluated in the §35 safety tick; a breach is UNSAFE through the same classifier/reaction/
+  auto-resume machinery, the safety.unsafe payload carries a reasons array, and the notification
+  names the tripped threshold. Fields shipped WITH enforcement (weather_triggers_enabled default
+  OFF + 3 thresholds); the WILMA Safety → Policies panel gained the section. Per-trigger ACTIONS
+  deferred by design — thresholds decide WHEN, the single on_unsafe decides WHAT (PORT_DECISIONS
+  2026-07-07).
 - ✅ **§35.3 emergency stop — DONE (2026-07-07).** `EmergencyStopService` ladder (abort runs FIRST
   so nothing starts a fresh exposure behind the stop → abort exposure → stop guiding → park →
   flat light off; every rung best-effort, honest result DTO, single-flight double-press gate)
