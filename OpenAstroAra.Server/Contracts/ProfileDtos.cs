@@ -167,7 +167,16 @@ public sealed record SafetyPoliciesDto(
     // Error→Critical) while the site sits in astronomical darkness, so the §35.5 alarm
     // behaviour engages earlier for a sleeping user. Default ON per the spec's unattended
     // posture; see UnattendedSeverity.
-    bool UnattendedEscalation = true);
+    bool UnattendedEscalation = true,
+    // §58.12 — when a run suspends awaiting the user (PausedAwaitingUser) and nobody responds
+    // within the wait window, gracefully shut the rig down (stop guider → park → disconnect →
+    // warm cooler → disconnect camera; see UnattendedShutdownService). Default ON: the spec
+    // allows disabling but flags it as not recommended.
+    bool UnattendedShutdownEnabled = true,
+    // §58.12 — the unattended wait before the shutdown executes. 10 min is the spec's
+    // Goldilocks default (long enough to grab a phone and acknowledge, short enough not to
+    // burn a field battery all night); 5 for battery rigs, 30 for wall-powered observatories.
+    int UnattendedShutdownWaitMinutes = 10);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -37,7 +38,18 @@ public static class ConnectionEndpoints {
         var server = app.MapGroup("/api/v1/server").WithTags("Connection");
 
         server.MapPost("/connect",
-                async ([FromBody] ClientConnectRequestDto body, ClientSessionService sessions, CancellationToken ct) => {
+                async ([FromBody] ClientConnectRequestDto body, ClientSessionService sessions,
+                        HttpContext http, CancellationToken ct) => {
+                    // §58.12 — a FRESH claim of the §27 control slot (no prior
+                    // session id) is a human opening WILMA: cancel any
+                    // unattended-shutdown countdown. A re-claim presenting an
+                    // existing session id is WILMA's own silent recovery after a
+                    // network blip — automated, not attention (flaky Wi-Fi must
+                    // not defeat the §58.12 safety net all night).
+                    if (body?.SessionId is null) {
+                        http.RequestServices.GetService<UnattendedShutdownService>()
+                            ?.NotifyUserActivity("server.connect");
+                    }
                     var hostname = body?.Hostname?.Trim();
                     if (string.IsNullOrEmpty(hostname)) {
                         return Results.Problem(

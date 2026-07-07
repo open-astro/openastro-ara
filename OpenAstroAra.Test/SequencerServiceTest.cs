@@ -56,12 +56,13 @@ namespace OpenAstroAra.Test {
         }
 
         private static SequencerService BuildService(Guid id, JsonElement? body, IWsBroadcaster? ws = null,
-                IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null) {
+                IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null,
+                UnattendedShutdownService? unattendedShutdown = null) {
             factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
-                frames: frames);
+                frames: frames, unattendedShutdown: unattendedShutdown);
         }
 
         private static async Task<SequenceRunStateDto?> WaitForTerminalAsync(SequencerService svc, Guid id) {
@@ -433,6 +434,54 @@ namespace OpenAstroAra.Test {
             executor.Verify(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
                 It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()),
                 Times.AtLeast(2), "the flip was re-attempted after resume");
+        }
+
+        [Test]
+        public async Task Awaiting_user_pause_arms_the_unattended_shutdown_countdown_and_resume_cancels_it() {
+            // §58.12 integration: the engine entering PausedAwaitingUser starts
+            // the countdown; the user's explicit resume (the "user came back"
+            // signal) cancels it. Countdown wait is left at real minutes so the
+            // ladder can never fire inside this test.
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            var flipSucceeds = false;
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor
+                .Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(() => Task.FromResult(flipSucceeds));
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile,
+                meridianFlipExecutor: executor.Object);
+
+            // Default profile policy (no IProfileStore) = shutdown enabled, 10 min.
+            using var shutdown = new UnattendedShutdownService();
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "first" });
+            }, factory), factory: factory, unattendedShutdown: shutdown);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            Assert.That(shutdown.IsCountingDown, Is.True,
+                "entering PausedAwaitingUser must start the §58.12 clock");
+
+            flipSucceeds = true;
+            await svc.ResumeAsync(id, null, CancellationToken.None);
+            Assert.That(shutdown.IsCountingDown, Is.False,
+                "the explicit resume IS the user coming back — countdown cancelled");
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
         }
 
         [Test]

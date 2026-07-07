@@ -457,6 +457,26 @@ public partial class Program {
         // (concrete + ISequencerService + IHostedService) so there's no concrete
         // cast — a future swap of the ISequencerService impl can't break the
         // hosted-service registration with an InvalidCastException at startup.
+        // §58.12 — the unattended-shutdown countdown. Func<ISequencerService>
+        // resolver breaks the construction cycle with SequencerService (which
+        // notifies this service on awaiting-user entry; this service re-reads
+        // run state before firing the ladder).
+        builder.Services.AddSingleton<UnattendedShutdownService>(sp =>
+            new UnattendedShutdownService(
+                sp.GetService<IProfileStore>(),
+                () => sp.GetService<ISequencerService>(),
+                sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
+                sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetService<ICameraService>(),
+                sp.GetService<IFilterWheelService>(),
+                sp.GetService<IFocuserService>(),
+                sp.GetService<IRotatorService>(),
+                sp.GetService<IFlatDeviceService>(),
+                sp.GetService<INotificationService>(),
+                sp.GetService<ILogger<UnattendedShutdownService>>()));
+        // Hosted so a daemon shutdown cancels a pending countdown.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
+
         builder.Services.AddSingleton<SequencerService>(sp =>
             new SequencerService(
                 sp.GetRequiredService<SequenceBodyDeserializer>(),
@@ -467,7 +487,9 @@ public partial class Program {
                 // §40 — explicit: this factory lambda bypasses constructor
                 // activation, so the optional param must be passed by hand
                 // (the #711 CameraService lesson).
-                sp.GetService<IFrameRepository>()));
+                sp.GetService<IFrameRepository>(),
+                // §58.12 — same lesson: pass the countdown service by hand.
+                sp.GetService<UnattendedShutdownService>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.

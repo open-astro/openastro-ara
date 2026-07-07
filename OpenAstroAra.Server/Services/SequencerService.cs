@@ -68,6 +68,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     private readonly ActiveSequenceCheckpoint? _checkpoint;
     private readonly IFrameRepository? _frames;
     private readonly SequenceBodyDeserializer _deserializer;
+    // §58.12 — the unattended-shutdown countdown. Notified when a run enters
+    // PausedAwaitingUser (starts the clock) and on every explicit lifecycle
+    // command (the user is back — cancels it). AbortActiveRunsAsync and the
+    // hosted-service shutdown path deliberately do NOT notify: those are the
+    // daemon's own automated actions, not user attention.
+    private readonly UnattendedShutdownService? _unattendedShutdown;
     private readonly ILogger<SequencerService> _logger;
     private readonly ConcurrentDictionary<Guid, RunState> _runs = new();
     // Completed runs stay queryable via GetRunState after they finish (WILMA
@@ -87,19 +93,22 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             Func<ISequenceService?>? sequencesResolver = null,
             ActiveSequenceCheckpoint? checkpoint = null,
             ILogger<SequencerService>? logger = null,
-            IFrameRepository? frames = null) {
+            IFrameRepository? frames = null,
+            UnattendedShutdownService? unattendedShutdown = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
         _checkpoint = checkpoint;
         _logger = logger ?? NullLogger<SequencerService>.Instance;
         _frames = frames;
+        _unattendedShutdown = unattendedShutdown;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
     public Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.start");
         // Atomically reserve the run slot BEFORE any async work. Two concurrent
         // starts for the same id otherwise both pass a separate guard and both
         // spawn a worker (TOCTOU). AddOrUpdate is atomic per key: an absent slot
@@ -192,6 +201,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.pause");
         // Arm the run's instruction-boundary gate; the engine suspends at the next
         // boundary (SequentialStrategy awaits the gate before each item, so the
         // current instruction always finishes — NINA pause semantics). The state
@@ -205,6 +215,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.resume");
         if (_runs.TryGetValue(id, out var run)) {
             // CAS BEFORE releasing the gate: while the engine is suspended it
             // cannot advance, so a successful Paused→Running here always gets its
@@ -246,10 +257,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
             _ = EmitAsync("sequence.paused", sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
+            if (target == SequenceRunState.PausedAwaitingUser) {
+                // §58.12 — the rig needs a human; start the unattended-shutdown
+                // clock. Runs on the engine thread: the call only arms a timer.
+                _unattendedShutdown?.NotifyRunPausedAwaitingUser(sequenceId, run.RunId);
+            }
         }
     }
 
     public Task<OperationAcceptedDto> SkipAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.skip");
         // Skip whatever the run is currently executing (e.g. a target that isn't well-positioned):
         // SkipCurrentRunningItems() cancels each running item so the sequence advances to the next.
         // A no-op for a non-running run — skipping nothing is harmless, so it's always Accepted.
@@ -260,11 +277,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     public async Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.abort");
         await RequestCancelAsync(id, SequenceRunState.Aborting);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.abort", idempotencyKey);
     }
 
     public async Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.stop");
         await RequestCancelAsync(id, SequenceRunState.Stopped);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
