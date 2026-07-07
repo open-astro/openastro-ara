@@ -330,22 +330,6 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         if (error != null) {
           (error, downloadTime) = await _pullVerifyStore(client, entry); // one retry
         }
-        if (error == null) {
-          // downloadTime spans ONLY client.downloadFrame (and only the
-          // attempt that succeeded) — sha hashing and disk writes must
-          // inflate neither the link measurement (a slow NAS would
-          // understate the link) nor the pacing comparison.
-          final elapsed = downloadTime ?? Duration.zero;
-          _recordThroughput(entry.sizeBytes, elapsed);
-          final floor = paceFloor(entry.sizeBytes, state.maxMbps);
-          if (floor > elapsed) {
-            // §44.4 inter-frame pacing: the frame moved at link speed; wait
-            // until the session average is back under the cap before the
-            // next pull. Re-checked flags below keep a mid-wait disable safe.
-            await pacer(floor - elapsed);
-            if (!state.enabled || !state.active) return;
-          }
-        }
         if (error != null) {
           // Surface it and move on — the queue is oldest-first and an
           // un-acked frame stays at the head, so stopping here would let one
@@ -357,12 +341,31 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           if (failuresThisPass >= 3) break;
           continue;
         }
+        // Ack BEFORE pacing: the frame is already verified on disk, and a
+        // disable arriving mid-wait must not orphan it un-acked (the daemon
+        // would re-serve it next session — wasting exactly the bandwidth
+        // the cap conserves).
         await client.ack(_hostname, entry.id);
         state = state.copyWith(
           pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
           syncedThisSession: state.syncedThisSession + 1,
           syncedBytesThisSession: state.syncedBytesThisSession + entry.sizeBytes,
         );
+        // downloadTime spans ONLY client.downloadFrame (and only the attempt
+        // that succeeded) — sha hashing and disk writes must inflate neither
+        // the link measurement (a slow NAS would understate the link) nor
+        // the pacing comparison.
+        final elapsed = downloadTime ?? Duration.zero;
+        _recordThroughput(entry.sizeBytes, elapsed);
+        final floor = paceFloor(entry.sizeBytes, state.maxMbps);
+        if (floor > elapsed) {
+          // §44.4 inter-frame pacing: the frame moved at link speed; wait
+          // until the session average is back under the cap before the
+          // next pull. A mid-wait disable exits cleanly — this frame is
+          // already acked.
+          await pacer(floor - elapsed);
+          if (!state.enabled || !state.active) return;
+        }
       }
     } on BackupStreamSlotLostException catch (e) {
       // Handled below, AFTER the finally clears _polling — the reclaim's own
