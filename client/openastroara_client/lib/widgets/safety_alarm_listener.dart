@@ -31,7 +31,11 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
         _showAlarmDialog(next.reason);
       }
       if (!isActive && wasActive && _dialogShowing) {
-        // safety.safe (or another silence path) cleared it — drop the modal.
+        // Single pop path: EVERY dismissal (Silence button, safety.safe)
+        // flows through state → here. The flag clears synchronously BEFORE
+        // the pop so a re-entrant state change can't double-pop and take the
+        // screen underneath the modal with it.
+        _dialogShowing = false;
         Navigator.of(context, rootNavigator: true).pop();
       }
     });
@@ -56,10 +60,10 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(dialogContext).colorScheme.error,
               ),
-              onPressed: () {
-                ref.read(safetyAlarmProvider.notifier).silence();
-                Navigator.of(dialogContext).pop();
-              },
+              // Only mutates state — the ref.listen branch above owns the
+              // pop, so Silence and safety.safe share one dismissal path.
+              onPressed: () =>
+                  ref.read(safetyAlarmProvider.notifier).silence(),
               child: const Text('Silence alarm'),
             ),
           ],
