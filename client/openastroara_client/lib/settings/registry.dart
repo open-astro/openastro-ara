@@ -634,6 +634,15 @@ const List<Setting> settingsRegistry = [
     defaultValue: '',
   ),
   Setting(
+    id: 'session.storage.backup_stream_mbps',
+    label: 'Backup bandwidth cap (Mbps)',
+    description: 'Average-rate ceiling for the real-time backup stream\'s downloads; 0 (the default) means unlimited. Each frame still moves at link speed — the puller then waits until the average is back under the cap, on top of the built-in pause while an exposure is downloading.',
+    keywords: ['backup', 'bandwidth', 'cap', 'limit', 'mbps', 'throttle', 'network', 'stream'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.intRange(min: 0, max: 10000),
+    defaultValue: 0,
+  ),
+  Setting(
     id: 'session.storage.backup_retention_count',
     label: 'Keep backup snapshots',
     description: 'How many configuration backups the daemon keeps. After each new backup, older snapshots beyond this count are deleted automatically. 0 keeps every backup forever.',

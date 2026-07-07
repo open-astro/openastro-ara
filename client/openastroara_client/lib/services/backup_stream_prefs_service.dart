@@ -30,26 +30,30 @@ class BackupStreamPrefsService {
 
   /// The saved state, or the disabled defaults when nothing is stored yet
   /// (or on any read/parse error — prefs are non-critical, degrade to off).
-  Future<({bool enabled, String root})> load() async {
+  /// [maxMbps] 0 = unlimited (§44.4).
+  Future<({bool enabled, String root, int maxMbps})> load() async {
     try {
       final f = await _file();
-      if (!await f.exists()) return (enabled: false, root: '');
+      if (!await f.exists()) return (enabled: false, root: '', maxMbps: 0);
       final decoded = jsonDecode(await f.readAsString());
-      if (decoded is! Map) return (enabled: false, root: '');
+      if (decoded is! Map) return (enabled: false, root: '', maxMbps: 0);
       return (
         enabled: decoded['enabled'] is bool ? decoded['enabled'] as bool : false,
         root: decoded['root'] is String ? decoded['root'] as String : '',
+        maxMbps: decoded['mbps'] is int ? decoded['mbps'] as int : 0,
       );
     } catch (_) {
-      return (enabled: false, root: '');
+      return (enabled: false, root: '', maxMbps: 0);
     }
   }
 
-  Future<void> save({required bool enabled, required String root}) {
+  Future<void> save({required bool enabled, required String root, required int maxMbps}) {
     final task = _chain.then((_) async {
       try {
         final f = await _file();
-        await f.writeAsString(jsonEncode({'enabled': enabled, 'root': root}), flush: true);
+        await f.writeAsString(
+            jsonEncode({'enabled': enabled, 'root': root, 'mbps': maxMbps}),
+            flush: true);
       } catch (_) {/* best effort — a failed prefs write must not break the stream */}
     });
     _chain = task;

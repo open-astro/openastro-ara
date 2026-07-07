@@ -26,6 +26,15 @@ class BackupStreamState {
   final int syncedThisSession;
   final int syncedBytesThisSession;
 
+  /// §44.4 — average-rate ceiling for pulls, in Mbps; 0 = unlimited. Applied
+  /// as inter-frame pacing (a frame downloads at link speed, then the loop
+  /// waits until the average is back under the cap).
+  final int maxMbps;
+
+  /// §44.4 — the link throughput observed on this session's first pull
+  /// (Mbps), for the settings status line; null until one frame has moved.
+  final double? measuredMbps;
+
   /// Human-readable why-not when the stream isn't healthy (slot held
   /// elsewhere, disk trouble, transport error) — null when healthy. Survives
   /// an auto-disable so the panel can explain why the toggle switched off.
@@ -38,6 +47,8 @@ class BackupStreamState {
     this.pendingCount = 0,
     this.syncedThisSession = 0,
     this.syncedBytesThisSession = 0,
+    this.maxMbps = 0,
+    this.measuredMbps,
     this.problem,
   });
 
@@ -48,6 +59,8 @@ class BackupStreamState {
     int? pendingCount,
     int? syncedThisSession,
     int? syncedBytesThisSession,
+    int? maxMbps,
+    double? measuredMbps,
     String? problem,
     bool clearProblem = false,
   }) =>
@@ -58,6 +71,8 @@ class BackupStreamState {
         pendingCount: pendingCount ?? this.pendingCount,
         syncedThisSession: syncedThisSession ?? this.syncedThisSession,
         syncedBytesThisSession: syncedBytesThisSession ?? this.syncedBytesThisSession,
+        maxMbps: maxMbps ?? this.maxMbps,
+        measuredMbps: measuredMbps ?? this.measuredMbps,
         problem: clearProblem ? null : (problem ?? this.problem),
       );
 }
@@ -99,6 +114,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   Future<String> Function()? defaultRootResolver;
   Duration pollInterval = const Duration(seconds: 15);
 
+  /// §44.4 pacing sleep — a seam so tests assert requested delays instead of
+  /// actually waiting.
+  Future<void> Function(Duration) pacer = (d) => Future<void>.delayed(d);
+
   BackupStreamClient? _client;
   String? _clientServerId;
 
@@ -128,10 +147,13 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     final saved = await ref.read(backupStreamPrefsProvider).load();
     // A user toggle that raced ahead of this async load wins.
     if (_userTouched) return;
-    if (saved.root.isEmpty && !saved.enabled) return;
+    if (saved.root.isEmpty && !saved.enabled && saved.maxMbps == 0) return;
     state = state.copyWith(
       localRoot: saved.root.isEmpty ? null : saved.root,
       enabled: saved.enabled,
+      // Clamp like the write path — a hand-edited prefs file must not smuggle
+      // an out-of-range cap past setMaxMbps's validation.
+      maxMbps: saved.maxMbps.clamp(0, 10000),
     );
     if (saved.enabled) {
       // Resume rides the first timer tick instead of claiming immediately —
@@ -142,9 +164,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   }
 
   void _persist() {
-    unawaited(ref
-        .read(backupStreamPrefsProvider)
-        .save(enabled: state.enabled, root: state.localRoot));
+    unawaited(ref.read(backupStreamPrefsProvider).save(
+        enabled: state.enabled, root: state.localRoot, maxMbps: state.maxMbps));
   }
 
   String get _hostname => (hostnameResolver ?? () => Platform.localHostname)();
@@ -186,6 +207,16 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     _persist();
     _startLoop();
     await _tick();
+  }
+
+  /// §44.4 settings field entry point; 0 = unlimited. Clamped to the
+  /// settings registry's declared 0..10000 range (the panel's parse path
+  /// bypasses registry validation).
+  void setMaxMbps(int mbps) {
+    if (mbps < 0) return;
+    _userTouched = true;
+    state = state.copyWith(maxMbps: mbps.clamp(0, 10000));
+    _persist();
   }
 
   /// Settings folder field entry point.
@@ -297,9 +328,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // Null sha = the daemon hasn't hashed it yet (per-page budget) —
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
-        var error = await _pullVerifyStore(client, entry);
+        var (error, downloadTime) = await _pullVerifyStore(client, entry);
+        var attempts = 1;
         if (error != null) {
-          error = await _pullVerifyStore(client, entry); // one retry
+          attempts = 2;
+          (error, downloadTime) = await _pullVerifyStore(client, entry); // one retry
         }
         if (error != null) {
           // Surface it and move on — the queue is oldest-first and an
@@ -309,15 +342,47 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // disk hits every entry); the next tick retries.
           failuresThisPass++;
           state = state.copyWith(problem: 'Backup of ${entry.id} failing: $error');
+          // Failed attempts still moved bytes over the link (a checksum
+          // mismatch is a full discarded transfer) — the cap must hold on
+          // exactly the flaky links that produce failures, so pace the full
+          // floor before touching the next entry.
+          final failedFloor = paceFloor(entry.sizeBytes * attempts, state.maxMbps);
+          if (failedFloor > Duration.zero) {
+            await pacer(failedFloor);
+            if (!state.enabled || !state.active) return;
+          }
           if (failuresThisPass >= 3) break;
           continue;
         }
+        // Ack BEFORE pacing: the frame is already verified on disk, and a
+        // disable arriving mid-wait must not orphan it un-acked (the daemon
+        // would re-serve it next session — wasting exactly the bandwidth
+        // the cap conserves).
         await client.ack(_hostname, entry.id);
         state = state.copyWith(
           pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
           syncedThisSession: state.syncedThisSession + 1,
           syncedBytesThisSession: state.syncedBytesThisSession + entry.sizeBytes,
         );
+        // downloadTime spans ONLY client.downloadFrame (and only the attempt
+        // that succeeded) — sha hashing and disk writes must inflate neither
+        // the link measurement (a slow NAS would understate the link) nor
+        // the pacing comparison.
+        final elapsed = downloadTime ?? Duration.zero;
+        _recordThroughput(entry.sizeBytes, elapsed);
+        // A retried pull moved (up to) the frame's bytes twice — a checksum
+        // mismatch discards a FULL transfer — so the floor charges both
+        // attempts. Counting a partial failure as full over-paces slightly,
+        // which is the safe side of a ceiling.
+        final floor = paceFloor(entry.sizeBytes * attempts, state.maxMbps);
+        if (floor > elapsed) {
+          // §44.4 inter-frame pacing: the frame moved at link speed; wait
+          // until the session average is back under the cap before the
+          // next pull. A mid-wait disable exits cleanly — this frame is
+          // already acked.
+          await pacer(floor - elapsed);
+          if (!state.enabled || !state.active) return;
+        }
       }
     } on BackupStreamSlotLostException catch (e) {
       // Handled below, AFTER the finally clears _polling — the reclaim's own
@@ -347,16 +412,22 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     }
   }
 
-  /// Pull + verify + store one frame. Returns null on success, else a short
-  /// error description (checksum mismatch, disk trouble, transport error) —
-  /// the caller decides whether to retry or surface it.
-  Future<String?> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
+  /// Pull + verify + store one frame. Returns (null, downloadTime) on
+  /// success — downloadTime spans only the network transfer, for §44.4
+  /// pacing/measurement — else a short error description (checksum mismatch,
+  /// disk trouble, transport error); the caller decides whether to retry.
+  Future<(String?, Duration?)> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
     try {
+      // Stopwatch, not DateTime.now(): Windows' wall clock ticks ~1-16 ms,
+      // coarse enough to read a fast transfer as zero elapsed.
+      final stopwatch = Stopwatch()..start();
       final bytes = await client.downloadFrame(entry.id);
+      stopwatch.stop();
+      final downloadTime = stopwatch.elapsed;
       final digest = sha256.convert(bytes).toString();
       if (!_digestMatches(digest, entry.sha256!)) {
         debugPrint('backup-stream sha mismatch for ${entry.id} — retrying');
-        return 'checksum mismatch';
+        return ('checksum mismatch', null);
       }
       final server = ref.read(activeServerProvider);
       final hostDir = _sanitize(server?.hostname ?? 'server');
@@ -369,12 +440,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       final tmp = File('${file.path}.tmp');
       await tmp.writeAsBytes(bytes, flush: true);
       await tmp.rename(file.path);
-      return null;
+      return (null, downloadTime);
     } on BackupStreamSlotLostException {
       rethrow;
     } catch (e) {
       debugPrint('backup-stream pull failed for ${entry.id}: $e');
-      return '$e';
+      return ('$e', null);
     }
   }
 
@@ -384,6 +455,22 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   /// segment blindly — strip separators + parent-dir tokens.
   static String _sanitize(String segment) =>
       segment.replaceAll(RegExp(r'[/\\]'), '_').replaceAll('..', '_');
+
+  /// §44.4 — the minimum wall-clock a [bytes]-sized pull may occupy under a
+  /// [mbps] average-rate cap. Zero cap (or degenerate sizes) = no floor.
+  static Duration paceFloor(int bytes, int mbps) {
+    if (mbps <= 0 || bytes <= 0) return Duration.zero;
+    return Duration(microseconds: (bytes * 8 / mbps).round());
+  }
+
+  void _recordThroughput(int bytes, Duration elapsed) {
+    if (state.measuredMbps != null || bytes <= 0 || elapsed.inMicroseconds <= 0) {
+      return;
+    }
+    // First pull of the session doubles as the §44.4 link measurement.
+    state = state.copyWith(
+        measuredMbps: bytes * 8 / elapsed.inMicroseconds);
+  }
 
   void _stopLoop() {
     _pollTimer?.cancel();

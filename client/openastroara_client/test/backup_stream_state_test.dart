@@ -348,6 +348,62 @@ void main() {
     expect(fake.claimCalls, 3, reason: 'enable + one reclaim per flap');
   });
 
+  test('paceFloor: zero cap or degenerate size means no floor; math is bits over Mbps', () {
+    expect(BackupStreamController.paceFloor(1000, 0), Duration.zero);
+    expect(BackupStreamController.paceFloor(0, 10), Duration.zero);
+    // 1 MB at 8 Mbps = 1 second.
+    expect(BackupStreamController.paceFloor(1000000, 8),
+        const Duration(seconds: 1));
+  });
+
+  test('a bandwidth cap paces between frames via the seam; first pull measures the link',
+      () async {
+    final c = controller();
+    final requested = <Duration>[];
+    c.pacer = (d) async => requested.add(d);
+    fake.addFrame('frame-1', 'X' * 1000);
+    fake.addFrame('frame-2', 'Y' * 1000);
+
+    await c.setEnabled(true);
+    await settle();
+    c.setMaxMbps(1); // 1000 bytes → 8 ms floor per frame
+    fake.addFrame('frame-3', 'Z' * 1000);
+    await c.tickNow();
+    await settle();
+
+    expect(fake.acked, containsAll(['frame-1', 'frame-2', 'frame-3']));
+    expect(requested, isNotEmpty, reason: 'the capped pull must pace');
+    expect(requested.first.inMilliseconds, greaterThanOrEqualTo(4),
+        reason: 'the requested wait is the 8 ms floor minus the (tiny) real elapsed');
+    final state = container.read(backupStreamProvider);
+    expect(state.measuredMbps, isNotNull,
+        reason: 'the first pull doubles as the link measurement');
+  });
+
+  test('the bandwidth cap persists across restarts', () async {
+    final c = controller();
+    await c.setEnabled(true);
+    await settle();
+    c.setMaxMbps(25);
+    // The persist is fire-and-forget — wait for the chained write to land
+    // before "restarting" (CI runners lost this race).
+    final prefsProbe = BackupStreamPrefsService(supportDir: () async => prefsDir);
+    for (var i = 0; i < 40 && (await prefsProbe.load()).maxMbps != 25; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+
+    container.dispose();
+    fake = _FakeClient();
+    container = buildContainer();
+    await container.read(savedServersProvider.future);
+    controller();
+    for (var i = 0; i < 40 && !container.read(backupStreamProvider).enabled; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+
+    expect(container.read(backupStreamProvider).maxMbps, 25);
+  });
+
   test('disable releases the slot', () async {
     final c = controller();
     await c.setEnabled(true);

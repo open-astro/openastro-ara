@@ -53,8 +53,13 @@ for the feature to be user-visible end-to-end (§44.7/§44.8):
   + per-frame cloud badge in the library (`FrameListItemDto.SyncedAt` → tri-state thumbnail icon;
   no badge on rigs without a stream so absence never reads as "unprotected"). The stats-dashboard
   tile was dropped as redundant with the always-visible footer chip.
-- **§44.4 token-bucket bandwidth limit (remaining)**: the capture-aware pause shipped; the
-  configurable Mbps cap + first-connect throughput measurement are still open (client-side).
+- ✅ **§44.4 bandwidth cap — DONE (2026-07-07).** Configurable Mbps cap (0 = unlimited,
+  persisted with the toggle/folder) applied as inter-frame pacing — a frame moves at link
+  speed, the loop then waits until the session average is back under the cap (`paceFloor`,
+  pacer seam for tests); the session's first pull doubles as the link measurement, surfaced
+  in the Settings status line ("link ≈ N Mbps"). A literal mid-stream token bucket was
+  dropped as needless complexity over Dio — average-rate pacing at frame granularity gives
+  the same LAN protection on top of the capture-aware pause.
 - **Puller minors (from the #736 round-4 review, accepted as non-blocking)**: (1) reset `active`
   via `ref.listen(activeServerProvider, …)` when multi-server selection lands (today the slot-lost
   reclaim self-heals the mismatch on the first `queue()`); (2) drop the dead
