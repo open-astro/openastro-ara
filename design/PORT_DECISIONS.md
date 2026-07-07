@@ -205,3 +205,10 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **`skip_target` skips the current items and lets the sequence advance,** accepting that later guide instructions fail until the guider is back — that is what the user's chosen policy means; the notification says so explicitly.
 - **One reaction per disconnect episode.** A flapping socket must not stack pauses/notifications; the latch clears only on the next successful connect (`SetStateLocked(Connected)`).
 - **Quiet when nothing is running.** The §63.3 recovery coordinator already posts the crash notifications; the fault flow only speaks when it actually touched a run.
+
+## 2026-07-07 — §63.3 active poll + auto-reconnect semantics
+
+- **The liveness ping rides a fresh per-call RPC connection** (PHD2Guider's per-call transport), so a daemon whose event socket is open but whose RPC dispatch is wedged fails the probe — exactly the case the passive `PHD2ConnectionLost` event can never catch. 3 consecutive failures (5 s bound each) converge on the same `HandleLinkDownLocked` path as a socket death, so recovery + the §42.2 fault flow behave identically for both failure shapes.
+- **`GuiderRetryTimeoutSec` is the auto-reconnect grace window** (its first consumer, honoring the #732 decision to reserve it for this): after the recovery coordinator reports `Recovered`, ARA retries its own connect until the window expires. Clamped to ≥10 s (the daemon needs a moment to open its listener after a systemd restart).
+- **The auto-reconnect's connect must not supersede the recovery pass that issued it.** `ConnectAsync` cancels any in-flight recovery (a user connect means the user took over); the auto-reconnect calls `ConnectCoreAsync(supersedeRecovery: false)` so it doesn't cancel its own token mid-loop. Caught during implementation — the naive reuse would have silently self-cancelled after the first attempt.
+- **Auto-reconnect never auto-resumes the paused run.** §42.1 pause semantics: the user resumes manually. The reconnect notification says exactly that.
