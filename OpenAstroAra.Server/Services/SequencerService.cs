@@ -212,8 +212,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // Stopped and starve the event (it only moves once Resume() below
             // releases it). The CAS still keeps this from resurrecting a run an
             // Abort/Stop moved past Paused (their unconditional state write +
-            // token cancel win; a released gate is then harmless).
-            if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
+            // token cancel win; a released gate is then harmless). Resume covers
+            // BOTH paused flavors — a §58.12 awaiting-user pause is cleared by
+            // the same explicit user command (that IS the user coming back).
+            if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)
+                || run.TryTransition(SequenceRunState.PausedAwaitingUser, SequenceRunState.Running)) {
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
             }
@@ -226,11 +229,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     }
 
     // PauseGate.PauseEntered callback — runs on the engine worker at the moment a
-    // strategy actually suspends. Running→Paused via CAS so a concurrent
-    // Abort/Stop (which sets Aborting/Stopped unconditionally) is never clobbered;
-    // parallel branches may fire this repeatedly — the CAS also makes it idempotent.
+    // strategy actually suspends. Running→Paused (or PausedAwaitingUser, when the
+    // gate was armed by the engine itself after an urgent failure — §58.12) via
+    // CAS so a concurrent Abort/Stop (which sets Aborting/Stopped unconditionally)
+    // is never clobbered; parallel branches may fire this repeatedly — the CAS
+    // also makes it idempotent. The Paused→PausedAwaitingUser escalation handles
+    // a failure that arms an ALREADY-suspended run (a parallel branch's flip
+    // failing while the user has the run paused): the next branch to reach its
+    // boundary re-fires this callback and upgrades the state.
     private void OnPauseEntered(Guid sequenceId, RunState run) {
-        if (run.TryTransition(SequenceRunState.Running, SequenceRunState.Paused)) {
+        var target = run.Gate.PendingKind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser
+            ? SequenceRunState.PausedAwaitingUser
+            : SequenceRunState.Paused;
+        if (run.TryTransition(SequenceRunState.Running, target)
+            || (target == SequenceRunState.PausedAwaitingUser
+                && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
             _ = EmitAsync("sequence.paused", sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
         }
