@@ -6,7 +6,27 @@ Per PORT_PLAYBOOK.md §0 rule 4 (`Cite when stuck`): when you cannot translate a
 
 Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope suggestions": when CR suggests a broader refactor or future feature, log it here with the PR reference and reply "Acknowledged — tracked in design/PORT_TODO.md for follow-up".
 
+**File layout (since 2026-07-07):** open and mixed sections first; sections that are entirely
+closed live under **"✅ Done / obsolete — archived entries"** at the bottom. When a section up
+top becomes fully closed, move it below the archive line whole (verbatim — this file is the
+historical record as well as the queue). See `design/README.md` for how this file relates to
+the other design docs.
+
 ---
+
+## §34 apt.openastro.net publish pipeline — release-blocking (2026-07-07)
+
+Releases ship through the **apt.openastro.net** APT repository (user decision 2026-07-07 — see
+PORT_DECISIONS; `docs/DEPLOY.md` now documents the §34.1 install flow). CI builds the `.deb` as an
+artifact today; still to build before the `v0.0.1-ara.1` tag can be a real release:
+
+- **Repo publish job** — reprepro or aptly per §34.5, triggered on tag push, laying out
+  `dists/stable/main/binary-arm64` + `pool/main/o/openastroara-server/`.
+- **Hosting + signing** — stand up apt.openastro.net (static hosting suffices for a reprepro tree)
+  and generate the repo GPG signing key; publish its public half at `/gpg.key` (the path
+  DEPLOY.md's one-time setup curls).
+- **Sibling packages** — §34.2's Recommends (`alpaca-bridge`, the guider daemon) need their `.deb`s
+  in the same pool for the default install to resolve; coordinate with those repos.
 
 ## §36 Planning / webview / connection — follow-ups (2026-06-27)
 
@@ -27,62 +47,13 @@ The following former-§68 entries are now **obsolete** (the gate they depended o
 - **DONE (2026-07-02) — §68.2 wizard Screen 2 missing-bridge UX.** Implemented per playbook §68.2 (which the old wording here had drifted from — the gate is on a successful HANDSHAKE, i.e. a clean discovery response even with zero devices, not "a device is discovered"; with the §68.1 version gate removed, reachability IS the handshake): the probe auto-runs on entry, Next is gated via `wizardStepValidProvider` until it succeeds, failure shows the prominent "AlpacaBridge not detected." panel with the `sudo apt install alpaca-bridge` command + [Retry detection], and the playbook's [Skip to manual entry] escape requires the address override to be filled in. Discovery API construction moved behind `equipmentDiscoveryApiFactoryProvider` for the test seam; 4 widget tests cover happy/blocked/retry/skip/no-server.
 - **DONE (2026-07-02) — §68.4 search entries, resolved via the Help registry.** The design call answered itself once §69 shipped: help entries ARE the "informational entry" kind. `Help` gained an optional `keywords` list, `buildSearchIndex()` now indexes the whole `helpRegistry` as informational hits (groupLabel "Help", no panel/setting id), and activating one in the command palette opens the §69 help sheet (refactored to a public `showHelpSheet` carrying its own Consumer, so it survives the palette popping) — making all ~60 help entries searchable, not just the new one. `equipment.alpacabridge.troubleshoot` added with the playbook §68.4 keywords + the §68.2 guidance (install command, systemctl diagnostic, subnet note, override pointer). `equipment.alpacabridge.version` is MOOT — the §68.1 version gate was removed (Alpaca has no version endpoint by design; user decision 2026-06-21), so there is no version to explain; recorded in the registry comment.
 
-## Phase 0.5a — Fork hygiene / WPF demolition
-
-### Cascade scrubs
-
-- ✅ `NINA.Equipment.csproj` ProjectReferences to nikoncswrapper + NINA.MGEN — scrubbed in Phase 0.5b
-- ✅ `NINA.Test.csproj` ProjectReferences to NINA.MGEN + NINA.Plugin + NINA.CustomControlLibrary + NINA.WPF.Base + NINA — scrubbed in Phase 0.5b
-- ✅ **Phase 0.5p-followup buildfix** (`phase-0.5p-followup-buildfix`, 2026-05-26) — Core scrubs (Notification.cs CustomDisplayPart removal, MyMessageBox.cs MyMessageBoxView removal, +System.Management package for WMI usage in Logger.cs/SerialPortProvider.cs), Astrometry DB-greenfield reconciliation (DatabaseInteraction.cs stubbed to GetUT1_UTC + GetDisplayAlias only; consumers AstroUtil.cs/TopocentricCoordinates.cs cleaned), Equipment vendor file deletions (EDCamera + MGENGuider + ASCOMInteraction + 4 flat device drivers + 3 orphaned test files), Phase 6 Alpaca discovery bug fix (`deviceType:` → `deviceTypes:` + missing `logger:` param). After this PR, `dotnet build OpenAstroAra.sln -c Release` is green except for the Sequencer item below.
-- ✅ **Sequencer WPF-removal pass** — Resolved in Phase 0.5p2 (PR #242 / promoted #243). All 7 NINA-inherited projects (Core, Astrometry, Profile, Image, Equipment, PlateSolving, Sequencer) + Test now target `net10.0` headless per playbook §5.2/§8. WPF UI files deleted wholesale per §4.2 (~404 files); mediator-VM constraint dropped per §8.1; `BitmapSource` → `byte[]` for type signatures with OpenCvSharp4 wiring deferred per §line-2105; Compat stubs (`Astrometry/Compat/`, `Sequencer/Compat/`, `Image/ImageAnalysis/HeadlessStubs.cs`) preserve legacy call surfaces. `dotnet build OpenAstroAra.sln -c Release` → 0 errors, all CI matrix jobs green. Server csproj wired to all 7 libs in #244 / promoted #245 per playbook §8 Phase 4 scaffold.
-- ✅ **NINA.Test.csproj post-Sequencer-removal** — Resolved alongside #242. Test subdirs that depended on deleted WPF/Sequencer code (Sequencer/, SimpleSequencer/, MGEN/, Plugin/, Converters/, ViewModel/, Autofocus/, FlatDevice/, Image/, PlateSolving/, Planetarium/, Focuser/, Rotator/, Dome/, Equipment/SDK/) purged per playbook §4.5. 296 platform-agnostic tests pass on macOS-arm64; 1006 NOVAS/SOFA fixtures filter to `[Platform("Win")]` since the natives are Windows-only Win32 binaries (libnovas.so + libsofa.so packaging is Phase 14e).
-
-### Source-file `TODO(port)` markers
-
-(none yet — Phase 0.5a is pure delete; no new code introduced)
-
 ---
-
-## Out-of-scope CodeRabbit suggestions
-
-- **DONE (2026-07-02) — PR #71 filter-slot control.** The Imaging tab's exposure panel now has the Filter dropdown wired to `params.filterSlot`/`setFilterSlot` (until now only the hardcoded 'L' default ever went up as `filter_name`). Choices come from the profile's wheel slot labels — daemon-authoritative since the 12h.2b round-trip — with a stored value not among the labels kept selectable (the §38 picker's stance).
 
 ## CodeRabbit security findings addressed
 
 - **PR #12** (port/ara → master promotion) — zizmor + CodeRabbit flagged `.github/workflows/ci.yml` for (1) mutable `actions/checkout@v4` reference, (2) missing `persist-credentials: false`. Both fixed on `ci-harden` branch. Future workflow steps added at Phase 0.5p / Phase 4 / Phase 11 / Phase 14 should follow the same pattern: actions pinned to a commit SHA + `persist-credentials: false` unless a step explicitly needs git push.
 
 ---
-
-## Merge-gate audit follow-ups (2026-06-17)
-
-A retrospective audit of merged PRs (the bot's verdict-at-merge vs. the §19.1 gate) found **no unaddressed high-severity defect** — the recall-biased reviewer's near-permanent "⚠️ Issues found" sign-off is not itself a defect signal, and every high-severity keyword in a final verdict was negated / avoided-by-design / an explicit non-blocker. It did surface these **low-severity, bot-acknowledged-non-blocker** hardening items, logged here and being remediated as focused follow-up PRs (each driven to the bot's ✅ Approved before merge):
-
-- **DONE (verified 2026-07-02) — #384 dark-library build disposal/cancellation.** `GuiderService.DarkLibrary.cs` now handles the whole lifecycle: the shutdown CTS token is captured BEFORE the deferred lambda (a concurrent Dispose can no longer throw ObjectDisposedException in the background task and leak the gate), the token threads into the 2-hour `BuildDarkLibraryAsync` RPC so shutdown cancels it, the single-build gate releases in `finally` on every path (and in the Task.Run queue-failure catch), and background exceptions are contained + surfaced as the `*.failed` WS event, never an unobserved task exception. Landed with the guider a/c hardening.
-- **DONE (verified 2026-07-02) — #390 WS drain error surfacing.** `ws_event_stream.dart`'s teardown now logs both failure paths ("Surface (don't silently drop) a teardown failure"): a faulted `sub.cancel()` and a faulted `socket.close()` each land in a `catchError` → `debugPrint`, and the onError path finalises the socket so a half-open TCP connection can't leak across reconnects.
-- **DONE (verified 2026-07-02) — #425 backup `listSnapshots` drop logging.** `backup_api.dart` now throws on a non-array 2xx body (wire-contract break surfaces as an error state, not a silent empty list) and logs the dropped count when malformed/unusable entries (missing id or downloadUrl) are skipped.
-- **DONE (verified 2026-07-02) — #349 image preview guards.** All three `SKBitmap.GetPixels` call sites in `JpegEncoder` (EncodeGray, EncodeThumbnail, RgbToBitmap) check for `IntPtr.Zero` and throw with a clear message instead of writing through a null pointer, and the full-preview path resizes via `PreviewMaxDim` (2048, `SqliteFrameRepository`) with `EncodeGray`/`EncodeColor` delegating oversize frames to the tested thumbnail-resize path.
-- **CLOSED (2026-07-02) — #399 latent dialog error-drop: mitigated by a documented contract, not dead code.** The dialog's fire-and-forget sites carry the contract comment at the exact refactor point ("GuiderCalibrationNotifier._run wraps every action in try/catch and routes failures to state = AsyncValue.error… Keep that contract if _run is ever refactored"), which is the appropriate guard for a purely hypothetical future refactor — a `catchError` today would be dead code silencing nothing. Re-open only if `_run`'s error routing actually changes.
-
----
-
-## Phase 15 sweep candidates
-
-- ✅ **Consolidate `_SwitchRow` into shared editable-field widget set.** Resolved in PR #104 (Phase 12h.2-switch) — lifted into `lib/widgets/settings/editable_field.dart` as `SettingsSwitchRow` with optional `hint` slot. All 6 panel copies removed.
-- ✅ **Filename template `$$TOKEN$$` vs `$TOKEN$`.** Verified post-Phase-0.5p2 (`OpenAstroAra.Core/Model/ImagePattern.cs` now compiles + readable). The canonical render-side token registry `ImagePatternKeys` declares every token as `$$TOKEN$$` (e.g., `Filter = "$$FILTER$$"`, `FrameNr = "$$FRAMENR$$"`, `ExposureTime = "$$EXPOSURETIME$$"`) — matches the double-dollar form the 4 default sources of truth use. Sonnet's flag on PR #141 ("might expect single-dollar") was a false positive against the un-built NINA inheritance; no action needed. Same shape as the `\\` vs `\` separator answer in PR #131.
-
-## Phase 14 hardening candidates
-
-- ✅ **Server AOT `JsonSerializerContext` source-gen.** **Resolved in Phase 14a** — single `AraJsonSerializerContext` partial class with `[JsonSerializable]` for all 133 DTO records + the 7 concrete `CursorPage<T>` instantiations + 8 `IReadOnlyList<T>` collection wrappers. Wired via `TypeInfoResolverChain.Insert(0, ...)` in `Program.cs`. `FileProfileStore.Persist`/`LoadOrDefaults` switched to typed-info overloads; pragmas removed. `dotnet run` smoke now passes end-to-end (verified: `/healthz` 200, GET/PUT `/api/v1/profile/imaging-defaults` round-trip, `profile.json` written to disk).
-- ✅ **AOT-safe `JsonStringEnumConverter` per-enum.** Resolved in `phase-15-aot-enum-converters` — replaced the single non-generic `JsonStringEnumConverter(LowerCaseNamingPolicy)` with 8 per-enum `JsonStringEnumConverter<TEnum>(LowerCaseNamingPolicy.Instance)` registrations in `Program.cs`. Each generic instantiation is AOT-traceable; the `IL3050` suppression pragma is removed. .NET 10's `JsonStringEnumConverter<TEnum>` accepts a `JsonNamingPolicy` via its constructor — the earlier TODO assumed that constructor didn't exist.
-
-## Phase 38 — §38k instruction prototypes deferred (need more than a device mediator)
-
-Deferred during the §38k-13…18 equipment-mediator stub layer (PR #315). Each is a registered-prototype gap, not a `// TODO(port)` code marker — the instructions exist and compile; they're simply not wired into `HeadlessSequencerFactory.WithDefaults()` yet because they need a non-device dependency the headless daemon doesn't provide. Register them once the prerequisite lands.
-
-- ✅ **`Dither` + `SwitchFilter`** — **resolved in §38k-22 (#318)**: a `HeadlessProfileService` stub satisfies their `IProfileService` dependency for prototype construction; both registered.
-- ✅ **`SynchronizeDome`** — **resolved in §38k-21 (#317)**: added a `HeadlessDomeFollower` stub (the one non-mediator equipment dependency) and registered the instruction. `Enable`/`DisableDomeSynchronization` (dome + telescope only) landed earlier in §38k-18.
-- ✅ **Full `TakeExposure` capture path** — **resolved in §14e capture-path PRa+PRb (#343 + follow-up)**: real `CameraService` pipeline (expose → download → §72 FITS → §28 catalog) + re-ported `TakeExposure` executing through `IImagingMediator.CaptureImage` on the same pipeline. The #315 capture-block note is addressed: `IsFreeToCapture` truthfully reflects the shared in-flight capture gate (Register/Release stay inert — no headless consumer registers blocks). Still §2105-gated: the in-memory render path (`CaptureAndPrepareImage`/`PrepareImage`/live view, OpenCvSharp4 + libraw) — `TakeExposure` deliberately discards the returned `IExposureData`.
-- ✅ **Connect/Disconnect/SwitchProfile capstone** (`ConnectAllEquipment`, etc.) — **resolved in §38k-22 (#318)**: registered all five via the `HeadlessProfileService` stub; `DisconnectAllEquipment`/`DisconnectEquipment` flipped `internal`→`public` (CA1002 on their `Devices` property fixed to `IReadOnlyList<string>`).
 
 ## Execution-engine TODOs
 
@@ -128,44 +99,6 @@ The §38 execution engine (`SequencerService`, #319) now **runs** sequences for 
   - **Guider follow-ups (§63, from the guider-a #345 self-review):** (1) ✅ **RMS** — *done in guider-a*: `GuiderService` accumulates raw RA/Dec errors from the `GuideEvent` stream into a bounded 200-step window and `GetAsync` reports `RmsTotal/Ra/Dec` (root-mean-square, pixels). ✅ *arcsec refinement done (2026-07-05)*: `GuiderStateDto` gained additive `RmsTotalArcsec/RmsRaArcsec/RmsDecArcsec` (pixel RMS × the guider's reported `PixelScale`; null until PHD2 reports a positive scale — never a fake 0″). (2) **Terminal-status surface for guide ops**: `StartGuiding`/`StopGuiding`/`Dither` are fire-and-forget `Task.Run` returning 202, so a `Dither` rejected because the guider isn't yet GUIDING (returns false, no exception) is indistinguishable from success to a polling client — the proper fix is a §60.9 WS event (`guider.dither.{complete,rejected}` etc.) once the WS guider channel lands, not a synchronous result. (3) **Arg-passing via shared profile**: `ConnectAsync`/`DitherAsync` write Host/Port/DitherPixels onto the singleton `ActiveProfile.GuiderSettings` that `PHD2Guider` reads asynchronously — racy under *concurrent* guider requests, but mitigated by §27 single-client for v0.0.1; a cleaner design passes these as method args when the guider mediator unification (guider-c) reworks the surface. (4) **`IGuiderMediator` unification** (guider-c) replacing `HeadlessGuiderMediator` so the sequencer's StartGuiding/StopGuiding/Dither drive the live guider.
   - **Multi-instance equipment (`/equipment/{type}/{n}`) — Switch is the pilot.** ✅ **PR1 (server) done:** `SwitchService` went single-instance → keyed-by-`AlpacaDeviceNumber` so multiple Switch devices connect at once (`GET /switch` list + `/switch/{n}` get/disconnect/value; `SwitchDto.alpaca_device_number`; mediator targets the lowest-numbered "primary"; cross-host number collision replaces + logs). ✅ **PR2a (client data layer) done** (#557): `SwitchDevice`/`SwitchPort` models, `SwitchApi`, `switchListProvider`, `EquipmentDeviceType.switchDevice`, `DiscoveredDevice.toConnectRequestJson`. ✅ **PR2b (client UI) done:** `equipment_switch_panel.dart` (Settings → Equipment → Switch) — list of connected switches + per-port controls (boolean toggle / value slider / read-only) + Disconnect + an "Add switch" button (chooser `onPick` connects an additional device). **Deferred from PR2b:** the **wizard discovery Switch slot** stays disabled — the wizard models one device id per type (`switchDeviceId`), which doesn't fit multiple switches; multi-switch is managed in the Settings panel instead (wiring the wizard for a switch *list* is a separate follow-up if wanted). ✅ **PR3 (sequencer) done (2026-07-05):** `SetSwitchValue` gained a `[JsonProperty] AlpacaDeviceNumber` (default `-1` = primary — the value every pre-PR3/NINA sequence deserializes to, so no migration needed) routed through the new ARA-owned `ISwitchDeviceTargeting` capability interface (NOT added to the NINA-inherited `ISwitchMediator` — that file is ISO-8859-1 and the inherited surface stays untouched; the instruction type-checks and falls back to the single-target path). `SwitchService` implements it (`TargetConnectionLocked`: `-1` → lowest-numbered primary; `>= 0` → exact connected match only — a named-but-absent device degrades to the logged no-op, never a fallback to a DIFFERENT hub); Validate reads the SAME device Execute writes. Client: `SetSwitchValue` catalogued (new Switch palette category; device / writable-port / value fields). Dead `PlaceholderSwitchService` removed. **(Later)** multi-switch remember+auto-connect (`EquipmentSelectionStore` is one-device-per-type — multi-per-type for Switch + an `EquipmentAutoConnectService` Switch case); generalize `{n}` multi-instance to the other device types per §10.6 as real multi-device rigs need them; equipment `switch.*` WS events (no device emits equipment WS events yet — cross-cutting); a friendlier device/port PICKER in the sequence editor (live-queried names instead of raw numbers) once an editor-side equipment lookup exists.
   - **Remaining device services**: Camera/Guider/PolarAlign REST services are still `Placeholder*` (202-Accepted no-ops) — Camera gates on the image pipeline (§2105), Guider on PHD2 (§63), PolarAlign on camera+plate-solve orchestration. **Mediator follow-ups: complete.** Telescope (#337), Switch (#338) and FilterWheel (#339, with the device→profile filter import) landed; `IFlatDeviceMediator`/`IWeatherDataMediator` have **no consuming sequence instruction** in the port (the only `IFlatDeviceMediator` consumers are the Connect-capstone instructions, which call the inert `Connect()`/`Disconnect()` lifecycle members) so their headless stubs are the correct, final wiring until a flat-wizard/connect orchestration ships.
-
-## §26 / §2105 OpenCvSharp4 — version-pin BLOCKER (found 2026-06-10)
-
-The playbook §26.2 pins all five OpenCvSharp4 packages at `4.11.0.20250507`. **That pin is invalid** — verified against NuGet (2026-06-10):
-- `OpenCvSharp4` (managed): `4.11.0.20250507` exists; latest is `4.13.0.20260602`.
-- `OpenCvSharp4.runtime.linux-arm64` (the **production Pi target**): tracks the managed package (4.13.x current); **does NOT have `4.11.0.20250507`** — its versions use a different sequence.
-- `OpenCvSharp4.runtime.linux-x64` (CI host + x64 docker): **frozen at `4.10.0.20240717`** (no updates since 2024).
-- `OpenCvSharp4.runtime.osx`: **does not exist**; `OpenCvSharp4.runtime.osx_arm64` stops at `4.8.1`.
-
-OpenCvSharp4 requires the native-runtime OpenCV version to match the managed binding, so **there is no single version that works across linux-arm64 + linux-x64 + osx-arm64**. Consequences/decisions needed (revises §26.2 — user-authoritative):
-1. **Version strategy**: pin to a managed+linux-arm64-aligned version (production works) and accept linux-x64/osx native are stale/absent — meaning OpenCvSharp4 code can't be unit-tested on the macOS dev box or the linux-x64 CI host, only on linux-arm64 (e.g. via the §14d qemu-arm64 docker e2e). OR find an older common version (~OpenCV 4.10) where main + linux-x64 + linux-arm64 all align, trading off currency.
-2. **csproj**: the §26.2 "5 runtime refs at one version" block must change to reality (per-platform versions, or arm64-only).
-3. This gates the whole §2105 render-stub migration (`RenderedImage`/`BaseImageData`/`ImageArrayExposureData`/`ExposureData` — ~10 `NotImplementedException("pending OpenCvSharp4 wiring")` methods) + the separate libraw RAW path. Note much of preview/thumbnail/stretch is already served by the §65 SkiaSharp pipeline; the unique consumer of the in-memory OpenCvSharp render path is Live View (§64), whose v0.0.1 scope is itself an open question.
-
-### §2105 follow-up (2026-06-10, hard NuGet data): OpenCvSharp4 runtimes are FUNDAMENTALLY unalignable — consider SkiaSharp instead
-
-Verified there is **no single OpenCvSharp4 version whose native runtimes exist for all of linux-arm64 + linux-x64 + osx-arm64**:
-- `runtime.linux-arm64`: only modern (4.11.x+/4.13.x) — no 4.8.x, no 4.10.x.
-- `runtime.linux-x64`: only `4.10.0.20240717` — no 4.8.x, no 4.11+.
-- `runtime.osx_arm64`: only `4.8.1` (stops 2023).
-- `runtime.win`: `4.8.0.x` + others.
-
-OpenCvSharp4 requires the native runtime's OpenCV version to match the managed binding, so OpenCvSharp4 code **cannot native-load on the macOS-arm64 dev box AND the linux-x64 CI host AND the linux-arm64 Pi with one pin** — it's only runnable on linux-arm64 (slow qemu docker, not a unit-test env). Writing/iterating the §2105 render stubs against an un-runnable backend is a poor foundation for "the single biggest technical risk."
-
-**Recommendation: reconsider §26's OpenCvSharp4 choice in favor of SkiaSharp for §2105.** SkiaSharp is already a proven, cross-platform-clean dependency in this repo (the §65 stretch/preview pipeline, #208 — `SKBitmap`/`JpegEncoder`, works on dev + CI + arm64). The §2105 render needs (16→8-bit, JPEG/thumbnail encode, resize, basic transforms) are all SkiaSharp-native; the one OpenCvSharp-specific op is **debayering** (`Cv2.CvtColor(BayerRG2RGB)`), which can be done with a small bilinear-debayer kernel over the raw `ushort[]`/`byte[]` buffers (or via libraw for DSLR RAW). This would un-stub `Image/ImageData/*` (`RenderImage`/`Debayer`/`RenderBitmapSource`/`GetThumbnail`/`Stretch`) on a testable-everywhere backend and avoid the OpenCvSharp packaging trap entirely. **Revises §26 (user-authoritative) — flag for decision.** If Live View (§64) is deferred to v0.1.0, most of this can be deferred with it (the §65 SkiaSharp preview already serves the catalog).
-
-## §15 / §17.2 dependency-license audit (2026-06-10) — RELEASE-SAFE, no copyleft contamination
-
-Audited all NuGet PackageReferences across the solution for MPL-2.0-distribution compatibility:
-- **Distributed (daemon) deps**: all permissive (MIT / Apache-2.0 / BSD / MS-PL / ISC / public-domain) EXCEPT one inherited-from-NINA non-MIT one, compatible: **Accord.NET (LGPL-2.1)** — separate dynamically-linked .NET assemblies, satisfies LGPL's relink allowance. (The **FreeImage**/VVVV.FreeImage dependency was removed as dead weight — the RAW-converter that used it was deleted in the port, the §2105 render path is SkiaSharp, and only a vestigial enum label remained; dropping it also removed a shipped-but-unused .NETFramework native lib + the NU1701 warning.) **No GPL/AGPL/SSPL/commercial-licensed code in the distributed daemon.** Called out in `NOTICE.md`.
-- **Test-only deps with license caveats (NOT distributed)**: `FluentAssertions` is pinned `[7.0.0]` — deliberately the last Apache-2.0 version before v8 went commercial (Xceed paid); `Moq 4.20.72` is post-SponsorLink. Both fine + test-only.
-- ✅ **Action remaining (release-time only) — DONE (2026-07-01)**: `scripts/generate-3rd-party-licenses.py` generates the repo-root `3rd-party-licenses.txt` from the daemon's full transitive NuGet graph (98 packages; SPDX expressions from the nuspecs + a curated OVERRIDES table for the 18 pre-SPDX legacy packages, each verified upstream). CI's `server-build` job runs `--check` right after restore so a dependency bump that forgets to regenerate fails fast, and `build-deb.sh` ships LICENSE.txt + NOTICE.md + the notices at `/usr/share/doc/openastroara-server/`. ✅ Sibling task DONE (2026-07-05): the **WILMA client's** third-party notices ship in-app — Settings → System → About (the `app.changelog` panel is now real: identity + version via package_info_plus + license posture + repo link) opens Flutter's built-in `showLicensePage` over `LicenseRegistry`, which the build tooling populates with every bundled package's LICENSE automatically, so the notices stay correct as dependencies change with no generated file to forget.
-
-## §65 JpegEncoder.EncodeThumbnail null-resize guard ✅ DONE (verified already present, 2026-07-05)
-
-Stale entry: the grayscale `EncodeThumbnail` carries the identical `Resize(...) ?? throw
-InvalidOperationException` guard as `EncodeColorThumbnail` (JpegEncoder.cs — both resize call
-sites) — it landed with the #349-era guard sweep despite this entry surviving. Nothing to do.
 
 ## Client "active server" selector — servers.last is ambiguous with multiple saved servers (2026-06-10, from PR #350 review)
 
@@ -264,11 +197,6 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   + inverse-mapping calibration table. Research-grade "better than NINA" feature — likely v0.1.0, not v0.0.1.
 - **AF triggers + sequencer wiring (§59.5):** sequence-start / temp-Δ / HFR-drift / post-flip / first-filter
   triggers consulting `/diagnostics/current` (§59.9). Sequencer-integration work, gated on the live sweep.
-
-### §2105 PR4 Debayer — ✅ DONE (shipped in #357)
-Full-resolution bilinear debayer landed in PR #357: `OpenAstroAra.Stretch/Debayer.Bilinear(mosaic, w, h, pattern)`,
-`IDebayeredImage`/`DebayeredImage`/`LRGBArrays`, and `RenderedImage.Debayer(...)` wired (Lum = weighted RGB). Dead
-code until Live View (§64). (Entry was left in "ready to implement" state; corrected here.)
 
 ## §58 meridian flip — follow-ups (2026-06-11, after the trigger re-port #362)
 
@@ -417,108 +345,6 @@ Remaining: the
 focuser-hardware blocker). Of the §58 profile block only `refocus_after_flip`/`guider_recal` mode enums
 remain un-modelled (they land with the refocus/recal orchestration they configure); `first_flip_confirmed` shipped with §58.8.
 
-### IDomeFollower.TriggerTelescopeSync has no cancellation token ✅ DONE (2026-06-12)
-`IDomeFollower.TriggerTelescopeSync` now takes a `CancellationToken` (matching `WaitForDomeSynchronization(token)`
-on the following path), threaded from the caller's token at all three call sites (`MeridianFlipExecutor.SynchronizeDome`,
-`CenteringSolver`, and the `SynchronizeDome` sequence item) so a non-following dome sync is cancellable mid-slew.
-`HeadlessDomeFollower` (the only impl) ignores it (no-op stub); a real dome-following impl will honor it.
-
-### §39 calibration — dark matching by temperature ✅ DONE (2026-06-12)
-`SqliteCalibrationService.MatchingDarksAvailable` now matches darks to lights by `(exposure_seconds, gain,
-ROUND(temperature_c, 0))` — temperature bucketed to the nearest whole degree. `temperature_c` is `NOT NULL`
-(an uncooled camera records the 0.0 sentinel that `CameraService` coalesces a missing CCD temperature to), so
-uncooled lights/darks still bucket-match. +3 tests (temp-mismatch rejects, within-degree bucketing, uncooled
-sentinel). Flats match by `filter` only (correct).
-
-### §39.5 matching flats — plan → runnable sequence ✅ DONE (2026-07-02)
-`GenerateMatchingFlatsAsync` now materializes the plan into a persisted §38 sequence via `ISequenceService`
-(`CalibrationSequenceBuilder` emits the NINA-verbatim body dialect): per light filter, a looped
-SequentialContainer of [SwitchFilter (name-resolved, `_position:-1` so a stale slot index never wins) →
-MoveFocuserAbsolute (the session's modal per-filter focus, §39.5 dust-shadow alignment) → TakeExposure(FLAT)
-carrying the lights' modal gain/offset]. `GeneratedSequenceId` is the real stored id (endpoint: 201+Location;
-`GenerateOnly` → null id, 200). Proven by deserializing the stored body through the real sequencer factory.
-Deferred: a flat-device instruction (panel on/brightness/auto-ADU exposure — generated TakeExposure uses a 1 s
-starting point, TargetAdu stays advisory) and §39.6 cooler-temp replay; both need new sequencer instructions.
-### §39.8 dark library — catalog-backed + generated build sequence ✅ DONE (2026-07-02)
-`SqliteDarkLibraryService` replaced the fixture placeholder: entries ARE the catalog's DARK frames grouped by
-the §39 matching key (exposure, gain-nullable, whole-degree temp bucket; stable SHA-derived entry ids; group
-byte totals; newest frame as representative path). The build generates a runnable §38 dark-matrix sequence via
-`CalibrationSequenceBuilder.BuildDarkLibraryBody` (CoolCamera per set-point — empty temp list = ambient, no
-CoolCamera; looped TakeExposure(DARK) per combination; empty gain list = camera default) and persists it
-(`calibration:dark-library`); `DarkLibraryStateDto.GeneratedSequenceId` surfaces it. Status is coverage-based
-(a combination completes when the catalog holds >= FramesPerCombination matching darks; completion stamped at
-first observation). `ReuseExistingFrames` skips already-covered combinations. Wire changes (no client consumer
-yet): build request exposures int->double (§28), entry Gain int->int? (the #670 review note), state +
-GeneratedSequenceId. Deferred: `calibration.dark_library.*` WS events (the generated sequence already emits
-standard §60.9 run events) and server-side master-dark stacking (§39.2 capture-only philosophy — external
-stackers consume the raw frames).
-### §39.10 calibration client surface ✅ DONE (2026-07-02)
-Full-screen Calibration route (bottom status bar, beside Image Library/Stats) live over
-`/api/v1/calibration/*`: Sessions tab (per-filter summaries, flats/darks coverage badges, the §39.5
-[Capture Matching Flats] dialog -> generate -> select the sequence -> jump to the Run tab) and Dark
-Library tab (catalogued groups incl. null-gain/sub-second rendering, coverage status header with
-[Open build sequence], the §39.8 matrix build form). New `CalibrationApi`/models/state follow the
-sequence-list factory->api->notifier idiom. Remaining §39 client work: the Image Library session
-card's stubbed [Capture Matching Flats] button waits on 12f.2 (library live-wiring gives cards real
-session ids); WS auto-refresh SHIPPED (frame.complete now actually EMITTED on capture insert — it was
-catalogued but never published — and the library/calibration/dark-library notifiers refresh on it,
-debounced 2 s); cursor paging on the
-sessions tab (first page at the server's 200 cap today — from the #673 review).
-### 12f.2 Image Library live-wiring — sessions/frames/thumbnails + flats button ✅ DONE (2026-07-02)
-`ImageLibraryScreen` now renders `/api/v1/sessions` + `/sessions/{id}/frames` via the new
-`LibraryApi`/`live_library` models/state trio (autoDispose, last-issued-wins refresh): live session
-cards (light/calibration counts, filters), lazily-loaded frame strips with capture-time thumbnails
-(`/frames/{id}/thumbnail`, placeholder on 404), the shared §39.5 [Capture Matching Flats] dialog
-wired with REAL session ids, and a wire-truth `LiveFrameViewerScreen` (pinch-zoom thumbnail +
-list-endpoint metadata; the demo `FrameViewerScreen` deleted). Demo `librarySessionsProvider`
-remains ONLY for the Stats dashboard (§50 live-wiring is its own slice). 12f.3b bulk ops SHIPPED (Rate/Tag/Delete live against `/frames/bulk/*` with confirm/star/tag dialogs;
-Move-to-session + Export stay disabled — no server endpoints). §40.6 Resume Target SHIPPED
-(server ResumeTargetAsync real: recorded sequence_json re-persisted when present/valid, else per-filter
-modal LIGHT synthesis via `CalibrationSequenceBuilder.BuildResumeTargetBody` with original frame counts,
-OverrideSequenceId echoed; endpoint 201+Location; library button -> Run-tab jump. Slew/center steps are
-the user's to add — per-frame plate-solve coordinates aren't in the catalog). 12f.3 pills SHIPPED
-(filter/rating pills narrow the frame strips, target search hides sessions, active pills highlight +
-Clear escape hatch). §50 demo-data retirement SHIPPED: the Stats CSVs stream from `/api/v1/stats/export/csv`
-(scope=sessions now a real per-session rollup server-side; scope=frames the full table), and the
-12f.1/12g.2 in-memory demo sessions are deleted — every Stats/Library surface is catalog-backed.
-§65 stretched previews SHIPPED in the viewer (palette picker -> POST /frames/{id}/preview full-res
-render, thumbnail as instant first paint, fetch-generation guard). In-viewer star rating SHIPPED (optimistic single-frame
-edit via the §40.8 bulk endpoint; strips invalidated after). In-viewer tag editing + detail
-metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size rows + tag chips
-with add/remove via the single-id bulk reuse). Cursor paging SHIPPED (Load-more on the library +
-calibration session lists via the shared CursorPage envelope; frame strips stay first-page-only by
-design). Move-to-session SHIPPED (POST /frames/bulk/move,
-target-session existence 422-guarded; bulk bar picker over the loaded sessions). §65.9 manual sliders SHIPPED
-(the baked v0.0.1 design: 200 ms debounced server round-trip; black/midtone/white 0-1 with the
-profile-seed defaults; client-side real-time stretching stays v0.1.0). Export SHIPPED (POST
-/frames/bulk/export streams a tar of the selected FITS via System.Formats.Tar — missing files
-skipped, name-collision dedupe, 404 when nothing exportable; client saves via the OS dialog with
-an injectable saver for tests). THE §40.8 BULK BAR IS COMPLETE. In-memory tar assembly is fine at
-selection scale; the streaming writer SHIPPED (open-handles-first
-FrameExportPrep: TOCTOU skip at open time before any tar bytes, count header from successful opens,
-entries streamed straight into the response via the Results.Stream callback — no MemoryStream, no
-rollback; path resolution batched into one IN(...) query, closing the #686 N+1 note for export).
-
-### ✅ DONE (2026-07-03) — `temperature_c` sentinel pass (from the #681 review)
-Nullable end-to-end: DDL dropped NOT NULL (in-place rebuild keyed on the stored DDL; rows copied
-VERBATIM — a legacy 0.0 cannot be told apart from a real freezing-point reading), FrameDto double?,
-RegisterFrameAsync + the FITS rescan record NULL when the camera/header reports nothing. The §39
-matching/bucketing queries use ROUND(COALESCE(temperature_c, 0), 0) so NULL and legacy 0.0 share a
-bucket — the documented uncooled-match semantics hold across both generations (tested). Astrobin
-cooling + frame viewer blank unknown; focus-temp chart filters NULL. This pass also introduced the
-**schema_version table** (=3, the #670 review commitment) for future passes to key on. Superseded
-entry follows for history:
-
-### (superseded) §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
-`frames.temperature_c` is NOT NULL and `CameraService.RegisterFrameAsync` coalesces a missing CCD
-temperature to 0.0 — the same fabricated-sentinel anti-pattern §28 removed for gain (#670), now
-user-visible as "Sensor: 0.0°C" in the frame viewer. Widening to nullable end-to-end is a dedicated
-pass like #670 (column rebuild, FrameDto, readers) **plus a design decision**: the §39 dark-matching
-rules deliberately exploit the sentinel ("uncooled lights/darks still bucket-match at 0.0" —
-documented + tested in SqliteCalibrationServiceTest). NULL-matching semantics must replace that
-(NULL matches NULL, as filters do) before the sentinel goes. Client is already nullable-ready
-(`LibraryFrameDetail.temperatureC` is `double?`, renders unknown as "—").
-
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
 per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at v0.0.1 scale over the
@@ -574,27 +400,6 @@ needs byte-preserving edits. The connect-path swap used the Edit tool safely; md
 - **Profile lifecycle (§63.4 table) beyond connect-time select/create:** `delete_profile` on ARA-profile delete,
   `clone_profile` on ARA-profile clone, `rename_profile` on rename — likely v0.1.0 (need ARA profile-lifecycle
   hooks that don't exist headless yet).
-
-## §29 disk-space monitor — follow-ups (2026-06-12, after the warn-only monitor)
-The §29 active disk-space gap is now closed by `DiskSpaceMonitor` (a `BackgroundService` that warns via a §51
-diagnostic + the §54 `OnDiskSpaceLow` notification when the save volume runs low; opens one issue on a downward
-transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEventsByTypeAsync`). Deferred:
-
-- **Configurable thresholds.** ✅ DONE — `StorageSettingsDto.MinFreeDiskWarnGb` / `MinFreeDiskCriticalGb`
-  (optional, back-compat defaults 10/2), surfaced under Settings → Session → Storage; the monitor reads them
-  live each tick via the pure `ResolveThresholdBytes` (falls back to the 10/2 GiB defaults on a non-positive or
-  inverted pair). Client + server validate critical < warn.
-- **Hard-stop option (§29.x).** ✅ DONE — `SafetyPoliciesDto.OnDiskSpaceCritical` (`warn` default / `abort`),
-  surfaced under Settings → Safety → Policies. On entering Critical with `abort`, the monitor calls the new
-  `ISequencerService.AbortActiveRunsAsync` to halt running sequences + fires a critical notification. ("Pause"
-  was considered but the headless engine's `PauseAsync` is still a deferred no-op, so only warn/abort ship; add
-  "pause" when the engine grows a real pause hook.)
-- ✅ **Per-frame pre-capture check — DONE (2026-07-06).** `CaptureCoreAsync` gates each frame BEFORE the
-  shutter opens: when the configured save volume is CRITICALLY low AND `OnDiskSpaceCritical=abort`, the
-  capture is blocked (an exposure that can't be saved is wasted sky time); the "warn" default never blocks —
-  the monitor's notification path owns reporting. Pure decision in `DiskSpaceMonitor.PreCaptureShouldBlock`
-  (+tests); the probe is best-effort (no store / unprobeable volume / probe fault → capture proceeds — a
-  broken probe must never cost a frame).
 
 ## §45 polar alignment — phase 1 groundwork shipped (2026-07-06)
 
@@ -777,16 +582,6 @@ timeout — `get_profile`'s bare response fails deserialization and `GetProfiles
 runs in ~0.5s. A future nicety: give the connect-time getters a shorter timeout than the 60s default so a genuinely
 non-responsive guider degrades connect in seconds rather than a minute. Low priority. Surfaced 2026-06-13 by bench-3.
 
-**OBSOLETE (2026-07-02) — §36 CEF 149 sandbox hardening: no longer applicable.** The #611 planetarium pivot removed CEF/`webview_cef` entirely; the planetarium now runs in the OS-native WebView (WKWebView / WebView2 / WebKitGTK), which carries the platform's own renderer sandboxing, so neither hardening track below can or needs to happen. Kept for history. Original entry: The CEF 149
-Sky Atlas runs with **no macOS App Sandbox** (host + helper) — CEF's browser process registers a PID-suffixed *global*
-Mach bootstrap name for the helper rendezvous that `bootstrap_check_in` denies under the sandbox, aborting
-`CefInitialize` — **and** no Chromium renderer sandbox (`webview_cef` sets `CefSettings.no_sandbox = true`, a plugin
-default). So the webview has zero OS/Chromium sandboxing. Accepted for now: Developer-ID desktop control app, fixed
-bundled offline Aladin page, only outbound CDS HiPS tile fetches. Two future-hardening tracks: (a) if a future CEF/plugin
-release makes the rendezvous name static (or offers a sandbox-compatible transport), re-enable `app-sandbox` on host +
-helper (and flip the entitlements-test guard back); (b) enable Chromium's own renderer sandbox by linking `cef_sandbox`
-+ a sandboxed helper variant — independent of (a). See `client/.../macos/CEF_HELPER.md`. Surfaced 2026-06-24 by the
-CEF-149 OSR review; nothing tracks the migration except this entry + the entitlement comments.
 
 **DONE (2026-07-02) — §36 Data Manager DeleteAsync no longer conflates "not installed" and "permission denied".** `DeleteAsync` now returns `PackageDeleteResult` (Deleted / NotInstalled / Blocked — the delete-raced `DirectoryNotFoundException` maps to NotInstalled, the locked/permission-denied `IOException`/`UnauthorizedAccessException` family to Blocked), the endpoint maps Blocked to a 409 problem ("files are in use or protected — retry"), and the client `delete()` turns the 409 into a typed `PackageDeleteBlockedException` whose message surfaces in the modal SnackBar — so a locked dir reads "retry later", never "already clear". POSIX-gated read-only-parent test covers the Blocked path. Original entry: Both an
 unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locked or permission-denied dir) return
@@ -980,15 +775,6 @@ Deferred to **§43-2**:
   64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real
   focuser) would wrap silently. If a wider range is ever needed, widen `FocuserPositionDto`/`FocusTempPoint` to `long`
   end-to-end (wire + client model) rather than casting. Low priority. Surfaced 2026-06-14 by the #448 re-review.
-- **OBSOLETE (2026-07-02) — build-time guard for un-provisioned macOS CEF: CEF was removed by the #611 native-webview pivot** (and `scripts/provision-cef-macos.sh` was deleted in the Aladin-scrub PR), so there is nothing to provision. Original entry: If a developer runs `flutter build macos` without
-  first running `scripts/provision-cef-macos.sh`, the failure is a cryptic linker error (missing CEF framework symbols).
-  A short pre-build phase (or a check in the Podfile `post_install`) that detects an un-provisioned `macos/third/cef` and
-  emits a human-readable `error:` pointing at the script would improve DX. Low priority. Surfaced 2026-06-15 by the #463 review.
-- **OBSOLETE (2026-07-02) — CEF multi-process helper DX/CI follow-ups: CEF and the `packages/webview_cef` submodule were removed by the #611 native-webview pivot**, so neither follow-up has a target. Original entry: (1) **CI guard for the sandbox repoint** — `add_helper_target.rb` re-points the Helper target's `CODE_SIGN_ENTITLEMENTS` to the plugin's non-sandboxed default each run; a `git`-grep/`diff --exit-code` CI check asserting the three Helper configs still point at `Runner/Helper.entitlements` would catch a re-run that forgot the manual repoint (currently mitigated by the self-contained two-step command in `macos/CEF_HELPER.md`). It's a `.github/workflows` change → its own infra PR. (2) **Missing-submodule pre-build error** — the Helper target's `INFOPLIST_FILE` points into the `packages/webview_cef` submodule; a first build without `git submodule update --init` fails with a confusing Xcode error. A pre-build shell phase that checks the path and aborts with a clear `error: run git submodule update --init packages/webview_cef` would improve DX. Both low priority.
-- **OBSOLETE (2026-07-02) — Windows CEF main.cpp tweak: CEF was removed by the #611 native-webview pivot** (Windows renders via WebView2). Original entry: When the Windows build is first exercised,
-  fold in the `windows/runner/main.cpp` CEF multi-process + IME tweak that `webview_cef` requires on Windows (the Linux
-  and Windows builds auto-download CEF via the plugin's `third/download.cmake`, so no binary-placement step is needed
-  there — unlike macOS). Surfaced 2026-06-14 by the #450 review.
 - **DONE (2026-06-15) — macOS webview_cef build wired up (§36).** The first real `flutter build macos` was completed.
   macOS (unlike Linux/Windows) does not auto-download CEF, so: (1) `scripts/provision-cef-macos.sh` fetches + SHA-verifies
   the pinned arch-matched CEF bundle and restructures the flat framework into a versioned bundle (macOS Xcode rejects the
@@ -1026,7 +812,7 @@ Deferred to **§43-2**:
   invalidation matrix explicitly recomputes framing on effective-focal-length change, don't just assume it; (iii) the §25.5
   walkthrough numbers only 4 tabs (Image Library + Stats absent) and the NINA-control-labels list (~PORT_PLAYBOOK line 2021)
   still says "Framing Assistant"/"Sky Atlas" — fold both into the prose sweep so they don't slip.
-- **Re-shim the open-astro/webview_cef fork on Flutter upgrades (§36).** The §36 Aladin embed depends on the
+- **OBSOLETE (2026-07-07) — re-shim the webview_cef fork: no longer applicable.** The #611 native-webview pivot removed `webview_cef` entirely (see the §36 follow-ups entry at the top of this file — "webview_all is the shipping renderer and webview_cef is fully retired"), so there is no fork to re-shim on Flutter upgrades. Original entry: **Re-shim the open-astro/webview_cef fork on Flutter upgrades (§36).** The §36 Aladin embed depends on the
   [open-astro/webview_cef](https://github.com/open-astro/webview_cef) fork (SHA-pinned), which carries a one-line shim:
   `bool TextInputClient.onFocusReceived() => false;` in `lib/src/webview_textinput.dart` (upstream predates that Flutter
   API). On each Flutter SDK bump, re-verify the fork compiles — Flutter periodically adds abstract members to
@@ -1063,7 +849,6 @@ Deferred to **§43-2**:
 - **DONE (2026-07-02) — §25.5.5 dumb-cooler (on/off, no TEC set-point) support.** Implemented exactly as this entry prescribed: `CameraCapabilitiesDto` gained `HasCooler` (connect-time probe — ASCOM contract: reading `CoolerOn` throws PropertyNotImplementedException when there is no cooler, so a successful read means a cooler exists), the panel gates the on/off Switch on `has_cooler` and the set-point field on `can_set_temperature`, and the client parse falls back to `can_set_temperature` when the field is absent so a pre-slice daemon reproduces the old gating exactly. Original entry: The panel currently gates the *entire* cooler control block (on/off Switch + set-point) on `can_set_temperature`. A camera with a simple on/off cooler but no temperature regulation reports ASCOM `CanSetCCDTemperature=false`, so its cooler Switch is hidden entirely. Such cameras are rare in this hobby (TEC set-point cameras dominate), so v1 ships gated on `can_set_temperature`. Proper fix when wanted: add a separate `has_cooler` capability to `CameraCapabilitiesDto` (daemon probes whether `CoolerOn` is implemented at connect), gate the on/off Switch on `has_cooler` and the set-point field on `can_set_temperature`. Flagged by CR on #567.
 - **§64 Live View — reported frame dims vs the encoder's maxDim downscale (from the #652 review, pre-existing).** `LiveViewFrameData.Width/Height` report the PRE-encode dimensions (native for mono, super-pixel-halved for OSC), but `JpegEncoder.EncodeGray/EncodeColor` internally downscale anything over `LiveViewMaxDim` (1024) — so on any real sensor the reported dims exceed the actual JPEG's pixel size. Harmless today: the client renders the bytes directly (`Image.memory`) and never sizes by the DTO. If a consumer ever needs the JPEG's true dims (overlay math, pixel-space cursor readout), either report post-encode dims or have the encoder return them. Noted so the #652 review observation isn't lost. (low)
 - **DONE (2026-07-02) — §64 Live View debayered colour for OSC (RGGB) cameras.** The live loop now resolves the session's Bayer pattern at start (from the connect-time capabilities, only at bin 1x1 — binning mixes CFA cells, mirroring the capture path's BAYERPAT gating) and renders debayered COLOUR via the shared mosaic->RGB preview recipe, which moved to `Debayer.SuperPixelStretched` so the §65 capture preview and the §64 live render cannot drift. Super-pixel halves the published frame dims (the client sizes by them; it renders the JPEG bytes directly, so no client change). Mono and binned-OSC sessions render greyscale luminance exactly as before. The render decision is the testable `CameraService.RenderLiveFrame` seam (dims + JPEG assertions; channel-order proven via Manual-stretch determinism). Original entry: LV-1 (#569) renders every live frame as greyscale via `Stretcher.Apply(AutoStf) → JpegEncoder.EncodeGray`. For a mono camera that's true luminance; for an **RGGB OSC** camera it renders the raw CFA mosaic as greyscale (the cross-hatch is visible), since the live path skips the `Debayer.SuperPixel` step the §65 capture-preview path (`SqliteFrameRepository.DebayerAndStretch`) does. Acceptable for framing/focus, but a debayered (or green-channel) live render is the nicer finish — additive in a later LV slice. `SensorType.Color` (already-debayered 3-plane) is refused at `StartLiveViewAsync`. Flagged by CR on #569.
-- **OBSOLETE (2026-07-02) — §36.1 GPL v3 §6 Aladin Lite sign-off: no longer applicable.** The premise died with the #611 planetarium pivot: Aladin Lite is no longer bundled (nor fetched) — the `AladinView` widget was deleted, `assets/aladin/` was never in `pubspec.yaml` after the pivot, and the leftover unshipped `assets/aladin/{aladin.js,ALADIN_LICENSE.md}` files were removed from the repo in the Aladin-scrub PR (2026-07-02), which also replaced the stale NOTICE.md Aladin bullet with the Stellarium Web Engine (AGPL-3.0) disclosure. No GPL §6 obligation exists for software we do not convey. The bundled planetarium engine's own source-disclosure duty (AGPL §13) is already satisfied — see `client/.../assets/stellarium/README.md` + the `open-astro/stellarium-web-engine` fork (tag `ara-v1`). Original entry (historical): As of #571 the Aladin Lite v3 engine (GPL v3, minified) ships *inside* the WILMA client binary rather than being fetched from the CDS CDN at runtime, which changes the obligation from "linking" (the GPL FAQ separate-process exception NOTICE.md cites) to "distribution": GPL v3 §6 requires the complete corresponding source accompany or be offered alongside any binary conveyed to a third party. A formal §6 **written offer** + the unambiguous corresponding-source pointer (the upstream `v3.6.1` tag) is now in `client/.../assets/aladin/ALADIN_LICENSE.md`, which satisfies the substance for a network-available upstream. **Before the first public/installer release that conveys the binary**, have whoever signs off the existing LGPL/FreeImage compliance confirm the §6 form is adequate for the shipping channel (e.g. that the installer carries or links the offer, and the corresponding-source location is durable). No obligation crystallises at merge — this PR does not ship an installer to third parties; the duty attaches when the packaged binary is conveyed. Flagged by the #571 review.
 - **DONE (2026-07-02) — §25.3 top-bar Switch chip busy (amber) state.** Closed via the entry's own "derive it from an in-flight set-value op" option: `switchActingProvider` mirrors `SwitchListNotifier._act`'s re-entrancy guard (set/cleared in the same try/finally, generation-guarded on server switch), and `switchChipLevel` gained an `acting` input that maps to amber for any in-flight switch action (port write or connect/disconnect) — loading/error still outrank it, matching the other chips' precedence. `SwitchDevice` itself stays unchanged (the daemon reports no per-port actuation state to model). Original entry: The single-instance equipment status chips (camera/focuser/mount/…) turn amber while a move/op is in flight (their `EquipmentDeviceStatus.isBusy`), but `SwitchStatusChip` can't: `SwitchDevice` only models `connectionState`/`isConnected`, not a per-port actuation/busy state, so a switch with a port actuating stays green rather than amber. Intentional gap (the model doesn't carry it), not forgotten — to close it, add a busy/actuating signal to `SwitchDevice` (or derive it from an in-flight set-value op) and map it in `switchChipLevel`. Flagged by the #577 review.
 - **DONE (verified 2026-07-02) — §36/§25.5 Planning "Add to sequence" from the Framing panel.** Superseded by the #611 self-driven page: the framing overlay (camera FOV from the optics profile + rotation dial + N×M mosaic) lives *inside* `assets/stellarium/index.html`, which owns the framing geometry and posts an `addToSequence` event (`raDeg`/`decDeg`/`rotationDeg`/`name`) over the `/araevent` loopback; `StellariumView._onPageEvent` builds the Run with the shared `buildSlewTargetBody`. No atlas-centre→Dart bridge is needed. The old Aladin-era Dart framing chain (`framing_state.dart` + `fov_box.dart`) was deleted as superseded in the Aladin-scrub PR. Remaining gap (already tracked in the NINA sequencer-fidelity epic): the framing `rotationDeg` is not carried into the Run (the slew instruction has no PA field — needs CenterAndRotate/rotator). Original entry: The Tonight's-Sky-row "Add to a new sequence" action (this slice) builds a one-slew sequence from the object's `ra_deg`/`dec_deg`, which Dart already holds. The Framing panel's **"Add to Sequence"** button (still `onPressed: null`) wants to capture the *currently-framed* centre + rotation/mosaic, but the atlas centre lives only in the planetarium page (post-#611: the self-driven Stellarium page; the page->Dart channel is the `/araevent` loopback POST, not a JS bridge) and is never reported back to Dart — there's no `{centerRaDeg, centerDecDeg}` provider. To enable it: add a JS→Dart bridge that reports the atlas centre (and ideally the live FOV), store it in a provider, then wire the Framing button to `buildSlewTargetBody` + the framing rotation/mosaic (a richer body than the single slew — likely a container with the FOV-derived panel set). Until then the Framing button stays disabled. Flagged while building the Tonight's-Sky add-to-sequence slice (PR2).
 - **§36 Data Manager catalogs — durability + remaining slices.** **Durability RESOLVED (2026-07-01):** `hyg-stars`/`openngc-dso` now download from the org's own snapshot repo — commit-pinned raw URLs at `open-astro/sky-data` @ `712bf93` (byte-identical to the upstream pins, digests unchanged; that repo's README carries the CC BY-SA attribution + provenance, and a `v1` GitHub release mirrors the files for humans). Deliberately raw URLs, NOT release assets: asset downloads 302-redirect and the sky-data HttpClient refuses redirects (the HTTPS-downgrade guard in Program.cs), while raw serves 200 directly — verified live (0 redirects, digests match). Refresh procedure: commit new files to sky-data `main`, cut `v2`, update the `Catalog` URLs (new commit SHA) + `CatalogSha256` in the same ARA PR. Historical context: previously commit-pinned to the upstream repos (HYG archived repo; OpenNGC), which a repo deletion would have broken. `horizon-default` — **REMOVED** (was the dead-`data.openastro.net` entry): a site horizon (flat default or survey) is generated LOCALLY for the §36 Tonight's-Sky overlay (Meeus altitude formula + below-horizon shading per playbook §36), NOT fetched via the Data Manager, so it was a miscategorised broken download. The real horizon feature re-adds horizon data on the Tonight's-Sky side when built. Remaining catalog-overlay slices: (1) a server endpoint to serve an installed catalog as JSON rows {ra,dec,mag,name} (parse `{packageDir}/catalog.csv` — **delimiters + columns differ per package**: HYG `hygdata` is comma-separated with `ra`/`dec`/`mag`/`proper` columns, OpenNGC is **semicolon**-separated with different column names, so the parser must be per-catalog, not one-size-fits-all); (2) client `araAddCatalog` Aladin overlay + fetch, gated on installed catalog packages. Flagged while wiring the real-catalog download (PR4a-2); per-package delimiter raised by the #584 review. **Content-integrity — RESOLVED in #584:** downloads now verify against a known SHA-256 (internal `CatalogSha256` map; `SkyDataInstaller` hashes the stream and checks the digest *before* the atomic swap, so a corrupt/wrong download is rejected without replacing a good install). When a self-hosted snapshot lands, update the digests alongside the URLs.
@@ -1085,3 +870,253 @@ Deferred to **§43-2**:
 - ✅ **§36 sequencer model — `$type` constants + FilterInfo consolidated** *(done 2026-07-06)*: the nine assembly-qualified `$type` literals + `filterInfoType` were promoted to named consts in the instruction/condition/trigger catalogs (the `slewScopeToRaDecType` pattern) with a shared `buildFilterInfo(name, {position})` helper; `imaging_run_body.dart`, `optimal_sub_advisor.dart`, and `sequence_field_editor.dart` now import them (no local mirrors). `kRunTabIndex` moved next to `kOptionsTabIndex` in `settings_nav.dart` with the matching app_shell assert, and calibration_screen's bare `select(1)` uses it. Flagged by the #689 self-review (reuse).
 - ✅ **§36 Planning — createImagingRun feedback consolidated** *(done 2026-07-06)*: the three call sites (target action bar, Tonight's Sky row, framing overlay) now share `showImagingRunFeedback` next to `ImagingRunResult` — one place for the appended/created/error strings, error styling unified, and the no-server case now surfaces on ALL three (previously only the framing overlay said anything). Flagged by the #689 self-review (reuse/simplification).
 - **§36 multi-target append — NINA "End" containers aren't recognized as session-end steps.** `appendTargetToRunBody` walks back over trailing WarmCamera/ParkScope LEAVES (#689), but an imported NINA sequence that wraps its park/warm steps in an End-area CONTAINER gets the new target appended after it (containers are indistinguishable from target blocks structurally). If imported-sequence appending matters, detect NINA's Start/End area containers by their `Strategy`/name markers. Flagged by the #689 self-review.
+
+---
+
+# ✅ Done / obsolete — archived entries
+
+Everything below is **closed** (shipped, verified stale, or obsoleted by a later decision) and
+is kept verbatim for the historical record. The live open-items list is everything **above**
+this line. Sections were moved here whole, unreworded, in the 2026-07-07 design-docs cleanup;
+sections that still mix open and done bullets remain above with their inline ✅ marks.
+
+## Phase 0.5a — Fork hygiene / WPF demolition
+
+### Cascade scrubs
+
+- ✅ `NINA.Equipment.csproj` ProjectReferences to nikoncswrapper + NINA.MGEN — scrubbed in Phase 0.5b
+- ✅ `NINA.Test.csproj` ProjectReferences to NINA.MGEN + NINA.Plugin + NINA.CustomControlLibrary + NINA.WPF.Base + NINA — scrubbed in Phase 0.5b
+- ✅ **Phase 0.5p-followup buildfix** (`phase-0.5p-followup-buildfix`, 2026-05-26) — Core scrubs (Notification.cs CustomDisplayPart removal, MyMessageBox.cs MyMessageBoxView removal, +System.Management package for WMI usage in Logger.cs/SerialPortProvider.cs), Astrometry DB-greenfield reconciliation (DatabaseInteraction.cs stubbed to GetUT1_UTC + GetDisplayAlias only; consumers AstroUtil.cs/TopocentricCoordinates.cs cleaned), Equipment vendor file deletions (EDCamera + MGENGuider + ASCOMInteraction + 4 flat device drivers + 3 orphaned test files), Phase 6 Alpaca discovery bug fix (`deviceType:` → `deviceTypes:` + missing `logger:` param). After this PR, `dotnet build OpenAstroAra.sln -c Release` is green except for the Sequencer item below.
+- ✅ **Sequencer WPF-removal pass** — Resolved in Phase 0.5p2 (PR #242 / promoted #243). All 7 NINA-inherited projects (Core, Astrometry, Profile, Image, Equipment, PlateSolving, Sequencer) + Test now target `net10.0` headless per playbook §5.2/§8. WPF UI files deleted wholesale per §4.2 (~404 files); mediator-VM constraint dropped per §8.1; `BitmapSource` → `byte[]` for type signatures with OpenCvSharp4 wiring deferred per §line-2105; Compat stubs (`Astrometry/Compat/`, `Sequencer/Compat/`, `Image/ImageAnalysis/HeadlessStubs.cs`) preserve legacy call surfaces. `dotnet build OpenAstroAra.sln -c Release` → 0 errors, all CI matrix jobs green. Server csproj wired to all 7 libs in #244 / promoted #245 per playbook §8 Phase 4 scaffold.
+- ✅ **NINA.Test.csproj post-Sequencer-removal** — Resolved alongside #242. Test subdirs that depended on deleted WPF/Sequencer code (Sequencer/, SimpleSequencer/, MGEN/, Plugin/, Converters/, ViewModel/, Autofocus/, FlatDevice/, Image/, PlateSolving/, Planetarium/, Focuser/, Rotator/, Dome/, Equipment/SDK/) purged per playbook §4.5. 296 platform-agnostic tests pass on macOS-arm64; 1006 NOVAS/SOFA fixtures filter to `[Platform("Win")]` since the natives are Windows-only Win32 binaries (libnovas.so + libsofa.so packaging is Phase 14e).
+
+### Source-file `TODO(port)` markers
+
+(none yet — Phase 0.5a is pure delete; no new code introduced)
+
+## Out-of-scope CodeRabbit suggestions
+
+- **DONE (2026-07-02) — PR #71 filter-slot control.** The Imaging tab's exposure panel now has the Filter dropdown wired to `params.filterSlot`/`setFilterSlot` (until now only the hardcoded 'L' default ever went up as `filter_name`). Choices come from the profile's wheel slot labels — daemon-authoritative since the 12h.2b round-trip — with a stored value not among the labels kept selectable (the §38 picker's stance).
+
+## Merge-gate audit follow-ups (2026-06-17)
+
+A retrospective audit of merged PRs (the bot's verdict-at-merge vs. the §19.1 gate) found **no unaddressed high-severity defect** — the recall-biased reviewer's near-permanent "⚠️ Issues found" sign-off is not itself a defect signal, and every high-severity keyword in a final verdict was negated / avoided-by-design / an explicit non-blocker. It did surface these **low-severity, bot-acknowledged-non-blocker** hardening items, logged here and being remediated as focused follow-up PRs (each driven to the bot's ✅ Approved before merge):
+
+- **DONE (verified 2026-07-02) — #384 dark-library build disposal/cancellation.** `GuiderService.DarkLibrary.cs` now handles the whole lifecycle: the shutdown CTS token is captured BEFORE the deferred lambda (a concurrent Dispose can no longer throw ObjectDisposedException in the background task and leak the gate), the token threads into the 2-hour `BuildDarkLibraryAsync` RPC so shutdown cancels it, the single-build gate releases in `finally` on every path (and in the Task.Run queue-failure catch), and background exceptions are contained + surfaced as the `*.failed` WS event, never an unobserved task exception. Landed with the guider a/c hardening.
+- **DONE (verified 2026-07-02) — #390 WS drain error surfacing.** `ws_event_stream.dart`'s teardown now logs both failure paths ("Surface (don't silently drop) a teardown failure"): a faulted `sub.cancel()` and a faulted `socket.close()` each land in a `catchError` → `debugPrint`, and the onError path finalises the socket so a half-open TCP connection can't leak across reconnects.
+- **DONE (verified 2026-07-02) — #425 backup `listSnapshots` drop logging.** `backup_api.dart` now throws on a non-array 2xx body (wire-contract break surfaces as an error state, not a silent empty list) and logs the dropped count when malformed/unusable entries (missing id or downloadUrl) are skipped.
+- **DONE (verified 2026-07-02) — #349 image preview guards.** All three `SKBitmap.GetPixels` call sites in `JpegEncoder` (EncodeGray, EncodeThumbnail, RgbToBitmap) check for `IntPtr.Zero` and throw with a clear message instead of writing through a null pointer, and the full-preview path resizes via `PreviewMaxDim` (2048, `SqliteFrameRepository`) with `EncodeGray`/`EncodeColor` delegating oversize frames to the tested thumbnail-resize path.
+- **CLOSED (2026-07-02) — #399 latent dialog error-drop: mitigated by a documented contract, not dead code.** The dialog's fire-and-forget sites carry the contract comment at the exact refactor point ("GuiderCalibrationNotifier._run wraps every action in try/catch and routes failures to state = AsyncValue.error… Keep that contract if _run is ever refactored"), which is the appropriate guard for a purely hypothetical future refactor — a `catchError` today would be dead code silencing nothing. Re-open only if `_run`'s error routing actually changes.
+
+## Phase 15 sweep candidates
+
+- ✅ **Consolidate `_SwitchRow` into shared editable-field widget set.** Resolved in PR #104 (Phase 12h.2-switch) — lifted into `lib/widgets/settings/editable_field.dart` as `SettingsSwitchRow` with optional `hint` slot. All 6 panel copies removed.
+- ✅ **Filename template `$$TOKEN$$` vs `$TOKEN$`.** Verified post-Phase-0.5p2 (`OpenAstroAra.Core/Model/ImagePattern.cs` now compiles + readable). The canonical render-side token registry `ImagePatternKeys` declares every token as `$$TOKEN$$` (e.g., `Filter = "$$FILTER$$"`, `FrameNr = "$$FRAMENR$$"`, `ExposureTime = "$$EXPOSURETIME$$"`) — matches the double-dollar form the 4 default sources of truth use. Sonnet's flag on PR #141 ("might expect single-dollar") was a false positive against the un-built NINA inheritance; no action needed. Same shape as the `\\` vs `\` separator answer in PR #131.
+
+## Phase 14 hardening candidates
+
+- ✅ **Server AOT `JsonSerializerContext` source-gen.** **Resolved in Phase 14a** — single `AraJsonSerializerContext` partial class with `[JsonSerializable]` for all 133 DTO records + the 7 concrete `CursorPage<T>` instantiations + 8 `IReadOnlyList<T>` collection wrappers. Wired via `TypeInfoResolverChain.Insert(0, ...)` in `Program.cs`. `FileProfileStore.Persist`/`LoadOrDefaults` switched to typed-info overloads; pragmas removed. `dotnet run` smoke now passes end-to-end (verified: `/healthz` 200, GET/PUT `/api/v1/profile/imaging-defaults` round-trip, `profile.json` written to disk).
+- ✅ **AOT-safe `JsonStringEnumConverter` per-enum.** Resolved in `phase-15-aot-enum-converters` — replaced the single non-generic `JsonStringEnumConverter(LowerCaseNamingPolicy)` with 8 per-enum `JsonStringEnumConverter<TEnum>(LowerCaseNamingPolicy.Instance)` registrations in `Program.cs`. Each generic instantiation is AOT-traceable; the `IL3050` suppression pragma is removed. .NET 10's `JsonStringEnumConverter<TEnum>` accepts a `JsonNamingPolicy` via its constructor — the earlier TODO assumed that constructor didn't exist.
+
+## Phase 38 — §38k instruction prototypes deferred (need more than a device mediator)
+
+Deferred during the §38k-13…18 equipment-mediator stub layer (PR #315). Each is a registered-prototype gap, not a `// TODO(port)` code marker — the instructions exist and compile; they're simply not wired into `HeadlessSequencerFactory.WithDefaults()` yet because they need a non-device dependency the headless daemon doesn't provide. Register them once the prerequisite lands.
+
+- ✅ **`Dither` + `SwitchFilter`** — **resolved in §38k-22 (#318)**: a `HeadlessProfileService` stub satisfies their `IProfileService` dependency for prototype construction; both registered.
+- ✅ **`SynchronizeDome`** — **resolved in §38k-21 (#317)**: added a `HeadlessDomeFollower` stub (the one non-mediator equipment dependency) and registered the instruction. `Enable`/`DisableDomeSynchronization` (dome + telescope only) landed earlier in §38k-18.
+- ✅ **Full `TakeExposure` capture path** — **resolved in §14e capture-path PRa+PRb (#343 + follow-up)**: real `CameraService` pipeline (expose → download → §72 FITS → §28 catalog) + re-ported `TakeExposure` executing through `IImagingMediator.CaptureImage` on the same pipeline. The #315 capture-block note is addressed: `IsFreeToCapture` truthfully reflects the shared in-flight capture gate (Register/Release stay inert — no headless consumer registers blocks). Still §2105-gated: the in-memory render path (`CaptureAndPrepareImage`/`PrepareImage`/live view, OpenCvSharp4 + libraw) — `TakeExposure` deliberately discards the returned `IExposureData`.
+- ✅ **Connect/Disconnect/SwitchProfile capstone** (`ConnectAllEquipment`, etc.) — **resolved in §38k-22 (#318)**: registered all five via the `HeadlessProfileService` stub; `DisconnectAllEquipment`/`DisconnectEquipment` flipped `internal`→`public` (CA1002 on their `Devices` property fixed to `IReadOnlyList<string>`).
+
+## §26 / §2105 OpenCvSharp4 — version-pin BLOCKER (found 2026-06-10)
+
+The playbook §26.2 pins all five OpenCvSharp4 packages at `4.11.0.20250507`. **That pin is invalid** — verified against NuGet (2026-06-10):
+- `OpenCvSharp4` (managed): `4.11.0.20250507` exists; latest is `4.13.0.20260602`.
+- `OpenCvSharp4.runtime.linux-arm64` (the **production Pi target**): tracks the managed package (4.13.x current); **does NOT have `4.11.0.20250507`** — its versions use a different sequence.
+- `OpenCvSharp4.runtime.linux-x64` (CI host + x64 docker): **frozen at `4.10.0.20240717`** (no updates since 2024).
+- `OpenCvSharp4.runtime.osx`: **does not exist**; `OpenCvSharp4.runtime.osx_arm64` stops at `4.8.1`.
+
+OpenCvSharp4 requires the native-runtime OpenCV version to match the managed binding, so **there is no single version that works across linux-arm64 + linux-x64 + osx-arm64**. Consequences/decisions needed (revises §26.2 — user-authoritative):
+1. **Version strategy**: pin to a managed+linux-arm64-aligned version (production works) and accept linux-x64/osx native are stale/absent — meaning OpenCvSharp4 code can't be unit-tested on the macOS dev box or the linux-x64 CI host, only on linux-arm64 (e.g. via the §14d qemu-arm64 docker e2e). OR find an older common version (~OpenCV 4.10) where main + linux-x64 + linux-arm64 all align, trading off currency.
+2. **csproj**: the §26.2 "5 runtime refs at one version" block must change to reality (per-platform versions, or arm64-only).
+3. This gates the whole §2105 render-stub migration (`RenderedImage`/`BaseImageData`/`ImageArrayExposureData`/`ExposureData` — ~10 `NotImplementedException("pending OpenCvSharp4 wiring")` methods) + the separate libraw RAW path. Note much of preview/thumbnail/stretch is already served by the §65 SkiaSharp pipeline; the unique consumer of the in-memory OpenCvSharp render path is Live View (§64), whose v0.0.1 scope is itself an open question.
+
+### §2105 follow-up (2026-06-10, hard NuGet data): OpenCvSharp4 runtimes are FUNDAMENTALLY unalignable — consider SkiaSharp instead
+
+Verified there is **no single OpenCvSharp4 version whose native runtimes exist for all of linux-arm64 + linux-x64 + osx-arm64**:
+- `runtime.linux-arm64`: only modern (4.11.x+/4.13.x) — no 4.8.x, no 4.10.x.
+- `runtime.linux-x64`: only `4.10.0.20240717` — no 4.8.x, no 4.11+.
+- `runtime.osx_arm64`: only `4.8.1` (stops 2023).
+- `runtime.win`: `4.8.0.x` + others.
+
+OpenCvSharp4 requires the native runtime's OpenCV version to match the managed binding, so OpenCvSharp4 code **cannot native-load on the macOS-arm64 dev box AND the linux-x64 CI host AND the linux-arm64 Pi with one pin** — it's only runnable on linux-arm64 (slow qemu docker, not a unit-test env). Writing/iterating the §2105 render stubs against an un-runnable backend is a poor foundation for "the single biggest technical risk."
+
+**Recommendation: reconsider §26's OpenCvSharp4 choice in favor of SkiaSharp for §2105.** SkiaSharp is already a proven, cross-platform-clean dependency in this repo (the §65 stretch/preview pipeline, #208 — `SKBitmap`/`JpegEncoder`, works on dev + CI + arm64). The §2105 render needs (16→8-bit, JPEG/thumbnail encode, resize, basic transforms) are all SkiaSharp-native; the one OpenCvSharp-specific op is **debayering** (`Cv2.CvtColor(BayerRG2RGB)`), which can be done with a small bilinear-debayer kernel over the raw `ushort[]`/`byte[]` buffers (or via libraw for DSLR RAW). This would un-stub `Image/ImageData/*` (`RenderImage`/`Debayer`/`RenderBitmapSource`/`GetThumbnail`/`Stretch`) on a testable-everywhere backend and avoid the OpenCvSharp packaging trap entirely. **Revises §26 (user-authoritative) — flag for decision.** If Live View (§64) is deferred to v0.1.0, most of this can be deferred with it (the §65 SkiaSharp preview already serves the catalog).
+
+## §15 / §17.2 dependency-license audit (2026-06-10) — RELEASE-SAFE, no copyleft contamination
+
+Audited all NuGet PackageReferences across the solution for MPL-2.0-distribution compatibility:
+- **Distributed (daemon) deps**: all permissive (MIT / Apache-2.0 / BSD / MS-PL / ISC / public-domain) EXCEPT one inherited-from-NINA non-MIT one, compatible: **Accord.NET (LGPL-2.1)** — separate dynamically-linked .NET assemblies, satisfies LGPL's relink allowance. (The **FreeImage**/VVVV.FreeImage dependency was removed as dead weight — the RAW-converter that used it was deleted in the port, the §2105 render path is SkiaSharp, and only a vestigial enum label remained; dropping it also removed a shipped-but-unused .NETFramework native lib + the NU1701 warning.) **No GPL/AGPL/SSPL/commercial-licensed code in the distributed daemon.** Called out in `NOTICE.md`.
+- **Test-only deps with license caveats (NOT distributed)**: `FluentAssertions` is pinned `[7.0.0]` — deliberately the last Apache-2.0 version before v8 went commercial (Xceed paid); `Moq 4.20.72` is post-SponsorLink. Both fine + test-only.
+- ✅ **Action remaining (release-time only) — DONE (2026-07-01)**: `scripts/generate-3rd-party-licenses.py` generates the repo-root `3rd-party-licenses.txt` from the daemon's full transitive NuGet graph (98 packages; SPDX expressions from the nuspecs + a curated OVERRIDES table for the 18 pre-SPDX legacy packages, each verified upstream). CI's `server-build` job runs `--check` right after restore so a dependency bump that forgets to regenerate fails fast, and `build-deb.sh` ships LICENSE.txt + NOTICE.md + the notices at `/usr/share/doc/openastroara-server/`. ✅ Sibling task DONE (2026-07-05): the **WILMA client's** third-party notices ship in-app — Settings → System → About (the `app.changelog` panel is now real: identity + version via package_info_plus + license posture + repo link) opens Flutter's built-in `showLicensePage` over `LicenseRegistry`, which the build tooling populates with every bundled package's LICENSE automatically, so the notices stay correct as dependencies change with no generated file to forget.
+
+## §65 JpegEncoder.EncodeThumbnail null-resize guard ✅ DONE (verified already present, 2026-07-05)
+
+Stale entry: the grayscale `EncodeThumbnail` carries the identical `Resize(...) ?? throw
+InvalidOperationException` guard as `EncodeColorThumbnail` (JpegEncoder.cs — both resize call
+sites) — it landed with the #349-era guard sweep despite this entry surviving. Nothing to do.
+
+## §29 disk-space monitor — follow-ups (2026-06-12, after the warn-only monitor)
+The §29 active disk-space gap is now closed by `DiskSpaceMonitor` (a `BackgroundService` that warns via a §51
+diagnostic + the §54 `OnDiskSpaceLow` notification when the save volume runs low; opens one issue on a downward
+transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEventsByTypeAsync`). Deferred:
+
+- **Configurable thresholds.** ✅ DONE — `StorageSettingsDto.MinFreeDiskWarnGb` / `MinFreeDiskCriticalGb`
+  (optional, back-compat defaults 10/2), surfaced under Settings → Session → Storage; the monitor reads them
+  live each tick via the pure `ResolveThresholdBytes` (falls back to the 10/2 GiB defaults on a non-positive or
+  inverted pair). Client + server validate critical < warn.
+- **Hard-stop option (§29.x).** ✅ DONE — `SafetyPoliciesDto.OnDiskSpaceCritical` (`warn` default / `abort`),
+  surfaced under Settings → Safety → Policies. On entering Critical with `abort`, the monitor calls the new
+  `ISequencerService.AbortActiveRunsAsync` to halt running sequences + fires a critical notification. ("Pause"
+  was considered but the headless engine's `PauseAsync` is still a deferred no-op, so only warn/abort ship; add
+  "pause" when the engine grows a real pause hook.)
+- ✅ **Per-frame pre-capture check — DONE (2026-07-06).** `CaptureCoreAsync` gates each frame BEFORE the
+  shutter opens: when the configured save volume is CRITICALLY low AND `OnDiskSpaceCritical=abort`, the
+  capture is blocked (an exposure that can't be saved is wasted sky time); the "warn" default never blocks —
+  the monitor's notification path owns reporting. Pure decision in `DiskSpaceMonitor.PreCaptureShouldBlock`
+  (+tests); the probe is best-effort (no store / unprobeable volume / probe fault → capture proceeds — a
+  broken probe must never cost a frame).
+
+### §2105 PR4 Debayer — ✅ DONE (shipped in #357)
+Full-resolution bilinear debayer landed in PR #357: `OpenAstroAra.Stretch/Debayer.Bilinear(mosaic, w, h, pattern)`,
+`IDebayeredImage`/`DebayeredImage`/`LRGBArrays`, and `RenderedImage.Debayer(...)` wired (Lum = weighted RGB). Dead
+code until Live View (§64). (Entry was left in "ready to implement" state; corrected here.)
+
+### IDomeFollower.TriggerTelescopeSync has no cancellation token ✅ DONE (2026-06-12)
+`IDomeFollower.TriggerTelescopeSync` now takes a `CancellationToken` (matching `WaitForDomeSynchronization(token)`
+on the following path), threaded from the caller's token at all three call sites (`MeridianFlipExecutor.SynchronizeDome`,
+`CenteringSolver`, and the `SynchronizeDome` sequence item) so a non-following dome sync is cancellable mid-slew.
+`HeadlessDomeFollower` (the only impl) ignores it (no-op stub); a real dome-following impl will honor it.
+
+### §39 calibration — dark matching by temperature ✅ DONE (2026-06-12)
+`SqliteCalibrationService.MatchingDarksAvailable` now matches darks to lights by `(exposure_seconds, gain,
+ROUND(temperature_c, 0))` — temperature bucketed to the nearest whole degree. `temperature_c` is `NOT NULL`
+(an uncooled camera records the 0.0 sentinel that `CameraService` coalesces a missing CCD temperature to), so
+uncooled lights/darks still bucket-match. +3 tests (temp-mismatch rejects, within-degree bucketing, uncooled
+sentinel). Flats match by `filter` only (correct).
+
+### §39.5 matching flats — plan → runnable sequence ✅ DONE (2026-07-02)
+`GenerateMatchingFlatsAsync` now materializes the plan into a persisted §38 sequence via `ISequenceService`
+(`CalibrationSequenceBuilder` emits the NINA-verbatim body dialect): per light filter, a looped
+SequentialContainer of [SwitchFilter (name-resolved, `_position:-1` so a stale slot index never wins) →
+MoveFocuserAbsolute (the session's modal per-filter focus, §39.5 dust-shadow alignment) → TakeExposure(FLAT)
+carrying the lights' modal gain/offset]. `GeneratedSequenceId` is the real stored id (endpoint: 201+Location;
+`GenerateOnly` → null id, 200). Proven by deserializing the stored body through the real sequencer factory.
+Deferred: a flat-device instruction (panel on/brightness/auto-ADU exposure — generated TakeExposure uses a 1 s
+starting point, TargetAdu stays advisory) and §39.6 cooler-temp replay; both need new sequencer instructions.
+
+### §39.8 dark library — catalog-backed + generated build sequence ✅ DONE (2026-07-02)
+`SqliteDarkLibraryService` replaced the fixture placeholder: entries ARE the catalog's DARK frames grouped by
+the §39 matching key (exposure, gain-nullable, whole-degree temp bucket; stable SHA-derived entry ids; group
+byte totals; newest frame as representative path). The build generates a runnable §38 dark-matrix sequence via
+`CalibrationSequenceBuilder.BuildDarkLibraryBody` (CoolCamera per set-point — empty temp list = ambient, no
+CoolCamera; looped TakeExposure(DARK) per combination; empty gain list = camera default) and persists it
+(`calibration:dark-library`); `DarkLibraryStateDto.GeneratedSequenceId` surfaces it. Status is coverage-based
+(a combination completes when the catalog holds >= FramesPerCombination matching darks; completion stamped at
+first observation). `ReuseExistingFrames` skips already-covered combinations. Wire changes (no client consumer
+yet): build request exposures int->double (§28), entry Gain int->int? (the #670 review note), state +
+GeneratedSequenceId. Deferred: `calibration.dark_library.*` WS events (the generated sequence already emits
+standard §60.9 run events) and server-side master-dark stacking (§39.2 capture-only philosophy — external
+stackers consume the raw frames).
+
+### §39.10 calibration client surface ✅ DONE (2026-07-02)
+Full-screen Calibration route (bottom status bar, beside Image Library/Stats) live over
+`/api/v1/calibration/*`: Sessions tab (per-filter summaries, flats/darks coverage badges, the §39.5
+[Capture Matching Flats] dialog -> generate -> select the sequence -> jump to the Run tab) and Dark
+Library tab (catalogued groups incl. null-gain/sub-second rendering, coverage status header with
+[Open build sequence], the §39.8 matrix build form). New `CalibrationApi`/models/state follow the
+sequence-list factory->api->notifier idiom. Remaining §39 client work: the Image Library session
+card's stubbed [Capture Matching Flats] button waits on 12f.2 (library live-wiring gives cards real
+session ids); WS auto-refresh SHIPPED (frame.complete now actually EMITTED on capture insert — it was
+catalogued but never published — and the library/calibration/dark-library notifiers refresh on it,
+debounced 2 s); cursor paging on the
+sessions tab (first page at the server's 200 cap today — from the #673 review).
+
+### 12f.2 Image Library live-wiring — sessions/frames/thumbnails + flats button ✅ DONE (2026-07-02)
+`ImageLibraryScreen` now renders `/api/v1/sessions` + `/sessions/{id}/frames` via the new
+`LibraryApi`/`live_library` models/state trio (autoDispose, last-issued-wins refresh): live session
+cards (light/calibration counts, filters), lazily-loaded frame strips with capture-time thumbnails
+(`/frames/{id}/thumbnail`, placeholder on 404), the shared §39.5 [Capture Matching Flats] dialog
+wired with REAL session ids, and a wire-truth `LiveFrameViewerScreen` (pinch-zoom thumbnail +
+list-endpoint metadata; the demo `FrameViewerScreen` deleted). Demo `librarySessionsProvider`
+remains ONLY for the Stats dashboard (§50 live-wiring is its own slice). 12f.3b bulk ops SHIPPED (Rate/Tag/Delete live against `/frames/bulk/*` with confirm/star/tag dialogs;
+Move-to-session + Export stay disabled — no server endpoints). §40.6 Resume Target SHIPPED
+(server ResumeTargetAsync real: recorded sequence_json re-persisted when present/valid, else per-filter
+modal LIGHT synthesis via `CalibrationSequenceBuilder.BuildResumeTargetBody` with original frame counts,
+OverrideSequenceId echoed; endpoint 201+Location; library button -> Run-tab jump. Slew/center steps are
+the user's to add — per-frame plate-solve coordinates aren't in the catalog). 12f.3 pills SHIPPED
+(filter/rating pills narrow the frame strips, target search hides sessions, active pills highlight +
+Clear escape hatch). §50 demo-data retirement SHIPPED: the Stats CSVs stream from `/api/v1/stats/export/csv`
+(scope=sessions now a real per-session rollup server-side; scope=frames the full table), and the
+12f.1/12g.2 in-memory demo sessions are deleted — every Stats/Library surface is catalog-backed.
+§65 stretched previews SHIPPED in the viewer (palette picker -> POST /frames/{id}/preview full-res
+render, thumbnail as instant first paint, fetch-generation guard). In-viewer star rating SHIPPED (optimistic single-frame
+edit via the §40.8 bulk endpoint; strips invalidated after). In-viewer tag editing + detail
+metadata SHIPPED (GET /frames/{id} detail fetch: gain/offset/sensor/focus/size rows + tag chips
+with add/remove via the single-id bulk reuse). Cursor paging SHIPPED (Load-more on the library +
+calibration session lists via the shared CursorPage envelope; frame strips stay first-page-only by
+design). Move-to-session SHIPPED (POST /frames/bulk/move,
+target-session existence 422-guarded; bulk bar picker over the loaded sessions). §65.9 manual sliders SHIPPED
+(the baked v0.0.1 design: 200 ms debounced server round-trip; black/midtone/white 0-1 with the
+profile-seed defaults; client-side real-time stretching stays v0.1.0). Export SHIPPED (POST
+/frames/bulk/export streams a tar of the selected FITS via System.Formats.Tar — missing files
+skipped, name-collision dedupe, 404 when nothing exportable; client saves via the OS dialog with
+an injectable saver for tests). THE §40.8 BULK BAR IS COMPLETE. In-memory tar assembly is fine at
+selection scale; the streaming writer SHIPPED (open-handles-first
+FrameExportPrep: TOCTOU skip at open time before any tar bytes, count header from successful opens,
+entries streamed straight into the response via the Results.Stream callback — no MemoryStream, no
+rollback; path resolution batched into one IN(...) query, closing the #686 N+1 note for export).
+
+### ✅ DONE (2026-07-03) — `temperature_c` sentinel pass (from the #681 review)
+Nullable end-to-end: DDL dropped NOT NULL (in-place rebuild keyed on the stored DDL; rows copied
+VERBATIM — a legacy 0.0 cannot be told apart from a real freezing-point reading), FrameDto double?,
+RegisterFrameAsync + the FITS rescan record NULL when the camera/header reports nothing. The §39
+matching/bucketing queries use ROUND(COALESCE(temperature_c, 0), 0) so NULL and legacy 0.0 share a
+bucket — the documented uncooled-match semantics hold across both generations (tested). Astrobin
+cooling + frame viewer blank unknown; focus-temp chart filters NULL. This pass also introduced the
+**schema_version table** (=3, the #670 review commitment) for future passes to key on. Superseded
+entry follows for history:
+
+### (superseded) §28-style follow-up — `temperature_c` NOT NULL + 0.0 sentinel (from the #681 review)
+`frames.temperature_c` is NOT NULL and `CameraService.RegisterFrameAsync` coalesces a missing CCD
+temperature to 0.0 — the same fabricated-sentinel anti-pattern §28 removed for gain (#670), now
+user-visible as "Sensor: 0.0°C" in the frame viewer. Widening to nullable end-to-end is a dedicated
+pass like #670 (column rebuild, FrameDto, readers) **plus a design decision**: the §39 dark-matching
+rules deliberately exploit the sentinel ("uncooled lights/darks still bucket-match at 0.0" —
+documented + tested in SqliteCalibrationServiceTest). NULL-matching semantics must replace that
+(NULL matches NULL, as filters do) before the sentinel goes. Client is already nullable-ready
+(`LibraryFrameDetail.temperatureC` is `double?`, renders unknown as "—").
+
+**OBSOLETE (2026-07-02) — §36 CEF 149 sandbox hardening: no longer applicable.** The #611 planetarium pivot removed CEF/`webview_cef` entirely; the planetarium now runs in the OS-native WebView (WKWebView / WebView2 / WebKitGTK), which carries the platform's own renderer sandboxing, so neither hardening track below can or needs to happen. Kept for history. Original entry: The CEF 149
+Sky Atlas runs with **no macOS App Sandbox** (host + helper) — CEF's browser process registers a PID-suffixed *global*
+Mach bootstrap name for the helper rendezvous that `bootstrap_check_in` denies under the sandbox, aborting
+`CefInitialize` — **and** no Chromium renderer sandbox (`webview_cef` sets `CefSettings.no_sandbox = true`, a plugin
+default). So the webview has zero OS/Chromium sandboxing. Accepted for now: Developer-ID desktop control app, fixed
+bundled offline Aladin page, only outbound CDS HiPS tile fetches. Two future-hardening tracks: (a) if a future CEF/plugin
+release makes the rendezvous name static (or offers a sandbox-compatible transport), re-enable `app-sandbox` on host +
+helper (and flip the entitlements-test guard back); (b) enable Chromium's own renderer sandbox by linking `cef_sandbox`
++ a sandboxed helper variant — independent of (a). See `client/.../macos/CEF_HELPER.md`. Surfaced 2026-06-24 by the
+CEF-149 OSR review; nothing tracks the migration except this entry + the entitlement comments.
+
+- **OBSOLETE (2026-07-02) — build-time guard for un-provisioned macOS CEF: CEF was removed by the #611 native-webview pivot** (and `scripts/provision-cef-macos.sh` was deleted in the Aladin-scrub PR), so there is nothing to provision. Original entry: If a developer runs `flutter build macos` without
+  first running `scripts/provision-cef-macos.sh`, the failure is a cryptic linker error (missing CEF framework symbols).
+  A short pre-build phase (or a check in the Podfile `post_install`) that detects an un-provisioned `macos/third/cef` and
+  emits a human-readable `error:` pointing at the script would improve DX. Low priority. Surfaced 2026-06-15 by the #463 review.
+
+- **OBSOLETE (2026-07-02) — CEF multi-process helper DX/CI follow-ups: CEF and the `packages/webview_cef` submodule were removed by the #611 native-webview pivot**, so neither follow-up has a target. Original entry: (1) **CI guard for the sandbox repoint** — `add_helper_target.rb` re-points the Helper target's `CODE_SIGN_ENTITLEMENTS` to the plugin's non-sandboxed default each run; a `git`-grep/`diff --exit-code` CI check asserting the three Helper configs still point at `Runner/Helper.entitlements` would catch a re-run that forgot the manual repoint (currently mitigated by the self-contained two-step command in `macos/CEF_HELPER.md`). It's a `.github/workflows` change → its own infra PR. (2) **Missing-submodule pre-build error** — the Helper target's `INFOPLIST_FILE` points into the `packages/webview_cef` submodule; a first build without `git submodule update --init` fails with a confusing Xcode error. A pre-build shell phase that checks the path and aborts with a clear `error: run git submodule update --init packages/webview_cef` would improve DX. Both low priority.
+
+- **OBSOLETE (2026-07-02) — Windows CEF main.cpp tweak: CEF was removed by the #611 native-webview pivot** (Windows renders via WebView2). Original entry: When the Windows build is first exercised,
+  fold in the `windows/runner/main.cpp` CEF multi-process + IME tweak that `webview_cef` requires on Windows (the Linux
+  and Windows builds auto-download CEF via the plugin's `third/download.cmake`, so no binary-placement step is needed
+  there — unlike macOS). Surfaced 2026-06-14 by the #450 review.
+
+- **OBSOLETE (2026-07-02) — §36.1 GPL v3 §6 Aladin Lite sign-off: no longer applicable.** The premise died with the #611 planetarium pivot: Aladin Lite is no longer bundled (nor fetched) — the `AladinView` widget was deleted, `assets/aladin/` was never in `pubspec.yaml` after the pivot, and the leftover unshipped `assets/aladin/{aladin.js,ALADIN_LICENSE.md}` files were removed from the repo in the Aladin-scrub PR (2026-07-02), which also replaced the stale NOTICE.md Aladin bullet with the Stellarium Web Engine (AGPL-3.0) disclosure. No GPL §6 obligation exists for software we do not convey. The bundled planetarium engine's own source-disclosure duty (AGPL §13) is already satisfied — see `client/.../assets/stellarium/README.md` + the `open-astro/stellarium-web-engine` fork (tag `ara-v1`). Original entry (historical): As of #571 the Aladin Lite v3 engine (GPL v3, minified) ships *inside* the WILMA client binary rather than being fetched from the CDS CDN at runtime, which changes the obligation from "linking" (the GPL FAQ separate-process exception NOTICE.md cites) to "distribution": GPL v3 §6 requires the complete corresponding source accompany or be offered alongside any binary conveyed to a third party. A formal §6 **written offer** + the unambiguous corresponding-source pointer (the upstream `v3.6.1` tag) is now in `client/.../assets/aladin/ALADIN_LICENSE.md`, which satisfies the substance for a network-available upstream. **Before the first public/installer release that conveys the binary**, have whoever signs off the existing LGPL/FreeImage compliance confirm the §6 form is adequate for the shipping channel (e.g. that the installer carries or links the offer, and the corresponding-source location is durable). No obligation crystallises at merge — this PR does not ship an installer to third parties; the duty attaches when the packaged binary is conveyed. Flagged by the #571 review.

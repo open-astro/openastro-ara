@@ -35,6 +35,11 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed
+- **Docs reorganized under `docs/`.** `RUNNING.md`, `DEPLOY.md`, and `RELEASE_NOTES.md` moved from the repo root into `docs/` alongside the user guide; cross-references updated. The release notes' stale "still placeholders" list was refreshed to match reality (§64 Live View, §36 sky-data Data Manager, and §43 backup have shipped; §45 polar alignment, §44 backup stream, and DSLR RAW remain pending). `NOTICE.md` stays at the root next to `LICENSE.txt` — packaging (`build-deb.sh`, the `.deb` copyright file) references it there.
+- **The daemon's documented install path is the apt.openastro.net APT repository** (maintainer decision 2026-07-07): `docs/DEPLOY.md`'s quick start now adds the OpenAstro apt repo (§34.1 gpg key + sources list) and installs/updates `openastroara-server` through apt, replacing the GitHub-Releases `.deb` download flow; the WILMA client still ships from GitHub Releases (§75).
+- **`design/` indexed and decluttered.** New `design/README.md` (what each doc is, how it's maintained, and where "what's left" authoritatively lives); the fully-resolved design-phase gap tracker (`GAPS-ARA.md`) and the obsolete June agent-handoff snapshot (`HANDOFF.md`) moved to `design/archive/` with banners (CI's sanity gate now checks `design/README.md` instead); `PORT_TODO.md` split into open-items-on-top / done-archive-below halves (verbatim block moves); `PORT_PROGRESS.md`'s layered stale "Current" section replaced with an accurate snapshot, the old bullets preserved under Completed.
+
 ### Added
 - **§37.6 — the setup wizard pre-checks the recommended sky data.** The sky-data step now arrives with the curated star + deep-sky catalogs already ticked (badged "Recommended") so a fresh profile gets the packages the planner and atlas actually use — untick anything you don't want; your own picks are never overridden.
 - **§25.5.5 — camera readout modes and a visible cooling target.** The camera panel gains a readout-mode picker (the driver's own mode list; switching re-reads the per-mode sensor electronics), shows "Cooling to −10.0 °C" next to the actual sensor temperature while the cooler runs, and renders asymmetric pixel pitches ("3.76 × 3.80 μm") when a sensor reports them.

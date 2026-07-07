@@ -1,5 +1,11 @@
 # Handoff — OpenAstroAra §14e equipment layer (for Fable)
 
+> **📦 ARCHIVED (2026-07-07).** A point-in-time agent-handoff snapshot from 2026-06-09
+> (mid-PR #336). Everything it queued is long since shipped (all mediator unifications,
+> the camera capture path, guiding, meridian flip); its process rules live in
+> [`COMMIT-PR-RULES.md`](../COMMIT-PR-RULES.md) and the `.claude/skills/port-driver` skill,
+> and its analyzer/review gotchas are encoded in the repo conventions. Kept for history only.
+
 Written 2026-06-09 by the prior agent, mid-flight on PR #336. Read this top-to-bottom before
 touching code. It captures the standing mandate, the two patterns in play, exact process rules, and
 the gotchas the CI review bot will hammer you on if you don't pre-empt them.

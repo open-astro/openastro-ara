@@ -18,11 +18,14 @@
 - §60.9 WebSocket lifecycle: real upgrade handler, X-Ara-WS-Version validation, resume protocol with replay buffer, 30s ping / 60s pong heartbeat.
 - §37 profile round-trip — 12 sections persisted as `profile.json`; the live NINA profile hydrates from it so executing instructions read user-edited settings (§14e profile source-of-truth).
 - §46.5 SQLite notifications log + preferences; §50 stats (8 chart views); §51 diagnostics state/history/mode; §40.7 hfr-analysis; §40.8 frame bulk ops; §13 systemd-driven `/server/restart` with §34.7 imminent-restart WS event.
+- **Real Live View** (§64): short-exposure loop on the connected camera rendered to JPEG via the §65 stretch path (ephemeral — never catalogued), with OSC debayering to real colour; the client's Imaging-tab Live View toggle drives it.
+- **§36 sky-data Data Manager**: downloads the real HYG star + OpenNGC deep-sky catalogs (commit-pinned, SHA-256-verified, atomic install), serving Tonight's Sky ranking + planetarium catalog overlays.
+- **§43 configuration backup**: ZIP snapshots with retention pruning + restore (local or from another daemon's snapshot URL, SHA-256-gated).
 
 **Still placeholders (real impl ahead):**
 - Polar alignment (§45) — will drive the `openastro-guider` daemon's polar-align API.
-- In-memory image render / Live View (§64 / §2105) — previews/thumbnails already work via the §65 SkiaSharp catalog pipeline; the in-memory render backend is pending (see `design/PORT_TODO.md` — SkiaSharp vs OpenCvSharp4 decision). DSLR RAW (libraw) likewise pending.
-- §44 backup stream + §43 ZIP backup; §36 sky-data Data Manager.
+- §44 backup stream.
+- DSLR RAW decoding (libraw).
 
 ### Client (`OpenAstroAra.Client` Flutter)
 
@@ -39,14 +42,14 @@
 
 ### Deployment
 
-- Distributable `.deb` packaging in CI (artifact-only; apt.openastro.net is post-v0.0.1).
+- Distributable `.deb` packaging in CI; releases are served from the **apt.openastro.net** APT repository (`sudo apt install openastroara-server` — see `docs/DEPLOY.md`).
 - systemd `openastroara-server.service` unit (sample in §13). Guiding requires the sibling `openastro-guider` daemon on the Pi.
 - Reference platform: Raspberry Pi 4 (4 GB+) or Pi 5 on 64-bit Debian Trixie.
 
 ### Known limitations
 
-- Live View / in-memory image render (§64) is not yet wired — captured frames are served via the §65 SkiaSharp preview/thumbnail pipeline from the catalog; the per-frame in-memory render path is a follow-up.
 - DSLR RAW decoding (libraw) not yet integrated.
-- Dependency licenses audited release-safe (MPL-2.0-compatible; no GPL/AGPL/commercial in the daemon); the full `3rd-party-licenses.txt` is generated at the .deb release.
+- Polar alignment (§45) not yet implemented.
+- Dependency licenses audited release-safe (MPL-2.0-compatible; no GPL/AGPL/commercial in the daemon); `3rd-party-licenses.txt` at the repo root is generated from the full NuGet graph and kept fresh by CI.
 
-See [`design/PORT_PROGRESS.md`](design/PORT_PROGRESS.md) for the full sub-PR-by-sub-PR breakdown.
+See [`design/PORT_PROGRESS.md`](../design/PORT_PROGRESS.md) for the full sub-PR-by-sub-PR breakdown.
