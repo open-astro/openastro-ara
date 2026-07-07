@@ -308,6 +308,62 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task User_activity_mid_ladder_abandons_the_remaining_steps() {
+            // r4 — a user resuming during the (up to ~30 min) ladder must not
+            // have equipment torn down underneath them: the in-flight step
+            // finishes, everything after is skipped, and the record posts as
+            // Info (the user is present) naming what already ran. Stall the
+            // ladder at the FOCUSER disconnect to land the activity mid-flight.
+            var gate = new TaskCompletionSource<OperationAcceptedDto>(TaskCreationOptions.RunContinuationsAsynchronously);
+            focuser.Setup(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Returns(gate.Task);
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(
+                () => focuser.Invocations.Count > 0,
+                "the ladder is stalled at the focuser step");
+
+            sut.NotifyUserActivity("sequencer.resume"); // the user is back
+            gate.SetResult(new OperationAcceptedDto(Guid.NewGuid(), "focuser.disconnect", DateTimeOffset.UtcNow, null));
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "the ladder wraps up");
+
+            // Steps BEFORE the stall ran; steps AFTER it were skipped.
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once);
+            rotator.Verify(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            flatDevice.Verify(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            lock (coolerCalls) Assert.That(coolerCalls, Is.Empty, "the warm-up never started");
+
+            var n = published[0];
+            Assert.That(n.Severity, Is.EqualTo(NotificationSeverity.Info),
+                "the user is present — this is a record, not a morning alarm");
+            Assert.That(n.Title, Does.Contain("abandoned"));
+            Assert.That(n.Message, Does.Contain("Guider stopped"), "what already ran is named");
+        }
+
+        [Test]
+        public async Task Abandon_during_the_cooler_ramp_leaves_the_cooler_ON_and_the_camera_connected() {
+            // r4 — the ramp is the ladder's longest stretch; a user back mid-ramp
+            // may resume imaging, so the cooler stays ON at the current set-point
+            // and the camera stays connected.
+            using var sut = CreateSUT();
+            sut.WarmTimeScale = 60; // 1 "minute" = 1 s — the ramp is interruptibly slow
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (coolerCalls) return coolerCalls.Count > 0; },
+                "the ramp has started");
+
+            sut.NotifyUserActivity("equipment.POST");
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "the ladder wraps up");
+
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            lock (coolerCalls) {
+                Assert.That(coolerCalls.TrueForAll(c => c.on), Is.True,
+                    "no cooler-OFF call — the user keeps their cooling");
+            }
+            Assert.That(published[0].Message, Does.Contain("cooler left ON"));
+        }
+
+        [Test]
         public async Task Host_shutdown_awaits_an_in_flight_ladder() {
             // r2 — a daemon stop landing mid-ladder must let the ladder finish
             // (bounded by the host deadline) rather than killing the process
