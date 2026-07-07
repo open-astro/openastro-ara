@@ -512,6 +512,24 @@ public partial class Program {
         // cancels any in-flight sequence runs on daemon shutdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SequencerService>());
 
+        // §35.4 — safety-reaction engine: polls the connected SafetyMonitor and on a
+        // safe→unsafe transition executes the profile's on_unsafe policy (pause/abort
+        // + stop guiding + park), with the auto-resume-when-safe countdown. The
+        // sequencer resolver breaks the construction cycle (same pattern as §58.12).
+        builder.Services.AddSingleton<SafetyReactionService>(sp =>
+            new SafetyReactionService(
+                sp.GetService<ISafetyMonitorService>(),
+                sp.GetService<IProfileStore>(),
+                () => sp.GetService<ISequencerService>(),
+                sp.GetService<IGuiderService>(),
+                sp.GetService<ITelescopeService>(),
+                sp.GetService<INotificationService>(),
+                sp.GetService<IWsBroadcaster>(),
+                sp.GetService<ILogger<SafetyReactionService>>()));
+        // Hosted so the poll timer starts with the daemon and a shutdown cancels a
+        // pending auto-resume countdown.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
+
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();

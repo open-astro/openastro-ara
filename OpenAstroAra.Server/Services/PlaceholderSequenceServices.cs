@@ -149,6 +149,30 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return aborted;
     }
 
+    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) {
+        var paused = new List<Guid>();
+        foreach (var (id, run) in _runs) {
+            ct.ThrowIfCancellationRequested();
+            if (run.State == SequenceRunState.Running) {
+                run.State = SequenceRunState.Paused;
+                paused.Add(id);
+            }
+        }
+        return Task.FromResult<IReadOnlyList<Guid>>(paused);
+    }
+
+    public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
+        var resumed = 0;
+        foreach (var id in ids) {
+            ct.ThrowIfCancellationRequested();
+            if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Paused) {
+                run.State = SequenceRunState.Running;
+                resumed++;
+            }
+        }
+        return Task.FromResult(resumed);
+    }
+
     private async Task RunWorkerAsync(Guid sequenceId, RunState run) {
         try {
             run.State = SequenceRunState.Running;

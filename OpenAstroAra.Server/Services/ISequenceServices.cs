@@ -83,6 +83,22 @@ public interface ISequencerService {
     /// so a full disk halts capture rather than failing frame-by-frame). Returns the count of runs asked to abort.
     /// </summary>
     Task<int> AbortActiveRunsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// §35 — arm the instruction-boundary pause gate on every active run (the safety-reaction engine's
+    /// <c>pause_and_park</c> action). Unlike <see cref="PauseAsync"/> this is a daemon-automated action, so it
+    /// deliberately does NOT count as §58.12 user activity. Returns the ids of the runs a pause was requested
+    /// on, so the caller can resume exactly those runs when conditions clear.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// §35 — resume the given runs (the safety engine's auto-resume when conditions turn safe again). Same
+    /// CAS + gate-release semantics as <see cref="ResumeAsync"/> but daemon-automated (no §58.12 user-activity
+    /// signal), and it never resurrects a <c>PausedAwaitingUser</c> run — that state means a human is owed and
+    /// only an explicit user command clears it. Returns the count of runs whose gate was released.
+    /// </summary>
+    Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>

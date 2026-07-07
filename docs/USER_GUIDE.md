@@ -90,6 +90,14 @@ View** runs a fast framing/focus loop when you need to point or focus by eye.
 
 Ara assumes you're asleep while it works:
 
+- **Safety monitor reactions**: with an Alpaca SafetyMonitor connected, the daemon polls it every
+  10 seconds and reacts the moment it reports unsafe, per **Settings → Safety → Policies → "When
+  conditions turn unsafe"**: pause the sequence + stop guiding + park (the default), park only,
+  abort + park, or notify only. WILMA gets a `safety.unsafe` alert before the action runs. If
+  **auto-resume when safe** is on, the daemon waits your configured delay after conditions clear,
+  unparks, restores tracking, and resumes the paused run — verify pointing afterwards unless your
+  sequence re-centers its target. A run that is paused *awaiting you* (e.g. after a failed flip)
+  is never auto-resumed.
 - **Meridian flips** run a guarded pipeline: a pre-flight check (predicted altitude, mount health,
   required equipment), an in-slew watchdog (stall/timeout/pier-side verification), a hard
   post-flip plate-solve gate (imaging does not resume on an unverified pointing), and a safe-rest

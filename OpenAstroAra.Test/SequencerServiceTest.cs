@@ -369,6 +369,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task PauseActiveRunsAsync_pauses_the_running_run_and_ResumeRunsAsync_releases_it() {
+            // §35 safety bulk pause/resume: PauseActiveRunsAsync arms the gate on the
+            // running run and reports its id; ResumeRunsAsync releases exactly that
+            // run (same boundary semantics as the user pause above).
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+                c.Items.Add(new Annotation { Name = "after-safety-pause" });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+
+            var pausedIds = await svc.PauseActiveRunsAsync(CancellationToken.None);
+            Assert.That(pausedIds, Is.EquivalentTo(new[] { id }));
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+
+            // A second bulk pause finds nothing to arm — the run is already Paused,
+            // so the safety engine can never "adopt" a pause it didn't create.
+            Assert.That(await svc.PauseActiveRunsAsync(CancellationToken.None), Is.Empty);
+
+            var resumed = await svc.ResumeRunsAsync(pausedIds, CancellationToken.None);
+            Assert.That(resumed, Is.EqualTo(1));
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(ws.Events, Does.Contain("sequence.resumed"));
+        }
+
+        [Test]
         public async Task Failed_meridian_flip_pauses_the_run_awaiting_user_and_resume_reattempts_the_flip() {
             // §58.12 END-TO-END through the real engine: a MeridianFlipTrigger whose
             // executor fails arms the pause gate as AwaitingUser → the run suspends
@@ -420,6 +449,12 @@ namespace OpenAstroAra.Test {
 
             // Suspended means suspended — nothing advances while the user is away.
             await Task.Delay(200);
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State,
+                Is.EqualTo(SequenceRunState.PausedAwaitingUser));
+
+            // §35 guard: the safety engine's automated bulk resume must never
+            // settle a debt owed to the user — the run stays PausedAwaitingUser.
+            Assert.That(await svc.ResumeRunsAsync(new[] { id }, CancellationToken.None), Is.EqualTo(0));
             Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State,
                 Is.EqualTo(SequenceRunState.PausedAwaitingUser));
 
