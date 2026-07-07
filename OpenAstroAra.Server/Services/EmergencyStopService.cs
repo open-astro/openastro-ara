@@ -171,7 +171,17 @@ public sealed partial class EmergencyStopService {
             if (sequencer is null) {
                 return (0, RungOutcome.NotAvailable);
             }
-            return (await sequencer.AbortActiveRunsAsync(CancellationToken.None).ConfigureAwait(false), RungOutcome.Done);
+            // Same hung-component guard as the device rungs: the abort only
+            // touches in-memory run state today, but "no single dead
+            // component may wedge this button" must hold for every rung.
+            var work = sequencer.AbortActiveRunsAsync(CancellationToken.None);
+            var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
+            if (!ReferenceEquals(completed, work)) {
+                LogRungTimedOut("abort runs", RungTimeout.TotalSeconds);
+                ObserveQuietly("abort runs", work);
+                return (0, RungOutcome.Failed);
+            }
+            return (await work.ConfigureAwait(false), RungOutcome.Done);
         } catch (Exception ex) {
             LogRungFailed("abort runs", ex);
             return (0, RungOutcome.Failed);
