@@ -923,6 +923,10 @@ class ProfileApi {
             (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
         firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
         unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
+        unattendedShutdownEnabled:
+            (j['unattended_shutdown_enabled'] as bool?) ?? true,
+        unattendedShutdownWaitMinutes:
+            (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 10,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -944,6 +948,8 @@ class ProfileApi {
     'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
     'first_flip_confirmed': v.firstFlipConfirmed,
     'unattended_escalation': v.unattendedEscalation,
+    'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
+    'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,
   };
 
   static UnsafeAction _unsafeActionFromString(String? s) {

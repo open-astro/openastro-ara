@@ -55,6 +55,17 @@ class SafetyPolicies {
   // the site sits in astronomical darkness. Default on.
   final bool unattendedEscalation;
 
+  // §58.12 — when a run pauses awaiting the user and nobody responds within
+  // the wait window, the daemon gracefully shuts the rig down (guider stopped,
+  // mount parked, equipment disconnected, cooler warmed). Default on; the spec
+  // allows disabling but flags it as not recommended.
+  final bool unattendedShutdownEnabled;
+
+  // §58.12 — minutes of unattended silence before that shutdown executes.
+  // 10 is the Goldilocks default; 5 for battery rigs, 30 for wall-powered
+  // observatories.
+  final int unattendedShutdownWaitMinutes;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -73,6 +84,8 @@ class SafetyPolicies {
     this.expectedFlipSlewSeconds = 90,
     this.firstFlipConfirmed = false,
     this.unattendedEscalation = true,
+    this.unattendedShutdownEnabled = true,
+    this.unattendedShutdownWaitMinutes = 10,
   });
 
   SafetyPolicies copyWith({
@@ -93,6 +106,8 @@ class SafetyPolicies {
     int? expectedFlipSlewSeconds,
     bool? firstFlipConfirmed,
     bool? unattendedEscalation,
+    bool? unattendedShutdownEnabled,
+    int? unattendedShutdownWaitMinutes,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -118,6 +133,10 @@ class SafetyPolicies {
         firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
         unattendedEscalation:
             unattendedEscalation ?? this.unattendedEscalation,
+        unattendedShutdownEnabled:
+            unattendedShutdownEnabled ?? this.unattendedShutdownEnabled,
+        unattendedShutdownWaitMinutes:
+            unattendedShutdownWaitMinutes ?? this.unattendedShutdownWaitMinutes,
       );
 }
 
@@ -152,6 +171,14 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
 
   void setUnattendedEscalation(bool v) =>
       state = state.copyWith(unattendedEscalation: v);
+
+  void setUnattendedShutdownEnabled(bool v) =>
+      state = state.copyWith(unattendedShutdownEnabled: v);
+
+  void setUnattendedShutdownWaitMinutes(int v) {
+    if (v < 1) return; // the daemon clamps to >= 1 minute; mirror it here
+    state = state.copyWith(unattendedShutdownWaitMinutes: v);
+  }
 
   void setExpectedFlipSlewSeconds(int v) {
     if (v <= 0) return; // the daemon's watchdog needs a positive expectation
