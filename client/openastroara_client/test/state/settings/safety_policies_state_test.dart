@@ -87,6 +87,28 @@ void main() {
       expect(container.read(safetyPoliciesProvider).unattendedEscalation, isFalse);
     });
 
+    test('§58.12 unattended shutdown defaults on/10min; wait rejects < 1', () {
+      final n = container.read(safetyPoliciesProvider.notifier);
+      final s0 = container.read(safetyPoliciesProvider);
+      expect(s0.unattendedShutdownEnabled, isTrue);
+      expect(s0.unattendedShutdownWaitMinutes, 10);
+
+      n.setUnattendedShutdownEnabled(false);
+      n.setUnattendedShutdownWaitMinutes(30);
+      var s1 = container.read(safetyPoliciesProvider);
+      expect(s1.unattendedShutdownEnabled, isFalse);
+      expect(s1.unattendedShutdownWaitMinutes, 30);
+
+      // The daemon clamps the wait to >= 1 minute — the client mirrors it so
+      // a typo can't stage a value the server would silently rewrite.
+      n.setUnattendedShutdownWaitMinutes(0);
+      n.setUnattendedShutdownWaitMinutes(-5);
+      expect(
+        container.read(safetyPoliciesProvider).unattendedShutdownWaitMinutes,
+        30,
+      );
+    });
+
     test('§58.8 the flag is daemon-owned — the model carries it, nothing local mutates it', () {
       // Model-level round-trip only: the notifier deliberately has NO local
       // mutation for firstFlipConfirmed in either direction — re-arm goes
