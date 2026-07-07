@@ -97,6 +97,11 @@ Ara assumes you're asleep while it works:
   and offset — and starts it immediately (light your panel when notified); "Sky flats at
   twilight" generates the sequence ready to run. Tick "remember my choice" to stop the prompt.
   You can always capture matching flats later from the Image Library instead.
+- **Emergency stop**: the red **Emergency Stop** button on WILMA's bottom status bar is always one
+  tap away, on every tab. After a confirmation it makes the daemon abort the running sequence and
+  the in-flight exposure, stop guiding, park the mount, and switch the flat panel light off — then
+  reports honestly what each step did (an unreachable mount is called out loudly so you go check,
+  never papered over). A panicked double-press is ignored while the first stop is running.
 - **Safety monitor reactions**: with an Alpaca SafetyMonitor connected, the daemon polls it every
   10 seconds and reacts the moment it reports unsafe, per **Settings → Safety → Policies → "When
   conditions turn unsafe"**: pause the sequence + stop guiding + park (the default), park only,

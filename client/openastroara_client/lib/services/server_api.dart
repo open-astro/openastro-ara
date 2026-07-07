@@ -80,6 +80,18 @@ class ServerApi {
     }
   }
 
+  /// §35.3 — trigger the daemon's emergency stop (abort runs → abort
+  /// exposure → stop guiding → park → flat panel light off). Synchronous on
+  /// the server: the response reports honestly what each rung did. The
+  /// receive timeout is generous — the ladder waits on real device calls.
+  Future<EmergencyStopResult> emergencyStop() async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/server/emergency-stop',
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
+    );
+    return EmergencyStopResult.fromJson(res.data ?? const {});
+  }
+
   /// §27 — gracefully release the control slot. Best-effort: true when the
   /// server accepted the release, false when the session was already gone
   /// (taken over / released) — both mean "this client no longer holds it".
@@ -109,6 +121,37 @@ class SessionClaim {
   const SessionClaim.denied(this.deniedReason) : sessionId = null;
 
   bool get granted => sessionId != null;
+}
+
+/// §35.3 — what the daemon's emergency stop actually did, rung by rung.
+/// Booleans are honest: false means the rung failed or the device wasn't
+/// available. Tolerant parsing per the client convention.
+class EmergencyStopResult {
+  final bool alreadyInProgress;
+  final int runsAborted;
+  final bool exposureAborted;
+  final bool guidingStopped;
+  final bool parkRequested;
+  final bool flatPanelLightOff;
+
+  const EmergencyStopResult({
+    required this.alreadyInProgress,
+    required this.runsAborted,
+    required this.exposureAborted,
+    required this.guidingStopped,
+    required this.parkRequested,
+    required this.flatPanelLightOff,
+  });
+
+  factory EmergencyStopResult.fromJson(Map<String, dynamic> json) =>
+      EmergencyStopResult(
+        alreadyInProgress: json['already_in_progress'] == true,
+        runsAborted: json['runs_aborted'] is int ? json['runs_aborted'] as int : 0,
+        exposureAborted: json['exposure_aborted'] == true,
+        guidingStopped: json['guiding_stopped'] == true,
+        parkRequested: json['park_requested'] == true,
+        flatPanelLightOff: json['flat_panel_light_off'] == true,
+      );
 }
 
 class ServerInfo {

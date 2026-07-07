@@ -77,8 +77,12 @@ the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up
   connected ObservingConditions device, each with its own action + threshold profile fields. Add
   the fields WITH their enforcement (the enforcement-first rule) — the reaction plumbing to reuse
   is in place now.
-- **§35.3 emergency stop** — `POST /api/v1/server/emergency-stop` (abort exposure → stop guiding →
-  park → flat panel off → sequence aborted) + WILMA's persistent [Emergency Stop] button.
+- ✅ **§35.3 emergency stop — DONE (2026-07-07).** `EmergencyStopService` ladder (abort runs FIRST
+  so nothing starts a fresh exposure behind the stop → abort exposure → stop guiding → park →
+  flat light off; every rung best-effort, honest result DTO, single-flight double-press gate)
+  behind `POST /api/v1/server/emergency-stop`; `safety.emergency_stop` fires before the rungs.
+  WILMA's persistent red button lives on the bottom status bar (confirm dialog → honest per-rung
+  snackbar — a dead mount says "MOUNT NOT REACHED", never pretends).
 - **§35.5 client alarm assets** — bundled alarm tones + the alarm-delay/vibrate profile knobs
   (client work; the daemon's `safety.unsafe` event already fires before the action so the modal
   can alarm).
