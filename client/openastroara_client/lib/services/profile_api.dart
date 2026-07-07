@@ -932,6 +932,10 @@ class ProfileApi {
         calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
           j['calibration_capture_default'] as String?,
         ),
+        weatherTriggersEnabled: (j['weather_triggers_enabled'] as bool?) ?? false,
+        maxWindKmh: (j['max_wind_kmh'] as num?)?.toInt() ?? 36,
+        maxHumidityPct: (j['max_humidity_pct'] as num?)?.toInt() ?? 85,
+        minDewDeltaC: (j['min_dew_delta_c'] as num?)?.toDouble() ?? 2.0,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -957,6 +961,10 @@ class ProfileApi {
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,
     'calibration_capture_default':
         _calibrationCaptureDefaultToString(v.calibrationCaptureDefault),
+    'weather_triggers_enabled': v.weatherTriggersEnabled,
+    'max_wind_kmh': v.maxWindKmh,
+    'max_humidity_pct': v.maxHumidityPct,
+    'min_dew_delta_c': v.minDewDeltaC,
   };
 
   static CalibrationCaptureDefault _calibrationCaptureDefaultFromString(

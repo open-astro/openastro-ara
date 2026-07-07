@@ -226,3 +226,15 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **Only a COMPLETED run triggers flats.** Abort/stop/failure means the user (or a fault) ended the night — appending automation there would be surprising and possibly unsafe.
 - **The Phase-7/13.15 sketch surface (`AutoFlatsDecisionRequestDto` run-id/overrides shape + `PlaceholderAutoFlatsService`) was replaced inside the no-consumer window**; the decide endpoint keeps its route, now served by the SequencerService singleton (§8.1).
 - **`calibration_capture_default` lives on SafetyPoliciesDto** — §48.7 puts the calibration block "inside the existing safety/preferences area", and the section already carries the §29/§58 policy knobs; a dedicated profile section arrives with the v0.1.0 tuning blocks.
+
+## 2026-07-07 — §35.1 weather thresholds: one reaction, not per-trigger actions
+
+The PORT_TODO sketch said "each with its own action"; shipped design gives each threshold a
+WHEN but shares the single §35 `on_unsafe` WHAT. Rationale: (1) per-trigger actions triple the
+profile/panel surface for a distinction nobody asked for yet — wind-park vs humidity-warn can be
+added compatibly later as optional per-trigger overrides; (2) a single reaction path reuses the
+§35.4 classifier, reaction latch, debounce, and auto-resume machinery verbatim — no second state
+machine to flap; (3) the conservative combined verdict (any source unsafe → unsafe; resume needs
+ALL sources safe) is only coherent with one reaction. `weather_triggers_enabled` defaults OFF so
+an upgrading rig never surprise-parks; a sensor the station doesn't report skips its check (no
+data is not a breach).

@@ -74,6 +74,15 @@ class SafetyPolicies {
   // quiet ("never"). Rides the same profile safety-policies document.
   final CalibrationCaptureDefault calibrationCaptureDefault;
 
+  // §35.1 — granular weather thresholds over the connected weather station.
+  // Default OFF: an upgraded rig must not surprise-park because its station
+  // reads breezy. A breach makes conditions unsafe through the same on-unsafe
+  // reaction as the safety monitor.
+  final bool weatherTriggersEnabled;
+  final int maxWindKmh;
+  final int maxHumidityPct;
+  final double minDewDeltaC;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -95,6 +104,10 @@ class SafetyPolicies {
     this.unattendedShutdownEnabled = true,
     this.unattendedShutdownWaitMinutes = 10,
     this.calibrationCaptureDefault = CalibrationCaptureDefault.ask,
+    this.weatherTriggersEnabled = false,
+    this.maxWindKmh = 36,
+    this.maxHumidityPct = 85,
+    this.minDewDeltaC = 2.0,
   });
 
   SafetyPolicies copyWith({
@@ -118,6 +131,10 @@ class SafetyPolicies {
     bool? unattendedShutdownEnabled,
     int? unattendedShutdownWaitMinutes,
     CalibrationCaptureDefault? calibrationCaptureDefault,
+    bool? weatherTriggersEnabled,
+    int? maxWindKmh,
+    int? maxHumidityPct,
+    double? minDewDeltaC,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -149,6 +166,11 @@ class SafetyPolicies {
             unattendedShutdownWaitMinutes ?? this.unattendedShutdownWaitMinutes,
         calibrationCaptureDefault:
             calibrationCaptureDefault ?? this.calibrationCaptureDefault,
+        weatherTriggersEnabled:
+            weatherTriggersEnabled ?? this.weatherTriggersEnabled,
+        maxWindKmh: maxWindKmh ?? this.maxWindKmh,
+        maxHumidityPct: maxHumidityPct ?? this.maxHumidityPct,
+        minDewDeltaC: minDewDeltaC ?? this.minDewDeltaC,
       );
 }
 
@@ -213,6 +235,23 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
       state = state.copyWith(skipTargetIfRecoveryFails: v);
   void setCalibrationCaptureDefault(CalibrationCaptureDefault v) =>
       state = state.copyWith(calibrationCaptureDefault: v);
+  void setWeatherTriggersEnabled(bool v) =>
+      state = state.copyWith(weatherTriggersEnabled: v);
+
+  void setMaxWindKmh(int v) {
+    if (v <= 0) return;
+    state = state.copyWith(maxWindKmh: v);
+  }
+
+  void setMaxHumidityPct(int v) {
+    if (v <= 0 || v > 100) return;
+    state = state.copyWith(maxHumidityPct: v);
+  }
+
+  void setMinDewDeltaC(double v) {
+    if (v < 0) return;
+    state = state.copyWith(minDewDeltaC: v);
+  }
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
 

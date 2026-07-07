@@ -110,6 +110,13 @@ Ara assumes you're asleep while it works:
   unparks, restores tracking, and resumes the paused run — verify pointing afterwards unless your
   sequence re-centers its target. A run that is paused *awaiting you* (e.g. after a failed flip)
   is never auto-resumed.
+- **Weather thresholds**: beyond the boolean safety monitor, Ara can react to the numbers from a
+  connected weather station — turn on **Settings → Safety → Policies → "React to weather-station
+  thresholds"** and set your wind (km/h, sustained or gust), humidity (%), and dew-delta (°C)
+  limits. A breached threshold is treated exactly like the safety monitor reporting unsafe: your
+  configured action runs and the alert names which threshold tripped ("wind 54 km/h over the 36
+  km/h limit"). Auto-resume waits until every source — monitor and weather — reads safe. Off by
+  default; a sensor your station doesn't report is simply skipped.
 - **Guider loss mid-sequence**: if the guider connection drops while a run is executing, the
   daemon applies **Settings → Safety → Policies → "When the guider is lost"** immediately —
   pause the run (default), skip the current target, or abort — while §63.3 process recovery

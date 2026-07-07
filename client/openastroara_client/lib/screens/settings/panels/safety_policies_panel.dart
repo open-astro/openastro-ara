@@ -139,6 +139,54 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
             if (v != null) n.setResumeDelayMin(v);
           },
         ),
+        const SettingsSectionHeader('Weather thresholds (§35.1)'),
+        SettingsSwitchRow(
+          label: 'React to weather-station thresholds',
+          helpKey: 'safety.policies.weather_triggers',
+          value: s.weatherTriggersEnabled,
+          hint: 'With a weather station connected, a breached threshold below '
+              'makes conditions unsafe — the same reaction as the safety '
+              'monitor (the action above runs, and auto-resume waits for the '
+              'weather to clear too).',
+          onChanged: n.setWeatherTriggersEnabled,
+        ),
+        if (s.weatherTriggersEnabled) ...[
+          EditableNumberRow(
+            label: 'Max wind (km/h, sustained or gust)',
+            helpKey: 'safety.policies.max_wind_kmh',
+            currentValue: s.maxWindKmh.toString(),
+            getCanonical: () =>
+                ref.read(safetyPoliciesProvider).maxWindKmh.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setMaxWindKmh(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Max humidity (%)',
+            helpKey: 'safety.policies.max_humidity_pct',
+            currentValue: s.maxHumidityPct.toString(),
+            getCanonical: () =>
+                ref.read(safetyPoliciesProvider).maxHumidityPct.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setMaxHumidityPct(v);
+            },
+          ),
+          EditableNumberRow(
+            label: 'Min dew delta (°C above dew point)',
+            helpKey: 'safety.policies.min_dew_delta_c',
+            currentValue: s.minDewDeltaC.toStringAsFixed(1),
+            getCanonical: () => ref
+                .read(safetyPoliciesProvider)
+                .minDewDeltaC
+                .toStringAsFixed(1),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setMinDewDeltaC(v);
+            },
+          ),
+        ],
         const SettingsSectionHeader('On meridian flip'),
         SettingsSwitchRow(
           label: 'Auto flip',
