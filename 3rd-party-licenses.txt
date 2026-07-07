@@ -45,10 +45,10 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (112 packages):
+License summary (113 packages):
     MIT: 76 packages
     Apache-2.0: 19 packages
-    BSD-3-Clause: 7 packages
+    BSD-3-Clause: 8 packages
     Microsoft .NET Library License: 5 packages
     LGPL-2.1: 3 packages
     BSD-2-Clause: 1 package
@@ -811,7 +811,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/novotnyllc/Zeroconf
 
 
-CLIENT — WILMA direct runtime pub packages (14 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
+CLIENT — WILMA direct runtime pub packages (15 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
 ===========================================================================================================================
 
 ------------------------------------------------------------------------
@@ -819,6 +819,12 @@ Package:        collection 1.19.1
 Copyright:      Copyright 2015, the Dart project authors
 License:        BSD-3-Clause
 License source: https://pub.dev/packages/collection/license
+
+------------------------------------------------------------------------
+Package:        crypto 3.0.7
+Copyright:      Copyright 2015, the Dart project authors
+License:        BSD-3-Clause
+License source: https://pub.dev/packages/crypto/license
 
 ------------------------------------------------------------------------
 Package:        cupertino_icons 1.0.9

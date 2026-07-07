@@ -6,6 +6,7 @@ import '../../../state/saved_server_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
+import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -236,6 +237,55 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
             ),
           ],
         ),
+        const SizedBox(height: 24),
+        const SettingsSectionHeader('Real-time frame backup (§44)'),
+        Consumer(builder: (context, ref, _) {
+          final stream = ref.watch(backupStreamProvider);
+          final n = ref.read(backupStreamProvider.notifier);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SettingsSwitchRow(
+                label: 'Stream new frames to this device',
+                helpKey: 'session.storage.backup_stream',
+                value: stream.enabled,
+                hint: 'Mirror every captured FITS to this desktop as the night '
+                    'runs — a dead imaging drive then costs at most the frame '
+                    'being captured when it failed.',
+                onChanged: (v) => n.setEnabled(v),
+              ),
+              if (stream.enabled)
+                EditableTextRow(
+                  label: 'Backup folder',
+                  helpKey: 'session.storage.backup_stream_folder',
+                  currentValue: stream.localRoot,
+                  getCanonical: () => ref.read(backupStreamProvider).localRoot,
+                  parse: n.setLocalRoot,
+                ),
+              // The problem line renders even when disabled — an auto-disable
+              // (another desktop took the slot) must explain itself, not just
+              // silently flip the toggle off.
+              if (stream.enabled || stream.problem != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    stream.problem ??
+                        (stream.active
+                            ? 'Streaming — ${stream.pendingCount} pending, '
+                                '${stream.syncedThisSession} synced this session '
+                                '(${(stream.syncedBytesThisSession / (1024 * 1024)).toStringAsFixed(1)} MB).'
+                            : 'Starting…'),
+                    style: TextStyle(
+                      color: stream.problem != null
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).textTheme.bodySmall?.color,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }),
         const SizedBox(height: 24),
         const SettingsSectionHeader('Backup & Restore'),
         Padding(

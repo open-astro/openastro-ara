@@ -41,14 +41,16 @@ HttpListenerException handling in `AlpacaFaultProxy.ForwardAsync`).
 The server half shipped (`BackupStreamService`: slot/queue/ack + lazy sha256 + schema v4). Remaining
 for the feature to be user-visible end-to-end (§44.7/§44.8):
 
-- **WILMA puller**: Settings → Backup → "Stream new frames to this device" toggle → claim → poll
-  queue (also nudged by the existing `frame.complete` WS event) → download via `/frames/{id}/download`
-  → sha256 verify → ack; local layout `~/Documents/OpenAstroAra/Backups/<pi-hostname>/…` + the
-  §44.7 local SQLite bookkeeping.
-- **Progress surfaces**: footer indicator, dashboard tile, per-frame 🟢/⚪ sync icon in the library.
-- **§44.4 throttling**: token-bucket bandwidth limit + capture-aware backoff driven by the
-  `exposure.started`/`frame.complete` events (client-side — the server serves as fast as asked).
-- **Settings/help registry entries** for the new toggles (merge-gated when the panel lands).
+- ✅ **WILMA puller — DONE (2026-07-07).** `BackupStreamController` (claim → frame.complete-nudged
+  poll → download → sha-256 verify → temp+rename store under `<root>/<server>/<session>/` → ack;
+  slot-lost re-claim-once; capture-aware pause on `camera.exposure_*`), the Settings → Storage
+  section, and the settings/help registry entries all landed. Local bookkeeping is the files
+  themselves (the daemon's queue is the source of truth) — the §44.7 local SQLite is unnecessary
+  for v0.0.1 and recorded as superseded.
+- **Progress surfaces (remaining)**: footer indicator, dashboard tile, per-frame 🟢/⚪ sync icon in
+  the library (the Settings status line covers pending/synced today).
+- **§44.4 token-bucket bandwidth limit (remaining)**: the capture-aware pause shipped; the
+  configurable Mbps cap + first-connect throughput measurement are still open (client-side).
 
 ## §63.3 watch-items (from the #733 review, accepted as-is)
 

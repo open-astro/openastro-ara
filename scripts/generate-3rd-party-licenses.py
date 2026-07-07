@@ -148,6 +148,11 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2015, the Dart project authors",
     },
+    "crypto": {
+        "version": "3.0.7",
+        "license": "BSD-3-Clause",
+        "copyright": "Copyright 2015, the Dart project authors",
+    },
     "cupertino_icons": {
         "version": "1.0.9",
         "license": "MIT",
