@@ -190,7 +190,7 @@ void main() {
       // a permanent watch while only the child screen swaps. Mirror that here so
       // the mid-test unmount can't dispose the controller (and hand the remount
       // a FRESH draft, which would make this test pass vacuously — #728 review).
-      final keepAlive = container.listen(wizardControllerProvider, (_, __) {});
+      final keepAlive = container.listen(wizardControllerProvider, (_, _) {});
       addTearDown(keepAlive.close);
       Widget screen() => UncontrolledProviderScope(
             container: container,
