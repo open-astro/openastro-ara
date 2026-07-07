@@ -205,6 +205,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_AHungDriver_TimesOutAsFailed_AndTheLadderAndGateSurvive() {
+            // A camera that HANGS (stuck USB, unresponsive firmware) rather
+            // than throwing: without the per-rung timeout this stalled the
+            // ladder forever and wedged the single-flight gate for the whole
+            // session.
+            var never = new TaskCompletionSource();
+            camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
+                .Returns(never.Task);
+            var service = Build();
+            service.RungTimeout = TimeSpan.FromMilliseconds(50);
+
+            var result = await service.ExecuteAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(result.ExposureAborted, Is.False);
+                Assert.That(result.FailedRungs, Has.Count.EqualTo(1).And.Contains("abort_exposure"),
+                    "a hang degrades to a loud failure, never a stall");
+                Assert.That(result.ParkRequested, Is.True, "the rungs behind the hung device still run");
+                Assert.That(result.FlatPanelLightOff, Is.True);
+            });
+
+            // The gate re-opened — the button works for the rest of the night.
+            var second = await service.ExecuteAsync();
+            Assert.That(second.AlreadyInProgress, Is.False);
+            never.TrySetResult();
+        }
+
+        [Test]
         public async Task Execute_NoRunningSequence_ReportsZeroAborted() {
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
 

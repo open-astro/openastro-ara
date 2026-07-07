@@ -44,6 +44,14 @@ public sealed partial class EmergencyStopService {
     // noise while the first is mid-flight). 0 = idle, 1 = a stop is running.
     private int _running;
 
+    // A HUNG driver (as opposed to one that throws) must degrade to Failed
+    // instead of stalling the ladder behind it and wedging the single-flight
+    // gate for the rest of the session — abort_exposure in particular blocks
+    // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
+    // keeps the worst-case ladder inside the client's 60 s receive timeout.
+    // Internal knob so tests can compress it.
+    internal TimeSpan RungTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
     public EmergencyStopService(
             ICameraService? camera = null,
             Func<ISequencerService?>? sequencerResolver = null,
@@ -188,12 +196,32 @@ public sealed partial class EmergencyStopService {
             }
             // CancellationToken.None deliberately: the caller disconnecting
             // must not cancel a half-finished stop.
-            await action(CancellationToken.None).ConfigureAwait(false);
+            var work = action(CancellationToken.None);
+            var completed = await Task.WhenAny(work, Task.Delay(RungTimeout)).ConfigureAwait(false);
+            if (!ReferenceEquals(completed, work)) {
+                LogRungTimedOut(rung, RungTimeout.TotalSeconds);
+                ObserveQuietly(rung, work);
+                return RungOutcome.Failed;
+            }
+            await work.ConfigureAwait(false);
             return RungOutcome.Done;
         } catch (Exception ex) {
             LogRungFailed(rung, ex);
             return RungOutcome.Failed;
         }
+    }
+
+    /// <summary>
+    /// A timed-out rung's task keeps running (there is no way to cancel a
+    /// hung driver call) — log its eventual fault instead of leaving an
+    /// unobserved task exception.
+    /// </summary>
+    private void ObserveQuietly(string rung, Task work) {
+        _ = work.ContinueWith(
+            t => LogRungFailed(rung, t.Exception!.GetBaseException()),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -249,6 +277,9 @@ public sealed partial class EmergencyStopService {
 
     [LoggerMessage(EventId = 3534, Level = LogLevel.Warning, Message = "§35.3 emergency stop rung '{Rung}' failed")]
     private partial void LogRungFailed(string rung, Exception exception);
+
+    [LoggerMessage(EventId = 3536, Level = LogLevel.Warning, Message = "§35.3 emergency stop rung '{Rung}' timed out after {TimeoutSeconds}s — treating as failed; the ladder continues")]
+    private partial void LogRungTimedOut(string rung, double timeoutSeconds);
 
     [LoggerMessage(EventId = 3535, Level = LogLevel.Warning, Message = "§35.3 WS publish of {EventType} failed")]
     private partial void LogWsPublishFailed(string eventType, Exception exception);
