@@ -244,9 +244,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         return;
       }
       // NOTE: _reclaimedOnce is deliberately NOT reset here — only a
-      // successful queue poll proves the slot is genuinely ours again
+      // successful queue read proves the slot is genuinely ours again
       // (resetting on claim alone would let a claim-then-lose flap reclaim
-      // forever). _pollOnce clears it at the end of a clean pass.
+      // forever). _pollOnce clears it right after queue() succeeds.
       state = state.copyWith(active: true, clearProblem: true);
     } catch (e) {
       state = state.copyWith(active: false, problem: 'Could not start the backup stream: $e');
@@ -284,6 +284,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     BackupStreamSlotLostException? slotLost;
     try {
       final entries = await client.queue(_hostname);
+      // A successful queue read proves the slot is genuinely ours — this is
+      // the "clean poll" signal that re-arms the one-time reclaim. It must
+      // sit here, not after the loop: exposure-in-flight returns mid-loop
+      // would otherwise keep _reclaimedOnce stuck through a busy session.
+      _reclaimedOnce = false;
       state = state.copyWith(pendingCount: entries.length, clearProblem: true);
       for (final entry in entries) {
         if (!state.enabled || !state.active) return;
@@ -309,7 +314,6 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           syncedBytesThisSession: state.syncedBytesThisSession + entry.sizeBytes,
         );
       }
-      _reclaimedOnce = false;
     } on BackupStreamSlotLostException catch (e) {
       // Handled below, AFTER the finally clears _polling — the reclaim's own
       // kick-off poll would otherwise be swallowed by the single-flight guard.

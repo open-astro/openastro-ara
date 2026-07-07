@@ -24,6 +24,13 @@ class _FakeClient implements BackupStreamClient {
   int releaseCalls = 0;
   bool grantClaim = true;
   bool throwSlotLostOnQueue = false;
+
+  /// Throws slot-lost on this many queue() calls, then behaves normally.
+  int slotLostBudget = 0;
+
+  /// Runs inside a (successful) queue() call — lets a test start an exposure
+  /// between the queue read and the entry loop.
+  Future<void> Function()? onQueue;
   Uint8List Function(String frameId)? corruptor;
 
   BackupStreamQueueEntry addFrame(String id, String payload, {bool withSha = true}) {
@@ -56,6 +63,11 @@ class _FakeClient implements BackupStreamClient {
   @override
   Future<List<BackupStreamQueueEntry>> queue(String hostname, {int limit = 50}) async {
     if (throwSlotLostOnQueue) throw const BackupStreamSlotLostException('other-desk');
+    if (slotLostBudget > 0) {
+      slotLostBudget--;
+      throw const BackupStreamSlotLostException('other-desk');
+    }
+    await onQueue?.call();
     return List.of(pending);
   }
 
@@ -279,6 +291,43 @@ void main() {
     expect(fake.claimCalls, greaterThanOrEqualTo(2), reason: 'one idempotent re-claim attempt');
     expect(state.enabled, isFalse);
     expect(state.problem, contains('other-desk'));
+  });
+
+  test('a clean queue read re-arms the reclaim even when an exposure interrupts the pass', () async {
+    final c = controller();
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+    await c.setEnabled(true);
+    await settle();
+    expect(fake.acked, contains('frame-1'));
+
+    // Flap 1: slot lost once, and the recovered pass is interrupted mid-loop
+    // by an exposure starting — the successful queue read alone must re-arm
+    // the one-time reclaim, or a busy imaging session (an exposure roughly
+    // every poll) leaves it spent forever.
+    fake.addFrame('frame-2', 'FITS-DATA-2');
+    fake.slotLostBudget = 1;
+    fake.onQueue = () async => c.markExposureStarted();
+    await c.tickNow();
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+    expect(fake.acked, isNot(contains('frame-2')),
+        reason: 'the recovered pass was interrupted by the exposure');
+    expect(container.read(backupStreamProvider).enabled, isTrue);
+
+    // Flap 2 after the exposure ages out: must reclaim again, not disable.
+    fake.onQueue = null;
+    c.markExposureStarted(DateTime.now().subtract(const Duration(minutes: 16)));
+    fake.slotLostBudget = 1;
+    await c.tickNow();
+    await settle();
+
+    final state = container.read(backupStreamProvider);
+    expect(state.enabled, isTrue,
+        reason: 'an interrupted-but-clean pass must not leave the reclaim spent');
+    expect(state.active, isTrue);
+    expect(fake.acked, contains('frame-2'));
+    expect(fake.claimCalls, 3, reason: 'enable + one reclaim per flap');
   });
 
   test('disable releases the slot', () async {
