@@ -1,5 +1,14 @@
 import 'equipment_device_status.dart';
 
+bool _listEq(List<String> a, List<String> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 /// Camera capabilities (read once on connect, nullable until then): sensor
 /// geometry, gain/offset/bin ranges, exposure bounds, cooler support, and the
 /// Bayer pattern (null on a mono sensor).
@@ -15,6 +24,10 @@ class CameraCapabilities {
   /// field; the parse falls back to [canSetTemperature] so older daemons keep
   /// exactly the old gating.
   final bool hasCooler;
+  // §25.5.5 — readout-mode display names in driver index order (select by index);
+  // empty = no readout-mode support. Y pixel pitch: 0 = not reported (assume square).
+  final List<String> readoutModes;
+  final double pixelSizeUmY;
   final int minGain;
   final int maxGain;
   final int minOffset;
@@ -33,6 +46,8 @@ class CameraCapabilities {
     required this.pixelSizeUm,
     required this.canSetTemperature,
     this.hasCooler = false,
+    this.readoutModes = const [],
+    this.pixelSizeUmY = 0,
     required this.minGain,
     required this.maxGain,
     required this.minOffset,
@@ -61,6 +76,8 @@ class CameraCapabilities {
       // Absent on a pre-§25.5.5 daemon → fall back to canSetTemperature, which
       // reproduces the old cooler-UI gating exactly.
       hasCooler: json['has_cooler'] as bool? ?? canSetTemperature,
+      readoutModes: (json['readout_modes'] as List?)?.whereType<String>().toList() ?? const [],
+      pixelSizeUmY: d('pixel_size_um_y'),
       minGain: i('min_gain'),
       maxGain: i('max_gain'),
       minOffset: i('min_offset'),
@@ -84,6 +101,8 @@ class CameraCapabilities {
           other.pixelSizeUm == pixelSizeUm &&
           other.canSetTemperature == canSetTemperature &&
           other.hasCooler == hasCooler &&
+          _listEq(other.readoutModes, readoutModes) &&
+          other.pixelSizeUmY == pixelSizeUmY &&
           other.minGain == minGain &&
           other.maxGain == maxGain &&
           other.minOffset == minOffset &&
@@ -103,6 +122,8 @@ class CameraCapabilities {
         pixelSizeUm,
         canSetTemperature,
         hasCooler,
+        Object.hashAll(readoutModes),
+        pixelSizeUmY,
         minGain,
         maxGain,
         minOffset,
@@ -134,6 +155,10 @@ class CameraStatus extends EquipmentDeviceStatus {
   final double? coolerPowerPct;
   final bool coolerOn;
   final double? exposureProgressPct;
+  // §25.5.5 — the target the TEC is cooling TO (null: driver doesn't report one)
+  // and the current readout-mode display name (null: no readout-mode support).
+  final double? coolerSetpointC;
+  final String? readoutMode;
 
   CameraStatus({
     required this.deviceId,
@@ -145,6 +170,8 @@ class CameraStatus extends EquipmentDeviceStatus {
     required this.coolerPowerPct,
     required this.coolerOn,
     required this.exposureProgressPct,
+    this.coolerSetpointC,
+    this.readoutMode,
   });
 
   bool get isExposing => runtimeState == 'exposing' || runtimeState == 'downloading';
@@ -167,6 +194,8 @@ class CameraStatus extends EquipmentDeviceStatus {
       coolerPowerPct: (r['cooler_power_pct'] as num?)?.toDouble(),
       coolerOn: r['cooler_on'] as bool? ?? false,
       exposureProgressPct: (r['exposure_progress_pct'] as num?)?.toDouble(),
+      coolerSetpointC: (r['cooler_setpoint_c'] as num?)?.toDouble(),
+      readoutMode: r['readout_mode'] as String?,
     );
   }
 

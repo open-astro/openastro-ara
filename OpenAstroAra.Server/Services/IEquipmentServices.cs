@@ -36,6 +36,8 @@ public interface ICameraService {
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task AbortExposureAsync(CancellationToken ct);
     Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
+    // §25.5.5 — select a readout mode by index into CameraCapabilitiesDto.ReadoutModes.
+    Task SetReadoutModeAsync(int modeIndex, CancellationToken ct);
     // §64 Live View: a short-exposure render loop for framing/focus (no catalog write).
     Task StartLiveViewAsync(LiveViewStartRequestDto request, CancellationToken ct);
     // No CancellationToken by design: a stop is unconditional — it always runs to completion (it

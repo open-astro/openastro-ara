@@ -95,14 +95,27 @@ public sealed record CameraCapabilitiesDto(
     // implemented), independent of CanSetTemperature: a "dumb" on/off cooler with no TEC
     // set-point reports HasCooler=true + CanSetTemperature=false. Drives the client's
     // cooler-Switch gating (the set-point field stays gated on CanSetTemperature).
-    bool HasCooler = false);
+    bool HasCooler = false,
+    // §25.5.5 — the driver's readout-mode display names, in driver index order (POST
+    // /camera/readoutmode selects by index into THIS list). Null/empty = no readout-mode support.
+    System.Collections.Generic.IReadOnlyList<string>? ReadoutModes = null,
+    // §25.5.5 — Y pixel pitch for asymmetric-pixel sensors; 0 = not reported (assume square,
+    // use PixelSizeUm).
+    double PixelSizeUmY = 0);
 
 public sealed record CameraStateDto(
     string State,   // "idle" | "exposing" | "downloading" | "error"
     double? CcdTemperature,
     double? CoolerPowerPct,
     bool CoolerOn,
-    double? ExposureProgressPct);
+    double? ExposureProgressPct,
+    // §25.5.5 — the target the TEC is cooling TO (ASCOM SetCCDTemperature read-back), so the
+    // panel can show "cooling to −10°C" alongside the actual sensor temperature. Null when the
+    // driver doesn't report one (or no cooler). Optional defaults keep pre-slice shapes valid.
+    double? CoolerSetpointC = null,
+    // §25.5.5 — the CURRENT readout mode's display name (from the driver's ReadoutModes list);
+    // null when the camera has no readout-mode support.
+    string? ReadoutMode = null);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
@@ -137,6 +150,10 @@ public sealed record LiveViewStatusDto(
 // only writes SetCCDTemperature when a target is supplied (a pure on/off toggle
 // sends null). TargetTemperatureC is likewise ignored when Enabled is false.
 public sealed record CameraCoolerRequestDto(bool Enabled, double? TargetTemperatureC = null);
+
+/// <summary>POST /camera/readoutmode — select a readout mode by index into
+/// <see cref="CameraCapabilitiesDto.ReadoutModes"/> (driver order).</summary>
+public sealed record CameraReadoutModeRequestDto(int ModeIndex);
 
 public sealed record ExposureRequestDto(
     double ExposureSec,
