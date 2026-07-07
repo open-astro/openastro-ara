@@ -13,6 +13,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -41,6 +42,7 @@ namespace OpenAstroAra.Server.Services;
 public sealed partial class SafetyReactionService : IHostedService, IDisposable {
 
     private readonly ISafetyMonitorService? _safetyMonitor;
+    private readonly IObservingConditionsService? _weather;
     private readonly IProfileStore? _profiles;
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly IGuiderService? _guider;
@@ -86,6 +88,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     public SafetyReactionService(
             ISafetyMonitorService? safetyMonitor = null,
+            IObservingConditionsService? weather = null,
             IProfileStore? profiles = null,
             Func<ISequencerService?>? sequencerResolver = null,
             IGuiderService? guider = null,
@@ -94,6 +97,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             IWsBroadcaster? ws = null,
             ILogger<SafetyReactionService>? logger = null) {
         _safetyMonitor = safetyMonitor;
+        _weather = weather;
         _profiles = profiles;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -155,18 +159,52 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Timer-callback boundary: any fault is logged and the next tick retries; an escaped exception would be an unobserved task fault.")]
     internal async Task TickAsync() {
-        if (_safetyMonitor is null) {
+        if (_safetyMonitor is null && _weather is null) {
             return;
         }
         try {
-            SafetyMonitorDto? dto;
-            try {
-                dto = await _safetyMonitor.GetAsync(CancellationToken.None).ConfigureAwait(false);
-            } catch (Exception ex) {
-                LogMonitorReadFailed(ex);
-                dto = null;
+            SafetyMonitorDto? dto = null;
+            if (_safetyMonitor is not null) {
+                try {
+                    dto = await _safetyMonitor.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                } catch (Exception ex) {
+                    LogMonitorReadFailed(ex);
+                    dto = null;
+                }
             }
-            bool? nowSafe = dto is { State: EquipmentConnectionState.Connected } ? dto.Safe : null;
+            bool? monitorSafe = dto is { State: EquipmentConnectionState.Connected } ? dto.Safe : null;
+
+            // §35.1 — granular weather thresholds over the ObservingConditions
+            // device. A breach makes conditions UNSAFE through the same
+            // transition classifier + reaction + auto-resume machinery as the
+            // SafetyMonitor: thresholds decide WHEN, on_unsafe decides WHAT.
+            bool? weatherSafe = null;
+            IReadOnlyList<string> breaches = Array.Empty<string>();
+            var tickPolicy = ReadPolicies();
+            if (tickPolicy is { WeatherTriggersEnabled: true } && _weather is not null) {
+                ObservingConditionsDto? weather = null;
+                try {
+                    weather = await _weather.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                } catch (Exception ex) {
+                    LogWeatherReadFailed(ex);
+                }
+                if (weather is { State: EquipmentConnectionState.Connected }) {
+                    breaches = EvaluateWeatherBreaches(weather, tickPolicy);
+                    weatherSafe = breaches.Count == 0;
+                }
+            }
+
+            // Combined verdict: unknown only when NO source has a reading;
+            // otherwise any unsafe source wins (auto-resume therefore requires
+            // monitor AND weather to read safe, which is the conservative side).
+            bool? nowSafe = (monitorSafe, weatherSafe) switch {
+                (null, null) => null,
+                _ => (monitorSafe ?? true) && (weatherSafe ?? true),
+            };
+            lock (_lock) {
+                _lastBreaches = breaches;
+                _lastMonitorUnsafe = monitorSafe == false;
+            }
 
             Transition transition;
             lock (_lock) {
@@ -220,6 +258,39 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     // ─── unsafe reaction ───
 
+    // Why the tick's verdict went unsafe, captured for the event/notification
+    // (guarded by _lock; read once at reaction time).
+    private IReadOnlyList<string> _lastBreaches = Array.Empty<string>();
+    private bool _lastMonitorUnsafe;
+
+    /// <summary>
+    /// §35.1 threshold evaluation — pure so tests drive it directly. A sensor
+    /// the device doesn't report (null) skips its check: no data is not a
+    /// breach. Wind uses the worse of sustained speed and gust.
+    /// </summary>
+    internal static IReadOnlyList<string> EvaluateWeatherBreaches(ObservingConditionsDto weather, SafetyPoliciesDto policy) {
+        var breaches = new List<string>();
+        double? windMs = (weather.WindSpeedMs, weather.WindGustMs) switch {
+            (double s, double g) => Math.Max(s, g),
+            (double s, null) => s,
+            (null, double g) => g,
+            _ => null,
+        };
+        if (windMs is double w && w * 3.6 > policy.MaxWindKmh) {
+            breaches.Add(string.Create(CultureInfo.InvariantCulture,
+                $"wind {w * 3.6:F0} km/h over the {policy.MaxWindKmh} km/h limit"));
+        }
+        if (weather.HumidityPct is double h && h > policy.MaxHumidityPct) {
+            breaches.Add(string.Create(CultureInfo.InvariantCulture,
+                $"humidity {h:F0}% over the {policy.MaxHumidityPct}% limit"));
+        }
+        if (weather.TemperatureC is double t && weather.DewPointC is double d && t - d < policy.MinDewDeltaC) {
+            breaches.Add(string.Create(CultureInfo.InvariantCulture,
+                $"dew delta {t - d:F1}\u00b0C under the {policy.MinDewDeltaC:F1}\u00b0C minimum"));
+        }
+        return breaches;
+    }
+
     private async Task ReactToUnsafeAsync(SafetyMonitorDto? monitor) {
         var policy = ReadPolicies();
         var action = ParseAction(policy?.OnUnsafe);
@@ -227,11 +298,24 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             LogUnknownActionToken(policy.OnUnsafe);
         }
 
+        IReadOnlyList<string> breaches;
+        bool monitorUnsafe;
+        lock (_lock) {
+            breaches = _lastBreaches;
+            monitorUnsafe = _lastMonitorUnsafe;
+        }
+        var reasons = new List<string>();
+        if (monitorUnsafe) { reasons.Add("safety monitor reports unsafe"); }
+        reasons.AddRange(breaches);
+
         // §35.4: the unsafe event fires BEFORE the action so the client can alarm
         // while the daemon reacts.
+        var reasonsJson = new JsonArray();
+        foreach (var reason in reasons) { reasonsJson.Add(reason); }
         await PublishAsync(WsEventCatalog.SafetyUnsafe, new JsonObject {
             ["device_name"] = monitor?.Name,
             ["action"] = ActionToken(action),
+            ["reasons"] = reasonsJson,
         }).ConfigureAwait(false);
 
         var pausedRuns = 0;
@@ -272,7 +356,11 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             ["park_requested"] = parkRequested,
         }).ConfigureAwait(false);
 
-        var deviceName = string.IsNullOrWhiteSpace(monitor?.Name) ? "The safety monitor" : monitor!.Name;
+        // §35.1: when weather thresholds tripped the verdict, say WHICH ones —
+        // "wind 41 km/h over the 36 km/h limit" beats a bare "unsafe".
+        var deviceName = reasons.Count > 0 && !monitorUnsafe
+            ? "The weather station (" + string.Join("; ", breaches) + ")"
+            : string.IsNullOrWhiteSpace(monitor?.Name) ? "The safety monitor" : monitor!.Name;
         var (severity, title, message) = action switch {
             UnsafeAction.Ignore => (NotificationSeverity.Warning, "Unsafe conditions reported",
                 deviceName + " reports conditions are UNSAFE. Your safety policy is set to take no action — imaging continues. Check the sky."),
@@ -688,6 +776,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     [LoggerMessage(EventId = 3512, Level = LogLevel.Information, Message = "§35 auto-resume: tracked run {RunId} is no longer paused (state {State}) — dropped from resume tracking")]
     private partial void LogStaleRunDropped(Guid runId, SequenceRunState? state);
+
+    [LoggerMessage(EventId = 3514, Level = LogLevel.Warning, Message = "§35.1 weather read failed; weather thresholds treated as unknown this tick")]
+    private partial void LogWeatherReadFailed(Exception exception);
 
     [LoggerMessage(EventId = 3513, Level = LogLevel.Information, Message = "§35 auto-resume: no tracked run is still paused — nothing to resume, mount stays parked")]
     private partial void LogResumeNothingLeft();

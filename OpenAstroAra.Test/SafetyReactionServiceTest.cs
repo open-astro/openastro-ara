@@ -36,6 +36,7 @@ namespace OpenAstroAra.Test {
     public class SafetyReactionServiceTest {
 
         private Mock<ISafetyMonitorService> monitor = null!;
+        private Mock<IObservingConditionsService> weather = null!;
         private Mock<IProfileStore> profiles = null!;
         private Mock<ISequencerService> sequencer = null!;
         private Mock<IGuiderService> guider = null!;
@@ -52,6 +53,10 @@ namespace OpenAstroAra.Test {
         [SetUp]
         public void SetUp() {
             monitor = new Mock<ISafetyMonitorService>();
+            weather = new Mock<IObservingConditionsService>();
+            // Default: no weather device connected — §35.1 tests opt in.
+            weather.Setup(w => w.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync((ObservingConditionsDto?)null);
             profiles = new Mock<IProfileStore>();
             sequencer = new Mock<ISequencerService>();
             guider = new Mock<IGuiderService>();
@@ -86,7 +91,7 @@ namespace OpenAstroAra.Test {
             SetPolicy("pause_and_park", autoResume: true, delayMin: 1);
 
             service = new SafetyReactionService(
-                monitor.Object, profiles.Object, () => sequencer.Object,
+                monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
                 guider.Object, telescope.Object, notifications.Object, ws.Object) {
                 ResumeDelayFromMinutes = _ => TimeSpan.FromMilliseconds(30),
                 UnparkPollInterval = TimeSpan.FromMilliseconds(5),
@@ -97,12 +102,23 @@ namespace OpenAstroAra.Test {
         [TearDown]
         public void TearDown() => service.Dispose();
 
-        private void SetPolicy(string onUnsafe, bool autoResume, int delayMin) =>
+        private void SetPolicy(string onUnsafe, bool autoResume, int delayMin,
+                bool weatherTriggers = false, int maxWindKmh = 36, int maxHumidityPct = 85, double minDewDeltaC = 2.0) =>
             profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
                 OnUnsafe: onUnsafe, AutoResumeWhenSafe: autoResume, ResumeDelayMin: delayMin,
                 MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
                 OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: "pause",
-                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false));
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false,
+                WeatherTriggersEnabled: weatherTriggers, MaxWindKmh: maxWindKmh,
+                MaxHumidityPct: maxHumidityPct, MinDewDeltaC: minDewDeltaC));
+
+        private void SetWeather(double? windMs = null, double? gustMs = null, double? humidityPct = null,
+                double? temperatureC = null, double? dewPointC = null, bool connected = true) =>
+            weather.Setup(w => w.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ObservingConditionsDto(
+                    "w1", "Weather", connected ? EquipmentConnectionState.Connected : EquipmentConnectionState.Disconnected,
+                    temperatureC, humidityPct, dewPointC, null, null, windMs, gustMs, null, null,
+                    Safe: true, CapturedAt: "2026-01-01T00:00:00Z"));
 
         private void SetMonitor(bool? safe, bool connected = true) =>
             monitor.Setup(m => m.GetAsync(It.IsAny<CancellationToken>()))
@@ -440,6 +456,100 @@ namespace OpenAstroAra.Test {
             // Park still requested + notification still posted despite the guider fault.
             telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(postedNotifications, Has.Count.EqualTo(1));
+        }
+
+        // ─── §35.1 weather thresholds ───
+
+        private static SafetyPoliciesDto WeatherPolicy(int maxWindKmh = 36, int maxHumidityPct = 85, double minDewDeltaC = 2.0) =>
+            new(OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
+                OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: "pause",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false,
+                WeatherTriggersEnabled: true, MaxWindKmh: maxWindKmh, MaxHumidityPct: maxHumidityPct, MinDewDeltaC: minDewDeltaC);
+
+        private static ObservingConditionsDto Conditions(double? windMs = null, double? gustMs = null,
+                double? humidityPct = null, double? temperatureC = null, double? dewPointC = null) =>
+            new("w1", "Weather", EquipmentConnectionState.Connected,
+                temperatureC, humidityPct, dewPointC, null, null, windMs, gustMs, null, null,
+                Safe: true, CapturedAt: "2026-01-01T00:00:00Z");
+
+        [Test]
+        public void EvaluateWeatherBreaches_WindUsesTheWorseOfSpeedAndGust() {
+            // 5 m/s sustained is fine, but the 12 m/s gust is 43 km/h — breach.
+            var breaches = SafetyReactionService.EvaluateWeatherBreaches(
+                Conditions(windMs: 5, gustMs: 12), WeatherPolicy(maxWindKmh: 36));
+            Assert.That(breaches, Has.Count.EqualTo(1));
+            Assert.That(breaches[0], Does.Contain("wind"));
+        }
+
+        [Test]
+        public void EvaluateWeatherBreaches_HumidityAndDewDelta() {
+            var breaches = SafetyReactionService.EvaluateWeatherBreaches(
+                Conditions(humidityPct: 91, temperatureC: 5.0, dewPointC: 4.2), WeatherPolicy());
+            Assert.Multiple(() => {
+                Assert.That(breaches, Has.Count.EqualTo(2));
+                Assert.That(breaches[0], Does.Contain("humidity"));
+                Assert.That(breaches[1], Does.Contain("dew delta"));
+            });
+        }
+
+        [Test]
+        public void EvaluateWeatherBreaches_MissingSensorsAreNotBreaches() {
+            // A device that reports nothing (or only in-range values) is clean —
+            // no data is not a breach.
+            Assert.That(SafetyReactionService.EvaluateWeatherBreaches(Conditions(), WeatherPolicy()), Is.Empty);
+            Assert.That(SafetyReactionService.EvaluateWeatherBreaches(
+                Conditions(windMs: 5, humidityPct: 60, temperatureC: 10, dewPointC: 2), WeatherPolicy()), Is.Empty);
+        }
+
+        [Test]
+        public async Task WeatherBreach_WithNoSafetyMonitor_FiresTheReaction_WithTheReasonNamed() {
+            SetPolicy("pause_and_park", autoResume: false, delayMin: 1, weatherTriggers: true);
+            SetWeather(windMs: 15); // 54 km/h
+
+            await service.TickAsync();
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(publishedEvents, Does.Contain("safety.unsafe"));
+            Assert.That(postedNotifications, Has.Count.EqualTo(1));
+            Assert.That(postedNotifications[0].Message, Does.Contain("wind"),
+                "the operator must learn WHICH threshold tripped, not a bare unsafe");
+        }
+
+        [Test]
+        public async Task WeatherBreach_WithTriggersDisabled_IsIgnored() {
+            SetPolicy("pause_and_park", autoResume: false, delayMin: 1, weatherTriggers: false);
+            SetWeather(windMs: 15);
+
+            await service.TickAsync();
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(publishedEvents, Is.Empty, "default-off: an upgraded rig must not surprise-park");
+        }
+
+        [Test]
+        public async Task MonitorSafe_ButWeatherBreached_IsUnsafe() {
+            SetPolicy("pause_and_park", autoResume: false, delayMin: 1, weatherTriggers: true);
+            SetMonitor(true);
+            SetWeather(humidityPct: 95);
+
+            await service.TickAsync();
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(postedNotifications[0].Message, Does.Contain("humidity"));
+        }
+
+        [Test]
+        public async Task WeatherRecovery_EmitsSafe() {
+            SetPolicy("pause_and_park", autoResume: false, delayMin: 1, weatherTriggers: true);
+            SetWeather(windMs: 15);
+            await service.TickAsync();
+
+            SetWeather(windMs: 2);
+            await service.TickAsync();
+
+            Assert.That(publishedEvents, Does.Contain("safety.safe"),
+                "a cleared breach flows through the same safe-transition machinery");
         }
     }
 }

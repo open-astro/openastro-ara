@@ -540,6 +540,7 @@ public partial class Program {
         builder.Services.AddSingleton<SafetyReactionService>(sp =>
             new SafetyReactionService(
                 sp.GetService<ISafetyMonitorService>(),
+                sp.GetService<IObservingConditionsService>(),
                 sp.GetService<IProfileStore>(),
                 () => sp.GetService<ISequencerService>(),
                 sp.GetService<IGuiderService>(),

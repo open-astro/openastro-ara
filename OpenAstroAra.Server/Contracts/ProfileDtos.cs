@@ -185,7 +185,22 @@ public sealed record SafetyPoliciesDto(
     // §58.12 — the unattended wait before the shutdown executes. 10 min is the spec's
     // Goldilocks default (long enough to grab a phone and acknowledge, short enough not to
     // burn a field battery all night); 5 for battery rigs, 30 for wall-powered observatories.
-    int UnattendedShutdownWaitMinutes = 10);
+    int UnattendedShutdownWaitMinutes = 10,
+    // §35.1 — granular weather-threshold triggers over the connected ObservingConditions
+    // device. Default OFF: a rig that upgrades must not surprise-park because its weather
+    // station reads breezy. When enabled, a breached threshold makes conditions UNSAFE and
+    // the single on_unsafe policy above reacts — thresholds decide WHEN, on_unsafe decides
+    // WHAT (per-trigger actions deferred; see PORT_DECISIONS 2026-07-07). Null-tolerant:
+    // a sensor the device doesn't report skips its check. Optional ctor defaults keep an
+    // older profile.json deserializing.
+    bool WeatherTriggersEnabled = false,
+    // Sustained wind OR gust above this (km/h) is a breach.
+    int MaxWindKmh = 36,
+    // Relative humidity above this (%) is a breach.
+    int MaxHumidityPct = 85,
+    // Ambient-minus-dew-point below this (°C) is a breach — optics are about
+    // to fog. Needs both temperature and dew point from the device.
+    double MinDewDeltaC = 2.0);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime
