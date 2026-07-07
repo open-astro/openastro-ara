@@ -207,11 +207,13 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     await _tick();
   }
 
-  /// §44.4 settings field entry point; 0 = unlimited.
+  /// §44.4 settings field entry point; 0 = unlimited. Clamped to the
+  /// settings registry's declared 0..10000 range (the panel's parse path
+  /// bypasses registry validation).
   void setMaxMbps(int mbps) {
     if (mbps < 0) return;
     _userTouched = true;
-    state = state.copyWith(maxMbps: mbps);
+    state = state.copyWith(maxMbps: mbps.clamp(0, 10000));
     _persist();
   }
 
@@ -324,9 +326,13 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // Null sha = the daemon hasn't hashed it yet (per-page budget) —
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
-        final pullStarted = DateTime.now();
+        var pullStarted = DateTime.now();
         var error = await _pullVerifyStore(client, entry);
         if (error != null) {
+          // Time only the attempt that actually moved the bytes — including
+          // a failed attempt would under-pace the cap and skew the link
+          // measurement low exactly when a flaky link needs both most.
+          pullStarted = DateTime.now();
           error = await _pullVerifyStore(client, entry); // one retry
         }
         if (error == null) {
