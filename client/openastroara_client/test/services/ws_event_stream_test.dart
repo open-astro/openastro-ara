@@ -68,11 +68,13 @@ void main() {
   const server = AraServer(hostname: 'host-a', port: 5555);
 
   group('WsEventStream transport', () {
-    test('connects to the ws URL with the version header', () async {
+    test('connects to the ws URL with the version header AND query fallback', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
       ws.connect();
-      expect(conn.lastUrl, Uri.parse('ws://host-a:5555/api/v1/ws'));
+      // ws_version rides in the query string too: browser WebSockets can't set
+      // request headers, and the server accepts either (header wins).
+      expect(conn.lastUrl, Uri.parse('ws://host-a:5555/api/v1/ws?ws_version=1'));
       expect(conn.lastHeaders, {'X-Ara-WS-Version': '1'});
       await ws.dispose();
     });

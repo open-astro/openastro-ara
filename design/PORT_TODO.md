@@ -657,18 +657,21 @@ building/done indicator wants the §60.9 WS stream to observe `guider.dark_libra
 `web_socket_channel`/`IOWebSocketChannel`), parses `{type,ts,seq,payload}` envelopes to a broadcast `Stream<WsEvent>`,
 reconnects with backoff + resumes from the last-seen seq (first-frame `{"resume_token":"<seq>"}`), skips the
 resume-response control frame + malformed frames. Injectable channel-seam (`WsSocket`/`WsConnector`); +6 tests.
-**Remaining for e-4b-3:** WS-client slice 2 — a Riverpod provider wiring the active server (`savedServersProvider →
-servers.last`) to a `WsEventStream` (lifecycle via `ref.onDispose`) + routing `diagnostics.*` → the existing
-`DiagnosticsSnapshot` contract (`diagnostic_panel.dart` stub) and `guider.dark_library.*` → the build modal.
-Slice 2 should also add a **connection-state signal** to `WsEventStream` (connected / reconnecting / disconnected) —
-the `events` stream alone can't tell consumers the link dropped (from #390 review); the diagnostics panel + build
-modal need a disconnected indicator. Web
-support needs a query-param version fallback (browser WS can't set the header). The guider isn't yet connectable
-from the client either (no equipment-guider control service) — also needed before the build button is useful.
+✅ **e-4b-3 / e-4c client UI — DONE (2026-07-06).** Most of WS-client slice 2 had already shipped piecemeal
+(`wsEventStreamProvider` + `wsConnectionStateProvider` + diagnostics routing; the calibration dialog + all five
+`GuiderCalibrationApi` endpoints landed with the guider control UI) — this slice closed what actually remained:
+`guiderBuildActivityProvider` folds `guider.dark_library.*`/`guider.defect_map.*` (started/complete/failed only —
+the daemon has no granular progress, so the UI is an indeterminate "Building — keep the scope covered" state, not a
+bar; NOT autoDispose so a terminal event landing after the dialog closes still folds + refreshes status), the
+**cover-the-scope confirmation** gates every build POST, both Build buttons disable while EITHER build runs (the
+daemon's shared single-build gate), a failed build renders its WS `error` payload, and the **web query-param
+version fallback** landed both sides (`?ws_version=1` accepted when the `X-Ara-WS-Version` header is absent —
+header wins; client sends both, so a future web transport needs no io-vs-web fork).
 
-**e-4b-2 review follow-up (from #384 r5, deferred to e-4b-3):** the build POST returns 409 for both "guider not
-connected" and "build already in progress"; give the concurrent-build case a distinct signal (423 Locked or a
-structured problem-detail `type`) when the build UI lands and needs to tell them apart.
+✅ **e-4b-2 #384 r5 follow-up — DONE (same PR):** the two build-409 causes now carry distinct problem-detail
+`type`s (`…/calibration-build-in-progress` via the new typed `CalibrationBuildInProgressException` — derives from
+`InvalidOperationException` so existing catches keep working — vs `…/guider-not-connected`); status codes stay 409
+(no wire break). The dialog upgrades both to actionable messages ("wait for it" vs "connect it").
 
 **Shipped:** e-4c-a — defect-map RPC request/response shapes (`PHD2Methods.DarkLibrary.cs`):
 `build_defect_map_darks {exposure_ms def 3000, frame_count def 10, notes?, load_after def true}` →
@@ -696,8 +699,8 @@ already covers defect-map status.
 helper (dedupes the status→DTO mapping). +7 tests. **The §63.6 guider calibration surface is now server-complete**
 (build + status + enable/disable, for both darks and defect maps).
 
-**e-4c remaining (deferred):** the client "Also build defect map" affordance + the build/toggle/status UI (gated on
-the same WS client + dark-library UI as e-4b-3).
+✅ **e-4c remaining — DONE (2026-07-06, with e-4b-3 below):** the defect-map build/toggle/status UI shipped with
+the calibration dialog; the live build state + cover-the-scope gate landed in the same slice as the dark library's.
 
 ✅ **WS slice 5 (#395) — diagnostics reconnect-replay gap — DONE (2026-07-06).** The server now sends a
 per-connection `diagnostics.snapshot` envelope (the full open-issue set from `IDiagnosticsService.GetStateAsync`,

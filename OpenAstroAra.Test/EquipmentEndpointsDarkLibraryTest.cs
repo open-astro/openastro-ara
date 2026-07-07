@@ -166,6 +166,49 @@ namespace OpenAstroAra.Test {
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }
 
+        // ── e-4b-2 #384 r5 follow-up: the two 409 causes carry distinct problem types ──
+
+        [Test]
+        public async Task Build_busy_gate_409_carries_the_build_in_progress_problem_type() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.BuildDarkLibraryAsync(It.IsAny<BuildDarkLibraryRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new CalibrationBuildInProgressException());
+
+            var result = await EquipmentEndpoints.BuildDarkLibraryAsync(Request, null, svc.Object, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.BuildInProgressProblemType));
+            });
+        }
+
+        [Test]
+        public async Task Build_not_connected_409_carries_the_guider_not_connected_problem_type() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.BuildDarkLibraryAsync(It.IsAny<BuildDarkLibraryRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider is not connected"));
+
+            var result = await EquipmentEndpoints.BuildDarkLibraryAsync(Request, null, svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
+        }
+
+        [Test]
+        public async Task DefectMap_busy_gate_409_carries_the_build_in_progress_problem_type() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.BuildDefectMapDarksAsync(It.IsAny<BuildDefectMapDarksRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new CalibrationBuildInProgressException());
+
+            var result = await EquipmentEndpoints.BuildDefectMapDarksAsync(DefectRequest, null, svc.Object, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.BuildInProgressProblemType));
+            });
+        }
+
         private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
+
+        private static string? ProblemTypeOf(IResult result) => (result as ProblemHttpResult)?.ProblemDetails.Type;
     }
 }

@@ -5,6 +5,7 @@ import 'package:openastroara/models/calibration_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_calibration_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/guider/guider_build_activity_state.dart';
 import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/widgets/equipment/guider_calibration_dialog.dart';
@@ -82,10 +83,24 @@ CalibrationStatusResponse _connected({
       ),
     );
 
-Widget _host(GuiderCalibrationClient fake) => ProviderScope(
+// The dialog watches guiderBuildActivityProvider, whose real notifier watches
+// the WS stream (which would dial a socket in tests) — stub it with a fixed map.
+class _StubBuildActivity extends GuiderBuildActivityNotifier {
+  _StubBuildActivity(this.initial);
+  final Map<CalibrationArtifact, CalibrationBuildActivity> initial;
+  @override
+  Map<CalibrationArtifact, CalibrationBuildActivity> build() => initial;
+}
+
+Widget _host(
+  GuiderCalibrationClient fake, {
+  Map<CalibrationArtifact, CalibrationBuildActivity> builds = const {},
+}) =>
+    ProviderScope(
       overrides: [
         savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
         guiderCalibrationApiFactoryProvider.overrideWithValue((_) => fake),
+        guiderBuildActivityProvider.overrideWith(() => _StubBuildActivity(builds)),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -101,6 +116,13 @@ Widget _host(GuiderCalibrationClient fake) => ProviderScope(
 
 Future<void> _open(WidgetTester tester) async {
   await tester.tap(find.text('open'));
+  await tester.pumpAndSettle();
+}
+
+/// Answers the cover-the-scope confirmation that now precedes every build.
+Future<void> _confirmCover(WidgetTester tester) async {
+  expect(find.text('Cover the scope'), findsOneWidget);
+  await tester.tap(find.text("It's covered — build"));
   await tester.pumpAndSettle();
 }
 
@@ -140,6 +162,7 @@ void main() {
     // Dark library not built → the button reads "Build".
     await tester.tap(find.widgetWithText(TextButton, 'Build').first);
     await tester.pumpAndSettle();
+    await _confirmCover(tester);
     expect(fake.darkBuilds, 1);
   });
 
@@ -167,6 +190,7 @@ void main() {
     await _open(tester);
     await tester.tap(find.widgetWithText(TextButton, 'Build').at(1)); // defect map is the second
     await tester.pumpAndSettle();
+    await _confirmCover(tester);
     expect(fake.defectBuilds, 1);
   });
 
@@ -177,6 +201,7 @@ void main() {
     expect(find.widgetWithText(TextButton, 'Rebuild'), findsWidgets);
     await tester.tap(find.widgetWithText(TextButton, 'Rebuild').first);
     await tester.pumpAndSettle();
+    await _confirmCover(tester);
     expect(fake.darkBuilds, 1);
   });
 
@@ -196,5 +221,44 @@ void main() {
     await tester.tap(find.byType(Switch).at(1));
     await tester.pumpAndSettle();
     expect(fake.defectEnabled, isTrue, reason: 'auto-load was off → toggled on');
+  });
+
+  testWidgets('cancelling the cover-the-scope confirmation dispatches nothing', (tester) async {
+    final fake = _FakeCalibrationClient(_connected());
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Build').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Cover the scope'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(fake.darkBuilds, 0, reason: 'no confirm → no 202');
+  });
+
+  testWidgets('a building artifact shows the live building state and disables BOTH build buttons', (tester) async {
+    final fake = _FakeCalibrationClient(_connected());
+    await tester.pumpWidget(_host(fake, builds: const {
+      CalibrationArtifact.darkLibrary:
+          CalibrationBuildActivity(phase: CalibrationBuildPhase.building),
+    }));
+    // No pumpAndSettle: the indeterminate build indicators animate forever.
+    await tester.tap(find.text('open'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Building — keep the scope covered.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Building…'), findsOneWidget);
+    // One camera, one build: the defect-map Build must be disabled too.
+    final defectBuild = tester.widget<TextButton>(find.widgetWithText(TextButton, 'Build').first);
+    expect(defectBuild.onPressed, isNull, reason: 'shared single-build gate');
+  });
+
+  testWidgets('a failed build renders its error from the WS payload', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected()), builds: const {
+      CalibrationArtifact.defectMap: CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.failed, error: 'camera timeout'),
+    }));
+    await _open(tester);
+    expect(find.text('Build failed: camera timeout'), findsOneWidget);
   });
 }

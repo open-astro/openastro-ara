@@ -84,7 +84,7 @@ public sealed partial class GuiderService {
                     // Retry of the in-flight build with the same key + op → re-accept (§60.5 at-least-once).
                     return Task.FromResult(Accepted(op, idempotencyKey));
                 case BuildAdmission.Reject:
-                    throw new InvalidOperationException("a calibration build is already in progress");
+                    throw new CalibrationBuildInProgressException();
                 default: // Start
                     _calibrationBuildInProgress = true;
                     _calibrationBuildKey = idempotencyKey;
@@ -269,7 +269,7 @@ public sealed partial class GuiderService {
                     return Task.FromResult(Accepted(op, idempotencyKey));
                 case BuildAdmission.Reject:
                     // Shared gate: a dark-library build in flight also rejects a defect-map build (one capture).
-                    throw new InvalidOperationException("a calibration build is already in progress");
+                    throw new CalibrationBuildInProgressException();
                 default: // Start
                     _calibrationBuildInProgress = true;
                     _calibrationBuildKey = idempotencyKey;
@@ -321,4 +321,15 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Defect-map build failed")]
     partial void LogDefectMapBuildFailed(Exception ex);
+}
+
+/// <summary>The shared calibration-build gate rejected a second concurrent build (e-4b-2 #384 r5
+/// follow-up). Derives from <see cref="InvalidOperationException"/> so every existing catch keeps
+/// working, but lets the endpoint give this case a distinct problem-detail <c>type</c> — the
+/// client needs to tell "another build is running, wait" apart from "guider not connected,
+/// connect it" (both were an indistinguishable 409 before).</summary>
+public sealed class CalibrationBuildInProgressException : InvalidOperationException {
+    public CalibrationBuildInProgressException() : base("a calibration build is already in progress") { }
+    public CalibrationBuildInProgressException(string message) : base(message) { }
+    public CalibrationBuildInProgressException(string message, Exception innerException) : base(message, innerException) { }
 }

@@ -1,10 +1,37 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/calibration_status.dart';
+import '../../state/guider/guider_build_activity_state.dart';
 import '../../state/guider/guider_calibration_state.dart';
+
+/// Problem-detail `type` tokens the daemon puts on calibration-build 409s so
+/// the two user situations read differently (mirrors EquipmentEndpoints).
+const kBuildInProgressProblemType =
+    'https://openastro.net/errors/calibration-build-in-progress';
+const kGuiderNotConnectedProblemType =
+    'https://openastro.net/errors/guider-not-connected';
+
+/// A user-actionable message for a failed calibration action. The daemon's
+/// build 409s carry a problem `type` distinguishing "another build is running"
+/// (wait) from "guider not connected" (connect it); anything else stays the
+/// neutral refresh hint — hasError also covers plain transport failures.
+String describeCalibrationActionError(Object? error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    final type = data is Map ? data['type'] : null;
+    if (type == kBuildInProgressProblemType) {
+      return 'Another calibration build is already running — wait for it to finish.';
+    }
+    if (type == kGuiderNotConnectedProblemType) {
+      return 'The guider is not connected — connect it and try again.';
+    }
+  }
+  return 'The last guider request failed. Tap Refresh to recheck.';
+}
 
 /// Opens the §63.6 guider calibration dialog (dark-library / defect-map build +
 /// enable controls). Requires a connected guider; the dialog itself shows a
@@ -45,6 +72,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(guiderCalibrationProvider);
+    final builds = ref.watch(guiderBuildActivityProvider);
     final busy = async.isLoading;
     final response = async.asData?.value;
     final status = response?.status;
@@ -66,12 +94,12 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (async.hasError)
-              // Neutral — hasError covers both "couldn't reach the guider" and a
-              // failed build/toggle, so don't blame the connection specifically.
               // This replaces the last-known status (Riverpod 3's copyWithPrevious
               // is internal); the error is transient and Refresh restores status.
+              // The describe helper upgrades the daemon's typed 409s (build busy /
+              // not connected) to actionable text; everything else stays neutral.
               Text(
-                'The last guider request failed. Tap Refresh to recheck.',
+                describeCalibrationActionError(async.error),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               )
             else if (response == null || !response.connected)
@@ -83,6 +111,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
               _CalibrationBody(
                 status: status,
                 locked: locked,
+                builds: builds,
                 notifier: ref.read(guiderCalibrationProvider.notifier),
               ),
           ],
@@ -107,11 +136,17 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
 class _CalibrationBody extends StatelessWidget {
   final CalibrationStatus status;
   final bool locked;
+  final Map<CalibrationArtifact, CalibrationBuildActivity> builds;
   // Passed in rather than read here: the parent already holds the stable notifier
   // reference, so this widget needn't read any provider in build() (reading
   // provider *state* in build is the footgun; the notifier itself is stable).
   final GuiderCalibrationNotifier notifier;
-  const _CalibrationBody({required this.status, required this.locked, required this.notifier});
+  const _CalibrationBody({
+    required this.status,
+    required this.locked,
+    required this.builds,
+    required this.notifier,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +155,12 @@ class _CalibrationBody extends StatelessWidget {
     // failures to `state = AsyncValue.error(...)` — the returned future never
     // throws past the notifier, and the error renders in this dialog's hasError
     // branch. Keep that contract if _run is ever refactored.
+    final darkActivity = builds[CalibrationArtifact.darkLibrary];
+    final defectActivity = builds[CalibrationArtifact.defectMap];
+    // One camera, one build at a time (the daemon's shared gate): while EITHER
+    // artifact is building, both Build buttons stay disabled.
+    final anyBuilding = darkActivity?.phase == CalibrationBuildPhase.building ||
+        defectActivity?.phase == CalibrationBuildPhase.building;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,13 +170,17 @@ class _CalibrationBody extends StatelessWidget {
           exists: status.darkLibraryExists,
           loaded: status.darkLibraryLoaded,
           detail: _darkDetail(status),
+          activity: darkActivity,
           // The switch is the auto-load/enable flag, NOT the transient
           // "loaded in memory right now" state (which can stay true after
           // disabling, bouncing the switch back). Gate on exists so a server
           // reporting auto-load=on for a not-built artifact doesn't show an
           // interactive-looking-but-frozen ON switch.
           switchValue: status.darkLibraryExists && status.autoLoadDarks,
-          onBuild: locked ? null : () => unawaited(notifier.buildDarkLibrary()),
+          onBuild: (locked || anyBuilding)
+              ? null
+              : () => unawaited(_confirmCoverThenBuild(
+                  context, 'dark library', () => notifier.buildDarkLibrary())),
           onToggle: (locked || !status.darkLibraryExists)
               ? null
               : (v) => unawaited(notifier.setDarkLibraryEnabled(v)),
@@ -146,14 +191,43 @@ class _CalibrationBody extends StatelessWidget {
           exists: status.defectMapExists,
           loaded: status.defectMapLoaded,
           detail: null,
+          activity: defectActivity,
           switchValue: status.defectMapExists && status.autoLoadDefectMap,
-          onBuild: locked ? null : () => unawaited(notifier.buildDefectMap()),
+          onBuild: (locked || anyBuilding)
+              ? null
+              : () => unawaited(_confirmCoverThenBuild(
+                  context, 'defect map', () => notifier.buildDefectMap())),
           onToggle: (locked || !status.defectMapExists)
               ? null
               : (v) => unawaited(notifier.setDefectMapEnabled(v)),
         ),
       ],
     );
+  }
+
+  /// The §63.6 cover-the-scope gate: both builds capture DARK frames, so light
+  /// on the sensor silently poisons the whole library. Confirm before the 202.
+  static Future<void> _confirmCoverThenBuild(
+      BuildContext context, String what, Future<void> Function() build) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cover the scope'),
+        content: Text(
+          'Building the $what captures dark frames — cap the guide scope '
+          '(or close the flip-flat) first. Any light reaching the sensor '
+          'silently corrupts every frame in the build.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("It's covered — build"),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await build();
   }
 
   String? _darkDetail(CalibrationStatus s) {
@@ -180,6 +254,8 @@ class _Artifact extends StatelessWidget {
   final bool exists;
   final bool loaded;
   final String? detail;
+  // Live build activity from the WS stream (null before any build this session).
+  final CalibrationBuildActivity? activity;
   // The on/off value shown by the auto-load Switch — NOT whether the Switch is
   // interactive (that's governed by onToggle being null).
   final bool switchValue;
@@ -191,6 +267,7 @@ class _Artifact extends StatelessWidget {
     required this.exists,
     required this.loaded,
     required this.detail,
+    required this.activity,
     required this.switchValue,
     required this.onBuild,
     required this.onToggle,
@@ -199,6 +276,7 @@ class _Artifact extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final building = activity?.phase == CalibrationBuildPhase.building;
     final state = !exists
         ? 'Not built'
         : loaded
@@ -218,12 +296,27 @@ class _Artifact extends StatelessWidget {
         ),
         Text(state, style: theme.textTheme.bodySmall),
         if (detail != null) Text(detail!, style: theme.textTheme.labelSmall),
+        if (building) ...[
+          const SizedBox(height: 4),
+          // Indeterminate on purpose: the daemon's build is one blocking RPC
+          // with started/complete/failed events only — no percentage exists.
+          const LinearProgressIndicator(),
+          const SizedBox(height: 4),
+          Text('Building — keep the scope covered.', style: theme.textTheme.bodySmall),
+        ] else if (activity?.phase == CalibrationBuildPhase.failed)
+          Text(
+            'Build failed${activity?.error is String ? ': ${activity!.error}' : ''}',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+          ),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             onPressed: onBuild,
-            icon: const Icon(Icons.build, size: 16),
-            label: Text(exists ? 'Rebuild' : 'Build'),
+            icon: building
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.build, size: 16),
+            label: Text(building ? 'Building…' : (exists ? 'Rebuild' : 'Build')),
           ),
         ),
       ],
