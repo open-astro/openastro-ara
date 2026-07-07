@@ -207,4 +207,79 @@ void main() {
       expect(snap.events.last.message, 'issue 2', reason: 'oldest two evicted');
     });
   });
+
+  group('diagnostics.snapshot resync', () {
+    test('an empty snapshot heals an issue stuck open by a missed cleared', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected,
+          {'event_type': 'guider.lost', 'severity': 'red'}, seq: 1));
+      expect(acc.snapshot.level, StatusLevel.error);
+      // The cleared fired while the socket was down; the reconnect snapshot
+      // (sent on every WS accept) says nothing is open.
+      final snap = acc.apply(_ev(
+          DiagnosticsWsEvents.snapshot, {'open_issues': <dynamic>[]},
+          seq: 2))!;
+      expect(snap.level, StatusLevel.connected);
+      expect(snap.label, 'Diagnostics: nominal');
+    });
+
+    test('a snapshot replaces the roll-up wholesale (adds AND drops)', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected,
+          {'event_type': 'stale.type', 'severity': 'yellow'}, seq: 1));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.snapshot, {
+        'open_issues': [
+          {'event_type': 'disk.low', 'severity': 'yellow'},
+          {'event_type': 'guider.lost', 'severity': 'red'},
+        ],
+      }, seq: 2))!;
+      expect(snap.level, StatusLevel.error);
+      expect(snap.label, 'Diagnostics: 2 issues — critical');
+    });
+
+    test('an identical snapshot is a no-op (apply returns null — no churn)', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected,
+          {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
+      final result = acc.apply(_ev(DiagnosticsWsEvents.snapshot, {
+        'open_issues': [
+          {'event_type': 'disk.low', 'severity': 'yellow'},
+        ],
+      }, seq: 2));
+      expect(result, isNull, reason: 'roll-up unchanged — watchers must not churn');
+    });
+
+    test('a malformed snapshot (open_issues not a list) is ignored, not treated as all-clear', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected,
+          {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
+      expect(acc.apply(_ev(DiagnosticsWsEvents.snapshot, {'open_issues': 'oops'}, seq: 2)), isNull);
+      expect(acc.apply(_ev(DiagnosticsWsEvents.snapshot, <String, dynamic>{}, seq: 3)), isNull);
+      expect(acc.snapshot.level, StatusLevel.busy, reason: 'real open issue survives malformed resyncs');
+    });
+
+    test('snapshot entries without an event_type are skipped; the set is capped', () {
+      final acc = DiagnosticsAccumulator(maxEvents: 2);
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.snapshot, {
+        'open_issues': [
+          {'severity': 'red'}, // no event_type — skipped
+          {'event_type': 'a', 'severity': 'yellow'},
+          {'event_type': 'b', 'severity': 'yellow'},
+          {'event_type': 'c', 'severity': 'red'}, // over the cap — dropped
+        ],
+      }, seq: 1))!;
+      expect(snap.label, 'Diagnostics: 2 issues — warning');
+    });
+
+    test('the snapshot never touches the event log', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected,
+          {'event_type': 'disk.low', 'severity': 'yellow', 'description': 'low'}, seq: 1));
+      final snap = acc.apply(_ev(
+          DiagnosticsWsEvents.snapshot, {'open_issues': <dynamic>[]},
+          seq: 2))!;
+      expect(snap.events, hasLength(1), reason: 'resync is bookkeeping, not a happening');
+      expect(snap.events.first.message, 'low');
+    });
+  });
 }

@@ -339,7 +339,13 @@ but isn't registered yet) instead of the `null!` ctor args.
     missing-star-service frame fails loud + local instead of an opaque NRE. (Out of scope for the solve
     endpoint, which never calls those.)
 
-### §58.9 unattended meridian-flip safety layers (from §58.4 executor)
+### ✅ §58.9 unattended meridian-flip safety layers — DONE (all four layers shipped with the §58.5–§58.12 work;
+### marker added 2026-07-06 — this entry predated the implementation and never got its ✅)
+All four layers live in `MeridianFlipExecutor`: Layer 1 `PreFlipFlightCheck`, Layer 2 `FlipWithWatchdog`
+(stall/hard-timeout/pier-side assertions), Layer 3 hard re-center verification gate (±2° solve bound, 3 attempts
+with safety on), Layer 4 `SafeRest` (park-else-tracking-stop + guider stopped). Only the re-focus-after-flip step
+remains, gated on the §59 live focuser AF sweep (hardware). Original entry follows for the spec record.
+
 The §58.4 `MeridianFlipExecutor` (Server) ships the core recovery sequence — stop guiding → pass meridian →
 flip slew → recenter → resume guiding → settle → §58.5 side-of-pier check — faithfully ported from NINA's
 `MeridianFlipVM.DoMeridianFlip`. Its failure path is NINA's (restore tracking + resume guiding + halt the
@@ -693,14 +699,16 @@ helper (dedupes the status→DTO mapping). +7 tests. **The §63.6 guider calibra
 **e-4c remaining (deferred):** the client "Also build defect map" affordance + the build/toggle/status UI (gated on
 the same WS client + dark-library UI as e-4b-3).
 
-**WS slice 5 (#395) — diagnostics live updates: reconnect-replay gap (deferred, needs server-side work).** The
-client `DiagnosticsAccumulator` folds the live `diagnostics.*` stream but has no replay across a WS reconnect:
-`WsEventStream` auto-reconnects (the stream stays non-null, so the notifier's `build()` never re-runs), so any
-event the server emits while the socket is down is lost. The hazardous case is a missed `diagnostics.cleared` —
-the issue stays stuck in `_open` and the §51 pill reads amber/red indefinitely with no recovery short of a server
-switch. The fix is **server-side history-on-connect** (replay the open-diagnostics set on a new WS connection / on
-resume), then have the client reset its roll-up from that snapshot. There's an in-code `TODO` at
-`diagnostics_state.dart`'s notifier `build()`. Tracked here per #395 review.
+✅ **WS slice 5 (#395) — diagnostics reconnect-replay gap — DONE (2026-07-06).** The server now sends a
+per-connection `diagnostics.snapshot` envelope (the full open-issue set from `IDiagnosticsService.GetStateAsync`,
+per-issue fields spelled exactly like `issue_detected`; seq 0 — a statement of state, not a stream position) after
+EVERY WS accept, unconditionally: after a successful seq-resume the replay already caught the client up, so the
+(identical) snapshot folds as a no-op; after a failed resume (token beyond the 1000-event window, daemon restart)
+it is the resync that heals the stuck pill. Client `DiagnosticsAccumulator._applySnapshot` replaces the `_open`
+roll-up wholesale (same event_type-required + cap defences as `_applyIssue`; identical set → no watcher churn;
+malformed `open_issues` ignored rather than read as all-clear; the event LOG is deliberately untouched — a resync
+is bookkeeping, not a happening). `DiagnosticHealthWire.Token` is now the single severity-token source, total over
+the enum (`Unknown` → `"unknown"` instead of throwing away the emit).
 
 **Virtual-observatory bench (§42.2) — guider fault scenarios landed (bench-4, ✅).** `GuiderFakeIntegrationTest`
 now drives the real `GuiderService`/`PHD2Guider` through two device-fault paths against `FakeGuider`: a lost guide
