@@ -305,7 +305,9 @@ class _RunStateBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color),
       ),
-      child: Text(s.name,
+      // The single-word states read fine as their enum names; the §58.12
+      // multi-word state needs a human label ("pausedAwaitingUser" is not UI).
+      child: Text(s == SequenceRunState.pausedAwaitingUser ? 'needs attention' : s.name,
           style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }

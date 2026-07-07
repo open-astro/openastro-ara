@@ -194,6 +194,27 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
           value: s.unattendedEscalation,
           onChanged: n.setUnattendedEscalation,
         ),
+        SettingsSwitchRow(
+          label: 'Unattended shutdown after failure (§58.12)',
+          hint: 'If a run pauses awaiting your attention and nobody responds '
+              'within the wait window, the daemon parks the mount, warms the '
+              'cooler and disconnects the equipment. Any command — or simply '
+              'opening WILMA — cancels the countdown.',
+          value: s.unattendedShutdownEnabled,
+          onChanged: n.setUnattendedShutdownEnabled,
+        ),
+        EditableNumberRow(
+          label: 'Unattended shutdown wait (min)',
+          currentValue: s.unattendedShutdownWaitMinutes.toString(),
+          getCanonical: () => ref
+              .read(safetyPoliciesProvider)
+              .unattendedShutdownWaitMinutes
+              .toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setUnattendedShutdownWaitMinutes(v);
+          },
+        ),
         // §58.8 — first-flip announce status + manual re-arm. The daemon owns
         // the flag (set after the first announced flip, cleared automatically
         // on an optics change); the panel offers only the one-way re-arm, so
