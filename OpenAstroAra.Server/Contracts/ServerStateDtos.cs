@@ -96,3 +96,21 @@ public sealed record LogEntryDto(
     string Source,
     string Message,
     System.Text.Json.JsonElement? Properties);
+/// <summary>
+/// §35.3 — what the emergency stop actually did, rung by rung. Booleans are
+/// honest: false means the rung failed or the device wasn't available, not
+/// "skipped". <see cref="AlreadyInProgress"/> reports a second trigger that
+/// arrived while a stop was mid-flight (ignored — the first pass covers it).
+/// </summary>
+public sealed record EmergencyStopResultDto(
+    bool AlreadyInProgress,
+    int RunsAborted,
+    bool ExposureAborted,
+    bool GuidingStopped,
+    bool ParkRequested,
+    bool FlatPanelLightOff,
+    // Rungs that were ATTEMPTED and faulted (tokens: abort_runs,
+    // abort_exposure, stop_guiding, park, flat_panel_light_off). A device
+    // that isn't connected at all reads false above but is NOT listed here —
+    // a rig without a flat panel is not a failure.
+    System.Collections.Generic.IReadOnlyList<string> FailedRungs);

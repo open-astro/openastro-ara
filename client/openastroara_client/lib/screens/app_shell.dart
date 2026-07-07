@@ -8,6 +8,7 @@ import '../theme/ara_colors.dart';
 import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/connection_policy_listener.dart';
+import '../widgets/emergency_stop_button.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/ws_connection_indicator.dart';
@@ -234,6 +235,9 @@ class _BottomStatusBar extends StatelessWidget {
         children: [
           const SizedBox(width: 8),
           const WsConnectionIndicator(),
+          // §35.3 — the big red button lives on the always-visible status
+          // bar: reachable in one tap from any tab, exactly when panicking.
+          const EmergencyStopButton(),
           const Spacer(),
           // Image Library entry (§40). Full-screen route — captured frames
           // grouped by session per 12f.1's in-memory demo; real backend in

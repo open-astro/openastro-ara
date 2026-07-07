@@ -10,6 +10,8 @@ import 'package:openastroara/state/ws/client_session_state.dart';
 /// Scripted §27 claim/release double. Each [connectClient] call pops the next
 /// scripted outcome; a null script entry throws (network fault / older daemon).
 class _FakeServerApi implements ServerApi {
+  @override
+  Future<EmergencyStopResult> emergencyStop() => throw UnimplementedError();
   final List<SessionClaim?> script;
   final List<({String hostname, String? sessionId})> claims = [];
   final List<String> released = [];
@@ -194,6 +196,8 @@ void main() {
 /// A claim that blocks until the test completes [pending] — models the server
 /// holding the connect open while the current holder answers the modal.
 class _BlockingServerApi implements ServerApi {
+  @override
+  Future<EmergencyStopResult> emergencyStop() => throw UnimplementedError();
   final Completer<SessionClaim> pending = Completer<SessionClaim>();
   final List<String> released = [];
 
