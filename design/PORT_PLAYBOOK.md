@@ -54,7 +54,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - ✅ **§32** Network resilience (§60.9 WS resume + 30/60s heartbeat, #172-176).
 - 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates = v0.1.0.
 - 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); releases ship via apt.openastro.net (user decision 2026-07-07, reversing the earlier post-v0.0.1 deferral) — the repo publish pipeline (reprepro/aptly on tag push per §34.5) is still to build.
-- ✅ **§35** Safety policies (editable per-profile, #94).
+- ✅ **§35** Safety policies (editable per-profile, #94) + the §35.4 unsafe-reaction engine (`SafetyReactionService`: SafetyMonitor poll → on_unsafe policy pause/abort + stop-guiding + park + auto-resume-when-safe, 2026-07-07). §35.1's granular weather-threshold triggers (wind/humidity/dew via ObservingConditions) + the §35.3 emergency-stop endpoint remain follow-ups (PORT_TODO).
 - ✅ **§36** Sky imagery + Data Manager — real Data Manager (packages, downloads, catalog reads) + §36 planetarium native-webview (#611) + catalog overlay drawer/persistence/labels (#639/#640/#650) + §36.8 Tonight's Sky planner (#612-#660). Sharpless/Herschel overlays remain data-blocked.
 - ✅ **§37** Profile setup wizard (18-screen + round-trip persistence).
 - ✅ **§38** Sequence format + NINA import + real execution engine (#319-320).

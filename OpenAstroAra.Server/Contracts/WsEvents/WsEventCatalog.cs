@@ -139,6 +139,15 @@ public static class WsEventCatalog {
     public const string BackupRestoreProgress = "backup.restore_progress";
     public const string BackupRestoreComplete = "backup.restore_complete";
 
+    // §35.4 safety-reaction engine. safety.unsafe fires BEFORE the configured
+    // action executes (so the client can raise its alarm modal while the daemon
+    // reacts); safety.action_taken reports what the engine actually did (its
+    // payload's `action` is the executed policy token, or "auto_resume" for the
+    // §35 resume-when-safe path); safety.safe fires on the unsafe→safe transition.
+    public const string SafetyUnsafe = "safety.unsafe";
+    public const string SafetySafe = "safety.safe";
+    public const string SafetyActionTaken = "safety.action_taken";
+
     /// <summary>
     /// All registered event tokens. Iteration order is the order declared here.
     /// Used by the §17 contract-check to assert no runtime emit calls a token
@@ -184,7 +193,8 @@ public static class WsEventCatalog {
         NotificationAlarmStarted, NotificationAlarmStopped,
         BugReportPrepared, BugReportSharingModeSet,
         DataManagerDownloadProgress, DataManagerDownloadComplete, DataManagerDownloadFailed,
-        BackupZipCreated, BackupRestoreProgress, BackupRestoreComplete
+        BackupZipCreated, BackupRestoreProgress, BackupRestoreComplete,
+        SafetyUnsafe, SafetySafe, SafetyActionTaken
     };
 }
 

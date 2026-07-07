@@ -311,6 +311,67 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return aborted;
     }
 
+    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) {
+        // §35 safety pause — daemon-automated, so no NotifyUserActivity (an automated
+        // reaction must never masquerade as the user coming back per §58.12). Same
+        // gate-arm semantics as PauseAsync: the engine suspends at the next instruction
+        // boundary, the state flip + sequence.paused event fire in OnPauseEntered.
+        var paused = new System.Collections.Generic.List<Guid>();
+        foreach (var id in _runs.Keys) {
+            ct.ThrowIfCancellationRequested();
+            if (!_runs.TryGetValue(id, out var run)) {
+                continue;
+            }
+            // Only arm runs that are actually advancing. An already-Paused (or
+            // PausedAwaitingUser) run is excluded so the safety engine never
+            // "adopts" a pause the user (or a flip failure) owns — auto-resume
+            // must release only pauses this call created.
+            var state = run.State;
+            if (!IsAbortableRun(state) || state is SequenceRunState.Paused or SequenceRunState.PausedAwaitingUser) {
+                continue;
+            }
+            run.Gate.RequestPause();
+            paused.Add(id);
+        }
+        return Task.FromResult<IReadOnlyList<Guid>>(paused);
+    }
+
+    public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
+        // §35 safety auto-resume — daemon-automated (no NotifyUserActivity), and it
+        // deliberately does NOT clear PausedAwaitingUser: that state is a debt to the
+        // user (§58.12) that only an explicit command settles. Mirrors ResumeAsync's
+        // CAS-before-release ordering so the resumed event can't be starved.
+        var resumed = 0;
+        foreach (var id in ids) {
+            ct.ThrowIfCancellationRequested();
+            if (!_runs.TryGetValue(id, out var run)) {
+                continue;
+            }
+            if (run.State == SequenceRunState.PausedAwaitingUser) {
+                continue;
+            }
+            var released = false;
+            if (run.TryTransition(SequenceRunState.Paused, SequenceRunState.Running)) {
+                _ = EmitAsync("sequence.resumed", id, run);
+                WriteCheckpointIfOwner(run, id);
+                released = true;
+            } else if (run.State == SequenceRunState.Running) {
+                // Pause was requested but the run never reached a boundary — the
+                // disarm below genuinely un-pauses it, so it counts as released.
+                released = true;
+            }
+            // Always disarm — also cancels a pause that was requested but never
+            // reached a boundary; harmless on terminal runs (which don't count:
+            // the returned figure feeds the safety.action_taken runs_resumed
+            // payload and must not overstate — #731 review).
+            run.Gate.Resume();
+            if (released) {
+                resumed++;
+            }
+        }
+        return Task.FromResult(resumed);
+    }
+
     /// <summary>
     /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
     /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via
