@@ -118,7 +118,13 @@ public sealed record RestoreRequestDto(
     bool RestoreSequences,
     bool RestoreProfiles,
     bool RestoreFrameMetadata,
-    bool RestoreLogs);
+    bool RestoreLogs,
+    // §43-2b(b) — REQUIRED when BackupSourceUrl is a remote (absolute http/https)
+    // source: the expected SHA-256 (64 hex chars) of the archive, carried
+    // out-of-band exactly as the manifest-bypass note prescribed. The client
+    // knows it from the remote daemon's snapshot listing (BackupZipDto.Sha256).
+    // Ignored for local snapshots (their .meta.json manifest is the gate).
+    string? Sha256 = null);
 
 // ─── Profile share export / import (§70) ────────────────────────────────────
 

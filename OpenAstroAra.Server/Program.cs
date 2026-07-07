@@ -364,8 +364,18 @@ public partial class Program {
         // §43-1 backup — real disk-backed ZIP snapshots under {profileDir}/backups (replaces the placeholder).
         // Registered here (not at the §13.11 placeholder site) since it needs the resolved profileDir. The §43-2
         // restore worker + progress state machine extend this same service.
+        // §43-2b(b) — the remote-source fetcher. Redirects stay off (mirrors sky-data: the scheme guard checks
+        // only the initial URL); no client timeout — the download is bounded by the shutdown token + byte cap.
+        builder.Services.AddHttpClient(HttpBackupSourceFetcher.HttpClientName)
+            .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
+        builder.Services.AddSingleton<IBackupSourceFetcher, HttpBackupSourceFetcher>();
         builder.Services.AddSingleton<IBackupService>(sp =>
-            new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>()));
+            new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>(),
+                // Explicit: this factory lambda bypasses constructor activation, so optional params are passed
+                // by hand (the #711 CameraService lesson).
+                restorer: null,
+                remoteFetcher: sp.GetRequiredService<IBackupSourceFetcher>()));
 
         // §36/§25.5 Tonight's Sky — ranks the OpenNGC catalog by altitude (with visibility window,
         // transit, and integration hours) for the active profile's site; falls back to a starter list
