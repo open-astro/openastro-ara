@@ -308,6 +308,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Host_shutdown_awaits_an_in_flight_ladder() {
+            // r2 — a daemon stop landing mid-ladder must let the ladder finish
+            // (bounded by the host deadline) rather than killing the process
+            // mid-warm-up. Stall the ladder at the warm-up read, stop the host,
+            // and confirm StopAsync only completes once the ladder does.
+            var gate = new TaskCompletionSource<CameraDto?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).Returns(gate.Task);
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(
+                () => guider.Invocations.Count > 0,
+                "the ladder is mid-flight (guider step reached)");
+
+            var stop = ((Microsoft.Extensions.Hosting.IHostedService)sut).StopAsync(CancellationToken.None);
+            await Task.Delay(150);
+            Assert.That(stop.IsCompleted, Is.False, "stop waits for the in-flight ladder");
+
+            gate.SetResult(Camera(coolerOn: false, temperature: 15)); // release
+            await stop.WaitAsync(TimeSpan.FromSeconds(5));
+            lock (published) Assert.That(published, Has.Count.EqualTo(1), "the ladder ran to completion");
+        }
+
+        [Test]
         public async Task A_dead_device_mid_ladder_does_not_stop_the_rest() {
             focuser.Setup(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("focuser driver crashed"));

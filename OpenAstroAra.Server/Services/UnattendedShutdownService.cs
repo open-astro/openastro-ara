@@ -167,6 +167,13 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             // First failure already started the clock, or its ladder is still
             // putting the rig to bed — either way the user is equally absent
             // and the (idempotent) ladder covers the shared equipment once.
+            // DELIBERATE: a run that re-enters awaiting-user WHILE the ladder
+            // executes (a resume racing the ladder, the flip re-failing fast
+            // against half-disconnected equipment) is dropped without a fresh
+            // countdown — the rig is already being put to bed by the running
+            // ladder, and that failure's own Critical notification still
+            // reaches the user; re-arming here would re-run a mostly-no-op
+            // ladder (and post a fresh summary) every wait-window forever.
             if (_pending is not null || _executing) return;
             _pending = new CancellationTokenSource();
             _sequenceId = sequenceId;
@@ -183,12 +190,14 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     /// </summary>
     public void NotifyUserActivity(string source) {
         CancellationTokenSource? toCancel;
+        Guid cancelledSequenceId;
         lock (_lock) {
             toCancel = _pending;
             _pending = null;
+            cancelledSequenceId = _sequenceId;
         }
         if (toCancel is null) return;
-        LogCountdownCancelled(source, _sequenceId);
+        LogCountdownCancelled(source, cancelledSequenceId);
         try {
             toCancel.Cancel();
         } finally {
@@ -412,8 +421,29 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     Task IHostedService.StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     Task IHostedService.StopAsync(CancellationToken cancellationToken) {
+        // Cancel a still-pending countdown...
         NotifyUserActivity("daemon-shutdown");
-        return Task.CompletedTask;
+        Task? worker;
+        lock (_lock) { worker = _worker; }
+        // ...and let an in-flight LADDER finish inside the host's shutdown
+        // window (mirroring SequencerService's worker await): killing the
+        // process mid-warm-up strands the TEC cold — the very failure mode the
+        // cooler-before-camera ordering exists to avoid. The host deadline
+        // still bounds the wait; a ladder that outlives it dies with the
+        // process, same as a power cut.
+        return worker is null ? Task.CompletedTask : AwaitWorkerAsync(worker, cancellationToken);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Shutdown must never throw; the worker is fire-and-forget by design.")]
+    private static async Task AwaitWorkerAsync(Task worker, CancellationToken ct) {
+        try {
+            await worker.WaitAsync(ct).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            // Host shutdown deadline hit — nothing more graceful is possible.
+        } catch (Exception) {
+            // CountdownAsync catches everything itself; belt-and-braces only.
+        }
     }
 
     public void Dispose() => NotifyUserActivity("dispose");
