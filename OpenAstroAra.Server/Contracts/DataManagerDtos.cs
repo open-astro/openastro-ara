@@ -29,7 +29,11 @@ public sealed record DataPackageDto(
     string Version,
     bool IsInstalled,
     DateTimeOffset? InstalledUtc,
-    Uri? SourceUrl);
+    Uri? SourceUrl,
+    // §37.6 — curator flag: the wizard's sky-data screen pre-checks recommended
+    // (not-yet-installed) packages so a fresh profile starts with the useful set
+    // ticked. Optional default so pre-slice serialized shapes still deserialize.
+    bool Recommended = false);
 
 /// <summary>POST /api/v1/data-manager/download body.</summary>
 /// <param name="PackageId">Catalog id of the package to download.</param>

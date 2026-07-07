@@ -166,5 +166,35 @@ void main() {
       await tester.pump();
       expect(ids, isNot(contains('a')));
     });
+
+    testWidgets('recommended packages pre-check into an empty selection, with a badge', (tester) async {
+      const rec = DataPackage(
+          id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);
+      final container = await pump(tester, build: () async => [rec, pkgA, installed]);
+      await tester.pumpAndSettle();
+      expect(find.text('Recommended'), findsOneWidget);
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.skyDataDownloadIds, {'r'},
+          reason: 'the recommended (not-installed) package seeds the empty selection');
+    });
+
+    testWidgets('an existing selection is never clobbered by the recommended seed', (tester) async {
+      const rec = DataPackage(
+          id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);
+      final container = ProviderContainer(overrides: [
+        dataManagerPackagesProvider.overrideWith(
+            () => _FakePackages(() async => [rec, pkgA])),
+      ]);
+      addTearDown(container.dispose);
+      // The user picked exactly pkgA on a previous visit (or cleared and re-picked).
+      container.read(wizardControllerProvider).draft.skyDataDownloadIds.add('a');
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ScreenSkyData())),
+      ));
+      await tester.pumpAndSettle();
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds, {'a'},
+          reason: 'a non-empty selection is the user\'s explicit intent');
+    });
   });
 }

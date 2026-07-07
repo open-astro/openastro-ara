@@ -23,6 +23,8 @@ class DataPackage {
   final int sizeBytes;
   final String version;
   final bool isInstalled;
+  // §37.6 — curator flag: the wizard pre-checks recommended packages.
+  final bool recommended;
   final DateTime? installedUtc;
   final String? sourceUrl;
 
@@ -34,6 +36,7 @@ class DataPackage {
     this.sizeBytes = 0,
     this.version = '',
     this.isInstalled = false,
+    this.recommended = false,
     this.installedUtc,
     this.sourceUrl,
   });
@@ -47,6 +50,7 @@ class DataPackage {
       sizeBytes: _int(json['size_bytes']) ?? 0,
       version: _str(json['version']) ?? '',
       isInstalled: _bool(json['is_installed']),
+      recommended: _bool(json['recommended']),
       installedUtc: _dt(json['installed_utc']),
       sourceUrl: _str(json['source_url']),
     );
@@ -62,12 +66,13 @@ class DataPackage {
       other.sizeBytes == sizeBytes &&
       other.version == version &&
       other.isInstalled == isInstalled &&
+      other.recommended == recommended &&
       other.installedUtc == installedUtc &&
       other.sourceUrl == sourceUrl;
 
   @override
   int get hashCode => Object.hash(
-      id, name, description, category, sizeBytes, version, isInstalled, installedUtc, sourceUrl);
+      id, name, description, category, sizeBytes, version, isInstalled, installedUtc, sourceUrl, recommended);
 }
 
 /// Where a tracked download is in its lifecycle (from the WS event subtype).
