@@ -54,6 +54,14 @@ class LibraryFrameItem {
   final int? starCount;
   final int rating;
 
+  /// §44 — when the backup stream confirmed this frame stored on [syncTarget];
+  /// null = not mirrored yet (or no stream configured). Sync is PER-DESKTOP
+  /// (a takeover re-queues everything for the new target), so callers must
+  /// compare [syncTarget] against this machine's hostname — see
+  /// [frameSyncedForThisDesktop].
+  final DateTime? syncedAt;
+  final String? syncTarget;
+
   const LibraryFrameItem({
     required this.id,
     required this.frameType,
@@ -63,6 +71,8 @@ class LibraryFrameItem {
     required this.hfr,
     required this.starCount,
     required this.rating,
+    this.syncedAt,
+    this.syncTarget,
   });
 
   factory LibraryFrameItem.fromJson(Map<String, dynamic> json) {
@@ -75,6 +85,8 @@ class LibraryFrameItem {
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       hfr: (json['hfr'] as num?)?.toDouble(),
       starCount: (json['star_count'] as num?)?.toInt(),
+      syncedAt: DateTime.tryParse(json['synced_at'] as String? ?? ''),
+      syncTarget: json['sync_target'] as String?,
       rating: (json['rating'] as num?)?.toInt() ?? 0,
     );
   }
@@ -121,4 +133,22 @@ class LibraryFrameDetail {
           .toList(growable: false),
     );
   }
+}
+
+/// §44 tri-state badge input: null = no backup stream configured (no badge —
+/// absence must not read as "unprotected"); true only when the frame was
+/// confirmed stored on THIS desktop. Sync is per-target: a frame mirrored to
+/// another desktop is still pending here (the daemon re-queues it for this
+/// hostname), so a bare synced_at must never render as protected. Hostname
+/// comparison is case-insensitive to match the daemon's idempotent-reclaim
+/// semantics.
+bool? frameSyncedForThisDesktop(
+  LibraryFrameItem frame, {
+  required bool backupConfigured,
+  required String hostname,
+}) {
+  if (!backupConfigured) return null;
+  return frame.syncedAt != null &&
+      frame.syncTarget != null &&
+      frame.syncTarget!.toLowerCase() == hostname.toLowerCase();
 }

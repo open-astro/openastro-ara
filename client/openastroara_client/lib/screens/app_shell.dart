@@ -6,6 +6,7 @@ import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/auto_flats_prompt_listener.dart';
+import '../widgets/backup_stream_chip.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/connection_policy_listener.dart';
 import '../widgets/emergency_stop_button.dart';
@@ -238,6 +239,8 @@ class _BottomStatusBar extends StatelessWidget {
           // §35.3 — the big red button lives on the always-visible status
           // bar: reachable in one tap from any tab, exactly when panicking.
           const EmergencyStopButton(),
+          // §44 — the backup stream's live pulse (hidden while disabled).
+          const BackupStreamChip(),
           const Spacer(),
           // Image Library entry (§40). Full-screen route — captured frames
           // grouped by session per 12f.1's in-memory demo; real backend in

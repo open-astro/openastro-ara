@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../state/library/library_selection.dart';
 import '../../state/library/library_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../state/backup/backup_stream_state.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
 import '../../widgets/library/load_more_button.dart';
@@ -545,6 +548,8 @@ class _FrameStrip extends ConsumerWidget {
         }
         final selection = ref.watch(librarySelectionProvider);
         final inSelectionMode = selection.isNotEmpty;
+        final backupConfigured = ref.watch(
+            backupStreamProvider.select((s) => s.enabled));
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -557,6 +562,12 @@ class _FrameStrip extends ConsumerWidget {
                   imageUrl: api?.thumbnailUrl(f.id),
                   selected: selection.contains(f.id),
                   selectionMode: inSelectionMode,
+                  // §44 badge only when a backup stream is configured, and
+                  // "protected" only when mirrored to THIS desktop — sync is
+                  // per-target, another machine's mirror doesn't cover us.
+                  synced: frameSyncedForThisDesktop(f,
+                      backupConfigured: backupConfigured,
+                      hostname: Platform.localHostname),
                   onTap: () {
                     if (inSelectionMode) {
                       ref.read(librarySelectionProvider.notifier).toggle(f.id);

@@ -16,6 +16,12 @@ class FrameThumbnail extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool selected;
   final bool selectionMode;
+
+  /// §44 tri-state backup badge: true = mirrored to the backup target,
+  /// false = stream active but this frame not stored yet, null = no backup
+  /// stream configured (no badge — don't imply frames are unprotected on
+  /// rigs that never enabled the feature).
+  final bool? synced;
   const FrameThumbnail({
     super.key,
     required this.filter,
@@ -26,6 +32,7 @@ class FrameThumbnail extends StatelessWidget {
     this.onLongPress,
     this.selected = false,
     this.selectionMode = false,
+    this.synced,
   });
 
   @override
@@ -104,6 +111,21 @@ class FrameThumbnail extends StatelessWidget {
                         ? const Icon(Icons.check,
                             size: 14, color: Colors.white)
                         : null,
+                  ),
+                ),
+              if (synced != null)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Tooltip(
+                    message: synced!
+                        ? 'Backed up to your desktop'
+                        : 'Backup pending',
+                    child: Icon(
+                      synced! ? Icons.cloud_done : Icons.cloud_queue,
+                      size: 12,
+                      color: synced! ? AraColors.accentConnected : AraColors.textDisabled,
+                    ),
                   ),
                 ),
               // Defensive clamp — malformed payload could push rating
