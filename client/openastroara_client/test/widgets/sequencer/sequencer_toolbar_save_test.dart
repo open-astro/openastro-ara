@@ -31,6 +31,10 @@ SequenceDetail _detail(String id) => SequenceDetail(
     );
 
 class _SaveClient implements SequenceClient {
+  @override
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      throw UnimplementedError();
   Map<String, dynamic>? savedBody;
   int saveCalls = 0;
   Map<String, dynamic>? validatedBody;

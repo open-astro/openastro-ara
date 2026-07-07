@@ -33,6 +33,21 @@ const Map<String, Help> helpRegistry = {
   // companion `equipment.alpacabridge.version` entry from the playbook is MOOT:
   // the §68.1 version gate was removed (Alpaca has no version endpoint by
   // design — user decision 2026-06-21), so there is no version to explain.
+  'session.calibration.capture_default': Help(
+    key: 'session.calibration.capture_default',
+    title: 'End-of-night calibration capture',
+    body: 'When a sequence completes, Ara can generate matching flats from that night\'s own '
+        'session — one flat set per filter, replaying the night\'s focus position, gain, and '
+        'offset, so the flats actually match the lights they calibrate. "Ask at each sequence '
+        'start" shows a prompt when you start a run (answering with "remember my choice" '
+        'updates this setting); "Panel flats at end" starts the flats automatically when the '
+        'run completes and sends a notification to light your panel; "Sky flats at twilight" '
+        'generates the flats sequence ready to run — start it yourself at twilight; "Never" '
+        'stays quiet. Aborted or stopped runs never trigger flats — only a run that completes '
+        'on its own.',
+    relatedSettings: [],
+    keywords: ['calibration', 'flats', 'auto', 'panel', 'sky', 'twilight', 'prompt', 'matching'],
+  ),
   'session.storage.backup_stream': Help(
     key: 'session.storage.backup_stream',
     title: 'Real-time frame backup',

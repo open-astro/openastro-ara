@@ -99,6 +99,14 @@ abstract interface class SequenceClient {
   Future<String> abort(String id);
   Future<String> stop(String id);
 
+  /// §48 auto-flats decision: answer the daemon's "capture calibration
+  /// tonight?" prompt for a running sequence. [choice] is a wire token
+  /// (`panel_at_end` | `sky_at_twilight` | `later`); [remember] persists it
+  /// as the profile's calibration capture default ("later" persists as
+  /// "never" per §48.2).
+  Future<String> decideAutoFlats(String id,
+      {required String choice, required bool remember});
+
   /// §70.5 share-export: fetch the sequence's shareable manifest
   /// (`POST /{id}/share-export`) so the client can write it to a `.araseq.json`
   /// file. Throws on transport failure / unknown id (the daemon answers 404 → a
@@ -378,6 +386,12 @@ class SequenceApi implements SequenceClient {
         'dry_run': false,
         'continue_on_recoverable_errors': false,
       });
+
+  @override
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      _lifecycle(id, 'auto-flats-decision',
+          body: {'choice': choice, 'remember': remember});
 
   @override
   Future<String> pause(String id) => _lifecycle(id, 'pause');

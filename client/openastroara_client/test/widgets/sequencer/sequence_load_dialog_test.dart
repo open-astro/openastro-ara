@@ -23,6 +23,10 @@ class _FakeListNotifier extends SequenceListNotifier {
 /// Minimal SequenceClient so sequenceApiProvider can be "connected" in toolbar
 /// tests without a live server.
 class _FakeClient implements SequenceClient {
+  @override
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      throw UnimplementedError();
   final deleted = <String>[];
   final aborted = <String>[];
   bool throwOnDelete = false;

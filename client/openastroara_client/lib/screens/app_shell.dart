@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/connection_policy_listener.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
@@ -88,8 +89,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     return Scaffold(
       // §27 — daemon-initiated connection-policy modals (takeover request /
       // session transferred) listen here, at the always-alive shell level.
+      // §48 — the "capture calibration tonight?" prompt nests inside for the
+      // same reason: it must fire no matter which tab is showing.
       body: ConnectionPolicyListener(
-        child: SafeArea(
+        child: AutoFlatsPromptListener(
+          child: SafeArea(
           child: CallbackShortcuts(
             // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
             // is reachable regardless of host platform.
@@ -155,6 +159,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ],
               ),
             ),
+          ),
           ),
         ),
       ),

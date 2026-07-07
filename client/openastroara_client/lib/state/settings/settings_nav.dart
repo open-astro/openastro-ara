@@ -151,6 +151,11 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
         label: 'Notifications',
         groupId: 'session',
       ),
+      SettingsPanelInfo(
+        id: 'session.calibration',
+        label: 'Calibration',
+        groupId: 'session',
+      ),
     ],
   ),
   SettingsGroup(
