@@ -327,7 +327,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
         var (error, downloadTime) = await _pullVerifyStore(client, entry);
+        var attempts = 1;
         if (error != null) {
+          attempts = 2;
           (error, downloadTime) = await _pullVerifyStore(client, entry); // one retry
         }
         if (error != null) {
@@ -357,7 +359,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // the pacing comparison.
         final elapsed = downloadTime ?? Duration.zero;
         _recordThroughput(entry.sizeBytes, elapsed);
-        final floor = paceFloor(entry.sizeBytes, state.maxMbps);
+        // A retried pull moved (up to) the frame's bytes twice — a checksum
+        // mismatch discards a FULL transfer — so the floor charges both
+        // attempts. Counting a partial failure as full over-paces slightly,
+        // which is the safe side of a ceiling.
+        final floor = paceFloor(entry.sizeBytes * attempts, state.maxMbps);
         if (floor > elapsed) {
           // §44.4 inter-frame pacing: the frame moved at link speed; wait
           // until the session average is back under the cap before the
