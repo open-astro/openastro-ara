@@ -177,21 +177,30 @@ public sealed record HfrTimeSeriesPointDto(
     Guid FrameId);
 
 /// <summary>Backup stream subscription handle per §44.</summary>
-public sealed record BackupSubscriptionDto(
-    Guid SubscriptionId,
-    DateTimeOffset CreatedUtc,
-    string AckTopic);
+public sealed record BackupStreamStatusDto(
+    bool Enabled,
+    string? ActiveTarget,
+    int PendingCount,
+    int SyncedCount,
+    long QueueSizeBytes);
 
-/// <summary>One frame surfaced through the backup stream (§44).</summary>
-public sealed record BackupFrameDto(
-    Guid FrameId,
-    Guid SessionId,
-    DateTimeOffset CapturedUtc,
-    string FilePath,
-    long FileSizeBytes,
-    string Sha256);
+/// <summary>POST /backup-stream/claim body — the desktop WILMA identifies itself by hostname (§44.3 single-target).</summary>
+public sealed record BackupStreamClaimRequestDto(string Hostname);
+
+/// <summary>Claim outcome. A 409 (another target active) carries the holder's hostname in the problem detail instead.</summary>
+public sealed record BackupStreamClaimResultDto(
+    Guid SlotId,
+    string ActiveTarget);
+
+/// <summary>One pending frame in the §44.5 queue (oldest first). Sha256 is computed lazily and cached on first serve.</summary>
+public sealed record BackupStreamQueueEntryDto(
+    Guid Id,
+    string? Sha256,
+    long SizeBytes,
+    DateTimeOffset CapturedAt,
+    Guid SessionId);
 
 /// <summary>POST /api/v1/backup/stream/claim body (§44). Claims a frame for an active subscription.</summary>
-public sealed record BackupClaimRequestDto(
-    Guid SubscriptionId,
-    Guid FrameId);
+public sealed record BackupStreamAckRequestDto(
+    Guid FrameId,
+    bool Sha256Verified);

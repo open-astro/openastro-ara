@@ -111,8 +111,23 @@ public interface ISessionService {
 
 /// <summary>Backup stream per §44. Out-of-band frame fan-out to long-running backup processes.</summary>
 public interface IBackupStreamService {
-    Task<BackupSubscriptionDto> SubscribeAsync(CancellationToken ct);
-    Task<BackupFrameDto?> ClaimAsync(BackupClaimRequestDto request, CancellationToken ct);
+    /// <summary>§44.5 — enabled/active-target/pending/synced/queue-bytes rollup.</summary>
+    Task<BackupStreamStatusDto> GetStatusAsync(CancellationToken ct);
+
+    /// <summary>§44.3 single-target claim. The same hostname re-claims its own slot
+    /// idempotently (crash recovery); a different hostname gets null (→ 409 with the
+    /// holder's name) unless the holder has been silent past the stale window.</summary>
+    Task<BackupStreamClaimResultDto?> ClaimAsync(BackupStreamClaimRequestDto request, CancellationToken ct);
+
+    /// <summary>Voluntary release. Only the holding hostname releases; anyone else is a no-op. Returns whether a slot was released.</summary>
+    Task<bool> ReleaseAsync(BackupStreamClaimRequestDto request, CancellationToken ct);
+
+    /// <summary>§44.5 pending queue, oldest first: catalogued frames not yet acked by the active target.
+    /// Serving an entry lazily computes + caches its sha256 when missing. Null when the caller doesn't hold the slot.</summary>
+    Task<IReadOnlyList<BackupStreamQueueEntryDto>?> GetQueueAsync(string hostname, int limit, CancellationToken ct);
+
+    /// <summary>§44.5 ack — marks the frame synced to the active target. False for an unknown frame or a non-holder.</summary>
+    Task<bool> AckAsync(string hostname, BackupStreamAckRequestDto request, CancellationToken ct);
 }
 
 /// <summary>Diagnostics monitor (§51). Worker emits §60.9 WS events on state changes.</summary>

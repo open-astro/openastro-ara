@@ -144,6 +144,14 @@ keeps the newest N (default 20), and restores atomically — including **from an
 LAN** by URL, verified by checksum before anything touches live config. Take a backup before big
 reconfigurations; restore is a two-click undo.
 
+**Real-time frame mirroring (§44)** — the daemon can stream every newly-captured FITS to one
+desktop as the night runs: the desktop claims the stream slot, pulls each frame, verifies its
+SHA-256, and acknowledges. If the imaging drive dies overnight, everything already pulled is safe
+on the desktop — the worst case is losing the single in-flight exposure. The daemon side is live
+(one desktop at a time; a crashed desktop resumes where it left off); the WILMA toggle + progress
+UI arrive in an upcoming update, and until then any HTTP client can drive the
+`/api/v1/server/backup-stream/*` endpoints.
+
 ---
 
 ### Cheat sheet

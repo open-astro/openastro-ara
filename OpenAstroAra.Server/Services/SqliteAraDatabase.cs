@@ -115,6 +115,10 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // earlier build is brought forward with an idempotent ADD COLUMN. (v0.0.1
         // ships no migrations runner — this is the sanctioned additive-column path.)
         await AddColumnIfMissingAsync(conn, "frames", "focuser_position", "INTEGER", ct);
+        // §44.6 backup stream: sync bookkeeping + the lazily-cached content hash.
+        await AddColumnIfMissingAsync(conn, "frames", "sync_target", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "synced_at", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "sha256", "TEXT", ct);
 
         // §28 widening pass (pre-§40): sub-second calibration exposures need
         // exposure_seconds REAL (they rounded up to 1s as INTEGER), and gain must
@@ -137,8 +141,8 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);", ct);
         await ExecAsync(conn, """
             INSERT INTO schema_version (version)
-            SELECT 3 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
-            UPDATE schema_version SET version = 3 WHERE version < 3;
+            SELECT 4 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+            UPDATE schema_version SET version = 4 WHERE version < 4;
             """, ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
