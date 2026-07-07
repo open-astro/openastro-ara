@@ -44,12 +44,14 @@ public sealed partial class BackupStreamService : IBackupStreamService {
 
     private readonly object _slot = new();
     private string? _activeHostname;
-    private Guid _slotId;
     private DateTimeOffset _lastActivityUtc;
 
     /// <summary>How long a claim survives without queue/ack activity before another
     /// hostname may take over (a crashed WILMA must not wedge the slot forever).</summary>
     internal TimeSpan StaleClaimWindow { get; set; } = TimeSpan.FromMinutes(10);
+    /// <summary>Cap on lazy sha256 computations per queue page (#734 — a historical
+    /// backfill must not pin one request hashing hundreds of large files).</summary>
+    internal int MaxHashesPerPage { get; set; } = 25;
 
     public BackupStreamService(IAraDatabase db, ILogger<BackupStreamService>? logger = null) {
         _db = db ?? throw new ArgumentNullException(nameof(db));
@@ -78,16 +80,19 @@ public sealed partial class BackupStreamService : IBackupStreamService {
         }
         lock (_slot) {
             var now = DateTimeOffset.UtcNow;
-            if (_activeHostname is null
-                || string.Equals(_activeHostname, hostname, StringComparison.OrdinalIgnoreCase)
-                || now - _lastActivityUtc > StaleClaimWindow) {
-                var takeover = _activeHostname is not null
-                    && !string.Equals(_activeHostname, hostname, StringComparison.OrdinalIgnoreCase);
-                _activeHostname = hostname;
-                _slotId = Guid.NewGuid();
+            var sameHolder = _activeHostname is not null
+                && string.Equals(_activeHostname, hostname, StringComparison.OrdinalIgnoreCase);
+            if (_activeHostname is null || sameHolder || now - _lastActivityUtc > StaleClaimWindow) {
+                // Idempotent reclaim keeps the ORIGINAL stored casing: the SQL
+                // sync_target comparisons are BINARY, so adopting a re-claim's
+                // different casing would silently re-queue already-synced frames
+                // (#734 review). Only a genuinely new holder replaces the string.
+                if (!sameHolder) {
+                    _activeHostname = hostname;
+                }
                 _lastActivityUtc = now;
-                LogClaimed(hostname, takeover);
-                return Task.FromResult<BackupStreamClaimResultDto?>(new BackupStreamClaimResultDto(_slotId, hostname));
+                LogClaimed(_activeHostname!, takeover: !sameHolder);
+                return Task.FromResult<BackupStreamClaimResultDto?>(new BackupStreamClaimResultDto(_activeHostname!));
             }
             LogClaimRefused(hostname, _activeHostname);
             return Task.FromResult<BackupStreamClaimResultDto?>(null);
@@ -113,12 +118,11 @@ public sealed partial class BackupStreamService : IBackupStreamService {
     }
 
     public async Task<IReadOnlyList<BackupStreamQueueEntryDto>?> GetQueueAsync(string hostname, int limit, CancellationToken ct) {
-        if (!TouchHolder(hostname)) {
+        var active = TouchAndGetHolder(hostname);
+        if (active is null) {
             return null;
         }
         limit = Math.Clamp(limit, 1, 500);
-        string active;
-        lock (_slot) { active = _activeHostname!; }
 
         var entries = new List<(Guid Id, string? Sha, long Size, string Captured, Guid Session, string Path)>();
         await using (var conn = _db.OpenConnection()) {
@@ -148,9 +152,19 @@ public sealed partial class BackupStreamService : IBackupStreamService {
         }
 
         var result = new List<BackupStreamQueueEntryDto>(entries.Count);
+        var hashed = 0;
         foreach (var e in entries) {
             ct.ThrowIfCancellationRequested();
-            var sha = e.Sha ?? await ComputeAndCacheShaAsync(e.Id, e.Path, ct).ConfigureAwait(false);
+            var sha = e.Sha;
+            // Bound the per-page hash work: a first-time backfill over a big
+            // historical catalog must not pin one request hashing hundreds of
+            // multi-hundred-MB files (#734 review). Entries past the budget are
+            // served with a null sha; the client skips them and the next poll
+            // hashes the next batch.
+            if (sha is null && hashed < MaxHashesPerPage) {
+                sha = await ComputeAndCacheShaAsync(e.Id, e.Path, ct).ConfigureAwait(false);
+                hashed++;
+            }
             result.Add(new BackupStreamQueueEntryDto(
                 Id: e.Id,
                 Sha256: sha,
@@ -158,21 +172,23 @@ public sealed partial class BackupStreamService : IBackupStreamService {
                 CapturedAt: DateTimeOffset.Parse(e.Captured, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
                 SessionId: e.Session));
         }
+        // Hashing can take real time; re-stamp so a slow page never counts as
+        // holder silence toward the stale-takeover window.
+        TouchAndGetHolder(active);
         return result;
     }
 
-    public async Task<bool> AckAsync(string hostname, BackupStreamAckRequestDto request, CancellationToken ct) {
+    public async Task<BackupStreamAckResult> AckAsync(string hostname, BackupStreamAckRequestDto request, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        if (!TouchHolder(hostname)) {
-            return false;
+        var active = TouchAndGetHolder(hostname);
+        if (active is null) {
+            return BackupStreamAckResult.NotHolder;
         }
-        string active;
-        lock (_slot) { active = _activeHostname!; }
         if (!request.Sha256Verified) {
             // §44.9 — a mismatch means WILMA re-requests; an unverified ack is a
             // client bug, refused so the frame stays queued.
             LogUnverifiedAckRefused(request.FrameId, active);
-            return false;
+            return BackupStreamAckResult.UnverifiedRefused;
         }
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
@@ -188,19 +204,22 @@ public sealed partial class BackupStreamService : IBackupStreamService {
         if (rows > 0) {
             LogAcked(request.FrameId, active);
         }
-        return rows > 0;
+        return rows > 0 ? BackupStreamAckResult.Acked : BackupStreamAckResult.UnknownFrame;
     }
 
-    // Verifies the caller holds the slot and stamps the activity clock (the stale
-    // window keys off queue/ack traffic — a live puller is never displaced).
-    private bool TouchHolder(string hostname) {
+    // Verifies the caller holds the slot, stamps the activity clock (the stale
+    // window keys off queue/ack traffic — a live puller is never displaced), and
+    // returns the holder's STORED hostname in one lock acquisition, so callers
+    // never re-read _activeHostname in a second critical section that a
+    // concurrent Release could null out between the two (#734 review).
+    private string? TouchAndGetHolder(string hostname) {
         lock (_slot) {
             if (_activeHostname is null
                 || !string.Equals(_activeHostname, hostname?.Trim(), StringComparison.OrdinalIgnoreCase)) {
-                return false;
+                return null;
             }
             _lastActivityUtc = DateTimeOffset.UtcNow;
-            return true;
+            return _activeHostname;
         }
     }
 

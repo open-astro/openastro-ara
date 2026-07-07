@@ -126,9 +126,14 @@ public interface IBackupStreamService {
     /// Serving an entry lazily computes + caches its sha256 when missing. Null when the caller doesn't hold the slot.</summary>
     Task<IReadOnlyList<BackupStreamQueueEntryDto>?> GetQueueAsync(string hostname, int limit, CancellationToken ct);
 
-    /// <summary>§44.5 ack — marks the frame synced to the active target. False for an unknown frame or a non-holder.</summary>
-    Task<bool> AckAsync(string hostname, BackupStreamAckRequestDto request, CancellationToken ct);
+    /// <summary>§44.5 ack — marks the frame synced to the active target. The result
+    /// distinguishes the failure causes so the endpoint can map them to distinct
+    /// statuses (409 lost-slot / 422 unverified / 404 unknown frame).</summary>
+    Task<BackupStreamAckResult> AckAsync(string hostname, BackupStreamAckRequestDto request, CancellationToken ct);
 }
+
+/// <summary>Outcome of a §44.5 ack.</summary>
+public enum BackupStreamAckResult { Acked, NotHolder, UnverifiedRefused, UnknownFrame }
 
 /// <summary>Diagnostics monitor (§51). Worker emits §60.9 WS events on state changes.</summary>
 public interface IDiagnosticsService {

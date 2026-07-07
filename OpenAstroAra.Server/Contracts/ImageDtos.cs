@@ -187,9 +187,12 @@ public sealed record BackupStreamStatusDto(
 /// <summary>POST /backup-stream/claim body — the desktop WILMA identifies itself by hostname (§44.3 single-target).</summary>
 public sealed record BackupStreamClaimRequestDto(string Hostname);
 
-/// <summary>Claim outcome. A 409 (another target active) carries the holder's hostname in the problem detail instead.</summary>
+/// <summary>Claim outcome — the stored active-target hostname (original casing preserved
+/// on idempotent re-claims). No slot token: per the §67 trusted-LAN posture the surface is
+/// hostname-identified like the rest of the API, and a capability-looking Guid that nothing
+/// enforced would be worse than none (#734 review). A 409 (another target active) carries
+/// the holder's hostname in the problem detail instead.</summary>
 public sealed record BackupStreamClaimResultDto(
-    Guid SlotId,
     string ActiveTarget);
 
 /// <summary>One pending frame in the §44.5 queue (oldest first). Sha256 is computed lazily and cached on first serve.</summary>
@@ -200,7 +203,7 @@ public sealed record BackupStreamQueueEntryDto(
     DateTimeOffset CapturedAt,
     Guid SessionId);
 
-/// <summary>POST /api/v1/backup/stream/claim body (§44). Claims a frame for an active subscription.</summary>
+/// <summary>POST /backup-stream/ack body — §44.5: WILMA confirms it stored + sha-verified the frame.</summary>
 public sealed record BackupStreamAckRequestDto(
     Guid FrameId,
     bool Sha256Verified);

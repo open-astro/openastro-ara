@@ -327,10 +327,21 @@ public static class ImageEndpoints {
 
         backup.MapPost("/ack",
                 async (string hostname, [FromBody] BackupStreamAckRequestDto request, IBackupStreamService svc, CancellationToken ct) =>
-                    await svc.AckAsync(hostname, request, ct) ? Results.NoContent() : Results.NotFound())
+                    await svc.AckAsync(hostname, request, ct) switch {
+                        BackupStreamAckResult.Acked => Results.NoContent(),
+                        BackupStreamAckResult.NotHolder => Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                            title: "caller does not hold the backup-stream slot",
+                            type: "https://openastro.net/problems/backup-stream-not-holder"),
+                        BackupStreamAckResult.UnverifiedRefused => Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
+                            title: "unverified ack refused — re-download and verify the sha256, then ack",
+                            type: "https://openastro.net/problems/backup-stream-unverified-ack"),
+                        _ => Results.NotFound(),
+                    })
               .Accepts<BackupStreamAckRequestDto>("application/json")
               .Produces(StatusCodes.Status204NoContent)
               .ProducesProblem(StatusCodes.Status404NotFound)
+              .ProducesProblem(StatusCodes.Status409Conflict)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
               .WithName("AckBackupStreamFrame");
 
         return app;

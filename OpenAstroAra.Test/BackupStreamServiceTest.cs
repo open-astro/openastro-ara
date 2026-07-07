@@ -116,7 +116,7 @@ namespace OpenAstroAra.Test {
             Assert.That(queue[0].Sha256, Is.EqualTo(older.Sha), "sha computed lazily on first serve");
             Assert.That(queue[1].Sha256, Is.EqualTo(newer.Sha));
 
-            Assert.That(await _svc.AckAsync("wilma-desk", new BackupStreamAckRequestDto(older.Id, Sha256Verified: true), CancellationToken.None), Is.True);
+            Assert.That(await _svc.AckAsync("wilma-desk", new BackupStreamAckRequestDto(older.Id, Sha256Verified: true), CancellationToken.None), Is.EqualTo(BackupStreamAckResult.Acked));
             var after = await _svc.GetQueueAsync("wilma-desk", 10, CancellationToken.None);
             Assert.That(after!, Has.Count.EqualTo(1));
             Assert.That(after[0].Id, Is.EqualTo(newer.Id));
@@ -134,7 +134,7 @@ namespace OpenAstroAra.Test {
             var frame = await InsertFrameAsync("f", DateTimeOffset.UtcNow);
             await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
 
-            Assert.That(await _svc.AckAsync("wilma-desk", new BackupStreamAckRequestDto(frame.Id, Sha256Verified: false), CancellationToken.None), Is.False);
+            Assert.That(await _svc.AckAsync("wilma-desk", new BackupStreamAckRequestDto(frame.Id, Sha256Verified: false), CancellationToken.None), Is.EqualTo(BackupStreamAckResult.UnverifiedRefused));
             var queue = await _svc.GetQueueAsync("wilma-desk", 10, CancellationToken.None);
             Assert.That(queue!, Has.Count.EqualTo(1));
         }
@@ -145,7 +145,7 @@ namespace OpenAstroAra.Test {
             await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
 
             Assert.That(await _svc.GetQueueAsync("wilma-laptop", 10, CancellationToken.None), Is.Null);
-            Assert.That(await _svc.AckAsync("wilma-laptop", new BackupStreamAckRequestDto(frame.Id, Sha256Verified: true), CancellationToken.None), Is.False);
+            Assert.That(await _svc.AckAsync("wilma-laptop", new BackupStreamAckRequestDto(frame.Id, Sha256Verified: true), CancellationToken.None), Is.EqualTo(BackupStreamAckResult.NotHolder));
         }
 
         [Test]
@@ -159,6 +159,46 @@ namespace OpenAstroAra.Test {
             await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-laptop"), CancellationToken.None);
             var queue = await _svc.GetQueueAsync("wilma-laptop", 10, CancellationToken.None);
             Assert.That(queue!, Has.Count.EqualTo(1), "each target mirrors the full catalog (§44.1)");
+        }
+
+        [Test]
+        public async Task Reclaim_with_different_casing_does_not_requeue_synced_frames() {
+            // Regression (#734): the idempotent reclaim must keep the STORED
+            // hostname casing — sync_target comparisons are BINARY in SQLite, so
+            // adopting "WILMA-DESK" after acking as "wilma-desk" would silently
+            // re-transfer every synced frame.
+            var frame = await InsertFrameAsync("f", DateTimeOffset.UtcNow);
+            await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+            await _svc.AckAsync("wilma-desk", new BackupStreamAckRequestDto(frame.Id, Sha256Verified: true), CancellationToken.None);
+
+            var reclaim = await _svc.ClaimAsync(new BackupStreamClaimRequestDto("WILMA-DESK"), CancellationToken.None);
+            Assert.That(reclaim!.ActiveTarget, Is.EqualTo("wilma-desk"), "the stored casing survives an idempotent reclaim");
+            Assert.That((await _svc.GetQueueAsync("WILMA-DESK", 10, CancellationToken.None))!, Is.Empty,
+                "an already-synced frame must not re-queue after a re-cased reclaim");
+        }
+
+        [Test]
+        public async Task Ack_of_an_unknown_frame_reports_UnknownFrame() {
+            await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+            Assert.That(await _svc.AckAsync("wilma-desk", new BackupStreamAckRequestDto(Guid.NewGuid(), Sha256Verified: true), CancellationToken.None),
+                Is.EqualTo(BackupStreamAckResult.UnknownFrame));
+        }
+
+        [Test]
+        public async Task Hash_backfill_is_bounded_per_page_and_continues_next_poll() {
+            var a = await InsertFrameAsync("a", DateTimeOffset.UtcNow.AddMinutes(-3));
+            var b = await InsertFrameAsync("b", DateTimeOffset.UtcNow.AddMinutes(-2));
+            var c = await InsertFrameAsync("c", DateTimeOffset.UtcNow.AddMinutes(-1));
+            _svc.MaxHashesPerPage = 2;
+            await _svc.ClaimAsync(new BackupStreamClaimRequestDto("wilma-desk"), CancellationToken.None);
+
+            var first = await _svc.GetQueueAsync("wilma-desk", 10, CancellationToken.None);
+            Assert.That(first![0].Sha256, Is.EqualTo(a.Sha));
+            Assert.That(first[1].Sha256, Is.EqualTo(b.Sha));
+            Assert.That(first[2].Sha256, Is.Null, "the third hash waits for the next page (budget=2)");
+
+            var second = await _svc.GetQueueAsync("wilma-desk", 10, CancellationToken.None);
+            Assert.That(second![2].Sha256, Is.EqualTo(c.Sha), "cached hashes don't count against the budget, so the third gets hashed");
         }
 
         [Test]
