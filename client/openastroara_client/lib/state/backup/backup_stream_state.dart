@@ -418,9 +418,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   /// disk trouble, transport error); the caller decides whether to retry.
   Future<(String?, Duration?)> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
     try {
-      final downloadStarted = DateTime.now();
+      // Stopwatch, not DateTime.now(): Windows' wall clock ticks ~1-16 ms,
+      // coarse enough to read a fast transfer as zero elapsed.
+      final stopwatch = Stopwatch()..start();
       final bytes = await client.downloadFrame(entry.id);
-      final downloadTime = DateTime.now().difference(downloadStarted);
+      stopwatch.stop();
+      final downloadTime = stopwatch.elapsed;
       final digest = sha256.convert(bytes).toString();
       if (!_digestMatches(digest, entry.sha256!)) {
         debugPrint('backup-stream sha mismatch for ${entry.id} — retrying');
