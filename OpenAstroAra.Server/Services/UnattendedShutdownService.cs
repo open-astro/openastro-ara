@@ -37,12 +37,15 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// What counts as "the user came back" (per the playbook): dismissing or
 /// marking-read a notification, any explicit sequence lifecycle command, an
-/// equipment-control POST, claiming the §27 control slot, or a NEW WebSocket
-/// connection. What does NOT: background REST polling (GETs), pre-existing
-/// quiet sockets, or the daemon's own automated actions (the §29 disk monitor's
-/// abort calls <c>AbortActiveRunsAsync</c> directly, which never touches this
-/// service) — those hooks live at the HTTP layer precisely so internal calls
-/// don't masquerade as attention.
+/// equipment-control POST, a FRESH §27 control-slot claim (no prior session
+/// id), or a WebSocket from a client without an existing session. What does
+/// NOT: background REST polling (GETs), pre-existing quiet sockets, WILMA's
+/// own automatic reconnect/re-claim after a network blip (an existing session
+/// id marks those — flaky Wi-Fi must not defeat this safety net all night),
+/// or the daemon's own automated actions (the §29 disk monitor's abort calls
+/// <c>AbortActiveRunsAsync</c> directly, which never touches this service) —
+/// the hooks live at the HTTP layer precisely so internal calls don't
+/// masquerade as attention.
 ///
 /// The shutdown ladder (each step best-effort, logged, never throws):
 ///   1. stop the guider (corrections on a mis-aimed scope drift it further)
@@ -175,10 +178,10 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             // reaches the user; re-arming here would re-run a mostly-no-op
             // ladder (and post a fresh summary) every wait-window forever.
             if (_pending is not null || _executing) return;
-            _pending = new CancellationTokenSource();
+            var cts = new CancellationTokenSource();
+            _pending = cts;
             _sequenceId = sequenceId;
-            var token = _pending.Token;
-            _worker = Task.Run(() => CountdownAsync(sequenceId, runId, wait, token), CancellationToken.None);
+            _worker = Task.Run(() => CountdownAsync(sequenceId, runId, wait, cts), CancellationToken.None);
         }
         LogCountdownStarted(sequenceId, runId, wait);
     }
@@ -207,9 +210,9 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown.")]
-    private async Task CountdownAsync(Guid sequenceId, Guid runId, TimeSpan wait, CancellationToken token) {
+    private async Task CountdownAsync(Guid sequenceId, Guid runId, TimeSpan wait, CancellationTokenSource ownCts) {
         try {
-            await Task.Delay(wait, token).ConfigureAwait(false);
+            await Task.Delay(wait, ownCts.Token).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             return; // the user came back
         }
@@ -218,8 +221,17 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         // later awaiting-user entry can NOT start a second countdown while this
         // ladder (up to ~30 min of cooler warm-up) is still running against the
         // shared rig; a fresh countdown becomes possible again once it ends.
+        // Identity check closes the elapse-vs-activity TOCTOU: if a concurrent
+        // NotifyUserActivity disarmed the slot in the instant AFTER the delay
+        // completed but BEFORE this lock, the user came back — honor it (their
+        // Cancel() was a no-op on an already-completed delay, so this check is
+        // the only thing that stops the ladder for state-preserving activity
+        // like a notification dismiss).
         lock (_lock) {
-            _pending?.Dispose();
+            if (!ReferenceEquals(_pending, ownCts)) {
+                return; // activity won the race — no ladder
+            }
+            _pending.Dispose();
             _pending = null;
             _executing = true;
         }

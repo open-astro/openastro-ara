@@ -137,11 +137,6 @@ public static partial class WebSocketEndpoints {
         var sessionHeader = http.Request.Headers["X-Ara-Session"].ToString();
 
         using var socket = await http.WebSockets.AcceptWebSocketAsync();
-        // §58.12 — a FRESH WebSocket connection is "the user opened WILMA":
-        // cancel any unattended-shutdown countdown. Pre-existing quiet sockets
-        // never re-trigger this (the hook sits on the accept, not on traffic).
-        http.RequestServices.GetService<UnattendedShutdownService>()
-            ?.NotifyUserActivity("ws.connect");
         using var conn = new WsClientConnection(socket);
         if (Guid.TryParse(sessionHeader, out var sessionId)) {
             if (sessions.BindSocket(sessionId, conn)) {
@@ -149,6 +144,17 @@ public static partial class WebSocketEndpoints {
             } else {
                 LogSessionBindRejected(logger);
             }
+        }
+        // §58.12 — a WebSocket from a client WITHOUT an existing §27 session is
+        // "someone opened WILMA": cancel any unattended-shutdown countdown. A
+        // socket that re-attaches an existing session (boundSessionId set) is
+        // WILMA's own automatic reconnect after a network blip — NOT human
+        // attention; counting it would let flaky Wi-Fi silently defeat the
+        // §58.12 safety net all night. Pre-existing quiet sockets never
+        // re-trigger this either (the hook sits on the accept, not on traffic).
+        if (boundSessionId is null) {
+            http.RequestServices.GetService<UnattendedShutdownService>()
+                ?.NotifyUserActivity("ws.connect");
         }
         // Linked CTS lets the passive receive loop cancel the send loop
         // when the client sends a Close frame, while the server-side

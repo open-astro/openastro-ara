@@ -40,10 +40,16 @@ public static class ConnectionEndpoints {
         server.MapPost("/connect",
                 async ([FromBody] ClientConnectRequestDto body, ClientSessionService sessions,
                         HttpContext http, CancellationToken ct) => {
-                    // §58.12 — claiming (or re-claiming) the §27 control slot is a
-                    // human opening WILMA: cancel any unattended-shutdown countdown.
-                    http.RequestServices.GetService<UnattendedShutdownService>()
-                        ?.NotifyUserActivity("server.connect");
+                    // §58.12 — a FRESH claim of the §27 control slot (no prior
+                    // session id) is a human opening WILMA: cancel any
+                    // unattended-shutdown countdown. A re-claim presenting an
+                    // existing session id is WILMA's own silent recovery after a
+                    // network blip — automated, not attention (flaky Wi-Fi must
+                    // not defeat the §58.12 safety net all night).
+                    if (body?.SessionId is null) {
+                        http.RequestServices.GetService<UnattendedShutdownService>()
+                            ?.NotifyUserActivity("server.connect");
+                    }
                     var hostname = body?.Hostname?.Trim();
                     if (string.IsNullOrEmpty(hostname)) {
                         return Results.Problem(
