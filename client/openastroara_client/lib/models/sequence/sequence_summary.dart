@@ -13,24 +13,30 @@ int? _intOrNull(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
 DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
 /// §28.12 sequence lifecycle state machine — mirrors the daemon's
-/// `SequenceRunState` enum, serialized as a snake_case string on the wire.
+/// `SequenceRunState` enum, serialized as a lowercase string on the wire.
 enum SequenceRunState {
   idle,
   starting,
   running,
   paused,
+
+  /// §58.12 — the engine paused itself after an urgent failure (a §58.9
+  /// meridian-flip abort with the mount in safe rest) and needs the user to
+  /// resume, abort, or stop. Same controls as [paused]; louder presentation.
+  pausedAwaitingUser,
   aborting,
   stopped,
   completed,
   failed;
 
-  /// Parse the wire string (snake_case == lowercase here, all single words);
+  /// Parse the wire string (the daemon lower-cases the whole enum name, so a
+  /// multi-word state arrives with no separators: `pausedawaitinguser`);
   /// returns null for null/unknown so an unrecognised state degrades to "no
   /// badge" rather than throwing.
   static SequenceRunState? fromWire(dynamic v) {
     if (v is! String) return null;
     for (final s in SequenceRunState.values) {
-      if (s.name == v) return s;
+      if (s.name.toLowerCase() == v) return s;
     }
     return null;
   }
@@ -49,9 +55,16 @@ enum SequenceRunState {
         SequenceRunState.starting ||
         SequenceRunState.running ||
         SequenceRunState.paused ||
+        SequenceRunState.pausedAwaitingUser ||
         SequenceRunState.aborting =>
           true,
       };
+
+  /// True in either paused flavor — the states the Run button relabels to
+  /// Resume for, and from which `/resume` releases the engine.
+  bool get isAnyPaused =>
+      this == SequenceRunState.paused ||
+      this == SequenceRunState.pausedAwaitingUser;
 }
 
 /// One page of the sequence list — the daemon's `CursorPage<SequenceListItemDto>`.
