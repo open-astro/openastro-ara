@@ -289,7 +289,12 @@ class _RunStateBadge extends StatelessWidget {
     final color = switch (s) {
       SequenceRunState.running || SequenceRunState.starting => AraColors.accentBusy,
       SequenceRunState.paused => AraColors.accentInfo,
-      SequenceRunState.failed || SequenceRunState.aborting => AraColors.accentError,
+      // §58.12 awaiting-user reads as urgent (the rig needs a human), not as a
+      // leisurely operator pause — error red, even though the run is resumable.
+      SequenceRunState.pausedAwaitingUser ||
+      SequenceRunState.failed ||
+      SequenceRunState.aborting =>
+        AraColors.accentError,
       SequenceRunState.stopped || SequenceRunState.completed => AraColors.textSecondary,
       SequenceRunState.idle => AraColors.textSecondary, // unreachable (early-returned above)
     };

@@ -57,7 +57,9 @@ class SequencerToolbar extends ConsumerWidget {
     final canValidate = connected && editorLoaded && !busy;
     final isActive = runState?.isActive ?? false;
     final isRunning = runState == SequenceRunState.running;
-    final isPaused = runState == SequenceRunState.paused;
+    // Both paused flavors: an awaiting-user suspension (§58.12, a failed flip
+    // with the mount in safe rest) resumes through the same button and command.
+    final isPaused = runState?.isAnyPaused ?? false;
     final isAborting = runState == SequenceRunState.aborting;
     // Run = start when no run is active (including re-running a finished one);
     // the same button relabels to Resume while paused. Pause only while
@@ -397,6 +399,9 @@ String _runStateLabel(SequenceRunState s) => switch (s) {
       SequenceRunState.starting => 'Starting',
       SequenceRunState.running => 'Running',
       SequenceRunState.paused => 'Paused',
+      // §58.12 — the run stopped itself after an urgent failure (e.g. a failed
+      // meridian flip, mount in safe rest) and won't continue until resumed.
+      SequenceRunState.pausedAwaitingUser => 'Paused — needs your attention',
       SequenceRunState.aborting => 'Aborting',
       SequenceRunState.stopped => 'Stopped',
       SequenceRunState.completed => 'Completed',

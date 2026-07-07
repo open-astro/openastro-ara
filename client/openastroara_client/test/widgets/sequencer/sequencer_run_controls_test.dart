@@ -159,6 +159,21 @@ void main() {
       expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
+    testWidgets(
+        'pausedAwaitingUser → Resume enabled, needs-attention status, Pause disabled',
+        (tester) async {
+      // §58.12 — the engine paused ITSELF after an urgent failure (a failed
+      // meridian flip, mount in safe rest). Same controls as an operator
+      // pause — Resume releases the same gate — but the status line says the
+      // rig needs a human, not that someone chose to pause.
+      await pump(tester, run: _info(SequenceRunState.pausedAwaitingUser));
+      expect(find.text('Resume'), findsOneWidget);
+      expect(btn(tester, 'Resume').onPressed, isNotNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
+      expect(btn(tester, 'Abort').onPressed, isNotNull);
+      expect(find.textContaining('needs your attention'), findsOneWidget);
+    });
+
     testWidgets('starting → Run + Pause disabled, Abort enabled', (tester) async {
       await pump(tester, run: _info(SequenceRunState.starting));
       expect(btn(tester, 'Run').onPressed, isNull);
