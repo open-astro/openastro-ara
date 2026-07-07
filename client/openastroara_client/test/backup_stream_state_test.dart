@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/backup_stream.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/backup_stream_api.dart';
+import 'package:openastroara/services/backup_stream_prefs_service.dart';
 import 'package:openastroara/state/backup/backup_stream_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
@@ -77,6 +78,7 @@ class _FakeClient implements BackupStreamClient {
 
 void main() {
   late Directory tempDir;
+  late Directory prefsDir;
   late _FakeClient fake;
   late ProviderContainer container;
 
@@ -85,6 +87,9 @@ void main() {
         // No real socket in tests — the controller's frame.complete nudge is a
         // convenience over the poll loop, which these tests drive directly.
         wsEventStreamProvider.overrideWith((ref) => null),
+        // Prefs land in a per-test temp dir, never the real app-support dir.
+        backupStreamPrefsProvider.overrideWithValue(
+            BackupStreamPrefsService(supportDir: () async => prefsDir)),
       ]);
 
   BackupStreamController controller() {
@@ -98,6 +103,7 @@ void main() {
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('oara-bstream-client');
+    prefsDir = await Directory.systemTemp.createTemp('oara-bstream-prefs');
     fake = _FakeClient();
     container = buildContainer();
     // The active server derives from an ASYNC saved-servers load — settle it
@@ -109,10 +115,12 @@ void main() {
 
   tearDown(() async {
     container.dispose();
-    try {
-      await tempDir.delete(recursive: true);
-    } on FileSystemException {
-      // best-effort temp cleanup
+    for (final dir in [tempDir, prefsDir]) {
+      try {
+        await dir.delete(recursive: true);
+      } on FileSystemException {
+        // best-effort temp cleanup
+      }
     }
   });
 
@@ -144,7 +152,7 @@ void main() {
     expect(File('${stored.path}.tmp').existsSync(), isFalse, reason: 'temp file renamed away');
   });
 
-  test('a corrupted download retries once then skips without acking', () async {
+  test('a corrupted download retries once then surfaces the problem without acking', () async {
     final c = controller();
     fake.addFrame('frame-bad', 'GOOD-BYTES');
     fake.corruptor = (_) => Uint8List.fromList('TAMPERED'.codeUnits);
@@ -153,7 +161,96 @@ void main() {
     await settle();
 
     expect(fake.acked, isEmpty, reason: 'a sha mismatch must never ack');
-    expect(container.read(backupStreamProvider).syncedThisSession, 0);
+    final state = container.read(backupStreamProvider);
+    expect(state.syncedThisSession, 0);
+    expect(state.problem, contains('checksum'),
+        reason: 'a persistently failing frame must be visible, not silently retried');
+  });
+
+  test('an unwritable backup folder surfaces the problem instead of looping silently', () async {
+    final c = controller();
+    // A regular FILE where the root dir should be — dir.create() fails.
+    final blocker = File('${tempDir.path}${Platform.pathSeparator}blocker');
+    await blocker.writeAsString('x');
+    c.defaultRootResolver = () async => blocker.path;
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+
+    await c.setEnabled(true);
+    await settle();
+
+    final state = container.read(backupStreamProvider);
+    expect(fake.acked, isEmpty);
+    expect(state.problem, isNotNull, reason: 'disk trouble must reach the panel');
+  });
+
+  test('a claim denied at enable time retries on the next tick without a manual off/on', () async {
+    final c = controller();
+    fake.grantClaim = false;
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+
+    await c.setEnabled(true);
+    await settle();
+    var state = container.read(backupStreamProvider);
+    expect(state.enabled, isTrue);
+    expect(state.active, isFalse);
+    expect(state.problem, contains('other-desk'));
+
+    fake.grantClaim = true;
+    await c.tickNow();
+    await settle();
+
+    state = container.read(backupStreamProvider);
+    expect(state.active, isTrue, reason: 'the freed slot is picked up by the loop itself');
+    expect(fake.acked, contains('frame-1'));
+  });
+
+  test('a stale exposure-in-flight flag self-heals past the watchdog', () async {
+    final c = controller();
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+    await c.setEnabled(true);
+    await settle();
+
+    fake.addFrame('frame-2', 'FITS-DATA-2');
+    c.markExposureStarted(); // fresh — poll must hold off
+    await c.tickNow();
+    expect(fake.acked, isNot(contains('frame-2')),
+        reason: 'an in-flight exposure pauses pulls');
+
+    // Age the flag past the 15-minute watchdog: a missed completion event
+    // must not stall the stream until app restart.
+    c.markExposureStarted(DateTime.now().subtract(const Duration(minutes: 16)));
+    await c.tickNow();
+    await settle();
+    expect(fake.acked, contains('frame-2'));
+  });
+
+  test('the toggle and folder persist and a persisted-on stream resumes after restart', () async {
+    final c = controller();
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+    await c.setEnabled(true);
+    await settle();
+
+    // "Restart": a fresh container over the same prefs dir.
+    container.dispose();
+    fake = _FakeClient();
+    fake.addFrame('frame-2', 'FITS-DATA-2');
+    container = buildContainer();
+    await container.read(savedServersProvider.future);
+    final c2 = controller();
+    // The async prefs restore lands before the first tick.
+    for (var i = 0; i < 40 && !container.read(backupStreamProvider).enabled; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+
+    var state = container.read(backupStreamProvider);
+    expect(state.enabled, isTrue, reason: 'the toggle survives a restart');
+    expect(state.localRoot, tempDir.path, reason: 'the folder survives a restart');
+
+    await c2.tickNow(); // resume rides the first loop beat
+    await settle();
+    state = container.read(backupStreamProvider);
+    expect(state.active, isTrue);
+    expect(fake.acked, contains('frame-2'));
   });
 
   test('entries without a sha are skipped until the daemon hashes them', () async {

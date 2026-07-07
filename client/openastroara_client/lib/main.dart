@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
+import 'state/backup/backup_stream_state.dart';
 import 'state/saved_server_state.dart';
 import 'theme/ara_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
@@ -42,6 +43,11 @@ class _RootRouter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Materialize the §44 backup-stream controller at the root so a
+    // persisted-enabled stream resumes at launch without the user having to
+    // open Settings → Storage first (listen, not watch — per-frame sync
+    // counters must not rebuild the whole app).
+    ref.listen(backupStreamProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     return saved.when(
       data: (servers) =>

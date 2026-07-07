@@ -254,7 +254,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
                     'being captured when it failed.',
                 onChanged: (v) => n.setEnabled(v),
               ),
-              if (stream.enabled) ...[
+              if (stream.enabled)
                 EditableTextRow(
                   label: 'Backup folder',
                   helpKey: 'session.storage.backup_stream_folder',
@@ -262,6 +262,10 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
                   getCanonical: () => ref.read(backupStreamProvider).localRoot,
                   parse: n.setLocalRoot,
                 ),
+              // The problem line renders even when disabled — an auto-disable
+              // (another desktop took the slot) must explain itself, not just
+              // silently flip the toggle off.
+              if (stream.enabled || stream.problem != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Text(
@@ -279,7 +283,6 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
                     ),
                   ),
                 ),
-              ],
             ],
           );
         }),

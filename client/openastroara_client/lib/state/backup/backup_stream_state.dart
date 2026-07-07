@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../models/backup_stream.dart';
 import '../../models/server.dart';
 import '../../services/backup_stream_api.dart';
+import '../../services/backup_stream_prefs_service.dart';
 import '../saved_server_state.dart';
 import '../ws/ws_providers.dart';
 
@@ -25,8 +26,9 @@ class BackupStreamState {
   final int syncedThisSession;
   final int syncedBytesThisSession;
 
-  /// Human-readable why-not when [enabled] but not [active] (slot held
-  /// elsewhere, disk trouble, transport error) — null when healthy.
+  /// Human-readable why-not when the stream isn't healthy (slot held
+  /// elsewhere, disk trouble, transport error) — null when healthy. Survives
+  /// an auto-disable so the panel can explain why the toggle switched off.
   final String? problem;
 
   const BackupStreamState({
@@ -60,20 +62,36 @@ class BackupStreamState {
       );
 }
 
+/// Device-local persistence for the toggle + folder (overridable in tests).
+final backupStreamPrefsProvider =
+    Provider<BackupStreamPrefsService>((ref) => BackupStreamPrefsService());
+
 /// The §44 desktop puller: claim the daemon's stream slot, poll the pending
 /// queue (nudged by `frame.complete`), download each frame, verify its
 /// SHA-256, write it under `<localRoot>/<server-host>/<sessionId>/`, and ack.
 /// Pulls pause while an exposure is in flight when the daemon emits the
-/// `camera.exposure_*` events (§44.4 capture-aware backoff-lite); otherwise
-/// the fixed poll interval stands. A lost slot re-claims once (our own
-/// hostname re-claims idempotently server-side); a second loss disables the
-/// stream and surfaces the holder.
+/// `camera.exposure_*` events (§44.4 capture-aware backoff-lite); a watchdog
+/// clears a stale in-flight flag if the completion event was missed. A lost
+/// slot re-claims once (our own hostname re-claims idempotently server-side);
+/// a second loss disables the stream and surfaces the holder. When enabled
+/// but not yet active (no server, slot held elsewhere, claim error), every
+/// timer tick retries the claim — no manual off/on needed once the obstacle
+/// clears. The toggle + folder persist across app restarts; a persisted-on
+/// stream resumes on its first tick after launch.
 class BackupStreamController extends Notifier<BackupStreamState> {
   Timer? _pollTimer;
   Timer? _wsDebounce;
   bool _polling = false;
+  bool _claiming = false;
   bool _reclaimedOnce = false;
+  bool _userTouched = false;
   bool _exposureInFlight = false;
+  DateTime? _exposureSince;
+
+  /// If neither `camera.exposure_complete` nor `_failed` arrives within this
+  /// window (WS reconnect gap, app backgrounded), assume the event was
+  /// missed and resume pulling rather than stalling until restart.
+  static const _exposureWatchdog = Duration(minutes: 15);
 
   // ─── test seams ───
   BackupStreamClient Function(AraServer server)? clientFactory;
@@ -94,15 +112,39 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         case 'frame.complete':
           if (!state.active) return;
           _wsDebounce?.cancel();
-          _wsDebounce = Timer(const Duration(seconds: 2), _pollOnce);
+          _wsDebounce = Timer(const Duration(seconds: 2), _tick);
         case 'camera.exposure_started':
-          _exposureInFlight = true;
+          markExposureStarted();
         case 'camera.exposure_complete':
         case 'camera.exposure_failed':
           _exposureInFlight = false;
       }
     });
+    unawaited(_restore());
     return const BackupStreamState();
+  }
+
+  Future<void> _restore() async {
+    final saved = await ref.read(backupStreamPrefsProvider).load();
+    // A user toggle that raced ahead of this async load wins.
+    if (_userTouched) return;
+    if (saved.root.isEmpty && !saved.enabled) return;
+    state = state.copyWith(
+      localRoot: saved.root.isEmpty ? null : saved.root,
+      enabled: saved.enabled,
+    );
+    if (saved.enabled) {
+      // Resume rides the first timer tick instead of claiming immediately —
+      // at launch the saved-servers load and WS connection are still coming
+      // up, and _tick retries the claim every interval anyway.
+      _startLoop();
+    }
+  }
+
+  void _persist() {
+    unawaited(ref
+        .read(backupStreamPrefsProvider)
+        .save(enabled: state.enabled, root: state.localRoot));
   }
 
   String get _hostname => (hostnameResolver ?? () => Platform.localHostname)();
@@ -120,10 +162,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
 
   /// Settings toggle entry point.
   Future<void> setEnabled(bool enabled) async {
+    _userTouched = true;
     if (!enabled) {
       final client = _resolveClient();
       _stopLoop();
       state = state.copyWith(enabled: false, active: false, clearProblem: true);
+      _persist();
       if (client != null) {
         try {
           await client.release(_hostname);
@@ -139,12 +183,16 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       root = await (defaultRootResolver ?? _defaultRoot)();
     }
     state = state.copyWith(enabled: true, localRoot: root, clearProblem: true);
-    await _claimAndStart();
+    _persist();
+    _startLoop();
+    await _tick();
   }
 
   /// Settings folder field entry point.
   void setLocalRoot(String root) {
+    _userTouched = true;
     state = state.copyWith(localRoot: root.trim());
+    _persist();
   }
 
   static Future<String> _defaultRoot() async {
@@ -152,13 +200,37 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     return '${docs.path}${Platform.pathSeparator}OpenAstroAra${Platform.pathSeparator}Backups';
   }
 
-  Future<void> _claimAndStart() async {
-    final client = _resolveClient();
-    if (client == null) {
-      state = state.copyWith(active: false, problem: 'Connect to a server first.');
-      return;
+  void _startLoop() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(pollInterval, (_) => _tick());
+  }
+
+  /// One loop beat: claim if we don't hold the slot yet, then poll. Public
+  /// (visibleForTesting) so tests can drive beats without real timers.
+  @visibleForTesting
+  Future<void> tickNow() => _tick();
+
+  Future<void> _tick() async {
+    if (!state.enabled) return;
+    if (!state.active) {
+      await _claimOnce();
+      if (!state.active) return;
     }
+    await _pollOnce();
+  }
+
+  /// One claim attempt. On failure the stream stays enabled with a visible
+  /// problem — the next tick retries, so a slot freeing up or a server
+  /// connecting later is picked up without a manual off/on.
+  Future<void> _claimOnce() async {
+    if (_claiming) return;
+    _claiming = true;
     try {
+      final client = _resolveClient();
+      if (client == null) {
+        state = state.copyWith(active: false, problem: 'Connect to a server first.');
+        return;
+      }
       final granted = await client.claim(_hostname);
       if (!granted) {
         String? holder;
@@ -167,7 +239,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         } catch (_) {}
         state = state.copyWith(
             active: false,
-            problem: 'Another desktop${holder == null ? '' : ' ($holder)'} is already streaming from this server.');
+            problem:
+                'Another desktop${holder == null ? '' : ' ($holder)'} is already streaming from this server.');
         return;
       }
       // NOTE: _reclaimedOnce is deliberately NOT reset here — only a
@@ -175,19 +248,36 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // (resetting on claim alone would let a claim-then-lose flap reclaim
       // forever). _pollOnce clears it at the end of a clean pass.
       state = state.copyWith(active: true, clearProblem: true);
-      _pollTimer?.cancel();
-      _pollTimer = Timer.periodic(pollInterval, (_) => _pollOnce());
-      unawaited(_pollOnce());
     } catch (e) {
       state = state.copyWith(active: false, problem: 'Could not start the backup stream: $e');
+    } finally {
+      _claiming = false;
     }
+  }
+
+  /// Marks an exposure in flight (WS `camera.exposure_started`); [at] is a
+  /// test seam for aging the flag past the watchdog.
+  @visibleForTesting
+  void markExposureStarted([DateTime? at]) {
+    _exposureInFlight = true;
+    _exposureSince = at ?? DateTime.now();
+  }
+
+  bool get _exposureBlocking {
+    if (!_exposureInFlight) return false;
+    final since = _exposureSince;
+    if (since != null && DateTime.now().difference(since) > _exposureWatchdog) {
+      _exposureInFlight = false;
+      return false;
+    }
+    return true;
   }
 
   Future<void> _pollOnce() async {
     if (!state.enabled || !state.active || _polling) return;
     // §44.4 capture-aware backoff-lite: never compete with an in-flight
     // exposure for the daemon's USB/IO; the timer retries after it completes.
-    if (_exposureInFlight) return;
+    if (_exposureBlocking) return;
     final client = _resolveClient();
     if (client == null) return;
     _polling = true;
@@ -197,13 +287,21 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       state = state.copyWith(pendingCount: entries.length, clearProblem: true);
       for (final entry in entries) {
         if (!state.enabled || !state.active) return;
-        if (_exposureInFlight) return;
+        if (_exposureBlocking) return;
         // Null sha = the daemon hasn't hashed it yet (per-page budget) —
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
-        final ok = await _pullVerifyStore(client, entry) ||
-            await _pullVerifyStore(client, entry); // one retry on sha mismatch/IO
-        if (!ok) continue;
+        var error = await _pullVerifyStore(client, entry);
+        if (error != null) {
+          error = await _pullVerifyStore(client, entry); // one retry
+        }
+        if (error != null) {
+          // Persistent per-frame failure (full/read-only disk, repeated
+          // checksum mismatch): surface it and stop this pass instead of
+          // hammering every remaining entry — the next tick retries.
+          state = state.copyWith(problem: 'Backup of ${entry.id} failing: $error');
+          break;
+        }
         await client.ack(_hostname, entry.id);
         state = state.copyWith(
           pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
@@ -217,8 +315,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // kick-off poll would otherwise be swallowed by the single-flight guard.
       slotLost = e;
     } catch (e) {
-      // Transient transport/disk trouble: surface it, keep the loop; the next
-      // tick retries. Persistent local-disk failure is the visible problem text.
+      // Transient transport trouble: surface it, keep the loop; the next
+      // tick retries.
       state = state.copyWith(problem: 'Backup stream hiccup: $e');
     } finally {
       _polling = false;
@@ -227,24 +325,29 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       if (!_reclaimedOnce) {
         // Our own hostname re-claims idempotently; a crashed session resumes.
         _reclaimedOnce = true;
-        await _claimAndStart();
+        await _claimOnce();
+        if (state.active) unawaited(_pollOnce());
       } else {
         _stopLoop();
         state = state.copyWith(
             enabled: false,
             active: false,
             problem: 'Backup stream stopped — ${slotLost.holder ?? 'another desktop'} took over the slot.');
+        _persist();
       }
     }
   }
 
-  Future<bool> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
+  /// Pull + verify + store one frame. Returns null on success, else a short
+  /// error description (checksum mismatch, disk trouble, transport error) —
+  /// the caller decides whether to retry or surface it.
+  Future<String?> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
     try {
       final bytes = await client.downloadFrame(entry.id);
       final digest = sha256.convert(bytes).toString();
       if (!_digestMatches(digest, entry.sha256!)) {
         debugPrint('backup-stream sha mismatch for ${entry.id} — retrying');
-        return false;
+        return 'checksum mismatch';
       }
       final server = ref.read(activeServerProvider);
       final hostDir = _sanitize(server?.hostname ?? 'server');
@@ -257,12 +360,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       final tmp = File('${file.path}.tmp');
       await tmp.writeAsBytes(bytes, flush: true);
       await tmp.rename(file.path);
-      return true;
+      return null;
     } on BackupStreamSlotLostException {
       rethrow;
     } catch (e) {
       debugPrint('backup-stream pull failed for ${entry.id}: $e');
-      return false;
+      return '$e';
     }
   }
 
