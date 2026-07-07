@@ -283,6 +283,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_throwing_mount_GetInfo_still_gets_a_blind_tracking_stop() {
+            // r5 — the info read is only an optimization; when it throws, the
+            // mount state is UNKNOWN and the tracking stop must still be tried
+            // (a no-op on a parked mount, decisive on a tracking one).
+            telescope.Setup(t => t.GetInfo()).Throws(new InvalidOperationException("driver hung"));
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
+
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.SetTrackingEnabled(false), Times.Once);
+            Assert.That(published[0].Message, Does.Contain("tracking stop attempted"));
+        }
+
+        [Test]
+        public async Task A_throwing_guider_GetInfo_still_attempts_the_guider_stop() {
+            // r5 — same principle: unknown guider state → try the stop anyway;
+            // an unknown guider quietly correcting a resting mount is the risk.
+            guider.Setup(g => g.GetInfo()).Throws(new InvalidOperationException("phd2 gone"));
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
+
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(published[0].Message, Does.Contain("Guider stopped"));
+        }
+
+        [Test]
         public async Task A_new_awaiting_user_entry_during_a_running_ladder_is_dropped() {
             // r1 — the disarm happens before the (up to ~30 min) ladder; a
             // second failure landing in that window must NOT start a second

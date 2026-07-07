@@ -314,15 +314,27 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             return true;
         }
 
-        // 1 — stop the guider.
-        try {
-            if (_guider is not null && _guider.GetInfo().Connected) {
-                await _guider.StopGuiding(CancellationToken.None).ConfigureAwait(false);
-                summary.Append("Guider stopped. ");
+        // 1 — stop the guider. GetInfo is only an optimization to skip a
+        // disconnected guider — if the read itself throws, the state is
+        // UNKNOWN and the stop is still attempted (an unknown guider quietly
+        // correcting a safe-rested mount is the failure mode, not a wasted
+        // no-op stop call).
+        if (_guider is not null) {
+            bool? guiderConnected = null;
+            try {
+                guiderConnected = _guider.GetInfo().Connected;
+            } catch (Exception ex) {
+                LogStepFailed("guider-info", ex);
             }
-        } catch (Exception ex) {
-            LogStepFailed("stop-guider", ex);
-            summary.Append("Guider stop FAILED. ");
+            if (guiderConnected != false) {
+                try {
+                    await _guider.StopGuiding(CancellationToken.None).ConfigureAwait(false);
+                    summary.Append("Guider stopped. ");
+                } catch (Exception ex) {
+                    LogStepFailed("stop-guider", ex);
+                    summary.Append("Guider stop FAILED. ");
+                }
+            }
         }
 
         // 2 — park the mount (or stop tracking). Same moves as §58.9 SafeRest,
@@ -334,9 +346,21 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         // are idempotent when safe rest already ran.
         try {
             if (!Abandoned() && _telescope is not null) {
-                var mount = _telescope.GetInfo();
-                var parked = false;
-                if (mount.CanPark && !mount.AtPark) {
+                OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo? mount = null;
+                try {
+                    mount = _telescope.GetInfo();
+                } catch (Exception ex) {
+                    LogStepFailed("mount-info", ex);
+                }
+                if (mount is null) {
+                    // State unreadable — the one thing still worth trying blind
+                    // is the tracking stop: an unattended TRACKING mount is the
+                    // outcome this feature exists to prevent, and a stop sent
+                    // to a parked/disconnected mount is a harmless no-op.
+                    _telescope.SetTrackingEnabled(false);
+                    summary.Append("Mount state unreadable — tracking stop attempted. ");
+                } else if (mount.CanPark && !mount.AtPark) {
+                    var parked = false;
                     try {
                         using var parkCts = new CancellationTokenSource(ParkTimeout);
                         var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>();
