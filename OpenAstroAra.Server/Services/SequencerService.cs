@@ -113,7 +113,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
-    public Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        StartCoreAsync(id, request, idempotencyKey, announceAutoFlats: true);
+
+    // §48 — the auto-started end-of-session flats run must not itself announce
+    // (a prompt asking whether to calibrate the calibration run, or a re-tagged
+    // profile default re-executing against the flats-only session — #735 review).
+    internal Task<OperationAcceptedDto> StartCoreAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, bool announceAutoFlats) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.start");
         // Atomically reserve the run slot BEFORE any async work. Two concurrent
         // starts for the same id otherwise both pass a separate guard and both
@@ -132,10 +138,22 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // IHostedService.StopAsync always finds a Worker to await (closes the
         // null-Worker shutdown window). The body load + deserialize + §28
         // checkpoint claim run inside the worker, off the request path.
+        // §48.1 — resolve the profile's capture default SYNCHRONOUSLY before the
+        // worker exists: a fast run must never reach its completion check before
+        // the choice lands (#735 review — the two-Task.Run race). Only the WS
+        // announcement rides a background task.
+        string? autoFlatsToken = null;
+        if (announceAutoFlats) {
+            autoFlatsToken = ResolveAutoFlatsToken();
+            if (autoFlatsToken is ChoicePanelAtEnd or ChoiceSkyAtTwilight) {
+                run.AutoFlatsChoice = autoFlatsToken;
+            }
+        }
         run.Worker = Task.Run(() => LoadAndRunAsync(id, run), CancellationToken.None);
-        // §48.1 — surface the calibrate-tonight prompt (or apply the profile
-        // default) once the run is genuinely launched.
-        _ = Task.Run(() => AnnounceAutoFlatsAsync(id, run), CancellationToken.None);
+        if (autoFlatsToken is not null) {
+            var runId = run.RunId;
+            _ = Task.Run(() => EmitAutoFlatsAnnouncementAsync(id, runId, autoFlatsToken), CancellationToken.None);
+        }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey));
     }
 
@@ -834,7 +852,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public OpenAstroAra.Sequencer.Utility.PauseGate Gate { get; } = new();
         // §48.1 — the run's "capture calibration tonight?" answer:
         // "panel_at_end" | "sky_at_twilight" | null (later / undecided / never).
-        public string? AutoFlatsChoice { get; set; }
+        // Volatile: written by the start path / the HTTP decide handler, read by
+        // the worker at completion (#735 review — cross-thread visibility).
+        private string? _autoFlatsChoice;
+        public string? AutoFlatsChoice {
+            get => Volatile.Read(ref _autoFlatsChoice);
+            set => Volatile.Write(ref _autoFlatsChoice, value);
+        }
         public int? CurrentInstructionIndex { get; private set; }   // wired with instruction-level hooks (deferred)
         public string? CurrentInstructionDescription { get; private set; }
         public int InstructionsCompleted { get; private set; }            // wired with instruction-level hooks (deferred)

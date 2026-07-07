@@ -77,22 +77,29 @@ public sealed partial class SequencerService : IAutoFlatsService {
         return PlaceholderEquipmentHelpers.Accepted("sequence.auto-flats-decision", idempotencyKey);
     }
 
-    // Fired once per run right after the worker launches (never blocks StartAsync).
+    // Sync profile read on the start path — the choice must land on the run
+    // BEFORE the worker launches (#735 race). Fail toward asking, never toward
+    // silently skipping calibration.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background announce boundary: a profile/WS fault must never affect the run that just started; logged, never rethrown.")]
-    private async Task AnnounceAutoFlatsAsync(Guid sequenceId, RunState run) {
+        Justification = "Best-effort profile read on the start path: a store fault degrades to the ask default; logged, never thrown into StartAsync.")]
+    private string ResolveAutoFlatsToken() {
         try {
-            string token;
-            try {
-                token = _profileStore?.GetSafetyPolicies().CalibrationCaptureDefault ?? "ask";
-            } catch (Exception ex) {
-                LogAutoFlatsPolicyReadFailed(ex);
-                token = "ask";
-            }
+            return _profileStore?.GetSafetyPolicies().CalibrationCaptureDefault ?? "ask";
+        } catch (Exception ex) {
+            LogAutoFlatsPolicyReadFailed(ex);
+            return "ask";
+        }
+    }
+
+    // Background WS announcement only — the run's choice was already set
+    // synchronously by StartCoreAsync.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background announce boundary: a WS fault must never affect the run that just started; logged, never rethrown.")]
+    private async Task EmitAutoFlatsAnnouncementAsync(Guid sequenceId, Guid runId, string token) {
+        try {
             switch (token) {
                 case ChoicePanelAtEnd:
                 case ChoiceSkyAtTwilight:
-                    run.AutoFlatsChoice = token;
                     await EmitAutoFlatsEventAsync(WsEventCatalog.SequenceAutoFlatsDecided, new JsonObject {
                         ["sequence_id"] = sequenceId.ToString(),
                         ["choice"] = token,
@@ -103,11 +110,9 @@ public sealed partial class SequencerService : IAutoFlatsService {
                 case "never":
                     break;
                 default:
-                    // "ask" (and any unknown token — fail toward asking, never
-                    // toward silently skipping calibration).
                     await EmitAutoFlatsEventAsync(WsEventCatalog.SequenceAutoFlatsPrompt, new JsonObject {
                         ["sequence_id"] = sequenceId.ToString(),
-                        ["run_id"] = run.RunId.ToString(),
+                        ["run_id"] = runId.ToString(),
                     }).ConfigureAwait(false);
                     break;
             }
@@ -136,9 +141,11 @@ public sealed partial class SequencerService : IAutoFlatsService {
             }
 
             if (choice == ChoicePanelAtEnd) {
-                await StartAsync(flatsId,
+                // announce:false — the flats run must not prompt about calibrating
+                // the calibration, nor re-tag itself for a second execute pass.
+                await StartCoreAsync(flatsId,
                     new SequenceStartRequestDto(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false),
-                    idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                    idempotencyKey: null, announceAutoFlats: false).ConfigureAwait(false);
                 LogAutoFlatsStarted(sequenceId, flatsId, generated.TotalFlatFrames);
                 await NotifyAutoFlatsQuietlyAsync("End-of-session flats started",
                     $"Your sequence completed and \"{generated.GeneratedSequenceName}\" is now capturing {generated.TotalFlatFrames} matching flats — "

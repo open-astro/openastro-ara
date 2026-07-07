@@ -14,6 +14,15 @@ the other design docs.
 
 ---
 
+## Flaky bench test — AlpacaFaultProxy header-forward (observed 2026-07-07, CI linux)
+
+`PassThrough_forwards_inbound_request_headers_to_the_upstream` failed once on the #735 CI run with
+`ObjectDisposedException: HttpListenerResponse` — a teardown race in the bench proxy (the upstream
+fake's response object disposed while the forward was still writing). Pre-existing, unrelated to
+the PR's diff; passes locally and on re-run. Fix when touched next: guard the proxy's response
+write against a disposed listener (catch ObjectDisposedException alongside the existing
+HttpListenerException handling in `AlpacaFaultProxy.ForwardAsync`).
+
 ## §48 auto-flats — follow-ups (2026-07-07, after the server prompt-flow PR)
 
 - **WILMA client slice**: the §48.1 prompt dialog (listens for `sequence.auto_flats_prompt`,
