@@ -11,6 +11,9 @@ enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
 enum GuiderLostAction { pauseAndRetry, skipTarget, abortSequence }
 enum DiskSpaceCriticalAction { warn, abort }
 
+/// §48.2 — the sequence-start "capture calibration tonight?" behaviour.
+enum CalibrationCaptureDefault { ask, panelAtEnd, skyAtTwilight, never }
+
 class SafetyPolicies {
   // On unsafe weather.
   final UnsafeAction onUnsafe;
@@ -66,6 +69,11 @@ class SafetyPolicies {
   // observatories.
   final int unattendedShutdownWaitMinutes;
 
+  // §48.2 — whether starting a sequence prompts for end-of-night calibration
+  // capture ("ask", the default), silently auto-decides (panel/sky), or stays
+  // quiet ("never"). Rides the same profile safety-policies document.
+  final CalibrationCaptureDefault calibrationCaptureDefault;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -86,6 +94,7 @@ class SafetyPolicies {
     this.unattendedEscalation = true,
     this.unattendedShutdownEnabled = true,
     this.unattendedShutdownWaitMinutes = 10,
+    this.calibrationCaptureDefault = CalibrationCaptureDefault.ask,
   });
 
   SafetyPolicies copyWith({
@@ -108,6 +117,7 @@ class SafetyPolicies {
     bool? unattendedEscalation,
     bool? unattendedShutdownEnabled,
     int? unattendedShutdownWaitMinutes,
+    CalibrationCaptureDefault? calibrationCaptureDefault,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -137,6 +147,8 @@ class SafetyPolicies {
             unattendedShutdownEnabled ?? this.unattendedShutdownEnabled,
         unattendedShutdownWaitMinutes:
             unattendedShutdownWaitMinutes ?? this.unattendedShutdownWaitMinutes,
+        calibrationCaptureDefault:
+            calibrationCaptureDefault ?? this.calibrationCaptureDefault,
       );
 }
 
@@ -199,6 +211,8 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
 
   void setSkipTargetIfRecoveryFails(bool v) =>
       state = state.copyWith(skipTargetIfRecoveryFails: v);
+  void setCalibrationCaptureDefault(CalibrationCaptureDefault v) =>
+      state = state.copyWith(calibrationCaptureDefault: v);
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
 

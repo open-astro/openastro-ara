@@ -12,6 +12,10 @@ import 'package:openastroara/widgets/sequencer/sequence_new_dialog.dart';
 /// instantiateTemplate returns a configured id (or throws); records what was sent.
 class _NewClient implements SequenceClient {
   @override
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      throw UnimplementedError();
+  @override
   Future<bool> deleteSequence(String id) => throw UnimplementedError();
   @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>

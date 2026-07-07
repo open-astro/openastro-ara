@@ -566,6 +566,16 @@ const List<Setting> settingsRegistry = [
     profilePath: 'storage.min_free_disk_critical_gb',
   ),
   Setting(
+    id: 'session.calibration.capture_default',
+    label: 'Capture calibration after a sequence',
+    description: 'The §48 sequence-start behaviour for end-of-night calibration: ask each run (WILMA prompts), automatically capture panel flats when the run ends, generate sky flats ready for twilight, or never. The matching flats replay the night\'s own focus, gain, and offset per filter.',
+    keywords: ['calibration', 'flats', 'auto flats', 'panel', 'sky flats', 'twilight', 'end of night', 'prompt', 'ask'],
+    path: ['Settings', 'Session', 'Calibration'],
+    type: SettingType.enumValue(['Ask at each sequence start', 'Panel flats at end', 'Sky flats at twilight', 'Never']),
+    defaultValue: 'Ask at each sequence start',
+    profilePath: 'safety.calibration_capture_default',
+  ),
+  Setting(
     id: 'session.storage.backup_stream',
     label: 'Stream new frames to this device',
     description: 'Real-time backup: this desktop claims the daemon\'s backup-stream slot and mirrors every captured FITS as the night runs — verified by SHA-256 — so a mid-session imaging-drive failure costs at most the in-flight frame. One desktop at a time.',

@@ -929,6 +929,9 @@ class ProfileApi {
             (j['unattended_shutdown_enabled'] as bool?) ?? true,
         unattendedShutdownWaitMinutes:
             (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 10,
+        calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
+          j['calibration_capture_default'] as String?,
+        ),
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -952,7 +955,40 @@ class ProfileApi {
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,
+    'calibration_capture_default':
+        _calibrationCaptureDefaultToString(v.calibrationCaptureDefault),
   };
+
+  static CalibrationCaptureDefault _calibrationCaptureDefaultFromString(
+    String? s,
+  ) {
+    switch (s) {
+      case 'panel_at_end':
+        return CalibrationCaptureDefault.panelAtEnd;
+      case 'sky_at_twilight':
+        return CalibrationCaptureDefault.skyAtTwilight;
+      case 'never':
+        return CalibrationCaptureDefault.never;
+      case 'ask':
+      default:
+        return CalibrationCaptureDefault.ask;
+    }
+  }
+
+  static String _calibrationCaptureDefaultToString(
+    CalibrationCaptureDefault v,
+  ) {
+    switch (v) {
+      case CalibrationCaptureDefault.ask:
+        return 'ask';
+      case CalibrationCaptureDefault.panelAtEnd:
+        return 'panel_at_end';
+      case CalibrationCaptureDefault.skyAtTwilight:
+        return 'sky_at_twilight';
+      case CalibrationCaptureDefault.never:
+        return 'never';
+    }
+  }
 
   static UnsafeAction _unsafeActionFromString(String? s) {
     switch (s) {

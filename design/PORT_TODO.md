@@ -25,10 +25,11 @@ HttpListenerException handling in `AlpacaFaultProxy.ForwardAsync`).
 
 ## §48 auto-flats — follow-ups (2026-07-07, after the server prompt-flow PR)
 
-- **WILMA client slice**: the §48.1 prompt dialog (listens for `sequence.auto_flats_prompt`,
-  POSTs `/sequences/{id}/auto-flats-decision`, "don't ask again" checkbox) + Settings →
-  Calibration panel exposing `calibration_capture_default` (+ settings/help registry entries,
-  merge-gated with the panel).
+- ✅ **WILMA client slice — DONE (2026-07-07).** `AutoFlatsPromptListener` (shell-level, mirrors
+  the §27 ConnectionPolicyListener pattern; a newer run's prompt replaces a stale dialog),
+  `SequenceApi.decideAutoFlats`, the Settings → Session → Calibration panel over the safety-policies
+  round-trip (`CalibrationCaptureDefault` enum through model/notifier/ProfileApi), and the
+  settings/help registry entries.
 - **§48.3/§48.4 native flat instructions (v0.1.0)**: NINA's FlatPanelFlats/SkyFlats were never
   ported; v0.0.1's automation is the §39.5 generated sequence (fixed 1 s starting exposure,
   advisory TargetAdu). The native instructions bring auto-exposure-to-ADU, flat-panel
@@ -51,6 +52,12 @@ for the feature to be user-visible end-to-end (§44.7/§44.8):
   the library (the Settings status line covers pending/synced today).
 - **§44.4 token-bucket bandwidth limit (remaining)**: the capture-aware pause shipped; the
   configurable Mbps cap + first-connect throughput measurement are still open (client-side).
+- **Puller minors (from the #736 round-4 review, accepted as non-blocking)**: (1) reset `active`
+  via `ref.listen(activeServerProvider, …)` when multi-server selection lands (today the slot-lost
+  reclaim self-heals the mismatch on the first `queue()`); (2) drop the dead
+  `BackupStreamSlotLostException` rethrow in `_pullVerifyStore` (`downloadFrame` hits the plain
+  frames endpoint, which is not slot-gated); (3) remember stored-but-unacked frames within a
+  session so an ack failure doesn't re-download an already-verified file next pass.
 
 ## §63.3 watch-items (from the #733 review, accepted as-is)
 
