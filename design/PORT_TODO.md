@@ -95,6 +95,10 @@ the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up
   behind `POST /api/v1/server/emergency-stop`; `safety.emergency_stop` fires before the rungs.
   WILMA's persistent red button lives on the bottom status bar (confirm dialog → honest per-rung
   snackbar — a dead mount says "MOUNT NOT REACHED", never pretends).
+- **Linux client packaging — gstreamer runtime Depends**: `audioplayers_linux` links against
+  GStreamer, so when WILMA Linux distribution is set up its package must declare
+  `libgstreamer1.0-0` + `libgstreamer-plugins-base1.0-0` (runtime libs; the CI dev headers
+  landed in #743). No action until a Linux client package exists.
 - ✅ **§35.5 client alarm assets — DONE (2026-07-07).** Three generated sine-synth loop tones
   bundled (`assets/audio/alarm_{siren,beeps,chime}.wav` — no third-party audio licensing),
   `SafetyAlarmController` rides `safety.unsafe` / `safety.emergency_stop` (modal immediately,
