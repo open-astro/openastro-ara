@@ -509,6 +509,23 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return appStateResponse?.result?.ToString();
         }
 
+        /// <summary>
+        /// §63.3 liveness probe — a bounded <c>get_app_state</c> round-trip on a fresh
+        /// per-call RPC connection (independent of the event-stream socket, so a daemon
+        /// whose event socket is still open but whose RPC dispatch is wedged fails this).
+        /// True = the daemon answered within the timeout; false = any failure.
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A liveness probe's only job is to answer up-or-down; any transport/protocol fault (socket, IO, timeout, malformed reply) means down, never a throw into the poll loop.")]
+        public async Task<bool> PingAsync(int receiveTimeout = 5000) {
+            try {
+                var state = await GetAppState(receiveTimeout).ConfigureAwait(false);
+                return state != null;
+            } catch (Exception) {
+                return false;
+            }
+        }
+
         private async Task<bool> IsCalibrated() {
             var msg = new Phd2GetCalibrated();
             var response = await SendMessage<BooleanPhdMethodResponse>(msg, 5000);

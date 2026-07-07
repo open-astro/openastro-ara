@@ -101,8 +101,10 @@ Ara assumes you're asleep while it works:
 - **Guider loss mid-sequence**: if the guider connection drops while a run is executing, the
   daemon applies **Settings → Safety → Policies → "When the guider is lost"** immediately —
   pause the run (default), skip the current target, or abort — while §63.3 process recovery
-  tries to restart the guider daemon in the background. After reconnecting the guider, Resume
-  the paused run.
+  tries to restart the guider daemon in the background. A *wedged* guider (socket alive, RPC
+  unresponsive) is caught the same way by an active liveness ping. When recovery succeeds, ARA
+  reconnects automatically within your "guider retry timeout" window and notifies you — just
+  Resume the paused run; if it can't reconnect in time, reconnect manually (Equipment → Guider).
 - **Meridian flips** run a guarded pipeline: a pre-flight check (predicted altitude, mount health,
   required equipment), an in-slew watchdog (stall/timeout/pier-side verification), a hard
   post-flip plate-solve gate (imaging does not resume on an unverified pointing), and a safe-rest

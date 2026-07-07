@@ -114,7 +114,13 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
-    public Task<OperationAcceptedDto> ConnectAsync(GuiderConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> ConnectAsync(GuiderConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        ConnectCoreAsync(request, idempotencyKey, supersedeRecovery: true);
+
+    // §63.3 — the auto-reconnect path must NOT supersede the recovery pass that
+    // issued it (CancelRecoveryLocked would cancel the reconnect loop's own token
+    // mid-flight); every user/REST connect does.
+    internal Task<OperationAcceptedDto> ConnectCoreAsync(GuiderConnectRequestDto request, string? idempotencyKey, bool supersedeRecovery) {
         ArgumentNullException.ThrowIfNull(request);
         long generation;
         PHD2Guider guider;
@@ -125,8 +131,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (_state is EquipmentConnectionState.Connecting or EquipmentConnectionState.Connected) {
                 return Task.FromResult(Accepted("guider.connect", idempotencyKey));
             }
-            // A fresh connect supersedes any §63.3 recovery still polling for the dropped session.
-            CancelRecoveryLocked();
+            if (supersedeRecovery) {
+                // A fresh user connect supersedes any §63.3 recovery still polling
+                // for the dropped session.
+                CancelRecoveryLocked();
+            }
             // PHD2Guider reads host/port from the profile (§63.5), so honor the request by writing
             // them in before the connect.
             var settings = _profileService.ActiveProfile.GuiderSettings;
@@ -291,15 +300,23 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private void OnConnectionLost(object? sender, EventArgs e) {
         lock (_gate) {
             if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
-                SetStateLocked(EquipmentConnectionState.Error);
-                // §63.3 guider-d: the daemon dropped mid-session — try to recover the process.
-                BeginRecoveryLocked();
-                // §42.2: guiding is gone NOW — any running sequence is shooting
-                // unguided, so react per the profile's on_guider_lost policy
-                // (see GuiderService.FaultReaction.cs).
-                BeginFaultReactionLocked();
+                HandleLinkDownLocked();
             }
         }
+    }
+
+    // Shared §63.3/§42.2 link-down path: a dead socket (PHD2ConnectionLost) and a
+    // wedged-but-connected daemon (the active-poll ping streak, GuiderService.ActivePoll.cs)
+    // converge here. Caller holds _gate and has verified the loss belongs to the
+    // current guider/session.
+    private void HandleLinkDownLocked() {
+        SetStateLocked(EquipmentConnectionState.Error);
+        // §63.3 guider-d: the daemon dropped mid-session — try to recover the process
+        // (and, on success, auto-reconnect within the §63.3 grace window).
+        BeginRecoveryLocked();
+        // §42.2: guiding is gone NOW — any running sequence is shooting unguided,
+        // so react per the profile's on_guider_lost policy (GuiderService.FaultReaction.cs).
+        BeginFaultReactionLocked();
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current
@@ -372,6 +389,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // A fresh successful connection starts a new fault episode: the §42.2
             // reaction may fire again on the next mid-session loss.
             _faultReactionLatched = false;
+            StartPingLoopLocked();
+        } else {
+            StopPingLoopLocked();
         }
     }
 
@@ -398,6 +418,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _recoveryPassCts?.Dispose();
             _recoveryPassCts = null;
             CancelConnectLocked();
+            // §63.3 — stop + dispose the liveness-ping timer (CA2213).
+            StopPingLoopLocked();
             // Signal any in-flight calibration build to wind down. Its background task observes the
             // token where it can and its finally releases the gate; no new build can start
             // (BuildDarkLibraryAsync/BuildDefectMapDarksAsync check _disposed at entry).
