@@ -64,6 +64,22 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
             if (available.isEmpty) {
               return _Message('All sky-data packages are already installed.');
             }
+            // §37.6 — seed the recommended preset ONCE per wizard session, into
+            // an untouched (empty) selection only. The flag lives on the DRAFT
+            // (#728 review): this State is rebuilt on every back/forward visit,
+            // so a widget-local flag would re-seed over an explicit Clear.
+            final draft = ref.read(wizardControllerProvider).draft;
+            if (!draft.skyDataRecommendedSeeded) {
+              draft.skyDataRecommendedSeeded = true;
+              if (selected.isEmpty) {
+                // Mutating the draft set during build is safe here: `selected` IS
+                // the rendered source and the change happens before the checkboxes
+                // read it below (no setState needed — same-frame consistency; the
+                // draft's doc comment records that consumers read it directly).
+                selected.addAll(
+                    available.where((p) => p.recommended).map((p) => p.id));
+              }
+            }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -89,7 +105,18 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
                       onChanged: (v) => setState(() => v == true
                           ? selected.add(p.id)
                           : selected.remove(p.id)),
-                      title: Text(p.name),
+                      title: p.recommended
+                          ? Row(children: [
+                              Flexible(child: Text(p.name)),
+                              const SizedBox(width: 8),
+                              const Chip(
+                                label: Text('Recommended'),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ])
+                          : Text(p.name),
                       subtitle: Text(
                         // Drop empty parts so a package with no description
                         // doesn't render a dangling "  ·  1.0 MB" separator.

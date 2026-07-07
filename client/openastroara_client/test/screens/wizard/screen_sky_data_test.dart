@@ -166,5 +166,71 @@ void main() {
       await tester.pump();
       expect(ids, isNot(contains('a')));
     });
+
+    testWidgets('recommended packages pre-check into an empty selection, with a badge', (tester) async {
+      const rec = DataPackage(
+          id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);
+      final container = await pump(tester, build: () async => [rec, pkgA, installed]);
+      await tester.pumpAndSettle();
+      expect(find.text('Recommended'), findsOneWidget);
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.skyDataDownloadIds, {'r'},
+          reason: 'the recommended (not-installed) package seeds the empty selection');
+    });
+
+    testWidgets('an explicit Clear survives navigating away and back (no re-seed)', (tester) async {
+      const rec = DataPackage(
+          id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);
+      final container = ProviderContainer(overrides: [
+        dataManagerPackagesProvider.overrideWith(
+            () => _FakePackages(() async => [rec, pkgA])),
+      ]);
+      addTearDown(container.dispose);
+      // wizardControllerProvider is autoDispose; in production WizardShell holds
+      // a permanent watch while only the child screen swaps. Mirror that here so
+      // the mid-test unmount can't dispose the controller (and hand the remount
+      // a FRESH draft, which would make this test pass vacuously — #728 review).
+      final keepAlive = container.listen(wizardControllerProvider, (_, _) {});
+      addTearDown(keepAlive.close);
+      Widget screen() => UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: Scaffold(body: ScreenSkyData())),
+          );
+      await tester.pumpWidget(screen());
+      await tester.pumpAndSettle();
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds,
+          {'r'}, reason: 'first visit seeds');
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+      // Navigate away (unmount) and back (a brand-new State object). Re-read the
+      // LIVE draft from the container after the remount — never a stale capture.
+      await tester.pumpWidget(UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SizedBox()))));
+      await tester.pumpWidget(screen());
+      await tester.pumpAndSettle();
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds,
+          isEmpty,
+          reason: 'the seed flag lives on the draft — an explicit Clear is final');
+    });
+
+    testWidgets('an existing selection is never clobbered by the recommended seed', (tester) async {
+      const rec = DataPackage(
+          id: 'r', name: 'Star catalog', recommended: true, sizeBytes: 1 << 20);
+      final container = ProviderContainer(overrides: [
+        dataManagerPackagesProvider.overrideWith(
+            () => _FakePackages(() async => [rec, pkgA])),
+      ]);
+      addTearDown(container.dispose);
+      // The user picked exactly pkgA on a previous visit (or cleared and re-picked).
+      container.read(wizardControllerProvider).draft.skyDataDownloadIds.add('a');
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ScreenSkyData())),
+      ));
+      await tester.pumpAndSettle();
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds, {'a'},
+          reason: 'a non-empty selection is the user\'s explicit intent');
+    });
   });
 }

@@ -81,7 +81,8 @@ namespace OpenAstroAra.Server.Services {
                 Version: "v40",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/hygdata_v40.csv.gz")),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/hygdata_v40.csv.gz"),
+                Recommended: true),
             new DataPackageDto(
                 Id: "openngc-dso",
                 Name: "OpenNGC deep-sky objects",
@@ -95,7 +96,8 @@ namespace OpenAstroAra.Server.Services {
                 Version: "git-36cb178",
                 IsInstalled: false,
                 InstalledUtc: null,
-                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/NGC.csv")),
+                SourceUrl: new Uri("https://raw.githubusercontent.com/open-astro/sky-data/712bf937b4967694746e3c5ae50560ab4aa1df38/NGC.csv"),
+                Recommended: true),
             // NOTE: the former "horizon-default" entry was removed — it pointed at the dead data.openastro.net host
             // and was miscategorised as a download. A site horizon (flat default or survey) is generated LOCALLY for
             // the §36 Tonight's-Sky overlay, not fetched via the Data Manager; the real horizon feature re-adds it

@@ -46,6 +46,12 @@ class ProfileDraft {
   // and rely on the mutating widget's setState for repaints, as screen 17 does.
   final Set<String> skyDataDownloadIds = <String>{};
 
+  // §37.6 — whether screen 17 has seeded the recommended preset THIS wizard
+  // session. Lives on the draft (not the screen's State) so back/forward
+  // navigation — which rebuilds the screen widget — can't re-seed over a
+  // user's explicit clear. Never persisted to the profile.
+  bool skyDataRecommendedSeeded = false;
+
   // Per-screen "skipped" flags so the profile knows to surface "Default —
   // please review in Settings" markers per §37.8.
   final Set<int> skippedScreens = <int>{};
