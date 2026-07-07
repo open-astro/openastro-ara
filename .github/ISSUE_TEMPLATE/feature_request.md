@@ -1,20 +1,22 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest an improvement or new capability
 title: ''
-labels: ''
+labels: enhancement
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**The problem this solves**
+What are you trying to do that Ara doesn't do (or makes harder than it should be)?
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**Proposed behavior**
+How you imagine it working. Screenshots/sketches welcome.
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+**Alternatives considered**
+Workarounds you're using today, other tools' approaches, etc.
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+**Notes for triage**
+Feature work is tracked against the design docs (`design/PORT_PLAYBOOK.md` § numbers and
+`design/PORT_TODO.md`); accepted requests get mapped to a section + release there. If your
+request matches an existing §, mention it.

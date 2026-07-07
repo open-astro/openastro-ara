@@ -368,13 +368,18 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 
 ## Documentation — separate effort, post-Phase 15
 
-- [ ] **README rewrite** (Open Astro front matter, lineage attribution, install quickstart, link to wiki + DEPLOY.md)
-- [ ] **NOTICE.md full text** (snippet in §17.2; needs to become a real file at repo root with NINA + Aladin Lite + PI.N.S. credit + complete dep list)
-- [ ] **DEPLOY.md** content (mostly drafted in §34.6 but not yet a real file)
-- [ ] **User guide / "how to use ARA"** — wizard walkthrough, sky atlas tour, sequence builder basics, safety policy explainer, troubleshooting
-- [ ] **CONTRIBUTING.md update** for the fork (current file is NINA's; needs fork-specific content)
-- [ ] **`.github/ISSUE_TEMPLATE/`** + **`.github/PULL_REQUEST_TEMPLATE.md`** for the new repo
-- [ ] **API_CONTRACT.md initial content** — currently scaffolded as a tracking file in §1; will fill as endpoints are designed in Phase 5
+- [x] **README rewrite** — done (shipped earlier than this list was updated: lineage, license split, layout, RUNNING/DEPLOY links)
+- [x] **NOTICE.md full text** — done (#228)
+- [x] **DEPLOY.md** content — done (#230)
+- [x] **User guide** — done 2026-07-07: `docs/USER_GUIDE.md` (first-contact → wizard → equipment → planning →
+  sequencing → unattended safety → library/stats → diagnostics → backups, + cheat sheet)
+- [x] **CONTRIBUTING.md update** — done 2026-07-07: full fork rewrite (repo layout, build gates, the
+  settings/help-registry merge blocks, fields-need-consumers + additive-DTO conventions, branching/PR rules,
+  Claude Code skill recommendations, per-directory licensing)
+- [x] **`.github/ISSUE_TEMPLATE/`** + **`.github/PULL_REQUEST_TEMPLATE.md`** — done 2026-07-07: bug report
+  (§54 Help → Report-a-bug bundle), feature request (design-doc triage note), NEW driver-quirk-report
+  (ConformU ask + upstream routing); the PR template was already ARA's (registry-gate checkboxes)
+- [x] **API_CONTRACT.md initial content** — done (Phase-5 entry + template; append-only log in active use)
 
 ## Things confirmed resolved (for the record)
 
