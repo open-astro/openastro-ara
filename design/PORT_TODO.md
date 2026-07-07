@@ -392,9 +392,21 @@ existing `/resume` releases it — the trigger then re-fires at the next boundar
 §58.9 flight check included. Abort/stop still win over the suspension; the §38 edit/delete-while-running
 409 guard counts the new state as active; enum value appended LAST (the §28 checkpoint stores it numerically).
 
-Remaining: **§58.12 unattended-shutdown countdown** itself (the 10-min `paused_awaiting_user` → graceful
-shutdown ladder: stop guider → warm cooler → park → disconnect; reset by acknowledge/any explicit command/a
-new WS connection), and the
+✅ **§58.12 unattended-shutdown countdown — DONE (2026-07-06)**: `UnattendedShutdownService` (singleton +
+hosted). Entering `PausedAwaitingUser` starts the clock (profile `safety.unattended_shutdown_enabled`
+default ON / `safety.unattended_shutdown_wait_minutes` default 10); "user came back" cancels it — hooks sit
+at the HTTP altitude (sequence lifecycle POSTs, notification dismiss/mark-read, §27 connect, a FRESH WS
+accept, an endpoint filter on all non-GET equipment routes) so GET polling and the daemon's own automated
+actions (§29 `AbortActiveRunsAsync`, hosted-shutdown) never masquerade as attention. On expiry it re-verifies
+the run is STILL awaiting-user (same RunId) then runs the best-effort ladder: stop guider → park (90 s cap,
+tracking-off fallback) → disconnect FW/focuser/rotator/flat → warm cooler stepping the set-point at the
+profile's `CoolerRampCPerMin` (first consumer of that knob; 30-min hard cap, `WarmTimeScale` test seam) →
+disconnect camera → Warning summary notification (NOT Critical — no new siren). Deliberate deviations: the
+action ladder is fixed (enabled + wait are the dials), the run stays suspended with its §40 session open
+(the worker's finally still owns it; resume keeps working). Client settings entries + §58.13 morning
+summary = follow-ups.
+
+Remaining: the
 **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
 focuser-hardware blocker). Of the §58 profile block only `refocus_after_flip`/`guider_recal` mode enums
 remain un-modelled (they land with the refocus/recal orchestration they configure); `first_flip_confirmed` shipped with §58.8.

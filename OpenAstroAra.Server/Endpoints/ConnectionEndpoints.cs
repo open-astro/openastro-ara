@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 
@@ -37,7 +38,12 @@ public static class ConnectionEndpoints {
         var server = app.MapGroup("/api/v1/server").WithTags("Connection");
 
         server.MapPost("/connect",
-                async ([FromBody] ClientConnectRequestDto body, ClientSessionService sessions, CancellationToken ct) => {
+                async ([FromBody] ClientConnectRequestDto body, ClientSessionService sessions,
+                        HttpContext http, CancellationToken ct) => {
+                    // §58.12 — claiming (or re-claiming) the §27 control slot is a
+                    // human opening WILMA: cancel any unattended-shutdown countdown.
+                    http.RequestServices.GetService<UnattendedShutdownService>()
+                        ?.NotifyUserActivity("server.connect");
                     var hostname = body?.Hostname?.Trim();
                     if (string.IsNullOrEmpty(hostname)) {
                         return Results.Problem(

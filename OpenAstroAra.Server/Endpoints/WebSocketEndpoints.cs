@@ -15,6 +15,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -136,6 +137,11 @@ public static partial class WebSocketEndpoints {
         var sessionHeader = http.Request.Headers["X-Ara-Session"].ToString();
 
         using var socket = await http.WebSockets.AcceptWebSocketAsync();
+        // §58.12 — a FRESH WebSocket connection is "the user opened WILMA":
+        // cancel any unattended-shutdown countdown. Pre-existing quiet sockets
+        // never re-trigger this (the hook sits on the accept, not on traffic).
+        http.RequestServices.GetService<UnattendedShutdownService>()
+            ?.NotifyUserActivity("ws.connect");
         using var conn = new WsClientConnection(socket);
         if (Guid.TryParse(sessionHeader, out var sessionId)) {
             if (sessions.BindSocket(sessionId, conn)) {
