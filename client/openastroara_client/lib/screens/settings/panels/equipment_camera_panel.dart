@@ -90,6 +90,10 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
             s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
         if (s.coolerPowerPct != null)
           _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
+        // §25.5.5 — the target the TEC is cooling TO (read back from the daemon),
+        // so "cooling to −10 °C" is visible next to the actual sensor temperature.
+        if (s.coolerOn && s.coolerSetpointC != null)
+          _row('Cooling to', '${s.coolerSetpointC!.toStringAsFixed(1)} °C'),
         if (s.isExposing)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -138,13 +142,41 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
         if (caps != null) ...[
           _row('Sensor', '${caps.sensorWidth} × ${caps.sensorHeight}'),
           if (caps.pixelSizeUm > 0)
-            _row('Pixel size', '${caps.pixelSizeUm.toStringAsFixed(2)} μm'),
+            _row(
+                'Pixel size',
+                caps.pixelSizeUmY > 0 && caps.pixelSizeUmY != caps.pixelSizeUm
+                    ? '${caps.pixelSizeUm.toStringAsFixed(2)} × ${caps.pixelSizeUmY.toStringAsFixed(2)} μm'
+                    : '${caps.pixelSizeUm.toStringAsFixed(2)} μm'),
           _row('Sensor type', caps.isColor ? 'Colour (${caps.bayerPattern})' : 'Mono'),
           if (caps.maxGain > caps.minGain)
             _row('Gain range', '${caps.minGain}–${caps.maxGain}'),
           if (caps.maxOffset > caps.minOffset)
             _row('Offset range', '${caps.minOffset}–${caps.maxOffset}'),
           _row('Max binning', '${caps.maxBinX}×${caps.maxBinY}'),
+          // §25.5.5 — readout-mode picker (driver-defined list; select by index).
+          if (caps.readoutModes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(children: [
+                const Expanded(child: Text('Readout mode')),
+                DropdownButton<int>(
+                  value: _readoutIndex(caps.readoutModes, s.readoutMode),
+                  items: [
+                    for (var i = 0; i < caps.readoutModes.length; i++)
+                      DropdownMenuItem(value: i, child: Text(caps.readoutModes[i])),
+                  ],
+                  onChanged: s.isBusy
+                      ? null
+                      : (i) {
+                          if (i != null) {
+                            _run(() => ref
+                                .read(cameraStatusProvider.notifier)
+                                .setReadoutMode(i));
+                          }
+                        },
+                ),
+              ]),
+            ),
         ],
       ],
     );
@@ -176,6 +208,14 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
   }
 
   double? _parseTarget() => double.tryParse(_target.text.trim());
+
+  /// The dropdown's selected index: the runtime's current mode name located in
+  /// the caps list (null → no selection shown, e.g. daemon didn't report one).
+  static int? _readoutIndex(List<String> modes, String? current) {
+    if (current == null) return null;
+    final i = modes.indexOf(current);
+    return i >= 0 ? i : null;
+  }
 
   Future<void> _run(Future<bool> Function() action) async {
     final messenger = ScaffoldMessenger.of(context);

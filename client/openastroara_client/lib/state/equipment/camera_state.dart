@@ -61,6 +61,11 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
           'target_temperature_c': targetTemperatureC,
         }),
       );
+
+  /// §25.5.5 — select a readout mode by index into capabilities.readoutModes.
+  Future<bool> setReadoutMode(int modeIndex) => performAction(
+    (api) => api.command('readoutmode', {'mode_index': modeIndex}),
+  );
 }
 
 final cameraStatusProvider =

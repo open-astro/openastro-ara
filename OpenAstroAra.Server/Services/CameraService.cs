@@ -23,6 +23,7 @@ using OpenAstroAra.Fits;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
@@ -263,6 +264,37 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             }
             client.CoolerOn = enabled;
         }, CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    // §25.5.5 — select a readout mode by driver index. The list is re-read from the device inside
+    // the write (not from the cached caps) so the validation matches what the driver will accept
+    // even if it changed the list since connect. Per-mode electronics (full-well, e-/ADU) differ by
+    // mode, so a successful set invalidates the cached caps — the next refresh re-reads them along
+    // with the new current-mode name.
+    public async Task SetReadoutModeAsync(int modeIndex, CancellationToken ct) {
+        // Argument validation precedes the connected check (the Slew/Sync precedence): a
+        // structurally-bad request is a 400 regardless of connection state.
+        if (modeIndex < 0) {
+            throw new ArgumentOutOfRangeException(nameof(modeIndex), modeIndex, "readout mode index must be >= 0");
+        }
+        var client = RequireConnectedClient();
+        await Task.Run(() => {
+            var modes = client.ReadoutModes;
+            if (modes is null || modes.Count == 0) {
+                throw new InvalidOperationException("this camera reports no readout modes");
+            }
+            if (modeIndex >= modes.Count) {
+                throw new ArgumentOutOfRangeException(nameof(modeIndex), modeIndex,
+                    $"readout mode index must be below the driver's {modes.Count}-entry list");
+            }
+            client.ReadoutMode = (short)modeIndex; // ASCOM ReadoutMode is a short; index already validated against the list
+        }, CancellationToken.None).ConfigureAwait(false);
+        lock (_gate) {
+            if (ReferenceEquals(_client, client)) {
+                _capabilities = null; // force a caps re-read: electronics are per-readout-mode
+            }
+        }
         RefreshCacheOnce();
     }
 
@@ -860,7 +892,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { coolerPower = coolerOn ? c.CoolerPower : null; } catch (Exception) { coolerPower = null; }
         double? progress;
         try { progress = state == CameraState.Exposing ? c.PercentCompleted : null; } catch (Exception) { progress = null; }
-        return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress);
+        // §25.5.5 — cooler set-point read-back ("cooling to −10°C") + the current readout-mode
+        // name (driver index → display name; an out-of-range index or no mode support → null).
+        double? setpoint;
+        try { setpoint = c.SetCCDTemperature; } catch (Exception) { setpoint = null; }
+        string? readoutMode = null;
+        try {
+            var modes = c.ReadoutModes;
+            var idx = c.ReadoutMode;
+            if (modes is not null && idx >= 0 && idx < modes.Count) {
+                readoutMode = modes[idx]?.ToString();
+            }
+        } catch (Exception) { }
+        return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress,
+            CoolerSetpointC: setpoint, ReadoutMode: readoutMode);
     }
 
     // Extracted (internal) for direct unit testing.
@@ -921,6 +966,18 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { sensorName = c.SensorName; } catch (Exception) { }
         int currentGain = -1;
         try { currentGain = c.Gain; } catch (Exception) { }
+        // §25.5.5 — readout-mode display names in driver index order (the selection endpoint
+        // addresses by index into this list); unsupported → null. Y pixel pitch for
+        // asymmetric-pixel sensors; unreported → 0 (assume square).
+        IReadOnlyList<string>? readoutModes = null;
+        try {
+            var modes = c.ReadoutModes;
+            if (modes is { Count: > 0 }) {
+                readoutModes = modes.Cast<object?>().Select(m => m?.ToString() ?? "").ToList();
+            }
+        } catch (Exception) { }
+        double pixelSizeY = 0;
+        try { pixelSizeY = c.PixelSizeY; } catch (Exception) { }
         return new CameraCapabilitiesDto(
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
@@ -933,7 +990,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             ElectronsPerAdu: ePerAdu,
             SensorName: sensorName,
             CurrentGain: currentGain,
-            HasCooler: hasCooler);
+            HasCooler: hasCooler,
+            ReadoutModes: readoutModes,
+            PixelSizeUmY: pixelSizeY);
     }
 
     // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,

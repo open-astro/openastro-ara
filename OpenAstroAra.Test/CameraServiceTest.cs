@@ -120,6 +120,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SetReadoutModeAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new CameraService();
+            Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetReadoutModeAsync(0, CancellationToken.None));
+        }
+
+        [Test]
+        public void SetReadoutModeAsync_rejects_a_negative_index_before_the_connected_check() {
+            using var svc = new CameraService();
+            // Same precedence as dome Slew/Sync: a structurally-bad index is a 400 even
+            // while disconnected; a plausible index on a disconnected camera is a 409.
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.SetReadoutModeAsync(-1, CancellationToken.None));
+        }
+
+        [Test]
         public void Ops_after_Dispose_throw_ObjectDisposed() {
             var svc = new CameraService();
             svc.Dispose();

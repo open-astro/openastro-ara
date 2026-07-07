@@ -80,6 +80,18 @@ public static class EquipmentEndpoints {
             await svc.SetCoolerAsync(request.Enabled, request.TargetTemperatureC, ct);
             return Results.Accepted();
         });
+        // §25.5.5 — readout-mode selection (index into caps.readout_modes, driver order).
+        camera.MapPost("/readoutmode", async ([FromBody] CameraReadoutModeRequestDto request, ICameraService svc, CancellationToken ct) => {
+            try {
+                await svc.SetReadoutModeAsync(request.ModeIndex, ct);
+                return Results.Accepted();
+            } catch (System.ArgumentOutOfRangeException ex) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            } catch (System.InvalidOperationException ex) {
+                // Not connected, or the camera reports no readout modes.
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
         // §64 Live View — short-exposure framing/focus loop (no catalog write).
         camera.MapPost("/liveview/start", async ([FromBody] LiveViewStartRequestDto request, ICameraService svc, CancellationToken ct) => {
             try {
