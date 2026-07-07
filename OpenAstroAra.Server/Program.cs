@@ -551,6 +551,20 @@ public partial class Program {
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
 
+        // §35.3 — emergency stop (abort runs → abort exposure → stop guiding →
+        // park → flat light off), behind POST /api/v1/server/emergency-stop.
+        // Same optional-dep + sequencer-resolver pattern as the reaction engine.
+        builder.Services.AddSingleton<EmergencyStopService>(sp =>
+            new EmergencyStopService(
+                sp.GetService<ICameraService>(),
+                () => sp.GetService<ISequencerService>(),
+                sp.GetService<IGuiderService>(),
+                sp.GetService<ITelescopeService>(),
+                sp.GetService<IFlatDeviceService>(),
+                sp.GetService<INotificationService>(),
+                sp.GetService<IWsBroadcaster>(),
+                sp.GetService<ILogger<EmergencyStopService>>()));
+
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();

@@ -96,3 +96,16 @@ public sealed record LogEntryDto(
     string Source,
     string Message,
     System.Text.Json.JsonElement? Properties);
+/// <summary>
+/// §35.3 — what the emergency stop actually did, rung by rung. Booleans are
+/// honest: false means the rung failed or the device wasn't available, not
+/// "skipped". <see cref="AlreadyInProgress"/> reports a second trigger that
+/// arrived while a stop was mid-flight (ignored — the first pass covers it).
+/// </summary>
+public sealed record EmergencyStopResultDto(
+    bool AlreadyInProgress,
+    int RunsAborted,
+    bool ExposureAborted,
+    bool GuidingStopped,
+    bool ParkRequested,
+    bool FlatPanelLightOff);

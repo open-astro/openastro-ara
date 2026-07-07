@@ -151,6 +151,12 @@ public static class WsEventCatalog {
     public const string SafetySafe = "safety.safe";
     public const string SafetyActionTaken = "safety.action_taken";
 
+    // §35.3 emergency stop: fires BEFORE the stop rungs run (same
+    // client-can-alarm-while-daemon-reacts contract as safety.unsafe); the
+    // per-rung outcome rides the follow-up safety.action_taken event with
+    // action == "emergency_stop".
+    public const string SafetyEmergencyStop = "safety.emergency_stop";
+
     /// <summary>
     /// All registered event tokens. Iteration order is the order declared here.
     /// Used by the §17 contract-check to assert no runtime emit calls a token
@@ -197,7 +203,7 @@ public static class WsEventCatalog {
         BugReportPrepared, BugReportSharingModeSet,
         DataManagerDownloadProgress, DataManagerDownloadComplete, DataManagerDownloadFailed,
         BackupZipCreated, BackupRestoreProgress, BackupRestoreComplete,
-        SafetyUnsafe, SafetySafe, SafetyActionTaken
+        SafetyUnsafe, SafetySafe, SafetyActionTaken, SafetyEmergencyStop
     };
 }
 

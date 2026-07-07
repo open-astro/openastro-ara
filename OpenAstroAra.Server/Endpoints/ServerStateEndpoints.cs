@@ -59,6 +59,15 @@ public static class ServerStateEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetReleaseNotes");
 
+        // §35.3 — the big red button. Synchronous on purpose: the caller
+        // needs to know what actually stopped, not a 202 promise. Rungs are
+        // best-effort inside the service; a dead device never 500s this.
+        server.MapPost("/emergency-stop",
+                async (EmergencyStopService svc) =>
+                    Results.Ok(await svc.ExecuteAsync()))
+              .Produces<EmergencyStopResultDto>(StatusCodes.Status200OK)
+              .WithName("EmergencyStop");
+
         server.MapPost("/restart",
                 async (IServerStateService svc,
                        [FromQuery] string? reason,
