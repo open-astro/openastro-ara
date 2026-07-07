@@ -147,7 +147,11 @@ class WsEventStream {
        // TODO(wss): plaintext ws:// is fine for the trusted-LAN default, but the
        // §67.4 / web-support follow-up must switch to wss:// for untrusted routes
        // (the resume handshake + payloads would otherwise be in the clear).
-       _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws'),
+       // ws_version rides in the query string AS WELL AS the header: browser
+       // WebSockets can't set request headers, so the server accepts either
+       // (header wins when both are sent) — carrying both keeps this URL shape
+       // correct for a future web transport without an io-vs-web fork here.
+       _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws?ws_version=$wsVersion'),
        _connect = connect ?? _defaultConnect,
        _backoff = backoff ?? defaultBackoff;
 

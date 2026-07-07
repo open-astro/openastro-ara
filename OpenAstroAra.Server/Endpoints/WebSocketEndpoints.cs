@@ -72,20 +72,24 @@ public static partial class WebSocketEndpoints {
             async (HttpContext http, IWsEventChannel channel, IWsBroadcaster broadcaster,
                    ClientSessionService sessions, ILoggerFactory loggerFactory) => {
                 if (http.WebSockets.IsWebSocketRequest) {
-                    // §60.9 requires X-Ara-WS-Version: 1. Per openapi.yaml line 674,
-                    // a mismatched/missing version is rejected pre-upgrade with 426
-                    // — close-code 4003 only applies if version negotiation fails
-                    // *after* a successful upgrade, which can't happen with a
-                    // pre-handshake header check.
-                    var versionHeader = http.Request.Headers["X-Ara-WS-Version"].ToString();
-                    if (!string.Equals(versionHeader, ProtocolVersion, StringComparison.Ordinal)) {
+                    // §60.9 requires version 1, via the X-Ara-WS-Version header OR the
+                    // ws_version query parameter — browser WebSockets can't set request
+                    // headers, so the query param is the web client's only channel (the
+                    // header wins when both are present). Per openapi.yaml line 674, a
+                    // mismatched/missing version is rejected pre-upgrade with 426 —
+                    // close-code 4003 only applies if version negotiation fails *after*
+                    // a successful upgrade, which can't happen with a pre-handshake check.
+                    var requested = ResolveRequestedWsVersion(
+                        http.Request.Headers["X-Ara-WS-Version"].ToString(),
+                        http.Request.Query["ws_version"].ToString());
+                    if (!string.Equals(requested, ProtocolVersion, StringComparison.Ordinal)) {
                         http.Response.Headers.Upgrade = "websocket";
                         http.Response.Headers.Connection = "Upgrade";
                         return Results.Problem(
                             type: "https://openastro.net/errors/ws-version-mismatch",
                             title: "Unsupported WebSocket protocol version",
                             statusCode: StatusCodes.Status426UpgradeRequired,
-                            detail: $"X-Ara-WS-Version header is required and must equal \"{ProtocolVersion}\". Got: \"{versionHeader}\".");
+                            detail: $"X-Ara-WS-Version header (or ws_version query parameter) is required and must equal \"{ProtocolVersion}\". Got: \"{requested}\".");
                     }
                     var logger = loggerFactory.CreateLogger("OpenAstroAra.Server.Endpoints.WebSocket");
                     await HandleWebSocketAsync(http, channel, broadcaster, sessions, logger);
@@ -106,6 +110,13 @@ public static partial class WebSocketEndpoints {
 
         return app;
     }
+
+    /// <summary>The version the client asked for: the X-Ara-WS-Version header when present
+    /// (the native clients' channel), else the ws_version query parameter (the web fallback —
+    /// browser WebSockets can't set request headers). Empty when neither was sent.
+    /// Internal for unit tests.</summary>
+    internal static string ResolveRequestedWsVersion(string headerValue, string queryValue) =>
+        !string.IsNullOrEmpty(headerValue) ? headerValue : queryValue;
 
     /// <summary>
     /// Window the server waits for an optional resume request as the
