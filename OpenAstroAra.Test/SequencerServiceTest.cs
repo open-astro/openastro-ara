@@ -398,6 +398,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task SkipActiveRunsAsync_advances_a_running_run_past_its_current_instruction() {
+            // §42.2 skip_target: the bulk skip cancels the currently-running items
+            // (here a long wait) so the engine advances — the run completes early
+            // instead of sitting out the full wait.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 3600 });
+                c.Items.Add(new Annotation { Name = "after-skip" });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+
+            var skipped = await svc.SkipActiveRunsAsync(CancellationToken.None);
+            Assert.That(skipped, Is.EqualTo(1));
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "the hour-long wait was skipped, so the run finishes promptly");
+        }
+
+        [Test]
         public async Task Failed_meridian_flip_pauses_the_run_awaiting_user_and_resume_reattempts_the_flip() {
             // §58.12 END-TO-END through the real engine: a MeridianFlipTrigger whose
             // executor fails arms the pause gate as AwaitingUser → the run suspends

@@ -161,6 +161,20 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return Task.FromResult<IReadOnlyList<Guid>>(paused);
     }
 
+    public Task<int> SkipActiveRunsAsync(CancellationToken ct) {
+        var skipped = 0;
+        foreach (var (_, run) in _runs) {
+            ct.ThrowIfCancellationRequested();
+            if (run.State == SequenceRunState.Running) {
+                // Placeholder runs have no per-item cancellation; advancing the
+                // index on the next worker tick is the closest analogue, so this
+                // just counts the runs a real engine would have skipped.
+                skipped++;
+            }
+        }
+        return Task.FromResult(skipped);
+    }
+
     public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
         var resumed = 0;
         foreach (var id in ids) {

@@ -80,12 +80,17 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private readonly IGuiderProcessSupervisor _supervisor;
 
     public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
-            IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null) {
+            IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null,
+            IProfileStore? profileStore = null, Func<ISequencerService?>? sequencerResolver = null,
+            INotificationService? notifications = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _ws = ws;
+        _profileStore = profileStore;
+        _sequencerResolver = sequencerResolver;
+        _notifications = notifications;
     }
 
     public Task<GuiderDto?> GetAsync(CancellationToken ct) {
@@ -289,6 +294,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 SetStateLocked(EquipmentConnectionState.Error);
                 // §63.3 guider-d: the daemon dropped mid-session — try to recover the process.
                 BeginRecoveryLocked();
+                // §42.2: guiding is gone NOW — any running sequence is shooting
+                // unguided, so react per the profile's on_guider_lost policy
+                // (see GuiderService.FaultReaction.cs).
+                BeginFaultReactionLocked();
             }
         }
     }
@@ -357,7 +366,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             AcceptedUtc: DateTimeOffset.UtcNow,
             IdempotencyKey: idempotencyKey);
 
-    private void SetStateLocked(EquipmentConnectionState state) => _state = state;
+    private void SetStateLocked(EquipmentConnectionState state) {
+        _state = state;
+        if (state == EquipmentConnectionState.Connected) {
+            // A fresh successful connection starts a new fault episode: the §42.2
+            // reaction may fire again on the next mid-session loss.
+            _faultReactionLatched = false;
+        }
+    }
 
     private void DisposeGuiderLocked() {
         if (_guider is not null) {

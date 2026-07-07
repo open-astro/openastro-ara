@@ -198,3 +198,10 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **`PausedAwaitingUser` is never auto-resumed and automated safety actions are never §58.12 user activity.** New `ISequencerService.PauseActiveRunsAsync`/`ResumeRunsAsync` exist precisely so the engine doesn't ride the user-facing `PauseAsync`/`ResumeAsync` (whose `NotifyUserActivity` would cancel an unattended-shutdown countdown as if the user came back). The bulk pause also skips already-paused runs so the engine can never "adopt" (and later auto-resume) a pause the user or a flip failure owns.
 - **A disconnected monitor is unknown, not safe.** Losing the SafetyMonitor cancels a pending auto-resume (no evidence conditions are safe) but triggers no new action (no evidence they're unsafe either); a monitor that CONNECTS reporting unsafe triggers immediately (unknown→unsafe counts as a transition).
 - **Unknown `on_unsafe` tokens fall back to `pause_and_park`** (fail toward protecting the gear; logged so a typo'd profile is visible rather than silently inert).
+
+## 2026-07-07 — §42.2 guider-lost reaction semantics
+
+- **React immediately, no grace window.** The §42.3 hot-reconnect ladder suggests retrying before pausing, but ARA's client has no auto-reconnect yet (§63.3 follow-up) — a socket drop today means guiding is gone until the user reconnects, so every second of grace is another unguided frame. `GuiderRetryTimeoutSec` stays unconsumed until the auto-reconnect lands (recorded in PORT_TODO); the pause itself is instruction-boundary anyway, so the in-flight frame always completes.
+- **`skip_target` skips the current items and lets the sequence advance,** accepting that later guide instructions fail until the guider is back — that is what the user's chosen policy means; the notification says so explicitly.
+- **One reaction per disconnect episode.** A flapping socket must not stack pauses/notifications; the latch clears only on the next successful connect (`SetStateLocked(Connected)`).
+- **Quiet when nothing is running.** The §63.3 recovery coordinator already posts the crash notifications; the fault flow only speaks when it actually touched a run.

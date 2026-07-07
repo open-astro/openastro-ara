@@ -99,6 +99,13 @@ public interface ISequencerService {
     /// only an explicit user command clears it. Returns the count of runs whose gate was released.
     /// </summary>
     Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>
+    /// §42.2 — skip the currently-executing instructions of every active run (the guider-fault flow's
+    /// <c>skip_target</c> action). Same semantics as <see cref="SkipAsync"/> per run, but daemon-automated
+    /// (no §58.12 user-activity signal). Returns the count of runs a skip was issued on.
+    /// </summary>
+    Task<int> SkipActiveRunsAsync(CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>
