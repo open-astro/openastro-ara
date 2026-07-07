@@ -105,6 +105,13 @@ public static class WsEventCatalog {
     public const string DiagnosticsAutoActionTaken = "diagnostics.auto_action_taken";
     public const string DiagnosticsAutoActionSkipped = "diagnostics.auto_action_skipped";
     public const string DiagnosticsCleared = "diagnostics.cleared";
+    // Per-connection resync frame sent once after every WS accept (§51
+    // reconnect-replay gap): the full set of currently-open issues, so a client
+    // whose socket was down when a diagnostics.cleared fired can drop the stale
+    // issue instead of showing amber/red forever. Sent directly on the socket
+    // (never broadcast), always with seq 0 — it is a statement of state, not a
+    // position in the event stream.
+    public const string DiagnosticsSnapshot = "diagnostics.snapshot";
 
     // Phase 9 — server lifecycle + notifications + storage
     public const string ServerPendingRestart = "server.pending_restart";
