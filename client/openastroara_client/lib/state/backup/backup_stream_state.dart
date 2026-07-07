@@ -290,6 +290,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // would otherwise keep _reclaimedOnce stuck through a busy session.
       _reclaimedOnce = false;
       state = state.copyWith(pendingCount: entries.length, clearProblem: true);
+      var failuresThisPass = 0;
       for (final entry in entries) {
         if (!state.enabled || !state.active) return;
         if (_exposureBlocking) return;
@@ -301,11 +302,15 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           error = await _pullVerifyStore(client, entry); // one retry
         }
         if (error != null) {
-          // Persistent per-frame failure (full/read-only disk, repeated
-          // checksum mismatch): surface it and stop this pass instead of
-          // hammering every remaining entry — the next tick retries.
+          // Surface it and move on — the queue is oldest-first and an
+          // un-acked frame stays at the head, so stopping here would let one
+          // permanently-bad frame block every newer frame forever. The cap
+          // bounds the pass when the failure is systemic (full/read-only
+          // disk hits every entry); the next tick retries.
+          failuresThisPass++;
           state = state.copyWith(problem: 'Backup of ${entry.id} failing: $error');
-          break;
+          if (failuresThisPass >= 3) break;
+          continue;
         }
         await client.ack(_hostname, entry.id);
         state = state.copyWith(

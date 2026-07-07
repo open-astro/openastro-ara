@@ -179,6 +179,24 @@ void main() {
         reason: 'a persistently failing frame must be visible, not silently retried');
   });
 
+  test('one persistently-bad frame does not block newer frames from mirroring', () async {
+    final c = controller();
+    fake.addFrame('frame-bad', 'GOOD-BYTES');
+    fake.corruptor = (id) => id == 'frame-bad'
+        ? Uint8List.fromList('TAMPERED'.codeUnits)
+        : fake.frames[id]!;
+    fake.addFrame('frame-good', 'FITS-DATA-2');
+
+    await c.setEnabled(true);
+    await settle();
+
+    final state = container.read(backupStreamProvider);
+    expect(fake.acked, contains('frame-good'),
+        reason: 'the queue is oldest-first — a stuck head frame must not freeze the mirror');
+    expect(fake.acked, isNot(contains('frame-bad')));
+    expect(state.problem, contains('frame-bad'));
+  });
+
   test('an unwritable backup folder surfaces the problem instead of looping silently', () async {
     final c = controller();
     // A regular FILE where the root dir should be — dir.create() fails.
