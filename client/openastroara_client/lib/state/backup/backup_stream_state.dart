@@ -326,17 +326,16 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // Null sha = the daemon hasn't hashed it yet (per-page budget) —
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
-        var pullStarted = DateTime.now();
-        var error = await _pullVerifyStore(client, entry);
+        var (error, downloadTime) = await _pullVerifyStore(client, entry);
         if (error != null) {
-          // Time only the attempt that actually moved the bytes — including
-          // a failed attempt would under-pace the cap and skew the link
-          // measurement low exactly when a flaky link needs both most.
-          pullStarted = DateTime.now();
-          error = await _pullVerifyStore(client, entry); // one retry
+          (error, downloadTime) = await _pullVerifyStore(client, entry); // one retry
         }
         if (error == null) {
-          final elapsed = DateTime.now().difference(pullStarted);
+          // downloadTime spans ONLY client.downloadFrame (and only the
+          // attempt that succeeded) — sha hashing and disk writes must
+          // inflate neither the link measurement (a slow NAS would
+          // understate the link) nor the pacing comparison.
+          final elapsed = downloadTime ?? Duration.zero;
           _recordThroughput(entry.sizeBytes, elapsed);
           final floor = paceFloor(entry.sizeBytes, state.maxMbps);
           if (floor > elapsed) {
@@ -393,16 +392,19 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     }
   }
 
-  /// Pull + verify + store one frame. Returns null on success, else a short
-  /// error description (checksum mismatch, disk trouble, transport error) —
-  /// the caller decides whether to retry or surface it.
-  Future<String?> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
+  /// Pull + verify + store one frame. Returns (null, downloadTime) on
+  /// success — downloadTime spans only the network transfer, for §44.4
+  /// pacing/measurement — else a short error description (checksum mismatch,
+  /// disk trouble, transport error); the caller decides whether to retry.
+  Future<(String?, Duration?)> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
     try {
+      final downloadStarted = DateTime.now();
       final bytes = await client.downloadFrame(entry.id);
+      final downloadTime = DateTime.now().difference(downloadStarted);
       final digest = sha256.convert(bytes).toString();
       if (!_digestMatches(digest, entry.sha256!)) {
         debugPrint('backup-stream sha mismatch for ${entry.id} — retrying');
-        return 'checksum mismatch';
+        return ('checksum mismatch', null);
       }
       final server = ref.read(activeServerProvider);
       final hostDir = _sanitize(server?.hostname ?? 'server');
@@ -415,12 +417,12 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       final tmp = File('${file.path}.tmp');
       await tmp.writeAsBytes(bytes, flush: true);
       await tmp.rename(file.path);
-      return null;
+      return (null, downloadTime);
     } on BackupStreamSlotLostException {
       rethrow;
     } catch (e) {
       debugPrint('backup-stream pull failed for ${entry.id}: $e');
-      return '$e';
+      return ('$e', null);
     }
   }
 

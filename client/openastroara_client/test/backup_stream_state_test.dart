@@ -385,6 +385,12 @@ void main() {
     await c.setEnabled(true);
     await settle();
     c.setMaxMbps(25);
+    // The persist is fire-and-forget — wait for the chained write to land
+    // before "restarting" (CI runners lost this race).
+    final prefsProbe = BackupStreamPrefsService(supportDir: () async => prefsDir);
+    for (var i = 0; i < 40 && (await prefsProbe.load()).maxMbps != 25; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
 
     container.dispose();
     fake = _FakeClient();
