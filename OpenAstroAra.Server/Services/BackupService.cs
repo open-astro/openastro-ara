@@ -103,6 +103,13 @@ namespace OpenAstroAra.Server.Services {
         // fill the disk. Internal test seam (shrink to exercise the cap without a big file).
         internal long MaxRemoteArchiveBytes { get; set; } = 512L * 1024 * 1024;
 
+        // §43-2b(b) — read-progress watchdog for the remote download (the DataManagerService
+        // pattern): the deadline re-arms on every byte, so a healthy transfer never trips it,
+        // but a peer that accepts the connection and then stalls (headers OR body) is cancelled
+        // instead of holding the single clone slot — and with it EVERY future restore — hostage
+        // until a daemon restart. Internal test seam.
+        internal TimeSpan RemoteIdleTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
         private readonly IBackupSourceFetcher? _remoteFetcher;
 
         public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null,
@@ -432,6 +439,12 @@ namespace OpenAstroAra.Server.Services {
                     "No restorable area selected — set restore_profiles and/or restore_sequences.");
             }
 
+            // The DTO declares the URL non-nullable, but the JSON deserializer doesn't enforce that at runtime —
+            // a body with "backup_source_url": null must stay the clean 422 it was pre-remote-support, not an NRE.
+            if (request.BackupSourceUrl is null) {
+                throw new BackupRestoreSourceUnsupportedException("backup_source_url is required.");
+            }
+
             // §43-2b(b) — source discrimination. A RELATIVE URL is always local (that's the shape
             // ListSnapshots hands out and the client echoes back). An ABSOLUTE http(s) URL whose
             // path parses as our snapshot route AND whose id exists on disk stays local too (the
@@ -554,44 +567,60 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // Streams the remote archive to disk while hashing it, bounded by MaxRemoteArchiveBytes both by the
-        // advertised Content-Length (refuse before the first byte) and by actual bytes received (a server that
-        // lies about — or omits — the length still can't fill the disk).
+        // Streams the remote archive to disk while hashing it, bounded three ways: by the advertised
+        // Content-Length (refuse before the first byte), by actual bytes received (a server that lies about —
+        // or omits — the length still can't fill the disk), and by the RemoteIdleTimeout read-progress watchdog
+        // (a peer that stalls on headers or mid-body is cancelled — MaxRemoteArchiveBytes bounds volume, not time,
+        // and the backup-source HttpClient deliberately has no Timeout).
         private async Task DownloadAndVerifyAsync(Uri source, string expectedSha256, string tempPath, CancellationToken ct) {
-            await using var fetch = await _remoteFetcher!.OpenAsync(source, ct).ConfigureAwait(false);
-            if (fetch.TotalBytes is { } advertised && advertised > MaxRemoteArchiveBytes) {
-                throw new InvalidOperationException(
-                    $"Remote backup archive advertises {advertised} bytes — over this daemon's {MaxRemoteArchiveBytes}-byte cap; not restored.");
-            }
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            long received = 0;
-            var stagedOk = false;
+            using var idleCts = new CancellationTokenSource();
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, idleCts.Token);
+            var linkedCt = linked.Token;
             try {
-                await using (var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None)) {
-                    var buffer = new byte[81920];
-                    int read;
-                    while ((read = await fetch.Content.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0) {
-                        received += read;
-                        if (received > MaxRemoteArchiveBytes) {
-                            throw new InvalidOperationException(
-                                $"Remote backup archive exceeded this daemon's {MaxRemoteArchiveBytes}-byte cap mid-download; not restored.");
+                // Arm BEFORE OpenAsync so the header-wait phase is bounded too (the DataManagerService pattern).
+                idleCts.CancelAfter(RemoteIdleTimeout);
+                await using var fetch = await _remoteFetcher!.OpenAsync(source, linkedCt).ConfigureAwait(false);
+                if (fetch.TotalBytes is { } advertised && advertised > MaxRemoteArchiveBytes) {
+                    throw new InvalidOperationException(
+                        $"Remote backup archive advertises {advertised} bytes — over this daemon's {MaxRemoteArchiveBytes}-byte cap; not restored.");
+                }
+                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                long received = 0;
+                var stagedOk = false;
+                try {
+                    await using (var file = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None)) {
+                        var buffer = new byte[81920];
+                        int read;
+                        idleCts.CancelAfter(RemoteIdleTimeout); // fresh deadline for the body; re-armed per read below.
+                        while ((read = await fetch.Content.ReadAsync(buffer, linkedCt).ConfigureAwait(false)) > 0) {
+                            idleCts.CancelAfter(RemoteIdleTimeout);
+                            received += read;
+                            if (received > MaxRemoteArchiveBytes) {
+                                throw new InvalidOperationException(
+                                    $"Remote backup archive exceeded this daemon's {MaxRemoteArchiveBytes}-byte cap mid-download; not restored.");
+                            }
+                            hash.AppendData(buffer, 0, read);
+                            await file.WriteAsync(buffer.AsMemory(0, read), linkedCt).ConfigureAwait(false);
                         }
-                        hash.AppendData(buffer, 0, read);
-                        await file.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                    }
+                    var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
+                    if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
+                        throw new BackupCorruptException(
+                            "The downloaded backup archive failed its checksum and was not restored (transfer corruption, or the wrong sha256).");
+                    }
+                    stagedOk = true;
+                } finally {
+                    // Never leave a failed/oversize/corrupt download staged; the sweep would reclaim it at next
+                    // boot, but there is no reason to hold disk until then.
+                    if (!stagedOk) {
+                        TryDelete(tempPath);
                     }
                 }
-                var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
-                if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase)) {
-                    throw new BackupCorruptException(
-                        "The downloaded backup archive failed its checksum and was not restored (transfer corruption, or the wrong sha256).");
-                }
-                stagedOk = true;
-            } finally {
-                // Never leave a failed/oversize/corrupt download staged; the sweep would reclaim it at next boot,
-                // but there is no reason to hold disk until then.
-                if (!stagedOk) {
-                    TryDelete(tempPath);
-                }
+            } catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested) {
+                // The watchdog fired (not a daemon shutdown): report the stall as the restore failure — the
+                // clone slot must free up for the next attempt instead of wedging until a process restart.
+                throw new InvalidOperationException(
+                    $"Remote backup download stalled (no data received for {RemoteIdleTimeout.TotalSeconds:F0}s); not restored.");
             }
         }
 

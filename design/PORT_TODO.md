@@ -881,7 +881,11 @@ Deferred to **§43-2**:
   which may hold device credentials. Bolting auth onto one route would be inconsistent and ineffective (the same data
   leaks via `/api/v1/profile/*`). If the daemon is ever exposed beyond a trusted LAN, API auth must be a **cross-cutting
   middleware** decision (PRODUCT-SCOPE / user-authoritative), not per-endpoint. Surfaced 2026-06-13 by the §43-1
-  round-4 review.
+  round-4 review. **Addendum (2026-07-06, §43-2b(b) remote-restore review):** the remote `BackupSourceUrl` fetch is a
+  NEW arbitrary-outbound-GET capability — any client that can reach the API can make the daemon GET any http(s) URL
+  (an SSRF/reachability-oracle surface via the differentiated clone-status failure messages). Accepted as intentional
+  within the same trusted-LAN threat model (a LAN peer can already reach those targets directly); if the daemon ever
+  gets auth/remote exposure, revisit alongside it (host/IP allowlist or confirm-on-daemon for remote restores).
 - **Stats catalog: light-frame partial index — RESOLVED 2026-06-15.** Added `idx_frames_light_captured` on
   `frames(captured_utc) WHERE frame_type = 'light'` (additive + idempotent in `SqliteAraDatabase.InitializeAsync`), with
   an EXPLAIN-QUERY-PLAN test asserting the planner uses it for the light-frame, captured_utc-ordered queries. This covers

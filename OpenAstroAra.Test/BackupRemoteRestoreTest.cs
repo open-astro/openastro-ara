@@ -57,12 +57,38 @@ namespace OpenAstroAra.Test {
             public byte[] Bytes = Array.Empty<byte>();
             public long? AdvertisedLength;
             public bool AdvertiseTrueLength = true;
+            public bool StallHeaders;
+            public bool StallBody;
             public int OpenCalls;
-            public Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
+            public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
                 OpenCalls++;
+                if (StallHeaders) {
+                    // A peer that accepts the connection but never sends headers — unblocks only on cancellation.
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
                 var advertised = AdvertiseTrueLength ? Bytes.Length : AdvertisedLength;
-                return Task.FromResult(new SkyDataFetch(new MemoryStream(Bytes), advertised));
+                Stream content = StallBody ? new StallingStream() : new MemoryStream(Bytes);
+                return new SkyDataFetch(content, advertised);
             }
+        }
+
+        // A body stream that never produces a byte: ReadAsync completes only when the token cancels,
+        // simulating a peer that sent headers then went silent mid-body.
+        private sealed class StallingStream : Stream {
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return 0;
+            }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }
 
         private sealed class RecordingRestorer : IBackupRestorer {
@@ -221,6 +247,54 @@ namespace OpenAstroAra.Test {
             var relative = new Uri("/api/v1/backup/snapshot/" + Guid.NewGuid().ToString("D") + "/download", UriKind.Relative);
             Assert.ThrowsAsync<BackupSnapshotNotFoundException>(
                 () => svc.RestoreZipAsync(Req(relative, sha: null), null, CancellationToken.None));
+        }
+
+        [Test]
+        public async Task A_peer_stalling_on_headers_fails_the_restore_and_frees_the_clone_slot() {
+            var fetcher = new FakeFetcher { StallHeaders = true };
+            var restorer = new RecordingRestorer();
+            using var svc = NewService(fetcher, restorer);
+            svc.RemoteIdleTimeout = TimeSpan.FromMilliseconds(50);
+
+            await svc.RestoreZipAsync(Req(RemoteUrl, new string('a', 64)), null, CancellationToken.None);
+            Assert.That(await WaitForTerminalAsync(svc), Is.EqualTo("failed"));
+            var status = await svc.GetCloneStatusAsync(CancellationToken.None);
+            Assert.Multiple(() => {
+                Assert.That(status.GetProperty("message").GetString(), Does.Contain("stalled"));
+                Assert.That(restorer.Calls, Is.Zero);
+            });
+
+            // The wedge the review flagged: the slot must be free for the NEXT restore attempt.
+            var good = new byte[] { 7, 7 };
+            fetcher.StallHeaders = false;
+            fetcher.Bytes = good;
+            await svc.RestoreZipAsync(Req(RemoteUrl, Sha256Hex(good)), null, CancellationToken.None);
+            Assert.That(await WaitForTerminalAsync(svc), Is.EqualTo("done"));
+        }
+
+        [Test]
+        public async Task A_peer_stalling_mid_body_fails_the_restore_via_the_idle_watchdog() {
+            var fetcher = new FakeFetcher { StallBody = true, AdvertiseTrueLength = false, AdvertisedLength = null };
+            var restorer = new RecordingRestorer();
+            using var svc = NewService(fetcher, restorer);
+            svc.RemoteIdleTimeout = TimeSpan.FromMilliseconds(50);
+
+            await svc.RestoreZipAsync(Req(RemoteUrl, new string('a', 64)), null, CancellationToken.None);
+            Assert.That(await WaitForTerminalAsync(svc), Is.EqualTo("failed"));
+            var status = await svc.GetCloneStatusAsync(CancellationToken.None);
+            Assert.Multiple(() => {
+                Assert.That(status.GetProperty("message").GetString(), Does.Contain("stalled"));
+                Assert.That(StagedTemps(), Is.Empty, "a stalled download must not stay staged");
+            });
+        }
+
+        [Test]
+        public void A_null_backup_source_url_is_a_clean_422_not_an_NRE() {
+            // The DTO declares the Uri non-nullable but the JSON deserializer doesn't enforce it at
+            // runtime — "backup_source_url": null must keep the pre-remote-support 422 behaviour.
+            using var svc = NewService(new FakeFetcher(), new RecordingRestorer());
+            Assert.ThrowsAsync<BackupRestoreSourceUnsupportedException>(
+                () => svc.RestoreZipAsync(Req(null!, sha: null), null, CancellationToken.None));
         }
 
         [Test]
