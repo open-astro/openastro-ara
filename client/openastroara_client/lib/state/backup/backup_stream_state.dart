@@ -151,7 +151,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     state = state.copyWith(
       localRoot: saved.root.isEmpty ? null : saved.root,
       enabled: saved.enabled,
-      maxMbps: saved.maxMbps,
+      // Clamp like the write path — a hand-edited prefs file must not smuggle
+      // an out-of-range cap past setMaxMbps's validation.
+      maxMbps: saved.maxMbps.clamp(0, 10000),
     );
     if (saved.enabled) {
       // Resume rides the first timer tick instead of claiming immediately —
@@ -340,6 +342,15 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // disk hits every entry); the next tick retries.
           failuresThisPass++;
           state = state.copyWith(problem: 'Backup of ${entry.id} failing: $error');
+          // Failed attempts still moved bytes over the link (a checksum
+          // mismatch is a full discarded transfer) — the cap must hold on
+          // exactly the flaky links that produce failures, so pace the full
+          // floor before touching the next entry.
+          final failedFloor = paceFloor(entry.sizeBytes * attempts, state.maxMbps);
+          if (failedFloor > Duration.zero) {
+            await pacer(failedFloor);
+            if (!state.enabled || !state.active) return;
+          }
           if (failuresThisPass >= 3) break;
           continue;
         }
