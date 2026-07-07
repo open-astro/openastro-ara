@@ -403,9 +403,17 @@ public static class EquipmentEndpoints {
                 statusCode: StatusCodes.Status502BadGateway);
     }
 
+    // Both build 409s carry a problem-detail `type` so the client can tell them apart (e-4b-2 #384 r5
+    // follow-up): "another build is running — wait" is user-actionable in a different way than "connect
+    // the guider first". Status code stays 409 for both (no wire-shape break for older clients).
+    internal const string BuildInProgressProblemType = "https://openastro.net/errors/calibration-build-in-progress";
+    internal const string GuiderNotConnectedProblemType = "https://openastro.net/errors/guider-not-connected";
+
     // Extracted (not an inline lambda) so the validation/connection error mapping is unit-testable with a mocked
     // service. §63.6: a bad request (out-of-range frame count / exposure bound, or min > max) throws
-    // ArgumentException → 400; a disconnected guider throws InvalidOperationException → 409 Conflict.
+    // ArgumentException → 400; a busy build gate throws CalibrationBuildInProgressException → 409 (typed);
+    // a disconnected guider throws plain InvalidOperationException → 409 (typed). The typed catch must come
+    // first — the busy exception DERIVES from InvalidOperationException.
     public static async Task<IResult> BuildDarkLibraryAsync(
             BuildDarkLibraryRequestDto request, string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
         try {
@@ -413,22 +421,25 @@ public static class EquipmentEndpoints {
         } catch (System.ArgumentException ex) {
             // Covers ArgumentOutOfRangeException (frame count / exposure bounds) and the min > max ArgumentException.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (CalibrationBuildInProgressException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: BuildInProgressProblemType);
         } catch (System.InvalidOperationException ex) {
             // Guider not connected — can't accept a build it can't run.
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
 
     // §63.6 defect-map twin of BuildDarkLibraryAsync — same validation/connection error mapping (400 / 409).
-    // The 409 also covers "a calibration build is already in progress" (the shared single-build gate).
     public static async Task<IResult> BuildDefectMapDarksAsync(
             BuildDefectMapDarksRequestDto request, string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
         try {
             return Results.Accepted(value: await svc.BuildDefectMapDarksAsync(request, idempotencyKey, ct));
         } catch (System.ArgumentException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (CalibrationBuildInProgressException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: BuildInProgressProblemType);
         } catch (System.InvalidOperationException ex) {
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
 
