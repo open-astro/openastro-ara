@@ -347,6 +347,19 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                 return;
             }
 
+            // Drop ids that are no longer resumable BEFORE touching the mount: a
+            // tracked run the user aborted/stopped during the countdown (or one a
+            // later abort_and_park reaction took down) must not trigger an unpark
+            // + tracking-on + "resumed" notification with nothing to resume
+            // (#731 round-3). Terminal/unknown ids are dropped permanently; a
+            // transient state-read fault keeps the id (the release path is
+            // guarded and honest, and a hiccup must not strand a resumable run).
+            ids = await FilterStillPausedAsync(ids).ConfigureAwait(false);
+            if (ids.Count == 0) {
+                LogResumeNothingLeft();
+                return;
+            }
+
             var unparked = await UnparkAndWaitQuietlyAsync(cts.Token).ConfigureAwait(false);
 
             // Re-check AFTER the (up to 90 s) unpark wait: a relapse to unsafe in
@@ -381,10 +394,18 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                 ["runs_resumed"] = resumed,
                 ["unparked"] = unparked,
             }).ConfigureAwait(false);
-            await NotifyQuietlyAsync(NotificationSeverity.Warning, "Safe again — sequence resumed",
-                "Conditions stayed safe through the configured delay, so the mount was unparked and the paused sequence resumed. "
-                + "Verify the pointing: unless your sequence re-centers the target, frames after an unsafe pause may need the target re-slewed."
-                + (unparked ? string.Empty : " NOTE: the mount did not confirm it unparked in time — check it before trusting new frames.")).ConfigureAwait(false);
+            if (resumed > 0) {
+                await NotifyQuietlyAsync(NotificationSeverity.Warning, "Safe again — sequence resumed",
+                    "Conditions stayed safe through the configured delay, so the mount was unparked and the paused sequence resumed. "
+                    + "Verify the pointing: unless your sequence re-centers the target, frames after an unsafe pause may need the target re-slewed."
+                    + (unparked ? string.Empty : " NOTE: the mount did not confirm it unparked in time — check it before trusting new frames.")).ConfigureAwait(false);
+            } else {
+                // The run ended in the tiny window between the liveness filter and
+                // the release — the mount is unparked but nothing resumed; say so
+                // honestly instead of claiming a resume.
+                await NotifyQuietlyAsync(NotificationSeverity.Warning, "Safe again — nothing left to resume",
+                    "Conditions cleared and the mount was unparked, but the paused sequence had already ended, so nothing was resumed.").ConfigureAwait(false);
+            }
         } catch (Exception ex) {
             LogResumeFailed(ex);
         } finally {
@@ -499,6 +520,30 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             LogRungFailed("unpark", ex);
             return false;
         }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort filter: a transient run-state read fault keeps the id (the release path is guarded); logged, never rethrown.")]
+    private async Task<List<Guid>> FilterStillPausedAsync(List<Guid> ids) {
+        var sequencer = _sequencerResolver?.Invoke();
+        if (sequencer is null) {
+            return ids;
+        }
+        var resumable = new List<Guid>(ids.Count);
+        foreach (var id in ids) {
+            try {
+                var state = await sequencer.GetRunStateAsync(id, CancellationToken.None).ConfigureAwait(false);
+                if (state is { State: SequenceRunState.Paused }) {
+                    resumable.Add(id);
+                } else {
+                    LogStaleRunDropped(id, state?.State);
+                }
+            } catch (Exception ex) {
+                LogRungFailed("filter_paused", ex);
+                resumable.Add(id);
+            }
+        }
+        return resumable;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -640,4 +685,10 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     [LoggerMessage(EventId = 3511, Level = LogLevel.Debug, Message = "§35 unsafe reading after a monitor read hiccup — reaction already latched, not re-firing")]
     private partial void LogUnsafeDebounced();
+
+    [LoggerMessage(EventId = 3512, Level = LogLevel.Information, Message = "§35 auto-resume: tracked run {RunId} is no longer paused (state {State}) — dropped from resume tracking")]
+    private partial void LogStaleRunDropped(Guid runId, SequenceRunState? state);
+
+    [LoggerMessage(EventId = 3513, Level = LogLevel.Information, Message = "§35 auto-resume: no tracked run is still paused — nothing to resume, mount stays parked")]
+    private partial void LogResumeNothingLeft();
 }

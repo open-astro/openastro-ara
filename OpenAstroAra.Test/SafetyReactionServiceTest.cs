@@ -79,6 +79,10 @@ namespace OpenAstroAra.Test {
             sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(0);
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
+            // Default: any tracked run still reads back Paused, so the countdown's
+            // liveness filter keeps it (stale-run tests override this per-id).
+            sequencer.Setup(s => s.GetRunStateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Guid id, CancellationToken _) => MakeRunState(id, SequenceRunState.Paused));
             SetPolicy("pause_and_park", autoResume: true, delayMin: 1);
 
             service = new SafetyReactionService(
@@ -107,6 +111,9 @@ namespace OpenAstroAra.Test {
                     : new SafetyMonitorDto("sm1", "Cloudwatcher",
                         connected ? EquipmentConnectionState.Connected : EquipmentConnectionState.Disconnected,
                         safe ?? false, DateTimeOffset.UtcNow.ToString("O")));
+
+        private static SequenceRunStateDto MakeRunState(Guid id, SequenceRunState state) =>
+            new(id, Guid.NewGuid(), state, null, null, DateTimeOffset.UtcNow, null, 0, 1, null);
 
         private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000) {
             var sw = Stopwatch.StartNew();
@@ -366,6 +373,30 @@ namespace OpenAstroAra.Test {
             await service.TickAsync();
             await WaitUntilAsync(() => resumedIds is not null);
             Assert.That(resumedIds, Is.EquivalentTo(new[] { runId }));
+        }
+
+        [Test]
+        public async Task A_run_that_ended_during_the_countdown_never_triggers_an_unpark() {
+            // The engine pauses run R; conditions clear; during the resume delay
+            // the user aborts R. The countdown's liveness filter must drop the
+            // stale id and leave the mount PARKED — no unpark, no tracking-on,
+            // no "resumed" notification (#731 round-3).
+            var runId = Guid.NewGuid();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { runId });
+            sequencer.Setup(s => s.GetRunStateAsync(runId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(MakeRunState(runId, SequenceRunState.Stopped));
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+
+            await Task.Delay(200);
+            telescope.Verify(t => t.UnparkAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.SetTrackingAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(postedNotifications, Has.Count.EqualTo(1), "only the original unsafe notification — no spurious resume message");
         }
 
         [Test]
