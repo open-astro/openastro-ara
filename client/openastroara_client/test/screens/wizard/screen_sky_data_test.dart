@@ -186,24 +186,31 @@ void main() {
             () => _FakePackages(() async => [rec, pkgA])),
       ]);
       addTearDown(container.dispose);
+      // wizardControllerProvider is autoDispose; in production WizardShell holds
+      // a permanent watch while only the child screen swaps. Mirror that here so
+      // the mid-test unmount can't dispose the controller (and hand the remount
+      // a FRESH draft, which would make this test pass vacuously — #728 review).
+      final keepAlive = container.listen(wizardControllerProvider, (_, __) {});
+      addTearDown(keepAlive.close);
       Widget screen() => UncontrolledProviderScope(
             container: container,
             child: const MaterialApp(home: Scaffold(body: ScreenSkyData())),
           );
       await tester.pumpWidget(screen());
       await tester.pumpAndSettle();
-      final draft = container.read(wizardControllerProvider).draft;
-      expect(draft.skyDataDownloadIds, {'r'}, reason: 'first visit seeds');
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds,
+          {'r'}, reason: 'first visit seeds');
       await tester.tap(find.text('Clear'));
       await tester.pumpAndSettle();
-      expect(draft.skyDataDownloadIds, isEmpty);
-      // Navigate away (unmount) and back (a brand-new State object).
+      // Navigate away (unmount) and back (a brand-new State object). Re-read the
+      // LIVE draft from the container after the remount — never a stale capture.
       await tester.pumpWidget(UncontrolledProviderScope(
           container: container,
           child: const MaterialApp(home: Scaffold(body: SizedBox()))));
       await tester.pumpWidget(screen());
       await tester.pumpAndSettle();
-      expect(draft.skyDataDownloadIds, isEmpty,
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds,
+          isEmpty,
           reason: 'the seed flag lives on the draft — an explicit Clear is final');
     });
 
