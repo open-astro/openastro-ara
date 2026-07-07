@@ -66,6 +66,16 @@ namespace OpenAstroAra.Test {
                 .Callback<NotificationDto, CancellationToken>((n, _) => { lock (postedNotifications) { postedNotifications.Add(n); } })
                 .Returns(Task.CompletedTask);
             camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            // Connected by default — the rung probes cached connection state
+            // and treats a disconnected device as not-available, not failed.
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new CameraDto("c1", "Cam", EquipmentConnectionState.Connected, null, null!));
+            guider.Setup(g => g.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderDto("g1", "PHD2", EquipmentConnectionState.Connected, null!));
+            telescope.Setup(t => t.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new TelescopeDto("t1", "Mount", EquipmentConnectionState.Connected, null, null!));
+            flat.Setup(f => f.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new FlatDeviceDto("f1", "Panel", EquipmentConnectionState.Connected, null!));
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
             guider.Setup(g => g.StopGuidingAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
             telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
@@ -172,6 +182,26 @@ namespace OpenAstroAra.Test {
             // The gate re-opens once the first pass finishes.
             var third = await service.ExecuteAsync().ConfigureAwait(false);
             Assert.That(third.AlreadyInProgress, Is.False);
+        }
+
+        [Test]
+        public async Task Execute_ADisconnectedDevice_IsNotAvailable_NotAFailure() {
+            // A rig without a flat panel: the service is registered in DI but
+            // the device is disconnected — its "is not connected" throw must
+            // NOT land in failed_rungs and scare a panicking operator.
+            flat.Setup(f => f.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new FlatDeviceDto("f1", "Panel", EquipmentConnectionState.Disconnected, null!));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(result.FlatPanelLightOff, Is.False);
+                Assert.That(result.FailedRungs, Is.Empty,
+                    "disconnected is a routine state, not a fault");
+                Assert.That(result.ParkRequested, Is.True, "the connected rungs still run");
+            });
+            flat.Verify(f => f.ApplyFlatPanelAsync(It.IsAny<FlatPanelRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
+                "a disconnected device is never poked — its throw would be a false alarm");
         }
 
         [Test]

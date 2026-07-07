@@ -99,15 +99,19 @@ public sealed partial class EmergencyStopService {
         var (runsAborted, abortRunsOutcome) = await AbortRunsQuietlyAsync().ConfigureAwait(false);
         if (abortRunsOutcome is RungOutcome.Failed) { failedRungs.Add("abort_runs"); }
         var exposureOutcome = await RungAsync("abort exposure",
+            _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
         if (exposureOutcome is RungOutcome.Failed) { failedRungs.Add("abort_exposure"); }
         var guidingOutcome = await RungAsync("stop guiding",
+            _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (guidingOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guiding"); }
         var parkOutcome = await RungAsync("park mount",
+            _telescope is null ? null : async () => (await _telescope.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _telescope is null ? null : async ct => await _telescope.ParkAsync(new ParkRequestDto("emergency_stop"), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (parkOutcome is RungOutcome.Failed) { failedRungs.Add("park"); }
         var flatOutcome = await RungAsync("flat panel light off",
+            _flatDevice is null ? null : async () => (await _flatDevice.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _flatDevice is null ? null : async ct => await _flatDevice.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: false), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (flatOutcome is RungOutcome.Failed) { failedRungs.Add("flat_panel_light_off"); }
 
@@ -168,11 +172,20 @@ public sealed partial class EmergencyStopService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort rung: a dead device must never block the remaining rungs; the result DTO carries the honest false, logged, never rethrown.")]
-    private async Task<RungOutcome> RungAsync(string rung, Func<CancellationToken, Task>? action) {
+    private async Task<RungOutcome> RungAsync(string rung, Func<Task<bool>>? connectedProbe, Func<CancellationToken, Task>? action) {
         if (action is null) {
             return RungOutcome.NotAvailable;
         }
         try {
+            // A registered-but-disconnected device is a routine state (a rig
+            // without a flat panel, an idle guider), NOT a failure — probing
+            // the cached connection state first keeps it out of failed_rungs,
+            // where the service's own "is not connected" throw would land it.
+            // A disconnect racing the probe still throws below and reads
+            // Failed — a device dying mid-stop deserves the loud path.
+            if (connectedProbe is not null && !await connectedProbe().ConfigureAwait(false)) {
+                return RungOutcome.NotAvailable;
+            }
             // CancellationToken.None deliberately: the caller disconnecting
             // must not cancel a half-finished stop.
             await action(CancellationToken.None).ConfigureAwait(false);
