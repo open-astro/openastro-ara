@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,18 @@ const kGuiderNotConnectedProblemType =
 /// neutral refresh hint — hasError also covers plain transport failures.
 String describeCalibrationActionError(Object? error) {
   if (error is DioException) {
-    final data = error.response?.data;
+    Object? data = error.response?.data;
+    // The daemon serves problem details as application/problem+json, which
+    // Dio's default transformer does NOT auto-decode (its JSON parse is gated
+    // on exactly application/json) — the body arrives as a raw string. Decode
+    // it here; a Map still comes through directly if a transformer already did.
+    if (data is String && data.isNotEmpty) {
+      try {
+        data = jsonDecode(data);
+      } on FormatException {
+        // Not JSON — fall through to the neutral message.
+      }
+    }
     final type = data is Map ? data['type'] : null;
     if (type == kBuildInProgressProblemType) {
       return 'Another calibration build is already running — wait for it to finish.';

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -260,5 +261,40 @@ void main() {
     }));
     await _open(tester);
     expect(find.text('Build failed: camera timeout'), findsOneWidget);
+  });
+
+  group('describeCalibrationActionError', () {
+    DioException problem409(Object? data) => DioException(
+          requestOptions: RequestOptions(path: '/darklibrary/build'),
+          response: Response<Object?>(
+            requestOptions: RequestOptions(path: '/darklibrary/build'),
+            statusCode: 409,
+            data: data,
+          ),
+        );
+
+    test('decodes application/problem+json delivered as a RAW STRING (Dio does not auto-parse it)', () {
+      // Dio's default transformer only JSON-decodes application/json; the
+      // daemon's Results.Problem responses are application/problem+json and
+      // arrive as a string — the review-caught path.
+      final msg = describeCalibrationActionError(problem409(
+          '{"type":"$kBuildInProgressProblemType","title":"conflict","status":409}'));
+      expect(msg, contains('already running'));
+    });
+
+    test('still handles an already-decoded Map body', () {
+      final msg = describeCalibrationActionError(
+          problem409({'type': kGuiderNotConnectedProblemType}));
+      expect(msg, contains('not connected'));
+    });
+
+    test('non-JSON string bodies and unknown types fall through to the neutral hint', () {
+      expect(describeCalibrationActionError(problem409('<html>teapot</html>')),
+          contains('Tap Refresh'));
+      expect(describeCalibrationActionError(problem409('{"type":"something-else"}')),
+          contains('Tap Refresh'));
+      expect(describeCalibrationActionError(StateError('plain failure')),
+          contains('Tap Refresh'));
+    });
   });
 }
