@@ -250,6 +250,16 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
         dome.MapPost("/park", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.ParkAsync(key, ct)));
+        // §25.5.5 — the remaining dome motions (caps for all four already ride DomeCapabilitiesDto,
+        // so the client gates each button on its cap). Same 202 + validation/connection mapping as Slew.
+        dome.MapPost("/findhome", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
+        dome.MapPost("/abort", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.AbortSlewAsync(key, ct)));
+        dome.MapPost("/setpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SetParkAsync(key, ct)));
+        dome.MapPost("/sync", async ([FromBody] DomeSlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SyncToAzimuthAsync(request, key, ct)));
         dome.MapPost("/shutter/open", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.OpenShutterAsync(key, ct)));
         dome.MapPost("/shutter/close", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>

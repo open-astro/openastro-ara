@@ -97,6 +97,39 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void FindHomeAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new DomeService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.FindHomeAsync(null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void AbortSlewAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new DomeService();
+            // Async method — the connected check throws via the returned task.
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.AbortSlewAsync(null, CancellationToken.None));
+        }
+
+        [Test]
+        public void SetParkAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new DomeService();
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.SetParkAsync(null, CancellationToken.None));
+        }
+
+        [Test]
+        public void SyncToAzimuthAsync_validates_range_before_the_connected_check() {
+            using var svc = new DomeService();
+            // Same [0, 360) rule and precedence as SlewAsync: a bad azimuth is a 400
+            // even while disconnected; a good azimuth on a disconnected dome is a 409.
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.SyncToAzimuthAsync(new DomeSlewRequestDto(360), null, CancellationToken.None));
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.SyncToAzimuthAsync(new DomeSlewRequestDto(180), null, CancellationToken.None));
+        }
+
+        [Test]
         public void IsAzimuthOutOfRange_enforces_zero_to_360() {
             Assert.That(DomeService.IsAzimuthOutOfRange(0), Is.False);
             Assert.That(DomeService.IsAzimuthOutOfRange(359.9), Is.False);

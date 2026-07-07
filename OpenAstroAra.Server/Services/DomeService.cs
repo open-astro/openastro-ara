@@ -78,7 +78,7 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             // controls the dome supports (shutter / azimuth-slew / park / home).
             var caps = state == EquipmentConnectionState.Connected && _domeCaps is { } c
                 ? new DomeCapabilitiesDto(
-                    c.CanSetShutter, c.CanSetAzimuth, c.CanSyncAzimuth, c.CanPark, c.CanFindHome)
+                    c.CanSetShutter, c.CanSetAzimuth, c.CanSyncAzimuth, c.CanPark, c.CanFindHome, c.CanSetPark)
                 : null;
             return Task.FromResult<DomeDto?>(
                 new DomeDto(_device.UniqueId, _device.Name, state, caps, runtime));
@@ -161,6 +161,49 @@ public sealed partial class DomeService : IDomeService, IDisposable {
         return Task.FromResult(Accepted("dome.shutter.close", idempotencyKey));
     }
 
+    // §25.5.5 — the remaining dome motions. FindHome is a long motion like Slew/Park, so it runs
+    // through the same fire-and-forget RunControl (202 semantics, cache refresh on completion).
+    public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        RunControl("dome.findhome", client, c => c.FindHome());
+        return Task.FromResult(Accepted("dome.findhome", idempotencyKey));
+    }
+
+    // §57 panic-stop shape (mirrors TelescopeService.AbortSlewAsync): issue AbortSlew NOW and await
+    // it — not fire-and-forget — so the 202 means the stop was actually sent. CancellationToken.None
+    // is critical: Task.Run(lambda, ct) returns a pre-cancelled task WITHOUT running the lambda if
+    // ct is already cancelled, so an HTTP-timeout that cancelled the token would silently never send
+    // the abort and the dome would keep rotating.
+    public async Task<OperationAcceptedDto> AbortSlewAsync(string? idempotencyKey, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+        return Accepted("dome.abort", idempotencyKey);
+    }
+
+    // SetPark is a prompt register write (no motion) — await it so a driver rejection surfaces as
+    // the request's error instead of a silent background log line.
+    public async Task<OperationAcceptedDto> SetParkAsync(string? idempotencyKey, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        await Task.Run(() => client.SetPark(), CancellationToken.None).ConfigureAwait(false);
+        return Accepted("dome.setpark", idempotencyKey);
+    }
+
+    // SyncToAzimuth re-labels the current position (no motion) — prompt write, same validation
+    // range as Slew.
+    public async Task<OperationAcceptedDto> SyncToAzimuthAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        if (IsAzimuthOutOfRange(request.TargetAzimuthDeg)) {
+            throw new ArgumentOutOfRangeException(nameof(request), request.TargetAzimuthDeg,
+                "TargetAzimuthDeg must be in [0, 360).");
+        }
+        var client = RequireConnectedClient();
+        var target = request.TargetAzimuthDeg;
+        await Task.Run(() => client.SyncToAzimuth(target), CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+        return Accepted("dome.sync", idempotencyKey);
+    }
+
     private AlpacaDome RequireConnectedClient() {
         AlpacaDome? client;
         lock (_gate) {
@@ -241,7 +284,9 @@ public sealed partial class DomeService : IDomeService, IDisposable {
         try { canPark = c.CanPark; } catch (Exception) { canPark = false; }
         bool canFindHome;
         try { canFindHome = c.CanFindHome; } catch (Exception) { canFindHome = false; }
-        return new DomeCaps(canSetShutter, canSetAzimuth, canSyncAzimuth, canPark, canFindHome);
+        bool canSetPark;
+        try { canSetPark = c.CanSetPark; } catch (Exception) { canSetPark = false; }
+        return new DomeCaps(canSetShutter, canSetAzimuth, canSyncAzimuth, canPark, canFindHome, canSetPark);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

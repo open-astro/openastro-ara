@@ -61,6 +61,20 @@ class DomeNotifier extends EquipmentDeviceNotifier<DomeStatus> {
   );
 
   Future<bool> park() => performAction((api) => api.command('park'));
+
+  // §25.5.5 — the remaining dome motions (each button gates on its capability).
+  Future<bool> findHome() => performAction((api) => api.command('findhome'));
+
+  /// §57-style stop for a rotating dome — always available while connected.
+  Future<bool> abortSlew() => performAction((api) => api.command('abort'));
+
+  /// Store the CURRENT position as the park position (no motion).
+  Future<bool> setPark() => performAction((api) => api.command('setpark'));
+
+  /// Re-label the current physical position as [azimuthDeg] (no motion).
+  Future<bool> syncToAzimuth(double azimuthDeg) => performAction(
+    (api) => api.command('sync', {'target_azimuth_deg': azimuthDeg}),
+  );
 }
 
 final domeProvider = AsyncNotifierProvider<DomeNotifier, DomeStatus?>(

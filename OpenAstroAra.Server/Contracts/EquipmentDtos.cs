@@ -270,7 +270,9 @@ public sealed record DomeDto(
     DomeStateDto Runtime);
 
 public sealed record DomeCapabilitiesDto(
-    bool CanSetShutter, bool CanSetAzimuth, bool CanSyncAzimuth, bool CanPark, bool CanFindHome);
+    bool CanSetShutter, bool CanSetAzimuth, bool CanSyncAzimuth, bool CanPark, bool CanFindHome,
+    // §25.5.5 — optional ctor default so pre-slice serialized shapes still deserialize.
+    bool CanSetPark = false);
 
 public sealed record DomeStateDto(string State, double? AzimuthDeg, bool ShutterOpen, bool AtHome, bool Parked);
 
