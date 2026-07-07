@@ -226,6 +226,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Read_hiccup_on_a_persistently_unsafe_monitor_does_not_refire_the_reaction() {
+            // unsafe → reaction fires and latches. A transient GetAsync fault
+            // resets state to unknown; the next unsafe reading (unknown→unsafe)
+            // must NOT re-park/re-notify — only a genuine safe reading clears
+            // the latch (#731 round-2 debounce).
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+            monitor.Setup(m => m.GetAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new TimeoutException("driver hiccup"));
+            await service.TickAsync();
+            SetMonitor(safe: false);
+            await service.TickAsync();
+
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(postedNotifications, Has.Count.EqualTo(1), "no notification spam per read hiccup");
+
+            // A genuine safe reading clears the latch — the next unsafe re-fires.
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
+
+        [Test]
         public async Task Safe_first_observation_takes_no_action() {
             SetMonitor(safe: true);
             await service.TickAsync();

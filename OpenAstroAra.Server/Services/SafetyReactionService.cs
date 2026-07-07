@@ -57,6 +57,12 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     // Non-empty exactly while a pause_and_park reaction of OURS is outstanding —
     // the run ids the engine paused, i.e. the only runs auto-resume may release.
     private readonly List<Guid> _pausedRunIds = new();
+    // Set when an unsafe reaction executes; cleared only by a genuine safe
+    // reading. A transient monitor read fault resets _lastSafe to unknown, and
+    // without this latch the next unsafe reading (unknown→unsafe) would re-fire
+    // the whole reaction — pause/park commands + a fresh Critical notification —
+    // on every read hiccup of a persistently-unsafe flaky driver (#731 round-2).
+    private bool _unsafeReactionLatched;
     // Single-flight: reactions and resumes run on background tasks; a poll tick
     // never starts a second one while the first is still executing.
     private bool _reacting;
@@ -174,13 +180,23 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                     // countdown is no longer standing on solid ground.
                     CancelResumeCountdownLocked();
                 }
+                if (transition == Transition.BecameSafe) {
+                    _unsafeReactionLatched = false;
+                }
                 if (transition == Transition.BecameUnsafe) {
                     if (_reacting) {
                         // A reaction is still executing (e.g. a slow park from a
                         // fast safe→unsafe→safe→unsafe flap) — don't stack another.
                         transition = Transition.None;
+                    } else if (_unsafeReactionLatched) {
+                        // unknown→unsafe after a read hiccup, with no genuine safe
+                        // reading in between — the reaction already ran; don't
+                        // re-park/re-notify per flake (#731 round-2 debounce).
+                        transition = Transition.None;
+                        LogUnsafeDebounced();
                     } else {
                         _reacting = true;
+                        _unsafeReactionLatched = true;
                     }
                 }
             }
@@ -450,6 +466,15 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             if (_telescope is null) {
                 return false;
             }
+            // Fresh gate immediately before commanding the unpark: a relapse to
+            // unsafe between the countdown's check and this call must not move
+            // the mount at all (#731 round-2) — the post-wait re-check then only
+            // covers a relapse landing DURING the wait.
+            lock (_lock) {
+                if (_disposed || ct.IsCancellationRequested || _lastSafe != true) {
+                    return false;
+                }
+            }
             await _telescope.UnparkAsync(null, CancellationToken.None).ConfigureAwait(false);
             // Unpark is a 202 background op; resuming a run whose next instruction
             // slews a still-parked mount would fail it, so wait (bounded) for the
@@ -612,4 +637,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     [LoggerMessage(EventId = 3510, Level = LogLevel.Warning, Message = "§35 WS publish of {EventType} failed (best-effort)")]
     private partial void LogWsPublishFailed(string eventType, Exception exception);
+
+    [LoggerMessage(EventId = 3511, Level = LogLevel.Debug, Message = "§35 unsafe reading after a monitor read hiccup — reaction already latched, not re-firing")]
+    private partial void LogUnsafeDebounced();
 }
