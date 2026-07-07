@@ -35,7 +35,20 @@ public enum SequenceRunState {
     Aborting,
     Stopped,
     Completed,
-    Failed
+    Failed,
+
+    /// <summary>
+    /// §58.12 — the engine paused itself after an urgent failure (e.g. a §58.9
+    /// meridian-flip abort with the mount in safe rest) and will not continue
+    /// until the user resumes, aborts, or stops the run. Same transitions as
+    /// <see cref="Paused"/>; the distinct value lets clients and the unattended-
+    /// shutdown countdown tell "operator chose to pause" from "the rig needs a
+    /// human". Deliberately LAST: the §28 checkpoint file stores this enum as a
+    /// number (bare serializer context), so appending keeps a pre-upgrade
+    /// checkpoint's states readable across a daemon update. Wire name
+    /// <c>pausedawaitinguser</c> (the shared lower-case enum policy).
+    /// </summary>
+    PausedAwaitingUser
 }
 
 /// <summary>List item for /api/v1/sequences (paginated per §60.2).</summary>

@@ -60,6 +60,15 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                             await pauseGate.WaitWhilePausedAsync(token);
                         }
                         await RunTriggers(context, previous, next, progress, token);
+                        if (pauseGate != null) {
+                            // A trigger can arm the gate itself (§58.12: a failed
+                            // meridian flip pauses the run awaiting the user). Wait
+                            // again so the suspension lands BEFORE this item — the
+                            // pre-trigger wait above has already been passed, and
+                            // imaging must not continue on a rig in safe rest.
+                            // Free when the gate is unarmed.
+                            await pauseGate.WaitWhilePausedAsync(token);
+                        }
                         await next.Run(progress, token);
                         previous = next;
 

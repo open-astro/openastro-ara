@@ -383,8 +383,18 @@ messages carry "(severity raised — unattended hours)" so morning triage reads 
 Profile toggle `SafetyPoliciesDto.UnattendedEscalation` (default ON); best-effort — a profile/almanac
 fault posts at the original severity, never blocks the notification.
 
-Remaining: **§58.12 unattended-shutdown countdown** (needs the sequencer's `paused_awaiting_user` state —
-the engine currently halts rather than pauses on failures; build when pause-awaiting-input lands), and the
+✅ **§58.12 prerequisite — the sequencer's `PausedAwaitingUser` state — DONE (2026-07-06)**: a failed
+meridian flip now arms the §38 pause gate as `AwaitingUser` (via the trigger, after the executor's §58.9
+safe rest + Critical notification) instead of throwing the run to `Failed`. The engine suspends before the
+next instruction (the strategy re-awaits the gate after pre-item triggers, so no frame fires on a rig in
+safe rest), reports the new `pausedawaitinguser` run state over REST/WS (`sequence.paused`), and the
+existing `/resume` releases it — the trigger then re-fires at the next boundary and re-attempts the flip,
+§58.9 flight check included. Abort/stop still win over the suspension; the §38 edit/delete-while-running
+409 guard counts the new state as active; enum value appended LAST (the §28 checkpoint stores it numerically).
+
+Remaining: **§58.12 unattended-shutdown countdown** itself (the 10-min `paused_awaiting_user` → graceful
+shutdown ladder: stop guider → warm cooler → park → disconnect; reset by acknowledge/any explicit command/a
+new WS connection), and the
 **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
 focuser-hardware blocker). Of the §58 profile block only `refocus_after_flip`/`guider_recal` mode enums
 remain un-modelled (they land with the refocus/recal orchestration they configure); `first_flip_confirmed` shipped with §58.8.

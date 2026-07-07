@@ -110,5 +110,31 @@ namespace OpenAstroAra.Test {
             await wait.WaitAsync(TimeSpan.FromSeconds(2));
             Assert.That(wait.IsCompletedSuccessfully, Is.True);
         }
+
+        [Test]
+        public void Kind_defaults_to_User_and_resets_when_resume_disarms() {
+            var gate = new PauseGate();
+            Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.User));
+
+            gate.RequestPause(PauseKind.AwaitingUser);
+            Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
+
+            gate.Resume();
+            gate.RequestPause();
+            Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.User),
+                "a fresh pause after resume must not inherit the old escalation");
+        }
+
+        [Test]
+        public void AwaitingUser_escalation_is_sticky_against_a_later_user_request() {
+            // §58.12: while the engine is paused awaiting the user, an ordinary
+            // pause request (a second operator hitting Pause) must not downgrade
+            // the kind — the run still needs a human, not a leisurely resume.
+            var gate = new PauseGate();
+            gate.RequestPause(PauseKind.User);
+            gate.RequestPause(PauseKind.AwaitingUser); // escalates an armed gate
+            gate.RequestPause(PauseKind.User);         // must NOT downgrade
+            Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
+        }
     }
 }

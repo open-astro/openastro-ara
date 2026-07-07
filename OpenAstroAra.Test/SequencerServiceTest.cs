@@ -44,8 +44,9 @@ namespace OpenAstroAra.Test {
         private static readonly SequenceStartRequestDto StartReq = new(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false);
 
         /// <summary>Serialize a SequentialContainer (populated by <paramref name="populate"/>) to a body JsonElement.</summary>
-        private static JsonElement BuildBody(Action<SequentialContainer>? populate = null) {
-            var factory = HeadlessSequencerFactory.WithDefaults();
+        private static JsonElement BuildBody(Action<SequentialContainer>? populate = null,
+                HeadlessSequencerFactory? factory = null) {
+            factory ??= HeadlessSequencerFactory.WithDefaults();
             var converter = new SequenceJsonConverter(factory);
             var root = new SequentialContainer { Name = "Test sequence" };
             populate?.Invoke(root);
@@ -55,8 +56,8 @@ namespace OpenAstroAra.Test {
         }
 
         private static SequencerService BuildService(Guid id, JsonElement? body, IWsBroadcaster? ws = null,
-                IFrameRepository? frames = null) {
-            var factory = HeadlessSequencerFactory.WithDefaults();
+                IFrameRepository? frames = null, HeadlessSequencerFactory? factory = null) {
+            factory ??= HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body);
             return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null,
@@ -364,6 +365,114 @@ namespace OpenAstroAra.Test {
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
             Assert.That(ws.Events, Does.Contain("sequence.resumed"));
+        }
+
+        [Test]
+        public async Task Failed_meridian_flip_pauses_the_run_awaiting_user_and_resume_reattempts_the_flip() {
+            // §58.12 END-TO-END through the real engine: a MeridianFlipTrigger whose
+            // executor fails arms the pause gate as AwaitingUser → the run suspends
+            // BEFORE the next instruction (imaging must not continue on a rig in
+            // safe rest) and reports PausedAwaitingUser. The user's explicit resume
+            // releases it; the trigger re-fires at the next boundary, this time the
+            // flip succeeds, and the run completes.
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true,
+                TrackingEnabled = true,
+                TimeToMeridianFlip = 0, // the flip window has arrived at the very first boundary
+                Coordinates = coords,
+            });
+            var flipSucceeds = false;
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor
+                .Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(() => Task.FromResult(flipSucceeds));
+            // A real profile (not a loose mock — other prototypes read it during
+            // construction) with side-of-pier off so ShouldTrigger is purely time-based.
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile,
+                meridianFlipExecutor: executor.Object);
+
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "first" });
+                c.Items.Add(new Annotation { Name = "second" });
+            }, factory), ws, factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(paused!.State, Is.EqualTo(SequenceRunState.PausedAwaitingUser));
+            Assert.That(paused.InstructionsCompleted, Is.EqualTo(0),
+                "the suspension lands BEFORE the instruction that follows the failed flip");
+            Assert.That(ws.Events, Does.Contain("sequence.paused"));
+
+            // Suspended means suspended — nothing advances while the user is away.
+            await Task.Delay(200);
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State,
+                Is.EqualTo(SequenceRunState.PausedAwaitingUser));
+
+            // The user sorts the rig out and resumes: the trigger re-fires at the
+            // next boundary and this time the flip goes through.
+            flipSucceeds = true;
+            await svc.ResumeAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "both instructions ran after resume");
+            Assert.That(ws.Events, Does.Contain("sequence.resumed"));
+            executor.Verify(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()),
+                Times.AtLeast(2), "the flip was re-attempted after resume");
+        }
+
+        [Test]
+        public async Task Abort_wins_over_a_pause_awaiting_user() {
+            // §58.12: abort must win over an awaiting-user suspension exactly as it
+            // does over an ordinary pause — the run ends Stopped, never wedged.
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor
+                .Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile,
+                meridianFlipExecutor: executor.Object);
+
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "never-reached" });
+            }, factory), ws, factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+            Assert.That(ws.Events, Does.Contain("sequence.aborted"));
         }
 
         [Test]

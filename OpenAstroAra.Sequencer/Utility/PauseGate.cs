@@ -43,6 +43,7 @@ namespace OpenAstroAra.Sequencer.Utility {
         // waiters. RunContinuationsAsynchronously so Resume() (a request thread)
         // never inlines engine continuations.
         private TaskCompletionSource? _resume;
+        private PauseKind _kind = PauseKind.User;
 
         /// <summary>
         /// Raised on the engine thread each time a strategy actually suspends at
@@ -57,10 +58,26 @@ namespace OpenAstroAra.Sequencer.Utility {
             get { lock (_lock) { return _resume != null; } }
         }
 
-        /// <summary>Arm the gate. Idempotent — a second request joins the first.</summary>
-        public void RequestPause() {
+        /// <summary>
+        /// Why the pending pause was requested. Only meaningful while
+        /// <see cref="IsPauseRequested"/>; resets to <see cref="PauseKind.User"/>
+        /// when <see cref="Resume"/> disarms the gate.
+        /// </summary>
+        public PauseKind PendingKind {
+            get { lock (_lock) { return _kind; } }
+        }
+
+        /// <summary>
+        /// Arm the gate. Idempotent — a second request joins the first. The kind
+        /// only ever escalates (a user pause request cannot downgrade an armed
+        /// <see cref="PauseKind.AwaitingUser"/> back to an ordinary pause).
+        /// </summary>
+        public void RequestPause(PauseKind kind = PauseKind.User) {
             lock (_lock) {
                 _resume ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (kind > _kind) {
+                    _kind = kind;
+                }
             }
         }
 
@@ -70,6 +87,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             lock (_lock) {
                 toComplete = _resume;
                 _resume = null;
+                _kind = PauseKind.User;
             }
             toComplete?.TrySetResult();
         }
@@ -94,6 +112,24 @@ namespace OpenAstroAra.Sequencer.Utility {
                 await resumeTask.WaitAsync(token).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>
+    /// Why a pause was requested — the gate's owner maps this to the run state the
+    /// suspension lands in. Ordered by severity: <see cref="RequestPause"/> only
+    /// ever escalates the pending kind, never downgrades it.
+    /// </summary>
+    public enum PauseKind {
+
+        /// <summary>§38 — an operator asked the run to pause; resume at leisure.</summary>
+        User = 0,
+
+        /// <summary>
+        /// §58.12 — the engine paused itself after an urgent failure (e.g. a §58.9
+        /// meridian-flip abort with the mount in safe rest) and needs a human
+        /// decision before imaging may continue.
+        /// </summary>
+        AwaitingUser = 1
     }
 
     /// <summary>

@@ -140,6 +140,7 @@ namespace OpenAstroAra.Test {
         [TestCase(SequenceRunState.Starting)]
         [TestCase(SequenceRunState.Running)]
         [TestCase(SequenceRunState.Paused)]
+        [TestCase(SequenceRunState.PausedAwaitingUser)]
         [TestCase(SequenceRunState.Aborting)]
         public async Task Delete_with_an_active_run_is_refused_and_keeps_the_file(SequenceRunState state) {
             var svc = new FileSequenceService(_profileDir, SequencerReporting(state).Object);
@@ -155,6 +156,7 @@ namespace OpenAstroAra.Test {
         [TestCase(SequenceRunState.Starting)]
         [TestCase(SequenceRunState.Running)]
         [TestCase(SequenceRunState.Paused)]
+        [TestCase(SequenceRunState.PausedAwaitingUser)]
         [TestCase(SequenceRunState.Aborting)]
         public async Task Update_with_an_active_run_is_refused_and_leaves_the_body(SequenceRunState state) {
             var svc = new FileSequenceService(_profileDir, SequencerReporting(state).Object);
