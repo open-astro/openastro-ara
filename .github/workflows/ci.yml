@@ -760,13 +760,16 @@ jobs:
         # libwebkit2gtk-4.1-dev: linux/runner/planetarium_overlay.cc (§36
         #   native-webview planetarium, pkg_check_modules REQUIRED).
         # libsecret-1-dev + libjsoncpp-dev: flutter_secure_storage_linux.
+        # libgstreamer1.0-dev + libgstreamer-plugins-base1.0-dev:
+        #   audioplayers_linux (§35.5 safety alarm, pkg_check_modules REQUIRED).
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build pkg-config \
             libgtk-3-dev libwebkit2gtk-4.1-dev \
-            libsecret-1-dev libjsoncpp-dev
+            libsecret-1-dev libjsoncpp-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
       - name: Read pinned Flutter version
         id: flutter-version
