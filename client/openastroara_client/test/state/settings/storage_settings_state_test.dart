@@ -69,6 +69,19 @@ void main() {
       expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 8);
     });
 
+    test('§43-2b backup retention defaults to 20 and rejects negatives (0 = keep all)', () {
+      final n = container.read(storageSettingsProvider.notifier);
+      expect(container.read(storageSettingsProvider).backupRetentionCount, 20);
+      n.setBackupRetentionCount(-1);
+      expect(container.read(storageSettingsProvider).backupRetentionCount, 20,
+          reason: 'negative is meaningless — mirrors the server 400');
+      n.setBackupRetentionCount(0);
+      expect(container.read(storageSettingsProvider).backupRetentionCount, 0,
+          reason: '0 is the explicit keep-everything value');
+      n.setBackupRetentionCount(50);
+      expect(container.read(storageSettingsProvider).backupRetentionCount, 50);
+    });
+
     test('§29 thresholdsValid flags an inverted pair (the save-time check)', () {
       final n = container.read(storageSettingsProvider.notifier);
       expect(n.thresholdsValid, isTrue); // defaults 10 > 2

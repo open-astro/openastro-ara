@@ -375,7 +375,9 @@ public partial class Program {
                 // Explicit: this factory lambda bypasses constructor activation, so optional params are passed
                 // by hand (the #711 CameraService lesson).
                 restorer: null,
-                remoteFetcher: sp.GetRequiredService<IBackupSourceFetcher>()));
+                remoteFetcher: sp.GetRequiredService<IBackupSourceFetcher>(),
+                // §43-2b retention — read live per create (a settings change applies without a restart).
+                profiles: sp.GetService<IProfileStore>()));
 
         // §36/§25.5 Tonight's Sky — ranks the OpenNGC catalog by altitude (with visibility window,
         // transit, and integration hours) for the active profile's site; falls back to a starter list

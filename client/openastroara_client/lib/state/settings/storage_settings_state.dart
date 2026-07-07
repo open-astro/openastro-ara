@@ -21,6 +21,10 @@ class StorageSettings {
   final int minFreeDiskWarnGb;
   final int minFreeDiskCriticalGb;
 
+  // §43-2b — how many backup snapshots the daemon keeps; older ones are pruned
+  // after each new backup. 0 = keep everything.
+  final int backupRetentionCount;
+
   const StorageSettings({
     this.saveDirectory = '/media/openastroara',
     this.fileFormat = StorageFileFormat.fits,
@@ -29,6 +33,7 @@ class StorageSettings {
         r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
     this.minFreeDiskWarnGb = 10,
     this.minFreeDiskCriticalGb = 2,
+    this.backupRetentionCount = 20,
   });
 
   StorageSettings copyWith({
@@ -38,6 +43,7 @@ class StorageSettings {
     String? filenameTemplate,
     int? minFreeDiskWarnGb,
     int? minFreeDiskCriticalGb,
+    int? backupRetentionCount,
   }) =>
       StorageSettings(
         saveDirectory: saveDirectory ?? this.saveDirectory,
@@ -46,6 +52,7 @@ class StorageSettings {
         filenameTemplate: filenameTemplate ?? this.filenameTemplate,
         minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
         minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
+        backupRetentionCount: backupRetentionCount ?? this.backupRetentionCount,
       );
 }
 
@@ -83,6 +90,13 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
   void setMinFreeDiskCriticalGb(int v) {
     if (v < 1) return;
     state = state.copyWith(minFreeDiskCriticalGb: v);
+  }
+
+  // §43-2b — 0 is meaningful (keep everything); negatives are rejected like the
+  // server's 400 (backup_retention_count must be >= 0).
+  void setBackupRetentionCount(int v) {
+    if (v < 0) return;
+    state = state.copyWith(backupRetentionCount: v);
   }
 
   /// Whether the current pair satisfies critical &lt; warn (checked before persisting).

@@ -232,6 +232,16 @@ const Map<String, Help> helpRegistry = {
         'Use `\\` (or `/`) as the path separator. Subdirectories are created automatically.',
     relatedSettings: ['session.storage.filename_template'],
   ),
+  'session.storage.backup_retention_count': Help(
+    key: 'session.storage.backup_retention_count',
+    title: 'Backup snapshot retention',
+    body: 'How many configuration backups (profile + sequences) the daemon keeps under its backups folder. After every new backup, the oldest snapshots beyond this count are deleted automatically — so routine backups can\u2019t slowly fill the disk.\n\n'
+        'Backups are small (kilobytes), so the default of 20 costs almost nothing while keeping weeks of history. Set **0** to keep every backup forever and manage the folder yourself.',
+    relatedSettings: [
+      'session.storage.backup_retention_count',
+      'session.storage.min_free_disk_warn_gb',
+    ],
+  ),
   'session.storage.min_free_disk_warn_gb': Help(
     key: 'session.storage.min_free_disk_warn_gb',
     title: 'Low-disk warning threshold',
