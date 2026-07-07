@@ -21,6 +21,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.WebSockets;
 using System.Text.Json;
@@ -178,6 +179,16 @@ public static partial class WebSocketEndpoints {
             // JSON resume request as its first frame. Anything else (timeout,
             // non-JSON, missing resume_token) → treat as fresh subscription.
             var (highWaterMark, pendingReceive) = await HandleResumePhaseAsync(socket, conn, channel, broadcaster, logger, ct);
+
+            // §51 reconnect-replay gap — send the open-diagnostics set as a
+            // per-connection diagnostics.snapshot frame so a client that missed
+            // a diagnostics.cleared while its socket was down (resume-token
+            // expired, daemon restarted) resyncs instead of showing a stuck
+            // amber/red pill forever. Sent unconditionally: after a successful
+            // resume the replay already caught the client up, so folding the
+            // (identical) snapshot is a no-op there. Best-effort — a
+            // diagnostics fault must not kill a healthy socket.
+            await SendDiagnosticsSnapshotAsync(http, conn, socket, logger, ct);
 
             // Receive loop — watches for Close frames and (since §27) parses the
             // small client→server control frames: {"type":"pong"} liveness answers
@@ -355,6 +366,67 @@ public static partial class WebSocketEndpoints {
                 && frame.Action is "allow" or "reject") {
             sessions.TryCompleteTakeover(frame.RequestId, frame.Action);
         }
+    }
+
+    /// <summary>
+    /// §51 — sends the current open-diagnostics set to THIS connection as a
+    /// <c>diagnostics.snapshot</c> envelope (seq 0 — a statement of state, not
+    /// a position in the stream; the client's resume tracking only ever moves
+    /// forward, so seq 0 never regresses it). Best-effort: no diagnostics
+    /// service registered, a read fault, or a send fault is logged and skipped
+    /// — the socket carries on as a normal subscription.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort resync: a diagnostics read/serialize fault must not tear down a healthy WS connection.")]
+    private static async Task SendDiagnosticsSnapshotAsync(
+            HttpContext http,
+            WsClientConnection conn,
+            WebSocket socket,
+            ILogger logger,
+            CancellationToken ct) {
+        try {
+            var diagnostics = http.RequestServices.GetService<IDiagnosticsService>();
+            if (diagnostics is null || socket.State != WebSocketState.Open) return;
+            var state = await diagnostics.GetStateAsync(ct);
+            var payload = BuildDiagnosticsSnapshotPayload(state);
+            // ToJsonString()+Parse is the AOT-safe JsonObject→JsonElement path
+            // (mirrors SqliteDiagnosticsService.EmitDiagnosticsEventAsync).
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            var envelope = new WsEventEnvelopeDto(
+                WsEventCatalog.DiagnosticsSnapshot,
+                DateTimeOffset.UtcNow,
+                Seq: 0,
+                doc.RootElement.Clone());
+            var json = JsonSerializer.SerializeToUtf8Bytes(
+                envelope, AraJsonSerializerContext.Default.WsEventEnvelopeDto);
+            await conn.SendTextAsync(json, ct);
+        } catch (OperationCanceledException) {
+            // Connection teardown mid-snapshot — nothing to resync.
+        } catch (Exception ex) {
+            LogDiagnosticsSnapshotFailed(logger, ex);
+        }
+    }
+
+    /// <summary>The <c>diagnostics.snapshot</c> payload: the open-issue set,
+    /// with per-issue fields spelled exactly like <c>diagnostics.issue_detected</c>
+    /// so a client folds both with one parser. Internal for unit tests.</summary>
+    internal static System.Text.Json.Nodes.JsonObject BuildDiagnosticsSnapshotPayload(DiagnosticsStateDto state) {
+        var issues = new System.Text.Json.Nodes.JsonArray();
+        foreach (var issue in state.OpenIssues) {
+            issues.Add(new System.Text.Json.Nodes.JsonObject {
+                ["id"] = issue.Id.ToString(),
+                ["event_type"] = issue.IssueType,
+                ["severity"] = DiagnosticHealthWire.Token(issue.Severity),
+                ["description"] = issue.Description,
+                ["detected_utc"] = issue.DetectedUtc.ToString("O"),
+                ["recommended_action"] = issue.RecommendedAction,
+                ["auto_correctible"] = issue.AutoCorrectible,
+            });
+        }
+        return new System.Text.Json.Nodes.JsonObject {
+            ["health"] = DiagnosticHealthWire.Token(state.Health),
+            ["open_issues"] = issues,
+        };
     }
 
     /// <summary>
@@ -541,6 +613,9 @@ public static partial class WebSocketEndpoints {
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "WS heartbeat ping loop ended on socket error")]
     private static partial void LogPingLoopEnded(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "diagnostics.snapshot send failed — the connection continues without the §51 resync")]
+    private static partial void LogDiagnosticsSnapshotFailed(ILogger logger, Exception ex);
 
     #endregion
 }

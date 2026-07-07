@@ -26,6 +26,22 @@ public enum DiagnosticHealth {
     Unknown
 }
 
+/// <summary>The §60.9 wire token for a <see cref="DiagnosticHealth"/> —
+/// single source of truth for every `diagnostics.*` WS payload's `severity`
+/// field. Total over the enum (Unknown maps to "unknown", which clients fold
+/// as info); throws only if the enum grows an unmapped member — silently
+/// reporting the *healthiest* state for an unknown severity is the wrong
+/// direction for a diagnostic.</summary>
+public static class DiagnosticHealthWire {
+    public static string Token(DiagnosticHealth severity) => severity switch {
+        DiagnosticHealth.Green => "green",
+        DiagnosticHealth.Yellow => "yellow",
+        DiagnosticHealth.Red => "red",
+        DiagnosticHealth.Unknown => "unknown",
+        _ => throw new System.ArgumentOutOfRangeException(nameof(severity), severity, "unhandled DiagnosticHealth"),
+    };
+}
+
 /// <summary>Diagnostics monitor operating mode (per §51.5).</summary>
 public enum DiagnosticsMode {
     Off,

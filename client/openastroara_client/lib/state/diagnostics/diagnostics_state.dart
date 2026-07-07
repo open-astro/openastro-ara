@@ -14,6 +14,12 @@ abstract final class DiagnosticsWsEvents {
   static const issueDetected = 'diagnostics.issue_detected';
   static const autoActionTaken = 'diagnostics.auto_action_taken';
   static const cleared = 'diagnostics.cleared';
+
+  /// Per-connection resync the server sends once after every WS accept: the
+  /// full open-issue set. Folding it replaces the open roll-up wholesale, so
+  /// a `cleared` missed while the socket was down can no longer leave an
+  /// issue stuck amber/red (the §51 reconnect-replay gap).
+  static const snapshot = 'diagnostics.snapshot';
 }
 
 /// Snapshot of the daemon's diagnostic state, rolled up from §60.9
@@ -93,6 +99,8 @@ class DiagnosticsAccumulator {
         changed = true;
       case DiagnosticsWsEvents.cleared:
         changed = _applyCleared(event);
+      case DiagnosticsWsEvents.snapshot:
+        changed = _applySnapshot(event);
       default:
         return null;
     }
@@ -179,6 +187,43 @@ class DiagnosticsAccumulator {
     return true;
   }
 
+  /// Folds a `diagnostics.snapshot` resync: replaces the open roll-up with the
+  /// server's authoritative open-issue set. This is what heals the stuck-pill
+  /// case — a `cleared` missed while the socket was down leaves a type in
+  /// [_open] that the snapshot (sent on every reconnect) no longer lists.
+  /// Returns whether the roll-up actually changed, so an identical snapshot
+  /// (every reconnect where nothing was missed) doesn't churn watchers.
+  ///
+  /// The event log is deliberately untouched: a resync is transport
+  /// bookkeeping, not a new happening — entries for the issues themselves
+  /// arrived (or were missed) as their own events.
+  bool _applySnapshot(WsEvent event) {
+    final issues = event.payload['open_issues'];
+    // A snapshot without a well-formed list is malformed — ignore it rather
+    // than treating it as "no open issues" and wrongly clearing real state.
+    // An EMPTY list is meaningful (all clear) and falls through below.
+    if (issues is! List) return false;
+    final next = <String, StatusLevel>{};
+    for (final entry in issues) {
+      if (entry is! Map) continue;
+      final eventType = _string(entry['event_type']);
+      // Same rule as _applyIssue: an event_type-less issue is unclearable, so
+      // it never enters the roll-up. Same bound too — a misbehaving server
+      // can't grow the map past the cap (keep the FIRST maxEvents; there is
+      // no recency to preserve inside one snapshot).
+      if (eventType == null || next.length >= maxEvents) continue;
+      next[eventType] = severityToLevel(_string(entry['severity']));
+    }
+    if (next.length == _open.length &&
+        next.entries.every((e) => _open[e.key] == e.value)) {
+      return false; // identical roll-up — no churn
+    }
+    _open
+      ..clear()
+      ..addAll(next);
+    return true;
+  }
+
   void _append(DiagnosticEvent entry) {
     _log.addFirst(entry); // most-recent first (panel renders top-down)
     if (_log.length > maxEvents) {
@@ -259,12 +304,11 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
     // wsEventsProvider is a StreamProvider — it delivers asynchronously (next
     // microtask), never synchronously inside this build(), so `state` is always
     // assigned after build() has returned the initial snapshot below.
-    // TODO: no replay on reconnect — events the server emits while the socket is
-    // down (WsEventStream auto-reconnects, so the stream stays non-null) are
-    // lost. A missed issue_detected reads stale-nominal; worse, a clear missed
-    // during the gap leaves that issue stuck in _open (pill stays amber/red with
-    // no recovery short of a server switch). Resolve when server-side
-    // history-on-connect lands.
+    // Reconnect resync: events emitted while the socket was down are still
+    // lost from the LOG, but the open-issue roll-up self-heals — the server
+    // sends a `diagnostics.snapshot` (the full open set) on every WS accept,
+    // and _applySnapshot replaces _open from it. A missed cleared can no
+    // longer leave the §51 pill stuck amber/red.
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       // Cheap early-out for the non-diagnostics majority by routing prefix
