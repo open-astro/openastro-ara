@@ -376,6 +376,11 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                     ? " It will auto-resume after conditions stay safe for " + policy.ResumeDelayMin + " min."
                     : string.Empty)),
         };
+        if (monitorUnsafe && breaches.Count > 0) {
+            // Combined breach: the monitor drove the deviceName, so the weather
+            // reasons must still reach the operator — never a bare "unsafe".
+            message += " Weather thresholds also breached: " + string.Join("; ", breaches) + ".";
+        }
         await NotifyQuietlyAsync(severity, title, message).ConfigureAwait(false);
     }
 

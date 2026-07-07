@@ -540,6 +540,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task MonitorAndWeatherBothUnsafe_TheNotificationNamesBoth() {
+            SetPolicy("pause_and_park", autoResume: false, delayMin: 1, weatherTriggers: true);
+            SetMonitor(false);
+            SetWeather(windMs: 15);
+
+            await service.TickAsync();
+
+            Assert.That(postedNotifications, Has.Count.EqualTo(1));
+            Assert.That(postedNotifications[0].Message, Does.Contain("UNSAFE"));
+            Assert.That(postedNotifications[0].Message, Does.Contain("wind"),
+                "a combined breach must not drop the weather reasons from the operator-facing text");
+        }
+
+        [Test]
         public async Task WeatherRecovery_EmitsSafe() {
             SetPolicy("pause_and_park", autoResume: false, delayMin: 1, weatherTriggers: true);
             SetWeather(windMs: 15);
