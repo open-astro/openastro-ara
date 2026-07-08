@@ -71,20 +71,20 @@ void main() {
     test('posts the source url + area flags and returns the operation_id', () async {
       final adapter = _FakeAdapter((_) => _json(<String, dynamic>{'operation_id': 'op-r'}, status: 202));
       final api = _api(adapter);
-      final id = await api.restore(sourceUrl: '/api/v1/backup/snapshot/b1/download', profiles: true, sequences: false);
+      final id = await api.restore(sourceUrl: '/api/v1/backup/snapshot/b1/download', profiles: true, sequences: false, frameMetadata: true);
       expect(id, 'op-r');
       final body = adapter.lastRequest!.data as Map<String, dynamic>;
       expect(body['backup_source_url'], '/api/v1/backup/snapshot/b1/download');
       expect(body['restore_profiles'], isTrue);
       expect(body['restore_sequences'], isFalse);
-      expect(body['restore_frame_metadata'], isFalse);
+      expect(body['restore_frame_metadata'], isTrue);
       expect(body['restore_logs'], isFalse);
     });
 
     test('rejects an empty source url before hitting the network', () async {
       final api = _api(_FakeAdapter((_) => _json(<String, dynamic>{'operation_id': 'unused'})));
       await expectLater(
-        api.restore(sourceUrl: '', profiles: true, sequences: true),
+        api.restore(sourceUrl: '', profiles: true, sequences: true, frameMetadata: false),
         throwsA(isA<ArgumentError>()),
       );
     });

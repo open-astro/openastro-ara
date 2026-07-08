@@ -12,6 +12,10 @@ DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 abstract final class BackupAreas {
   static const String profiles = 'profiles';
   static const String sequences = 'sequences';
+
+  /// §43-2b(c) — the frames-catalog snapshot (`db/openastroara.db` in the zip):
+  /// session/frame METADATA only, never the FITS files (§43.8).
+  static const String framesMetadata = 'frames_metadata';
 }
 
 /// One backup ZIP snapshot — client mirror of the daemon's `BackupZipDto`.

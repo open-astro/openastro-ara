@@ -19,11 +19,14 @@ abstract interface class BackupClient {
 
   /// Restore the selected areas from a snapshot's [downloadUrl]. Returns the
   /// accepted operation id. Throws on an unknown snapshot (404), an unsupported
-  /// source / no area selected / corrupt archive (422), or a transport error.
+  /// source / no area selected (422), or a transport error. A corrupt archive
+  /// surfaces via [cloneStatus] `failed` (§43-2b(c): the checksum runs on the
+  /// worker now that archives carry the catalog snapshot).
   Future<String> restore({
     required String sourceUrl,
     required bool profiles,
     required bool sequences,
+    required bool frameMetadata,
   });
 
   /// The restore worker's live state (§43-2b) — poll after [restore] until it
@@ -95,6 +98,7 @@ class BackupApi implements BackupClient {
     required String sourceUrl,
     required bool profiles,
     required bool sequences,
+    required bool frameMetadata,
   }) async {
     // A real guard (not a release-stripped assert): an empty source would otherwise
     // reach the daemon as a confusing 422 that doesn't reflect the client mistake.
@@ -107,10 +111,8 @@ class BackupApi implements BackupClient {
         'backup_source_url': sourceUrl,
         'restore_profiles': profiles,
         'restore_sequences': sequences,
-        // §43-1 backups don't carry these areas yet; send false explicitly.
-        // TODO(§43-2b): parameterize restore_frame_metadata / restore_logs once create captures those areas
-        // (interface + this impl + the notifier action all gain the flags).
-        'restore_frame_metadata': false,
+        'restore_frame_metadata': frameMetadata,
+        // restore_logs stays reserved: logs are not a §43.4 zip area (§43.8 only prunes them).
         'restore_logs': false,
       },
       // Restore does the atomic swap + rollback over the sequences/ tree — give it

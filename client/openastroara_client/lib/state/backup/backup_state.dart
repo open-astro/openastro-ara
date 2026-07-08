@@ -63,6 +63,7 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
     BackupSnapshot snapshot, {
     required bool profiles,
     required bool sequences,
+    required bool frameMetadata,
   }) async {
     final api = ref.read(backupApiProvider);
     if (api == null) return null;
@@ -72,6 +73,7 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
       sourceUrl: snapshot.downloadUrl,
       profiles: profiles,
       sequences: sequences,
+      frameMetadata: frameMetadata,
     );
   }
 
