@@ -234,9 +234,6 @@ public sealed partial class SequencerService : IAutoFlatsService {
     [LoggerMessage(EventId = 4804, Level = LogLevel.Information, Message = "§48 end-of-session flats started: run of sequence {SequenceId} → flats sequence {FlatsSequenceId} ({Frames} frames)")]
     private partial void LogAutoFlatsStarted(Guid sequenceId, Guid flatsSequenceId, int frames);
 
-    [LoggerMessage(EventId = 4805, Level = LogLevel.Information, Message = "§48 twilight flats sequence {FlatsSequenceId} generated for sequence {SequenceId} ({Frames} frames) — not auto-started")]
-    private partial void LogAutoFlatsGeneratedOnly(Guid sequenceId, Guid flatsSequenceId, int frames);
-
     [LoggerMessage(EventId = 4806, Level = LogLevel.Information, Message = "§48 nothing to capture: session {SessionId} of sequence {SequenceId} yielded no flats plan (no light frames?)")]
     private partial void LogAutoFlatsNothingToCapture(Guid sequenceId, Guid sessionId);
 
