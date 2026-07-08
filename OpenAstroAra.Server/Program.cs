@@ -276,7 +276,13 @@ public partial class Program {
                 () => sp.GetService<ISequencerService>(),
                 sp.GetService<INotificationService>()));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
-        builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
+        // §45 — the real polar-align service (skeleton): drives the routine over the connected GuiderService
+        // (PA-session lease lifecycle now; the capture→solve→slew loop lands in follow-up slices).
+        builder.Services.AddSingleton<IPolarAlignService>(sp =>
+            new PolarAlignService(
+                sp.GetRequiredService<GuiderService>(),
+                sp.GetRequiredService<ILogger<PolarAlignService>>(),
+                sp.GetService<IWsBroadcaster>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control

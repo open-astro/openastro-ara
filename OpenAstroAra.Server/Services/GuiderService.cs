@@ -383,7 +383,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     internal static double? RmsArcsec(double? rmsPixels, double pixelScaleArcsecPerPx) =>
         rmsPixels is { } px && pixelScaleArcsecPerPx > 0 ? px * pixelScaleArcsecPerPx : null;
 
-    private PHD2Guider RequireConnectedGuider() {
+    // internal (not private): the §45 PolarAlignService reuses this to reach the connected guider for the
+    // PA-session lease + solver captures, with the same connected-or-throw contract the guide ops use.
+    internal PHD2Guider RequireConnectedGuider() {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_guider is null || _state != EquipmentConnectionState.Connected) {
