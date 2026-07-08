@@ -1087,6 +1087,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         }
                         break;
                     }
+                case "SingleFrameComplete": {
+                        // §45: a fire-and-forget capture_single_frame finished. The RPC already acked 0; this
+                        // carries the outcome + saved-FITS path the PolarAlignService hands to its solver.
+                        if (message.ToObject<PhdEventSingleFrameComplete>() is { } frame) {
+                            Logger.Debug($"PHD2 - single frame complete (success: {frame.Success}; path: {frame.Path})");
+                            RaiseSingleFrameComplete(frame.Success, frame.Error, frame.Path);
+                        }
+                        break;
+                    }
                 default: {
                         break;
                     }
