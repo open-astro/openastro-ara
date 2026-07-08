@@ -185,12 +185,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
-            // §59.5 — the trigger family's reference point: temperature drift and HFR trend are
-            // both measured "since the last autofocus", and the filter records which wheel slot
-            // this focus position belongs to (first-use-of-a-filter trigger).
-            _history?.RecordAutofocus(
-                _focuser.GetInfo()?.Temperature ?? double.NaN,
-                _filterWheel?.GetInfo()?.SelectedFilter?.Name);
+            RecordAutofocusQuietly();
             return true;
         } catch (OperationCanceledException) {
             // A cancelled sweep (abort/stop/shutdown) restores best-effort and propagates — the
@@ -202,6 +197,24 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             LogSweepError(ex);
             await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
             return false;
+        }
+    }
+
+    // §59.5 — the trigger family's reference point: temperature drift and HFR trend are both
+    // measured "since the last autofocus", and the filter records which wheel slot this focus
+    // position belongs to (first-use-of-a-filter trigger). Bookkeeping AFTER a completed sweep:
+    // a GetInfo hiccup here must not turn a successful autofocus into a reported failure (which
+    // would also restore the focuser to the stale pre-sweep position, undoing real work).
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Post-success bookkeeping boundary: device-info reads for the history record may surface any device/comms exception; the sweep already succeeded and must be reported as such. CA1031's log-and-recover boundary applies.")]
+    private void RecordAutofocusQuietly() {
+        if (_history is null) return;
+        try {
+            _history.RecordAutofocus(
+                _focuser.GetInfo()?.Temperature ?? double.NaN,
+                _filterWheel?.GetInfo()?.SelectedFilter?.Name);
+        } catch (Exception ex) {
+            LogHistoryRecordFailed(ex);
         }
     }
 
@@ -242,4 +255,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Autofocus: failed to restore focuser to {Position}")]
     private partial void LogRestoreFailed(Exception ex, int position);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: completed sweep could not be recorded into the session history — the §59.5 triggers keep their previous reference point")]
+    private partial void LogHistoryRecordFailed(Exception ex);
 }

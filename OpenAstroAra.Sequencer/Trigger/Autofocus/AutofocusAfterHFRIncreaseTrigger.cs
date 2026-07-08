@@ -160,13 +160,17 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
                 points = points.Where(x => x.Id > lastAF.Id);
             }
 
+            // ALWAYS scope to the current filter — a mono rig (no wheel) records null-filter
+            // points and matches null==null; a wheel transiently reporting nothing matches
+            // no points and the trigger stays quiet, instead of mixing filters into one
+            // trend where a bandpass-driven HFR difference could spuriously fire (or mask)
+            // an autofocus.
             var fwInfo = filterWheelMediator?.GetInfo();
-            if (fwInfo is { Connected: true, SelectedFilter: not null }) {
-                Filter = fwInfo.SelectedFilter.Name;
-                points = points.Where(x => x.Filter == Filter);
-            } else {
-                Filter = string.Empty;
-            }
+            var currentFilter = fwInfo is { Connected: true, SelectedFilter: not null }
+                ? fwInfo.SelectedFilter.Name
+                : null;
+            Filter = currentFilter ?? string.Empty;
+            points = points.Where(x => x.Filter == currentFilter);
 
             var imageHistory = points.ToList();
             if (imageHistory.Count == 0) {
@@ -194,7 +198,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
                 shouldTrigger = true;
             }
 
-            if (shouldTrigger && Parent is { } parent && ItemUtility.IsTooCloseToMeridianFlip(parent, TriggerAndNextDuration(nextItem))) {
+            if (shouldTrigger && IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
                 shouldTrigger = false;
             }
@@ -215,11 +219,6 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             var slope = covXY / varX;
             var intercept = meanY - (slope * meanX);
             return intercept + (slope * n);
-        }
-
-        private TimeSpan TriggerAndNextDuration(ISequenceItem? nextItem) {
-            return (TriggerRunner?.GetItemsSnapshot().FirstOrDefault()?.GetEstimatedDuration() ?? TimeSpan.Zero)
-                + (nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero);
         }
 
         public override string ToString() {

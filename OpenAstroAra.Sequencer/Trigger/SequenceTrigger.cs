@@ -156,6 +156,19 @@ namespace OpenAstroAra.Sequencer.Trigger {
             AfterParentChanged();
         }
 
+        /// <summary>
+        /// True when firing this trigger now would collide with an imminent meridian flip —
+        /// the §58 window check over the runner's first item plus the upcoming instruction.
+        /// Triggers that yield to the flip (the §59.5 autofocus family) consult this AFTER
+        /// deciding they want to fire, and must not mutate their own reference state until
+        /// the veto has passed — a vetoed attempt retries on the next check.
+        /// </summary>
+        protected bool IsVetoedByImminentMeridianFlip(ISequenceItem? nextItem) {
+            var duration = (TriggerRunner?.GetItemsSnapshot().FirstOrDefault()?.GetEstimatedDuration() ?? TimeSpan.Zero)
+                + (nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero);
+            return Parent is { } parent && ItemUtility.IsTooCloseToMeridianFlip(parent, duration);
+        }
+
         public abstract bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         public virtual bool ShouldTriggerAfter(ISequenceItem? previousItem, ISequenceItem? nextItem) {

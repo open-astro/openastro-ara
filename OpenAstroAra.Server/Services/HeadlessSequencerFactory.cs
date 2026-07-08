@@ -36,6 +36,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Trigger.Autofocus;
+using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
@@ -334,6 +335,13 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new AutofocusAfterTemperatureChangeTrigger(focuserMediator, imageHistory),
                 new AutofocusAfterHFRIncreaseTrigger(imageHistory, filterWheelMediator),
                 new AutofocusAfterFilterChange(filterWheelMediator, imageHistory, profileService),
+                // Previously unregistered: a WILMA-added or NINA-imported ReconnectTrigger
+                // degraded to UnknownSequenceTrigger (never fired). Its ConnectEquipment item
+                // prototype was already registered above; the trigger itself was missed.
+                new ReconnectTrigger(
+                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             });
     }
 }

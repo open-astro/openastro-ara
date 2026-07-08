@@ -125,16 +125,11 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             Elapsed = Math.Round(since.TotalMinutes, 2);
             var shouldTrigger = since >= TimeSpan.FromMinutes(Amount);
 
-            if (shouldTrigger && Parent is { } parent && ItemUtility.IsTooCloseToMeridianFlip(parent, TriggerAndNextDuration(nextItem))) {
+            if (shouldTrigger && IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
                 shouldTrigger = false;
             }
             return shouldTrigger;
-        }
-
-        private TimeSpan TriggerAndNextDuration(ISequenceItem? nextItem) {
-            return (TriggerRunner?.GetItemsSnapshot().FirstOrDefault()?.GetEstimatedDuration() ?? TimeSpan.Zero)
-                + (nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero);
         }
 
         public override string ToString() {

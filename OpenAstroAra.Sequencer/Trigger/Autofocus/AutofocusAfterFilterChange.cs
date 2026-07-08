@@ -135,24 +135,24 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
                 // spurious one when the filter reappears. Keep the reference and stay quiet.
                 return false;
             }
-            var shouldTrigger = false;
             if (LastAutoFocusFilter == null) {
+                // First sight only anchors — there is no change to react to yet.
                 LastAutoFocusFilter = currentFilter;
-            } else if (LastAutoFocusFilter != currentFilter) {
-                LastAutoFocusFilter = currentFilter;
-                shouldTrigger = true;
+                return false;
+            }
+            if (LastAutoFocusFilter == currentFilter) {
+                return false;
             }
 
-            if (shouldTrigger && Parent is { } parent && ItemUtility.IsTooCloseToMeridianFlip(parent, TriggerAndNextDuration(nextItem))) {
+            // The reference moves only when the trigger actually fires: a meridian-flip veto
+            // must leave it pointing at the OLD filter, or the still-owed autofocus for the
+            // new one would be forgotten forever (the veto would read new==new next check).
+            if (IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
-                shouldTrigger = false;
+                return false;
             }
-            return shouldTrigger;
-        }
-
-        private TimeSpan TriggerAndNextDuration(ISequenceItem? nextItem) {
-            return (TriggerRunner?.GetItemsSnapshot().FirstOrDefault()?.GetEstimatedDuration() ?? TimeSpan.Zero)
-                + (nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero);
+            LastAutoFocusFilter = currentFilter;
+            return true;
         }
 
         public override string ToString() {

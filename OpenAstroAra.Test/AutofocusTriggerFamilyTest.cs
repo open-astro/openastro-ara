@@ -286,6 +286,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void HfrTrigger_ADisconnectedWheelNeverMixesFiltersIntoOneTrend() {
+            // A rising Ha trend, but the wheel is (transiently) gone: scoping to the
+            // current filter (null) must match nothing — not fall back to ALL points,
+            // where a bandpass-driven HFR difference could spuriously fire.
+            var sut = new AutofocusAfterHFRIncreaseTrigger(
+                HfrHistory(2.0, 2.1, 2.2, 2.3, 2.4),
+                FilterWheel("Ha", connected: false).Object) { Amount = 5, SampleSize = 5 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False);
+        }
+
+        [Test]
+        public void HfrTrigger_AMonoRigWithoutAWheelStillWorks() {
+            var history = new FakeHistory();
+            var hfrs = new[] { 2.0, 2.1, 2.2, 2.3, 2.4 };
+            for (var i = 0; i < hfrs.Length; i++) {
+                history.Images.Add(new ImageHistoryEntry(i + 1, "LIGHT", hfrs[i], Filter: null));
+            }
+            var sut = new AutofocusAfterHFRIncreaseTrigger(history, filterWheelMediator: null) { Amount = 5, SampleSize = 5 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True,
+                "no wheel scopes to the null filter, which is exactly what a mono rig records");
+        }
+
+        [Test]
         public void HfrTrigger_NeedsAtLeastThreeSamplesAndAHistory() {
             Assert.That(new AutofocusAfterHFRIncreaseTrigger(null, null).ShouldTrigger(null, LightExposure()), Is.False);
             Assert.That(new AutofocusAfterHFRIncreaseTrigger(HfrHistory(2.0, 4.0), FilterWheel("Ha").Object) { Amount = 5 }
