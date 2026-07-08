@@ -81,6 +81,7 @@ namespace OpenAstroAra.Test {
 
             var sawComplete = await WaitForEventAsync(events, GuiderService.DarkLibraryCompleteEvent).ConfigureAwait(false);
             Assert.That(sawComplete, Is.True, "the build should finish and emit its complete event once unblocked");
+            AssertNoProgressAfterTerminal(events, GuiderService.DarkLibraryProgressEvent, GuiderService.DarkLibraryCompleteEvent);
         }
 
         [Test]
@@ -115,6 +116,19 @@ namespace OpenAstroAra.Test {
 
             var sawComplete = await WaitForEventAsync(events, GuiderService.DefectMapCompleteEvent).ConfigureAwait(false);
             Assert.That(sawComplete, Is.True, "the build should finish and emit its complete event once unblocked");
+            AssertNoProgressAfterTerminal(events, GuiderService.DefectMapProgressEvent, GuiderService.DefectMapCompleteEvent);
+        }
+
+        // The poll is drained before the terminal event, so every progress tick must precede complete on the
+        // stream — a progress event after complete would flicker a WILMA progress bar backward after it finished.
+        private static void AssertNoProgressAfterTerminal(ConcurrentQueue<string> events, string progressEvent, string terminalEvent) {
+            var ordered = events.ToArray();
+            var terminalIndex = Array.IndexOf(ordered, terminalEvent);
+            Assert.That(terminalIndex, Is.GreaterThanOrEqualTo(0), "the terminal event should be on the stream");
+            var lastProgressIndex = Array.LastIndexOf(ordered, progressEvent);
+            Assert.That(lastProgressIndex, Is.GreaterThanOrEqualTo(0), "at least one progress event should have fired");
+            Assert.That(lastProgressIndex, Is.LessThan(terminalIndex),
+                "every progress event must precede the terminal (complete/failed) event on the WS stream");
         }
 
         // Connects the real GuiderService to the fake with a capturing WS broadcaster that records every published

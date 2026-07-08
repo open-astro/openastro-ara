@@ -43,6 +43,14 @@ public sealed partial class GuiderService {
     // load trivial (one short-lived RPC connection per tick).
     private const int BuildProgressPollIntervalMs = 1000;
 
+    // §63.8 — a SHORT receive timeout for the poll RPC. GetDarkBuildProgressAsync's SendMessage takes no
+    // CancellationToken for the in-flight receive, so cancelling the poll can't interrupt a tick already mid-send;
+    // only this timeout can. We cancel-and-drain the poll BEFORE emitting the build's complete/failed event (so a
+    // late progress tick can't land after it), which puts that drain on the completion path — a short bound keeps
+    // it to a few seconds rather than the default 60 s if a tick stalls on a daemon hiccup. A dropped progress
+    // frame is cosmetic; the next tick recovers.
+    private const int BuildProgressPollReceiveTimeoutMs = 5000;
+
     // A calibration build (dark library OR defect-map darks) is a single blocking RPC on the daemon, so two
     // concurrent builds are undefined behavior there (and would emit ambiguous paired started/complete events) —
     // this serializes ALL calibration builds under _gate. A second build with the SAME non-null idempotency key
@@ -150,6 +158,8 @@ public sealed partial class GuiderService {
                     exposures.Add(ms);
                 }
             }
+            // Drain the poll BEFORE the terminal event so no late progress tick can land after complete.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DarkLibraryCompleteEvent, new JsonObject {
                 ["profile_id"] = result.ProfileId,
                 ["dark_library_path"] = result.DarkLibraryPath,
@@ -159,15 +169,15 @@ public sealed partial class GuiderService {
             });
         } catch (Exception ex) {
             LogDarkLibraryBuildFailed(ex);
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DarkLibraryFailedEvent, new JsonObject {
                 ["error"] = ex.Message,
             });
         } finally {
-            // Stop the progress poll and let it unwind before releasing the gate (PollBuildProgressAsync swallows
-            // its own cancellation, so this await never throws).
-            await pollCts.CancelAsync().ConfigureAwait(false);
-            await pollTask.ConfigureAwait(false);
-            // Release the single-build gate whether the build completed or failed.
+            // Safety net — the poll is already drained on both the success and failure paths; this covers any
+            // future path that skips them. Idempotent (PollBuildProgressAsync swallows its own cancellation, so
+            // the await never throws). Then release the single-build gate whether the build completed or failed.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             lock (_gate) {
                 ReleaseCalibrationGateLocked();
             }
@@ -266,8 +276,12 @@ public sealed partial class GuiderService {
         while (!ct.IsCancellationRequested) {
             try {
                 await Task.Delay(BuildProgressPollIntervalMs, ct).ConfigureAwait(false);
-                var progress = await guider.GetDarkBuildProgressAsync(ct).ConfigureAwait(false);
-                if (progress.Active) {
+                var progress = await guider.GetDarkBuildProgressAsync(ct, BuildProgressPollReceiveTimeoutMs).ConfigureAwait(false);
+                // Re-check cancellation right before emitting: the build may have settled (and the drain begun)
+                // while this tick was mid-RPC. Skipping a cancelled tick's emit — together with the caller
+                // draining this loop BEFORE it publishes complete/failed — guarantees no progress event lands on
+                // the WS stream after the build's terminal event.
+                if (progress.Active && !ct.IsCancellationRequested) {
                     await EmitCalibrationEventAsync(progressEvent, new JsonObject {
                         ["exposure_index"] = progress.ExposureIndex,
                         ["exposure_count"] = progress.ExposureCount,
@@ -284,6 +298,16 @@ public sealed partial class GuiderService {
                 // skip this tick and keep polling. The Task.Delay at the top bounds the retry to one per second.
             }
         }
+    }
+
+    // Cancel the progress poll and let it fully drain. Called BEFORE the build's complete/failed event (so no late
+    // progress tick can follow the terminal event) and again in the finally as a safety net. Idempotent: a second
+    // call cancels an already-cancelled source (no-op) and awaits an already-completed task (instant). The drain is
+    // bounded by BuildProgressPollReceiveTimeoutMs — SendMessage's receive takes no token, so a tick already
+    // mid-send finishes on its own short timeout rather than being interrupted by the cancel.
+    private static async Task StopProgressPollAsync(CancellationTokenSource pollCts, Task pollTask) {
+        await pollCts.CancelAsync().ConfigureAwait(false);
+        await pollTask.ConfigureAwait(false);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Dark-library build started (frames={FrameCount}, clearExisting={ClearExisting})")]
@@ -351,6 +375,8 @@ public sealed partial class GuiderService {
             pollTask = PollBuildProgressAsync(guider, DefectMapProgressEvent, pollCts.Token);
             var result = await guider.BuildDefectMapDarksAsync(
                 p.ExposureMs, p.FrameCount, p.Notes, p.LoadAfter, ct).ConfigureAwait(false);
+            // Drain the poll BEFORE the terminal event so no late progress tick can land after complete.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DefectMapCompleteEvent, new JsonObject {
                 ["profile_id"] = result.ProfileId,
                 ["defect_map_path"] = result.DefectMapPath,
@@ -360,14 +386,14 @@ public sealed partial class GuiderService {
             });
         } catch (Exception ex) {
             LogDefectMapBuildFailed(ex);
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DefectMapFailedEvent, new JsonObject {
                 ["error"] = ex.Message,
             });
         } finally {
-            // Stop the progress poll and let it unwind before releasing the gate (the await never throws —
-            // PollBuildProgressAsync swallows its own cancellation).
-            await pollCts.CancelAsync().ConfigureAwait(false);
-            await pollTask.ConfigureAwait(false);
+            // Safety net — the poll is already drained on both paths; this covers any future path that skips
+            // them (idempotent, never throws). Then release the single-build gate.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             lock (_gate) {
                 ReleaseCalibrationGateLocked();
             }

@@ -211,13 +211,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// when idle). A quick query; because <see cref="SendMessage{T}"/> opens its own short-lived
         /// connection, this is safe to call CONCURRENTLY with the blocking build RPC — the daemon yields
         /// between frames, so a caller can drive a progress bar while <see cref="BuildDarkLibraryAsync"/> is
-        /// still awaiting. Requires a connected guider; throws on RPC error.</summary>
-        public async Task<Phd2DarkBuildProgress> GetDarkBuildProgressAsync(CancellationToken ct) {
+        /// still awaiting. Requires a connected guider; throws on RPC error.
+        /// <para><paramref name="receiveTimeoutMs"/> bounds the underlying send/receive. Because
+        /// <see cref="SendMessage{T}"/> takes no <see cref="CancellationToken"/> for the in-flight receive (see
+        /// the NOTE above), a caller that cancels this call cannot interrupt a receive already in progress — only
+        /// this timeout can. A progress poll should pass a SHORT value (a few seconds) so a stalled tick self-bails
+        /// quickly rather than pinning a cancel-and-drain for the default 60 s; a dropped progress frame is
+        /// cosmetic and the next tick recovers.</para></summary>
+        public async Task<Phd2DarkBuildProgress> GetDarkBuildProgressAsync(CancellationToken ct, int receiveTimeoutMs = 60000) {
             ct.ThrowIfCancellationRequested();
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
             }
-            var response = await SendMessage<Phd2GetDarkBuildProgressResponse>(new Phd2GetDarkBuildProgress());
+            var response = await SendMessage<Phd2GetDarkBuildProgressResponse>(new Phd2GetDarkBuildProgress(), receiveTimeoutMs);
             if (response.error != null) {
                 throw new GuiderRpcException("get_dark_build_progress", response.error.code, response.error.message);
             }
