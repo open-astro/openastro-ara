@@ -57,6 +57,16 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         public double MaxBrightness { get; set; }
         public double Background { get; set; }
 
+        /// <summary>Recover the (x, y) pixel centre from the row-major packed <see cref="Position"/>
+        /// (= round(y)·width + round(x), the way StarDetector.Measure writes it). Kept beside Position so the
+        /// pack/unpack contract lives in one place — a caller that hand-decodes it would silently mislocate
+        /// every star if the packing ever changed. width·height stays well under int.MaxValue for any real
+        /// (binned) live/analysis frame, so the int cast is safe.</summary>
+        public (int X, int Y) Unpack(int width) {
+            int idx = (int)Position;
+            return (idx % width, idx / width);
+        }
+
         // §59.3/§59.4 Smart Focus shape metrics — the per-star half of the feature vector that a
         // defocus→offset inverse map is trained on. Derived from the same flux-weighted blob moments as
         // HFR (see StarDetector.Measure), so they cost one extra pass, no re-detection.

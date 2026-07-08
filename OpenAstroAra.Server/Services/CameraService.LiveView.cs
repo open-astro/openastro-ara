@@ -378,8 +378,8 @@ public sealed partial class CameraService {
         var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
         if (annotate) {
             // Detect on the RAW pixels — the same width×height grid as the stretched preview, since the stretch
-            // is per-pixel and never moves a star — so markers land on their stars; EncodeGrayAnnotated then
-            // downscales the markers and the image together under maxDim, keeping the circles aligned.
+            // is per-pixel and never moves a star — so markers land on their stars; EncodeGrayAnnotated downscales
+            // the frame first, then draws the markers into the ≤maxDim output so their rings survive the cap.
             var markers = DetectStarMarkers(pixels, width, height);
             return (JpegEncoder.EncodeGrayAnnotated(stretched, width, height, markers, maxDim: LiveViewMaxDim), width, height);
         }
@@ -387,19 +387,18 @@ public sealed partial class CameraService {
     }
 
     // §64/§59 — run the shared star detector on a mono live frame and turn each detected star into an overlay
-    // circle, its radius scaled from the star's HFR (with a floor so tight stars stay visible). Same detector /
-    // sensitivity as the §59 analysis metric so the overlay matches what autofocus sees. Capped at
-    // LiveViewMaxMarkers so a rich field doesn't bury the preview or the per-frame draw cost.
+    // circle, its radius scaled from the star's HFR (with a floor so tight stars stay visible). Uses the shared
+    // AnalysisDetectionParams so the overlay matches what the §59 HFR trend sees. LiveViewMaxMarkers caps the
+    // returned/drawn markers so a rich field doesn't bury the preview — it bounds the draw, NOT the detector's
+    // per-blob measurement cost (the full frame is still flood-filled and measured every annotated frame).
     private static List<StarMarker> DetectStarMarkers(ushort[] pixels, int width, int height) {
         var result = StarDetector.Detect(
-            pixels, width, height,
-            new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = LiveViewMaxMarkers },
-            CancellationToken.None);
+            pixels, width, height, AnalysisDetectionParams(LiveViewMaxMarkers), CancellationToken.None);
         var markers = new List<StarMarker>(result.StarList.Count);
         foreach (var s in result.StarList) {
-            int idx = (int)s.Position;
-            float x = idx % width;
-            float y = idx / width;
+            // Unpack decodes StarDetector's row-major packed Position — going through the helper keeps this
+            // caller from silently mislocating every marker if that packing ever changes.
+            var (x, y) = s.Unpack(width);
             float radius = (float)Math.Max(LiveViewMarkerMinRadius, s.HFR * LiveViewMarkerHfrScale);
             markers.Add(new StarMarker(x, y, radius));
         }

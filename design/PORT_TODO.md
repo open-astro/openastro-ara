@@ -14,6 +14,28 @@ the other design docs.
 
 ---
 
+## §64/§59 Live View star annotation — follow-ups (2026-07-08, PR #775 /review self-review)
+
+Deferred out-of-scope findings from the mono-annotation wiring PR. The PR's scope was "wire the mono
+overlay"; these are genuine but larger and tracked here per §0 rule 6.
+
+- **OSC annotation.** The Bayer/OSC live path ignores `LiveViewStartRequestDto.Annotate` entirely — a
+  WILMA client that starts Live View with `annotate:true` on an OSC camera gets a normal colour preview
+  with no circles and no signal (indistinguishable from "detector found no stars"). Follow-up: either
+  echo an *effective-annotate* flag in `LiveViewStatusDto`/`LiveViewMeta` so the client can tell the
+  punt from an empty field, or reject `annotate` at start for a non-monochrome sensor; and eventually a
+  real colour-frame overlay (detect on the luminance/green plane, not the raw mosaic).
+- **Detection runs inside the `_captureInFlight` gate, unoffloaded.** `RenderLiveFrame` runs the
+  synchronous full-frame `StarDetector.Detect` on the live loop's continuation while it holds
+  `_captureInFlight = 1`; a user-initiated catalog capture arbitrates on the same gate, so with annotate
+  on, every live frame extends the window a real capture is blocked. `StarDetector`'s own doc says
+  callers must offload the CPU-bound work. Follow-up: offload detection off the capture continuation (or
+  detect on a downsized copy) so annotation doesn't lengthen the shared capture gate.
+- **Marker cap bounds the draw, not detection cost.** `LiveViewMaxMarkers` trims the returned/drawn
+  markers *after* `FindStars`+`Measure` have run the full per-blob pipeline on every blob. A dense field
+  (Milky Way, low threshold) fully measures thousands of blobs each annotated frame, then discards all
+  but 250. Comment corrected in this PR; a real early-out (cap detection, not just the draw) is follow-up.
+
 ## Flaky bench test — AlpacaFaultProxy header-forward — ✅ FIXED (2026-07-08)
 
 `PassThrough_forwards_inbound_request_headers_to_the_upstream` failed once on CI linux with
