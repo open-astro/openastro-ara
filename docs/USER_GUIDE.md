@@ -102,6 +102,11 @@ if diagnostics reports clouds passing, a blocked aperture, or dew forming, the t
 sky time on a sweep that would fail, then fires as soon as conditions clear. Imported NINA
 plans carry these triggers over natively.
 
+> Note: the deferral machinery is live, but the sky-condition detector that feeds it (the
+> live acquisition-pattern analyzer) hasn't shipped yet — until it does, triggers fire
+> normally in all conditions. No configuration is needed; deferral switches on by itself
+> when the detector lands.
+
 ## 6. Imaging and monitoring
 
 The **Imaging** tab shows the live story: current frame with stretch control, exposure progress,
