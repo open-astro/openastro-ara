@@ -99,8 +99,8 @@ namespace OpenAstroAra.Test {
                   { "index": 1, "name": "HD 5914", "ra": 1.48, "dec": 86.25, "mag": 5.4 }
                 ],
                 "measured_points": [
-                  { "position": 1, "x": 100.0, "y": 200.0 },
-                  { "position": 2, "x": 150.0, "y": 210.0 }
+                  { "position": 2, "x": 100.0, "y": 200.0 },
+                  { "position": 3, "x": 150.0, "y": 210.0 }
                 ],
                 "rotation": {
                   "required_deg": 30.0, "rotated_deg": 12.5, "step": 1,
@@ -142,7 +142,7 @@ namespace OpenAstroAra.Test {
             Assert.That(s.RefStars![0].Dec, Is.EqualTo(89.26));
 
             Assert.That(s.MeasuredPoints, Has.Count.EqualTo(2));
-            Assert.That(s.MeasuredPoints![1].Position, Is.EqualTo(2));
+            Assert.That(s.MeasuredPoints![1].Position, Is.EqualTo(3));
             Assert.That(s.MeasuredPoints![1].X, Is.EqualTo(150.0));
 
             Assert.That(s.Rotation!.RequiredDeg, Is.EqualTo(30.0));
