@@ -206,7 +206,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // Flux-weighted centroid + Half-Flux-Radius. Flux is background-subtracted (f = v - bg); every blob
         // pixel is above threshold = bg + k·σ > bg, so f > 0 throughout — no per-pixel positivity guard is
         // needed. HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak
-        // is rejected — its clipped-flat core biases both centroid and HFR.
+        // is rejected — its clipped-flat core biases both centroid and HFR. The same second pass folds in
+        // the flux-weighted second-moment tensor that yields the §59 Smart Focus shape features.
         private static DetectedStar? Measure(List<int> blob, ReadOnlySpan<ushort> pixels, int width, double background) {
             double sumF = 0, sumX = 0, sumY = 0, sumV = 0;
             ushort peak = 0;
@@ -225,12 +226,18 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             }
             double cx = sumX / sumF, cy = sumY / sumF;
 
-            double sumFR = 0;
+            // Second pass: HFR (Σ f·dist / Σ f) plus the flux-weighted covariance Mxx/Myy/Mxy about the
+            // centroid. The covariance carries both the size (⟨r²⟩ = Mxx + Myy) and the shape (its eigenvalue
+            // ratio) of the flux distribution — the raw material for FWHM + roundness below.
+            double sumFR = 0, mxx = 0, myy = 0, mxy = 0;
             foreach (int p in blob) {
                 double f = pixels[p] - background;
                 int x = p % width, y = p / width;
                 double dx = x - cx, dy = y - cy;
                 sumFR += f * Math.Sqrt(dx * dx + dy * dy);
+                mxx += f * dx * dx;
+                myy += f * dy * dy;
+                mxy += f * dx * dy;
             }
             // A single-pixel-tight star yields HFR 0; clamp to a small floor so it's a usable focus metric.
             double hfr = Math.Max(0.5, sumFR / sumF);
@@ -241,7 +248,41 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 AverageBrightness = sumV / blob.Count, // mean raw brightness over every blob pixel
                 MaxBrightness = peak,
                 Background = background,
+                FWHM = FwhmFromMoments(mxx / sumF, myy / sumF),
+                Roundness = RoundnessFromMoments(mxx / sumF, myy / sumF, mxy / sumF),
+                // Floor the denominator to 1 ADU (the sensor noise floor) rather than branching on
+                // background == 0: a real frame's median background is a non-negative integer that's
+                // essentially always ≥ bias, but flooring keeps this a bounded, continuous, scale-invariant
+                // ratio even on an all-dark/bias-free synthetic frame — a raw-peak fallback there would
+                // inject an outlier of a wholly different magnitude into the §59.3 median the model trains on.
+                PeakToBackground = (peak - background) / Math.Max(1.0, background),
             };
+        }
+
+        // For a 2D Gaussian the flux-weighted radial second moment ⟨r²⟩ = cxx + cyy equals 2σ², so
+        // σ = √(⟨r²⟩/2) and FWHM = 2√(2 ln 2)·σ. The threshold truncates the wings symmetrically, so the
+        // absolute value is a slight under-estimate but monotonic in true defocus — which is all the §59
+        // inverse map needs. Guarded to 0 for a degenerate single-pixel blob.
+        private const double FwhmPerSigma = 2.354820045; // 2·√(2·ln 2)
+
+        private static double FwhmFromMoments(double cxx, double cyy) {
+            double meanR2 = cxx + cyy;
+            return meanR2 > 0 ? FwhmPerSigma * Math.Sqrt(meanR2 / 2.0) : 0.0;
+        }
+
+        // Roundness = √(λ_min / λ_max) of the 2×2 flux covariance — the minor/major principal-axis ratio,
+        // 1 for a circularly symmetric star and → 0 as it elongates (drift, tilt, coma). Eigenvalues of a
+        // symmetric 2×2 matrix in closed form; the minor is clamped to 0 against float round-off.
+        private static double RoundnessFromMoments(double cxx, double cyy, double cxy) {
+            double half = (cxx + cyy) / 2.0;
+            double diff = (cxx - cyy) / 2.0;
+            double common = Math.Sqrt(diff * diff + cxy * cxy);
+            double lambdaMax = half + common;
+            double lambdaMin = half - common;
+            if (lambdaMax <= 0) {
+                return 1.0;
+            }
+            return Math.Sqrt(Math.Max(0.0, lambdaMin) / lambdaMax);
         }
 
         private static StarDetectionResult Summarize(List<DetectedStar> stars) {
