@@ -79,21 +79,36 @@ namespace OpenAstroAra.Server.Services {
         /// <see cref="GuiderService.RequireConnectedGuider"/>) when no guider is connected, mapped to the
         /// same client error the guide ops return.
         /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Rollback-and-rethrow: any failure after the state reservation (not-connected, lease rejection, cancellation, socket fault) must undo the reservation and propagate — nothing is swallowed.")]
         public async Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct) {
+            // Reserve the active state under a single lock BEFORE any await, so two near-simultaneous Starts
+            // can't both observe _active==false and both acquire the lease + publish (the endpoint calls
+            // straight into this singleton with no request serialization). The loser sees the reservation and
+            // returns a no-op accept. This mirrors GuiderService.ConnectCoreAsync (check + transition in one
+            // lock before the await). The preflight + lease acquire run AFTER the lock is released (so we
+            // don't hold _gate across GuiderService's own lock); a failure there rolls the reservation back.
             lock (_gate) {
                 if (_active) {
                     return Accepted("polar-align.start", idempotencyKey);
                 }
-            }
-            // Preflight: the routine needs a connected guider to hold the camera + capture. Reuses the guide
-            // ops' connected-or-throw contract, so a not-connected Start fails the same way.
-            var guiderClient = _guider.RequireConnectedGuider();
-            await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
-            lock (_gate) {
                 _active = true;
                 _state = "capturing";
                 _framesCaptured = 0;
                 _lastFrameId = null;
+            }
+            try {
+                // Preflight: the routine needs a connected guider to hold the camera + capture. Reuses the
+                // guide ops' connected-or-throw contract, so a not-connected Start fails the same way.
+                var guiderClient = _guider.RequireConnectedGuider();
+                await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
+            } catch {
+                // Preflight/lease acquire failed — undo the reservation so a retry can start cleanly.
+                lock (_gate) {
+                    _active = false;
+                    _state = "idle";
+                }
+                throw;
             }
             LogStarted();
             await PublishStateEventAsync(WsEventCatalog.PolarAlignStarted, "capturing").ConfigureAwait(false);

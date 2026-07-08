@@ -127,6 +127,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Concurrent_starts_acquire_the_lease_and_publish_only_once() {
+            // The endpoint calls straight into the singleton with no request serialization, so two
+            // near-simultaneous Starts race. The reservation-under-lock must let exactly one acquire the
+            // lease + publish; the other is a no-op accept (guards against the TOCTOU double-acquire).
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFakeWithPaSession(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
+
+            await Task.WhenAll(
+                svc.StartAsync(null, CancellationToken.None),
+                svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
+
+            var acquisitions = 0;
+            while (paCalls.TryDequeue(out var active)) {
+                if (active) {
+                    acquisitions++;
+                }
+            }
+            Assert.That(acquisitions, Is.EqualTo(1), "concurrent Starts must acquire the lease exactly once");
+            ws.Verify(w => w.PublishAsync(WsEventCatalog.PolarAlignStarted, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Test]
         public void Start_without_a_connected_guider_throws() {
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());

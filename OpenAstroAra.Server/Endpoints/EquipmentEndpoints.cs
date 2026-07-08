@@ -385,7 +385,7 @@ public static class EquipmentEndpoints {
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.StartAsync(key, ct)));
+            await PolarAlignStartAsync(svc, key, ct));
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
 
@@ -460,6 +460,21 @@ public static class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (CalibrationBuildInProgressException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: BuildInProgressProblemType);
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        }
+    }
+
+    // §45 polar-align start (extracted for the error-mapping tests). The DI swap to the real
+    // PolarAlignService made a not-connected Start a live path: RequireConnectedGuider throws plain
+    // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
+    // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
+    // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
+    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.StartAsync(idempotencyKey, ct));
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
