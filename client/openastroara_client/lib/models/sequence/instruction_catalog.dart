@@ -436,6 +436,8 @@ const String switchFilterType =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
 const String runAutofocusType =
     'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer';
+const String ditherType =
+    'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer';
 
 /// The daemon `FilterInfo` `$type` — the value shape of `SwitchFilter.Filter`.
 /// Build instances with [buildFilterInfo] so the `{_name, _position}` wire
@@ -699,8 +701,7 @@ const List<InstructionDef> instructionCatalog = [
   // `[JsonProperty]`); the "after N exposures" / settle parameters live on the
   // dither *trigger*, not this instruction.
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer',
+    type: ditherType,
     label: 'Dither',
     category: InstructionCategory.guider,
     icon: Icons.scatter_plot_outlined,

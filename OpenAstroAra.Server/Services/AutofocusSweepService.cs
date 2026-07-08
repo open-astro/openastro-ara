@@ -71,6 +71,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     private readonly IAnalysisFrameSource _frames;
     private readonly Func<AnalysisFrame, CancellationToken, (double Hfr, int Stars)> _metric;
     private readonly ILogger<AutofocusSweepService> _logger;
+    private readonly ImageHistoryService? _history;
+    private readonly IFilterWheelMediator? _filterWheel;
     // One sweep at a time — the focuser is a single physical axis, and interleaved sweeps would
     // corrupt each other's curves. Waiters queue (same philosophy as the capture gate).
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -80,12 +82,16 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             IFocuserMediator focuser,
             IAnalysisFrameSource frames,
             ILogger<AutofocusSweepService>? logger = null,
-            Func<AnalysisFrame, CancellationToken, (double Hfr, int Stars)>? metric = null) {
+            Func<AnalysisFrame, CancellationToken, (double Hfr, int Stars)>? metric = null,
+            ImageHistoryService? history = null,
+            IFilterWheelMediator? filterWheel = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
         _logger = logger ?? NullLogger<AutofocusSweepService>.Instance;
         _metric = metric ?? DefaultMetric;
+        _history = history;
+        _filterWheel = filterWheel;
     }
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
@@ -179,6 +185,12 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
+            // §59.5 — the trigger family's reference point: temperature drift and HFR trend are
+            // both measured "since the last autofocus", and the filter records which wheel slot
+            // this focus position belongs to (first-use-of-a-filter trigger).
+            _history?.RecordAutofocus(
+                _focuser.GetInfo()?.Temperature ?? double.NaN,
+                _filterWheel?.GetInfo()?.SelectedFilter?.Name);
             return true;
         } catch (OperationCanceledException) {
             // A cancelled sweep (abort/stop/shutdown) restores best-effort and propagates — the

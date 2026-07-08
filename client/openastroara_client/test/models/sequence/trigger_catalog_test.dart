@@ -33,7 +33,8 @@ void main() {
   });
 
   group('build()', () {
-    test('emits \$type + Parent + an empty SequentialContainer TriggerRunner', () {
+    test('emits \$type + Parent + a SequentialContainer TriggerRunner seeded '
+        'with the def\'s runner items', () {
       for (final def in triggerCatalog) {
         final node = def.build();
         expect(node[r'$type'], def.type);
@@ -42,11 +43,29 @@ void main() {
         // Triggers aren't SequenceItems — no ErrorBehavior/Attempts.
         expect(node.containsKey('ErrorBehavior'), isFalse, reason: def.label);
         expect(node.containsKey('Attempts'), isFalse, reason: def.label);
-        // The runner is a real, empty SequentialContainer the DOM recognises.
+        // The runner is a real SequentialContainer the DOM recognises, holding
+        // exactly the def's action items (an empty runner is a silent no-op on
+        // the daemon, so action triggers must ship theirs).
         final runner = node['TriggerRunner'] as Map<String, dynamic>;
         expect(runner[r'$type'], contains('SequentialContainer'));
         expect(isContainer(runner), isTrue);
-        expect(childrenOf(runner), isEmpty);
+        expect(
+          childrenOf(runner).map((c) => c[r'$type']).toList(),
+          def.runnerItems,
+          reason: def.label,
+        );
+      }
+    });
+
+    test('every autofocus trigger fires a RunAutofocus; the dither trigger '
+        'fires a Dither', () {
+      for (final def in triggerCatalog) {
+        if (def.type.contains('.Trigger.Autofocus.')) {
+          expect(def.runnerItems, [runAutofocusType], reason: def.label);
+        }
+        if (def.type.contains('DitherAfterExposures')) {
+          expect(def.runnerItems, [ditherType], reason: def.label);
+        }
       }
     });
 
@@ -58,7 +77,7 @@ void main() {
       expect(node.keys.toSet(), {r'$type', 'Parent', 'TriggerRunner'});
     });
 
-    test('each build produces its own empty TriggerRunner (not a shared instance)', () {
+    test('each build produces its own TriggerRunner (not a shared instance)', () {
       final a = triggerForType(_meridianFlip)!.build();
       final b = triggerForType(_meridianFlip)!.build();
       // Distinct runner instances; deep fresh-list isolation of the container is
