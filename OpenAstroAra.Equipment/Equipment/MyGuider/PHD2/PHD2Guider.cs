@@ -1080,9 +1080,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "EquipmentReconnected": {
+                        // Informational only — the fault reaction is one-shot per connect episode and is
+                        // not re-armed here (a flapping device must not re-trigger skip/abort per cycle).
                         if (message.ToObject<PhdEventEquipmentReconnected>() is { } reconnect) {
                             Logger.Info($"PHD2 - equipment reconnected: {reconnect.DeviceType}");
-                            RaiseEquipmentRecovered(reconnect.DeviceType);
                         }
                         break;
                     }

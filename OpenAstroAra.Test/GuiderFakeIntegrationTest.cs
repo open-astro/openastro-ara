@@ -260,10 +260,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task EquipmentReconnected_rearms_the_fault_reaction_for_a_later_drop() {
-            // The fault reaction is one-shot per episode; a camera-only fault never leaves Connected, so
-            // without the reconnect re-arm a second drop would be silently swallowed. Events on the single
-            // listener stream are processed in order, so the reconnect re-arms before the second drop.
+        public async Task A_non_camera_equipment_disconnect_does_not_pause_the_sequence() {
+            // Only the guide CAMERA drives the guiding-lost policy. A future/other device_type
+            // (rotator/aux) must not pause the sequence as "guiding lost".
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             var profiles = new Mock<IProfileStore>();
@@ -283,14 +282,16 @@ namespace OpenAstroAra.Test {
             Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
                 "the service never reached Connected against the fake guider");
 
-            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected(deviceType: "rotator")).ConfigureAwait(false);
+            // A camera drop afterwards SHOULD react — proving the rotator event was filtered, not that the
+            // pipeline is simply dead.
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected(deviceType: "camera")).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => System.Threading.Volatile.Read(ref pauseCalls) == 1).ConfigureAwait(false),
-                Is.True, "the first device drop should have run the fault reaction");
-
-            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
-            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
-            Assert.That(await WaitUntilAsync(() => System.Threading.Volatile.Read(ref pauseCalls) == 2).ConfigureAwait(false),
-                Is.True, "after a reconnect re-armed the latch, a second device drop should react again");
+                Is.True, "the camera drop should have paused exactly once");
+            // Give any erroneous rotator-driven reaction a moment to have fired, then confirm it did not.
+            await Task.Delay(200).ConfigureAwait(false);
+            Assert.That(System.Threading.Volatile.Read(ref pauseCalls), Is.EqualTo(1),
+                "a non-camera device_type must not trigger the guiding-lost policy");
         }
 
         private static SafetyPoliciesDto GuiderLostPolicy(string onGuiderLost) => new(

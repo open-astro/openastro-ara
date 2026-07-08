@@ -148,10 +148,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
             guider.PHD2ConnectionLost += OnConnectionLost;
             guider.GuideEvent += OnGuideStep;
-            // §42.2: a structured device fault (e.g. guide camera dropped) — the link stays up, so this
-            // runs the on_guider_lost policy without dropping to Error; the reconnect re-arms it.
+            // §42.2: a structured device fault (guide camera dropped) — the link stays up, so this runs
+            // the on_guider_lost policy without dropping to Error or starting §63.3 recovery.
             guider.EquipmentFault += OnEquipmentFault;
-            guider.EquipmentRecovered += OnEquipmentRecovered;
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _guider = guider;
             generation = ++_connectGeneration;
@@ -309,29 +308,28 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
-    // §42.2: the daemon reported a structured device fault (e.g. the guide camera dropped). Unlike a
-    // socket drop this leaves the guider LINK up and the daemon may be self-reconnecting, so we do NOT
-    // go to Error or start §63.3 process recovery — guiding is simply degraded now, so we run the
-    // on_guider_lost policy and stay Connected. (Pairing reconnecting=true with an ARA-side watchdog for
-    // the daemon's silent reconnect-abandonment — open-astro/openastro-guider#66 — is a tracked follow-up.)
+    // §42.2: the daemon reported a structured device fault (the guide camera dropped). Unlike a socket
+    // drop this leaves the guider LINK up and the daemon may be self-reconnecting, so we do NOT go to
+    // Error or start §63.3 process recovery — guiding is simply degraded now, so we run the
+    // on_guider_lost policy and stay Connected. We react only to the guide CAMERA: the daemon emits only
+    // camera today, and a future non-guiding device (rotator/aux) must not pause the sequence as "guiding
+    // lost". (Pairing reconnecting=false / the daemon's silent reconnect-abandonment — guider#66 — with an
+    // ARA-side watchdog is a tracked follow-up.)
     private void OnEquipmentFault(object? sender, EquipmentFaultEventArgs e) {
         lock (_gate) {
-            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
-                BeginFaultReactionLocked();
+            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected
+                    && AffectsGuiding(e.DeviceType)) {
+                BeginFaultReactionLocked(GuiderFaultKind.EquipmentDisconnected, e.DeviceType);
             }
         }
     }
 
-    // The daemon auto-reconnected the dropped device. The reaction latch is otherwise cleared only on a
-    // fresh Connected transition, which a camera-only fault episode never triggers (the link never left
-    // Connected), so re-arm it here — a subsequent device drop reacts as its own fresh episode.
-    private void OnEquipmentRecovered(object? sender, EquipmentRecoveredEventArgs e) {
-        lock (_gate) {
-            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
-                RearmFaultReactionLocked();
-            }
-        }
-    }
+    // The daemon's device-type enum is effectively "camera" today. Treat a missing/blank type as the
+    // guide camera (fail toward alerting on the one device we know it emits) and ignore any other named
+    // device until per-device guiding impact is modelled.
+    private static bool AffectsGuiding(string? deviceType) =>
+        string.IsNullOrWhiteSpace(deviceType)
+        || deviceType.Equals("camera", StringComparison.OrdinalIgnoreCase);
 
     // Shared §63.3/§42.2 link-down path: a dead socket (PHD2ConnectionLost) and a
     // wedged-but-connected daemon (the active-poll ping streak, GuiderService.ActivePoll.cs)
@@ -344,7 +342,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         BeginRecoveryLocked();
         // §42.2: guiding is gone NOW — any running sequence is shooting unguided,
         // so react per the profile's on_guider_lost policy (GuiderService.FaultReaction.cs).
-        BeginFaultReactionLocked();
+        BeginFaultReactionLocked(GuiderFaultKind.LinkDown, deviceType: null);
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current
@@ -428,7 +426,6 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guider.PHD2ConnectionLost -= OnConnectionLost;
             _guider.GuideEvent -= OnGuideStep;
             _guider.EquipmentFault -= OnEquipmentFault;
-            _guider.EquipmentRecovered -= OnEquipmentRecovered;
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;
