@@ -285,15 +285,15 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
   decision). The `IStarDetection`/`IStarAnnotator` interfaces in `HeadlessStubs.cs` stay as the (unused) DI seam.
 - ✅ **`RenderedImage.UpdateAnalysis(...)`** — DONE (#358). Publishes HFR/HFRStDev/DetectedStars/StarList
   onto `RawImageData.StarDetectionAnalysis` (flows into the FITS HFR/StarCount pattern keys).
-  - **Annotation — draw primitive LANDED, wiring deferred (branch `liveview-star-annotation-encoder`).** The
-    SkiaSharp draw path now exists as `JpegEncoder.EncodeGrayAnnotated(pixels, w, h, IReadOnlyList<StarMarker>,
-    …)` — expands the grayscale preview to RGB, draws green marker circles, encodes JPEG (5 headless tests). Still
-    to wire (its own slice, the real design work): run `StarDetector` on the live frame (mono raw pixels; OSC needs
-    a debayered luminance, not the raw mosaic), scale detection coords into the encoder's space (the live JPEG can
-    be super-pixel-halved and/or `LiveViewMaxDim`-downscaled), and add an `annotate` flag on
-    `LiveViewStartRequestDto` (only the render loop holds the raw pixels — the served frame is a cached JPEG). The
-    old `DetectStars(annotateImage: true)` no-op and the `IStarAnnotator` DI seam are the alternate (repo-frame)
-    path, still unimplemented.
+  - **Annotation — draw primitive + MONO live-view wiring LANDED; OSC + repo-frame path still open.** The
+    SkiaSharp draw path is `JpegEncoder.EncodeGrayAnnotated(pixels, w, h, IReadOnlyList<StarMarker>, …)` (#774),
+    and §64 Live View now wires it end-to-end for MONO (branch `liveview-star-annotation-mono`): `Annotate` flag
+    on `LiveViewStartRequestDto` → `RenderLiveFrame` runs `StarDetector` on the raw mono pixels and draws
+    HFR-scaled green circles (coords align 1:1 since detection + the stretched preview share the width×height grid,
+    and the encoder downscales markers + image together under `LiveViewMaxDim`). **Still open:** (1) OSC/colour
+    annotation — the bayer path ignores `annotate` (detecting on a raw mosaic is wrong; needs a debayered-luminance
+    detect + a colour overlay); (2) the alternate repo-frame path — `DetectStars(annotateImage: true)` is still a
+    no-op and the `IStarAnnotator` DI seam is still unimplemented.
   - ✅ **Atomic analysis publish + thread safety:** DONE (#358 round-7/8). `IStarDetectionAnalysis.SetAll(...)`
     writes all four backing fields under a lock (full memory barrier + torn-read safety for the doubles on
     32-bit ARM) before raising any `PropertyChanged` outside it, so a §59-autofocus / Live-View observer on

@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using SkiaSharp;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -132,6 +133,60 @@ namespace OpenAstroAra.Test {
             var (jpeg, ow, oh) = CameraService.RenderLiveFrame(pixels, w, h, bayerPattern: null);
             Assert.That((ow, oh), Is.EqualTo((8, 6)));
             Assert.That((jpeg[0], jpeg[1]), Is.EqualTo(((byte)0xFF, (byte)0xD8)), "JPEG SOI marker");
+        }
+
+        // Stamp a round Gaussian star into a flat-background mono frame so the detector finds it.
+        private static ushort[] MonoFrameWithStar(int w, int h, int cx, int cy, ushort background, double amplitude, double sigma) {
+            var frame = new ushort[w * h];
+            Array.Fill(frame, background);
+            int r = (int)Math.Ceiling(sigma * 3);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= h) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= w) continue;
+                    double v = amplitude * Math.Exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+                    int idx = y * w + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + v);
+                }
+            }
+            return frame;
+        }
+
+        private static int CountGreenishPixels(byte[] jpeg) {
+            using var decoded = SKBitmap.Decode(jpeg);
+            int count = 0;
+            for (int y = 0; y < decoded.Height; y++) {
+                for (int x = 0; x < decoded.Width; x++) {
+                    var c = decoded.GetPixel(x, y);
+                    if (c.Green > c.Red + 30 && c.Green > c.Blue + 30) count++;
+                }
+            }
+            return count;
+        }
+
+        [Test]
+        public void RenderLiveFrame_annotate_draws_star_markers_on_a_mono_frame() {
+            int w = 100, h = 100;
+            var frame = MonoFrameWithStar(w, h, 50, 50, background: 1000, amplitude: 9000, sigma: 2.0);
+
+            var (jpeg, ow, oh) = CameraService.RenderLiveFrame(frame, w, h, bayerPattern: null, annotate: true);
+
+            Assert.That((ow, oh), Is.EqualTo((100, 100)));
+            Assert.That(CountGreenishPixels(jpeg), Is.GreaterThan(0),
+                "annotate should draw a green marker circle around the detected star");
+        }
+
+        [Test]
+        public void RenderLiveFrame_without_annotate_stays_monochrome() {
+            int w = 100, h = 100;
+            var frame = MonoFrameWithStar(w, h, 50, 50, background: 1000, amplitude: 9000, sigma: 2.0);
+
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(frame, w, h, bayerPattern: null, annotate: false);
+
+            Assert.That(CountGreenishPixels(jpeg), Is.EqualTo(0),
+                "the default (unannotated) live frame must stay monochrome");
         }
 
         [Test]

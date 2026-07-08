@@ -15,9 +15,11 @@
 using ASCOM.Alpaca.Clients;
 using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Stretch;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,6 +38,12 @@ public sealed partial class CameraService {
 
     // Downscale cap for the live JPEG: framing/focus wants responsiveness over full resolution.
     private const int LiveViewMaxDim = 1024;
+
+    // §64/§59 star-marker overlay tuning. Cap the drawn markers so a rich field stays readable and the draw
+    // cost is bounded; scale each circle's radius from the star's HFR with a floor so tight stars stay visible.
+    private const int LiveViewMaxMarkers = 250;
+    private const double LiveViewMarkerMinRadius = 5.0;
+    private const double LiveViewMarkerHfrScale = 3.0;
     // Live View is for framing/focus; a long exposure both defeats that and would hold the capture
     // gate (and a pending stop, since the ImageArray download is non-cancellable) for its whole
     // duration. 15 s is generous for framing while bounding worst-case stop/start latency.
@@ -343,7 +351,7 @@ public sealed partial class CameraService {
             Interlocked.Exchange(ref _downloading, 0);
         }
         var (pixels, width, height) = ConvertImageArray(imageArray);
-        var (jpeg, outWidth, outHeight) = RenderLiveFrame(pixels, width, height, bayerPattern);
+        var (jpeg, outWidth, outHeight) = RenderLiveFrame(pixels, width, height, bayerPattern, request.Annotate);
 
         // Single writer (this loop). Meta (exposure/start) was set once at start and isn't touched
         // here, so the only per-frame publish is the frame itself — one atomic volatile write
@@ -359,14 +367,43 @@ public sealed partial class CameraService {
     // readout, which is no longer a Bayer mosaic — renders greyscale luminance as before.
     // SensorType.Color (already-debayered 3-plane) is refused at start.
     internal static (byte[] Jpeg, int Width, int Height) RenderLiveFrame(
-            ushort[] pixels, int width, int height, BayerPattern? bayerPattern) {
+            ushort[] pixels, int width, int height, BayerPattern? bayerPattern, bool annotate = false) {
         if (bayerPattern is { } pattern) {
+            // OSC super-pixel colour path. Star-marker annotation is a mono-only feature for now (detecting on a
+            // raw Bayer mosaic is wrong, and the colour path would need its own overlay), so `annotate` is ignored.
             var (rgb, ow, oh) = Debayer.SuperPixelStretched(
                 pixels, width, height, pattern, StretchAlgorithm.AutoStf);
             return (JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: LiveViewMaxDim), ow, oh);
         }
         var stretched = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
+        if (annotate) {
+            // Detect on the RAW pixels — the same width×height grid as the stretched preview, since the stretch
+            // is per-pixel and never moves a star — so markers land on their stars; EncodeGrayAnnotated then
+            // downscales the markers and the image together under maxDim, keeping the circles aligned.
+            var markers = DetectStarMarkers(pixels, width, height);
+            return (JpegEncoder.EncodeGrayAnnotated(stretched, width, height, markers, maxDim: LiveViewMaxDim), width, height);
+        }
         return (JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim), width, height);
+    }
+
+    // §64/§59 — run the shared star detector on a mono live frame and turn each detected star into an overlay
+    // circle, its radius scaled from the star's HFR (with a floor so tight stars stay visible). Same detector /
+    // sensitivity as the §59 analysis metric so the overlay matches what autofocus sees. Capped at
+    // LiveViewMaxMarkers so a rich field doesn't bury the preview or the per-frame draw cost.
+    private static List<StarMarker> DetectStarMarkers(ushort[] pixels, int width, int height) {
+        var result = StarDetector.Detect(
+            pixels, width, height,
+            new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = LiveViewMaxMarkers },
+            CancellationToken.None);
+        var markers = new List<StarMarker>(result.StarList.Count);
+        foreach (var s in result.StarList) {
+            int idx = (int)s.Position;
+            float x = idx % width;
+            float y = idx / width;
+            float radius = (float)Math.Max(LiveViewMarkerMinRadius, s.HFR * LiveViewMarkerHfrScale);
+            markers.Add(new StarMarker(x, y, radius));
+        }
+        return markers;
     }
 
     // Called from Dispose: cancel the loop promptly without awaiting it, and release the CTS. Not
