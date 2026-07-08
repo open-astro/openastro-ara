@@ -48,6 +48,22 @@ public static class PhdEvents {
         return e;
     }
 
+    /// <summary>§42.2 structured device-fault event (openastro-guider #57) — snake_case fields.</summary>
+    public static JsonObject EquipmentDisconnected(string deviceType = "camera", string reason = "USB device removed", bool reconnecting = true) {
+        var e = Base("EquipmentDisconnected");
+        e["device_type"] = deviceType;
+        e["reason"] = reason;
+        e["reconnecting"] = reconnecting;
+        return e;
+    }
+
+    /// <summary>§42.2 structured device-reconnect event (openastro-guider #57).</summary>
+    public static JsonObject EquipmentReconnected(string deviceType = "camera") {
+        var e = Base("EquipmentReconnected");
+        e["device_type"] = deviceType;
+        return e;
+    }
+
     /// <summary>Guiding started (after calibration / on resume).</summary>
     public static JsonObject StartGuiding() => Base("StartGuiding");
 

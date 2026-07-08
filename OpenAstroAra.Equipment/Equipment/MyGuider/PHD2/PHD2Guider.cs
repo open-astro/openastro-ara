@@ -1062,9 +1062,27 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "ConfigurationChange": {
-                        if(initialized) { 
+                        if(initialized) {
                             Logger.Debug($"PHD2 - ConfigurationChange!");
                             _ = SetPixelScale();
+                        }
+                        break;
+                    }
+                case "EquipmentDisconnected": {
+                        // §42.2: the daemon lost a device (guide camera) but its own link is still up —
+                        // a guiding-degraded fault, not a link drop. Surface it as a push event so the
+                        // service can run the on_guider_lost policy while staying Connected.
+                        if (message.ToObject<PhdEventEquipmentDisconnected>() is { } disconnect) {
+                            Logger.Warning($"PHD2 - equipment disconnected: {disconnect.DeviceType} " +
+                                $"(reason: {disconnect.Reason}; reconnecting: {disconnect.Reconnecting})");
+                            RaiseEquipmentFault(disconnect.DeviceType, disconnect.Reason, disconnect.Reconnecting);
+                        }
+                        break;
+                    }
+                case "EquipmentReconnected": {
+                        if (message.ToObject<PhdEventEquipmentReconnected>() is { } reconnect) {
+                            Logger.Info($"PHD2 - equipment reconnected: {reconnect.DeviceType}");
+                            RaiseEquipmentRecovered(reconnect.DeviceType);
                         }
                         break;
                     }

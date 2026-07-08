@@ -65,6 +65,14 @@ public sealed partial class GuiderService {
         _ => "pause_and_retry",
     };
 
+    // Caller holds _gate. Re-arm the one-shot latch (e.g. after a device reconnects) so the next
+    // mid-session guiding loss reacts as its own fresh episode without a full disconnect/reconnect.
+    private void RearmFaultReactionLocked() {
+        if (!_disposed) {
+            _faultReactionLatched = false;
+        }
+    }
+
     // Caller holds _gate.
     private void BeginFaultReactionLocked() {
         if (_disposed || _faultReactionLatched) {

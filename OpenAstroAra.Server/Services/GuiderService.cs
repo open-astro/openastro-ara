@@ -148,6 +148,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
             guider.PHD2ConnectionLost += OnConnectionLost;
             guider.GuideEvent += OnGuideStep;
+            // §42.2: a structured device fault (e.g. guide camera dropped) — the link stays up, so this
+            // runs the on_guider_lost policy without dropping to Error; the reconnect re-arms it.
+            guider.EquipmentFault += OnEquipmentFault;
+            guider.EquipmentRecovered += OnEquipmentRecovered;
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _guider = guider;
             generation = ++_connectGeneration;
@@ -305,6 +309,30 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    // §42.2: the daemon reported a structured device fault (e.g. the guide camera dropped). Unlike a
+    // socket drop this leaves the guider LINK up and the daemon may be self-reconnecting, so we do NOT
+    // go to Error or start §63.3 process recovery — guiding is simply degraded now, so we run the
+    // on_guider_lost policy and stay Connected. (Pairing reconnecting=true with an ARA-side watchdog for
+    // the daemon's silent reconnect-abandonment — open-astro/openastro-guider#66 — is a tracked follow-up.)
+    private void OnEquipmentFault(object? sender, EquipmentFaultEventArgs e) {
+        lock (_gate) {
+            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
+                BeginFaultReactionLocked();
+            }
+        }
+    }
+
+    // The daemon auto-reconnected the dropped device. The reaction latch is otherwise cleared only on a
+    // fresh Connected transition, which a camera-only fault episode never triggers (the link never left
+    // Connected), so re-arm it here — a subsequent device drop reacts as its own fresh episode.
+    private void OnEquipmentRecovered(object? sender, EquipmentRecoveredEventArgs e) {
+        lock (_gate) {
+            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
+                RearmFaultReactionLocked();
+            }
+        }
+    }
+
     // Shared §63.3/§42.2 link-down path: a dead socket (PHD2ConnectionLost) and a
     // wedged-but-connected daemon (the active-poll ping streak, GuiderService.ActivePoll.cs)
     // converge here. Caller holds _gate and has verified the loss belongs to the
@@ -399,6 +427,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (_guider is not null) {
             _guider.PHD2ConnectionLost -= OnConnectionLost;
             _guider.GuideEvent -= OnGuideStep;
+            _guider.EquipmentFault -= OnEquipmentFault;
+            _guider.EquipmentRecovered -= OnEquipmentRecovered;
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;
