@@ -108,7 +108,10 @@ namespace OpenAstroAra.Test {
             notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                 .Callback<NotificationDto, CancellationToken>((n, _) => { lock (posted) posted.Add(n.Message); })
                 .Returns(Task.CompletedTask);
-            var gate = new DiagnosticsAutofocusGate(diagnostics.Object, notifications.Object);
+            var gate = new DiagnosticsAutofocusGate(diagnostics.Object, notifications.Object) {
+                // Zero TTL so each call re-reads — this test drives state transitions call-by-call.
+                CacheTtl = TimeSpan.Zero,
+            };
 
             gate.DeferralReason();
             gate.DeferralReason();
@@ -125,6 +128,23 @@ namespace OpenAstroAra.Test {
             lock (posted) {
                 Assert.That(posted, Has.Count.EqualTo(2), "a fresh episode alerts again");
             }
+        }
+
+        [Test]
+        public void OneReadServesTheWholeTriggerPass() {
+            var reads = 0;
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => Interlocked.Increment(ref reads))
+                .ReturnsAsync(State(Issue("clouds_passing")));
+            var gate = new DiagnosticsAutofocusGate(diagnostics.Object); // default 1 s TTL
+
+            // Five due triggers in one RunTriggers pass — without memoization each would
+            // block the run-engine thread on its own diagnostics read.
+            for (var i = 0; i < 5; i++) {
+                Assert.That(gate.DeferralReason(), Is.EqualTo("clouds passing"));
+            }
+            Assert.That(reads, Is.EqualTo(1));
         }
 
         // ---- trigger-side deferral behavior ----

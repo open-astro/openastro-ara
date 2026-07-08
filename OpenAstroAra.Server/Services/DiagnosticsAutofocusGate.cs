@@ -57,7 +57,20 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
     private readonly INotificationService? _notifications;
     private readonly ILogger<DiagnosticsAutofocusGate> _logger;
     private readonly object _episodeGate = new();
+    private readonly System.Diagnostics.Stopwatch _sinceLastRead = new();
+    private string? _cachedReason;
     private bool _inEpisode;
+
+    /// <summary>
+    /// One diagnostics read serves every trigger of a RunTriggers pass: the sequencer asks
+    /// each registered AF trigger after every item transition, and in a bad-sky episode
+    /// several can be "due" at once — without this, each would block on its own bounded
+    /// read (compounding to ~10 s of run-thread stall per tick when diagnostics is
+    /// degraded). One second is far below any sky-condition change cadence and caps a
+    /// degraded read at one bounded wait per second. Internal so tests can set Zero to
+    /// exercise state transitions call-by-call.
+    /// </summary>
+    internal TimeSpan CacheTtl { get; set; } = TimeSpan.FromSeconds(1);
 
     public DiagnosticsAutofocusGate(
             IDiagnosticsService diagnostics,
@@ -69,9 +82,22 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
     }
 
     /// <inheritdoc/>
+    public string? DeferralReason() {
+        // The lock also serializes concurrent callers behind one read: whoever arrives while
+        // a read is in flight gets the freshly cached answer instead of issuing its own.
+        lock (_episodeGate) {
+            if (_sinceLastRead.IsRunning && _sinceLastRead.Elapsed < CacheTtl) {
+                return _cachedReason;
+            }
+            _cachedReason = ReadDeferralReasonLocked();
+            _sinceLastRead.Restart();
+            return _cachedReason;
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fail-open boundary: any diagnostics read fault (DB, wrapper, cancellation surfacing as AggregateException) must degrade to 'don't defer' — diagnostics must never freeze focusing. CA1031's log-and-recover boundary applies.")]
-    public string? DeferralReason() {
+    private string? ReadDeferralReasonLocked() {
         DiagnosticsStateDto state;
         try {
             var read = _diagnostics.GetStateAsync(CancellationToken.None);
@@ -86,19 +112,17 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
         }
 
         var issue = state.OpenIssues.FirstOrDefault(i => SkyConditionIssueTypes.ContainsKey(i.IssueType));
-        lock (_episodeGate) {
-            if (issue is null) {
-                _inEpisode = false;
-                return null;
-            }
-            var reason = SkyConditionIssueTypes[issue.IssueType];
-            if (!_inEpisode) {
-                _inEpisode = true;
-                LogDeferred(reason);
-                _ = NotifyQuietlyAsync(reason);
-            }
-            return reason;
+        if (issue is null) {
+            _inEpisode = false;
+            return null;
         }
+        var reason = SkyConditionIssueTypes[issue.IssueType];
+        if (!_inEpisode) {
+            _inEpisode = true;
+            LogDeferred(reason);
+            _ = NotifyQuietlyAsync(reason);
+        }
+        return reason;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
