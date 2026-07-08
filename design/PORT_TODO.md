@@ -14,14 +14,13 @@ the other design docs.
 
 ---
 
-## Flaky bench test — AlpacaFaultProxy header-forward (observed 2026-07-07, CI linux)
+## Flaky bench test — AlpacaFaultProxy header-forward — ✅ FIXED (2026-07-08)
 
-`PassThrough_forwards_inbound_request_headers_to_the_upstream` failed once on the #735 CI run with
-`ObjectDisposedException: HttpListenerResponse` — a teardown race in the bench proxy (the upstream
-fake's response object disposed while the forward was still writing). Pre-existing, unrelated to
-the PR's diff; passes locally and on re-run. Fix when touched next: guard the proxy's response
-write against a disposed listener (catch ObjectDisposedException alongside the existing
-HttpListenerException handling in `AlpacaFaultProxy.ForwardAsync`).
+`PassThrough_forwards_inbound_request_headers_to_the_upstream` failed once on CI linux with
+`ObjectDisposedException: HttpListenerResponse`. Root cause: the test-file StubAlpaca's response
+write was unguarded, so a teardown race killed the loop task and `DisposeAsync`'s `await _loop`
+rethrew into the test. The write block now catches HttpListenerException/ObjectDisposedException
+like the accept path always did.
 
 ## §48 auto-flats — follow-ups (2026-07-07, after the server prompt-flow PR)
 
