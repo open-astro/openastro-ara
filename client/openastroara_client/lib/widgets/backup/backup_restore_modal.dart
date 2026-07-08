@@ -256,7 +256,9 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text('${_formatBytes(snapshot.sizeBytes)} · ${snapshot.includedAreas.join(', ')}',
+            Text(
+                '${_formatBytes(snapshot.sizeBytes)} · ${snapshot.includedAreas.join(', ')}'
+                '${snapshot.framesMetadataRows is int ? ' · ${snapshot.framesMetadataRows} frame records' : ''}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary)),
           ],
         ),

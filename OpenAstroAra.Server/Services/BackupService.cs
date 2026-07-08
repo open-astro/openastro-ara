@@ -254,6 +254,13 @@ namespace OpenAstroAra.Server.Services {
             if (!File.Exists(dbPath)) {
                 return null; // fresh daemon before first catalog init — nothing to capture
             }
+            if (IsReparsePoint(dbPath)) {
+                // Same guard as profile.json above: SQLite would faithfully follow a symlinked
+                // db and copy whatever it points at — possibly outside the profile root — into
+                // the archive. A real catalog is a plain file; skip a link honestly.
+                LogDbSnapshotFailed(new IOException($"'{dbPath}' is a symlink/reparse point and was not snapshotted."));
+                return null;
+            }
             var snapshotTmp = Path.Combine(_backupsDir,
                 TempPrefix + id.ToString("N", CultureInfo.InvariantCulture) + ".db");
             try {
@@ -443,7 +450,8 @@ namespace OpenAstroAra.Server.Services {
                     SizeBytes: manifest.SizeBytes,
                     Sha256: manifest.Sha256,
                     DownloadUrl: SnapshotDownloadUrl(manifest.BackupId),
-                    IncludedAreas: manifest.IncludedAreas);
+                    IncludedAreas: manifest.IncludedAreas,
+                    FramesMetadataRows: manifest.FramesMetadataRows);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
                 // A single corrupt/locked manifest shouldn't fail the whole list — skip it and report the rest.
                 LogManifestSkipped(manifestPath, ex);
