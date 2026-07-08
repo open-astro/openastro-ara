@@ -148,6 +148,49 @@ void main() {
     expect(player.played, isEmpty);
   });
 
+  test('an emergency stop mid-episode escalates the reason without restacking', () async {
+    emit('safety.unsafe', {
+      'reasons': ['humidity 95% over the 85% limit'],
+    });
+    await settle();
+    expect(container.read(safetyAlarmProvider).ringing, isTrue);
+
+    emit('safety.emergency_stop');
+    await settle();
+
+    final state = container.read(safetyAlarmProvider);
+    expect(state.reason, contains('EMERGENCY STOP'),
+        reason: 'the modal must show the situation escalated');
+    expect(state.reason, contains('humidity'),
+        reason: 'the original cause stays visible');
+    expect(player.played, hasLength(1), reason: 'no second siren stacked');
+  });
+
+  test('the persisted delay and tone apply even to an event racing app launch', () async {
+    // Seed prefs BEFORE a fresh controller builds, and never touch the knobs.
+    await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
+        .save(delaySec: 0, tone: 'chime');
+    container.dispose();
+    container = ProviderContainer(overrides: [
+      wsEventStreamProvider.overrideWith((ref) {
+        stream.connect();
+        return stream;
+      }),
+      safetyAlarmPrefsProvider.overrideWithValue(
+          SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
+    ]);
+    container.read(notificationsSettingsProvider.notifier).setSoundAlert(true);
+    container.listen(safetyAlarmProvider, (prev, next) {});
+    final c = container.read(safetyAlarmProvider.notifier);
+    c.playerFactory = () => player;
+    // Trigger IMMEDIATELY — before the async prefs read can have resolved.
+    c.trigger('launch race');
+    await settle();
+
+    expect(player.played, ['audio/alarm_chime.wav'],
+        reason: 'the ring must use the persisted tone, not the siren default');
+  });
+
   test('a flapping monitor does not stack alarms', () async {
     final c = container.read(safetyAlarmProvider.notifier);
     emit('safety.unsafe');

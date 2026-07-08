@@ -28,7 +28,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
       final wasActive = (prev?.pending ?? false) || (prev?.ringing ?? false);
       final isActive = next.pending || next.ringing;
       if (isActive && !wasActive && !_dialogShowing) {
-        _showAlarmDialog(next.reason);
+        _showAlarmDialog();
       }
       if (!isActive && wasActive && _dialogShowing) {
         // Single pop path: EVERY dismissal (Silence button, safety.safe)
@@ -42,7 +42,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
     return widget.child;
   }
 
-  void _showAlarmDialog(String reason) {
+  void _showAlarmDialog() {
     _dialogShowing = true;
     unawaited(
       showDialog<void>(
@@ -54,7 +54,13 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
           icon: Icon(Icons.notifications_active,
               color: Theme.of(dialogContext).colorScheme.error, size: 32),
           title: const Text('SAFETY ALERT'),
-          content: Text(reason.isEmpty ? 'Conditions are UNSAFE.' : reason),
+          // Live-read: an emergency stop arriving mid-episode escalates the
+          // reason in place — the open modal must show it.
+          content: Consumer(builder: (context, ref, _) {
+            final reason =
+                ref.watch(safetyAlarmProvider.select((s) => s.reason));
+            return Text(reason.isEmpty ? 'Conditions are UNSAFE.' : reason);
+          }),
           actions: [
             FilledButton(
               style: FilledButton.styleFrom(

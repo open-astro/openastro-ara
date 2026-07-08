@@ -141,6 +141,7 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
   Timer? _delayTimer;
   SafetyAlarmPlayer? _player;
   bool _userTouched = false;
+  Future<void>? _restoreDone;
 
   // ─── test seams ───
   SafetyAlarmPlayer Function()? playerFactory;
@@ -158,12 +159,13 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
               ? reasons.whereType<String>().join('; ')
               : 'Conditions are UNSAFE');
         case 'safety.emergency_stop':
-          trigger('EMERGENCY STOP triggered');
+          trigger('EMERGENCY STOP triggered', urgent: true);
         case 'safety.safe':
           silence();
       }
     });
-    unawaited(_restore());
+    _restoreDone = _restore();
+    unawaited(_restoreDone);
     return const SafetyAlarmState();
   }
 
@@ -193,16 +195,31 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
     _persist();
   }
 
-  /// Fires the alarm flow for [reason]. No-op while one is already pending
-  /// or ringing (a flapping monitor must not stack sirens), or when the
-  /// Notifications "Sound alert" master toggle is off.
+  /// Fires the alarm flow for [reason]. While an episode is already pending
+  /// or ringing, a flapping monitor must not stack sirens — but an [urgent]
+  /// event (emergency stop) arriving mid-episode still updates the modal's
+  /// reason so the user learns the situation escalated. Master-gated by the
+  /// Notifications "Sound alert" toggle.
   @visibleForTesting
-  void trigger(String reason) {
-    if (state.pending || state.ringing) return;
+  void trigger(String reason, {bool urgent = false}) {
+    if (state.pending || state.ringing) {
+      if (urgent && !state.reason.contains('EMERGENCY')) {
+        state = state.copyWith(reason: '$reason — plus: ${state.reason}');
+      }
+      return;
+    }
     if (!ref.read(notificationsSettingsProvider).soundAlert) return;
     state = state.copyWith(pending: true, reason: reason);
     _delayTimer?.cancel();
-    _delayTimer = Timer(Duration(seconds: state.delaySec), _startRinging);
+    // The delay timer starts only after the device-local prefs restore
+    // resolved (a tiny file read) — an event racing app launch must ring
+    // with the USER'S delay/tone, not the defaults. The modal is already
+    // up either way; silence() mid-wait still wins (pending re-checked).
+    unawaited((_restoreDone ?? Future<void>.value()).then((_) {
+      if (!state.pending) return;
+      _delayTimer?.cancel();
+      _delayTimer = Timer(Duration(seconds: state.delaySec), _startRinging);
+    }));
   }
 
   void _startRinging() {
