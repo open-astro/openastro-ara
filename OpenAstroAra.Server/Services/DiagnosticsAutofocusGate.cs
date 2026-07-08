@@ -64,7 +64,7 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
     private readonly object _episodeGate = new();
     private readonly System.Diagnostics.Stopwatch _sinceLastRead = new();
     private string? _cachedReason;
-    private bool _inEpisode;
+    private string? _episodeReason;
 
     /// <summary>
     /// One diagnostics read serves every trigger of a RunTriggers pass: the sequencer asks
@@ -129,12 +129,15 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
         }
 
         if (issue is null) {
-            _inEpisode = false;
+            _episodeReason = null;
             return null;
         }
         var reason = SkyConditionIssueTypes[issue.IssueType];
-        if (!_inEpisode) {
-            _inEpisode = true;
+        // One alert per episode, keyed by REASON — if clouds clear but dew opens before
+        // diagnostics ever reports clean, the situation changed and the user hears the new
+        // reason instead of a stale "clouds passing" notification.
+        if (_episodeReason != reason) {
+            _episodeReason = reason;
             LogDeferred(reason);
             _ = NotifyQuietlyAsync(reason);
         }

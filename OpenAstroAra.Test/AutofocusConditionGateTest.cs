@@ -128,6 +128,15 @@ namespace OpenAstroAra.Test {
             lock (posted) {
                 Assert.That(posted, Has.Count.EqualTo(2), "a fresh episode alerts again");
             }
+
+            // The reason changes WITHOUT a clean gap (clouds clear, dew opens same tick):
+            // the user must hear the new reason, not keep a stale "clouds passing" alert.
+            state = State(Issue("dew_formation"));
+            Assert.That(gate.DeferralReason(), Is.EqualTo("dew forming on the optics"));
+            lock (posted) {
+                Assert.That(posted, Has.Count.EqualTo(3), "a mid-episode reason change re-alerts");
+                Assert.That(posted[2], Does.Contain("dew forming"));
+            }
         }
 
         [Test]
