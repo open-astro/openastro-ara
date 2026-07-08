@@ -140,7 +140,8 @@ class SafetyAlarmState {
 class SafetyAlarmController extends Notifier<SafetyAlarmState> {
   Timer? _delayTimer;
   SafetyAlarmPlayer? _player;
-  bool _userTouched = false;
+  bool _delayTouched = false;
+  bool _toneTouched = false;
   Future<void>? _restoreDone;
 
   // ─── test seams ───
@@ -171,26 +172,36 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
 
   Future<void> _restore() async {
     final saved = await ref.read(safetyAlarmPrefsProvider).load();
-    if (_userTouched) return;
-    state = state.copyWith(delaySec: saved.delaySec, tone: saved.tone);
+    if (!ref.mounted) return;
+    // Per-field: touching one knob before this async read resolves must not
+    // discard the OTHER knob's persisted value.
+    state = state.copyWith(
+      delaySec: _delayTouched ? null : saved.delaySec,
+      tone: _toneTouched ? null : saved.tone,
+    );
   }
 
   void _persist() {
-    unawaited(ref
-        .read(safetyAlarmPrefsProvider)
-        .save(delaySec: state.delaySec, tone: state.tone));
+    // Wait for the restore before writing: a knob touched at launch persists
+    // the WHOLE state, and writing the still-default other knob would clobber
+    // its saved value on disk (read-modify-write race).
+    final prefs = ref.read(safetyAlarmPrefsProvider);
+    unawaited((_restoreDone ?? Future<void>.value()).then((_) {
+      if (!ref.mounted) return; // disposed mid-flight — nothing to persist
+      unawaited(prefs.save(delaySec: state.delaySec, tone: state.tone));
+    }));
   }
 
   void setDelaySec(int v) {
     if (v < 0 || v > 300) return;
-    _userTouched = true;
+    _delayTouched = true;
     state = state.copyWith(delaySec: v);
     _persist();
   }
 
   void setTone(String tone) {
     if (!safetyAlarmTones.containsKey(tone)) return;
-    _userTouched = true;
+    _toneTouched = true;
     state = state.copyWith(tone: tone);
     _persist();
   }
@@ -208,7 +219,9 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
       }
       return;
     }
-    if (!ref.read(notificationsSettingsProvider).soundAlert) return;
+    // The MODAL always pops on a safety event — the Sound alert toggle
+    // gates only the tone (its copy promises exactly that). A muted user
+    // still sees the visual alert; it just never rings.
     state = state.copyWith(pending: true, reason: reason);
     _delayTimer?.cancel();
     // The delay timer starts only after the device-local prefs restore
@@ -216,7 +229,7 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
     // with the USER'S delay/tone, not the defaults. The modal is already
     // up either way; silence() mid-wait still wins (pending re-checked).
     unawaited((_restoreDone ?? Future<void>.value()).then((_) {
-      if (!state.pending) return;
+      if (!ref.mounted || !state.pending) return;
       _delayTimer?.cancel();
       _delayTimer = Timer(Duration(seconds: state.delaySec), _startRinging);
     }));
@@ -224,6 +237,11 @@ class SafetyAlarmController extends Notifier<SafetyAlarmState> {
 
   void _startRinging() {
     if (!state.pending) return;
+    if (!ref.read(notificationsSettingsProvider).soundAlert) {
+      // Sound muted: stay pending — the modal remains up until Silence or
+      // safety.safe, it just never rings.
+      return;
+    }
     state = state.copyWith(pending: false, ringing: true);
     _player ??= (playerFactory ?? AudioplayersAlarmPlayer.new)();
     unawaited(_player!

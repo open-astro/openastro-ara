@@ -137,15 +137,45 @@ void main() {
         reason: 'silencing within the delay is the whole point of the delay');
   });
 
-  test('the master Sound alert toggle off means no alarm at all', () async {
+  test('Sound alert off mutes the tone but the modal still alerts', () async {
     container.read(notificationsSettingsProvider.notifier).setSoundAlert(false);
     emit('safety.unsafe');
     await settle();
 
     final state = container.read(safetyAlarmProvider);
-    expect(state.pending, isFalse);
+    expect(state.pending, isTrue,
+        reason: 'the visual alert must survive a muted siren');
     expect(state.ringing, isFalse);
-    expect(player.played, isEmpty);
+    expect(player.played, isEmpty, reason: 'the toggle gates only the tone');
+  });
+
+  test('touching one knob before restore keeps the OTHER persisted value', () async {
+    container.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
+        .save(delaySec: 42, tone: 'chime');
+    container = ProviderContainer(overrides: [
+      wsEventStreamProvider.overrideWith((ref) {
+        stream.connect();
+        return stream;
+      }),
+      safetyAlarmPrefsProvider.overrideWithValue(
+          SafetyAlarmPrefsService(supportDir: () async => prefsDir)),
+    ]);
+    container.read(notificationsSettingsProvider.notifier).setSoundAlert(true);
+    container.listen(safetyAlarmProvider, (prev, next) {});
+    final c = container.read(safetyAlarmProvider.notifier);
+    c.playerFactory = () => player;
+    c.setTone('beeps'); // touch ONLY the tone before restore lands
+
+    for (var i = 0; i < 40 &&
+        container.read(safetyAlarmProvider).delaySec != 42; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+
+    final state = container.read(safetyAlarmProvider);
+    expect(state.delaySec, 42, reason: 'the untouched knob restores');
+    expect(state.tone, 'beeps', reason: 'the touched knob wins');
   });
 
   test('an emergency stop mid-episode escalates the reason without restacking', () async {
@@ -167,10 +197,13 @@ void main() {
   });
 
   test('the persisted delay and tone apply even to an event racing app launch', () async {
+    // Drop the setUp container FIRST and let its chained persist flush, or
+    // its deferred write clobbers the seed below.
+    container.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     // Seed prefs BEFORE a fresh controller builds, and never touch the knobs.
     await SafetyAlarmPrefsService(supportDir: () async => prefsDir)
         .save(delaySec: 0, tone: 'chime');
-    container.dispose();
     container = ProviderContainer(overrides: [
       wsEventStreamProvider.overrideWith((ref) {
         stream.connect();
