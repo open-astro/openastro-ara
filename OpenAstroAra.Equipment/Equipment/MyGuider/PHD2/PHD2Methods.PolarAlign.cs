@@ -112,6 +112,50 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "get_pa_session";
     }
 
+    /// <summary>Response for <c>get_star_centroids</c> — the daemon returns the stars as a BARE JSON
+    /// array (the <c>result</c> is the array itself, not an object wrapping it), so <c>result</c> binds
+    /// straight to the centroid list.</summary>
+    public class Phd2GetStarCentroidsResponse : PhdMethodResponse {
+        public IReadOnlyList<Phd2StarCentroid>? result { get; set; }
+    }
+
+    /// <summary>One detected star from <c>get_star_centroids</c> — sub-pixel centroid plus the daemon's
+    /// quality metrics (SNR, integrated mass, half-flux diameter).</summary>
+    public class Phd2StarCentroid {
+
+        [JsonProperty(PropertyName = "x")]
+        public double? X { get; set; }
+
+        [JsonProperty(PropertyName = "y")]
+        public double? Y { get; set; }
+
+        [JsonProperty(PropertyName = "snr")]
+        public double? Snr { get; set; }
+
+        [JsonProperty(PropertyName = "mass")]
+        public double? Mass { get; set; }
+
+        [JsonProperty(PropertyName = "hfd")]
+        public double? Hfd { get; set; }
+    }
+
+    /// <summary>Response for <c>set_pa_session</c>/<c>get_pa_session</c> — both return the same session
+    /// status object.</summary>
+    public class Phd2PaSessionResponse : PhdMethodResponse {
+        public Phd2PaSessionStatus? result { get; set; }
+    }
+
+    /// <summary>The PA session lease status. <c>ExpiresInS</c> is emitted only while the lease is
+    /// active (the daemon snapshots the clock so it never reports a negative remaining time).</summary>
+    public class Phd2PaSessionStatus {
+
+        [JsonProperty(PropertyName = "active")]
+        public bool? Active { get; set; }
+
+        [JsonProperty(PropertyName = "expires_in_s")]
+        public int? ExpiresInS { get; set; }
+    }
+
     // §45 Static PA — the near-pole centre-of-rotation "dot-to-bullseye" tool (openastro-guider
     // design/POLAR_ALIGNMENT_DESIGN.md; API_REFERENCE.md "Static PA"). ARA drives it headlessly and
     // renders the reticle from the status object below; the daemon owns the geometry, ARA owns the solver
