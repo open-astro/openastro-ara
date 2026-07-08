@@ -54,6 +54,10 @@ public static class WsEventCatalog {
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
     public const string GuiderFaultActionTaken = "guider.fault_action_taken";
+    // §45 polar alignment — the routine lifecycle. started/stopped land with the service skeleton;
+    // the in-loop frame_complete/solved/unsolved/paused events arrive with the capture-loop slice.
+    public const string PolarAlignStarted = "polar_align.started";
+    public const string PolarAlignStopped = "polar_align.stopped";
 
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
