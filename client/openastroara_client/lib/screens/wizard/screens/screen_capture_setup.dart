@@ -554,6 +554,7 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
                 'blank to keep the profile default.',
             errorText: _dewError,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
             onChanged: (v) {
               final t = v.trim();
               String? err;
