@@ -73,6 +73,24 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// — the scale-invariant central brightness that collapses as a refractor defocuses. The 1-ADU
         /// denominator floor keeps it bounded on an all-dark/bias-free frame.</summary>
         public double PeakToBackground { get; set; }
+
+        /// <summary>§59.3/§59.10 — outer diameter (pixels) of the defocused donut: the full extent of the
+        /// star's flux ring, from the half-max outer edge of its radial surface-brightness profile. On an
+        /// obstructed scope (SCT/RC/Newtonian) this is the donut's outer ring; on a refractor / in-focus star
+        /// it degrades to roughly the FWHM extent. 0 for a sub-pixel blob.</summary>
+        public double DonutOuterDiameter { get; set; }
+
+        /// <summary>§59.3/§59.10 — inner diameter (pixels) of the donut hole: the central-obstruction shadow,
+        /// from the half-max inner edge of the radial profile. &gt; 0 only when the star images as a ring with a
+        /// dark centre (a defocused obstructed scope); 0 for a refractor or an in-focus star whose profile
+        /// peaks at the centre.</summary>
+        public double DonutInnerDiameter { get; set; }
+
+        /// <summary>§59.3 — donut ring thickness (pixels) = <see cref="DonutOuterDiameter"/> −
+        /// <see cref="DonutInnerDiameter"/>. Derived, not stored: the per-star value is the difference, while
+        /// the frame-level median of it is a distinct statistic (the median of differences ≠ the difference of
+        /// medians) that <see cref="FocusFeatureVector"/> carries separately.</summary>
+        public double RingThickness => DonutOuterDiameter - DonutInnerDiameter;
     }
 
     public interface IStarDetection {

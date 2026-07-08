@@ -22,19 +22,24 @@ namespace OpenAstroAra.Image.ImageAnalysis {
     /// each Classic-AF step so the rig's defocus→focuser-offset relationship can be learned once and then
     /// inverted from a single frame (§59.2). Each field is a whole-frame aggregate of the per-star metrics
     /// <see cref="StarDetector"/> measures (<see cref="DetectedStar.FWHM"/> etc.); §59.4 later weights the
-    /// fields per telescope type. This slice ships the refractor-relevant subset (HFR, FWHM, roundness,
-    /// peak-to-background) — donut geometry (asymmetry, ring thickness) follows for obstructed scopes.
+    /// fields per telescope type. Carries the refractor-relevant metrics (HFR, FWHM, roundness,
+    /// peak-to-background) plus the §59.3/§59.10 donut geometry for obstructed scopes (outer/inner diameter,
+    /// ring thickness). The intra/extra-focal asymmetry coefficient (which resolves the §59.2 defocus sign)
+    /// and the §59.4 per-telescope field weighting are later slices.
     /// </summary>
     public sealed record FocusFeatureVector(
         int StarCount,
         double MedianHFR,
         double MedianFWHM,
         double MedianRoundness,
-        double MedianPeakToBackground) {
+        double MedianPeakToBackground,
+        double MedianDonutOuterDiameter,
+        double MedianDonutInnerDiameter,
+        double MedianRingThickness) {
 
         /// <summary>The empty-field vector — no stars, every metric zero. Returned for a starless frame so
         /// callers never branch on null; a zero <see cref="StarCount"/> is the "unusable sample" signal.</summary>
-        public static readonly FocusFeatureVector Empty = new(0, 0, 0, 0, 0);
+        public static readonly FocusFeatureVector Empty = new(0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     /// <summary>
@@ -58,12 +63,18 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             var fwhm = new double[n];
             var roundness = new double[n];
             var peak = new double[n];
+            var outerDiameter = new double[n];
+            var innerDiameter = new double[n];
+            var ringThickness = new double[n];
             for (int i = 0; i < n; i++) {
                 var s = stars[i];
                 hfr[i] = s.HFR;
                 fwhm[i] = s.FWHM;
                 roundness[i] = s.Roundness;
                 peak[i] = s.PeakToBackground;
+                outerDiameter[i] = s.DonutOuterDiameter;
+                innerDiameter[i] = s.DonutInnerDiameter;
+                ringThickness[i] = s.RingThickness;
             }
 
             return new FocusFeatureVector(
@@ -71,7 +82,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 MedianHFR: Median(hfr),
                 MedianFWHM: Median(fwhm),
                 MedianRoundness: Median(roundness),
-                MedianPeakToBackground: Median(peak));
+                MedianPeakToBackground: Median(peak),
+                MedianDonutOuterDiameter: Median(outerDiameter),
+                MedianDonutInnerDiameter: Median(innerDiameter),
+                // Median of per-star (outer − inner), NOT median(outer) − median(inner): the median is
+                // non-linear, so this is a distinct statistic worth carrying.
+                MedianRingThickness: Median(ringThickness));
         }
 
         // Median of a non-empty sample; sorts in place (each array is a private per-call copy). Even counts

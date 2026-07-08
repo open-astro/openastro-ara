@@ -337,8 +337,13 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   firing trigger executed nothing, silently — fixed in the client trigger catalog (`TriggerDef.runnerItems`
   seeds the runner with its action item: `RunAutofocus` for the AF family, `Dither` for DitherAfterExposures,
   matching what NINA's C# constructors serialize).
-- **Smart Focus (§59.2–59.4):** the feature-vector model (donut diameters, asymmetry, telescope-type extractor)
-  + inverse-mapping calibration table. Research-grade "better than NINA" feature — likely v0.1.0, not v0.0.1.
+- **Smart Focus (§59.2–59.4) — IN PROGRESS (v0.1.0), landing as pure-headless slices:** ✅ per-star feature
+  vector `FWHM`/`Roundness`/`PeakToBackground` (#758); ✅ `FocusInverseMap` defocus→offset magnitude table (#768);
+  ✅ donut geometry `DonutOuterDiameter`/`DonutInnerDiameter`/`RingThickness` for obstructed scopes (#593 branch).
+  Remaining: the intra/extra-focal **asymmetry coefficient** (resolves the §59.2 defocus sign — co-design with the
+  Phase-2 sign work), the §59.4 **telescope-type extractor selector** (field weighting per optical design), and
+  wiring `FocusInverseMap` into `AutofocusSweepService` as the Phase-2 one-frame run. §59.10 collimation verdict
+  reuses the donut ring centroids (its own slice).
 - **AF triggers + sequencer wiring (§59.5) — trigger family DONE (2026-07-08); two follow-ups open.**
   ✅ The four remaining NINA AF triggers re-ported headless from `840893eb8^` (time-interval / focuser-temp-Δ /
   HFR-drift / first-filter — "sequence start" is covered by the imaging-run builder's `autofocusAtStart`
@@ -632,6 +637,19 @@ response deserialization). Blocking build uses a 2-h `SendMessage` timeout (wors
 guider event stream (GuideStep/Settling/SettleDone/StarLost/Alert/… per §63.2) carries no dark-library-progress
 event, so the §63.8 "PHD2 streams build progress" premise below does **not** hold. Achievable design = a
 202-Accepted background build that fires **started + complete** (no granular % bar).
+
+**UPDATE (2026-07-08, #769/#770 — SUPERSEDES the correction above for progress reporting):** the "no granular
+progress" conclusion held only for the guider *event stream*. The openastro-guider release added a **pollable**
+`get_dark_build_progress` RPC (`{active, exposure_index, exposure_count, exposure_ms, frame, frame_count}`), so
+ARA now drives a real progress bar WITHOUT any progress event: #769 shipped the DTO + `PHD2Guider.GetDarkBuildProgressAsync`;
+#770 added the `GuiderService` poll-loop (`PollBuildProgressAsync`, own short-lived connection, drained before
+the terminal event for ordering) that calls it once a second during a build and promotes the
+`guider.{dark_library,defect_map}.*` WS stream from indeterminate to granular `exposure_index/exposure_count`
+progress. **Open follow-up (#770 review round-2 non-blocking note):** warn-once visibility when the poll produces
+zero successful reads across a whole build — a persistently-unreachable daemon currently yields an indeterminate
+bar with only a debug-level `SendMessage` log; that swallow is pre-existing but polling makes silent repeated
+failures more likely to go unnoticed. A "warn after N consecutive poll failures" pass is a candidate for a later
+guider slice.
 
 **Shipped:** e-4b-2 — service + REST surface. `GuiderService.BuildDarkLibraryAsync` (202-Accepted background
 `Task.Run`, validates synchronously → 400 on bad request / 409 when disconnected) + `GetCalibrationFilesStatusAsync`

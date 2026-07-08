@@ -242,6 +242,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // A single-pixel-tight star yields HFR 0; clamp to a small floor so it's a usable focus metric.
             double hfr = Math.Max(0.5, sumFR / sumF);
 
+            var (outerDiameter, innerDiameter) = DonutGeometry(blob, pixels, width, cx, cy, background);
+
             return new DetectedStar {
                 Position = Math.Round(cy) * width + Math.Round(cx),
                 HFR = hfr,
@@ -256,7 +258,81 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 // ratio even on an all-dark/bias-free synthetic frame — a raw-peak fallback there would
                 // inject an outlier of a wholly different magnitude into the §59.3 median the model trains on.
                 PeakToBackground = (peak - background) / Math.Max(1.0, background),
+                DonutOuterDiameter = outerDiameter,
+                DonutInnerDiameter = innerDiameter,
             };
+        }
+
+        // §59.3/§59.10 — donut (annulus) geometry for obstructed scopes. A defocused star on a scope with a
+        // central obstruction images as a ring: bright at some radius, dark in the middle (the obstruction
+        // shadow). Build the radial surface-brightness profile of the blob about its centroid — mean
+        // background-subtracted flux per integer-radius bin — and read the ring's half-max edges: the outer
+        // edge is the full donut diameter, the inner edge the obstruction-shadow diameter. Because the blob
+        // holds only above-threshold pixels, a donut's dark hole is absent (count-0 inner bins the scan skips),
+        // so the inner edge lands on the ring's inner rim. A refractor / in-focus star peaks at the centre, so
+        // its inner edge is bin 0 (inner diameter 0) and this degrades continuously to "outer ≈ FWHM, inner 0"
+        // — no branch on scope type. Diameters are 2·(bin radius) in pixels; a sub-pixel blob yields (0, 0).
+        private const double DonutRingHalfMaxFraction = 0.5;
+        private const int DonutProfileMaxStackBins = 96;
+
+        private static (double OuterDiameter, double InnerDiameter) DonutGeometry(
+                List<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
+            double maxR = 0;
+            foreach (int p in blob) {
+                int x = p % width, y = p / width;
+                double dx = x - cx, dy = y - cy;
+                double r = Math.Sqrt(dx * dx + dy * dy);
+                if (r > maxR) {
+                    maxR = r;
+                }
+            }
+            int bins = (int)maxR + 1;
+            // Stack the profile for the common small blob; spill to the heap only for a large defocused donut.
+            Span<double> flux = bins <= DonutProfileMaxStackBins ? stackalloc double[bins] : new double[bins];
+            Span<int> count = bins <= DonutProfileMaxStackBins ? stackalloc int[bins] : new int[bins];
+            foreach (int p in blob) {
+                int x = p % width, y = p / width;
+                double dx = x - cx, dy = y - cy;
+                int b = (int)Math.Sqrt(dx * dx + dy * dy);
+                if (b >= bins) {
+                    b = bins - 1;
+                }
+                flux[b] += pixels[p] - background;
+                count[b]++;
+            }
+            double peakSb = 0;
+            int peakBin = 0;
+            for (int b = 0; b < bins; b++) {
+                if (count[b] == 0) {
+                    continue;
+                }
+                double sb = flux[b] / count[b];
+                if (sb > peakSb) {
+                    peakSb = sb;
+                    peakBin = b;
+                }
+            }
+            if (peakSb <= 0) {
+                return (0.0, 0.0);
+            }
+            double half = DonutRingHalfMaxFraction * peakSb;
+            // Inner edge: the first populated bin (scanning out from the centre) whose surface brightness
+            // reaches half-max — bin 0 for a centre-peaked star, the ring's inner rim for a donut.
+            int innerBin = peakBin;
+            for (int b = 0; b <= peakBin; b++) {
+                if (count[b] > 0 && flux[b] / count[b] >= half) {
+                    innerBin = b;
+                    break;
+                }
+            }
+            // Outer edge: the last populated bin still at half-max, scanning outward from the ring peak.
+            int outerBin = peakBin;
+            for (int b = peakBin; b < bins; b++) {
+                if (count[b] > 0 && flux[b] / count[b] >= half) {
+                    outerBin = b;
+                }
+            }
+            return (2.0 * outerBin, 2.0 * innerBin);
         }
 
         // For a 2D Gaussian the flux-weighted radial second moment ⟨r²⟩ = cxx + cyy equals 2σ², so

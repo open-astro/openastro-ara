@@ -161,6 +161,9 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianFWHM, Is.EqualTo(0));
             Assert.That(vector.MedianRoundness, Is.EqualTo(0));
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(0));
+            Assert.That(vector.MedianDonutOuterDiameter, Is.EqualTo(0));
+            Assert.That(vector.MedianDonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(vector.MedianRingThickness, Is.EqualTo(0));
         }
 
         [Test]
@@ -171,9 +174,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Extract_uses_the_median_of_an_odd_count() {
             var stars = new List<DetectedStar> {
-                Star(hfr: 2.0, fwhm: 4.0, roundness: 0.90, peak: 6.0),
-                Star(hfr: 3.0, fwhm: 5.0, roundness: 0.80, peak: 8.0),
-                Star(hfr: 9.0, fwhm: 9.0, roundness: 0.20, peak: 2.0), // hot-pixel-like outlier
+                Star(hfr: 2.0, fwhm: 4.0, roundness: 0.90, peak: 6.0, outerDiameter: 10.0, innerDiameter: 4.0), // ring 6
+                Star(hfr: 3.0, fwhm: 5.0, roundness: 0.80, peak: 8.0, outerDiameter: 14.0, innerDiameter: 6.0), // ring 8
+                Star(hfr: 9.0, fwhm: 9.0, roundness: 0.20, peak: 2.0, outerDiameter: 30.0, innerDiameter: 2.0), // ring 28, outlier
             };
             var vector = FocusFeatureExtractor.Extract(new StarDetectionResult { StarList = stars });
 
@@ -183,6 +186,13 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianFWHM, Is.EqualTo(5.0));
             Assert.That(vector.MedianRoundness, Is.EqualTo(0.80));
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(6.0));
+            Assert.That(vector.MedianDonutOuterDiameter, Is.EqualTo(14.0)); // median{10,14,30}
+            Assert.That(vector.MedianDonutInnerDiameter, Is.EqualTo(4.0));  // median{2,4,6}
+            // Ring thickness is the median of per-star (outer − inner) = median{6,8,28} = 8, which is NOT
+            // MedianDonutOuterDiameter − MedianDonutInnerDiameter (14 − 4 = 10): the median is non-linear.
+            Assert.That(vector.MedianRingThickness, Is.EqualTo(8.0));
+            Assert.That(vector.MedianRingThickness,
+                Is.Not.EqualTo(vector.MedianDonutOuterDiameter - vector.MedianDonutInnerDiameter));
         }
 
         [Test]
@@ -200,7 +210,88 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(8.0).Within(1e-9)); // (10+6)/2
         }
 
-        private static DetectedStar Star(double hfr, double fwhm, double roundness, double peak) =>
-            new DetectedStar { HFR = hfr, FWHM = fwhm, Roundness = roundness, PeakToBackground = peak };
+        private static DetectedStar Star(double hfr, double fwhm, double roundness, double peak,
+                double outerDiameter = 0, double innerDiameter = 0) =>
+            new DetectedStar {
+                HFR = hfr, FWHM = fwhm, Roundness = roundness, PeakToBackground = peak,
+                DonutOuterDiameter = outerDiameter, DonutInnerDiameter = innerDiameter,
+            };
+
+        // Stamp a uniform-brightness annulus (a defocused obstructed-scope "donut"): a filled ring between
+        // innerRadius and outerRadius, its centre left at background so the detector's blob is the ring alone.
+        private static void AddDonut(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double innerRadius, double outerRadius) {
+            int r = (int)Math.Ceiling(outerRadius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    double dist = Math.Sqrt(dx * dx + dy * dy);
+                    if (dist < innerRadius || dist > outerRadius) continue;
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + amplitude);
+                }
+            }
+        }
+
+        [Test]
+        public void Filled_star_has_a_zero_inner_diameter_and_a_positive_outer() {
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            var star = DetectOne(frame, w, h);
+            // A refractor / in-focus star peaks at the centre — no dark hole, so the inner edge is bin 0.
+            Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(star.DonutOuterDiameter, Is.GreaterThan(0));
+            Assert.That(star.RingThickness, Is.EqualTo(star.DonutOuterDiameter));
+        }
+
+        [Test]
+        public void Defocused_donut_has_a_nonzero_inner_diameter_inside_its_outer() {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 9);
+
+            var star = DetectOne(frame, w, h);
+            // The obstruction shadow gives a real inner hole; the outer edge sits beyond it.
+            Assert.That(star.DonutInnerDiameter, Is.GreaterThan(0));
+            Assert.That(star.DonutOuterDiameter, Is.GreaterThan(star.DonutInnerDiameter));
+            Assert.That(star.RingThickness, Is.GreaterThan(0));
+            // Inner diameter tracks the ~r=4 inner rim, outer the ~r=9 rim (2·bin-radius, pixel scale).
+            Assert.That(star.DonutInnerDiameter, Is.GreaterThan(4).And.LessThan(12));
+            Assert.That(star.DonutOuterDiameter, Is.GreaterThan(12).And.LessThan(22));
+        }
+
+        [Test]
+        public void A_wider_donut_has_a_larger_outer_diameter() {
+            int w = 160, h = 160;
+            var tight = FlatField(w, h);
+            AddDonut(tight, w, h, 80, 80, amplitude: 6000, innerRadius: 3, outerRadius: 6);
+            var wide = FlatField(w, h);
+            AddDonut(wide, w, h, 80, 80, amplitude: 6000, innerRadius: 5, outerRadius: 11);
+
+            Assert.That(DetectOne(wide, w, h).DonutOuterDiameter,
+                Is.GreaterThan(DetectOne(tight, w, h).DonutOuterDiameter));
+        }
+
+        [Test]
+        public void Extract_on_a_donut_frame_yields_positive_median_donut_geometry() {
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            (int x, int y)[] centers = { (50, 50), (150, 50), (100, 100), (50, 150), (150, 150) };
+            foreach (var (cx, cy) in centers) {
+                AddDonut(frame, w, h, cx, cy, amplitude: 6000, innerRadius: 4, outerRadius: 9);
+            }
+
+            var vector = FocusFeatureExtractor.Extract(StarDetector.Detect(frame, w, h, NormalParams()));
+
+            Assert.That(vector.StarCount, Is.EqualTo(centers.Length));
+            Assert.That(vector.MedianDonutInnerDiameter, Is.GreaterThan(0));
+            Assert.That(vector.MedianDonutOuterDiameter, Is.GreaterThan(vector.MedianDonutInnerDiameter));
+            Assert.That(vector.MedianRingThickness, Is.GreaterThan(0));
+        }
     }
 }
