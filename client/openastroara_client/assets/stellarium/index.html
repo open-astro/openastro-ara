@@ -907,6 +907,10 @@ function setCatMsg(text) {
 // applying them). A 404 rows fetch means the OpenNGC source isn't installed —
 // revert the toggle honestly instead of leaving an on-dot with an empty sky.
 function catToggle(id, on, skipPost) {
+  // Ids come from the server inventory or saved prefs — both trusted, but they
+  // key plain {} maps, so reject anything outside the catalog-id shape (also
+  // shuts the '__proto__' silent-no-op corner).
+  if (!/^[a-z0-9-]+$/.test(String(id))) return;
   on = (on == null) ? !catOn[id] : !!on;
   catOn[id] = on;
   if (on && !catRowsCache[id] && !catPending[id]) {
@@ -937,6 +941,12 @@ function catToggle(id, on, skipPost) {
         catPending[id] = false; catOn[id] = false;
         setCatMsg('Could not load the catalog — is the server reachable?');
         renderCatPanel();
+        // Re-post the reverted state: an on→off→on interleave while this fetch
+        // was in flight already posted `true`, and without this the stored pref
+        // stays true over an off dot. Boot-restore (skipPost) stays silent by
+        // design — the merge-save must keep the saved key so the catalog still
+        // restores next launch once the server is back.
+        if (!skipPost) postDisplayPrefs();
       });
     renderCatPanel();
     return;
