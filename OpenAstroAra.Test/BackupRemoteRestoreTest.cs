@@ -93,7 +93,7 @@ namespace OpenAstroAra.Test {
 
         private sealed class RecordingRestorer : IBackupRestorer {
             public int Calls;
-            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool profiles, bool sequences, CancellationToken ct) {
+            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool profiles, bool sequences, bool frameMetadata, CancellationToken ct) {
                 Calls++;
                 return new[] { "profiles" };
             }

@@ -144,13 +144,13 @@ namespace OpenAstroAra.Test {
         private sealed class _ImmediateRestorer : IBackupRestorer {
             private readonly IReadOnlyList<string> _areas;
             public _ImmediateRestorer(IReadOnlyList<string> areas) => _areas = areas;
-            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, CancellationToken ct) => _areas;
+            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, bool restoreFrameMetadata, CancellationToken ct) => _areas;
         }
 
         private sealed class _ThrowingRestorer : IBackupRestorer {
             private readonly string _message;
             public _ThrowingRestorer(string message) => _message = message;
-            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, CancellationToken ct) =>
+            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, bool restoreFrameMetadata, CancellationToken ct) =>
                 throw new InvalidOperationException(_message);
         }
 
@@ -160,7 +160,7 @@ namespace OpenAstroAra.Test {
             public readonly SemaphoreSlim Started = new(0);
             public readonly SemaphoreSlim Release = new(0);
             private static readonly string[] Profiles = { "profiles" };
-            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, CancellationToken ct) {
+            public IReadOnlyList<string> Restore(string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, bool restoreFrameMetadata, CancellationToken ct) {
                 Started.Release();
                 Release.Wait(ct);
                 return Profiles;

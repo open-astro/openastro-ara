@@ -37,6 +37,8 @@ namespace OpenAstroAra.Server.Services {
 
         private const string ProfileFileName = "profile.json";
         private const string SequencesDirName = "sequences";
+        private const string DatabaseFileName = "openastroara.db";
+        private const string DatabaseZipDir = "db";
         private const string StagingPrefix = ".restore-staging-";
         private const string BackupPrefix = ".restore-backup-";
 
@@ -48,7 +50,8 @@ namespace OpenAstroAra.Server.Services {
         /// could not be rolled back (genuine data loss — the message names the backup location).
         /// </summary>
         internal static IReadOnlyList<string> Restore(
-            string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, CancellationToken ct) {
+            string zipPath, string profileDir, bool restoreProfile, bool restoreSequences,
+            bool restoreFrameMetadata, CancellationToken ct) {
             ArgumentException.ThrowIfNullOrEmpty(zipPath);
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
 
@@ -76,6 +79,25 @@ namespace OpenAstroAra.Server.Services {
                         restored.Add("sequences");
                     }
                 }
+                if (restoreFrameMetadata) {
+                    var staged = Path.Combine(stagingDir, DatabaseZipDir, DatabaseFileName);
+                    if (File.Exists(staged)) {
+                        var liveDb = Path.Combine(profileDir, DatabaseFileName);
+                        // Release every pooled handle so the file moves cleanly. Repositories open a
+                        // connection PER CALL (no long-lived handles), so an operation racing the swap
+                        // fails once into its own log-and-recover boundary rather than corrupting
+                        // either file; the restore gate already serializes against create/restore.
+                        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                        // The catalog runs WAL: stale -wal/-shm sidecars belonging to the OLD database
+                        // must never sit next to the swapped-in file — SQLite would replay the old WAL
+                        // into the new db. They move aside WITH the main file (the §43-2b(c) snapshot
+                        // is self-contained) and roll back — in reverse order, after the db — as a set.
+                        swaps.Add(SetAside(liveDb + "-wal", profileDir, token));
+                        swaps.Add(SetAside(liveDb + "-shm", profileDir, token));
+                        swaps.Add(SwapIn(staged, liveDb, profileDir, token, isDirectory: false));
+                        restored.Add(BackupService.FrameMetadataArea);
+                    }
+                }
 
                 // Every requested-and-present area landed — discard the set-aside originals.
                 foreach (var swap in swaps) {
@@ -91,6 +113,19 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private readonly record struct AreaSwap(string LivePath, string BackupPath, bool IsDirectory, bool HadExisting);
+
+        // Move a live file aside WITHOUT placing a staged replacement (the WAL/SHM sidecars of a
+        // restored database have no counterpart in the snapshot). Commit deletes the aside copy;
+        // rollback flows through the same machinery as a real swap — DeletePath on the (absent)
+        // live path is a no-op, then the aside copy moves back.
+        private static AreaSwap SetAside(string livePath, string profileDir, string token) {
+            var backupPath = Path.Combine(profileDir, BackupPrefix + token + "-" + Path.GetFileName(livePath));
+            var hadExisting = File.Exists(livePath);
+            if (hadExisting) {
+                File.Move(livePath, backupPath, overwrite: false);
+            }
+            return new AreaSwap(livePath, backupPath, IsDirectory: false, HadExisting: hadExisting);
+        }
 
         // Move the live area aside (if present) and move the staged area into its place. The returned record carries
         // the info needed to either commit (delete the aside backup) or roll back (move the backup back).

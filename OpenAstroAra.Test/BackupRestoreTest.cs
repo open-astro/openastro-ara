@@ -165,8 +165,20 @@ namespace OpenAstroAra.Test {
             var zip = Directory.GetFiles(Path.Combine(_profileDir, "backups"), "backup-*.zip").Single();
             await File.WriteAllTextAsync(zip, "not a zip anymore");
 
-            Assert.That(async () => await _svc.RestoreZipAsync(Req(url, true, true), null, CancellationToken.None),
-                Throws.InstanceOf<BackupCorruptException>());
+            // §43-2b(c): the checksum hash runs on the WORKER (the archive can carry a large
+            // catalog snapshot), so the POST still 202s and the corruption surfaces as a failed
+            // clone-status — before any live config is touched.
+            await _svc.RestoreZipAsync(Req(url, true, true), null, CancellationToken.None);
+            System.Text.Json.JsonElement status = default;
+            for (var i = 0; i < 200; i++) {
+                status = await _svc.GetCloneStatusAsync(CancellationToken.None);
+                if (status.GetProperty("state").GetString() != "running") {
+                    break;
+                }
+                await Task.Delay(10);
+            }
+            Assert.That(status.GetProperty("state").GetString(), Is.EqualTo("failed"));
+            Assert.That(status.GetProperty("message").GetString(), Does.Contain("checksum"));
             Assert.That(await File.ReadAllTextAsync(ProfilePath), Is.EqualTo("{\"v\":2}"),
                 "a corrupt archive is refused before any live config is touched");
         }
