@@ -19,7 +19,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
     /// <summary>
     /// §42.2 — openastro-guider's structured <c>EquipmentReconnected</c> event (#57): the daemon's
     /// best-effort auto-reconnect of a previously-dropped device succeeded. The guide link was never
-    /// down, so this is informational — ARA uses it to re-arm the one-shot fault reaction.
+    /// down, so this is informational only (logged in <c>ProcessEvent</c>); it drives no reaction — the
+    /// fault reaction is one-shot per connect episode and is deliberately not re-armed on reconnect (a
+    /// flapping device must not re-trigger skip/abort per cycle).
     /// </summary>
     public class PhdEventEquipmentReconnected : PhdEvent {
 
