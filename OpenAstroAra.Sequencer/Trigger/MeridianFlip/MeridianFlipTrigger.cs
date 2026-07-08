@@ -136,8 +136,17 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 Logger.Warning("No target information available for flip. Taking current telescope coordinates instead for the flip.");
             }
             if (target != null && target.RA == 0 && target.Dec == 0) {
-                target = telescopeMediator.GetCurrentPosition();
-                Logger.Warning("Target coordinates are all zero. Most likely not intended. Taking current telescope coordinates instead for the flip.");
+                // RA 0h / Dec 0° is almost always a never-filled default — but it is also a real
+                // spot on the sky (the vernal equinox). Trust it when the mount is actually
+                // pointing there (within 1°); otherwise substitute the current position, the
+                // inherited NINA heuristic for an unset target.
+                var current = telescopeMediator.GetCurrentPosition();
+                if (current != null && (target - current).Distance.Degree <= 1) {
+                    Logger.Info("Meridian Flip - Target is RA 0h / Dec 0° and the mount is pointing there; treating it as a real vernal-equinox target.");
+                } else {
+                    target = current;
+                    Logger.Warning("Target coordinates are all zero. Most likely not intended. Taking current telescope coordinates instead for the flip.");
+                }
             }
 
             if (target == null) {
