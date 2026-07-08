@@ -139,20 +139,22 @@
   #f-crosshair::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
     margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 4px rgba(79,195,247,0.85); }
 
-  /* Display drawer — on/off dot-row styling */
-  #display { left: 14px; top: 64px; width: 234px; max-height: 70%; overflow-y: auto; padding: 12px 13px 14px; display: none;
+  /* Display + Catalogs drawers — shared on/off dot-row styling */
+  #display, #catalogs { left: 14px; top: 64px; width: 234px; max-height: 70%; overflow-y: auto; padding: 12px 13px 14px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
-  #display .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
+  #display .cat-group, #catalogs .cat-group { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase;
     letter-spacing: .05em; margin: 13px 3px 3px; }
-  #display .cat-group:first-of-type { margin-top: 2px; }
-  #display .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 9px;
+  #display .cat-group:first-of-type, #catalogs .cat-group:first-of-type { margin-top: 2px; }
+  #display .cat-row, #catalogs .cat-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 9px;
     border-radius: 9px; cursor: pointer; font-size: 13px; transition: background .15s ease; }
-  #display .cat-row:hover { background: rgba(255,255,255,0.07); }
-  #display .cat-row:active { background: rgba(255,255,255,0.12); }
-  #display .cat-row .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto;
+  #display .cat-row:hover, #catalogs .cat-row:hover { background: rgba(255,255,255,0.07); }
+  #display .cat-row:active, #catalogs .cat-row:active { background: rgba(255,255,255,0.12); }
+  #display .cat-row .dot, #catalogs .cat-row .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--dim); flex: 0 0 auto;
     transition: background .18s ease, border-color .18s ease, box-shadow .18s ease; }
   #display .cat-row .dot.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px rgba(79,195,247,0.7); }
+  #catalogs #cat-msg { font-size: 11.5px; color: var(--dim); margin-top: 9px; line-height: 1.35; }
+  #catalogs #cat-msg:empty { display: none; }
 </style>
 </head>
 <body>
@@ -178,6 +180,7 @@
 
 <div id="layers" class="ui" style="display:none">
   <button id="display-btn" title="Sky layers">Display</button>
+  <button id="cat-btn" title="Highlight a catalog on the sky">Catalogs</button>
   <button id="frame-btn" title="Camera framing overlay">Frame</button>
 </div>
 
@@ -195,6 +198,15 @@
   <div class="cat-row" data-disp="dss"><span>DSS2 sky survey</span><span class="dot"></span></div>
   <div class="cat-row" data-disp="atmosphere"><span>Atmosphere</span><span class="dot"></span></div>
   <div class="cat-row" data-disp="landscape"><span>Landscape</span><span class="dot"></span></div>
+</div>
+
+<!-- Catalogs (§36): highlight rings for a chosen catalog or object type, drawn over
+     the engine's native deep-sky layer. Rows come from the daemon's catalog list
+     (GET /api/v1/catalogs), objects brightest-first per its 500-row cap. -->
+<div id="catalogs" class="ui">
+  <div class="card-title">Catalogs<button class="close" id="cat-close" title="Hide">✕</button></div>
+  <div id="cat-list"></div>
+  <div id="cat-msg"></div>
 </div>
 
 <!-- Framing overlay controls: draws the connected camera's field of view (from
@@ -724,7 +736,7 @@ function toggleTonight() {
   var panel = document.getElementById('tonight');
   var open = panel.style.display === 'none' || !panel.style.display;
   panel.style.display = open ? 'block' : 'none';
-  if (open) { toggleFrame(false); hideDisplay(); }   // one left drawer at a time
+  if (open) { toggleFrame(false); hideDisplay(); hideCatalogs(); }   // one left drawer at a time
   if (open && !_tonightLoaded) loadTonight();   // loadTonight sets _tonightLoaded only on success
 }
 
@@ -765,6 +777,9 @@ var DISPLAY_LAYERS = ['dsos', 'constellationLines', 'constellationArt',
 function postDisplayPrefs() {
   var layers = {};
   DISPLAY_LAYERS.forEach(function (k) { layers[k] = dispState(k); });
+  // Catalogs-overlay toggles ride the same channel, namespaced `cat:{id}` — the
+  // Flutter side merge-saves the map as-is and hands it back in the load URL.
+  Object.keys(catOn).forEach(function (id) { layers['cat:' + id] = !!catOn[id]; });
   // .catch (not try/catch): fetch reports network failures — loopback not yet
   // listening, connection refused — as a rejected promise, not a synchronous throw.
   // Best-effort: a dropped prefs post just means it saves on the next toggle.
@@ -800,6 +815,7 @@ function toggleDisplayPanel() {
   document.getElementById('display-btn').classList.toggle('on', open);
   if (open) {   // one left drawer at a time
     toggleFrame(false);
+    hideCatalogs();
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     renderDisplayPanel();
   }
@@ -811,6 +827,199 @@ function wireDisplay() {
   Array.prototype.forEach.call(document.querySelectorAll('#display .cat-row'), function (row) {
     row.onclick = function () { dispToggle(row.dataset.disp); };
   });
+}
+
+// ---- Catalogs overlay (§36) ----------------------------------------------
+// Highlight rings for a chosen catalog (Messier/Caldwell/NGC/IC) or object type,
+// drawn as ONE stroke-only MultiPolygon feature per catalog on a dedicated layer
+// (the mosaic's proven cheap path — per-feature work is what wedges the engine,
+// so 500 rings collapse into a single feature; fill-opacity 0 skips the fill
+// tessellation entirely). The engine's native dsos layer still supplies names/
+// selection underneath — these rings just say "this one is in your catalog".
+// Toggles persist through the same displayPref channel as the layer dots,
+// namespaced `cat:{id}` (the Flutter side stores the map as-is).
+var CAT_COLORS = {
+  messier: '#ffd54f', caldwell: '#ff8a65', ngc: '#4fc3f7', ic: '#ba68c8',
+  'galaxies': '#f06292', 'open-clusters': '#aed581', 'globular-clusters': '#ffb74d',
+  'planetary-nebulae': '#4dd0e1', 'emission-nebulae': '#e57373',
+  'reflection-nebulae': '#7986cb', 'nebulae': '#90a4ae', 'supernova-remnants': '#a1887f',
+};
+function catColor(id) { return CAT_COLORS[id] || '#81c784'; }
+
+var catInfos = null;      // [{id,name,group}] from /api/v1/catalogs, or null until fetched
+var catInfosPending = false;
+var catOn = {};           // id -> bool (the persisted toggle state)
+var catRowsCache = {};    // id -> fetched object rows (per-session cache)
+var catPending = {};      // id -> true while its rows fetch is in flight
+var _catLayer = null;     // one engine layer parents every catalog's geojson
+var _catGeos = {};        // id -> engine geojson object
+
+// Ring radius in degrees, magnitude-scaled so bright showpieces read bigger;
+// unknown magnitude gets a middling ring.
+function catRingRadius(mag) {
+  if (mag == null || isNaN(mag)) return 0.09;
+  return Math.max(0.05, Math.min(0.3, 0.3 - 0.022 * mag));
+}
+
+// One MultiPolygon of 12-gon rings for every object in the catalog, deprojected
+// off each object's own tangent plane (reuses the mosaic's gnomonic inverse so
+// rings stay round at high declination).
+function catData(id) {
+  var rows = catRowsCache[id] || [];
+  var polys = [];
+  for (var i = 0; i < rows.length; i++) {
+    var o = rows[i];
+    var ra = +o.ra_deg, dec = +o.dec_deg;
+    if (isNaN(ra) || isNaN(dec)) continue;
+    var r = catRingRadius(o.magnitude == null ? null : +o.magnitude);
+    var ring = [];
+    for (var s = 0; s <= 12; s++) {
+      var a = (s % 12) * Math.PI / 6;
+      ring.push(tanToRaDec(r * Math.cos(a), r * Math.sin(a), ra, dec));
+    }
+    polys.push([ring]);
+  }
+  return { type: 'FeatureCollection', features: [{
+    type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: polys },
+    properties: {
+      stroke: catColor(id), 'stroke-width': 1.3, 'stroke-opacity': 0.85,
+      fill: catColor(id), 'fill-opacity': 0,
+    },
+  }] };
+}
+
+function updateCatGeo(id) {
+  if (!stel) return;
+  if (!_catLayer) _catLayer = stel.createLayer({ z: 78, visible: true });
+  var g = _catGeos[id];
+  if (!g) { g = stel.createObj('geojson'); _catLayer.add(g); _catGeos[id] = g; }
+  g.data = (catOn[id] && catRowsCache[id])
+      ? catData(id) : { type: 'FeatureCollection', features: [] };
+}
+
+function setCatMsg(text) {
+  var el = document.getElementById('cat-msg');
+  if (el) el.textContent = text || '';
+}
+
+// Toggle one catalog's rings; rows fetch lazily on first enable and cache for
+// the session. [skipPost] is the boot-restore path (don't echo prefs back while
+// applying them). A 404 rows fetch means the OpenNGC source isn't installed —
+// revert the toggle honestly instead of leaving an on-dot with an empty sky.
+function catToggle(id, on, skipPost) {
+  on = (on == null) ? !catOn[id] : !!on;
+  catOn[id] = on;
+  if (on && !catRowsCache[id] && !catPending[id]) {
+    if (!API) { setCatMsg('Connect to a server to load catalogs.'); catOn[id] = false; renderCatPanel(); return; }
+    catPending[id] = true;
+    fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=500')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        catPending[id] = false;
+        if (rows && rows.length) {
+          catRowsCache[id] = rows;
+        } else {
+          catOn[id] = false;
+          setCatMsg('No data for this catalog — install the OpenNGC deep-sky package under Data.');
+        }
+        updateCatGeo(id); renderCatPanel();
+        if (!skipPost) postDisplayPrefs();   // persist only what actually stuck
+      })
+      .catch(function () {
+        catPending[id] = false; catOn[id] = false;
+        setCatMsg('Could not load the catalog — is the server reachable?');
+        renderCatPanel();
+      });
+    renderCatPanel();
+    return;
+  }
+  updateCatGeo(id);
+  renderCatPanel();
+  if (!skipPost) postDisplayPrefs();
+}
+
+// Build the grouped row list from the daemon's catalog inventory. textContent
+// only (no innerHTML with fetched strings) — keeps the page's escape invariant.
+function renderCatPanel() {
+  var list = document.getElementById('cat-list');
+  if (!list) return;
+  if (!catInfos) {
+    list.textContent = '';
+    return;
+  }
+  list.textContent = '';
+  var lastGroup = null;
+  catInfos.forEach(function (info) {
+    if (info.group !== lastGroup) {
+      lastGroup = info.group;
+      var h = document.createElement('div');
+      h.className = 'cat-group';
+      h.textContent = info.group;
+      list.appendChild(h);
+    }
+    var row = document.createElement('div');
+    row.className = 'cat-row';
+    var nm = document.createElement('span');
+    nm.textContent = info.name + (catPending[info.id] ? ' …' : '');
+    var dot = document.createElement('span');
+    dot.className = 'dot';
+    if (catOn[info.id]) {
+      var col = catColor(info.id);
+      dot.style.background = col;
+      dot.style.borderColor = col;
+      dot.style.boxShadow = '0 0 7px ' + col;
+    }
+    row.appendChild(nm);
+    row.appendChild(dot);
+    row.onclick = function () { catToggle(info.id); };
+    list.appendChild(row);
+  });
+}
+
+function loadCatalogs() {
+  if (catInfos || catInfosPending) return;
+  if (!API) { setCatMsg('Connect to a server to load catalogs.'); return; }
+  catInfosPending = true;
+  fetch(API + '/api/v1/catalogs')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (infos) {
+      catInfosPending = false;
+      if (infos && infos.length) {
+        catInfos = infos;
+        setCatMsg('Rings mark the brightest objects of each catalog (up to 500).');
+      } else {
+        setCatMsg('Install the OpenNGC deep-sky package (Data button in the app) to highlight catalogs.');
+      }
+      renderCatPanel();
+    })
+    .catch(function () {
+      catInfosPending = false;
+      setCatMsg('Could not reach the server for the catalog list.');
+    });
+}
+
+function hideCatalogs() {
+  document.getElementById('catalogs').style.display = 'none';
+  document.getElementById('cat-btn').classList.remove('on');
+}
+
+function toggleCatalogPanel() {
+  var p = document.getElementById('catalogs');
+  var open = p.style.display === 'none' || !p.style.display;
+  p.style.display = open ? 'block' : 'none';
+  document.getElementById('cat-btn').classList.toggle('on', open);
+  if (open) {   // one left drawer at a time
+    toggleFrame(false);
+    hideDisplay();
+    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
+    loadCatalogs();
+    renderCatPanel();
+  }
+}
+
+function wireCatalogs() {
+  document.getElementById('cat-btn').onclick = function () { toggleCatalogPanel(); };
+  document.getElementById('cat-close').onclick = hideCatalogs;
 }
 
 // ---- Framing overlay (camera FOV box + mosaic) --------------------------
@@ -1043,6 +1252,7 @@ function toggleFrame(on) {
     // the frame, and seed the box on the current view centre. (`= 0`, not
     // `= null`: a JSON null can't set the pointer attribute, so null no-ops.)
     hideDisplay();
+    hideCatalogs();
     var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     stel.core.lock = 0;
     var c = viewCenterRaDec();
@@ -1248,13 +1458,15 @@ StelWebEngine({
     core.dss.visible = true;
     // Apply the user's saved Display-panel toggles (from the `prefs` URL param) over
     // the defaults above; absent keys keep the default. Each change is reported back
-    // to Flutter (postDisplayPrefs) and restored here on the next launch. Legacy
-    // `cat:`-prefixed keys (the removed Catalogs-overlay drawer) are ignored.
+    // to Flutter (postDisplayPrefs) and restored here on the next launch. `cat:`-
+    // prefixed keys restore the Catalogs-overlay rings (rows re-fetch lazily; a
+    // failed boot-time fetch reverts the toggle honestly and the merge-save keeps
+    // the stored key for the next launch).
     try {
       var savedPrefs = JSON.parse(qp('prefs', '{}'));
       Object.keys(savedPrefs).forEach(function (k) {
         var on = !!savedPrefs[k];
-        if (k.indexOf('cat:') === 0) { /* removed feature — inert */ }
+        if (k.indexOf('cat:') === 0) { if (on) catToggle(k.slice(4), true, true); }
         else if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
         else setLayer(k, on);
       });
@@ -1271,6 +1483,7 @@ StelWebEngine({
     wireCmds();
     wireFrame();
     wireDisplay();
+    wireCatalogs();
     loadSite();                              // pull the real site from the daemon
     setInterval(loadSite, 2000);             // and keep it in sync with Options (near-instant)
   }
