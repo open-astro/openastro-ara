@@ -91,6 +91,14 @@ public interface IFrameRepository {
     /// needs a real profile. Null when the frame row or its FITS file is missing.
     /// </summary>
     Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(Guid id, OpenAstroAra.Profile.Interfaces.IProfileService profileService, CancellationToken ct);
+
+    /// <summary>
+    /// §18.I — read a catalogued frame's own pointing from its <c>OBJCTRA</c>/<c>OBJCTDEC</c> FITS headers
+    /// (both in J2000), to seed a near-solve when the caller supplies no explicit hint. Returns null when the
+    /// frame row/file is missing or the headers are absent/unparseable — the solve then falls back to blind.
+    /// RA is returned in degrees (not hours) so both header and body hints build coordinates uniformly.
+    /// </summary>
+    Task<(double RaDegrees, double DecDegrees)?> TryReadTargetCoordinatesAsync(Guid id, CancellationToken ct);
     Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct);

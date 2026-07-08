@@ -565,6 +565,55 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             new OpenAstroAra.Image.ImageData.ImageMetaData(), profileService, null!, null!);
     }
 
+    public async Task<(double RaDegrees, double DecDegrees)?> TryReadTargetCoordinatesAsync(Guid id, CancellationToken ct) {
+        // §18.I — a header-only read (no pixel decode) of the frame's stored pointing. OBJCTRA/OBJCTDEC are
+        // written by the capture path as FITS "H M S" / "D M S" strings from the target's J2000 coordinates
+        // (FITSHeader.cs). AstroUtil.HMSToDegrees/DMSToDegrees invert those formats; a frame with no target
+        // (e.g. a manually-framed light, or any frame that predates targeted capture) simply lacks the cards.
+        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            return null;
+        }
+        // The whole read is best-effort: a header hint is optional, so a FITS open/read fault (a corrupt
+        // card, or a TOCTOU delete between the File.Exists check and Open) must degrade to a blind solve —
+        // never surface as a 500 (unlike LoadImageDataAsync, where a corrupt frame IS the exceptional case).
+        try {
+            IReadOnlyDictionary<string, string> headers;
+            using (var fits = OpenAstroAra.Fits.FitsImage.Open(filePath)) {
+                headers = fits.ReadHeaders();
+            }
+            headers.TryGetValue("OBJCTRA", out var raHms);
+            headers.TryGetValue("OBJCTDEC", out var decDms);
+            return ParseTargetCoordinates(raHms, decDms);
+        } catch (Exception ex) when (ex is OpenAstroAra.Fits.FitsException or IOException) {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// §18.I — parse a frame's OBJCTRA/OBJCTDEC FITS cards ("H M S" / "D M S", J2000) into (RA°, Dec°), or
+    /// null when they aren't a usable pointing. The digit guard is load-bearing: <c>AstroUtil.DMSToDegrees</c>
+    /// returns 0 rather than throwing when its regex finds no numbers, so a blank/"N/A"/garbage card would
+    /// otherwise resolve to a bogus (0h, 0°) hint instead of falling through to a blind solve. A parsed value
+    /// outside a sane sky range is likewise rejected.
+    /// </summary>
+    internal static (double RaDegrees, double DecDegrees)? ParseTargetCoordinates(string? raHms, string? decDms) {
+        if (string.IsNullOrEmpty(raHms) || string.IsNullOrEmpty(decDms)
+            || !raHms.Any(char.IsDigit) || !decDms.Any(char.IsDigit)) {
+            return null;
+        }
+        try {
+            var raDeg = OpenAstroAra.Astrometry.AstroUtil.HMSToDegrees(raHms);
+            var decDeg = OpenAstroAra.Astrometry.AstroUtil.DMSToDegrees(decDms);
+            if (raDeg is < 0 or >= 360 || decDeg is < -90 or > 90) {
+                return null;
+            }
+            return (raDeg, decDeg);
+        } catch (FormatException) {
+            return null;
+        }
+    }
+
     private async Task<(string? FilePath, FrameType FrameType)> GetPathAndTypeAsync(Guid id, CancellationToken ct) {
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
