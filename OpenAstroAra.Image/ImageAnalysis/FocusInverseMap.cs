@@ -120,8 +120,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             if (q > MaxCalibratedHfr) {
                 return null; // beyond the calibrated defocus — an extrapolation we won't trust
             }
-            if (q <= _table[0].Hfr) {
-                return _table[0].Magnitude; // at/inside the in-focus anchor → ~0
+            // In-focus floor keyed off the fitted vertex HFR (a scalar), NOT _table[0]: with noisy real data
+            // a sample's measured HFR can land BELOW the least-squares vertex, taking index 0 after the sort,
+            // which would otherwise make this branch return that sample's non-zero magnitude for a genuinely
+            // sharp frame. A query at or sharper than best focus needs no move.
+            if (q <= InFocusHfr) {
+                return 0.0;
             }
             // Piecewise-linear interpolation over the sorted (HFR → magnitude) table.
             for (int i = 1; i < _table.Length; i++) {

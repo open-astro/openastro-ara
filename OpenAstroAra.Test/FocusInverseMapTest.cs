@@ -90,6 +90,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_noisy_sample_below_the_fitted_vertex_does_not_corrupt_the_in_focus_prediction() {
+            // The fit is least-squares, not an exact envelope, so a real frame's measured HFR can land below
+            // the fitted vertex. That sample must NOT define "in focus" — the fitted floor does — so a
+            // genuinely sharp query still reads as a ~0 move, not the noisy sample's magnitude.
+            var samples = Sweep(4600, 100, 9);
+            samples.Add(new FocusCalibrationSample(5300, Feature(1.0))); // 300 steps out, implausibly low HFR
+            var map = FocusInverseMap.Build(samples);
+            Assert.That(map, Is.Not.Null);
+            Assert.That(map!.PredictOffsetMagnitude(Feature(map.InFocusHfr)), Is.EqualTo(0).Within(1e-9));
+            Assert.That(map.PredictOffsetMagnitude(Feature(map.InFocusHfr - 0.1)), Is.EqualTo(0).Within(1e-9),
+                "a query sharper than the fitted best focus reads as in-focus (0), not a below-vertex sample's magnitude");
+        }
+
+        [Test]
         public void A_query_beyond_the_calibrated_range_returns_null() {
             var map = FocusInverseMap.Build(Sweep(4600, 100, 9))!;
             var predicted = map.PredictOffsetMagnitude(Feature(map.MaxCalibratedHfr + 1.0));
