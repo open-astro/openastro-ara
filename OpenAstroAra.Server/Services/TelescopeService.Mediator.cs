@@ -48,9 +48,10 @@ namespace OpenAstroAra.Server.Services;
 /// block on a bounded wait for their terminal condition (settled-on-target, AtPark, !AtPark, AtHome),
 /// returning <c>true</c> only when reached — reusing the cancellation+wall-clock-bounded launcher
 /// from the focuser/rotator/dome mediators. The tracking writes are prompt synchronous calls.
-/// Members no registered headless instruction consumes (MoveAxis, PulseGuide, Sync, the topocentric
-/// slews, MeridianFlip, custom tracking rates, snap port, DestinationSideOfPier) stay no-op stubs —
-/// each is documented at its declaration.
+/// The §28 centering loop also drives <see cref="Sync(Coordinates)"/> (a real
+/// <c>SyncToCoordinates</c>, epoch-transformed + capability/parked-guarded). Members no registered
+/// consumer reaches (MoveAxis, PulseGuide, the topocentric slews, MeridianFlip, custom tracking rates,
+/// snap port, DestinationSideOfPier) stay no-op stubs — each is documented at its declaration.
 /// </summary>
 public sealed partial class TelescopeService : ITelescopeMediator {
 
