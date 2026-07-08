@@ -51,6 +51,13 @@ public interface IFrameRepository {
     Task InsertAsync(FrameDto frame, CancellationToken ct);
 
     /// <summary>
+    /// §59.5 post-capture star-analysis write-back: stamps the frame's measured HFR + star
+    /// count (computed off the capture path, after registration) and broadcasts
+    /// <c>frame.analyzed</c>. A frame deleted between capture and analysis is a silent no-op.
+    /// </summary>
+    Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct);
+
+    /// <summary>
     /// §14e — id of the lazily-created "manual capture" session that REST-initiated exposures
     /// attach to. Idempotent per daemon lifetime. Sequence runs do NOT use this — they open
     /// their own per-run session (see <see cref="CreateRunSessionAsync"/> + CaptureSessionScope).

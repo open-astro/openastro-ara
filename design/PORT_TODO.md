@@ -310,11 +310,15 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   records each completed run (temperature + filter) so "since the last AF" reference points are real; factory
   prototypes + WILMA trigger-catalog defs. Class defaults keep NINA's values (30 min / 5 °C / 5 %) for import
   fidelity — the playbook §59.5 defaults (90 min / 1.5 °C / 15 %) are profile-level and apply when ARA builds
-  plans. Open follow-ups: (1) **live per-frame HFR analysis** — captured LIGHT frames currently register with
-  `Hfr: null` (only the §28.8 FITS rescan fills it), so `ImageHistoryService.ImagePoints` is empty and the
-  HFR-drift trigger stays quiet (the safe direction) until StarDetector runs on captured frames and feeds
-  `RecordImage`; (2) **§59.9 diagnostics deferral** — every AF trigger consults `/diagnostics/current` and
-  defers on clouds_passing/aperture_blocked/dew_formation with a "will run when conditions recover" notification.
+  plans. Follow-ups: (1) ✅ **live per-frame HFR analysis — DONE (2026-07-08)**: `CameraService` runs
+  StarDetector on every captured LIGHT frame off the capture path (fire-and-forget after registration; the
+  next exposure never waits), writes HFR + star count back via `IFrameRepository.UpdateAnalysisAsync`,
+  broadcasts `frame.analyzed` (WILMA's library rides its existing debounced refresh so HFR badges fill live),
+  and feeds `ImageHistoryService.RecordImage` — the HFR-drift trigger is data-live now. Frames under
+  `MinStarsForAnalysis` (10 — deliberately below the §59.6 autofocus bar of 30; a statistic tolerates more
+  scatter than a refocus decision) are skipped, never recorded as noise. (2) **§59.9 diagnostics deferral**
+  (still open) — every AF trigger consults `/diagnostics/current` and defers on
+  clouds_passing/aperture_blocked/dew_formation with a "will run when conditions recover" notification.
 
 ## §58 meridian flip — follow-ups (2026-06-11, after the trigger re-port #362)
 
