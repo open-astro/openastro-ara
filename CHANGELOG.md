@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+- **The guider is now correctly identified as openastro-guider.** The guiding daemon was renamed `openastro-phd2` → `openastro-guider`, but Ara's connect-time check still matched only the old name — so against the current daemon it would fall back to "connected to upstream PHD2" and warn that headless guiding features might be unavailable, even on a fully-supported rig. Ara now runs the daemon's `get_version` handshake on connect and reads its fork marker (accepting the old name too), so a supported guider is recognized as such and the spurious warning is gone.
+
 ### Changed
 - **Docs reorganized under `docs/`.** `RUNNING.md`, `DEPLOY.md`, and `RELEASE_NOTES.md` moved from the repo root into `docs/` alongside the user guide; cross-references updated. The release notes' stale "still placeholders" list was refreshed to match reality (§64 Live View, §36 sky-data Data Manager, and §43 backup have shipped; §45 polar alignment, §44 backup stream, and DSLR RAW remain pending). `NOTICE.md` stays at the root next to `LICENSE.txt` — packaging (`build-deb.sh`, the `.deb` copyright file) references it there.
 - **The daemon's documented install path is the apt.openastro.net APT repository** (maintainer decision 2026-07-07): `docs/DEPLOY.md`'s quick start now adds the OpenAstro apt repo (§34.1 gpg key + sources list) and installs/updates `openastroara-server` through apt, replacing the GitHub-Releases `.deb` download flow; the WILMA client still ships from GitHub Releases (§75).

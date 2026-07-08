@@ -226,23 +226,30 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     // (bounded by token + a 2-second cap) before logging identification.
                     await WaitForVersionAsync(maxWaitMs: 2000, token).ConfigureAwait(false);
 
-                    if (Version != null) {
-                        var phdVersionString = Version.PHDVersion ?? "(unknown)";
-                        var phdSubver = Version.PHDSubver ?? string.Empty;
-                        // openastro-phd2 advertises itself via PHDSubver ("openastroara" prefix)
-                        // or via dev-version semver suffix; both forms are treated as openastro-phd2.
-                        bool isOpenAstroPhd2 =
-                            phdSubver.Contains("openastroara", StringComparison.OrdinalIgnoreCase) ||
-                            phdSubver.Contains("openastro-phd2", StringComparison.OrdinalIgnoreCase) ||
-                            phdVersionString.Contains("openastro-phd2", StringComparison.OrdinalIgnoreCase);
-                        if (isOpenAstroPhd2) {
-                            Logger.Info($"Connected to openastro-phd2 v{phdVersionString} (subver {phdSubver}).");
-                        } else {
-                            Logger.Warning($"Connected to upstream PHD2 v{phdVersionString} (subver {phdSubver}). " +
-                                $"OpenAstro Ara is designed against openastro-phd2; some §63 / §63.2 features may not be available.");
-                        }
+                    // §63.9: the authoritative "connect → check version → decide" handshake. Ask
+                    // get_version synchronously (the fork added the RPC in #57); a pre-#57 daemon returns
+                    // an error, and IdentifyGuiderFork falls back to the catch-up "Version" event, then the
+                    // legacy version/subver substring. Note the daemon reports fork "openastro-guider" (the
+                    // post-rename name) — the old substring-only check for "openastro-phd2" mis-flagged it.
+                    Phd2GetVersionResult? versionRpc = null;
+                    var versionResponse = await SendMessage<Phd2GetVersionResponse>(new Phd2GetVersion(), 5000).ConfigureAwait(false);
+                    if (versionResponse.error == null) {
+                        versionRpc = versionResponse.result;
+                    }
+
+                    var forkIdentity = IdentifyGuiderFork(
+                        versionRpc?.Fork, versionRpc?.OverlapSupport, versionRpc?.PhdVersion, versionRpc?.PhdSubver,
+                        Version?.Fork, Version?.OverlapSupport, Version?.PHDVersion, Version?.PHDSubver);
+                    GuiderFork = forkIdentity.ForkName;
+                    OverlapSupport = forkIdentity.OverlapSupport;
+
+                    var reportedVersion = versionRpc?.Version ?? Version?.PHDVersion ?? "(unknown)";
+                    if (Version == null && versionRpc == null) {
+                        Logger.Warning("PHD2 version handshake produced neither a get_version result nor a Version event within 2s; cannot identify openastro-guider vs upstream. Some §63 features may behave unexpectedly.");
+                    } else if (forkIdentity.IsOpenAstroGuider) {
+                        Logger.Info($"Connected to openastro-guider v{reportedVersion} (fork \"{forkIdentity.ForkName}\", overlap_support {forkIdentity.OverlapSupport}).");
                     } else {
-                        Logger.Warning("PHD2 version event did not arrive within 2s after connect; cannot identify openastro-phd2 vs upstream. Some §63 features may behave unexpectedly.");
+                        Logger.Warning($"Connected to upstream PHD2 v{reportedVersion}. OpenAstro Ara is designed against openastro-guider; some §63 / §63.2 features may not be available.");
                     }
 
                     await GetProfiles();
