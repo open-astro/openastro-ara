@@ -565,6 +565,32 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             new OpenAstroAra.Image.ImageData.ImageMetaData(), profileService, null!, null!);
     }
 
+    public async Task<(double RaDegrees, double DecDegrees)?> TryReadTargetCoordinatesAsync(Guid id, CancellationToken ct) {
+        // §18.I — a header-only read (no pixel decode) of the frame's stored pointing. OBJCTRA/OBJCTDEC are
+        // written by the capture path as FITS "H M S" / "D M S" strings from the target's J2000 coordinates
+        // (FITSHeader.cs). AstroUtil.HMSToDegrees/DMSToDegrees invert those formats; a frame with no target
+        // (e.g. a manually-framed light, or any frame that predates targeted capture) simply lacks the cards.
+        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            return null;
+        }
+        IReadOnlyDictionary<string, string> headers;
+        using (var fits = OpenAstroAra.Fits.FitsImage.Open(filePath)) {
+            headers = fits.ReadHeaders();
+        }
+        if (!headers.TryGetValue("OBJCTRA", out var raHms) || !headers.TryGetValue("OBJCTDEC", out var decDms)
+            || string.IsNullOrWhiteSpace(raHms) || string.IsNullOrWhiteSpace(decDms)) {
+            return null;
+        }
+        try {
+            return (OpenAstroAra.Astrometry.AstroUtil.HMSToDegrees(raHms),
+                OpenAstroAra.Astrometry.AstroUtil.DMSToDegrees(decDms));
+        } catch (FormatException) {
+            // A malformed OBJCTRA/OBJCTDEC is a missing hint, not a solve failure — fall back to blind.
+            return null;
+        }
+    }
+
     private async Task<(string? FilePath, FrameType FrameType)> GetPathAndTypeAsync(Guid id, CancellationToken ct) {
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();

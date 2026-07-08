@@ -399,8 +399,16 @@ Wiring started:
   builds the configured solver via `IPlateSolverFactory` (now DI-registered, `PlateSolverFactoryProxy`) +
   assembles `PlateSolveParameter` from the active profile (focal length, pixel size, search/downsample). Image-in
   → solution-out core, unit-tested with a mocked `IImageSolver`. DI: `IPlateSolveService` + `IPlateSolverFactory`.
-- **Next slices:** a REST solve endpoint (`POST /api/v1/platesolve/solve` against a captured frame id); the §28
-  **centering loop** (`CenteringSolver`: capture → solve → sync → re-slew); then the §58.4 flip recenter consumes it.
+- ✅ **REST solve endpoint (§18.I sub-PR 2, #364):** `POST /api/v1/platesolve/frames/{id:guid}/solve` — loads
+  the catalogued frame's FITS via `IFrameRepository.LoadImageDataAsync`, calls `SolveImage`, maps to
+  `PlateSolveResultDto`; 404 missing frame, 422 solver/profile unconfigured (fixed message, no path leak).
+- ✅ **Hinted solve (§18.I sub-PR 3):** the solve endpoint takes an optional body
+  `PlateSolveRequestDto(approx_ra_hours, approx_dec_degrees)` to seed a fast near-solve; with no body it falls
+  back to the frame's own `OBJCTRA`/`OBJCTDEC` J2000 FITS headers (`IFrameRepository.TryReadTargetCoordinatesAsync`,
+  parsed via `AstroUtil.HMSToDegrees`/`DMSToDegrees`), then to a blind solve. A lone RA or Dec is treated as no
+  hint (an incomplete pair can't center a search).
+- **Next slices:** the §28 **centering loop** (`CenteringSolver`: capture → solve → sync → re-slew — the solve
+  step now supports a mount-position hint); then the §58.4 flip recenter consumes it.
 
 **ASTAP backend (org fork `github.com/open-astro/ASTAP`, see [[reference-astap-fork]]) — integration is CLI, no API:**
 `ASTAPSolver` (a `CLISolver`) shells out to the `astap_cli` binary at the profile's `ASTAPLocation` with
