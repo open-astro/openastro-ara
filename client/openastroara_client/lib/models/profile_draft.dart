@@ -197,13 +197,19 @@ enum FrameType { light, dark, bias, flat }
 
 class SafetyPolicies {
   // Wizard subset that maps onto the profile's safety section: the general
-  // unsafe-conditions reaction + auto-resume behaviour. All nullable (null keeps
-  // base). The §37.5 weather-type-granular actions (separate clouds/wind/rain) +
-  // alarm sound/vibrate aren't backed by the section DTO — they stay a
-  // Settings/§51 concern (tracked in design/PORT_TODO.md).
+  // unsafe-conditions reaction + auto-resume behaviour, plus the §35.1
+  // weather thresholds now that their enforcement landed (a breach reacts via
+  // the same on_unsafe policy — per-trigger actions stay deferred by design,
+  // PORT_DECISIONS 2026-07-07). All nullable (null keeps base). Alarm
+  // sound/delay are device-local knobs (Settings → Notifications), not
+  // profile fields, so the wizard doesn't carry them.
   UnsafeConditionAction? onUnsafe;
   bool? autoResumeWhenSafe;
   int? resumeDelayMin;
+  bool? weatherTriggersEnabled;
+  int? maxWindKmh;
+  int? maxHumidityPct;
+  double? minDewDeltaC;
 }
 
 /// Mirrors the safety section's `UnsafeAction` (mapped in wizard_save) — what to

@@ -238,8 +238,9 @@ StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
 }
 
 /// §37.5 screen 15 — map the draft's compact safety choices onto the safety
-/// section. Every field is nullable (null keeps base). The §37.5 weather-granular
-/// + alarm bits aren't section-backed (see design/PORT_TODO.md).
+/// section. Every field is nullable (null keeps base). The §35.1 weather
+/// thresholds map through since their enforcement landed; per-trigger actions
+/// stay deferred (PORT_DECISIONS 2026-07-07) and alarm knobs are device-local.
 SafetyPolicies applyDraftToSafety(SafetyPolicies base, ProfileDraft d) {
   final s = d.safety;
   return base.copyWith(
@@ -252,6 +253,10 @@ SafetyPolicies applyDraftToSafety(SafetyPolicies base, ProfileDraft d) {
     },
     autoResumeWhenSafe: s.autoResumeWhenSafe,
     resumeDelayMin: s.resumeDelayMin,
+    weatherTriggersEnabled: s.weatherTriggersEnabled,
+    maxWindKmh: s.maxWindKmh,
+    maxHumidityPct: s.maxHumidityPct,
+    minDewDeltaC: s.minDewDeltaC,
   );
 }
 

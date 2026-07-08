@@ -371,6 +371,15 @@ class ScreenSafety extends ConsumerStatefulWidget {
 
 class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
   late final SafetyPolicies _sp = _draftOf(ref).safety;
+  String? _windError;
+  String? _humidityError;
+  String? _dewError;
+
+  bool get _allValid =>
+      _delayError == null &&
+      _windError == null &&
+      _humidityError == null &&
+      _dewError == null;
   String? _delayError;
 
   @override
@@ -412,7 +421,7 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
               }
             });
             // Hiding/clearing the delay field can resolve a standing error.
-            _reportStepValid(ref, _delayError == null);
+            _reportStepValid(ref, _allValid);
           },
         ),
         // Hidden under Ignore — there's nothing to resume.
@@ -452,7 +461,115 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
                 }
               }
               setState(() => _delayError = err);
-              _reportStepValid(ref, err == null);
+              _reportStepValid(ref, _allValid);
+            },
+          ),
+        ],
+        // §35.1 weather thresholds — enforced by the daemon now (a breach
+        // reacts via the on-unsafe policy above); the fine editor lives in
+        // Settings → Safety → Policies.
+        WizardDropdown<bool?>(
+          label: 'React to weather-station thresholds',
+          value: _sp.weatherTriggersEnabled,
+          helperText: 'With a weather station connected, a breached wind / '
+              'humidity / dew-delta limit counts as unsafe.',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default (off)'),
+            DropdownMenuEntry(value: true, label: 'On'),
+            DropdownMenuEntry(value: false, label: 'Off'),
+          ],
+          onChanged: (v) {
+            setState(() {
+              _sp.weatherTriggersEnabled = v;
+              if (v != true) {
+                // Thresholds are meaningless while the master is off — clear
+                // them so stale values (and errors) don't reach Save.
+                _sp.maxWindKmh = null;
+                _sp.maxHumidityPct = null;
+                _sp.minDewDeltaC = null;
+                _windError = null;
+                _humidityError = null;
+                _dewError = null;
+              }
+            });
+            _reportStepValid(ref, _allValid);
+          },
+        ),
+        if (_sp.weatherTriggersEnabled == true) ...[
+          WizardTextField(
+            label: 'Max wind (km/h, sustained or gust)',
+            initialValue: _sp.maxWindKmh?.toString(),
+            hint: 'default 36',
+            helperText: 'Leave blank to keep the profile default.',
+            errorText: _windError,
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            inputFormatters: WizardInput.unsignedInt,
+            onChanged: (v) {
+              final t = v.trim();
+              String? err;
+              if (t.isEmpty) {
+                _sp.maxWindKmh = null;
+              } else {
+                final n = int.tryParse(t);
+                if (n != null && n > 0) {
+                  _sp.maxWindKmh = n;
+                } else {
+                  err = 'Enter a positive whole number of km/h.';
+                }
+              }
+              setState(() => _windError = err);
+              _reportStepValid(ref, _allValid);
+            },
+          ),
+          WizardTextField(
+            label: 'Max humidity (%)',
+            initialValue: _sp.maxHumidityPct?.toString(),
+            hint: 'default 85',
+            helperText: 'Leave blank to keep the profile default.',
+            errorText: _humidityError,
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            inputFormatters: WizardInput.unsignedInt,
+            onChanged: (v) {
+              final t = v.trim();
+              String? err;
+              if (t.isEmpty) {
+                _sp.maxHumidityPct = null;
+              } else {
+                final n = int.tryParse(t);
+                if (n != null && n > 0 && n <= 100) {
+                  _sp.maxHumidityPct = n;
+                } else {
+                  err = 'Enter a percentage between 1 and 100.';
+                }
+              }
+              setState(() => _humidityError = err);
+              _reportStepValid(ref, _allValid);
+            },
+          ),
+          WizardTextField(
+            label: 'Min dew delta (\u00b0C above dew point)',
+            initialValue: _sp.minDewDeltaC?.toString(),
+            hint: 'default 2.0',
+            helperText: 'Below this margin, optics are about to fog. Leave '
+                'blank to keep the profile default.',
+            errorText: _dewError,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            onChanged: (v) {
+              final t = v.trim();
+              String? err;
+              if (t.isEmpty) {
+                _sp.minDewDeltaC = null;
+              } else {
+                final n = double.tryParse(t);
+                if (n != null && n >= 0) {
+                  _sp.minDewDeltaC = n;
+                } else {
+                  err = 'Enter a non-negative number of \u00b0C.';
+                }
+              }
+              setState(() => _dewError = err);
+              _reportStepValid(ref, _allValid);
             },
           ),
         ],

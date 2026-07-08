@@ -331,6 +331,29 @@ void main() {
       expect(out.resumeDelayMin, 3);
     });
 
+    test('applyDraftToSafety maps the §35.1 weather thresholds', () {
+      final d = ProfileDraft();
+      d.safety
+        ..weatherTriggersEnabled = true
+        ..maxWindKmh = 25
+        ..maxHumidityPct = 90
+        ..minDewDeltaC = 3.5;
+      final out = applyDraftToSafety(const SafetyPolicies(), d);
+      expect(out.weatherTriggersEnabled, isTrue);
+      expect(out.maxWindKmh, 25);
+      expect(out.maxHumidityPct, 90);
+      expect(out.minDewDeltaC, 3.5);
+    });
+
+    test('applyDraftToSafety keeps base weather thresholds on a blank draft', () {
+      final base = const SafetyPolicies().copyWith(
+          weatherTriggersEnabled: true, maxWindKmh: 50, minDewDeltaC: 1.0);
+      final out = applyDraftToSafety(base, ProfileDraft());
+      expect(out.weatherTriggersEnabled, isTrue);
+      expect(out.maxWindKmh, 50);
+      expect(out.minDewDeltaC, 1.0);
+    });
+
     test('applyDraftToSafety preserves base on a blank draft', () {
       final base = const SafetyPolicies()
           .copyWith(onUnsafe: UnsafeAction.ignore, resumeDelayMin: 20);
