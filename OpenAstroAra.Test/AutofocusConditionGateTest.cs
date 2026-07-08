@@ -88,14 +88,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void AWedgedDiagnosticsRead_FailsOpenAfterTheBound() {
+        public void AWedgedDiagnosticsRead_FailsOpenAfterTheBound_AndIsActuallyCancelled() {
+            var captured = CancellationToken.None;
             var diagnostics = new Mock<IDiagnosticsService>();
             diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>()))
+                .Callback<CancellationToken>(t => captured = t)
                 .Returns(new TaskCompletionSource<DiagnosticsStateDto>().Task);
             var gate = new DiagnosticsAutofocusGate(diagnostics.Object);
 
             Assert.That(gate.DeferralReason(), Is.Null,
                 "a wedged DB costs one bounded pause, never a hung run worker");
+            Assert.That(captured.IsCancellationRequested, Is.True,
+                "the abandoned read must be torn down for real — a sustained wedge would "
+                + "otherwise leak an open connection every few seconds for hours");
         }
 
         [Test]

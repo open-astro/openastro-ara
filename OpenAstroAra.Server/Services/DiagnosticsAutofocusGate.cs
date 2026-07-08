@@ -107,18 +107,25 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
         // diagnostics can never crash focusing, and a malformed state (null issue list /
         // null issue type from some future IDiagnosticsService) is a diagnostics fault too.
         DiagnosticIssueDto? issue;
+        var cts = new CancellationTokenSource();
+        var disposeNow = true;
         try {
-            var read = _diagnostics.GetStateAsync(CancellationToken.None);
+            var read = _diagnostics.GetStateAsync(cts.Token);
             if (!read.Wait(ReadTimeout)) {
                 LogReadTimedOut();
-                // The abandoned read keeps running; observe a late fault so it never
-                // disappears silently (it can't crash the process, but it CAN explain
-                // why diagnostics was wedged when someone is debugging).
-                _ = read.ContinueWith(
-                    t => LogReadFailed(t.Exception!),
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted,
-                    TaskScheduler.Default);
+                // ACTUALLY tear the abandoned read down — Wait() only stops waiting; without
+                // the cancel, a sustained wedge would spawn a fresh read (each holding its
+                // own open SQLite connection) every ReadTimeout+CacheTtl for hours. The
+                // continuation observes a late non-cancellation fault (it can explain why
+                // diagnostics was wedged) and disposes the source once the task settles.
+                cts.Cancel();
+                disposeNow = false;
+                _ = read.ContinueWith(t => {
+                    if (t.IsFaulted && t.Exception?.InnerException is not OperationCanceledException) {
+                        LogReadFailed(t.Exception);
+                    }
+                    cts.Dispose();
+                }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
                 return null;
             }
             issue = read.Result.OpenIssues?.FirstOrDefault(
@@ -126,6 +133,10 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
         } catch (Exception ex) {
             LogReadFailed(ex);
             return null;
+        } finally {
+            if (disposeNow) {
+                cts.Dispose();
+            }
         }
 
         if (issue is null) {
