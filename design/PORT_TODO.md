@@ -45,7 +45,10 @@ like the accept path always did.
   still win, and WILMA's instruction catalog gained a Calibration category with the FlatPanelFlats
   def. Remaining slice: **PR 3** — `SkyFlats` (§48.4 twilight timing, frame-to-frame re-probe,
   stop_at_max/min_adu) at which point "sky_at_twilight" auto-starts instead of
-  generate-and-notify, + the `sky_flat` profile block.
+  generate-and-notify, + the `sky_flat` profile block. Watch-item from the #754 round-2 review:
+  generated FlatPanelFlats leaves keep the instruction's default [0.01, 10] s probe bounds —
+  a narrowband panel needing >10 s fails the probe honestly; add per-filter exposure bounds
+  (profile or spec) only if field use shows the need.
 
 ## §44 backup stream — the WILMA client half (2026-07-07, after the server PR)
 
