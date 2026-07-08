@@ -56,6 +56,22 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         public double AverageBrightness { get; set; }
         public double MaxBrightness { get; set; }
         public double Background { get; set; }
+
+        // §59.3/§59.4 Smart Focus shape metrics — the per-star half of the feature vector that a
+        // defocus→offset inverse map is trained on. Derived from the same flux-weighted blob moments as
+        // HFR (see StarDetector.Measure), so they cost one extra pass, no re-detection.
+
+        /// <summary>Full-Width-at-Half-Maximum in pixels, from the flux-weighted second moment
+        /// (FWHM = 2√(2 ln 2)·σ for the equivalent Gaussian). Grows monotonically with defocus.</summary>
+        public double FWHM { get; set; }
+
+        /// <summary>Minor/major principal-axis ratio of the flux distribution, in (0, 1]: 1 ≈ a round
+        /// star, → 0 an elongated one. The §59.4 asymmetry/tilt signal (guiding drift, tilt, coma).</summary>
+        public double Roundness { get; set; }
+
+        /// <summary>Background-corrected peak-to-background ratio, (peak − background) / background — the
+        /// scale-invariant central brightness that collapses as a refractor defocuses.</summary>
+        public double PeakToBackground { get; set; }
     }
 
     public interface IStarDetection {
