@@ -285,9 +285,15 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
   decision). The `IStarDetection`/`IStarAnnotator` interfaces in `HeadlessStubs.cs` stay as the (unused) DI seam.
 - ✅ **`RenderedImage.UpdateAnalysis(...)`** — DONE (#358). Publishes HFR/HFRStDev/DetectedStars/StarList
   onto `RawImageData.StarDetectionAnalysis` (flows into the FITS HFR/StarCount pattern keys).
-  - **Annotation still deferred:** `DetectStars(annotateImage: true)` is a documented no-op (logs a Debug line) —
-    drawing the star overlay onto the rendered buffer needs a §2105 annotator (SkiaSharp draw path). Not on the
-    v0.0.1 critical path (annotation is a Live-View/§64 nicety); wire it when Live View lands.
+  - **Annotation — draw primitive LANDED, wiring deferred (branch `liveview-star-annotation-encoder`).** The
+    SkiaSharp draw path now exists as `JpegEncoder.EncodeGrayAnnotated(pixels, w, h, IReadOnlyList<StarMarker>,
+    …)` — expands the grayscale preview to RGB, draws green marker circles, encodes JPEG (5 headless tests). Still
+    to wire (its own slice, the real design work): run `StarDetector` on the live frame (mono raw pixels; OSC needs
+    a debayered luminance, not the raw mosaic), scale detection coords into the encoder's space (the live JPEG can
+    be super-pixel-halved and/or `LiveViewMaxDim`-downscaled), and add an `annotate` flag on
+    `LiveViewStartRequestDto` (only the render loop holds the raw pixels — the served frame is a cached JPEG). The
+    old `DetectStars(annotateImage: true)` no-op and the `IStarAnnotator` DI seam are the alternate (repo-frame)
+    path, still unimplemented.
   - ✅ **Atomic analysis publish + thread safety:** DONE (#358 round-7/8). `IStarDetectionAnalysis.SetAll(...)`
     writes all four backing fields under a lock (full memory barrier + torn-read safety for the doubles on
     32-bit ARM) before raising any `PropertyChanged` outside it, so a §59-autofocus / Live-View observer on

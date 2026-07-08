@@ -13,8 +13,14 @@
 #endregion "copyright"
 
 using SkiaSharp;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Stretch;
+
+/// <summary>A star marker to overlay on a preview: a circle centred at (<see cref="X"/>, <see cref="Y"/>)
+/// with the given <see cref="Radius"/>, all in the pixel-buffer's coordinate space (the same space as the
+/// pixels handed to the encoder — the caller is responsible for scaling detection coordinates into it).</summary>
+public readonly record struct StarMarker(float X, float Y, float Radius);
 
 /// <summary>
 /// JPEG encoder for stretched grayscale pixels (§65). Takes the
@@ -63,6 +69,84 @@ public static class JpegEncoder {
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
         return data.ToArray();
+    }
+
+    // §64/§59 star-marker overlay colour + stroke. Green reads clearly over the near-monochrome sky of a
+    // stretched preview; a hollow (stroke-only) circle leaves the star itself visible inside the ring.
+    private static readonly SKColor MarkerColor = new(0, 255, 0);
+    private const float MarkerStrokeWidth = 2f;
+
+    /// <summary>
+    /// Encode 8-bit grayscale pixels as a JPEG with star-marker circles drawn over them (§64 Live View /
+    /// §59 focus overlay). The grayscale is expanded to an RGB surface so the markers can be drawn in colour;
+    /// markers are drawn at full resolution and, when <paramref name="maxDim"/> caps the output, the whole
+    /// annotated image is downscaled together so the circles stay aligned with the stars.
+    /// </summary>
+    /// <param name="pixels">Row-major 0–255 grayscale buffer; length must equal <paramref name="width"/> × <paramref name="height"/>.</param>
+    /// <param name="markers">Star markers in the same pixel space as <paramref name="pixels"/>; a zero/negative radius is skipped.</param>
+    /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the annotated output is downscaled to fit (aspect-preserving).</param>
+    public static byte[] EncodeGrayAnnotated(ReadOnlySpan<byte> pixels, int width, int height,
+            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0) {
+        if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
+        if (pixels.Length != width * height) {
+            throw new ArgumentException(
+                $"pixel buffer length ({pixels.Length}) doesn't match dimensions ({width}×{height} = {width * height})",
+                nameof(pixels));
+        }
+        ArgumentNullException.ThrowIfNull(markers);
+
+        using var bitmap = GrayToRgbaBitmap(pixels, width, height);
+        using (var canvas = new SKCanvas(bitmap))
+        using (var paint = new SKPaint {
+            Color = MarkerColor,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = MarkerStrokeWidth,
+            IsAntialias = true,
+        }) {
+            foreach (var m in markers) {
+                if (m.Radius > 0) {
+                    canvas.DrawCircle(m.X, m.Y, m.Radius, paint);
+                }
+            }
+        }
+
+        if (maxDim > 0 && (width > maxDim || height > maxDim)) {
+            var (dstW, dstH) = ScaleToFit(width, height, maxDim);
+            var dstInfo = new SKImageInfo(dstW, dstH, SKColorType.Rgba8888, SKAlphaType.Opaque);
+            using var resized = bitmap.Resize(dstInfo, new SKSamplingOptions(SKCubicResampler.Mitchell))
+                ?? throw new InvalidOperationException($"Skia failed to resize {width}×{height} → {dstW}×{dstH} annotated preview");
+            using var scaledImage = SKImage.FromBitmap(resized);
+            using var scaledData = scaledImage.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
+            return scaledData.ToArray();
+        }
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
+        return data.ToArray();
+    }
+
+    // Expand a single-channel grayscale buffer into an opaque Rgba8888 SKBitmap (r=g=b=gray, a=255) so a
+    // colour overlay can be drawn onto it.
+    private static SKBitmap GrayToRgbaBitmap(ReadOnlySpan<byte> pixels, int width, int height) {
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        var bitmap = new SKBitmap(info);
+        var pixelPtr = bitmap.GetPixels();
+        if (pixelPtr == IntPtr.Zero) {
+            bitmap.Dispose();
+            throw new InvalidOperationException("Skia could not allocate the Rgba8888 bitmap backing buffer.");
+        }
+        unsafe {
+            byte* dst = (byte*)pixelPtr;
+            int n = width * height;
+            for (int i = 0; i < n; i++) {
+                byte g = pixels[i];
+                int d = i * 4;
+                dst[d] = g;
+                dst[d + 1] = g;
+                dst[d + 2] = g;
+                dst[d + 3] = 255;
+            }
+        }
+        return bitmap;
     }
 
     /// <summary>
