@@ -28,6 +28,7 @@ using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Threading.Channels;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -443,8 +444,42 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // Test seam: frame analysis without synthesizing a detectable star field.
     internal Func<ReadOnlyMemory<ushort>, int, int, (double Hfr, int Stars)>? AnalysisMetricOverride { get; set; }
 
-    private void QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
-        _ = Task.Run(() => AnalyzeFrameAsync(frameId, pixels, width, height, filterName));
+    private sealed record AnalysisJob(Guid FrameId, ushort[] Pixels, int Width, int Height, string? FilterName);
+
+    // Single-reader worker, NOT Task.Run-per-frame (#747 review): the HFR-drift trigger's
+    // least-squares trend trusts ImageHistoryService's list order as capture chronology, and
+    // per-frame tasks complete in ANALYSIS order — two fast exposures outpacing the detector
+    // would shuffle the trend. One reader also caps StarDetector at one full-frame pass at a
+    // time (the RPi target runs guiding/WS work beside this) and the small bound keeps a
+    // burst of short subs from pinning whole pixel buffers in RAM: when the backlog is full
+    // the NEW frame's analysis is skipped honestly (logged; its HFR simply stays unrecorded,
+    // exactly like a star-starved frame).
+    internal const int AnalysisQueueCapacity = 2;
+    private readonly Channel<AnalysisJob> _analysisQueue = Channel.CreateBounded<AnalysisJob>(
+        new BoundedChannelOptions(AnalysisQueueCapacity) {
+            SingleReader = true,
+            FullMode = BoundedChannelFullMode.DropWrite,
+        });
+    private Task? _analysisWorker;
+
+    internal void QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+        lock (_gate) {
+            if (_disposed) {
+                return;
+            }
+            _analysisWorker ??= Task.Run(RunAnalysisWorkerAsync);
+        }
+        if (!_analysisQueue.Writer.TryWrite(new AnalysisJob(frameId, pixels, width, height, filterName))) {
+            LogFrameAnalysisBacklogged(frameId);
+        }
+    }
+
+    private async Task RunAnalysisWorkerAsync() {
+        // Per-job faults are absorbed inside AnalyzeFrameAsync; the loop ends only when
+        // Dispose completes the writer, so the worker can never fault-and-strand the queue.
+        await foreach (var job in _analysisQueue.Reader.ReadAllAsync().ConfigureAwait(false)) {
+            await AnalyzeFrameAsync(job.FrameId, job.Pixels, job.Width, job.Height, job.FilterName).ConfigureAwait(false);
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -1201,6 +1236,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _client = null;
         }
         _refreshTimer.Dispose();
+        // Stop accepting analysis jobs and let the worker drain what it holds; analysis
+        // pending at shutdown is acceptable loss (the frames themselves are safe on disk).
+        _analysisQueue.Writer.TryComplete();
         CancelLiveViewForDispose();
         // Dispose the client directly (guarded): the courtesy AbortExposure/Connected=false are
         // blocking HTTP calls that would hang container shutdown if the device is unreachable.
@@ -1272,4 +1310,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "§59.5 frame {FrameId} analysis failed — the frame itself is safe; HFR stays unrecorded")]
     private partial void LogFrameAnalysisFailed(Exception ex, Guid frameId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§59.5 frame {FrameId} analysis skipped: the analysis backlog is full (captures are outpacing the detector) — HFR stays unrecorded for this frame")]
+    private partial void LogFrameAnalysisBacklogged(Guid frameId);
 }

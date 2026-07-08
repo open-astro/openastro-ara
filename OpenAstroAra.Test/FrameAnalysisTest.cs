@@ -138,6 +138,67 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task AnalysisQueue_preserves_capture_order_even_when_the_first_frame_is_slow() {
+            var history = new ImageHistoryService();
+            using var camera = new CameraService(frames: new Mock<IFrameRepository>().Object, imageHistory: history);
+            var calls = 0;
+            camera.AnalysisMetricOverride = (_, _, _) => {
+                // The FIRST capture analyzes slowest — with per-frame Task.Run the second
+                // point would jump the queue and shuffle the HFR-drift trigger's trend.
+                if (Interlocked.Increment(ref calls) == 1) {
+                    Thread.Sleep(150);
+                    return (1.0, 50);
+                }
+                return (2.0, 50);
+            };
+
+            camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            for (var i = 0; i < 400 && history.ImagePoints.Count < 2; i++) {
+                await Task.Delay(10);
+            }
+
+            var points = history.ImagePoints;
+            Assert.That(points, Has.Count.EqualTo(2));
+            Assert.That(points[0].Hfr, Is.EqualTo(1.0),
+                "history order must be capture order, not analysis-completion order");
+            Assert.That(points[1].Hfr, Is.EqualTo(2.0));
+        }
+
+        [Test]
+        public async Task AnalysisQueue_backlog_drops_the_newest_frame_honestly() {
+            var history = new ImageHistoryService();
+            using var camera = new CameraService(frames: new Mock<IFrameRepository>().Object, imageHistory: history);
+            using var firstJobStarted = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            var calls = 0;
+            camera.AnalysisMetricOverride = (_, _, _) => {
+                if (Interlocked.Increment(ref calls) == 1) {
+                    firstJobStarted.Set();
+                    release.Wait(TimeSpan.FromSeconds(10));
+                }
+                return (2.0, 50);
+            };
+
+            camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            Assert.That(firstJobStarted.Wait(TimeSpan.FromSeconds(10)), Is.True,
+                "the worker must be mid-job so the buffer below fills deterministically");
+            // The worker is stuck on job 1; the buffer holds AnalysisQueueCapacity more.
+            for (var i = 0; i < CameraService.AnalysisQueueCapacity + 1; i++) {
+                camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            }
+            release.Set();
+            var expected = 1 + CameraService.AnalysisQueueCapacity;
+            for (var i = 0; i < 400 && history.ImagePoints.Count < expected; i++) {
+                await Task.Delay(10);
+            }
+            await Task.Delay(50); // settle: prove no extra point trickles in
+
+            Assert.That(history.ImagePoints, Has.Count.EqualTo(expected),
+                "the frame past the bound skips (its HFR stays unrecorded) instead of pinning buffers");
+        }
+
+        [Test]
         public async Task Analysis_write_back_fault_still_never_throws() {
             var frames = new Mock<IFrameRepository>();
             frames.Setup(f => f.UpdateAnalysisAsync(It.IsAny<Guid>(), It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
