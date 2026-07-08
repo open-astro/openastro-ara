@@ -455,23 +455,30 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // the NEW frame's analysis is skipped honestly (logged; its HFR simply stays unrecorded,
     // exactly like a star-starved frame).
     internal const int AnalysisQueueCapacity = 2;
+    // FullMode stays the default (Wait) — this code only ever uses the non-blocking TryWrite,
+    // which returns false synchronously on a full Wait-mode channel. DropWrite would make
+    // TryWrite return TRUE while silently discarding, so the honest-skip log below could
+    // never fire (round-2 review catch).
     private readonly Channel<AnalysisJob> _analysisQueue = Channel.CreateBounded<AnalysisJob>(
         new BoundedChannelOptions(AnalysisQueueCapacity) {
             SingleReader = true,
-            FullMode = BoundedChannelFullMode.DropWrite,
         });
     private Task? _analysisWorker;
 
-    internal void QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+    /// <summary>True when the frame's analysis was queued; false when the backlog was full
+    /// and this frame's analysis is skipped (logged — its HFR stays unrecorded).</summary>
+    internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
         lock (_gate) {
             if (_disposed) {
-                return;
+                return false;
             }
             _analysisWorker ??= Task.Run(RunAnalysisWorkerAsync);
         }
         if (!_analysisQueue.Writer.TryWrite(new AnalysisJob(frameId, pixels, width, height, filterName))) {
             LogFrameAnalysisBacklogged(frameId);
+            return false;
         }
+        return true;
     }
 
     private async Task RunAnalysisWorkerAsync() {

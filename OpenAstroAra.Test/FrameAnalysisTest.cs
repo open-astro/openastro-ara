@@ -180,13 +180,16 @@ namespace OpenAstroAra.Test {
                 return (2.0, 50);
             };
 
-            camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            Assert.That(camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha"), Is.True);
             Assert.That(firstJobStarted.Wait(TimeSpan.FromSeconds(10)), Is.True,
                 "the worker must be mid-job so the buffer below fills deterministically");
             // The worker is stuck on job 1; the buffer holds AnalysisQueueCapacity more.
-            for (var i = 0; i < CameraService.AnalysisQueueCapacity + 1; i++) {
-                camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            for (var i = 0; i < CameraService.AnalysisQueueCapacity; i++) {
+                Assert.That(camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha"), Is.True);
             }
+            Assert.That(camera.QueueFrameAnalysis(Guid.NewGuid(), new ushort[4], 2, 2, "Ha"), Is.False,
+                "the frame past the bound must report the skip — TryWrite on a Wait-mode "
+                + "channel returns false; DropWrite would lie true and drop silently");
             release.Set();
             var expected = 1 + CameraService.AnalysisQueueCapacity;
             for (var i = 0; i < 400 && history.ImagePoints.Count < expected; i++) {
