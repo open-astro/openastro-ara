@@ -339,11 +339,15 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   matching what NINA's C# constructors serialize).
 - **Smart Focus (§59.2–59.4) — IN PROGRESS (v0.1.0), landing as pure-headless slices:** ✅ per-star feature
   vector `FWHM`/`Roundness`/`PeakToBackground` (#758); ✅ `FocusInverseMap` defocus→offset magnitude table (#768);
-  ✅ donut geometry `DonutOuterDiameter`/`DonutInnerDiameter`/`RingThickness` for obstructed scopes (#593 branch).
-  Remaining: the intra/extra-focal **asymmetry coefficient** (resolves the §59.2 defocus sign — co-design with the
-  Phase-2 sign work), the §59.4 **telescope-type extractor selector** (field weighting per optical design), and
-  wiring `FocusInverseMap` into `AutofocusSweepService` as the Phase-2 one-frame run. §59.10 collimation verdict
-  reuses the donut ring centroids (its own slice).
+  ✅ donut geometry `DonutOuterDiameter`/`DonutInnerDiameter`/`RingThickness` for obstructed scopes (#771);
+  ✅ obstruction `DonutShadowDepth` (#594 branch). Remaining: the intra/extra-focal **asymmetry coefficient**
+  (resolves the §59.2 defocus sign — NOTE: no clean/honest single-frame definition exists yet, so this is
+  co-design work with the Phase-2 sign resolution it feeds, not a mechanical metric add), the §59.4
+  **telescope-type extractor selector** (field weighting per optical design — the obstructed-scope fields all
+  exist now; refractor still wants the asymmetry field), and wiring `FocusInverseMap` into `AutofocusSweepService`
+  as the Phase-2 one-frame run (server/orchestration + a NEW calibration-table profile store — a multi-slice
+  effort, see the AutofocusSweepService gap). §59.10 collimation verdict reuses the donut ring centroids (its own
+  slice).
 - **AF triggers + sequencer wiring (§59.5) — trigger family DONE (2026-07-08); two follow-ups open.**
   ✅ The four remaining NINA AF triggers re-ported headless from `840893eb8^` (time-interval / focuser-temp-Δ /
   HFR-drift / first-filter — "sequence start" is covered by the imaging-run builder's `autofocusAtStart`

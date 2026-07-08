@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test {
         private static FocusFeatureVector Feature(double hfr, int starCount = 30) =>
             new(StarCount: starCount, MedianHFR: hfr, MedianFWHM: hfr * 1.6, MedianRoundness: 0.9,
                 MedianPeakToBackground: 40, MedianDonutOuterDiameter: hfr * 2.0,
-                MedianDonutInnerDiameter: 0, MedianRingThickness: hfr * 2.0);
+                MedianDonutInnerDiameter: 0, MedianRingThickness: hfr * 2.0, MedianDonutShadowDepth: 0);
 
         private static double HfrAt(double offset) {
             double d = offset - Best;
