@@ -75,7 +75,7 @@ public sealed partial class GuiderService {
     // connect (SetStateLocked). Deliberately NOT re-armed on a device reconnect — a flapping guide camera
     // must not re-trigger skip/abort per cycle. (Debounced re-arm for repeated genuine incidents in one
     // session is a tracked follow-up, alongside the guider#66 reconnect-abandonment watchdog.)
-    private void BeginFaultReactionLocked(GuiderFaultKind kind, string? deviceType) {
+    private void BeginFaultReactionLocked(GuiderFaultKind kind) {
         if (_disposed || _faultReactionLatched) {
             return;
         }
@@ -84,12 +84,12 @@ public sealed partial class GuiderService {
         // catches everything itself, and each rung uses CancellationToken.None
         // deliberately (a daemon shutdown mid-reaction should still finish
         // pausing the run — the sequencer's own shutdown path wins regardless).
-        _ = Task.Run(() => ReactToGuidingLossAsync(kind, deviceType), CancellationToken.None);
+        _ = Task.Run(() => ReactToGuidingLossAsync(kind), CancellationToken.None);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background reaction boundary: a fault is logged and the sequence simply keeps its prior state — never an unobserved task exception, and never a blocked recovery (which runs on its own task).")]
-    internal async Task ReactToGuidingLossAsync(GuiderFaultKind kind, string? deviceType) {
+    internal async Task ReactToGuidingLossAsync(GuiderFaultKind kind) {
         try {
             SafetyPoliciesDto? policy = null;
             try {

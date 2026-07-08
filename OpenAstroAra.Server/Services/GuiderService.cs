@@ -319,7 +319,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         lock (_gate) {
             if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected
                     && AffectsGuiding(e.DeviceType)) {
-                BeginFaultReactionLocked(GuiderFaultKind.EquipmentDisconnected, e.DeviceType);
+                BeginFaultReactionLocked(GuiderFaultKind.EquipmentDisconnected);
             }
         }
     }
@@ -342,7 +342,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         BeginRecoveryLocked();
         // §42.2: guiding is gone NOW — any running sequence is shooting unguided,
         // so react per the profile's on_guider_lost policy (GuiderService.FaultReaction.cs).
-        BeginFaultReactionLocked(GuiderFaultKind.LinkDown, deviceType: null);
+        BeginFaultReactionLocked(GuiderFaultKind.LinkDown);
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current

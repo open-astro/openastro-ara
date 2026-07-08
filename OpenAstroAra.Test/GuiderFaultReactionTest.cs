@@ -101,7 +101,7 @@ namespace OpenAstroAra.Test {
             sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
 
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, null);
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
 
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
             sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -117,7 +117,7 @@ namespace OpenAstroAra.Test {
             SetPolicy("abort_sequence");
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, null);
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
 
             sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -129,7 +129,7 @@ namespace OpenAstroAra.Test {
             SetPolicy("skip_target");
             sequencer.Setup(s => s.SkipActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, null);
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
 
             sequencer.Verify(s => s.SkipActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -140,7 +140,7 @@ namespace OpenAstroAra.Test {
         public async Task No_running_sequence_stays_quiet() {
             // The §63.3 recovery posts its own crash notifications; with nothing
             // running, a sequence-action notification would be pure noise.
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, null);
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
 
             Assert.That(publishedEvents, Is.Empty);
             Assert.That(postedNotifications, Is.Empty);
@@ -151,7 +151,7 @@ namespace OpenAstroAra.Test {
             // An equipment fault (guide camera dropped, link still up) starts no §63.3 recovery, so —
             // unlike a link drop — it must NOT stay silent when idle: a camera dropped between targets
             // should still notify. No sequence action was taken, so no fault_action_taken WS event.
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.EquipmentDisconnected, "camera");
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.EquipmentDisconnected);
 
             Assert.That(publishedEvents, Is.Empty);
             Assert.That(postedNotifications, Has.Count.EqualTo(1));
@@ -165,7 +165,7 @@ namespace OpenAstroAra.Test {
             sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
 
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.EquipmentDisconnected, "camera");
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.EquipmentDisconnected);
 
             Assert.That(postedNotifications, Has.Count.EqualTo(1));
             Assert.That(postedNotifications[0].Title, Does.Contain("Guide camera"));
@@ -179,7 +179,7 @@ namespace OpenAstroAra.Test {
             sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
 
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, null);
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
 
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
@@ -190,7 +190,7 @@ namespace OpenAstroAra.Test {
             sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
 
-            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, null);
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
 
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(postedNotifications, Has.Count.EqualTo(1));
