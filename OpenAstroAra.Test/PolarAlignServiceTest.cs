@@ -38,6 +38,8 @@ namespace OpenAstroAra.Test {
     [Category("bench")]
     public class PolarAlignServiceTest {
 
+        private static readonly bool[] AcquireThenRelease = { true, false };
+
         private static GuiderRecoveryCoordinator NewRecovery() =>
             new(Mock.Of<IGuiderProcessSupervisor>(),
                 Mock.Of<INotificationService>(),
@@ -61,7 +63,7 @@ namespace OpenAstroAra.Test {
         public async Task Status_is_idle_before_start() {
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
 
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("idle"));
@@ -78,7 +80,7 @@ namespace OpenAstroAra.Test {
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
 
             await svc.StartAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
@@ -98,7 +100,7 @@ namespace OpenAstroAra.Test {
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
 
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             paCalls.TryDequeue(out _); // discard the Start (active=true) call
@@ -118,7 +120,7 @@ namespace OpenAstroAra.Test {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFakeWithPaSession(paCalls);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
 
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -129,15 +131,15 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Concurrent_starts_acquire_the_lease_and_publish_only_once() {
             // The endpoint calls straight into the singleton with no request serialization, so two
-            // near-simultaneous Starts race. The reservation-under-lock must let exactly one acquire the
-            // lease + publish; the other is a no-op accept (guards against the TOCTOU double-acquire).
+            // near-simultaneous Starts race. _opLock serializes them: exactly one acquires the lease +
+            // publishes, the other then sees _active and is a no-op accept (guards the double-acquire).
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFakeWithPaSession(paCalls);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
 
             await Task.WhenAll(
                 svc.StartAsync(null, CancellationToken.None),
@@ -155,10 +157,51 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Stop_waits_for_an_in_flight_start_and_leaves_the_lease_released() {
+            // The Start/Stop race: a Stop issued while a Start is mid-lease-RPC must serialize behind it
+            // (via _opLock), so the set_pa_session calls can't reorder on the wire and leave the daemon
+            // holding the lease while the service reports "stopped". We block Start inside its active:true
+            // RPC, fire Stop, and prove Stop waits — then the wire order is [true, false] and state=stopped.
+            var paCalls = new ConcurrentQueue<bool>();
+            using var startEnteredRpc = new ManualResetEventSlim(false);
+            using var releaseStartRpc = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            fake.OnRpc("set_pa_session", req => {
+                var active = req["params"]?["active"]?.GetValue<bool>() ?? false;
+                if (active) {
+                    startEnteredRpc.Set();
+                    releaseStartRpc.Wait(TimeSpan.FromSeconds(10));
+                }
+                paCalls.Enqueue(active);
+                return new JsonObject { ["active"] = active };
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+
+            var startTask = svc.StartAsync(null, CancellationToken.None);
+            Assert.That(startEnteredRpc.Wait(TimeSpan.FromSeconds(10)), Is.True, "Start should reach its lease RPC");
+
+            // Start now holds _opLock inside the (blocked) lease RPC; a Stop must wait on the semaphore.
+            var stopTask = svc.StopAsync(null, CancellationToken.None);
+            await Task.Delay(200).ConfigureAwait(false);
+            Assert.That(stopTask.IsCompleted, Is.False, "Stop must wait for the in-flight Start (serialized by _opLock)");
+
+            releaseStartRpc.Set();
+            await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+
+            Assert.That(paCalls.ToArray(), Is.EqualTo(AcquireThenRelease),
+                "the lease RPCs must run in call order — acquire then release — not race on the wire");
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("stopped"), "final state matches the last op, with the lease released");
+        }
+
+        [Test]
         public void Start_without_a_connected_guider_throws() {
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
 
             Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
         }
@@ -169,7 +212,7 @@ namespace OpenAstroAra.Test {
             // service must still transition and ack rather than throw.
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);

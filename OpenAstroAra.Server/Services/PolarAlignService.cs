@@ -37,12 +37,20 @@ namespace OpenAstroAra.Server.Services {
     /// alt/az error is the next slice; here the active state is reported as <c>capturing</c> (the routine's
     /// first action) and no frames are captured yet.
     /// </summary>
-    public sealed partial class PolarAlignService : IPolarAlignService {
+    public sealed partial class PolarAlignService : IPolarAlignService, IDisposable {
 
         private readonly GuiderService _guider;
         private readonly ILogger<PolarAlignService> _logger;
         private readonly IWsBroadcaster? _ws;
         private readonly object _gate = new();
+
+        // Serializes the whole Start/Stop lifecycle (including the lease RPC), so a Start and a concurrent
+        // Stop can't race their set_pa_session calls on the wire and leave the daemon holding the lease while
+        // the service reports "stopped". The endpoints call straight into this singleton with no request
+        // serialization, so a double-click / retried-after-timeout Start+Stop is plausible. Only one lease
+        // transition runs at a time; _gate still guards the short state reads/writes. (A plain lock can't span
+        // the awaited RPC.)
+        private readonly SemaphoreSlim _opLock = new(1, 1);
 
         // The lease is a courtesy hold on the single-client guide camera; the daemon default is 600 s and it
         // auto-expires so a crashed orchestrator can't wedge it. A renew watchdog for long sessions is a
@@ -77,58 +85,62 @@ namespace OpenAstroAra.Server.Services {
         /// state. Idempotent — a second Start on an already-running routine is a no-op accept (the lease
         /// renewal for long sessions is a later slice). Throws <see cref="InvalidOperationException"/> (via
         /// <see cref="GuiderService.RequireConnectedGuider"/>) when no guider is connected, mapped to the
-        /// same client error the guide ops return.
+        /// same client error the guide ops return. Serialized against <see cref="StopAsync"/> via
+        /// <c>_opLock</c> so the two can't reorder their lease RPCs on the wire.
         /// </summary>
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "Rollback-and-rethrow: any failure after the state reservation (not-connected, lease rejection, cancellation, socket fault) must undo the reservation and propagate — nothing is swallowed.")]
         public async Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct) {
-            // Reserve the active state under a single lock BEFORE any await, so two near-simultaneous Starts
-            // can't both observe _active==false and both acquire the lease + publish (the endpoint calls
-            // straight into this singleton with no request serialization). The loser sees the reservation and
-            // returns a no-op accept. This mirrors GuiderService.ConnectCoreAsync (check + transition in one
-            // lock before the await). The preflight + lease acquire run AFTER the lock is released (so we
-            // don't hold _gate across GuiderService's own lock); a failure there rolls the reservation back.
-            lock (_gate) {
-                if (_active) {
-                    return Accepted("polar-align.start", idempotencyKey);
-                }
-                _active = true;
-                _state = "capturing";
-                _framesCaptured = 0;
-                _lastFrameId = null;
-            }
+            await _opLock.WaitAsync(ct).ConfigureAwait(false);
             try {
+                lock (_gate) {
+                    if (_active) {
+                        return Accepted("polar-align.start", idempotencyKey);
+                    }
+                }
                 // Preflight: the routine needs a connected guider to hold the camera + capture. Reuses the
                 // guide ops' connected-or-throw contract, so a not-connected Start fails the same way.
+                // Acquire the lease BEFORE recording active state, so a failed acquire (not-connected, daemon
+                // rejection) leaves the state untouched — no reservation to roll back. Serialization by
+                // _opLock means no concurrent Stop can interleave between the acquire and the state write.
                 var guiderClient = _guider.RequireConnectedGuider();
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
-            } catch {
-                // Preflight/lease acquire failed — undo the reservation so a retry can start cleanly.
                 lock (_gate) {
-                    _active = false;
-                    _state = "idle";
+                    _active = true;
+                    _state = "capturing";
+                    _framesCaptured = 0;
+                    _lastFrameId = null;
                 }
-                throw;
+                LogStarted();
+                await PublishStateEventAsync(WsEventCatalog.PolarAlignStarted, "capturing").ConfigureAwait(false);
+                return Accepted("polar-align.start", idempotencyKey);
+            } finally {
+                _opLock.Release();
             }
-            LogStarted();
-            await PublishStateEventAsync(WsEventCatalog.PolarAlignStarted, "capturing").ConfigureAwait(false);
-            return Accepted("polar-align.start", idempotencyKey);
         }
 
         /// <summary>
         /// Stop the routine: release the PA-session lease (best-effort — a disconnected guider has nothing to
-        /// release, and the lease auto-expires regardless) and return to the stopped state. Idempotent.
+        /// release, and the lease auto-expires regardless) and return to the stopped state. Idempotent, and
+        /// serialized against <see cref="StartAsync"/> via <c>_opLock</c> — a Stop issued while a Start is
+        /// still acquiring the lease waits for it, then releases, so the final lease state always matches the
+        /// reported state.
         /// </summary>
         public async Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) {
-            lock (_gate) {
-                _active = false;
-                _state = "stopped";
+            await _opLock.WaitAsync(ct).ConfigureAwait(false);
+            try {
+                lock (_gate) {
+                    _active = false;
+                    _state = "stopped";
+                }
+                await ReleaseLeaseBestEffortAsync(ct).ConfigureAwait(false);
+                LogStopped();
+                await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
+                return Accepted("polar-align.stop", idempotencyKey);
+            } finally {
+                _opLock.Release();
             }
-            await ReleaseLeaseBestEffortAsync(ct).ConfigureAwait(false);
-            LogStopped();
-            await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
-            return Accepted("polar-align.stop", idempotencyKey);
         }
+
+        public void Dispose() => _opLock.Dispose();
 
         // Releasing the lease must not fail Stop: the guider may already be disconnected (nothing to release,
         // and the lease auto-expires), or the daemon may reject the call. Log-and-recover either way.
