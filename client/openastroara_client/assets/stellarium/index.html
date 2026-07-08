@@ -779,7 +779,12 @@ function postDisplayPrefs() {
   DISPLAY_LAYERS.forEach(function (k) { layers[k] = dispState(k); });
   // Catalogs-overlay toggles ride the same channel, namespaced `cat:{id}` — the
   // Flutter side merge-saves the map as-is and hands it back in the load URL.
-  Object.keys(catOn).forEach(function (id) { layers['cat:' + id] = !!catOn[id]; });
+  // Boot-reverted ids are skipped: their in-memory `false` is a launch-time
+  // fetch failure, not a user choice, and echoing it would overwrite the
+  // stored `true` the next-launch retry depends on.
+  Object.keys(catOn).forEach(function (id) {
+    if (!catBootReverted[id]) layers['cat:' + id] = !!catOn[id];
+  });
   // .catch (not try/catch): fetch reports network failures — loopback not yet
   // listening, connection refused — as a rejected promise, not a synchronous throw.
   // Best-effort: a dropped prefs post just means it saves on the next toggle.
@@ -849,6 +854,12 @@ function catColor(id) { return CAT_COLORS[id] || '#81c784'; }
 var catInfos = null;      // [{id,name,group}] from /api/v1/catalogs, or null until fetched
 var catInfosPending = false;
 var catOn = {};           // id -> bool (the persisted toggle state)
+// Ids whose boot-restore silently reverted (fetch failed/empty at launch).
+// postDisplayPrefs must NOT echo these — an unrelated toggle later in the
+// session would otherwise post their in-memory `false` over the stored `true`
+// and kill the retry-next-launch design. A genuine user interaction with the
+// id clears its flag (from then on its state is authoritative).
+var catBootReverted = {};
 var catRowsCache = {};    // id -> fetched object rows (per-session cache)
 var catPending = {};      // id -> true while its rows fetch is in flight
 var _catLayer = null;     // one engine layer parents every catalog's geojson
@@ -911,10 +922,18 @@ function catToggle(id, on, skipPost) {
   // key plain {} maps, so reject anything outside the catalog-id shape (also
   // shuts the '__proto__' silent-no-op corner).
   if (!/^[a-z0-9-]+$/.test(String(id))) return;
+  // A genuine user interaction makes this id's state authoritative again.
+  if (!skipPost) delete catBootReverted[id];
   on = (on == null) ? !catOn[id] : !!on;
   catOn[id] = on;
   if (on && !catRowsCache[id] && !catPending[id]) {
-    if (!API) { setCatMsg('Connect to a server to load catalogs.'); catOn[id] = false; renderCatPanel(); return; }
+    if (!API) {
+      setCatMsg('Connect to a server to load catalogs.');
+      catOn[id] = false;
+      if (skipPost) catBootReverted[id] = true;
+      renderCatPanel();
+      return;
+    }
     catPending[id] = true;
     fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=500')
       // 404 = the OpenNGC source isn't installed; a 200 empty array is an
@@ -930,6 +949,7 @@ function catToggle(id, on, skipPost) {
           catRowsCache[id] = res.rows;
         } else {
           catOn[id] = false;
+          if (skipPost) catBootReverted[id] = true;
           setCatMsg(!res ? 'Could not load the catalog — is the server reachable?'
               : res.missing ? 'Install the OpenNGC deep-sky package under Data to highlight catalogs.'
               : 'The installed data has no objects for this catalog.');
@@ -939,6 +959,7 @@ function catToggle(id, on, skipPost) {
       })
       .catch(function () {
         catPending[id] = false; catOn[id] = false;
+        if (skipPost) catBootReverted[id] = true;
         setCatMsg('Could not load the catalog — is the server reachable?');
         renderCatPanel();
         // Re-post the reverted state: an on→off→on interleave while this fetch
