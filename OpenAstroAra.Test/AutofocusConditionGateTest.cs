@@ -174,6 +174,45 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void TempTrigger_DefersThenRetriesWhenTheSkyRecovers() {
+            var focuser = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFocuser.FocuserInfo {
+                Connected = true,
+                Temperature = 4.0,
+            });
+            var history = new AutofocusConditionGateTestHistory();
+            history.Afs.Add(new AutofocusHistoryEntry(0, DateTimeOffset.UtcNow, 10.0, "Ha"));
+            var gate = new FakeGate { Reason = "clouds passing" };
+            var sut = new AutofocusAfterTemperatureChangeTrigger(focuser.Object, history, gate) { Amount = 5 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False, "deferred while clouds pass");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True, "the delta persists — fires on recovery");
+        }
+
+        [Test]
+        public void HfrTrigger_DefersThenRetriesWhenTheSkyRecovers() {
+            var wheel = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>();
+            wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0),
+            });
+            var history = new AutofocusConditionGateTestHistory();
+            var hfrs = new[] { 2.0, 2.1, 2.2, 2.3, 2.4 }; // 20% rising trend over the 2.0 low
+            for (var i = 0; i < hfrs.Length; i++) {
+                history.Images.Add(new ImageHistoryEntry(i + 1, "LIGHT", hfrs[i], "Ha"));
+            }
+            var gate = new FakeGate { Reason = "dew forming on the optics" };
+            var sut = new AutofocusAfterHFRIncreaseTrigger(history, wheel.Object, gate) { Amount = 5, SampleSize = 5 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False, "deferred while dew forms");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True, "the trend persists — fires on recovery");
+        }
+
+        [Test]
         public void FilterTrigger_ADeferralKeepsTheReferenceSoTheOwedFocusSurvives() {
             var wheel = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>();
             wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo {

@@ -106,6 +106,14 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
             var read = _diagnostics.GetStateAsync(CancellationToken.None);
             if (!read.Wait(ReadTimeout)) {
                 LogReadTimedOut();
+                // The abandoned read keeps running; observe a late fault so it never
+                // disappears silently (it can't crash the process, but it CAN explain
+                // why diagnostics was wedged when someone is debugging).
+                _ = read.ContinueWith(
+                    t => LogReadFailed(t.Exception!),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted,
+                    TaskScheduler.Default);
                 return null;
             }
             issue = read.Result.OpenIssues?.FirstOrDefault(
