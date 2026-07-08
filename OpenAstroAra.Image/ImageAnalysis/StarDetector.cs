@@ -73,7 +73,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             }
 
             token.ThrowIfCancellationRequested();
-            var (median, sigma) = BackgroundStats(work);
+            var (median, sigma) = BackgroundStats(work, width, height);
             // k·σ above the background. Sensitivity carries k directly (8≈Normal, 5≈High, 3≈Highest);
             // guard a non-positive/garbage value to the Normal default so detection never floods.
             double k = parameters.Sensitivity > 0 ? parameters.Sensitivity : 8.0;
@@ -93,19 +93,30 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return Summarize(stars);
         }
 
-        // Background is a sky-wide statistic, so a strided subsample (~BackgroundSampleTarget pixels)
-        // gives the same median/MAD as the full frame at a fraction of the cost — two full-frame sorts on
-        // a 20-50 MP frame would be 1-3 s and a full clone; the sample is a few thousand entries and a sub-ms
-        // sort. MAD is the median of |x - median|; ×1.4826 makes it a consistent σ estimator for Gaussian
-        // noise while ignoring the star outliers. Frames at/under the target sample in full (stride 1).
+        // Background is a sky-wide statistic, so a subsample (~BackgroundSampleTarget pixels) gives the same
+        // median/MAD as the full frame at a fraction of the cost — two full-frame sorts on a 20-50 MP frame
+        // would be 1-3 s and a full clone; the sample is a few thousand entries and a sub-ms sort. MAD is the
+        // median of |x - median|; ×1.4826 makes it a consistent σ estimator for Gaussian noise while ignoring
+        // the star outliers. Frames at/under the target sample in full (step 1).
         private const int BackgroundSampleTarget = 20000;
 
-        private static (double median, double sigma) BackgroundStats(ReadOnlySpan<ushort> pixels) {
-            int stride = Math.Max(1, pixels.Length / BackgroundSampleTarget);
-            int n = (pixels.Length + stride - 1) / stride; // ceil(length/stride) — exact count of i=0,stride,2·stride,… < length
-            var sample = new ushort[n];
-            for (int i = 0, j = 0; i < pixels.Length; i += stride) {
-                sample[j++] = pixels[i];
+        private static (double median, double sigma) BackgroundStats(ReadOnlySpan<ushort> pixels, int width, int height) {
+            // Sample on a 2D grid (equal x/y step), NOT a linear memory stride. A linear stride i += N through
+            // row-major pixels aliases onto a fixed set of columns whenever gcd(N, width) > 1 (e.g. any
+            // power-of-two width) — it then samples only every gcd-th column, so a vignette or any column-varying
+            // structure biases the median/MAD and thus the detection threshold. An isotropic grid step of
+            // √(length/target) spreads the samples evenly over the whole field. Frames at/under the target give
+            // step 1 (√(≤1) → 0 → floored to 1) and sample in full.
+            int step = Math.Max(1, (int)Math.Sqrt((double)pixels.Length / BackgroundSampleTarget));
+            int nx = (width + step - 1) / step;   // ceil(width/step): x positions 0, step, 2·step, … < width
+            int ny = (height + step - 1) / step;  // ceil(height/step): likewise for rows
+            var sample = new ushort[nx * ny];
+            int j = 0;
+            for (int y = 0; y < height; y += step) {
+                int rowBase = y * width;
+                for (int x = 0; x < width; x += step) {
+                    sample[j++] = pixels[rowBase + x];
+                }
             }
             Array.Sort(sample);
             int median = sample[sample.Length / 2];
