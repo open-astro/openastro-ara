@@ -241,4 +241,42 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2BuildDefectMapDarksResponse : PhdMethodResponse {
         public Phd2BuildDefectMapDarksResult? result { get; set; }
     }
+
+    /// <summary>§63.6/§63.8 — <c>get_dark_build_progress</c> (no params). The dark-library / defect-map build
+    /// RPCs are BLOCKING (they answer only when the whole capture stack is done), but the daemon yields
+    /// between frames so a SEPARATE poll of this method drives a progress bar while a build runs. Since
+    /// <see cref="SendMessage{T}"/> opens its own short-lived connection per call, this poll runs concurrently
+    /// with the in-flight build with no contention. All fields are zero/false when no build is active.</summary>
+    public class Phd2GetDarkBuildProgress : Phd2Method {
+        public override string Method => "get_dark_build_progress";
+    }
+
+    public class Phd2GetDarkBuildProgressResponse : PhdMethodResponse {
+        public Phd2DarkBuildProgress? result { get; set; }
+    }
+
+    /// <summary>Progress of an in-flight calibration build. <see cref="Active"/> false with the counters zero
+    /// means idle; while active, the build walks <see cref="Frame"/>/<see cref="FrameCount"/> frames at each
+    /// of <see cref="ExposureIndex"/>/<see cref="ExposureCount"/> matched exposures. Every field is emitted
+    /// unconditionally by the daemon.</summary>
+    public class Phd2DarkBuildProgress {
+
+        [JsonProperty(PropertyName = "active")]
+        public bool Active { get; set; }
+
+        [JsonProperty(PropertyName = "exposure_index")]
+        public int ExposureIndex { get; set; }
+
+        [JsonProperty(PropertyName = "exposure_count")]
+        public int ExposureCount { get; set; }
+
+        [JsonProperty(PropertyName = "exposure_ms")]
+        public int ExposureMs { get; set; }
+
+        [JsonProperty(PropertyName = "frame")]
+        public int Frame { get; set; }
+
+        [JsonProperty(PropertyName = "frame_count")]
+        public int FrameCount { get; set; }
+    }
 }
