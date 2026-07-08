@@ -71,6 +71,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Sync_when_not_connected_returns_false() {
+            // §28 — the centering loop calls Sync; when the mount isn't connected it must report a clean
+            // false (the loop offset-compensates) rather than touching astrometry or throwing.
+            using var svc = new TelescopeService();
+            Assert.That(
+                await ((ITelescopeMediator)svc).Sync(SampleTarget()),
+                Is.False);
+        }
+
+        [Test]
+        public void Sync_null_coords_throws() {
+            using var svc = new TelescopeService();
+            Assert.ThrowsAsync<System.ArgumentNullException>(
+                () => ((ITelescopeMediator)svc).Sync((Coordinates)null!));
+        }
+
+        [Test]
         public async Task ParkTelescope_when_not_connected_returns_false() {
             using var svc = new TelescopeService();
             Assert.That(
@@ -103,6 +120,9 @@ namespace OpenAstroAra.Test {
                 Is.False);
             Assert.That(
                 await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(SampleTarget(), CancellationToken.None),
+                Is.False);
+            Assert.That(
+                await ((ITelescopeMediator)svc).Sync(SampleTarget()),
                 Is.False);
         }
 

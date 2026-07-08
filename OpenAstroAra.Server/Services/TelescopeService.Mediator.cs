@@ -438,16 +438,67 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return raDiffDeg < SlewToleranceDeg && Math.Abs(c.Declination - targetDecDeg) < SlewToleranceDeg;
     }
 
+    /// <summary>
+    /// §28 — recalibrate the mount's pointing model to <paramref name="coordinates"/> (no motion). The
+    /// centering loop (<see cref="OpenAstroAra.PlateSolving.CenteringSolver"/>) calls this after a solve so
+    /// the follow-up slew lands accurately; it degrades to offset compensation when this returns false, so a
+    /// mount without sync (returns false on <c>CanSync</c>), a parked/disconnected mount, or a driver fault
+    /// is a clean "not synced", never a fault. Coordinates are transformed to the mount's native epoch first
+    /// (a J2000 solve result synced raw to a JNOW mount would recalibrate to the wrong place). Unlike a slew,
+    /// sync is instantaneous, so there's no settle-poll — a returning <c>SyncToCoordinates</c> is done.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Mount sync boundary: the blocking ASCOM SyncToCoordinates/CanSync can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-call; every escape is logged and reported as a failed sync (false) so the centering loop falls back to offset compensation rather than faulting the run. CA1031's log-and-recover boundary applies.")]
+    public async Task<bool> Sync(Coordinates coordinates) {
+        ArgumentNullException.ThrowIfNull(coordinates);
+        EquatorialCoordinateType equatorialSystem;
+        bool parked;
+        lock (_gate) {
+            // Connected check before the transform (which P/Invokes NOVAS): don't run native astrometry
+            // for a sync that's going to be reported failed anyway.
+            if (_disposed || _state != EquipmentConnectionState.Connected || _client is null) {
+                return false;
+            }
+            equatorialSystem = _equatorialSystemRaw;
+            parked = _runtime.Parked;
+        }
+        if (parked) {
+            // Syncing a parked mount would recalibrate to the park position; ASCOM drivers throw. Pre-empt.
+            LogMountOpRejectedParked("telescope.sync");
+            return false;
+        }
+        var client = ConnectedClientOrNull();
+        if (client is null) {
+            return false;
+        }
+        var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem));
+        try {
+            return await Task.Run(() => {
+                if (!client.CanSync) {
+                    // Encoder/absolute mounts don't sync — a clean "not synced", the loop offset-compensates.
+                    LogSyncUnsupported();
+                    return false;
+                }
+                TryEnableTracking(client); // some mounts require tracking engaged to accept a sync
+                client.SyncToCoordinates(target.RA, target.Dec);
+                RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
+                return true;
+            }, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogMountOpFailed(ex, "telescope.sync");
+            return false;
+        }
+    }
+
     // ── Unconsumed mediator surface — documented no-op stubs ─────────────────────────────────────
     // No registered headless instruction reaches these: MoveAxis/PulseGuide are interactive-GUI /
-    // guider-calibration aids; Sync + DestinationSideOfPier belong to the plate-solve/Center path
-    // (not ported yet); the topocentric slews back SlewScopeToAltAz (not registered); MeridianFlip
-    // is the imaging-loop trigger orchestration (lands with the capture path); custom tracking rates
-    // and the snap port have no headless consumer. Each reports "didn't succeed" like the stub.
+    // guider-calibration aids; DestinationSideOfPier belongs to the plate-solve/Center path (not ported
+    // yet); the topocentric slews back SlewScopeToAltAz (not registered); MeridianFlip is the imaging-loop
+    // trigger orchestration (lands with the capture path); custom tracking rates and the snap port have no
+    // headless consumer. Each reports "didn't succeed" like the stub.
 
     public void MoveAxis(TelescopeAxes axis, double rate) { }
     public void PulseGuide(GuideDirections direction, int duration) { }
-    public Task<bool> Sync(Coordinates coordinates) => Task.FromResult(false);
 
     [Obsolete("Use SlewToTopocentricCoordinates instead.")]
     public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token) =>
@@ -500,6 +551,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Mount mediator op {Op} rejected: mount is parked")]
     private partial void LogMountOpRejectedParked(string op);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Mount sync skipped: the mount reports CanSync=false; the centering loop will offset-compensate instead")]
+    private partial void LogSyncUnsupported();
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Mount tracking write failed")]
     private partial void LogTrackingWriteFailed(Exception ex);
