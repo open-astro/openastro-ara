@@ -344,25 +344,25 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
 
 `MeridianFlipTrigger` decision logic re-ported headless (#362) from `840893eb8^`, behind the new
 `IMeridianFlipExecutor` seam. Remaining §58 work:
-- **§58.4 flip orchestration (the executor impl):** replace `PlaceholderMeridianFlipExecutor` (throws) with the
-  real headless workflow — pause imaging → wait out `pause_after` → flip slew (`ITelescopeMediator`) →
-  plate-solve re-center (§28.2 tolerance, ≤3 retries) → optional re-focus (`refocus_after_flip` policy, §59
-  AF) → restart guiding (`IGuiderMediator`, auto-restore vs full recal) → §58.5 side-of-pier verification. Its
-  own sub-PR; needs telescope/camera/guider/focuser mediators + plate-solver. Move the `Recenter`/
-  `AutoFocusAfterFlip` precondition checks (currently dropped from the trigger's `Validate`) here.
-- **Side-of-pier projection test matrix:** the original NINA test had a large `[TestCase]` matrix exercising
-  `ShouldTrigger` with `UseSideOfPier=true` + projected `ExpectedPierSide`. Re-port deferred — it needs
-  `TelescopeInfo.Coordinates`/`SiderealTime` fixtures that yield a known expected pier side. The #362 tests
-  cover the no-pier timing decision + early-return guards + Validate.
-- **§58.6 profile schema gaps:** the playbook `meridian_flip` block has fields ARA's `IMeridianFlipSettings`
-  doesn't expose yet (`mode`, `max_wait_after_min` naming, `recenter_after_flip`, `refocus_after_flip` enum,
-  `guider_recal` enum, `skip_target_if_below_floor`, `first_flip_confirmed`). Map when the orchestration lands.
+- ✅ **§58.4 flip orchestration — DONE (#366, 2026-06-11).** The real `MeridianFlipExecutor` replaced the
+  throwing placeholder (stop guiding → pass meridian → flip slew → recenter → resume guiding → settle →
+  §58.5 pier-side verify); §58.9 unattended-safety layers + §58.12/§58.13 shipped in the later arc. This
+  entry was stale — see PORT_PROGRESS.
+- ✅ **Side-of-pier projection test matrix — DONE (2026-07-08).** `MeridianFlipTriggerTest` gained the
+  `[TestCase]` matrix with pinned-LST fixtures (JNOW coordinates at analytic RA offsets so
+  `ExpectedPierSide` is known): both projected-expectation directions in the no-remaining-time branch,
+  the matching/mismatching current-expectation branch, the delayed-flip window boundaries (inside,
+  before, past the 12 h ceiling), and the pierUnknown fallback to the no-pier evaluation.
+- **§58.6 profile schema gaps:** of the playbook `meridian_flip` block only the `refocus_after_flip`/
+  `guider_recal` mode enums remain un-modelled (they land with the refocus/recal orchestration they
+  configure); `first_flip_confirmed` shipped with §58.8. (Earlier gaps — `mode`, naming,
+  `recenter_after_flip`, `skip_target_if_below_floor` — closed with the executor arc.)
 
 ### §58 trigger — minor follow-ups (from #362 review)
-- **Vernal-equinox zero-coordinate heuristic:** `MeridianFlipTrigger.Execute` treats a flip target of exactly
-  `RA == 0 && Dec == 0` as "unset" and substitutes the mount's current position (inherited from NINA). This
-  misfires for a real object near the vernal equinox (RA 0h, Dec 0°) — spurious warning + a wrong flip
-  coordinate. Low likelihood; if it ever matters, gate the heuristic on a tolerance or an explicit "unset" flag.
+- ✅ **Vernal-equinox zero-coordinate heuristic — DONE (2026-07-08).** The exactly-0/0 "unset target"
+  substitution is now gated on where the mount actually points: within 1° of 0h/0° the coordinates are
+  trusted as a real vernal-equinox target (Info log); anywhere else keeps the inherited substitute-current-
+  position behavior. +2 tests through a real `IDeepSkyObjectContainer` context chain.
 
 ## §18.I plate-solving — integration map + slices (2026-06-11)
 

@@ -15,6 +15,7 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -32,8 +33,9 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
     /// <summary>
     /// §58 — <see cref="MeridianFlipTrigger"/> decision logic (re-ported headless). Exercises
     /// <see cref="MeridianFlipTrigger.ShouldTrigger"/> against a mocked <see cref="ITelescopeMediator"/> +
-    /// profile, with no equipment touched (the flip orchestration lives behind <see cref="IMeridianFlipExecutor"/>).
-    /// The full side-of-pier projection matrix is a follow-up (it needs coordinate/sidereal-time fixtures).
+    /// profile, with no equipment touched (the flip orchestration lives behind <see cref="IMeridianFlipExecutor"/>),
+    /// including the side-of-pier projection matrix (coordinate + sidereal-time fixtures with a known
+    /// <see cref="OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide"/>).
     /// </summary>
     [TestFixture]
     public class MeridianFlipTriggerTest {
@@ -142,6 +144,73 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             Assert.That(should, Is.EqualTo(expectFlip));
         }
 
+        // ─── §58 side-of-pier projection matrix ─────────────────────────────
+        // Fixtures pin the local sidereal time at 6 h and place the target by an
+        // RA offset, so ExpectedPierSide is known analytically ((RA − LST) mod 24
+        // < 12 → pierWest, else pierEast; JNOW coordinates so no epoch drift):
+        //   offset +6 h → expected WEST (now and after any ≤ 5 min projection)
+        //   offset +18 h → expected EAST (same robustness)
+        // remaining ≤ next-item ⇒ the "no remaining time" branch projects the
+        // pier side past the flip; remaining > next-item ⇒ the "time remaining"
+        // branch compares against the CURRENT expectation, where a mismatch only
+        // fires inside the delayed-flip window [11 h − maxAfter − pause, 12 h].
+        [Test]
+        // No remaining time (4 min ≤ 10 min next item) — projected expectation:
+        [TestCase(6.0, PierSide.pierWest, 4, 10, false, TestName = "PierMatrix: no time left, already on the expected (west) side → no flip")]
+        [TestCase(6.0, PierSide.pierEast, 4, 10, true, TestName = "PierMatrix: no time left, on the wrong side of an expected-west target → flip")]
+        [TestCase(18.0, PierSide.pierEast, 4, 10, false, TestName = "PierMatrix: no time left, already on the expected (east) side → no flip")]
+        [TestCase(18.0, PierSide.pierWest, 4, 10, true, TestName = "PierMatrix: no time left, on the wrong side of an expected-east target → flip")]
+        // Time remaining (remaining > next item) — current expectation:
+        [TestCase(6.0, PierSide.pierWest, 60, 5, false, TestName = "PierMatrix: time remains and the pier side matches → no flip")]
+        [TestCase(6.0, PierSide.pierEast, 60, 5, false, TestName = "PierMatrix: time remains, mismatch outside the delayed window → no flip yet")]
+        [TestCase(6.0, PierSide.pierEast, 690, 5, true, TestName = "PierMatrix: mismatch inside the delayed window (11.5 h) → the missed flip fires")]
+        [TestCase(18.0, PierSide.pierWest, 690, 5, true, TestName = "PierMatrix: mismatch inside the delayed window, east-expected variant → fires")]
+        [TestCase(6.0, PierSide.pierEast, 725, 5, false, TestName = "PierMatrix: mismatch past the 12 h ceiling → not a delayed flip")]
+        public void ShouldTrigger_side_of_pier_projection_matrix(double raOffsetHours, PierSide currentSide, double remainingMinutes, double nextMinutes, bool expectFlip) {
+            const double lstHours = 6;
+            settingsMock.SetupGet(m => m.UseSideOfPier).Returns(true);
+            settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(0);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true,
+                TrackingEnabled = true,
+                TimeToMeridianFlip = TimeSpan.FromMinutes(remainingMinutes).TotalHours,
+                SiderealTime = lstHours,
+                SideOfPier = currentSide,
+                Coordinates = new Coordinates(Angle.ByHours(AstroUtil.EuclidianModulus(lstHours + raOffsetHours, 24)), Angle.ByDegree(20), Epoch.JNOW),
+            });
+
+            var should = CreateSUT().ShouldTrigger(null, NextItem(TimeSpan.FromMinutes(nextMinutes)).Object);
+
+            Assert.That(should, Is.EqualTo(expectFlip));
+        }
+
+        [Test]
+        public void ShouldTrigger_pierUnknown_falls_back_to_the_no_pier_evaluation() {
+            // UseSideOfPier on, but the driver reports pierUnknown: the projection is
+            // impossible, so the trigger evaluates like the no-pier path — which adds a
+            // 2-minute safety window to the next item's duration.
+            settingsMock.SetupGet(m => m.UseSideOfPier).Returns(true);
+            settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(5);
+            settingsMock.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(0);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true,
+                TrackingEnabled = true,
+                TimeToMeridianFlip = TimeSpan.FromMinutes(11).TotalHours,
+                SiderealTime = 6,
+                SideOfPier = PierSide.pierUnknown,
+                Coordinates = new Coordinates(Angle.ByHours(12), Angle.ByDegree(20), Epoch.JNOW),
+            });
+
+            // 11 min remaining ≤ 10 min next + 2 min no-pier window → fires; the pier-side
+            // path with these fixtures (expected west, matching) would have said no.
+            var should = CreateSUT().ShouldTrigger(null, NextItem(TimeSpan.FromMinutes(10)).Object);
+
+            Assert.That(should, Is.True);
+        }
+
         [Test]
         public async Task ShouldTrigger_skips_a_second_flip_for_the_same_target_within_11h() {
             // A successful flip records (lastFlipTime, lastFlipCoordinates); evaluating again for the same
@@ -174,6 +243,60 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             var sut = CreateSUT();
             Assert.ThrowsAsync<InvalidOperationException>(
                 () => sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        private static Mock<IDeepSkyObjectContainer> TargetContext(Coordinates coords) {
+            // A real context chain: RetrieveContextCoordinates needs Target.InputCoordinates
+            // AND Target.DeepSkyObject non-null before it yields the coordinates.
+            var target = new InputTarget(Angle.ByDegree(45), Angle.ByDegree(0), null) {
+                InputCoordinates = new InputCoordinates(coords),
+                DeepSkyObject = new DeepSkyObject("test-target", coords, null),
+            };
+            var container = new Mock<IDeepSkyObjectContainer>();
+            container.SetupGet(x => x.Target).Returns(target);
+            return container;
+        }
+
+        [Test]
+        public async Task Execute_keeps_a_real_vernal_equinox_target_when_the_mount_points_there() {
+            // RA 0h / Dec 0° from the context is only "unset" when the mount is elsewhere;
+            // pointing at it (within 1°) means the user really is imaging the equinox region.
+            var equinox = new Coordinates(Angle.ByHours(0), Angle.ByDegree(0), Epoch.J2000);
+            var nearby = new Coordinates(Angle.ByDegree(0.2), Angle.ByDegree(0.2), Epoch.J2000);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(nearby);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1 });
+            Coordinates? flipped = null;
+            executorMock
+                .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, TimeSpan, IProgress<ApplicationStatus>, CancellationToken>((c, _, _, _) => flipped = c)
+                .ReturnsAsync(true);
+
+            await CreateSUT().Execute(TargetContext(equinox).Object, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(flipped, Is.Not.Null);
+            Assert.That(flipped!.RA, Is.EqualTo(0));
+            Assert.That(flipped.Dec, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task Execute_substitutes_the_current_position_for_a_zero_target_when_the_mount_is_elsewhere() {
+            // The inherited NINA heuristic: an exactly-0/0 target with the mount pointing
+            // somewhere else entirely is a never-filled default, not a real target.
+            var zero = new Coordinates(Angle.ByHours(0), Angle.ByDegree(0), Epoch.J2000);
+            var actual = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(actual);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1 });
+            Coordinates? flipped = null;
+            executorMock
+                .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, TimeSpan, IProgress<ApplicationStatus>, CancellationToken>((c, _, _, _) => flipped = c)
+                .ReturnsAsync(true);
+
+            await CreateSUT().Execute(TargetContext(zero).Object, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(flipped, Is.Not.Null);
+            Assert.That(flipped!.RA, Is.EqualTo(5).Within(1e-9));
+            Assert.That(flipped.Dec, Is.EqualTo(20).Within(1e-9));
         }
 
         [Test]
