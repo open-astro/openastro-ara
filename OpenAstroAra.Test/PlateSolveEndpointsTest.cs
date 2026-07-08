@@ -114,6 +114,22 @@ namespace OpenAstroAra.Test {
             Assert.That(coords.Dec, Is.EqualTo(12.0).Within(1e-6));
         }
 
+        [TestCase(3.5, 400.0)]   // Dec out of [-90, 90]
+        [TestCase(3.5, -400.0)]
+        [TestCase(30.0, 12.0)]   // RA out of [0, 24)
+        [TestCase(-1.0, 12.0)]
+        public async Task ResolveApprox_treats_an_out_of_range_body_hint_as_no_hint(double ra, double dec) {
+            // A nonsensical explicit hint can't center a search — fall through to the header hint (3.5h here),
+            // mirroring the header path's own range guard.
+            var frames = FramesWithHeaderCoords((RaDegrees: 52.5, DecDegrees: 12.0));
+
+            var coords = await PlateSolveEndpoints.ResolveApproxCoordinatesAsync(
+                Guid.NewGuid(), new PlateSolveRequestDto(ApproxRaHours: ra, ApproxDecDegrees: dec), frames.Object, CancellationToken.None);
+
+            Assert.That(coords, Is.Not.Null);
+            Assert.That(coords!.RA, Is.EqualTo(3.5).Within(1e-6), "the out-of-range body hint was ignored for the frame headers");
+        }
+
         [Test]
         public async Task ResolveApprox_is_blind_when_neither_a_body_hint_nor_frame_headers_exist() {
             var frames = FramesWithHeaderCoords(null);

@@ -68,12 +68,14 @@ public static class PlateSolveEndpoints {
         }
     }
 
-    /// <summary>Resolve the approximate sky position to seed a near-solve: an explicit body hint (both RA and
-    /// Dec supplied) wins; otherwise the frame's own OBJCTRA/OBJCTDEC FITS headers; otherwise null → a blind
-    /// solve. A lone RA or Dec in the body is treated as no hint (an incomplete pair can't center a search).</summary>
+    /// <summary>Resolve the approximate sky position to seed a near-solve: an explicit, in-range body hint (both
+    /// RA and Dec supplied) wins; otherwise the frame's own OBJCTRA/OBJCTDEC FITS headers; otherwise null → a
+    /// blind solve. A lone RA or Dec, or an out-of-range pair, is treated as no hint (an incomplete or nonsensical
+    /// pair can't center a search) and falls through — mirroring the header path's range guard for consistency.</summary>
     public static async Task<OpenAstroAra.Astrometry.Coordinates?> ResolveApproxCoordinatesAsync(
             Guid id, PlateSolveRequestDto? request, IFrameRepository frames, CancellationToken ct) {
-        if (request?.ApproxRaHours is double raHours && request.ApproxDecDegrees is double decDeg) {
+        if (request?.ApproxRaHours is double raHours && request.ApproxDecDegrees is double decDeg
+                && raHours is >= 0 and < 24 && decDeg is >= -90 and <= 90) {
             return new OpenAstroAra.Astrometry.Coordinates(
                 raHours, decDeg, OpenAstroAra.Astrometry.Epoch.J2000, OpenAstroAra.Astrometry.Coordinates.RAType.Hours);
         }
