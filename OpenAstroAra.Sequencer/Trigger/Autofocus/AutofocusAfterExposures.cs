@@ -14,6 +14,7 @@
 
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -42,12 +43,16 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     public class AutofocusAfterExposures : SequenceTrigger {
 
         [ImportingConstructor]
-        public AutofocusAfterExposures() : base() {
+        public AutofocusAfterExposures(IAutofocusConditionGate? conditionGate = null) : base() {
+            this.conditionGate = conditionGate;
         }
 
         private AutofocusAfterExposures(AutofocusAfterExposures cloneMe) : base(cloneMe) {
             AfterExposures = cloneMe.AfterExposures;
+            conditionGate = cloneMe.conditionGate;
         }
+
+        private readonly IAutofocusConditionGate? conditionGate;
 
         private int afterExposures = 1;
 
@@ -66,6 +71,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             // Zero the tally each time the parent block (re)starts (SequentialStrategy.InitializeBlock)
             // so a reset + replay doesn't carry the previous run's count and fire off-cadence.
             Interlocked.Exchange(ref exposureCount, 0);
+            deferredPending = false;
         }
 
         public override object Clone() {
@@ -86,6 +92,12 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             await TriggerRunner.Run(progress, token);
         }
 
+        // §59.9 — this trigger's condition is EDGE-based (fires exactly on the Nth exposure),
+        // so a conditions deferral must be latched or the owed autofocus would silently slip
+        // to exposure 2N. The pending flag re-arms the fire on every subsequent check until
+        // the sky recovers.
+        private bool deferredPending;
+
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             // Only an exposure (IExposureItem) advances the tally, and the trigger fires *on* the
             // exposure that completes a group of N. Capture AfterExposures once so a concurrent write
@@ -94,11 +106,29 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             // succeeds — the cadence is exposure-driven, and a failed autofocus surfaces as a
             // SequenceEntityFailedException through the run-engine rather than rewinding the count.
             var after = AfterExposures;
-            if (previousItem is not IExposureItem || after <= 0) {
+            var due = false;
+            if (previousItem is IExposureItem && after > 0) {
+                var count = Interlocked.Increment(ref exposureCount);
+                due = count % after == 0;
+            }
+            if (!due && !deferredPending) {
                 return false;
             }
-            var count = Interlocked.Increment(ref exposureCount);
-            return count % after == 0;
+            if (conditionGate?.DeferralReason() is { } reason) {
+                deferredPending = true;
+                // Debug, not Info: this fires on EVERY ShouldTrigger call while deferred (per item
+                // transition), and the gate already logs + notifies once per episode.
+                Logger.Debug($"Autofocus deferred — {reason}. Will run when conditions recover.");
+                return false;
+            }
+            deferredPending = false;
+            // Every fire re-anchors the cadence. For a natural fire this is identical to the
+            // modulo (counting to N ≡ firing at each multiple of N), but a CATCH-UP fire lands
+            // at whatever exposure the sky recovered on — without the reset, the next natural
+            // multiple could arrive one exposure later and run a second back-to-back autofocus,
+            // burning exactly the sky time the deferral saved.
+            Interlocked.Exchange(ref exposureCount, 0);
+            return true;
         }
     }
 }

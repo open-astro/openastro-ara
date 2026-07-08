@@ -50,16 +50,18 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     public class AutofocusAfterTimeTrigger : SequenceTrigger {
 
         [ImportingConstructor]
-        public AutofocusAfterTimeTrigger(IImageHistory? history = null) : base() {
+        public AutofocusAfterTimeTrigger(IImageHistory? history = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.history = history;
+            this.conditionGate = conditionGate;
             Amount = 30;
         }
 
-        private AutofocusAfterTimeTrigger(AutofocusAfterTimeTrigger cloneMe) : this(cloneMe.history) {
+        private AutofocusAfterTimeTrigger(AutofocusAfterTimeTrigger cloneMe) : this(cloneMe.history, cloneMe.conditionGate) {
             CopyMetaData(cloneMe);
         }
 
         private readonly IImageHistory? history;
+        private readonly IAutofocusConditionGate? conditionGate;
         private DateTime initialTime;
         private bool initialized;
 
@@ -127,6 +129,13 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
 
             if (shouldTrigger && IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
+                shouldTrigger = false;
+            }
+            // §59.9 — elapsed time only grows, so a deferred fire retries on the next check.
+            if (shouldTrigger && conditionGate?.DeferralReason() is { } reason) {
+                // Debug, not Info: this fires on EVERY ShouldTrigger call while deferred (per item
+                // transition), and the gate already logs + notifies once per episode.
+                Logger.Debug($"Autofocus deferred — {reason}. Will run when conditions recover.");
                 shouldTrigger = false;
             }
             return shouldTrigger;

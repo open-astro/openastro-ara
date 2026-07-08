@@ -1,0 +1,299 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Trigger.Autofocus;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// §59.9 — autofocus condition deferral: the <see cref="DiagnosticsAutofocusGate"/> over
+    /// §51 diagnostics (sky-condition issues defer, everything else doesn't, faults fail
+    /// open, one notification per episode) and the trigger family's deferral behavior
+    /// (level-based triggers retry naturally; the edge-based exposure-count trigger latches).
+    /// </summary>
+    [TestFixture]
+    public class AutofocusConditionGateTest {
+
+        private static DiagnosticsStateDto State(params DiagnosticIssueDto[] issues) => new(
+            Health: issues.Length == 0 ? DiagnosticHealth.Green : DiagnosticHealth.Yellow,
+            Mode: DiagnosticsMode.Observe,
+            OpenIssueCount: issues.Length,
+            LastHourIssueCount: issues.Length,
+            LastEvaluationUtc: DateTimeOffset.UtcNow,
+            OpenIssues: issues);
+
+        private static DiagnosticIssueDto Issue(string type) => new(
+            Id: Guid.NewGuid(),
+            IssueType: type,
+            Severity: DiagnosticHealth.Yellow,
+            Description: type,
+            DetectedUtc: DateTimeOffset.UtcNow,
+            RecommendedAction: null,
+            AutoCorrectible: false);
+
+        private static Mock<IDiagnosticsService> Diagnostics(DiagnosticsStateDto state) {
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>())).ReturnsAsync(state);
+            return diagnostics;
+        }
+
+        [Test]
+        public void SkyConditionIssue_DefersWithTheHumanReason() {
+            var gate = new DiagnosticsAutofocusGate(Diagnostics(State(Issue("clouds_passing"))).Object);
+            Assert.That(gate.DeferralReason(), Is.EqualTo("clouds passing"));
+        }
+
+        [Test]
+        public void NonSkyIssues_NeverDefer() {
+            var gate = new DiagnosticsAutofocusGate(Diagnostics(State(Issue("disk_space_critical"), Issue("guider_crash"))).Object);
+            Assert.That(gate.DeferralReason(), Is.Null,
+                "a disk or guider issue says nothing about whether stars are measurable");
+        }
+
+        [Test]
+        public void CleanState_DoesNotDefer() {
+            var gate = new DiagnosticsAutofocusGate(Diagnostics(State()).Object);
+            Assert.That(gate.DeferralReason(), Is.Null);
+        }
+
+        [Test]
+        public void ABrokenDiagnosticsRead_FailsOpen() {
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("db gone"));
+            var gate = new DiagnosticsAutofocusGate(diagnostics.Object);
+
+            Assert.That(gate.DeferralReason(), Is.Null, "diagnostics must never freeze focusing");
+        }
+
+        [Test]
+        public void AWedgedDiagnosticsRead_FailsOpenAfterTheBound_AndIsActuallyCancelled() {
+            var captured = CancellationToken.None;
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>()))
+                .Callback<CancellationToken>(t => captured = t)
+                .Returns(new TaskCompletionSource<DiagnosticsStateDto>().Task);
+            var gate = new DiagnosticsAutofocusGate(diagnostics.Object);
+
+            Assert.That(gate.DeferralReason(), Is.Null,
+                "a wedged DB costs one bounded pause, never a hung run worker");
+            Assert.That(captured.IsCancellationRequested, Is.True,
+                "the abandoned read must be torn down for real — a sustained wedge would "
+                + "otherwise leak an open connection every few seconds for hours");
+        }
+
+        [Test]
+        public void NotifiesOncePerEpisode_AndAgainOnANewEpisode() {
+            var state = State(Issue("dew_formation"));
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => state);
+            var notifications = new Mock<INotificationService>();
+            var posted = new List<string>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Callback<NotificationDto, CancellationToken>((n, _) => { lock (posted) posted.Add(n.Message); })
+                .Returns(Task.CompletedTask);
+            var gate = new DiagnosticsAutofocusGate(diagnostics.Object, notifications.Object) {
+                // Zero TTL so each call re-reads — this test drives state transitions call-by-call.
+                CacheTtl = TimeSpan.Zero,
+            };
+
+            gate.DeferralReason();
+            gate.DeferralReason();
+            gate.DeferralReason();
+            lock (posted) {
+                Assert.That(posted, Has.Count.EqualTo(1), "one alert per episode, not one per trigger check");
+                Assert.That(posted[0], Does.Contain("dew forming").And.Contain("Will run when conditions recover"));
+            }
+
+            state = State(); // sky recovers …
+            Assert.That(gate.DeferralReason(), Is.Null);
+            state = State(Issue("clouds_passing")); // … and a NEW episode opens
+            Assert.That(gate.DeferralReason(), Is.EqualTo("clouds passing"));
+            lock (posted) {
+                Assert.That(posted, Has.Count.EqualTo(2), "a fresh episode alerts again");
+            }
+
+            // The reason changes WITHOUT a clean gap (clouds clear, dew opens same tick):
+            // the user must hear the new reason, not keep a stale "clouds passing" alert.
+            state = State(Issue("dew_formation"));
+            Assert.That(gate.DeferralReason(), Is.EqualTo("dew forming on the optics"));
+            lock (posted) {
+                Assert.That(posted, Has.Count.EqualTo(3), "a mid-episode reason change re-alerts");
+                Assert.That(posted[2], Does.Contain("dew forming"));
+            }
+        }
+
+        [Test]
+        public void OneReadServesTheWholeTriggerPass() {
+            var reads = 0;
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.GetStateAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => Interlocked.Increment(ref reads))
+                .ReturnsAsync(State(Issue("clouds_passing")));
+            var gate = new DiagnosticsAutofocusGate(diagnostics.Object); // default 1 s TTL
+
+            // Five due triggers in one RunTriggers pass — without memoization each would
+            // block the run-engine thread on its own diagnostics read.
+            for (var i = 0; i < 5; i++) {
+                Assert.That(gate.DeferralReason(), Is.EqualTo("clouds passing"));
+            }
+            Assert.That(reads, Is.EqualTo(1));
+        }
+
+        // ---- trigger-side deferral behavior ----
+
+        private sealed class FakeGate : IAutofocusConditionGate {
+            public string? Reason { get; set; }
+            public string? DeferralReason() => Reason;
+        }
+
+        private static ISequenceItem LightExposure() {
+            var item = new Mock<IExposureItem>();
+            item.SetupGet(x => x.ImageType).Returns("LIGHT");
+            return item.As<ISequenceItem>().Object;
+        }
+
+        [Test]
+        public void TimeTrigger_DefersThenRetriesWhenTheSkyRecovers() {
+            var history = new AutofocusConditionGateTestHistory();
+            history.Afs.Add(new AutofocusHistoryEntry(0, DateTimeOffset.UtcNow.AddMinutes(-60), 5.0, "Ha"));
+            var gate = new FakeGate { Reason = "clouds passing" };
+            var sut = new AutofocusAfterTimeTrigger(history, gate) { Amount = 30 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False, "deferred while clouds pass");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True, "elapsed time persists — fires on recovery");
+        }
+
+        [Test]
+        public void TempTrigger_DefersThenRetriesWhenTheSkyRecovers() {
+            var focuser = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>();
+            focuser.Setup(f => f.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFocuser.FocuserInfo {
+                Connected = true,
+                Temperature = 4.0,
+            });
+            var history = new AutofocusConditionGateTestHistory();
+            history.Afs.Add(new AutofocusHistoryEntry(0, DateTimeOffset.UtcNow, 10.0, "Ha"));
+            var gate = new FakeGate { Reason = "clouds passing" };
+            var sut = new AutofocusAfterTemperatureChangeTrigger(focuser.Object, history, gate) { Amount = 5 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False, "deferred while clouds pass");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True, "the delta persists — fires on recovery");
+        }
+
+        [Test]
+        public void HfrTrigger_DefersThenRetriesWhenTheSkyRecovers() {
+            var wheel = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>();
+            wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0),
+            });
+            var history = new AutofocusConditionGateTestHistory();
+            var hfrs = new[] { 2.0, 2.1, 2.2, 2.3, 2.4 }; // 20% rising trend over the 2.0 low
+            for (var i = 0; i < hfrs.Length; i++) {
+                history.Images.Add(new ImageHistoryEntry(i + 1, "LIGHT", hfrs[i], "Ha"));
+            }
+            var gate = new FakeGate { Reason = "dew forming on the optics" };
+            var sut = new AutofocusAfterHFRIncreaseTrigger(history, wheel.Object, gate) { Amount = 5, SampleSize = 5 };
+
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False, "deferred while dew forms");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True, "the trend persists — fires on recovery");
+        }
+
+        [Test]
+        public void FilterTrigger_ADeferralKeepsTheReferenceSoTheOwedFocusSurvives() {
+            var wheel = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>();
+            wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0),
+            });
+            var gate = new FakeGate();
+            var sut = new AutofocusAfterFilterChange(wheel.Object, null, null, gate);
+            sut.Initialize();
+
+            wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = new OpenAstroAra.Core.Model.Equipment.FilterInfo("OIII", 0, 0),
+            });
+            gate.Reason = "dew forming on the optics";
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False);
+            Assert.That(sut.LastAutoFocusFilter, Is.EqualTo("Ha"), "the reference must survive the deferral");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True, "the owed focus fires on recovery");
+        }
+
+        [Test]
+        public void ExposureCountTrigger_LatchesADeferredFireUntilRecovery() {
+            var gate = new FakeGate();
+            var sut = new AutofocusAfterExposures(gate) { AfterExposures = 2 };
+
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 1 of 2");
+            gate.Reason = "clouds passing";
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "due at exposure 2 but deferred");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(new Mock<ISequenceItem>().Object, null), Is.True,
+                "the latched fire lands on the NEXT check after recovery — it must not slip to exposure 4");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "the cadence re-anchors on the fire");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "two exposures later fires on cadence");
+        }
+
+        [Test]
+        public void ExposureCountTrigger_ACatchUpFireReanchorsTheCadence() {
+            // The round-4 trace: due at exposure 2 (deferred), still cloudy through 3 and 4,
+            // sky recovers on exposure 5's check → catch-up fires. Without re-anchoring, the
+            // old modulo would fire AGAIN at exposure 6 — two autofocus runs back-to-back,
+            // burning exactly the sky time the deferral saved.
+            var gate = new FakeGate();
+            var sut = new AutofocusAfterExposures(gate) { AfterExposures = 2 };
+
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 1");
+            gate.Reason = "clouds passing";
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 2 — due, deferred");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 3 — still cloudy");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 4 — still cloudy");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "exposure 5 — catch-up fires");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False,
+                "exposure 6 must NOT fire back-to-back — the catch-up re-anchored the cadence");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "exposure 7 — full cadence after the catch-up");
+        }
+    }
+
+    // NUnit-visible helper: a plain fake IImageHistory (the trigger family test has its own
+    // private copy; kept separate so the two fixtures stay independent).
+    internal sealed class AutofocusConditionGateTestHistory : IImageHistory {
+        public List<ImageHistoryEntry> Images { get; } = [];
+        public List<AutofocusHistoryEntry> Afs { get; } = [];
+        public IReadOnlyList<ImageHistoryEntry> ImagePoints => Images;
+        public IReadOnlyList<AutofocusHistoryEntry> AutofocusPoints => Afs;
+    }
+}

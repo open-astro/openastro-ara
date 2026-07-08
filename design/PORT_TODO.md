@@ -316,9 +316,18 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   broadcasts `frame.analyzed` (WILMA's library rides its existing debounced refresh so HFR badges fill live),
   and feeds `ImageHistoryService.RecordImage` — the HFR-drift trigger is data-live now. Frames under
   `MinStarsForAnalysis` (10 — deliberately below the §59.6 autofocus bar of 30; a statistic tolerates more
-  scatter than a refocus decision) are skipped, never recorded as noise. (2) **§59.9 diagnostics deferral**
-  (still open) — every AF trigger consults `/diagnostics/current` and defers on
-  clouds_passing/aperture_blocked/dew_formation with a "will run when conditions recover" notification.
+  scatter than a refocus decision) are skipped, never recorded as noise. (2) ✅ **§59.9 diagnostics
+  deferral — DONE (2026-07-08), closing the §59.5 arc.** All five AF triggers consult the new
+  `IAutofocusConditionGate` seam (Sequencer) before firing; `DiagnosticsAutofocusGate` (Server) defers
+  while §51 diagnostics carries an open issue typed `clouds_passing` / `aperture_blocked` /
+  `dew_formation` (enforcement-first, the §35.1 pattern — the gate is live the moment any emitter opens
+  such an issue; the §51 acquisition-pattern analyzer that will emit them is separate future work).
+  Non-sky issues never defer; a broken/wedged diagnostics read fails OPEN (bounded 2 s wait — diagnostics
+  can never freeze focusing); one Info notification per episode ("Autofocus deferred — clouds passing.
+  Will run when conditions recover."). Level-based triggers (time/temp/HFR/filter) retry naturally on the
+  next check; the edge-based `AutofocusAfterExposures` latches a deferred fire so the owed autofocus can't
+  silently slip to exposure 2N. **The §59.5 arc is complete** — remaining §59 items: live focuser
+  validation + §59.7 backlash auto-discovery (hardware-gated), §59.2–59.4 Smart Focus (v0.1.0).
 
 ## §58 meridian flip — follow-ups (2026-06-11, after the trigger re-port #362)
 

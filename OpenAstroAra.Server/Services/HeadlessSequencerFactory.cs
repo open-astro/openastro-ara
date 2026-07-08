@@ -149,7 +149,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IMeridianFlipExecutor? meridianFlipExecutor = null,
             ICenteringExecutor? centeringExecutor = null,
             IAutofocusExecutor? autofocusExecutor = null,
-            IImageHistory? imageHistory = null) {
+            IImageHistory? imageHistory = null,
+            IAutofocusConditionGate? autofocusConditionGate = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -325,16 +326,17 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // Smart Exposure). Carries AfterExposures + a TriggerRunner holding a Dither.
                 new DitherAfterExposures(),
                 // §38 NINA import fidelity — the autofocus sibling: run autofocus every N exposures.
-                new AutofocusAfterExposures(),
+                new AutofocusAfterExposures(autofocusConditionGate),
                 // §59.5 — the remaining autofocus trigger family: time interval, focuser-temp
                 // delta, HFR drift, first-use-of-a-filter. Each reads the daemon's session
-                // image history (plus the equipment it observes); the RunAutofocus inside a
-                // deserialized TriggerRunner resolves through the item prototype above, which
-                // carries the §59 sweep executor.
-                new AutofocusAfterTimeTrigger(imageHistory),
-                new AutofocusAfterTemperatureChangeTrigger(focuserMediator, imageHistory),
-                new AutofocusAfterHFRIncreaseTrigger(imageHistory, filterWheelMediator),
-                new AutofocusAfterFilterChange(filterWheelMediator, imageHistory, profileService),
+                // image history (plus the equipment it observes) and consults the §59.9
+                // conditions gate before firing; the RunAutofocus inside a deserialized
+                // TriggerRunner resolves through the item prototype above, which carries the
+                // §59 sweep executor.
+                new AutofocusAfterTimeTrigger(imageHistory, autofocusConditionGate),
+                new AutofocusAfterTemperatureChangeTrigger(focuserMediator, imageHistory, autofocusConditionGate),
+                new AutofocusAfterHFRIncreaseTrigger(imageHistory, filterWheelMediator, autofocusConditionGate),
+                new AutofocusAfterFilterChange(filterWheelMediator, imageHistory, profileService, autofocusConditionGate),
                 // Previously unregistered: a WILMA-added or NINA-imported ReconnectTrigger
                 // degraded to UnknownSequenceTrigger (never fired). Its ConnectEquipment item
                 // prototype was already registered above; the trigger itself was missed.
