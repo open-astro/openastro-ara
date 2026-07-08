@@ -473,7 +473,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
         var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem));
         try {
-            return await Task.Run(() => {
+            var opTask = Task.Run(() => {
                 if (!client.CanSync) {
                     // Encoder/absolute mounts don't sync — a clean "not synced", the loop offset-compensates.
                     LogSyncUnsupported();
@@ -483,7 +483,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 client.SyncToCoordinates(target.RA, target.Dec);
                 RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
                 return true;
-            }, CancellationToken.None).ConfigureAwait(false);
+            }, CancellationToken.None);
+            // Bound the blocking ASCOM round-trip against a wall clock so a hung driver can't pin the
+            // sequencer thread — Sync takes no CancellationToken and the centering loop awaits it directly.
+            // Same hard-timeout race as RunMountOpAsync, minus the settle-poll (sync is instantaneous, so a
+            // returning SyncToCoordinates is done).
+            using var timeout = new CancellationTokenSource(MountOpHardTimeout);
+            var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, timeout.Token)).ConfigureAwait(false);
+            if (completed != opTask) {
+                ObserveQuietly(opTask);
+                throw new TimeoutException($"mount op telescope.sync did not complete within {MountOpHardTimeout.TotalSeconds:0}s");
+            }
+            return await opTask.ConfigureAwait(false);
         } catch (Exception ex) {
             LogMountOpFailed(ex, "telescope.sync");
             return false;
