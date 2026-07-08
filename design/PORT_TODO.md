@@ -110,9 +110,11 @@ the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up
   refinement could re-slew/re-center to the checkpointed target before releasing (needs per-run
   target coordinates surfaced to the engine). Until then the resume notification tells the user
   to verify pointing.
-- **§37.5 wizard safety extras — now unblocked** (were reclassified enforcement-first behind this
-  engine): the wizard/Settings can grow the granular per-trigger actions as each §35.1 trigger
-  lands with its enforcement.
+- ✅ **§37.5 wizard safety extras — DONE for the enforced subset (2026-07-07).** Wizard screen 15
+  grew the §35.1 weather-threshold fields (master toggle + wind/humidity/dew-delta, nullable =
+  keep base) now that their enforcement landed. Per-trigger ACTIONS stay deferred by design
+  (thresholds decide WHEN, on_unsafe decides WHAT — PORT_DECISIONS 2026-07-07); alarm knobs are
+  device-local (Settings → Notifications), not profile fields, so the wizard doesn't carry them.
 
 ## §34 apt.openastro.net publish pipeline — release-blocking (2026-07-07)
 
