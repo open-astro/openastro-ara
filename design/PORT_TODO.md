@@ -59,12 +59,13 @@ for the feature to be user-visible end-to-end (§44.7/§44.8):
   in the Settings status line ("link ≈ N Mbps"). A literal mid-stream token bucket was
   dropped as needless complexity over Dio — average-rate pacing at frame granularity gives
   the same LAN protection on top of the capture-aware pause.
-- **Puller minors (from the #736 round-4 review, accepted as non-blocking)**: (1) reset `active`
-  via `ref.listen(activeServerProvider, …)` when multi-server selection lands (today the slot-lost
-  reclaim self-heals the mismatch on the first `queue()`); (2) drop the dead
-  `BackupStreamSlotLostException` rethrow in `_pullVerifyStore` (`downloadFrame` hits the plain
-  frames endpoint, which is not slot-gated); (3) remember stored-but-unacked frames within a
-  session so an ack failure doesn't re-download an already-verified file next pass.
+- ✅ **Puller minors — DONE (2026-07-08)** (from the #736 round-4 review): (1) `ref.listen(activeServerProvider, …)`
+  now drops the claim/queue bookkeeping/ack memo/link measurement on a server switch (best-effort
+  release of the old slot; the next tick claims cleanly on the new server); (2) the dead
+  `BackupStreamSlotLostException` rethrow in `_pullVerifyStore` removed with a why-comment
+  (`downloadFrame` hits the plain frames endpoint, which is not slot-gated); (3) a session-scoped
+  stored-but-unacked memo brackets each ack so an ack failure acks directly next pass instead of
+  re-downloading (and re-paying the bandwidth cap for) an already-verified file. +2 tests.
 
 ## §63.3 watch-items (from the #733 review, accepted as-is)
 
