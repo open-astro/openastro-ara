@@ -129,6 +129,12 @@ Ara assumes you're asleep while it works:
   and offset — and starts it immediately (light your panel when notified); "Sky flats at
   twilight" generates the sequence ready to run. Tick "remember my choice" to stop the prompt.
   You can always capture matching flats later from the Image Library instead.
+- **Flats expose themselves**: each generated per-filter set is a **Flat Panel Flats** step — it
+  lights a connected flat panel, probes short exposures until the frame's mean brightness hits
+  your target ADU, then captures the set at the converged exposure. Tune the target, tolerance,
+  frames per filter, and whether the mount parks after flats under **Settings → Session →
+  Calibration**; the same step is available in the sequence editor's Calibration category for
+  hand-built plans (manual EL panels work too — the probe measures whatever light is there).
 - **Emergency stop**: the red **Emergency Stop** button on WILMA's bottom status bar is always one
   tap away, on every tab. After a confirmation it makes the daemon abort the running sequence and
   the in-flight exposure, stop guiding, park the mount, and switch the flat panel light off — then

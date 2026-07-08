@@ -34,28 +34,26 @@ namespace OpenAstroAra.Server.Services;
 /// this service only reports availability + generates the matching-flats plan.
 /// </summary>
 public sealed class SqliteCalibrationService : ICalibrationService {
-    // A conventional default flat count when the caller doesn't override it (NINA ships ~20-30).
+    // Fallback defaults when no profile store is wired (test/bootstrap contexts) — production
+    // reads the §48.7 flat_panel policy fields off SafetyPoliciesDto instead.
     private const int DefaultFlatFrames = 20;
-
-    // Default target ADU for a flat (≈ half the 16-bit range, a standard flat-panel target). Preserves the
-    // prior placeholder default so a plan always carries a usable target unless the caller overrides it.
     private const int DefaultTargetAdu = 32000;
-
-    // §39.5 flats need a panel-calibrated exposure; until the flat-device instruction ships
-    // (deferred — see PORT_TODO), the generated TakeExposure uses this conventional starting
-    // point and the user tunes it against their panel. TargetAdu stays advisory in the plan.
-    private const double DefaultFlatExposureSec = 1.0;
+    private const double DefaultTargetAduTolerancePct = 5;
 
     private readonly IAraDatabase _db;
     private readonly ISequenceService? _sequences;
+    private readonly IProfileStore? _profile;
 
     /// <param name="db">The §28 frame catalog.</param>
     /// <param name="sequences">The §38 sequence store the generated matching-flats sequence is
     /// persisted into. Null (test/bootstrap contexts only — Program.cs always wires the real
     /// store) degrades generation to plan-only, exactly as if the caller set GenerateOnly.</param>
-    public SqliteCalibrationService(IAraDatabase db, ISequenceService? sequences = null) {
+    /// <param name="profile">The §48.7 flat_panel policy source (target ADU, tolerance, frames
+    /// per filter, post-flat park). Null falls back to the conventional defaults above.</param>
+    public SqliteCalibrationService(IAraDatabase db, ISequenceService? sequences = null, IProfileStore? profile = null) {
         _db = db;
         _sequences = sequences;
+        _profile = profile;
     }
 
     public async Task<CursorPage<CalibrationSessionDto>> ListSessionsAsync(int limit, string? cursor, CancellationToken ct) {
@@ -117,8 +115,17 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var session = await BuildSessionDtoAsync(conn, sessionId, ct)
             ?? throw new CalibrationSessionNotFoundException(sessionId);
 
-        var frameCount = request.OverrideFrameCount is int n && n > 0 ? n : DefaultFlatFrames;
-        var targetAdu = request.OverrideTargetAdu ?? DefaultTargetAdu;
+        // §48.7 flat_panel policy (request overrides win, then the profile, then the fallback
+        // constants for a store-less context).
+        var policies = _profile?.GetSafetyPolicies();
+        var frameCount = request.OverrideFrameCount is int n && n > 0
+            ? n
+            : policies?.FlatFramesPerFilter is int p && p > 0 ? p : DefaultFlatFrames;
+        var targetAdu = request.OverrideTargetAdu
+            ?? (policies?.FlatTargetAdu is int t && t > 0 ? t : DefaultTargetAdu);
+        var tolerancePct = policies?.FlatTargetAduTolerancePct is double tol && tol > 0
+            ? tol : DefaultTargetAduTolerancePct;
+        var parkAfter = policies?.PostFlatParkMount ?? false;
         var captureSettings = await ModalCaptureSettingsByFilterAsync(conn, sessionId, ct);
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);
         var specs = new List<FlatStepSpec>(session.FiltersUsed.Count);
@@ -133,7 +140,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             specs.Add(new FlatStepSpec(
                 FilterName: filter.FilterName == NoFilter ? null : filter.FilterName,
                 FrameCount: frameCount,
-                ExposureSeconds: DefaultFlatExposureSec,
+                TargetAdu: targetAdu,
+                TargetAduTolerancePct: tolerancePct,
                 Gain: settings?.Gain,
                 Offset: settings?.Offset,
                 FocuserPosition: settings?.FocuserPosition));
@@ -147,7 +155,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
         if (!request.GenerateOnly && _sequences is not null) {
-            var body = CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs);
+            var body = CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter);
             var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",

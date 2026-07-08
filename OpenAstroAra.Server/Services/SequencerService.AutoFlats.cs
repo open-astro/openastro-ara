@@ -23,10 +23,12 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §48.1 auto-flats prompt flow. The daemon has no <c>FlatPanelFlats</c>/<c>SkyFlats</c>
-/// instructions (NINA's flat automation wasn't ported); ARA's equivalent is the §39.5
-/// matching-flats machinery, which regenerates tonight's exact per-filter geometry
-/// (focus, gain, offset) from the run's own catalog session. So: on run start the
+/// §48.1 auto-flats prompt flow. The flat automation is the §39.5 matching-flats
+/// machinery, which regenerates tonight's exact per-filter geometry (focus, gain,
+/// offset) from the run's own catalog session — since §48.3 each per-filter block is a
+/// native <c>FlatPanelFlats</c> auto-exposure set driven by the §48.7 flat_panel policy
+/// (a <c>SkyFlats</c> instruction for twilight timing remains the recorded follow-up).
+/// So: on run start the
 /// profile's <c>calibration_capture_default</c> decides — "ask" emits the
 /// <c>sequence.auto_flats_prompt</c> WS event for WILMA's dialog, "panel_at_end"/
 /// "sky_at_twilight" auto-decide, "never" stays silent. The decision (from the profile

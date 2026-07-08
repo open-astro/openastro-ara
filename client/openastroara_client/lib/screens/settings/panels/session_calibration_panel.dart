@@ -122,6 +122,51 @@ class _SessionCalibrationPanelState
             if (v != null) n.setCalibrationCaptureDefault(v);
           },
         ),
+        // §48.7 flat_panel — the auto-exposure flat sets the generated
+        // sequences run (each filter probes exposure to the target ADU,
+        // then captures this many frames).
+        const SettingsSectionHeader('Flat sets'),
+        EditableNumberRow(
+          label: 'Target brightness (mean ADU)',
+          helpKey: 'session.calibration.flat_target_adu',
+          currentValue: s.flatTargetAdu.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).flatTargetAdu.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setFlatTargetAdu(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Target tolerance (%)',
+          helpKey: 'session.calibration.flat_target_adu_tolerance_pct',
+          currentValue: s.flatTargetAduTolerancePct.toString(),
+          getCanonical: () => ref
+              .read(safetyPoliciesProvider)
+              .flatTargetAduTolerancePct
+              .toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setFlatTargetAduTolerancePct(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Frames per filter',
+          helpKey: 'session.calibration.flat_frames_per_filter',
+          currentValue: s.flatFramesPerFilter.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).flatFramesPerFilter.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setFlatFramesPerFilter(v);
+          },
+        ),
+        SettingsSwitchRow(
+          label: 'Park the mount after flats',
+          helpKey: 'session.calibration.post_flat_park_mount',
+          value: s.postFlatParkMount,
+          onChanged: n.setPostFlatParkMount,
+        ),
         if (_lastError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),

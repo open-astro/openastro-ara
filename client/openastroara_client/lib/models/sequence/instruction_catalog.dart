@@ -30,6 +30,7 @@ enum InstructionCategory {
   telescope,
   guider,
   switchDevice,
+  calibration,
   utility,
   container,
 }
@@ -43,6 +44,7 @@ extension InstructionCategoryLabel on InstructionCategory {
     InstructionCategory.telescope => 'Telescope',
     InstructionCategory.guider => 'Guider',
     InstructionCategory.switchDevice => 'Switch',
+    InstructionCategory.calibration => 'Calibration',
     InstructionCategory.utility => 'Utility',
     InstructionCategory.container => 'Containers',
   };
@@ -436,6 +438,8 @@ const String switchFilterType =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
 const String runAutofocusType =
     'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer';
+const String flatPanelFlatsType =
+    'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, OpenAstroAra.Sequencer';
 const String ditherType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer';
 
@@ -592,6 +596,56 @@ const List<InstructionDef> instructionCatalog = [
     ],
   ),
   // §38 NINA import — run an autofocus routine. No serialized fields.
+  // §48.3 — one auto-exposure flat set for the CURRENT filter: probes
+  // exposures until the frame mean hits the target ADU (lighting the flat
+  // panel when one is connected), then captures FrameCount saved FLATs at
+  // the converged exposure. Pair with Switch Filter for per-filter sets —
+  // the generated matching-flats sequences compose it exactly that way.
+  InstructionDef(
+    type: flatPanelFlatsType,
+    label: 'Flat Panel Flats',
+    category: InstructionCategory.calibration,
+    icon: Icons.flourescent_outlined,
+    fields: [
+      InstructionField(
+        'TargetAdu',
+        'Target (mean ADU)',
+        InstructionFieldType.number,
+        defaultValue: 30000.0,
+      ),
+      InstructionField(
+        'TargetAduTolerancePct',
+        'Tolerance (%)',
+        InstructionFieldType.number,
+        defaultValue: 5.0,
+      ),
+      InstructionField(
+        'FrameCount',
+        'Frames',
+        InstructionFieldType.integer,
+        defaultValue: 30,
+      ),
+      InstructionField(
+        'Brightness',
+        'Panel brightness',
+        InstructionFieldType.integer,
+        defaultValue: 50,
+      ),
+      // -1 is the NINA sentinel for "use the camera's profile default".
+      InstructionField(
+        'Gain',
+        'Gain',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+      InstructionField(
+        'Offset',
+        'Offset',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+    ],
+  ),
   InstructionDef(
     type: runAutofocusType,
     label: 'Run Autofocus',
