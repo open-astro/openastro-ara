@@ -35,6 +35,9 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added
+- **A dropped guide camera now pauses your sequence instead of shooting unguided.** When the guiding daemon reports the guide camera disconnected mid-session — e.g. its USB drops — Ara now runs your "when guiding is lost" policy (pause / skip target / abort, per **Settings → Safety → Policies**) rather than quietly continuing to expose without guiding, and alerts you even if no sequence is running. Because the daemon's own link is still up and it recovers the camera on its own, the guider session stays **connected** (no needless teardown) with wording that reflects that — it won't tell you to reconnect a guider that never disconnected. (Reacting to the daemon *giving up* on a stuck reconnect, and re-reacting to repeated drops in one session, are tracked follow-ups.)
+
 ### Fixed
 - **The guider is now correctly identified as openastro-guider.** The guiding daemon was renamed `openastro-phd2` → `openastro-guider`, but Ara's connect-time check still matched only the old name — so against the current daemon it would fall back to "connected to upstream PHD2" and warn that headless guiding features might be unavailable, even on a fully-supported rig. Ara now runs the daemon's `get_version` handshake on connect and reads its fork marker (accepting the old name too), so a supported guider is recognized as such and the spurious warning is gone.
 

@@ -41,11 +41,19 @@ public sealed partial class GuiderService {
     private readonly IProfileStore? _profileStore;
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly INotificationService? _notifications;
-    // Guarded by _gate. One §42.2 reaction per disconnect episode; cleared by
-    // SetStateLocked on the next successful connect.
-    private bool _faultReactionLatched;
+    // Guarded by _gate. The kind of the fault that most recently latched a §42.2 reaction this episode
+    // (null = not latched); cleared by SetStateLocked on the next successful connect. Kind-aware because
+    // an EquipmentDisconnected fault stays Connected and so never clears the latch — a later, strictly
+    // more severe LinkDown must still be able to react (see BeginFaultReactionLocked).
+    private GuiderFaultKind? _latchedFaultKind;
 
     internal enum GuiderLostAction { PauseAndRetry, SkipTarget, AbortSequence }
+
+    // Which fault triggered the reaction — shapes the user-facing copy and the idle (no-sequence)
+    // behaviour. A LinkDown is covered by the §63.3 process recovery's own notification; an
+    // EquipmentDisconnected (guide camera dropped, link still up) starts no recovery, so it must alert
+    // the user itself even when no sequence is running.
+    internal enum GuiderFaultKind { LinkDown, EquipmentDisconnected }
 
     /// <summary>
     /// Maps the profile's snake_case on_guider_lost token. Unknown tokens fall
@@ -65,22 +73,35 @@ public sealed partial class GuiderService {
         _ => "pause_and_retry",
     };
 
-    // Caller holds _gate.
-    private void BeginFaultReactionLocked() {
-        if (_disposed || _faultReactionLatched) {
+    // Caller holds _gate. One reaction per disconnect episode; the latch clears on the next successful
+    // connect (SetStateLocked). Deliberately NOT re-armed on a device reconnect — a flapping guide camera
+    // must not re-trigger skip/abort per cycle. (Debounced re-arm for repeated genuine incidents in one
+    // session is a tracked follow-up, alongside the guider#66 reconnect-abandonment watchdog.)
+    //
+    // Exception, safety-critical: a LinkDown always reacts even when an EquipmentDisconnected already
+    // latched. An equipment fault stays Connected, so its latch never clears on its own — without this a
+    // genuine link death following an earlier camera glitch in the same episode would be swallowed and the
+    // run would keep shooting unguided through a real disconnect. LinkDown is strictly more severe.
+    private void BeginFaultReactionLocked(GuiderFaultKind kind) {
+        if (_disposed) {
             return;
         }
-        _faultReactionLatched = true;
+        var alreadyReacted = _latchedFaultKind is not null
+            && !(kind == GuiderFaultKind.LinkDown && _latchedFaultKind == GuiderFaultKind.EquipmentDisconnected);
+        if (alreadyReacted) {
+            return;
+        }
+        _latchedFaultKind = kind;
         // Fire-and-forget one-shot: ReactToGuidingLossAsync owns no disposables,
         // catches everything itself, and each rung uses CancellationToken.None
         // deliberately (a daemon shutdown mid-reaction should still finish
         // pausing the run — the sequencer's own shutdown path wins regardless).
-        _ = Task.Run(() => ReactToGuidingLossAsync(), CancellationToken.None);
+        _ = Task.Run(() => ReactToGuidingLossAsync(kind), CancellationToken.None);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background reaction boundary: a fault is logged and the sequence simply keeps its prior state — never an unobserved task exception, and never a blocked recovery (which runs on its own task).")]
-    internal async Task ReactToGuidingLossAsync() {
+    internal async Task ReactToGuidingLossAsync(GuiderFaultKind kind) {
         try {
             SafetyPoliciesDto? policy = null;
             try {
@@ -94,48 +115,78 @@ public sealed partial class GuiderService {
             }
 
             var sequencer = _sequencerResolver?.Invoke();
-            if (sequencer is null) {
-                return;
-            }
             var affected = 0;
-            switch (action) {
-                case GuiderLostAction.AbortSequence:
-                    affected = await sequencer.AbortActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
-                    break;
-                case GuiderLostAction.SkipTarget:
-                    affected = await sequencer.SkipActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
-                    break;
-                default:
-                    affected = (await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false)).Count;
-                    break;
+            if (sequencer is not null) {
+                switch (action) {
+                    case GuiderLostAction.AbortSequence:
+                        affected = await sequencer.AbortActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+                        break;
+                    case GuiderLostAction.SkipTarget:
+                        affected = await sequencer.SkipActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
+                        break;
+                    default:
+                        affected = (await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false)).Count;
+                        break;
+                }
+                LogFaultReacted(GuiderLostActionToken(action), affected);
             }
-            LogFaultReacted(GuiderLostActionToken(action), affected);
+
             if (affected == 0) {
-                // No sequence was running — the §63.3 recovery's own notifications
-                // cover the crash itself; a sequence-action notification would be noise.
+                // No sequence was running, so there's no sequence-action to report. A LinkDown is still
+                // covered by the §63.3 recovery's own notification, so it stays quiet here. An equipment
+                // fault starts NO recovery, so a silently-dropped guide camera between targets would go
+                // completely unnoticed — alert the user directly instead.
+                if (kind == GuiderFaultKind.EquipmentDisconnected) {
+                    await NotifyFaultQuietlyAsync(
+                        "Guide camera disconnected",
+                        "The guider reported that the guide camera disconnected. Guiding is offline until it comes back; "
+                        + "the guider stays connected and is attempting to recover the camera on its own.").ConfigureAwait(false);
+                }
                 return;
             }
 
             await PublishFaultEventAsync(new JsonObject {
                 ["action"] = GuiderLostActionToken(action),
                 ["runs_affected"] = affected,
+                ["kind"] = kind == GuiderFaultKind.EquipmentDisconnected ? "equipment_disconnected" : "link_down",
             }).ConfigureAwait(false);
 
-            var (title, message) = action switch {
-                GuiderLostAction.AbortSequence => ("Guiding lost — sequence aborted",
-                    "The guider connection dropped mid-sequence and your safety policy is set to abort: the running sequence was aborted. "
-                    + "Automatic process recovery is attempting to bring the guider back (see its own notification for the outcome)."),
-                GuiderLostAction.SkipTarget => ("Guiding lost — current target skipped",
-                    "The guider connection dropped mid-sequence and your safety policy is set to skip: the current instructions were skipped and the sequence advances. "
-                    + "Instructions that need the guider will fail until it is reconnected."),
-                _ => ("Guiding lost — sequence paused",
-                    "The guider connection dropped mid-sequence: the running sequence pauses at the current instruction so no more unguided frames burn sky time. "
-                    + "Automatic process recovery is attempting to restart the guider; reconnect it (Equipment → Guider), then Resume the run."),
-            };
+            var (title, message) = BuildFaultCopy(kind, action);
             await NotifyFaultQuietlyAsync(title, message).ConfigureAwait(false);
         } catch (Exception ex) {
             LogFaultReactionFailed(ex);
         }
+    }
+
+    // Source-appropriate copy. A LinkDown genuinely dropped the connection and the §63.3 recovery is
+    // restarting the guider (so "reconnect it" is correct). An EquipmentDisconnected left the guider
+    // connected — only the guide camera dropped — so the copy must NOT tell the user to reconnect the
+    // guider or claim process recovery is running (neither is true).
+    private static (string title, string message) BuildFaultCopy(GuiderFaultKind kind, GuiderLostAction action) {
+        if (kind == GuiderFaultKind.EquipmentDisconnected) {
+            return action switch {
+                GuiderLostAction.AbortSequence => ("Guide camera dropped — sequence aborted",
+                    "The guide camera disconnected mid-sequence and your safety policy is set to abort: the running sequence was aborted. "
+                    + "The guider stays connected and is trying to recover the camera on its own."),
+                GuiderLostAction.SkipTarget => ("Guide camera dropped — current target skipped",
+                    "The guide camera disconnected mid-sequence and your safety policy is set to skip: the current instructions were skipped and the sequence advances. "
+                    + "Instructions that need guiding will fail until the camera is back."),
+                _ => ("Guide camera dropped — sequence paused",
+                    "The guide camera disconnected mid-sequence: the running sequence pauses so no more unguided frames burn sky time. "
+                    + "The guider stays connected and is trying to recover the camera on its own; Resume the run once guiding is back."),
+            };
+        }
+        return action switch {
+            GuiderLostAction.AbortSequence => ("Guiding lost — sequence aborted",
+                "The guider connection dropped mid-sequence and your safety policy is set to abort: the running sequence was aborted. "
+                + "Automatic process recovery is attempting to bring the guider back (see its own notification for the outcome)."),
+            GuiderLostAction.SkipTarget => ("Guiding lost — current target skipped",
+                "The guider connection dropped mid-sequence and your safety policy is set to skip: the current instructions were skipped and the sequence advances. "
+                + "Instructions that need the guider will fail until it is reconnected."),
+            _ => ("Guiding lost — sequence paused",
+                "The guider connection dropped mid-sequence: the running sequence pauses at the current instruction so no more unguided frames burn sky time. "
+                + "Automatic process recovery is attempting to restart the guider; reconnect it (Equipment → Guider), then Resume the run."),
+        };
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
