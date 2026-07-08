@@ -36,6 +36,11 @@ namespace OpenAstroAra.Server.Services;
 /// must never be able to freeze focusing. The user hears about a deferral once per episode
 /// ("Autofocus deferred — clouds passing. Will run when conditions recover."), not once per
 /// trigger check.
+///
+/// Concurrency assumption: the daemon controls one rig, so in practice one sequence run's
+/// worker consults this singleton at a time. If concurrent runs ever become a real mode,
+/// their trigger checks would contend on the internal lock (each bounded by the read timeout)
+/// and share one notification episode — safe, just coarser than per-run.
 /// </summary>
 public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
 

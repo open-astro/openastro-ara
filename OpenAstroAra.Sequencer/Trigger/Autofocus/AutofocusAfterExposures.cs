@@ -122,6 +122,12 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
                 return false;
             }
             deferredPending = false;
+            // Every fire re-anchors the cadence. For a natural fire this is identical to the
+            // modulo (counting to N ≡ firing at each multiple of N), but a CATCH-UP fire lands
+            // at whatever exposure the sky recovered on — without the reset, the next natural
+            // multiple could arrive one exposure later and run a second back-to-back autofocus,
+            // burning exactly the sky time the deferral saved.
+            Interlocked.Exchange(ref exposureCount, 0);
             return true;
         }
     }

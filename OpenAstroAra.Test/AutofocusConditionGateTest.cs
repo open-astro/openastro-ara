@@ -247,8 +247,30 @@ namespace OpenAstroAra.Test {
             gate.Reason = null;
             Assert.That(sut.ShouldTrigger(new Mock<ISequenceItem>().Object, null), Is.True,
                 "the latched fire lands on the NEXT check after recovery — it must not slip to exposure 4");
-            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 3 — the cadence resumes normally");
-            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "exposure 4 fires on cadence");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "the cadence re-anchors on the fire");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "two exposures later fires on cadence");
+        }
+
+        [Test]
+        public void ExposureCountTrigger_ACatchUpFireReanchorsTheCadence() {
+            // The round-4 trace: due at exposure 2 (deferred), still cloudy through 3 and 4,
+            // sky recovers on exposure 5's check → catch-up fires. Without re-anchoring, the
+            // old modulo would fire AGAIN at exposure 6 — two autofocus runs back-to-back,
+            // burning exactly the sky time the deferral saved.
+            var gate = new FakeGate();
+            var sut = new AutofocusAfterExposures(gate) { AfterExposures = 2 };
+
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 1");
+            gate.Reason = "clouds passing";
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 2 — due, deferred");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 3 — still cloudy");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False, "exposure 4 — still cloudy");
+
+            gate.Reason = null;
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "exposure 5 — catch-up fires");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.False,
+                "exposure 6 must NOT fire back-to-back — the catch-up re-anchored the cadence");
+            Assert.That(sut.ShouldTrigger(LightExposure(), null), Is.True, "exposure 7 — full cadence after the catch-up");
         }
     }
 
