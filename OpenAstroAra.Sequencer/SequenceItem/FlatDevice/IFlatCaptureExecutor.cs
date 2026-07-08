@@ -43,10 +43,35 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         int Offset = -1);
 
     /// <summary>
-    /// §48.3 — the flat-capture seam <see cref="FlatPanelFlats"/> executes through, mirroring
-    /// <see cref="Autofocus.IAutofocusExecutor"/>: the Sequencer owns the decision to capture a
-    /// flat set; the daemon owns the machinery (panel light, probe exposures, mean-ADU metric,
-    /// saved captures).
+    /// One §48.4 twilight sky-flat set for the CURRENT filter/pointing context. Unlike the panel
+    /// set, the sky drifts — the executor re-probes before every saved frame and bails when the
+    /// brightness leaves the usable window.
+    /// </summary>
+    /// <param name="TargetAdu">Mean-ADU target (§48.7 sky_flat default 25000).</param>
+    /// <param name="TolerancePct">Acceptable deviation from the target, percent.</param>
+    /// <param name="FrameCount">Saved FLAT frames to attempt.</param>
+    /// <param name="MinExposureSec">Lower exposure bound.</param>
+    /// <param name="MaxExposureSec">Upper exposure bound.</param>
+    /// <param name="StopAtMaxAdu">Bail when the sky reads above this even at the minimum exposure (over-bright dawn).</param>
+    /// <param name="StopAtMinAdu">Bail when the sky reads below this even at the maximum exposure (over-dark dusk).</param>
+    /// <param name="Gain">Camera gain for the saved flats (-1 = camera default).</param>
+    /// <param name="Offset">Camera offset for the saved flats (-1 = camera default).</param>
+    public sealed record SkyFlatSetRequest(
+        double TargetAdu,
+        double TolerancePct,
+        int FrameCount,
+        double MinExposureSec,
+        double MaxExposureSec,
+        double StopAtMaxAdu,
+        double StopAtMinAdu,
+        int Gain = -1,
+        int Offset = -1);
+
+    /// <summary>
+    /// §48.3/§48.4 — the flat-capture seam <see cref="FlatPanelFlats"/> and <see cref="SkyFlats"/>
+    /// execute through, mirroring <see cref="Autofocus.IAutofocusExecutor"/>: the Sequencer owns
+    /// the decision to capture a flat set; the daemon owns the machinery (panel light, probe
+    /// exposures, mean-ADU metric, saved captures).
     /// </summary>
     public interface IFlatCaptureExecutor {
 
@@ -58,5 +83,13 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FlatDevice {
         /// implementation logs the reason and restores the panel light either way.
         /// </summary>
         Task<bool> CaptureFlatSetAsync(FlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>
+        /// §48.4 — capture a sky-flat set: re-probe the sky before EVERY saved frame (twilight
+        /// drifts), rescale the exposure toward the target, capture at the adjusted exposure.
+        /// True when every requested frame captured; false when the sky left the usable window
+        /// (stop bounds), never converged, or the capture path is unavailable — reasons logged.
+        /// </summary>
+        Task<bool> CaptureSkyFlatSetAsync(SkyFlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token);
     }
 }

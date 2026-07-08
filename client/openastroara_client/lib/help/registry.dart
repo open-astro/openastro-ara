@@ -112,6 +112,74 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['session.calibration.capture_default'],
     keywords: ['park', 'mount', 'flats', 'end of night'],
   ),
+  'session.calibration.sky_flat_target_adu': Help(
+    key: 'session.calibration.sky_flat_target_adu',
+    title: 'Sky flat target brightness',
+    body: 'Twilight sky flats expose against the blank sky instead of a panel. Each set aims '
+        'for this mean ADU, re-probing the exposure before every frame because the twilight '
+        'sky brightens (or darkens) minute to minute. Keep the target comfortably between the '
+        'stop-below and stop-above bounds so the daemon has room to chase the changing sky.',
+    relatedSettings: ['session.calibration.sky_flat_stop_at_max_adu', 'session.calibration.sky_flat_stop_at_min_adu'],
+    keywords: ['sky flats', 'twilight', 'adu', 'target', 'brightness'],
+  ),
+  'session.calibration.sky_flat_frames_per_filter': Help(
+    key: 'session.calibration.sky_flat_frames_per_filter',
+    title: 'Sky flat frames per filter',
+    body: 'How many FLAT frames each twilight set captures per filter. Because the usable '
+        'twilight window is short, keep this modest (15-25) so the whole filter set finishes '
+        'before the sky leaves the brightness window — the daemon stops early and honestly if '
+        'it does.',
+    relatedSettings: ['session.calibration.sky_flat_target_adu'],
+    keywords: ['sky flats', 'twilight', 'frames', 'count'],
+  ),
+  'session.calibration.sky_flat_target_azimuth': Help(
+    key: 'session.calibration.sky_flat_target_azimuth',
+    title: 'Sky flat patch azimuth',
+    body: 'The compass bearing the mount slews to for twilight flats (0 = north, 90 = east, '
+        '180 = south, 270 = west). The evenest twilight sky is the anti-solar patch — opposite '
+        'the sunset at dusk, opposite the sunrise at dawn — so point away from where the sun '
+        'sits on the horizon.',
+    relatedSettings: ['session.calibration.sky_flat_target_altitude'],
+    keywords: ['sky flats', 'twilight', 'azimuth', 'pointing', 'anti-solar'],
+  ),
+  'session.calibration.sky_flat_target_altitude': Help(
+    key: 'session.calibration.sky_flat_target_altitude',
+    title: 'Sky flat patch altitude',
+    body: 'The height above the horizon the mount slews to for twilight flats. Around 75 '
+        'degrees keeps you clear of horizon brightness gradients and local obstructions while '
+        'staying off the exact zenith (where a German mount can foul the pier).',
+    relatedSettings: ['session.calibration.sky_flat_target_azimuth'],
+    keywords: ['sky flats', 'twilight', 'altitude', 'elevation', 'pointing'],
+  ),
+  'session.calibration.sky_flat_stop_at_max_adu': Help(
+    key: 'session.calibration.sky_flat_stop_at_max_adu',
+    title: 'Sky flat stop-above',
+    body: 'The upper brightness guard. When the sky reads brighter than this even at the '
+        'shortest exposure, dawn has grown too bright to flat against — the daemon stops the '
+        'set rather than saving blown frames. Keep it above the target with room to spare.',
+    relatedSettings: ['session.calibration.sky_flat_stop_at_min_adu', 'session.calibration.sky_flat_target_adu'],
+    keywords: ['sky flats', 'twilight', 'stop', 'too bright', 'ceiling'],
+  ),
+  'session.calibration.sky_flat_stop_at_min_adu': Help(
+    key: 'session.calibration.sky_flat_stop_at_min_adu',
+    title: 'Sky flat stop-below',
+    body: 'The lower brightness guard. When the sky reads darker than this even at the longest '
+        'exposure, the sky has gone too dark to flat against — the daemon stops the set. Keep '
+        'it below the target with room to spare.',
+    relatedSettings: ['session.calibration.sky_flat_stop_at_max_adu', 'session.calibration.sky_flat_target_adu'],
+    keywords: ['sky flats', 'twilight', 'stop', 'too dark', 'floor'],
+  ),
+  'session.calibration.sky_flat_sun_altitude': Help(
+    key: 'session.calibration.sky_flat_sun_altitude',
+    title: 'Sky flat wait-for sun altitude',
+    body: 'The generated sky-flat sequence begins with a wait for the sun to reach this '
+        'altitude below the horizon, so you can start the run early and let it park on the '
+        'wait until twilight arrives. Around -9 degrees (nautical twilight) the sky is dim '
+        'enough that stars are gone yet bright enough to reach the target within the exposure '
+        'bounds. Dawn flats fire as the sun rises up through the same altitude.',
+    relatedSettings: ['session.calibration.sky_flat_target_adu'],
+    keywords: ['sky flats', 'twilight', 'sun', 'altitude', 'nautical', 'wait'],
+  ),
   'session.storage.backup_stream': Help(
     key: 'session.storage.backup_stream',
     title: 'Real-time frame backup',

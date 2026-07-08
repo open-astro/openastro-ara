@@ -29,7 +29,7 @@ like the accept path always did.
   `SequenceApi.decideAutoFlats`, the Settings → Session → Calibration panel over the safety-policies
   round-trip (`CalibrationCaptureDefault` enum through model/notifier/ProfileApi), and the
   settings/help registry entries.
-- **§48.3/§48.4 native flat instructions (v0.1.0) — IN PROGRESS (arc started 2026-07-08).**
+- ✅ **§48.3/§48.4 native flat instructions (v0.1.0) — DONE (arc 2026-07-08, 3 PRs).**
   ✅ **PR 1 — the §48.3 auto-exposure core**: `FlatPanelFlats` instruction (one flat SET for the
   current filter context; per-filter iteration stays the sequence's concern) executing through the
   new `IFlatCaptureExecutor` seam; `FlatCaptureService` lights the panel via `IFlatDeviceService`
@@ -43,12 +43,24 @@ like the accept path always did.
   post_flat_park_mount → a ParkScope appended as the final root step); the four fields are
   editable under Settings → Session → Calibration (registry + help entries), request overrides
   still win, and WILMA's instruction catalog gained a Calibration category with the FlatPanelFlats
-  def. Remaining slice: **PR 3** — `SkyFlats` (§48.4 twilight timing, frame-to-frame re-probe,
-  stop_at_max/min_adu) at which point "sky_at_twilight" auto-starts instead of
-  generate-and-notify, + the `sky_flat` profile block. Watch-item from the #754 round-2 review:
-  generated FlatPanelFlats leaves keep the instruction's default [0.01, 10] s probe bounds —
-  a narrowband panel needing >10 s fails the probe honestly; add per-filter exposure bounds
-  (profile or spec) only if field use shows the need.
+  def. ✅ **PR 3 — the §48.4 twilight sky flats (ARC COMPLETE, 2026-07-08)**: `SkyFlats` instruction
+  (mirrors `FlatPanelFlats`, no panel) executing through the same `IFlatCaptureExecutor` seam
+  (`CaptureSkyFlatSetAsync`); `FlatCaptureService` re-probes the sky before EVERY saved frame
+  (twilight drifts minute to minute, `SkyProbeAttemptsPerFrame=4`), bails honestly when the sky is
+  over-bright at the min exposure (`stop_at_max_adu`) or over-dark at the max (`stop_at_min_adu`),
+  and captures pinned-but-in-window frames rather than losing the twilight. The §39.5 generator
+  gained a `Flavor` ("panel"|"sky"): the sky flavor emits `[WaitForSunAltitude → SlewScopeToAltAz →
+  per-filter SkyFlats]` reading the new `sky_flat` block on `SafetyPoliciesDto` (sky_flat_target_adu
+  25000 / sky_flat_frames_per_filter 20 / sky_flat_target_azimuth 90 / sky_flat_target_altitude 75 /
+  sky_flat_stop_at_max_adu 50000 / sky_flat_stop_at_min_adu 5000 / sky_flat_sun_altitude -9 nautical
+  twilight). `SequencerService.AutoFlats` "sky_at_twilight" now auto-starts (the sequence self-waits
+  for twilight) instead of generate-and-notify. `WaitForSunAltitude` + `SlewScopeToAltAz` registered
+  in `HeadlessSequencerFactory` (previously unregistered → generated sky bodies wouldn't have
+  loaded). Seven `sky_flat_*` fields editable under Settings → Session → Calibration (registry +
+  help), and WILMA's instruction catalog gained the SkyFlats def. Watch-item from the #754 round-2
+  review (still open, applies to both flavors): generated flat leaves keep the instruction's default
+  [0.01, 10] s probe bounds — a narrowband panel/dark sky needing >10 s fails the probe honestly;
+  add per-filter exposure bounds only if field use shows the need.
 
 ## §44 backup stream — the WILMA client half (2026-07-07, after the server PR)
 

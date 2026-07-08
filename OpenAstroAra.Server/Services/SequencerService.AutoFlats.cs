@@ -26,17 +26,17 @@ namespace OpenAstroAra.Server.Services;
 /// §48.1 auto-flats prompt flow. The flat automation is the §39.5 matching-flats
 /// machinery, which regenerates tonight's exact per-filter geometry (focus, gain,
 /// offset) from the run's own catalog session — since §48.3 each per-filter block is a
-/// native <c>FlatPanelFlats</c> auto-exposure set driven by the §48.7 flat_panel policy
-/// (a <c>SkyFlats</c> instruction for twilight timing remains the recorded follow-up).
+/// native <c>FlatPanelFlats</c> auto-exposure set (panel flavor) or, since §48.4, a
+/// <c>SkyFlats</c> twilight set (sky flavor) driven by the §48.7 flat_panel / sky_flat policy.
 /// So: on run start the
 /// profile's <c>calibration_capture_default</c> decides — "ask" emits the
 /// <c>sequence.auto_flats_prompt</c> WS event for WILMA's dialog, "panel_at_end"/
 /// "sky_at_twilight" auto-decide, "never" stays silent. The decision (from the profile
 /// or the §48.1 decide endpoint) is remembered on the run; when the run COMPLETES,
-/// "panel_at_end" generates the §39.5 flats sequence from the run's session and starts
-/// it immediately, while "sky_at_twilight" generates it and notifies without starting
-/// (automated twilight timing needs a SkyFlats instruction — a recorded follow-up; the
-/// generated sequence is ready to run at twilight by hand). One singleton serves both
+/// "panel_at_end" generates the §39.5 panel-flats sequence and starts it immediately, and
+/// (since §48.4) "sky_at_twilight" generates the sky-flats sequence and ALSO starts it
+/// immediately — the sky sequence carries its own <c>WaitForSunAltitude</c> gate, so starting
+/// it just parks the run on the wait until twilight arrives. One singleton serves both
 /// <see cref="ISequencerService"/> and <see cref="IAutoFlatsService"/> (§8.1 pattern).
 /// </summary>
 public sealed partial class SequencerService : IAutoFlatsService {
@@ -132,9 +132,11 @@ public sealed partial class SequencerService : IAutoFlatsService {
             if (calibration is null) {
                 return;
             }
+            var skyFlavor = choice != ChoicePanelAtEnd;
             var generated = await calibration.GenerateMatchingFlatsAsync(
                 sessionId,
-                new MatchingFlatsRequestDto(OverrideFrameCount: null, OverrideTargetAdu: null, GenerateOnly: false),
+                new MatchingFlatsRequestDto(OverrideFrameCount: null, OverrideTargetAdu: null, GenerateOnly: false,
+                    Flavor: skyFlavor ? "sky" : "panel"),
                 idempotencyKey: null,
                 CancellationToken.None).ConfigureAwait(false);
             if (generated.GeneratedSequenceId is not Guid flatsId || generated.TotalFlatFrames <= 0) {
@@ -142,21 +144,22 @@ public sealed partial class SequencerService : IAutoFlatsService {
                 return;
             }
 
-            if (choice == ChoicePanelAtEnd) {
-                // announce:false — the flats run must not prompt about calibrating
-                // the calibration, nor re-tag itself for a second execute pass.
-                await StartCoreAsync(flatsId,
-                    new SequenceStartRequestDto(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false),
-                    idempotencyKey: null, announceAutoFlats: false).ConfigureAwait(false);
-                LogAutoFlatsStarted(sequenceId, flatsId, generated.TotalFlatFrames);
+            // Both flavors auto-start now: the §48.4 sky sequence carries its own twilight wait
+            // (WaitForSunAltitude) + slew, so starting it immediately just parks the run on the
+            // wait until dawn brightens. announce:false — the flats run must not prompt about
+            // calibrating the calibration, nor re-tag itself for a second execute pass.
+            await StartCoreAsync(flatsId,
+                new SequenceStartRequestDto(DryRun: false, StartFromInstructionIndex: null, ContinueOnRecoverableErrors: false),
+                idempotencyKey: null, announceAutoFlats: false).ConfigureAwait(false);
+            LogAutoFlatsStarted(sequenceId, flatsId, generated.TotalFlatFrames);
+            if (skyFlavor) {
+                await NotifyAutoFlatsQuietlyAsync("Twilight sky flats armed",
+                    $"Your sequence completed and \"{generated.GeneratedSequenceName}\" is running — it waits for morning twilight, "
+                    + $"slews to the sky-flat position, then captures {generated.TotalFlatFrames} matching flats, adapting exposure as the sky brightens.").ConfigureAwait(false);
+            } else {
                 await NotifyAutoFlatsQuietlyAsync("End-of-session flats started",
                     $"Your sequence completed and \"{generated.GeneratedSequenceName}\" is now capturing {generated.TotalFlatFrames} matching flats — "
                     + "each filter replays tonight's focus position, gain, and offset. Light your flat panel if it isn't already on.").ConfigureAwait(false);
-            } else {
-                LogAutoFlatsGeneratedOnly(sequenceId, flatsId, generated.TotalFlatFrames);
-                await NotifyAutoFlatsQuietlyAsync("Twilight flats sequence is ready",
-                    $"Your sequence completed and \"{generated.GeneratedSequenceName}\" ({generated.TotalFlatFrames} matching flats) was generated from tonight's session. "
-                    + "Start it at morning twilight from the Run tab — automated twilight timing is a planned follow-up, so ARA doesn't start sky flats on its own yet.").ConfigureAwait(false);
             }
         } catch (Exception ex) {
             LogAutoFlatsExecuteFailed(ex, sequenceId, sessionId);
@@ -230,9 +233,6 @@ public sealed partial class SequencerService : IAutoFlatsService {
 
     [LoggerMessage(EventId = 4804, Level = LogLevel.Information, Message = "§48 end-of-session flats started: run of sequence {SequenceId} → flats sequence {FlatsSequenceId} ({Frames} frames)")]
     private partial void LogAutoFlatsStarted(Guid sequenceId, Guid flatsSequenceId, int frames);
-
-    [LoggerMessage(EventId = 4805, Level = LogLevel.Information, Message = "§48 twilight flats sequence {FlatsSequenceId} generated for sequence {SequenceId} ({Frames} frames) — not auto-started")]
-    private partial void LogAutoFlatsGeneratedOnly(Guid sequenceId, Guid flatsSequenceId, int frames);
 
     [LoggerMessage(EventId = 4806, Level = LogLevel.Information, Message = "§48 nothing to capture: session {SessionId} of sequence {SequenceId} yielded no flats plan (no light frames?)")]
     private partial void LogAutoFlatsNothingToCapture(Guid sequenceId, Guid sessionId);

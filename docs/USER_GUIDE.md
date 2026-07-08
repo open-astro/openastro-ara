@@ -127,14 +127,24 @@ Ara assumes you're asleep while it works:
   Calibration**). Answer "Panel flats at end" and, when the run completes, ARA generates a
   matching-flats sequence from tonight's session — each filter at tonight's exact focus, gain,
   and offset — and starts it immediately (light your panel when notified); "Sky flats at
-  twilight" generates the sequence ready to run. Tick "remember my choice" to stop the prompt.
-  You can always capture matching flats later from the Image Library instead.
+  twilight" generates a **sky-flat** sequence and starts it too — it opens by waiting for dawn
+  twilight, so you can leave it parked on the wait and it fires itself when the sky is right.
+  Tick "remember my choice" to stop the prompt. You can always capture matching flats later from
+  the Image Library instead.
 - **Flats expose themselves**: each generated per-filter set is a **Flat Panel Flats** step — it
   lights a connected flat panel, probes short exposures until the frame's mean brightness hits
   your target ADU, then captures the set at the converged exposure. Tune the target, tolerance,
   frames per filter, and whether the mount parks after flats under **Settings → Session →
   Calibration**; the same step is available in the sequence editor's Calibration category for
   hand-built plans (manual EL panels work too — the probe measures whatever light is there).
+- **Twilight sky flats**: prefer the sky to a panel? The **Sky Flats** step captures against the
+  dawn sky. The generated sky sequence waits for the sun to reach the altitude you set (about
+  −9° / nautical twilight by default), slews to a blank patch of sky, then re-probes the sky
+  before **every** frame because twilight brightness drifts minute to minute — and stops honestly
+  if the sky climbs above or falls below the usable brightness window before the set finishes.
+  Set the target ADU, frames per filter, the sky patch (azimuth/altitude), the stop-above/below
+  bounds, and the wait-for sun altitude under **Settings → Session → Calibration**; the step is
+  also in the sequence editor's Calibration category for hand-built plans.
 - **Emergency stop**: the red **Emergency Stop** button on WILMA's bottom status bar is always one
   tap away, on every tab. After a confirmation it makes the daemon abort the running sequence and
   the in-flight exposure, stop guiding, park the mount, and switch the flat panel light off — then

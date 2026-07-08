@@ -197,6 +197,87 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<bool> CaptureSkyFlatSetAsync(SkyFlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.TargetAdu <= 0 || request.FrameCount < 1
+            || request.MinExposureSec <= 0 || request.MaxExposureSec < request.MinExposureSec
+            || request.StopAtMinAdu < 0 || request.StopAtMaxAdu <= request.TargetAdu || request.StopAtMinAdu >= request.TargetAdu) {
+            LogBadSkyRequest(request.TargetAdu, request.FrameCount, request.StopAtMinAdu, request.StopAtMaxAdu);
+            return false;
+        }
+        if (_frames is null || _imaging is null) {
+            LogNotWired();
+            return false;
+        }
+
+        try {
+            var tolerance = Math.Abs(request.TargetAdu * request.TolerancePct / 100.0);
+            var exposure = Math.Clamp(1.0, request.MinExposureSec, request.MaxExposureSec);
+            for (var n = 1; n <= request.FrameCount; n++) {
+                token.ThrowIfCancellationRequested();
+                // Re-probe before EVERY saved frame — twilight brightness drifts minute to
+                // minute, so yesterday's exposure is already wrong by the next frame.
+                var settled = false;
+                for (var attempt = 0; attempt < SkyProbeAttemptsPerFrame; attempt++) {
+                    var frame = await _frames.CaptureForAnalysisAsync(exposure, binning: 1, token).ConfigureAwait(false);
+                    var mean = MeanAdu(frame.Pixels.Span);
+                    LogSkyProbe(n, exposure, mean);
+                    if (mean >= request.StopAtMaxAdu && exposure <= request.MinExposureSec) {
+                        // §48.4 bail: the sky over-exposes even at the shortest exposure.
+                        LogSkyTooBright(mean, request.StopAtMaxAdu, n - 1);
+                        return false;
+                    }
+                    if (mean <= request.StopAtMinAdu && exposure >= request.MaxExposureSec) {
+                        // §48.4 bail: the sky under-exposes even at the longest exposure.
+                        LogSkyTooDark(mean, request.StopAtMinAdu, n - 1);
+                        return false;
+                    }
+                    if (mean <= 0) {
+                        LogNoLight(exposure);
+                        return false;
+                    }
+                    if (Math.Abs(mean - request.TargetAdu) <= tolerance) {
+                        settled = true;
+                        break;
+                    }
+                    var next = Math.Clamp(exposure * (request.TargetAdu / mean), request.MinExposureSec, request.MaxExposureSec);
+                    if (Math.Abs(next - exposure) < 1e-9) {
+                        // Pinned at a bound but still inside the stop window: capture anyway —
+                        // an off-target-but-usable twilight frame beats losing the whole set.
+                        LogSkyPinned(exposure, mean, request.TargetAdu);
+                        settled = true;
+                        break;
+                    }
+                    exposure = next;
+                }
+                if (!settled) {
+                    // The sky is drifting faster than the probe can chase — capture at the last
+                    // exposure rather than burning the remaining twilight probing.
+                    LogSkyChasing(n, exposure);
+                }
+                var sequence = new CaptureSequence(
+                    exposure, ImageTypes.FLAT, filterType: null,
+                    binning: new OpenAstroAra.Core.Model.Equipment.BinningMode(1, 1), exposureCount: 1) {
+                    Gain = request.Gain,
+                    Offset = request.Offset,
+                };
+                _ = await _imaging.CaptureImage(sequence, token, progress, "Sky flats").ConfigureAwait(false);
+                progress?.Report(new ApplicationStatus {
+                    Status = $"Sky flat {n}/{request.FrameCount} at {exposure:0.###}s",
+                });
+            }
+            LogSkySetComplete(request.FrameCount);
+            return true;
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogSetFailed(ex);
+            return false;
+        }
+    }
+
+    /// <summary>Probe retries per saved sky frame before capturing at the best-known exposure.</summary>
+    internal const int SkyProbeAttemptsPerFrame = 4;
+
     internal static double MeanAdu(ReadOnlySpan<ushort> pixels) {
         if (pixels.IsEmpty) {
             return 0;
@@ -246,4 +327,25 @@ public sealed partial class FlatCaptureService : IFlatCaptureExecutor {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Flat panel light-off after the set failed (best-effort).")]
     private partial void LogPanelOffFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sky-flat set rejected: target ADU {TargetAdu} must sit between stop bounds [{StopMin}, {StopMax}]; frame count {FrameCount}.")]
+    private partial void LogBadSkyRequest(double targetAdu, int frameCount, double stopMin, double stopMax);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sky-flat probe (frame {Frame}): {ExposureSec}s -> mean {MeanAdu} ADU.")]
+    private partial void LogSkyProbe(int frame, double exposureSec, double meanAdu);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sky flats stopped: the sky reads {MeanAdu} ADU (over the {StopMax} ceiling) at the minimum exposure — dawn is too bright. {Captured} frames captured.")]
+    private partial void LogSkyTooBright(double meanAdu, double stopMax, int captured);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sky flats stopped: the sky reads {MeanAdu} ADU (under the {StopMin} floor) at the maximum exposure — the sky is too dark. {Captured} frames captured.")]
+    private partial void LogSkyTooDark(double meanAdu, double stopMin, int captured);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sky-flat probe pinned at {ExposureSec}s (mean {MeanAdu} ADU, target {TargetAdu}) but inside the stop window — capturing anyway.")]
+    private partial void LogSkyPinned(double exposureSec, double meanAdu, double targetAdu);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sky brightness is drifting faster than the probe converges (frame {Frame}) — capturing at {ExposureSec}s rather than burning twilight.")]
+    private partial void LogSkyChasing(int frame, double exposureSec);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sky-flat set complete: {FrameCount} frames.")]
+    private partial void LogSkySetComplete(int frameCount);
 }

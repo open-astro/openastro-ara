@@ -14,6 +14,7 @@
 
 using Microsoft.Data.Sqlite;
 using NUnit.Framework;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
@@ -21,6 +22,7 @@ using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -336,6 +338,71 @@ namespace OpenAstroAra.Test {
             Assert.That(flats.FrameCount, Is.EqualTo(12));
             Assert.That(root.GetItemsSnapshot().OfType<ParkScope>().Count(), Is.EqualTo(1),
                 "post_flat_park_mount appends the park as the final root step");
+        }
+
+        [Test]
+        public async Task GenerateSkyFlats_wraps_the_set_in_a_twilight_gate_and_a_slew() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            profile.PutSafetyPolicies(profile.GetSafetyPolicies() with {
+                SkyFlatTargetAdu = 22000,
+                SkyFlatFramesPerFilter = 18,
+                SkyFlatTargetAzimuth = 100,
+                SkyFlatTargetAltitude = 70,
+                SkyFlatStopAtMaxAdu = 48000,
+                SkyFlatStopAtMinAdu = 6000,
+                SkyFlatSunAltitude = -8,
+            });
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", offset: 12, focuserPosition: 4100);
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false, Flavor: "sky"),
+                idempotencyKey: null, CancellationToken.None);
+
+            Assert.That(plan.GeneratedSequenceName, Is.EqualTo("Sky flats — M42"));
+            Assert.That(plan.Steps.Single().FrameCount, Is.EqualTo(18));
+            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(22000));
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            Assert.That(stored!.Name, Is.EqualTo("Sky flats — M42"));
+            var (valid, reason) = SequenceSchemaValidator.Validate(stored.Body);
+            Assert.That(valid, Is.True, $"generated sky body must pass §38.5 validation: {reason}");
+
+            // The twilight gate is asserted on the raw body: WaitForSunAltitude.Clone() eagerly
+            // computes the sun altitude through the NOVAS native ephemeris, which isn't present in
+            // a headless unit-test host — the generator (which only serializes) must not depend on
+            // it, and neither should this test. The gate's shape is verified in the JSON directly.
+            using var doc = System.Text.Json.JsonDocument.Parse(stored.Body.GetRawText());
+            var bodyItems = doc.RootElement.GetProperty("Items").EnumerateArray().ToList();
+            var waitNode = bodyItems.Single(i => i.GetProperty("$type").GetString()!.Contains("WaitForSunAltitude", StringComparison.Ordinal));
+            var waitData = waitNode.GetProperty("Data");
+            Assert.That(waitData.GetProperty("Offset").GetDouble(), Is.EqualTo(-8), "the twilight sun altitude gate is enforced");
+            Assert.That(waitData.GetProperty("Comparator").GetInt32(), Is.EqualTo((int)ComparisonOperator.LessThan),
+                "LessThan waits until the sun rises through the offset (morning twilight)");
+
+            // The rest of the envelope [SlewScopeToAltAz → per-filter SkyFlats block] is
+            // NOVAS-independent, so the decisive proof — deserialization through the real factory
+            // into typed, executable instructions — still runs.
+            var profileSvc = new HeadlessProfileService();
+            profileSvc.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0));
+            var factory = HeadlessSequencerFactory.WithDefaults(profileService: profileSvc);
+            var root = new SequenceJsonConverter(factory).Deserialize(stored.Body.GetRawText());
+            var rootItems = root.GetItemsSnapshot();
+
+            var slew = rootItems.OfType<SlewScopeToAltAz>().Single();
+            Assert.That(slew.Coordinates.AzDegrees, Is.EqualTo(100));
+            Assert.That(slew.Coordinates.AltDegrees, Is.EqualTo(70));
+
+            var block = rootItems.OfType<SequentialContainer>().Single();
+            var flats = block.GetItemsSnapshot().OfType<SkyFlats>().Single();
+            Assert.That(flats.TargetAdu, Is.EqualTo(22000));
+            Assert.That(flats.FrameCount, Is.EqualTo(18));
+            Assert.That(flats.StopAtMaxAdu, Is.EqualTo(48000));
+            Assert.That(flats.StopAtMinAdu, Is.EqualTo(6000));
+            Assert.That(flats.Gain, Is.EqualTo(100), "sky flats replay the lights' gain");
+            Assert.That(flats.Offset, Is.EqualTo(12), "sky flats replay the lights' offset");
+            Assert.That(block.GetItemsSnapshot().OfType<MoveFocuserAbsolute>().Single().Position, Is.EqualTo(4100));
         }
 
         [Test]
