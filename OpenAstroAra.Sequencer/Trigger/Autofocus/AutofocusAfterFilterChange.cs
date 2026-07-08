@@ -128,6 +128,13 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
             }
 
             var currentFilter = filterWheelMediator?.GetInfo()?.SelectedFilter?.Name;
+            if (currentFilter == null) {
+                // No wheel, or a wheel transiently reporting no selected filter (mid-move /
+                // reconnect blip): there is no filter to focus FOR, so firing would waste an
+                // autofocus on nothing — and clobbering the reference would fire a second
+                // spurious one when the filter reappears. Keep the reference and stay quiet.
+                return false;
+            }
             var shouldTrigger = false;
             if (LastAutoFocusFilter == null) {
                 LastAutoFocusFilter = currentFilter;

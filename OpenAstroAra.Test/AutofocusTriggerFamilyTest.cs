@@ -350,6 +350,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void FilterTrigger_ATransientNullFilterNeitherFiresNorClobbersTheReference() {
+            var wheel = FilterWheel("Ha");
+            var sut = new AutofocusAfterFilterChange(wheel.Object, new FakeHistory(), null);
+            sut.Initialize();
+
+            // Mid-move / reconnect blip: the wheel momentarily reports no selected filter.
+            wheel.Setup(w => w.GetInfo()).Returns(new FilterWheelInfo { Connected = true, SelectedFilter = null! });
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False,
+                "there is no filter to focus for — a spurious AF here wastes sky time");
+            Assert.That(sut.LastAutoFocusFilter, Is.EqualTo("Ha"), "the reference survives the blip");
+
+            // The same filter comes back — nothing changed, still quiet.
+            wheel.Setup(w => w.GetInfo()).Returns(new FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = new FilterInfo("Ha", 0, 0),
+            });
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.False);
+
+            // A genuinely different filter still fires.
+            wheel.Setup(w => w.GetInfo()).Returns(new FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = new FilterInfo("OIII", 0, 0),
+            });
+            Assert.That(sut.ShouldTrigger(null, LightExposure()), Is.True);
+        }
+
+        [Test]
         public void FilterTrigger_ValidateFlagsAMissingWheel() {
             var sut = new AutofocusAfterFilterChange(FilterWheel("Ha", connected: false).Object, null, null);
             Assert.That(sut.Validate(), Is.False);
