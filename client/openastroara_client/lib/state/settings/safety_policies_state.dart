@@ -83,6 +83,13 @@ class SafetyPolicies {
   final int maxHumidityPct;
   final double minDewDeltaC;
 
+  // §48.7 flat_panel — the auto-exposure flat sets the daemon generates
+  // (target mean ADU, tolerance, saved frames per filter, park after).
+  final int flatTargetAdu;
+  final double flatTargetAduTolerancePct;
+  final int flatFramesPerFilter;
+  final bool postFlatParkMount;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -108,6 +115,10 @@ class SafetyPolicies {
     this.maxWindKmh = 36,
     this.maxHumidityPct = 85,
     this.minDewDeltaC = 2.0,
+    this.flatTargetAdu = 30000,
+    this.flatTargetAduTolerancePct = 5.0,
+    this.flatFramesPerFilter = 30,
+    this.postFlatParkMount = true,
   });
 
   SafetyPolicies copyWith({
@@ -135,6 +146,10 @@ class SafetyPolicies {
     int? maxWindKmh,
     int? maxHumidityPct,
     double? minDewDeltaC,
+    int? flatTargetAdu,
+    double? flatTargetAduTolerancePct,
+    int? flatFramesPerFilter,
+    bool? postFlatParkMount,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -171,6 +186,11 @@ class SafetyPolicies {
         maxWindKmh: maxWindKmh ?? this.maxWindKmh,
         maxHumidityPct: maxHumidityPct ?? this.maxHumidityPct,
         minDewDeltaC: minDewDeltaC ?? this.minDewDeltaC,
+        flatTargetAdu: flatTargetAdu ?? this.flatTargetAdu,
+        flatTargetAduTolerancePct:
+            flatTargetAduTolerancePct ?? this.flatTargetAduTolerancePct,
+        flatFramesPerFilter: flatFramesPerFilter ?? this.flatFramesPerFilter,
+        postFlatParkMount: postFlatParkMount ?? this.postFlatParkMount,
       );
 }
 
@@ -252,6 +272,24 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
     if (v < 0) return;
     state = state.copyWith(minDewDeltaC: v);
   }
+
+  void setFlatTargetAdu(int v) {
+    if (v <= 0) return;
+    state = state.copyWith(flatTargetAdu: v);
+  }
+
+  void setFlatTargetAduTolerancePct(double v) {
+    if (v <= 0) return;
+    state = state.copyWith(flatTargetAduTolerancePct: v);
+  }
+
+  void setFlatFramesPerFilter(int v) {
+    if (v <= 0) return;
+    state = state.copyWith(flatFramesPerFilter: v);
+  }
+
+  void setPostFlatParkMount(bool v) =>
+      state = state.copyWith(postFlatParkMount: v);
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
 

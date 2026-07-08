@@ -36,12 +36,19 @@ like the accept path always did.
   (optional — manual panels/sky proceed without one), probes exposures through the §59
   `IAnalysisFrameSource` (mean-ADU metric, exposure ×= target/mean, bounds-pinned/zero-light
   honest failures), captures the saved FLATs through the real `IImagingMediator` pipeline, and
-  restores the light on every exit path. Remaining slices: **PR 2** — switch the §39.5 generator's
-  `TakeExposure(FLAT)` leaf to `FlatPanelFlats` (TargetAdu/FrameCount stop being advisory) + the
-  §48.7 `flat_panel` profile block (enforcement-first) + the WILMA instruction-catalog entry (needs
-  a new calibration category); **PR 3** — `SkyFlats` (§48.4 twilight timing, frame-to-frame
-  re-probe, stop_at_max/min_adu) at which point "sky_at_twilight" auto-starts instead of
-  generate-and-notify, + the `sky_flat` profile block.
+  restores the light on every exit path. ✅ **PR 2 — generator switch + §48.7 flat_panel block**:
+  the §39.5 generator emits `FlatPanelFlats` leaves (no LoopCondition — the instruction captures
+  its own N) reading the new flat_panel fields flattened onto `SafetyPoliciesDto`
+  (flat_target_adu 30000 / flat_target_adu_tolerance_pct 5 / flat_frames_per_filter 30 /
+  post_flat_park_mount → a ParkScope appended as the final root step); the four fields are
+  editable under Settings → Session → Calibration (registry + help entries), request overrides
+  still win, and WILMA's instruction catalog gained a Calibration category with the FlatPanelFlats
+  def. Remaining slice: **PR 3** — `SkyFlats` (§48.4 twilight timing, frame-to-frame re-probe,
+  stop_at_max/min_adu) at which point "sky_at_twilight" auto-starts instead of
+  generate-and-notify, + the `sky_flat` profile block. Watch-item from the #754 round-2 review:
+  generated FlatPanelFlats leaves keep the instruction's default [0.01, 10] s probe bounds —
+  a narrowband panel needing >10 s fails the probe honestly; add per-filter exposure bounds
+  (profile or spec) only if field use shows the need.
 
 ## §44 backup stream — the WILMA client half (2026-07-07, after the server PR)
 

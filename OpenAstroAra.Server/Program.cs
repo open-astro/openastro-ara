@@ -290,8 +290,12 @@ public partial class Program {
         // dep can be constructed.
         // §39 — calibration sessions + matching-flats + the dark library all derive live from
         // the §28 SQLite catalog (replaced the Phase 13.14 fixture placeholders); builds
-        // generate runnable §38 sequences. Mosaics stay a placeholder (§47).
-        builder.Services.AddSingleton<ICalibrationService, SqliteCalibrationService>();
+        // generate runnable §38 sequences. Mosaics stay a placeholder (§47). The flats
+        // generator reads the §48.7 flat_panel policy for its FlatPanelFlats leaves.
+        builder.Services.AddSingleton<ICalibrationService>(sp => new SqliteCalibrationService(
+            sp.GetRequiredService<IAraDatabase>(),
+            sp.GetRequiredService<ISequenceService>(),
+            sp.GetRequiredService<IProfileStore>()));
         builder.Services.AddSingleton<IDarkLibraryService, SqliteDarkLibraryService>();
         builder.Services.AddSingleton<IMosaicService, PlaceholderMosaicService>();
         // Phase 13.15 — sequence templates + NINA import + auto-flats.

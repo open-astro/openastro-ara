@@ -71,6 +71,47 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: [],
     keywords: ['calibration', 'flats', 'auto', 'panel', 'sky', 'twilight', 'prompt', 'matching'],
   ),
+  'session.calibration.flat_target_adu': Help(
+    key: 'session.calibration.flat_target_adu',
+    title: 'Flat target brightness',
+    body: 'Generated flat sets expose themselves: each per-filter set probes short exposures, '
+        'measures the frame\'s mean pixel value (ADU), and scales the exposure until it lands '
+        'on this target before capturing the real flats. 30000 is a solid default for 16-bit '
+        'cameras — roughly 45% of full scale, bright enough for clean signal and safely below '
+        'saturation. If your camera is 12/14-bit behind a driver that scales to 16 bits, the '
+        'default still applies; for unusual setups aim for 40-50% of your camera\'s full scale.',
+    relatedSettings: ['session.calibration.flat_target_adu_tolerance_pct', 'session.calibration.flat_frames_per_filter'],
+    keywords: ['flats', 'adu', 'target', 'brightness', 'auto exposure'],
+  ),
+  'session.calibration.flat_target_adu_tolerance_pct': Help(
+    key: 'session.calibration.flat_target_adu_tolerance_pct',
+    title: 'Flat target tolerance',
+    body: 'How close the probe\'s measured mean must be to the target before the set starts '
+        'capturing, as a percentage of the target. 5% converges in one or two probes on a '
+        'stable panel; tighten it if you want maximally consistent flats between filters, '
+        'loosen it if your panel flickers and the probe struggles to settle.',
+    relatedSettings: ['session.calibration.flat_target_adu'],
+    keywords: ['flats', 'tolerance', 'percent', 'probe'],
+  ),
+  'session.calibration.flat_frames_per_filter': Help(
+    key: 'session.calibration.flat_frames_per_filter',
+    title: 'Flat frames per filter',
+    body: 'How many FLAT frames each generated per-filter set captures once its exposure has '
+        'converged. Stacking 20-30 flats averages away photon noise in the master flat on '
+        'most cameras; more helps narrowband filters with dim panels.',
+    relatedSettings: ['session.calibration.flat_target_adu'],
+    keywords: ['flats', 'frames', 'count', 'stack', 'master flat'],
+  ),
+  'session.calibration.post_flat_park_mount': Help(
+    key: 'session.calibration.post_flat_park_mount',
+    title: 'Park after flats',
+    body: 'Appends a park step to the end of the generated flats sequence, so when the last '
+        'flat set finishes the mount parks itself and the rig ends the night in a safe, '
+        'known position. Turn it off if something else manages parking (an observatory '
+        'controller, or you run flats mid-evening).',
+    relatedSettings: ['session.calibration.capture_default'],
+    keywords: ['park', 'mount', 'flats', 'end of night'],
+  ),
   'session.storage.backup_stream': Help(
     key: 'session.storage.backup_stream',
     title: 'Real-time frame backup',

@@ -936,6 +936,12 @@ class ProfileApi {
         maxWindKmh: (j['max_wind_kmh'] as num?)?.toInt() ?? 36,
         maxHumidityPct: (j['max_humidity_pct'] as num?)?.toInt() ?? 85,
         minDewDeltaC: (j['min_dew_delta_c'] as num?)?.toDouble() ?? 2.0,
+        flatTargetAdu: (j['flat_target_adu'] as num?)?.toInt() ?? 30000,
+        flatTargetAduTolerancePct:
+            (j['flat_target_adu_tolerance_pct'] as num?)?.toDouble() ?? 5.0,
+        flatFramesPerFilter:
+            (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
+        postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? true,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -965,6 +971,10 @@ class ProfileApi {
     'max_wind_kmh': v.maxWindKmh,
     'max_humidity_pct': v.maxHumidityPct,
     'min_dew_delta_c': v.minDewDeltaC,
+    'flat_target_adu': v.flatTargetAdu,
+    'flat_target_adu_tolerance_pct': v.flatTargetAduTolerancePct,
+    'flat_frames_per_filter': v.flatFramesPerFilter,
+    'post_flat_park_mount': v.postFlatParkMount,
   };
 
   static CalibrationCaptureDefault _calibrationCaptureDefaultFromString(

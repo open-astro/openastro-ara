@@ -29,7 +29,8 @@ namespace OpenAstroAra.Server.Services;
 public sealed record FlatStepSpec(
     string? FilterName,
     int FrameCount,
-    double ExposureSeconds,
+    int TargetAdu,
+    double TargetAduTolerancePct,
     int? Gain,
     int? Offset,
     int? FocuserPosition);
@@ -78,17 +79,25 @@ public static class CalibrationSequenceBuilder {
     private const string MoveFocuserAbsoluteType = "NINA.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, NINA.Sequencer";
     private const string TakeExposureType = "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer";
     private const string CoolCameraType = "NINA.Sequencer.SequenceItem.Camera.CoolCamera, NINA.Sequencer";
+    // ARA-only classes still ride the NINA dialect: the loader's type remap is a plain
+    // NINA→OpenAstroAra prefix replace, so these resolve to the OpenAstroAra classes on load.
+    private const string FlatPanelFlatsType = "NINA.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, NINA.Sequencer";
+    private const string ParkScopeType = "NINA.Sequencer.SequenceItem.Telescope.ParkScope, NINA.Sequencer";
 
     /// <summary>
-    /// Build the §38.1 body: a SequentialContainer root with one looped per-filter container —
-    /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure(FLAT)] × FrameCount. SwitchFilter /
-    /// MoveFocuserAbsolute re-execute on every loop pass; both are no-ops once in position,
-    /// which is exactly how NINA's own SmartExposure loops behave.
+    /// Build the §38.1 body: a SequentialContainer root with one per-filter container —
+    /// [SwitchFilter → MoveFocuserAbsolute → FlatPanelFlats]. Since §48.3 the flat leaf is the
+    /// auto-exposure instruction (it probes to the target ADU and captures its own FrameCount,
+    /// so the per-filter block needs no LoopCondition), followed by an optional ParkScope when
+    /// the §48.7 post_flat_park_mount policy asks for it.
     /// </summary>
-    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps) {
+    public static JsonElement BuildMatchingFlatsBody(string name, IReadOnlyList<FlatStepSpec> steps, bool parkMountAfter = false) {
         var items = new JsonArray();
         foreach (var step in steps) {
             items.Add(FlatBlock(step));
+        }
+        if (parkMountAfter) {
+            items.Add(new JsonObject { ["$type"] = ParkScopeType });
         }
 
         var root = new JsonObject {
@@ -103,9 +112,61 @@ public static class CalibrationSequenceBuilder {
         return JsonSerializer.SerializeToElement(root);
     }
 
-    private static JsonObject FlatBlock(FlatStepSpec step) =>
-        FilterCaptureBlock("Flats", "FLAT", step.FilterName, step.FrameCount,
-            step.ExposureSeconds, step.Gain, step.Offset, step.FocuserPosition);
+    /// <summary>The SwitchFilter step, resolving by NAME against the active profile's filter
+    /// list (_position -1 on purpose: only a recorded position >= 0 wins as a slot-index
+    /// fallback, and a stale index from a re-ordered wheel must not).</summary>
+    private static JsonObject SwitchFilterStep(string filterName) => new() {
+        ["$type"] = SwitchFilterType,
+        ["Filter"] = new JsonObject {
+            ["$type"] = FilterInfoType,
+            ["_name"] = filterName,
+            ["_position"] = -1,
+        },
+    };
+
+    private static JsonObject MoveFocuserStep(int position) => new() {
+        ["$type"] = MoveFocuserAbsoluteType,
+        ["Position"] = position,
+    };
+
+    /// <summary>One per-filter §48.3 flat set: position the wheel + focuser, then hand the whole
+    /// set to FlatPanelFlats (probe-to-ADU + N saved frames — its own iteration, no loop here).</summary>
+    private static JsonObject FlatBlock(FlatStepSpec step) {
+        var items = new JsonArray();
+
+        if (step.FilterName is not null) {
+            items.Add(SwitchFilterStep(step.FilterName));
+        }
+
+        if (step.FocuserPosition is int focus) {
+            items.Add(MoveFocuserStep(focus));
+        }
+
+        var flats = new JsonObject {
+            ["$type"] = FlatPanelFlatsType,
+            ["TargetAdu"] = step.TargetAdu,
+            ["TargetAduTolerancePct"] = step.TargetAduTolerancePct,
+            ["FrameCount"] = step.FrameCount,
+        };
+        // Omitted Gain/Offset deserialize to FlatPanelFlats' -1 "camera default" sentinel.
+        if (step.Gain is int gain) {
+            flats["Gain"] = gain;
+        }
+        if (step.Offset is int offset) {
+            flats["Offset"] = offset;
+        }
+        items.Add(flats);
+
+        var label = step.FilterName ?? "no filter";
+        return new JsonObject {
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = $"Flats — {label} ({step.FrameCount}× auto to {step.TargetAdu} ADU)",
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+    }
 
     /// <summary>The shared per-filter capture shape (r1 dedup): a looped SequentialContainer of
     /// [SwitchFilter → MoveFocuserAbsolute → TakeExposure] — flats and resume-target lights
@@ -116,24 +177,11 @@ public static class CalibrationSequenceBuilder {
         var items = new JsonArray();
 
         if (filterName is not null) {
-            items.Add(new JsonObject {
-                ["$type"] = SwitchFilterType,
-                // _position -1 on purpose: SwitchFilter.MatchFilter resolves by NAME against the
-                // active profile's filter list, and only falls back to a slot index when the
-                // recorded position is >= 0. A stale index from a re-ordered wheel must not win.
-                ["Filter"] = new JsonObject {
-                    ["$type"] = FilterInfoType,
-                    ["_name"] = filterName,
-                    ["_position"] = -1,
-                },
-            });
+            items.Add(SwitchFilterStep(filterName));
         }
 
         if (focuserPosition is int focus) {
-            items.Add(new JsonObject {
-                ["$type"] = MoveFocuserAbsoluteType,
-                ["Position"] = focus,
-            });
+            items.Add(MoveFocuserStep(focus));
         }
 
         var exposure = new JsonObject {

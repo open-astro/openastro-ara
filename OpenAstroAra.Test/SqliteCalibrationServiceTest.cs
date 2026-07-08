@@ -17,8 +17,10 @@ using NUnit.Framework;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
+using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -282,23 +284,75 @@ namespace OpenAstroAra.Test {
             Assert.That(blocks.Count, Is.EqualTo(2), "one looped container per light filter");
 
             var ha = blocks[0];
-            var loop = ha.GetConditionsSnapshot().OfType<LoopCondition>().Single();
-            Assert.That(loop.Iterations, Is.EqualTo(5));
+            // §48.3: FlatPanelFlats captures its own FrameCount, so the block carries no loop.
+            Assert.That(ha.GetConditionsSnapshot().OfType<LoopCondition>(), Is.Empty,
+                "the auto-exposure flat set needs no LoopCondition wrapper");
             var haItems = ha.GetItemsSnapshot();
             var switchFilter = haItems.OfType<SwitchFilter>().Single();
             Assert.That(switchFilter.Filter?.Name, Is.EqualTo("Ha"));
             var focus = haItems.OfType<MoveFocuserAbsolute>().Single();
             Assert.That(focus.Position, Is.EqualTo(5230), "per-filter focus from the session's lights is replayed");
-            var take = haItems.OfType<TakeExposure>().Single();
-            Assert.That(take.ImageType, Is.EqualTo("FLAT"));
-            Assert.That(take.Gain, Is.EqualTo(100), "flats replay the lights' gain");
-            Assert.That(take.Offset, Is.EqualTo(10), "flats replay the lights' offset");
+            var flats = haItems.OfType<FlatPanelFlats>().Single();
+            Assert.That(flats.FrameCount, Is.EqualTo(5));
+            Assert.That(flats.Gain, Is.EqualTo(100), "flats replay the lights' gain");
+            Assert.That(flats.Offset, Is.EqualTo(10), "flats replay the lights' offset");
 
             // The OIII lights carried no offset/focuser → no focuser step; defaults untouched.
             var oiiiItems = blocks[1].GetItemsSnapshot();
             Assert.That(oiiiItems.OfType<MoveFocuserAbsolute>(), Is.Empty);
-            Assert.That(oiiiItems.OfType<TakeExposure>().Single().Offset, Is.EqualTo(-1),
-                "no recorded offset → TakeExposure keeps its camera-default sentinel");
+            Assert.That(oiiiItems.OfType<FlatPanelFlats>().Single().Offset, Is.EqualTo(-1),
+                "no recorded offset → FlatPanelFlats keeps its camera-default sentinel");
+        }
+
+        [Test]
+        public async Task GenerateMatchingFlats_reads_the_flat_panel_policy_and_appends_the_park() {
+            var store = new FileSequenceService(_dir);
+            var profile = new InMemoryProfileStore();
+            profile.PutSafetyPolicies(profile.GetSafetyPolicies() with {
+                FlatTargetAdu = 25000,
+                FlatTargetAduTolerancePct = 3,
+                FlatFramesPerFilter = 12,
+                PostFlatParkMount = true,
+            });
+            var svc = new SqliteCalibrationService(_db, store, profile);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false),
+                idempotencyKey: null, CancellationToken.None);
+
+            Assert.That(plan.Steps.Single().FrameCount, Is.EqualTo(12));
+            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(25000));
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var profileSvc = new HeadlessProfileService();
+            profileSvc.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0));
+            var factory = HeadlessSequencerFactory.WithDefaults(profileService: profileSvc);
+            var root = new SequenceJsonConverter(factory).Deserialize(stored!.Body.GetRawText());
+            var block = root.GetItemsSnapshot().OfType<SequentialContainer>().Single();
+            var flats = block.GetItemsSnapshot().OfType<FlatPanelFlats>().Single();
+            Assert.That(flats.TargetAdu, Is.EqualTo(25000), "the §48.7 target ADU is enforced, not advisory");
+            Assert.That(flats.TargetAduTolerancePct, Is.EqualTo(3));
+            Assert.That(flats.FrameCount, Is.EqualTo(12));
+            Assert.That(root.GetItemsSnapshot().OfType<ParkScope>().Count(), Is.EqualTo(1),
+                "post_flat_park_mount appends the park as the final root step");
+        }
+
+        [Test]
+        public async Task GenerateMatchingFlats_without_a_profile_store_omits_the_park() {
+            var store = new FileSequenceService(_dir);
+            var svc = new SqliteCalibrationService(_db, store);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+
+            var plan = await svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: false), idempotencyKey: null, CancellationToken.None);
+
+            var stored = await store.GetAsync(plan.GeneratedSequenceId!.Value, CancellationToken.None);
+            var profileSvc = new HeadlessProfileService();
+            profileSvc.ActiveProfile.FilterWheelSettings.FilterWheelFilters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 0));
+            var factory = HeadlessSequencerFactory.WithDefaults(profileService: profileSvc);
+            var root = new SequenceJsonConverter(factory).Deserialize(stored!.Body.GetRawText());
+            Assert.That(root.GetItemsSnapshot().OfType<ParkScope>(), Is.Empty);
         }
 
         [Test]
@@ -330,7 +384,7 @@ namespace OpenAstroAra.Test {
             var block = root.GetItemsSnapshot().OfType<SequentialContainer>().Single();
             Assert.That(block.GetItemsSnapshot().OfType<SwitchFilter>(), Is.Empty,
                 "no filter wheel in the session → no SwitchFilter step");
-            Assert.That(block.GetItemsSnapshot().OfType<TakeExposure>().Single().ImageType, Is.EqualTo("FLAT"));
+            Assert.That(block.GetItemsSnapshot().OfType<FlatPanelFlats>().Count(), Is.EqualTo(1));
         }
 
         // ── helpers ────────────────────────────────────────────────────────────
