@@ -164,6 +164,7 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianDonutOuterDiameter, Is.EqualTo(0));
             Assert.That(vector.MedianDonutInnerDiameter, Is.EqualTo(0));
             Assert.That(vector.MedianRingThickness, Is.EqualTo(0));
+            Assert.That(vector.MedianDonutShadowDepth, Is.EqualTo(0));
         }
 
         [Test]
@@ -174,9 +175,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Extract_uses_the_median_of_an_odd_count() {
             var stars = new List<DetectedStar> {
-                Star(hfr: 2.0, fwhm: 4.0, roundness: 0.90, peak: 6.0, outerDiameter: 10.0, innerDiameter: 4.0), // ring 6
-                Star(hfr: 3.0, fwhm: 5.0, roundness: 0.80, peak: 8.0, outerDiameter: 14.0, innerDiameter: 6.0), // ring 8
-                Star(hfr: 9.0, fwhm: 9.0, roundness: 0.20, peak: 2.0, outerDiameter: 30.0, innerDiameter: 2.0), // ring 28, outlier
+                Star(hfr: 2.0, fwhm: 4.0, roundness: 0.90, peak: 6.0, outerDiameter: 10.0, innerDiameter: 4.0, shadowDepth: 0.9), // ring 6
+                Star(hfr: 3.0, fwhm: 5.0, roundness: 0.80, peak: 8.0, outerDiameter: 14.0, innerDiameter: 6.0, shadowDepth: 0.7), // ring 8
+                Star(hfr: 9.0, fwhm: 9.0, roundness: 0.20, peak: 2.0, outerDiameter: 30.0, innerDiameter: 2.0, shadowDepth: 0.3), // ring 28, outlier
             };
             var vector = FocusFeatureExtractor.Extract(new StarDetectionResult { StarList = stars });
 
@@ -188,6 +189,7 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(6.0));
             Assert.That(vector.MedianDonutOuterDiameter, Is.EqualTo(14.0)); // median{10,14,30}
             Assert.That(vector.MedianDonutInnerDiameter, Is.EqualTo(4.0));  // median{2,4,6}
+            Assert.That(vector.MedianDonutShadowDepth, Is.EqualTo(0.7));    // median{0.9,0.7,0.3}
             // Ring thickness is the median of per-star (outer − inner) = median{6,8,28} = 8, which is NOT
             // MedianDonutOuterDiameter − MedianDonutInnerDiameter (14 − 4 = 10): the median is non-linear.
             Assert.That(vector.MedianRingThickness, Is.EqualTo(8.0));
@@ -211,10 +213,11 @@ namespace OpenAstroAra.Test {
         }
 
         private static DetectedStar Star(double hfr, double fwhm, double roundness, double peak,
-                double outerDiameter = 0, double innerDiameter = 0) =>
+                double outerDiameter = 0, double innerDiameter = 0, double shadowDepth = 0) =>
             new DetectedStar {
                 HFR = hfr, FWHM = fwhm, Roundness = roundness, PeakToBackground = peak,
                 DonutOuterDiameter = outerDiameter, DonutInnerDiameter = innerDiameter,
+                DonutShadowDepth = shadowDepth,
             };
 
         // Stamp a uniform-brightness annulus (a defocused obstructed-scope "donut"): a filled ring between
@@ -333,6 +336,30 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianDonutInnerDiameter, Is.GreaterThan(0));
             Assert.That(vector.MedianDonutOuterDiameter, Is.GreaterThan(vector.MedianDonutInnerDiameter));
             Assert.That(vector.MedianRingThickness, Is.GreaterThan(0));
+            Assert.That(vector.MedianDonutShadowDepth, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void Donut_with_a_dark_hole_has_high_shadow_depth() {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 9); // hole left at background
+
+            var star = DetectOne(frame, w, h);
+            // A background-dark hole is nearly as dark as it gets relative to the ring peak → depth ≈ 1.
+            Assert.That(star.DonutShadowDepth, Is.GreaterThan(0.8).And.LessThanOrEqualTo(1.0));
+        }
+
+        [Test]
+        public void Filled_star_has_zero_shadow_depth() {
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            // No hole (inner diameter 0) → no shadow to measure → exactly 0.
+            var star = DetectOne(frame, w, h);
+            Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(star.DonutShadowDepth, Is.EqualTo(0));
         }
     }
 }

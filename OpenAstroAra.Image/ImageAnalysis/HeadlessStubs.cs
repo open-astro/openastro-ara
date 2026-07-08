@@ -91,6 +91,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// the frame-level median of it is a distinct statistic (the median of differences ≠ the difference of
         /// medians) that <see cref="FocusFeatureVector"/> carries separately.</summary>
         public double RingThickness => DonutOuterDiameter - DonutInnerDiameter;
+
+        /// <summary>§59.4 — central-obstruction shadow depth in [0, 1]: how dark the donut hole is relative to
+        /// the ring peak, (ringPeak − holeMean) / ringPeak. 1 for a background-dark hole (well-obstructed scope
+        /// / heavier defocus), lower as the hole fills in, and exactly 0 for a star with no hole (a refractor or
+        /// an in-focus star, where <see cref="DonutInnerDiameter"/> is 0).</summary>
+        public double DonutShadowDepth { get; set; }
     }
 
     public interface IStarDetection {
