@@ -261,5 +261,35 @@ namespace OpenAstroAra.Test {
             Assert.That(p["calibration_duration"]!.Value<int>(), Is.EqualTo(750));
             Assert.That(p["calibration_distance"]!.Value<int>(), Is.EqualTo(25));
         }
+
+        // ── §63.9 get_version handshake (openastro-guider #57) ──
+
+        [Test]
+        public void GetVersion_request_carries_method_and_no_params() {
+            var json = Serialize(new Phd2GetVersion());
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("get_version"));
+            Assert.That(json["params"], Is.Null, "get_version takes no params");
+            Assert.That(System.Guid.TryParse(json["id"]!.Value<string>(), out _), Is.True);
+        }
+
+        [Test]
+        public void GetVersion_response_deserializes_the_snake_case_fork_and_overlap_result() {
+            // The RPC result is snake_case (fork, overlap_support) — distinct from the PascalCase
+            // "Version" event; both shapes must round-trip.
+            const string wire = """
+                {"jsonrpc":"2.0","id":"abc","result":{"version":"2.6.11dev5","phd_version":"2.6.11",
+                 "phd_subver":"dev5","msg_version":1,"overlap_support":true,"fork":"openastro-guider"}}
+                """;
+            var response = JsonConvert.DeserializeObject<Phd2GetVersionResponse>(wire);
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.error, Is.Null);
+            var r = response.result!;
+            Assert.That(r.Version, Is.EqualTo("2.6.11dev5"));
+            Assert.That(r.PhdVersion, Is.EqualTo("2.6.11"));
+            Assert.That(r.PhdSubver, Is.EqualTo("dev5"));
+            Assert.That(r.MsgVersion, Is.EqualTo(1));
+            Assert.That(r.OverlapSupport, Is.True);
+            Assert.That(r.Fork, Is.EqualTo("openastro-guider"));
+        }
     }
 }

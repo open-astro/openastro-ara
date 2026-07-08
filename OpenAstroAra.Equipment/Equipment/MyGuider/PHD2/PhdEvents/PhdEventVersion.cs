@@ -26,5 +26,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [JsonProperty]
         public int MsgVersion { get; set; }
+
+        // §63.9 — the openastro-guider fork markers on the "Version" event (PascalCase; the get_version
+        // RPC result carries the same values snake_cased). Fork is "openastro-guider" on the fork,
+        // empty on stock PHD2; OverlapSupport is a fork-only pipelined-RPC capability.
+        [JsonProperty]
+        public string Fork { get; set; } = string.Empty;
+
+        [JsonProperty]
+        public bool OverlapSupport { get; set; }
     }
 }

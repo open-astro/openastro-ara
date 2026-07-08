@@ -72,6 +72,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_connect_handshake_queries_get_version_for_fork_identification() {
+            // §63.9: the real client must run the synchronous get_version handshake on connect so it can
+            // tell openastro-guider from stock PHD2 (and read overlap_support). The fake serves the fork
+            // result; here we assert the RPC is actually issued end-to-end through the real PHD2Guider.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_version", _ => new JsonObject {
+                ["version"] = "2.6.11dev5",
+                ["phd_version"] = "2.6.11",
+                ["phd_subver"] = "dev5",
+                ["msg_version"] = 1,
+                ["overlap_support"] = true,
+                ["fork"] = "openastro-guider",
+            });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+
+            var asked = await WaitUntilAsync(() => System.Linq.Enumerable.Contains(fake.ReceivedMethods, "get_version")).ConfigureAwait(false);
+            Assert.That(asked, Is.True, "the §63.9 connect handshake must call get_version for fork identification");
+        }
+
+        [Test]
         public async Task Reaches_Connected_and_reflects_live_guiding_events() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
