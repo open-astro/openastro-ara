@@ -111,4 +111,242 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2GetPaSession : Phd2Method {
         public override string Method => "get_pa_session";
     }
+
+    // §45 Static PA — the near-pole centre-of-rotation "dot-to-bullseye" tool (openastro-guider
+    // design/POLAR_ALIGNMENT_DESIGN.md; API_REFERENCE.md "Static PA"). ARA drives it headlessly and
+    // renders the reticle from the status object below; the daemon owns the geometry, ARA owns the solver
+    // + slews. All five methods (start/measure/get_status/stop) return the SAME status object; close
+    // returns 0 (reuse GenericPhdMethodResponse). Every status field is nullable: the daemon emits them
+    // conditionally (e.g. rotation only while aligning+auto; current_star/live_adjustment only when the
+    // live star is valid; the object short-circuits when active=false or calced=false). This is the DTO
+    // half of the §45 client — the PolarAlignService wiring is a later slice, DTO-first per the precedent.
+
+    /// <summary><c>staticpa_start {auto?, hemisphere?, ref_star?, hour_angle?, flip_camera?}</c> — begin
+    /// the Static PA routine (auto mode needs a slewable mount). Returns the status object.</summary>
+    public class Phd2StaticPaStart : Phd2Method<Phd2StaticPaStartParameter> {
+        public override string Method => "staticpa_start";
+    }
+
+    public class Phd2StaticPaStartParameter {
+
+        [JsonProperty(PropertyName = "auto", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Auto { get; set; }
+
+        // "north" / "south".
+        [JsonProperty(PropertyName = "hemisphere", NullValueHandling = NullValueHandling.Ignore)]
+        public string? Hemisphere { get; set; }
+
+        // Index into the status object's ref_stars (0..size-1).
+        [JsonProperty(PropertyName = "ref_star", NullValueHandling = NullValueHandling.Ignore)]
+        public int? RefStar { get; set; }
+
+        // Hours, 0..24.
+        [JsonProperty(PropertyName = "hour_angle", NullValueHandling = NullValueHandling.Ignore)]
+        public double? HourAngle { get; set; }
+
+        [JsonProperty(PropertyName = "flip_camera", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? FlipCamera { get; set; }
+    }
+
+    /// <summary><c>staticpa_measure {position}</c> — record a measurement point (manual mode only;
+    /// <c>position</c> is 2 or 3, rotating RA ≥ 0h20m between points). Returns the status object.</summary>
+    public class Phd2StaticPaMeasure : Phd2Method<Phd2StaticPaMeasureParameter> {
+        public override string Method => "staticpa_measure";
+    }
+
+    public class Phd2StaticPaMeasureParameter {
+
+        // 2 or 3 — required, so it's sent unconditionally.
+        [JsonProperty(PropertyName = "position")]
+        public int Position { get; set; }
+    }
+
+    /// <summary><c>staticpa_get_status</c> (no params) — the full Static PA status object.</summary>
+    public class Phd2StaticPaGetStatus : Phd2Method {
+        public override string Method => "staticpa_get_status";
+    }
+
+    /// <summary><c>staticpa_stop</c> (no params) — stop aligning; returns the status object.</summary>
+    public class Phd2StaticPaStop : Phd2Method {
+        public override string Method => "staticpa_stop";
+    }
+
+    /// <summary><c>staticpa_close</c> (no params) — tear the tool down; returns <c>0</c>
+    /// (deserialize with <see cref="GenericPhdMethodResponse"/>).</summary>
+    public class Phd2StaticPaClose : Phd2Method {
+        public override string Method => "staticpa_close";
+    }
+
+    /// <summary>Response wrapper for <c>staticpa_start</c>/<c>_measure</c>/<c>_get_status</c>/<c>_stop</c>
+    /// — all four return the same <see cref="Phd2StaticPaStatus"/>.</summary>
+    public class Phd2StaticPaStatusResponse : PhdMethodResponse {
+        public Phd2StaticPaStatus? result { get; set; }
+    }
+
+    /// <summary>The Static PA status object. Fields are nullable to mirror the daemon's conditional
+    /// emission — <c>Active=false</c> or <c>Calced=false</c> short-circuits the object, and the
+    /// centre/adjustment/reticle group only appears once <c>Calced</c>.</summary>
+    public class Phd2StaticPaStatus {
+
+        [JsonProperty(PropertyName = "active")]
+        public bool? Active { get; set; }
+
+        [JsonProperty(PropertyName = "aligning")]
+        public bool? Aligning { get; set; }
+
+        [JsonProperty(PropertyName = "auto")]
+        public bool? Auto { get; set; }
+
+        [JsonProperty(PropertyName = "can_slew")]
+        public bool? CanSlew { get; set; }
+
+        [JsonProperty(PropertyName = "hemisphere")]
+        public string? Hemisphere { get; set; }
+
+        [JsonProperty(PropertyName = "hour_angle")]
+        public double? HourAngle { get; set; }
+
+        [JsonProperty(PropertyName = "flip_camera")]
+        public bool? FlipCamera { get; set; }
+
+        [JsonProperty(PropertyName = "pixel_scale")]
+        public double? PixelScale { get; set; }
+
+        [JsonProperty(PropertyName = "camera_angle")]
+        public double? CameraAngle { get; set; }
+
+        [JsonProperty(PropertyName = "ref_star")]
+        public int? RefStar { get; set; }
+
+        // The 8 near-pole catalog stars ARA offers as the alignment reference.
+        [JsonProperty(PropertyName = "ref_stars")]
+        public IReadOnlyList<Phd2StaticPaRefStar>? RefStars { get; set; }
+
+        // 0–3 recorded points (manual mode).
+        [JsonProperty(PropertyName = "measured_points")]
+        public IReadOnlyList<Phd2StaticPaMeasuredPoint>? MeasuredPoints { get; set; }
+
+        // Present only while aligning in auto mode.
+        [JsonProperty(PropertyName = "rotation")]
+        public Phd2StaticPaRotation? Rotation { get; set; }
+
+        [JsonProperty(PropertyName = "calced")]
+        public bool? Calced { get; set; }
+
+        // The following appear only once Calced is true.
+        [JsonProperty(PropertyName = "centre")]
+        public Phd2StaticPaCentre? Centre { get; set; }
+
+        [JsonProperty(PropertyName = "adjustment")]
+        public Phd2StaticPaAdjustment? Adjustment { get; set; }
+
+        [JsonProperty(PropertyName = "ref_star_target")]
+        public Phd2Point? RefStarTarget { get; set; }
+
+        // current_star + live_adjustment are emitted together, only when the live star position is valid.
+        [JsonProperty(PropertyName = "current_star")]
+        public Phd2Point? CurrentStar { get; set; }
+
+        [JsonProperty(PropertyName = "live_adjustment")]
+        public Phd2StaticPaAdjustment? LiveAdjustment { get; set; }
+    }
+
+    /// <summary>An <c>{x, y}</c> point in image pixels — shared across the polar-align result shapes.</summary>
+    public class Phd2Point {
+
+        [JsonProperty(PropertyName = "x")]
+        public double? X { get; set; }
+
+        [JsonProperty(PropertyName = "y")]
+        public double? Y { get; set; }
+    }
+
+    public class Phd2StaticPaRefStar {
+
+        [JsonProperty(PropertyName = "index")]
+        public int? Index { get; set; }
+
+        [JsonProperty(PropertyName = "name")]
+        public string? Name { get; set; }
+
+        [JsonProperty(PropertyName = "ra")]
+        public double? Ra { get; set; }
+
+        [JsonProperty(PropertyName = "dec")]
+        public double? Dec { get; set; }
+
+        [JsonProperty(PropertyName = "mag")]
+        public double? Mag { get; set; }
+    }
+
+    public class Phd2StaticPaMeasuredPoint {
+
+        [JsonProperty(PropertyName = "position")]
+        public int? Position { get; set; }
+
+        [JsonProperty(PropertyName = "x")]
+        public double? X { get; set; }
+
+        [JsonProperty(PropertyName = "y")]
+        public double? Y { get; set; }
+    }
+
+    public class Phd2StaticPaRotation {
+
+        [JsonProperty(PropertyName = "required_deg")]
+        public double? RequiredDeg { get; set; }
+
+        [JsonProperty(PropertyName = "rotated_deg")]
+        public double? RotatedDeg { get; set; }
+
+        [JsonProperty(PropertyName = "step")]
+        public int? Step { get; set; }
+
+        [JsonProperty(PropertyName = "required_steps")]
+        public int? RequiredSteps { get; set; }
+
+        [JsonProperty(PropertyName = "slewing")]
+        public bool? Slewing { get; set; }
+    }
+
+    public class Phd2StaticPaCentre {
+
+        [JsonProperty(PropertyName = "x")]
+        public double? X { get; set; }
+
+        [JsonProperty(PropertyName = "y")]
+        public double? Y { get; set; }
+
+        [JsonProperty(PropertyName = "radius_px")]
+        public double? RadiusPx { get; set; }
+    }
+
+    /// <summary>An alt/az mount-error decomposition at a point — pixels + arcminutes + the on-sensor push
+    /// vectors. Reused for both the static <c>adjustment</c> and the live <c>live_adjustment</c>.</summary>
+    public class Phd2StaticPaAdjustment {
+
+        [JsonProperty(PropertyName = "alt_error_px")]
+        public double? AltErrorPx { get; set; }
+
+        [JsonProperty(PropertyName = "az_error_px")]
+        public double? AzErrorPx { get; set; }
+
+        [JsonProperty(PropertyName = "total_error_px")]
+        public double? TotalErrorPx { get; set; }
+
+        [JsonProperty(PropertyName = "alt_error_arcmin")]
+        public double? AltErrorArcmin { get; set; }
+
+        [JsonProperty(PropertyName = "az_error_arcmin")]
+        public double? AzErrorArcmin { get; set; }
+
+        [JsonProperty(PropertyName = "total_error_arcmin")]
+        public double? TotalErrorArcmin { get; set; }
+
+        [JsonProperty(PropertyName = "az_vector")]
+        public Phd2Point? AzVector { get; set; }
+
+        [JsonProperty(PropertyName = "alt_vector")]
+        public Phd2Point? AltVector { get; set; }
+    }
 }
