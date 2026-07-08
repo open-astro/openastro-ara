@@ -349,4 +349,97 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         [JsonProperty(PropertyName = "alt_vector")]
         public Phd2Point? AltVector { get; set; }
     }
+
+    // §45 Polar Drift — the drift-based polar-align tool: pick a star near the meridian/equator, let the
+    // mount track, and watch it drift; the daemon fits the drift into an az-error vector pointing at the
+    // pole (openastro-guider src/polardrift_toolwin.cpp; event_server.cpp polardrift_* handlers). Simpler
+    // than Static PA — no measure step and no reference-star catalog: start/get_status/stop share one flat
+    // status object, close returns 0. Only start takes params. Every status field is nullable to mirror the
+    // daemon's conditional emission: !active short-circuits the object, the drift results (offset/error/
+    // direction/star/target) appear only once num_samples > 1, and elapsed_s only while drifting.
+
+    /// <summary><c>polardrift_start {hemisphere?, mirrored?}</c> — begin the drift routine (both params
+    /// optional; absent keeps the tool's current/profile value). Returns the status object.</summary>
+    public class Phd2PolarDriftStart : Phd2Method<Phd2PolarDriftStartParameter> {
+        public override string Method => "polardrift_start";
+    }
+
+    public class Phd2PolarDriftStartParameter {
+
+        // "north" / "south" — the daemon rejects any other string.
+        [JsonProperty(PropertyName = "hemisphere", NullValueHandling = NullValueHandling.Ignore)]
+        public string? Hemisphere { get; set; }
+
+        // Set when the optical train mirrors the image (e.g. a star diagonal).
+        [JsonProperty(PropertyName = "mirrored", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Mirrored { get; set; }
+    }
+
+    /// <summary><c>polardrift_get_status</c> (no params) — the full Polar Drift status object.</summary>
+    public class Phd2PolarDriftGetStatus : Phd2Method {
+        public override string Method => "polardrift_get_status";
+    }
+
+    /// <summary><c>polardrift_stop</c> (no params) — stop drifting; returns the status object.</summary>
+    public class Phd2PolarDriftStop : Phd2Method {
+        public override string Method => "polardrift_stop";
+    }
+
+    /// <summary><c>polardrift_close</c> (no params) — tear the tool down; returns <c>0</c>
+    /// (deserialize with <see cref="GenericPhdMethodResponse"/>).</summary>
+    public class Phd2PolarDriftClose : Phd2Method {
+        public override string Method => "polardrift_close";
+    }
+
+    /// <summary>Response wrapper for <c>polardrift_start</c>/<c>_get_status</c>/<c>_stop</c> — all three
+    /// return the same <see cref="Phd2PolarDriftStatus"/>.</summary>
+    public class Phd2PolarDriftStatusResponse : PhdMethodResponse {
+        public Phd2PolarDriftStatus? result { get; set; }
+    }
+
+    /// <summary>The Polar Drift status object. Fields are nullable to mirror the daemon's conditional
+    /// emission — <c>Active=false</c> short-circuits the object, the drift solution
+    /// (<c>OffsetPx</c>/<c>ErrorArcmin</c>/<c>PoleDirectionDeg</c>/<c>CurrentStar</c>/<c>Target</c>) only
+    /// appears once at least two samples exist, and <c>ElapsedS</c> only while drifting.</summary>
+    public class Phd2PolarDriftStatus {
+
+        [JsonProperty(PropertyName = "active")]
+        public bool? Active { get; set; }
+
+        [JsonProperty(PropertyName = "drifting")]
+        public bool? Drifting { get; set; }
+
+        [JsonProperty(PropertyName = "hemisphere")]
+        public string? Hemisphere { get; set; }
+
+        [JsonProperty(PropertyName = "mirrored")]
+        public bool? Mirrored { get; set; }
+
+        [JsonProperty(PropertyName = "pixel_scale")]
+        public double? PixelScale { get; set; }
+
+        [JsonProperty(PropertyName = "num_samples")]
+        public int? NumSamples { get; set; }
+
+        // Present only while drifting with at least one sample.
+        [JsonProperty(PropertyName = "elapsed_s")]
+        public double? ElapsedS { get; set; }
+
+        // The following make up the drift solution — present only once num_samples > 1.
+        [JsonProperty(PropertyName = "offset_px")]
+        public double? OffsetPx { get; set; }
+
+        [JsonProperty(PropertyName = "error_arcmin")]
+        public double? ErrorArcmin { get; set; }
+
+        [JsonProperty(PropertyName = "pole_direction_deg")]
+        public double? PoleDirectionDeg { get; set; }
+
+        // current_star + target are each {x, y} — additionally gated on the respective position being valid.
+        [JsonProperty(PropertyName = "current_star")]
+        public Phd2Point? CurrentStar { get; set; }
+
+        [JsonProperty(PropertyName = "target")]
+        public Phd2Point? Target { get; set; }
+    }
 }
