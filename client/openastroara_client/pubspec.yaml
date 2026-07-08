@@ -34,6 +34,9 @@ dependencies:
   path_provider: ^2.1.6
   # §44 backup stream — sha-256 verification of pulled frames.
   crypto: ^3.0.6
+  # §35.5 audible safety alarm — loops the bundled tone on safety.unsafe /
+  # safety.emergency_stop until silenced.
+  audioplayers: ^6.1.0
   package_info_plus: ^10.2.0
   # §36 Planetarium renderer: the platform's native webview embedded as a platform
   # view — WKWebView (macOS/iOS), WebView2 (Windows), WebKitGTK (Linux), System
@@ -67,6 +70,9 @@ flutter:
   uses-material-design: true
 
   assets:
+    # §35.5 bundled alarm tones (generated sine-synth loops, no third-party
+    # audio licensing to carry).
+    - assets/audio/
     # §36 Planetarium — the Stellarium Web Engine (AGPL, built from pristine
     # source: github.com/Stellarium/stellarium-web-engine; see
     # assets/stellarium/LICENSE-AGPL-3.0.txt) plus the offline sky data served to

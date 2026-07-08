@@ -95,9 +95,17 @@ the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up
   behind `POST /api/v1/server/emergency-stop`; `safety.emergency_stop` fires before the rungs.
   WILMA's persistent red button lives on the bottom status bar (confirm dialog → honest per-rung
   snackbar — a dead mount says "MOUNT NOT REACHED", never pretends).
-- **§35.5 client alarm assets** — bundled alarm tones + the alarm-delay/vibrate profile knobs
-  (client work; the daemon's `safety.unsafe` event already fires before the action so the modal
-  can alarm).
+- **Linux client packaging — gstreamer runtime Depends**: `audioplayers_linux` links against
+  GStreamer, so when WILMA Linux distribution is set up its package must declare
+  `libgstreamer1.0-0` + `libgstreamer-plugins-base1.0-0` (runtime libs; the CI dev headers
+  landed in #743). No action until a Linux client package exists.
+- ✅ **§35.5 client alarm assets — DONE (2026-07-07).** Three generated sine-synth loop tones
+  bundled (`assets/audio/alarm_{siren,beeps,chime}.wav` — no third-party audio licensing),
+  `SafetyAlarmController` rides `safety.unsafe` / `safety.emergency_stop` (modal immediately,
+  tone after the configurable silent delay, `safety.safe` auto-silences, flap-guarded),
+  audioplayers at forced-max volume, delay + tone as device-local knobs in Settings →
+  Notifications. Vibration skipped by design — WILMA is desktop-only today; revisit if a
+  mobile build lands.
 - **Auto-resume pointing** — the resume releases the paused run where it stood; a v0.1.0
   refinement could re-slew/re-center to the checkpointed target before releasing (needs per-run
   target coordinates surfaced to the engine). Until then the resume notification tells the user

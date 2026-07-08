@@ -1,0 +1,274 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+
+import '../settings/notifications_settings_state.dart';
+import '../ws/ws_providers.dart';
+
+/// §35.5 bundled tones (generated sine-synth loops shipped in assets/audio/).
+const safetyAlarmTones = <String, String>{
+  'siren': 'audio/alarm_siren.wav',
+  'beeps': 'audio/alarm_beeps.wav',
+  'chime': 'audio/alarm_chime.wav',
+};
+
+/// The audio surface the controller drives — a seam so tests assert plays
+/// without real audio output.
+abstract interface class SafetyAlarmPlayer {
+  Future<void> playLoop(String assetPath);
+  Future<void> stop();
+  void dispose();
+}
+
+/// Production player: audioplayers at forced-max volume, looping until
+/// stopped — a safety alarm that respects a muted mixer defeats its purpose.
+class AudioplayersAlarmPlayer implements SafetyAlarmPlayer {
+  final AudioPlayer _player = AudioPlayer();
+
+  @override
+  Future<void> playLoop(String assetPath) async {
+    await _player.setReleaseMode(ReleaseMode.loop);
+    await _player.setVolume(1.0);
+    await _player.play(AssetSource(assetPath));
+  }
+
+  @override
+  Future<void> stop() => _player.stop();
+
+  @override
+  void dispose() => _player.dispose();
+}
+
+/// Device-local §35.5 knobs (each desktop picks its own tone/delay — the
+/// machine that rings is the one being configured). Same JSON-in-app-support
+/// pattern as the backup-stream prefs.
+class SafetyAlarmPrefsService {
+  SafetyAlarmPrefsService({Future<Directory> Function()? supportDir})
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
+
+  final Future<Directory> Function() _supportDir;
+  static const _fileName = 'safety_alarm.json';
+  Future<void> _chain = Future<void>.value();
+
+  Future<File> _file() async {
+    final dir = await _supportDir();
+    return File('${dir.path}/$_fileName');
+  }
+
+  Future<({int delaySec, String tone})> load() async {
+    try {
+      final f = await _file();
+      if (!await f.exists()) return (delaySec: 5, tone: 'siren');
+      final decoded = jsonDecode(await f.readAsString());
+      if (decoded is! Map) return (delaySec: 5, tone: 'siren');
+      final tone = decoded['tone'] is String ? decoded['tone'] as String : 'siren';
+      return (
+        delaySec: decoded['delay_sec'] is int ? decoded['delay_sec'] as int : 5,
+        tone: safetyAlarmTones.containsKey(tone) ? tone : 'siren',
+      );
+    } catch (_) {
+      return (delaySec: 5, tone: 'siren');
+    }
+  }
+
+  Future<void> save({required int delaySec, required String tone}) {
+    final task = _chain.then((_) async {
+      try {
+        final f = await _file();
+        await f.writeAsString(
+            jsonEncode({'delay_sec': delaySec, 'tone': tone}), flush: true);
+      } catch (_) {/* best effort — prefs must not break the alarm */}
+    });
+    _chain = task;
+    return task;
+  }
+}
+
+final safetyAlarmPrefsProvider =
+    Provider<SafetyAlarmPrefsService>((ref) => SafetyAlarmPrefsService());
+
+@immutable
+class SafetyAlarmState {
+  /// A safety event fired and the silent-popup window is counting down.
+  final bool pending;
+
+  /// The tone is looping right now.
+  final bool ringing;
+
+  /// What tripped — shown on the alarm modal.
+  final String reason;
+
+  final int delaySec;
+  final String tone;
+
+  const SafetyAlarmState({
+    this.pending = false,
+    this.ringing = false,
+    this.reason = '',
+    this.delaySec = 5,
+    this.tone = 'siren',
+  });
+
+  SafetyAlarmState copyWith({
+    bool? pending,
+    bool? ringing,
+    String? reason,
+    int? delaySec,
+    String? tone,
+  }) =>
+      SafetyAlarmState(
+        pending: pending ?? this.pending,
+        ringing: ringing ?? this.ringing,
+        reason: reason ?? this.reason,
+        delaySec: delaySec ?? this.delaySec,
+        tone: tone ?? this.tone,
+      );
+}
+
+/// §35.5 — the audible alarm. `safety.unsafe` / `safety.emergency_stop`
+/// arrive BEFORE the daemon's reaction runs (the §35.4 contract exists for
+/// exactly this), so the modal pops immediately and the tone starts after the
+/// configured silent delay (default 5 s — a glance at the screen beats a
+/// 3 a.m. siren for a passing cloud you were watching anyway). `safety.safe`
+/// auto-silences; the modal's Silence button stops it manually. The master
+/// on/off is the existing Notifications "Sound alert" toggle.
+class SafetyAlarmController extends Notifier<SafetyAlarmState> {
+  Timer? _delayTimer;
+  SafetyAlarmPlayer? _player;
+  bool _delayTouched = false;
+  bool _toneTouched = false;
+  Future<void>? _restoreDone;
+
+  // ─── test seams ───
+  SafetyAlarmPlayer Function()? playerFactory;
+
+  @override
+  SafetyAlarmState build() {
+    ref.onDispose(_teardown);
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null) return;
+      switch (event.type) {
+        case 'safety.unsafe':
+          final reasons = event.payload['reasons'];
+          trigger(reasons is List && reasons.isNotEmpty
+              ? reasons.whereType<String>().join('; ')
+              : 'Conditions are UNSAFE');
+        case 'safety.emergency_stop':
+          trigger('EMERGENCY STOP triggered', urgent: true);
+        case 'safety.safe':
+          silence();
+      }
+    });
+    _restoreDone = _restore();
+    unawaited(_restoreDone);
+    return const SafetyAlarmState();
+  }
+
+  Future<void> _restore() async {
+    final saved = await ref.read(safetyAlarmPrefsProvider).load();
+    if (!ref.mounted) return;
+    // Per-field: touching one knob before this async read resolves must not
+    // discard the OTHER knob's persisted value.
+    state = state.copyWith(
+      delaySec: _delayTouched ? null : saved.delaySec,
+      tone: _toneTouched ? null : saved.tone,
+    );
+  }
+
+  void _persist() {
+    // Wait for the restore before writing: a knob touched at launch persists
+    // the WHOLE state, and writing the still-default other knob would clobber
+    // its saved value on disk (read-modify-write race).
+    final prefs = ref.read(safetyAlarmPrefsProvider);
+    unawaited((_restoreDone ?? Future<void>.value()).then((_) {
+      if (!ref.mounted) return; // disposed mid-flight — nothing to persist
+      unawaited(prefs.save(delaySec: state.delaySec, tone: state.tone));
+    }));
+  }
+
+  void setDelaySec(int v) {
+    if (v < 0 || v > 300) return;
+    _delayTouched = true;
+    state = state.copyWith(delaySec: v);
+    _persist();
+  }
+
+  void setTone(String tone) {
+    if (!safetyAlarmTones.containsKey(tone)) return;
+    _toneTouched = true;
+    state = state.copyWith(tone: tone);
+    _persist();
+  }
+
+  /// Fires the alarm flow for [reason]. While an episode is already pending
+  /// or ringing, a flapping monitor must not stack sirens — but an [urgent]
+  /// event (emergency stop) arriving mid-episode still updates the modal's
+  /// reason so the user learns the situation escalated. Master-gated by the
+  /// Notifications "Sound alert" toggle.
+  @visibleForTesting
+  void trigger(String reason, {bool urgent = false}) {
+    if (state.pending || state.ringing) {
+      if (urgent && !state.reason.contains('EMERGENCY')) {
+        state = state.copyWith(reason: '$reason — plus: ${state.reason}');
+      }
+      return;
+    }
+    // The MODAL always pops on a safety event — the Sound alert toggle
+    // gates only the tone (its copy promises exactly that). A muted user
+    // still sees the visual alert; it just never rings.
+    state = state.copyWith(pending: true, reason: reason);
+    _delayTimer?.cancel();
+    // The delay timer starts only after the device-local prefs restore
+    // resolved (a tiny file read) — an event racing app launch must ring
+    // with the USER'S delay/tone, not the defaults. The modal is already
+    // up either way; silence() mid-wait still wins (pending re-checked).
+    unawaited((_restoreDone ?? Future<void>.value()).then((_) {
+      if (!ref.mounted || !state.pending) return;
+      _delayTimer?.cancel();
+      _delayTimer = Timer(Duration(seconds: state.delaySec), _startRinging);
+    }));
+  }
+
+  void _startRinging() {
+    if (!state.pending) return;
+    if (!ref.read(notificationsSettingsProvider).soundAlert) {
+      // Sound muted: stay pending — the modal remains up until Silence or
+      // safety.safe, it just never rings.
+      return;
+    }
+    state = state.copyWith(pending: false, ringing: true);
+    _player ??= (playerFactory ?? AudioplayersAlarmPlayer.new)();
+    unawaited(_player!
+        .playLoop(safetyAlarmTones[state.tone] ?? safetyAlarmTones['siren']!)
+        .catchError((Object e) => debugPrint('safety alarm play failed: $e')));
+  }
+
+  /// Stops the countdown and/or the tone — the modal's Silence button and
+  /// the daemon's `safety.safe` both land here.
+  void silence() {
+    _delayTimer?.cancel();
+    _delayTimer = null;
+    if (state.ringing) {
+      unawaited(_player?.stop());
+    }
+    if (state.pending || state.ringing) {
+      state = state.copyWith(pending: false, ringing: false);
+    }
+  }
+
+  void _teardown() {
+    _delayTimer?.cancel();
+    _player?.dispose();
+    _player = null;
+  }
+}
+
+final safetyAlarmProvider =
+    NotifierProvider<SafetyAlarmController, SafetyAlarmState>(
+        SafetyAlarmController.new);
