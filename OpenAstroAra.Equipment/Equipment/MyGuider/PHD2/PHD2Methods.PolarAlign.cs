@@ -442,4 +442,137 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         [JsonProperty(PropertyName = "target")]
         public Phd2Point? Target { get; set; }
     }
+
+    // §45 Drift Align — the classic two-axis drift method (azimuth then altitude): watch the Dec drift of a
+    // guided star near the meridian/horizon, adjust the mount, repeat (openastro-guider src/drift_tool.cpp;
+    // event_server.cpp driftalign_* handlers). The richest of the three families — start/set_phase/drift/
+    // adjust/get_status share one status object, close returns 0. Only set_phase takes a param (which axis);
+    // drift/adjust are mode switches (looping-to-measure vs looping-to-adjust). Every status field bar
+    // `active` is nullable to mirror the daemon's conditional emission: !active short-circuits the object,
+    // and status_message / polar_alignment_error / current_star / lock_position / scope are each further
+    // gated (non-empty message, a computed alignment error, a valid star/lock, a connected pointing source).
+
+    /// <summary><c>driftalign_start</c> (no params) — open the Drift Align tool. Returns the status object.</summary>
+    public class Phd2DriftAlignStart : Phd2Method {
+        public override string Method => "driftalign_start";
+    }
+
+    /// <summary><c>driftalign_set_phase {phase}</c> — switch the adjustment axis (<c>"azimuth"</c> or
+    /// <c>"altitude"</c>; the daemon rejects anything else). Returns the status object.</summary>
+    public class Phd2DriftAlignSetPhase : Phd2Method<Phd2DriftAlignSetPhaseParameter> {
+        public override string Method => "driftalign_set_phase";
+    }
+
+    public class Phd2DriftAlignSetPhaseParameter {
+
+        // "azimuth" / "altitude" — required, so it's sent unconditionally.
+        [JsonProperty(PropertyName = "phase")]
+        public string? Phase { get; set; }
+    }
+
+    /// <summary><c>driftalign_drift</c> (no params) — enter drift-measure mode. Returns the status object.</summary>
+    public class Phd2DriftAlignDrift : Phd2Method {
+        public override string Method => "driftalign_drift";
+    }
+
+    /// <summary><c>driftalign_adjust</c> (no params) — enter adjust mode. Returns the status object.</summary>
+    public class Phd2DriftAlignAdjust : Phd2Method {
+        public override string Method => "driftalign_adjust";
+    }
+
+    /// <summary><c>driftalign_get_status</c> (no params) — the full Drift Align status object.</summary>
+    public class Phd2DriftAlignGetStatus : Phd2Method {
+        public override string Method => "driftalign_get_status";
+    }
+
+    /// <summary><c>driftalign_close</c> (no params) — tear the tool down; returns <c>0</c>
+    /// (deserialize with <see cref="GenericPhdMethodResponse"/>).</summary>
+    public class Phd2DriftAlignClose : Phd2Method {
+        public override string Method => "driftalign_close";
+    }
+
+    /// <summary>Response wrapper for <c>driftalign_start</c>/<c>_set_phase</c>/<c>_drift</c>/<c>_adjust</c>/
+    /// <c>_get_status</c> — all five return the same <see cref="Phd2DriftAlignStatus"/>.</summary>
+    public class Phd2DriftAlignStatusResponse : PhdMethodResponse {
+        public Phd2DriftAlignStatus? result { get; set; }
+    }
+
+    /// <summary>The Drift Align status object. Fields are nullable to mirror the daemon's conditional
+    /// emission — <c>Active=false</c> short-circuits the object, and <c>StatusMessage</c> /
+    /// <c>PolarAlignmentError</c> / <c>CurrentStar</c> / <c>LockPosition</c> / <c>Scope</c> are each
+    /// further gated on their underlying state being present.</summary>
+    public class Phd2DriftAlignStatus {
+
+        [JsonProperty(PropertyName = "active")]
+        public bool? Active { get; set; }
+
+        // "azimuth" / "altitude".
+        [JsonProperty(PropertyName = "phase")]
+        public string? Phase { get; set; }
+
+        // "drift" / "adjust" / "idle".
+        [JsonProperty(PropertyName = "mode")]
+        public string? Mode { get; set; }
+
+        [JsonProperty(PropertyName = "drifting")]
+        public bool? Drifting { get; set; }
+
+        [JsonProperty(PropertyName = "can_slew")]
+        public bool? CanSlew { get; set; }
+
+        [JsonProperty(PropertyName = "slewing")]
+        public bool? Slewing { get; set; }
+
+        [JsonProperty(PropertyName = "calibrated")]
+        public bool? Calibrated { get; set; }
+
+        [JsonProperty(PropertyName = "guiding")]
+        public bool? Guiding { get; set; }
+
+        // Present only when the tool has a non-empty status line.
+        [JsonProperty(PropertyName = "status_message")]
+        public string? StatusMessage { get; set; }
+
+        // Present only once the daemon can compute an alignment error from the guide graph.
+        [JsonProperty(PropertyName = "polar_alignment_error")]
+        public Phd2DriftAlignError? PolarAlignmentError { get; set; }
+
+        // {x, y} — gated on a valid current star / lock position.
+        [JsonProperty(PropertyName = "current_star")]
+        public Phd2Point? CurrentStar { get; set; }
+
+        [JsonProperty(PropertyName = "lock_position")]
+        public Phd2Point? LockPosition { get; set; }
+
+        // Present only when the pointing source is connected and reports coordinates.
+        [JsonProperty(PropertyName = "scope")]
+        public Phd2DriftAlignScope? Scope { get; set; }
+    }
+
+    /// <summary>The Drift Align alignment-error read — the arcmin polar error plus the Dec drift rate it
+    /// was fitted from.</summary>
+    public class Phd2DriftAlignError {
+
+        [JsonProperty(PropertyName = "error_arcmin")]
+        public double? ErrorArcmin { get; set; }
+
+        [JsonProperty(PropertyName = "dec_drift_arcsec_per_min")]
+        public double? DecDriftArcsecPerMin { get; set; }
+
+        [JsonProperty(PropertyName = "samples")]
+        public int? Samples { get; set; }
+    }
+
+    /// <summary>The pointing source's current position at the time of the status read.</summary>
+    public class Phd2DriftAlignScope {
+
+        [JsonProperty(PropertyName = "ra_hours")]
+        public double? RaHours { get; set; }
+
+        [JsonProperty(PropertyName = "dec_degrees")]
+        public double? DecDegrees { get; set; }
+
+        [JsonProperty(PropertyName = "lst_hours")]
+        public double? LstHours { get; set; }
+    }
 }
