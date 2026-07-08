@@ -76,11 +76,17 @@ public static class JpegEncoder {
     private static readonly SKColor MarkerColor = new(0, 255, 0);
     private const float MarkerStrokeWidth = 2f;
 
+    // Floor for the drawn ring radius, in OUTPUT (post-downscale) pixels. The markers arrive sized in source
+    // pixels, and a real sensor is downscaled ~6× to the preview cap — a tight star's few-pixel ring would
+    // collapse to a sub-pixel dot and vanish. This keeps every marker at least this visible in the preview.
+    private const float MarkerMinOutputRadius = 6f;
+
     /// <summary>
     /// Encode 8-bit grayscale pixels as a JPEG with star-marker circles drawn over them (§64 Live View /
-    /// §59 focus overlay). The grayscale is expanded to an RGB surface so the markers can be drawn in colour;
-    /// markers are drawn at full resolution and, when <paramref name="maxDim"/> caps the output, the whole
-    /// annotated image is downscaled together so the circles stay aligned with the stars.
+    /// §59 focus overlay). The grayscale is downscaled FIRST (to <paramref name="maxDim"/> when set) and only
+    /// the ≤maxDim result is expanded to an RGB surface for drawing — so a 26 MP frame never allocates a
+    /// ~100 MB full-res RGBA buffer, and the markers are drawn in output space where their radius/stroke land
+    /// at the intended visible size instead of shrinking into the downscale.
     /// </summary>
     /// <param name="pixels">Row-major 0–255 grayscale buffer; length must equal <paramref name="width"/> × <paramref name="height"/>.</param>
     /// <param name="markers">Star markers in the same pixel space as <paramref name="pixels"/>; a zero/negative radius is skipped.</param>
@@ -95,58 +101,44 @@ public static class JpegEncoder {
         }
         ArgumentNullException.ThrowIfNull(markers);
 
-        using var bitmap = GrayToRgbaBitmap(pixels, width, height);
-        using (var canvas = new SKCanvas(bitmap))
-        using (var paint = new SKPaint {
-            Color = MarkerColor,
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = MarkerStrokeWidth,
-            IsAntialias = true,
-        }) {
+        var (outW, outH) = maxDim > 0 ? ScaleToFit(width, height, maxDim) : (width, height);
+        // ScaleToFit preserves aspect, so a single source→output scale applies to both axes and to radii.
+        double scale = (double)outW / width;
+
+        // Source stays single-channel (1 B/px). Draw it resized into a small Rgba8888 canvas: the RGBA
+        // surface — and the Mitchell resample — only ever touch the ≤maxDim output, not the full sensor.
+        var srcInfo = new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        using var srcGray = new SKBitmap(srcInfo);
+        var srcPtr = srcGray.GetPixels();
+        if (srcPtr == IntPtr.Zero) throw new InvalidOperationException("Skia could not allocate the Gray8 bitmap backing buffer.");
+        unsafe {
+            fixed (byte* p = pixels) {
+                System.Buffer.MemoryCopy(p, (void*)srcPtr, pixels.Length, pixels.Length);
+            }
+        }
+        using var srcImage = SKImage.FromBitmap(srcGray);
+
+        var outInfo = new SKImageInfo(outW, outH, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        using var canvasBitmap = new SKBitmap(outInfo);
+        using (var canvas = new SKCanvas(canvasBitmap)) {
+            canvas.DrawImage(srcImage, new SKRect(0, 0, width, height), new SKRect(0, 0, outW, outH),
+                new SKSamplingOptions(SKCubicResampler.Mitchell), paint: null);
+            using var paint = new SKPaint {
+                Color = MarkerColor,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = MarkerStrokeWidth,
+                IsAntialias = true,
+            };
             foreach (var m in markers) {
-                if (m.Radius > 0) {
-                    canvas.DrawCircle(m.X, m.Y, m.Radius, paint);
-                }
+                if (m.Radius <= 0) continue;
+                float r = (float)Math.Max(MarkerMinOutputRadius, m.Radius * scale);
+                canvas.DrawCircle((float)(m.X * scale), (float)(m.Y * scale), r, paint);
             }
         }
 
-        if (maxDim > 0 && (width > maxDim || height > maxDim)) {
-            var (dstW, dstH) = ScaleToFit(width, height, maxDim);
-            var dstInfo = new SKImageInfo(dstW, dstH, SKColorType.Rgba8888, SKAlphaType.Opaque);
-            using var resized = bitmap.Resize(dstInfo, new SKSamplingOptions(SKCubicResampler.Mitchell))
-                ?? throw new InvalidOperationException($"Skia failed to resize {width}×{height} → {dstW}×{dstH} annotated preview");
-            using var scaledImage = SKImage.FromBitmap(resized);
-            using var scaledData = scaledImage.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
-            return scaledData.ToArray();
-        }
-        using var image = SKImage.FromBitmap(bitmap);
+        using var image = SKImage.FromBitmap(canvasBitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
         return data.ToArray();
-    }
-
-    // Expand a single-channel grayscale buffer into an opaque Rgba8888 SKBitmap (r=g=b=gray, a=255) so a
-    // colour overlay can be drawn onto it.
-    private static SKBitmap GrayToRgbaBitmap(ReadOnlySpan<byte> pixels, int width, int height) {
-        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
-        var bitmap = new SKBitmap(info);
-        var pixelPtr = bitmap.GetPixels();
-        if (pixelPtr == IntPtr.Zero) {
-            bitmap.Dispose();
-            throw new InvalidOperationException("Skia could not allocate the Rgba8888 bitmap backing buffer.");
-        }
-        unsafe {
-            byte* dst = (byte*)pixelPtr;
-            int n = width * height;
-            for (int i = 0; i < n; i++) {
-                byte g = pixels[i];
-                int d = i * 4;
-                dst[d] = g;
-                dst[d + 1] = g;
-                dst[d + 2] = g;
-                dst[d + 3] = 255;
-            }
-        }
-        return bitmap;
     }
 
     /// <summary>

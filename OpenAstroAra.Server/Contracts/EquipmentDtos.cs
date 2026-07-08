@@ -122,7 +122,7 @@ public sealed record CameraStateDto(
 // status; the frame bytes come from GET /camera/liveview/frame. ExposureSec is
 // short (sub-second to a few seconds); BinX/BinY default to 2 for a faster,
 // lower-noise framing loop.
-public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = null, int BinX = 2, int BinY = 2);
+public sealed record LiveViewStartRequestDto(double ExposureSec, int? Gain = null, int BinX = 2, int BinY = 2, bool Annotate = false);
 
 // All nullable fields are null until the session has the relevant value, not optional config:
 // StartedAtUtc is null before the first start AND after each stop (meta clears on stop) — use

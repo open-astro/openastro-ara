@@ -97,6 +97,29 @@ public class JpegEncoderAnnotatedTest {
     }
 
     [Test]
+    public void EncodeGrayAnnotated_marker_survives_a_large_downscale() {
+        // Regression: markers used to be drawn at full resolution and only THEN was the whole bitmap
+        // downscaled to maxDim — on a real (≫maxDim) sensor a few-pixel ring collapsed to a sub-pixel dot
+        // and vanished on exactly the frames the overlay targets. The ring is now drawn in output space with
+        // a visible-floor radius, so it must remain present after the frame is capped.
+        int w = 4000, h = 3000;
+        var pixels = FlatGray(w, h, 30);
+        var markers = new List<StarMarker> { new(2000, 1500, 6) };  // 6 src px → <1 px after the ~0.16 downscale
+
+        var jpeg = JpegEncoder.EncodeGrayAnnotated(pixels, w, h, markers, maxDim: 640);
+        using var decoded = SKBitmap.Decode(jpeg);
+        Assert.That(Math.Max(decoded.Width, decoded.Height), Is.EqualTo(640), "the longest axis should be capped to maxDim");
+
+        int greenCount = 0;
+        for (int y = 0; y < decoded.Height; y++) {
+            for (int x = 0; x < decoded.Width; x++) {
+                if (IsGreenish(decoded.GetPixel(x, y))) greenCount++;
+            }
+        }
+        Assert.That(greenCount, Is.GreaterThan(0), "the marker ring must remain visible after the frame is downscaled to maxDim");
+    }
+
+    [Test]
     public void EncodeGrayAnnotated_rejects_a_dimension_mismatch() {
         Assert.Throws<ArgumentException>(() =>
             JpegEncoder.EncodeGrayAnnotated(new byte[10], 4, 4, new List<StarMarker>()));

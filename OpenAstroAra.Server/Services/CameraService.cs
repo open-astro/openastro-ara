@@ -513,14 +513,17 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
+    // §59 — the one detector posture the HFR trend and the live-view overlay must share. Both feed the same
+    // instrument's picture of the frame, so a sensitivity retune here must reach both; a copy-pasted literal
+    // at each call site would silently desync them. maxStars = 0 leaves the count uncapped (full-frame stats);
+    // the overlay passes its draw cap. IsAutoFocus = false: full-frame statistics, not the sweep's
+    // center-weighted probe posture.
+    private static StarDetectionParams AnalysisDetectionParams(int maxStars = 0) =>
+        new() { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = maxStars };
+
     private static (double Hfr, int Stars) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
-        // Same detector, same sensitivity as the §59 sweep metric — HFR values that feed one
-        // trend must come from one instrument. IsAutoFocus=false: full-frame statistics, not
-        // the sweep's center-weighted probe posture.
         var result = StarDetector.Detect(
-            pixels, width, height,
-            new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false },
-            CancellationToken.None);
+            pixels, width, height, AnalysisDetectionParams(), CancellationToken.None);
         return (result.AverageHFR, result.DetectedStars);
     }
 
