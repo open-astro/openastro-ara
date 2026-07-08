@@ -77,7 +77,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 if (string.IsNullOrWhiteSpace(path)) {
                     throw new ArgumentException("a saved frame requires a path.", nameof(path));
                 }
-                if (!System.IO.Path.IsPathRooted(path)) {
+                // IsPathFullyQualified — not IsPathRooted — so Windows drive-relative ("C:a.fits") and
+                // root-relative ("\a.fits") paths (which IsPathRooted accepts but the daemon rejects) are
+                // caught here, giving the caller a clear error instead of the daemon's opaque -32602.
+                if (!System.IO.Path.IsPathFullyQualified(path)) {
                     throw new ArgumentException($"path must be absolute: '{path}'.", nameof(path));
                 }
             }

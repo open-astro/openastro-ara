@@ -76,6 +76,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Capture_request_rejects_windows_drive_and_root_relative_paths() {
+            // IsPathFullyQualified (not IsPathRooted) must reject these — IsPathRooted accepts them on
+            // Windows but they are not truly absolute, so the daemon would still reject them.
+            Assert.Throws<ArgumentException>(() =>
+                PHD2Guider.BuildCaptureSolverFrameRequest(1000, null, null, null, path: @"C:a.fits", save: true),
+                "drive-relative path must be rejected");
+            Assert.Throws<ArgumentException>(() =>
+                PHD2Guider.BuildCaptureSolverFrameRequest(1000, null, null, null, path: @"\a.fits", save: true),
+                "root-relative path must be rejected");
+        }
+
+        [Test]
         public void Capture_request_rejects_out_of_range_exposure_binning_and_gain() {
             Assert.Throws<ArgumentOutOfRangeException>(() =>
                 PHD2Guider.BuildCaptureSolverFrameRequest(0, null, null, null, null, false));
