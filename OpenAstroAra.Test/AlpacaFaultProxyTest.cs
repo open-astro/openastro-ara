@@ -347,12 +347,23 @@ namespace OpenAstroAra.Test {
                     _lastRequestHeaders = context.Request.Headers;
                     var body = Encoding.UTF8.GetBytes(
                         $"{{\"Value\":{_valueLiteral},\"ErrorNumber\":0,\"ErrorMessage\":\"\",\"ClientTransactionID\":0,\"ServerTransactionID\":1}}");
-                    var resp = context.Response;
-                    resp.StatusCode = 200;
-                    resp.ContentType = "application/json";
-                    resp.ContentLength64 = body.Length;
-                    await resp.OutputStream.WriteAsync(body).ConfigureAwait(false);
-                    resp.OutputStream.Close();
+                    try {
+                        var resp = context.Response;
+                        resp.StatusCode = 200;
+                        resp.ContentType = "application/json";
+                        resp.ContentLength64 = body.Length;
+                        await resp.OutputStream.WriteAsync(body).ConfigureAwait(false);
+                        resp.OutputStream.Close();
+                    } catch (HttpListenerException) {
+                        // Teardown raced the write — client gone; keep accepting
+                        // until the listener itself stops.
+                    } catch (ObjectDisposedException) {
+                        // Same race surfaced as a disposed HttpListenerResponse
+                        // (observed once on CI linux, PORT_TODO 2026-07-07). An
+                        // unguarded throw here kills the loop task and fails the
+                        // test at DisposeAsync's await — a shutdown race must
+                        // never fail the bench.
+                    }
                 }
             }
 
