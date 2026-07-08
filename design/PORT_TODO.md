@@ -800,10 +800,13 @@ Deferred to **§43-2**:
   mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low
   priority — §43-1 payloads are config-sized (KB), so disk-full during packaging is unlikely. Surfaced 2026-06-13 by
   the §43-1 round-7 review.
-- **Async packaging + progress WS.** `CreateZipAsync` completes the zip within the request (the payload is config-sized
-  — kilobytes, not the frame library) rather than on a background worker emitting `backup.*` progress events. The
-  202/operation-id contract is already in place so the wire shape won't change when it becomes truly async; add the
-  worker + WS progress if a future area (e.g. frame-metadata) makes the payload large enough to warrant it.
+- **Async packaging + progress WS — trigger condition fired (2026-07-08).** `CreateZipAsync` completes the zip within
+  the request rather than on a background worker emitting `backup.*` progress events, and §43-2b(c)'s frames_metadata
+  area made the payload catalog-sized (SQLite `BackupDatabase` page-copy + zip + whole-archive SHA-256, all
+  in-request). Interim mitigation: the client's `createBackup()` carries a 120s per-call read timeout (2× restore's
+  headroom, since restore 202s to a worker while create can't). Durable fix: move create onto a worker like restore —
+  the 202/operation-id contract is already in place so the wire shape won't change. Surfaced by the §43-2b(c) round-3
+  review.
 - ✅ **Area selectors beyond profiles+sequences — RESOLVED (2026-07-08) by §43-2b(c) above.** The
   frames-catalog area ships end-to-end (create snapshot + manifest count + opt-in restore); logs are
   reserved-by-design (not a §43.4 zip area). Remaining from the §43.4 list: calibration metadata sidecar

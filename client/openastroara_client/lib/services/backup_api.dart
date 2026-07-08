@@ -41,9 +41,10 @@ abstract interface class BackupClient {
 }
 
 /// Dio wrapper over `/api/v1/backup/*`. Create is 202-Accepted and completes
-/// within the request (config-sized payload). Restore is also 202 but runs on a
-/// background worker (§43-2b) — poll [cloneStatus] for its `running`→`done`/
-/// `failed` outcome.
+/// within the request — since §43-2b(c) the payload can be catalog-sized, not
+/// just config-sized, so the call carries its own read timeout. Restore is also
+/// 202 but runs on a background worker (§43-2b) — poll [cloneStatus] for its
+/// `running`→`done`/`failed` outcome.
 class BackupApi implements BackupClient {
   final Dio _dio;
   final String _baseUrl;
@@ -89,7 +90,14 @@ class BackupApi implements BackupClient {
 
   @override
   Future<String> createBackup() async {
-    final res = await _dio.post<dynamic>('/api/v1/backup/create-zip');
+    final res = await _dio.post<dynamic>(
+      '/api/v1/backup/create-zip',
+      // §43-2b(c): create runs the whole job in-request — SQLite BackupDatabase
+      // page-copy of the frames catalog + zip + SHA-256 of the archive. On Pi
+      // hardware with a long-lived catalog that outgrows the 30s default, so
+      // give it double the restore headroom (restore 202s quickly; create can't).
+      options: Options(receiveTimeout: const Duration(seconds: 120)),
+    );
     return _operationId(res.data, 'create-zip');
   }
 
