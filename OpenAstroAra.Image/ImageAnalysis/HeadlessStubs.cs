@@ -69,8 +69,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// star, → 0 an elongated one. The §59.4 asymmetry/tilt signal (guiding drift, tilt, coma).</summary>
         public double Roundness { get; set; }
 
-        /// <summary>Background-corrected peak-to-background ratio, (peak − background) / background — the
-        /// scale-invariant central brightness that collapses as a refractor defocuses.</summary>
+        /// <summary>Background-corrected peak-to-background ratio, (peak − background) / max(1, background)
+        /// — the scale-invariant central brightness that collapses as a refractor defocuses. The 1-ADU
+        /// denominator floor keeps it bounded on an all-dark/bias-free frame.</summary>
         public double PeakToBackground { get; set; }
     }
 

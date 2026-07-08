@@ -250,7 +250,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 Background = background,
                 FWHM = FwhmFromMoments(mxx / sumF, myy / sumF),
                 Roundness = RoundnessFromMoments(mxx / sumF, myy / sumF, mxy / sumF),
-                PeakToBackground = background > 0 ? (peak - background) / background : peak,
+                // Floor the denominator to 1 ADU (the sensor noise floor) rather than branching on
+                // background == 0: a real frame's median background is a non-negative integer that's
+                // essentially always ≥ bias, but flooring keeps this a bounded, continuous, scale-invariant
+                // ratio even on an all-dark/bias-free synthetic frame — a raw-peak fallback there would
+                // inject an outlier of a wholly different magnitude into the §59.3 median the model trains on.
+                PeakToBackground = (peak - background) / Math.Max(1.0, background),
             };
         }
 

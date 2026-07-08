@@ -119,6 +119,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Peak_to_background_stays_bounded_on_a_near_zero_background_frame() {
+            // A dark/bias-free frame has a ~0 median background; the 1-ADU denominator floor must keep
+            // PeakToBackground a finite, peak-scale value rather than dividing by zero or NaN-ing — the
+            // §59.3 median must never ingest an infinity from an all-dark calibration frame.
+            int w = 120, h = 120;
+            var frame = new ushort[w * h]; // background 0, no Array.Fill
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            var star = DetectOne(frame, w, h);
+            Assert.That(double.IsFinite(star.PeakToBackground), Is.True);
+            Assert.That(star.PeakToBackground, Is.GreaterThan(0));
+            // With background ≈ 0 the ratio degrades to (peak − bg)/1 ≈ the raw peak — bounded, not exploded.
+            Assert.That(star.PeakToBackground, Is.LessThan(ushort.MaxValue));
+        }
+
+        [Test]
         public void Extract_on_a_detected_frame_yields_positive_medians() {
             int w = 160, h = 160;
             var frame = FlatField(w, h);
