@@ -38,10 +38,15 @@ public sealed record CalibrationFilterSummaryDto(
     int? RecommendedFlatFrames);
 
 /// <summary>POST /api/v1/calibration/sessions/{id}/matching-flats body.</summary>
+/// <remarks><c>Flavor</c> picks the §48 capture style: "panel" (default — FlatPanelFlats sets,
+/// run whenever a panel is lit) or "sky" (§48.4 — the sequence waits for twilight, slews to the
+/// profile's sky-flat patch, and captures SkyFlats sets with drift re-probing). Additive-optional
+/// so pre-§48.4 callers keep their shape.</remarks>
 public sealed record MatchingFlatsRequestDto(
     int? OverrideFrameCount,
     int? OverrideTargetAdu,
-    bool GenerateOnly);
+    bool GenerateOnly,
+    string Flavor = "panel");
 
 /// <summary>Sequence the server generated to capture matching flats for the session.
 /// <c>GeneratedSequenceId</c> is the persisted §38 sequence (runnable via

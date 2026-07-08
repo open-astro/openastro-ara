@@ -90,6 +90,17 @@ class SafetyPolicies {
   final int flatFramesPerFilter;
   final bool postFlatParkMount;
 
+  // §48.4 sky_flat — the twilight sky-flat sets the daemon generates (target mean ADU, saved
+  // frames per filter, the sky patch to point at, the ADU window it stops outside of, and the
+  // sun altitude the sequence waits for before it starts).
+  final int skyFlatTargetAdu;
+  final int skyFlatFramesPerFilter;
+  final double skyFlatTargetAzimuth;
+  final double skyFlatTargetAltitude;
+  final double skyFlatStopAtMaxAdu;
+  final double skyFlatStopAtMinAdu;
+  final double skyFlatSunAltitude;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -119,6 +130,13 @@ class SafetyPolicies {
     this.flatTargetAduTolerancePct = 5.0,
     this.flatFramesPerFilter = 30,
     this.postFlatParkMount = true,
+    this.skyFlatTargetAdu = 25000,
+    this.skyFlatFramesPerFilter = 20,
+    this.skyFlatTargetAzimuth = 90.0,
+    this.skyFlatTargetAltitude = 75.0,
+    this.skyFlatStopAtMaxAdu = 50000.0,
+    this.skyFlatStopAtMinAdu = 5000.0,
+    this.skyFlatSunAltitude = -9.0,
   });
 
   SafetyPolicies copyWith({
@@ -150,6 +168,13 @@ class SafetyPolicies {
     double? flatTargetAduTolerancePct,
     int? flatFramesPerFilter,
     bool? postFlatParkMount,
+    int? skyFlatTargetAdu,
+    int? skyFlatFramesPerFilter,
+    double? skyFlatTargetAzimuth,
+    double? skyFlatTargetAltitude,
+    double? skyFlatStopAtMaxAdu,
+    double? skyFlatStopAtMinAdu,
+    double? skyFlatSunAltitude,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -191,6 +216,16 @@ class SafetyPolicies {
             flatTargetAduTolerancePct ?? this.flatTargetAduTolerancePct,
         flatFramesPerFilter: flatFramesPerFilter ?? this.flatFramesPerFilter,
         postFlatParkMount: postFlatParkMount ?? this.postFlatParkMount,
+        skyFlatTargetAdu: skyFlatTargetAdu ?? this.skyFlatTargetAdu,
+        skyFlatFramesPerFilter:
+            skyFlatFramesPerFilter ?? this.skyFlatFramesPerFilter,
+        skyFlatTargetAzimuth:
+            skyFlatTargetAzimuth ?? this.skyFlatTargetAzimuth,
+        skyFlatTargetAltitude:
+            skyFlatTargetAltitude ?? this.skyFlatTargetAltitude,
+        skyFlatStopAtMaxAdu: skyFlatStopAtMaxAdu ?? this.skyFlatStopAtMaxAdu,
+        skyFlatStopAtMinAdu: skyFlatStopAtMinAdu ?? this.skyFlatStopAtMinAdu,
+        skyFlatSunAltitude: skyFlatSunAltitude ?? this.skyFlatSunAltitude,
       );
 }
 
@@ -290,6 +325,42 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
 
   void setPostFlatParkMount(bool v) =>
       state = state.copyWith(postFlatParkMount: v);
+
+  void setSkyFlatTargetAdu(int v) {
+    if (v <= 0) return;
+    state = state.copyWith(skyFlatTargetAdu: v);
+  }
+
+  void setSkyFlatFramesPerFilter(int v) {
+    if (v <= 0) return;
+    state = state.copyWith(skyFlatFramesPerFilter: v);
+  }
+
+  void setSkyFlatTargetAzimuth(double v) {
+    if (v < 0 || v > 360) return;
+    state = state.copyWith(skyFlatTargetAzimuth: v);
+  }
+
+  void setSkyFlatTargetAltitude(double v) {
+    if (v < 0 || v > 90) return;
+    state = state.copyWith(skyFlatTargetAltitude: v);
+  }
+
+  void setSkyFlatStopAtMaxAdu(double v) {
+    if (v <= 0) return;
+    state = state.copyWith(skyFlatStopAtMaxAdu: v);
+  }
+
+  void setSkyFlatStopAtMinAdu(double v) {
+    if (v < 0) return;
+    state = state.copyWith(skyFlatStopAtMinAdu: v);
+  }
+
+  void setSkyFlatSunAltitude(double v) {
+    if (v < -90 || v > 90) return;
+    state = state.copyWith(skyFlatSunAltitude: v);
+  }
+
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       state = state.copyWith(onDiskSpaceCritical: a);
 

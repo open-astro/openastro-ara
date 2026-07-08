@@ -211,7 +211,26 @@ public sealed record SafetyPoliciesDto(
     // Saved FLAT frames per filter.
     int FlatFramesPerFilter = 30,
     // Append a ParkScope step after the generated flats so the rig ends the night parked.
-    bool PostFlatParkMount = true);
+    bool PostFlatParkMount = true,
+    // §48.7 sky_flat — the twilight sky-flat variant the §39.5 generator emits for
+    // "sky_at_twilight" (SkyFlats leaves + the WaitForSunAltitude/SlewScopeToAltAz
+    // envelope). Optional ctor defaults keep an older profile.json deserializing.
+    // Mean-ADU target for the sky probe (dimmer than the panel target — twilight drifts).
+    int SkyFlatTargetAdu = 25000,
+    // Saved FLAT frames per filter for the sky variant.
+    int SkyFlatFramesPerFilter = 20,
+    // The flat-friendly sky patch, degrees (east in the morning — away from the rising sun's
+    // gradient; §48.9 tracks computing this per-twilight).
+    double SkyFlatTargetAzimuth = 90,
+    double SkyFlatTargetAltitude = 75,
+    // §48.4 bail-outs: stop when the sky reads over this at the minimum exposure…
+    double SkyFlatStopAtMaxAdu = 50000,
+    // …or under this at the maximum exposure.
+    double SkyFlatStopAtMinAdu = 5000,
+    // Sun altitude (deg) the sequence waits for before starting sky flats. -9 (mid nautical
+    // twilight, sky bright enough to reach the target within the exposure bounds) rather than
+    // the playbook prose's astronomical twilight (-18, still dark enough for imaging).
+    double SkyFlatSunAltitude = -9);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

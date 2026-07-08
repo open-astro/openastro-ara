@@ -167,6 +167,89 @@ class _SessionCalibrationPanelState
           value: s.postFlatParkMount,
           onChanged: n.setPostFlatParkMount,
         ),
+        // §48.4 sky_flat — twilight flats. The generated sequence waits for the
+        // sun to reach the altitude below, slews to the sky patch, then re-probes
+        // the sky before every frame and stops outside the ADU window.
+        const SettingsSectionHeader('Sky flats (twilight)'),
+        EditableNumberRow(
+          label: 'Target brightness (mean ADU)',
+          helpKey: 'session.calibration.sky_flat_target_adu',
+          currentValue: s.skyFlatTargetAdu.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).skyFlatTargetAdu.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setSkyFlatTargetAdu(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Frames per filter',
+          helpKey: 'session.calibration.sky_flat_frames_per_filter',
+          currentValue: s.skyFlatFramesPerFilter.toString(),
+          getCanonical: () => ref
+              .read(safetyPoliciesProvider)
+              .skyFlatFramesPerFilter
+              .toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setSkyFlatFramesPerFilter(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Sky patch azimuth (deg)',
+          helpKey: 'session.calibration.sky_flat_target_azimuth',
+          currentValue: s.skyFlatTargetAzimuth.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).skyFlatTargetAzimuth.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSkyFlatTargetAzimuth(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Sky patch altitude (deg)',
+          helpKey: 'session.calibration.sky_flat_target_altitude',
+          currentValue: s.skyFlatTargetAltitude.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).skyFlatTargetAltitude.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSkyFlatTargetAltitude(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Stop above (ADU)',
+          helpKey: 'session.calibration.sky_flat_stop_at_max_adu',
+          currentValue: s.skyFlatStopAtMaxAdu.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).skyFlatStopAtMaxAdu.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSkyFlatStopAtMaxAdu(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Stop below (ADU)',
+          helpKey: 'session.calibration.sky_flat_stop_at_min_adu',
+          currentValue: s.skyFlatStopAtMinAdu.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).skyFlatStopAtMinAdu.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSkyFlatStopAtMinAdu(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Wait for sun altitude (deg)',
+          helpKey: 'session.calibration.sky_flat_sun_altitude',
+          currentValue: s.skyFlatSunAltitude.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).skyFlatSunAltitude.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSkyFlatSunAltitude(v);
+          },
+        ),
         if (_lastError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),

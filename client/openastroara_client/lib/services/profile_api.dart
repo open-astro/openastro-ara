@@ -942,6 +942,19 @@ class ProfileApi {
         flatFramesPerFilter:
             (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
         postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? true,
+        skyFlatTargetAdu: (j['sky_flat_target_adu'] as num?)?.toInt() ?? 25000,
+        skyFlatFramesPerFilter:
+            (j['sky_flat_frames_per_filter'] as num?)?.toInt() ?? 20,
+        skyFlatTargetAzimuth:
+            (j['sky_flat_target_azimuth'] as num?)?.toDouble() ?? 90.0,
+        skyFlatTargetAltitude:
+            (j['sky_flat_target_altitude'] as num?)?.toDouble() ?? 75.0,
+        skyFlatStopAtMaxAdu:
+            (j['sky_flat_stop_at_max_adu'] as num?)?.toDouble() ?? 50000.0,
+        skyFlatStopAtMinAdu:
+            (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
+        skyFlatSunAltitude:
+            (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -975,6 +988,13 @@ class ProfileApi {
     'flat_target_adu_tolerance_pct': v.flatTargetAduTolerancePct,
     'flat_frames_per_filter': v.flatFramesPerFilter,
     'post_flat_park_mount': v.postFlatParkMount,
+    'sky_flat_target_adu': v.skyFlatTargetAdu,
+    'sky_flat_frames_per_filter': v.skyFlatFramesPerFilter,
+    'sky_flat_target_azimuth': v.skyFlatTargetAzimuth,
+    'sky_flat_target_altitude': v.skyFlatTargetAltitude,
+    'sky_flat_stop_at_max_adu': v.skyFlatStopAtMaxAdu,
+    'sky_flat_stop_at_min_adu': v.skyFlatStopAtMinAdu,
+    'sky_flat_sun_altitude': v.skyFlatSunAltitude,
   };
 
   static CalibrationCaptureDefault _calibrationCaptureDefaultFromString(

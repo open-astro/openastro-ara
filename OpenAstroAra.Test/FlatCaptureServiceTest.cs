@@ -282,5 +282,171 @@ namespace OpenAstroAra.Test {
             Assert.That(clone.Gain, Is.EqualTo(120));
             Assert.That(clone.Offset, Is.EqualTo(30));
         }
+
+        // ── §48.4 sky flats ──────────────────────────────────────────────────
+        // No flat panel is involved; the sky itself is the light source, so these exercise the
+        // frame source directly (twilight brightness = AduPerSecond) plus the stop-window bail-outs.
+
+        private static SkyFlatSetRequest SkyRequest(
+            double targetAdu = 25000, double tolerancePct = 5, int frameCount = 3,
+            double minSec = 0.01, double maxSec = 10, double stopMax = 50000, double stopMin = 5000,
+            int gain = 101, int offset = 7) =>
+            new(targetAdu, tolerancePct, frameCount, minSec, maxSec, stopMax, stopMin, gain, offset);
+
+        [Test]
+        public async Task Sky_converges_and_captures_the_set_as_FLAT_reprobing_each_frame() {
+            scene.AduPerSecond = 25000;   // 1s probe = 25000 = target, converges on the first probe
+            var ok = await CreateSUT().CaptureSkyFlatSetAsync(SkyRequest(), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured, Has.Count.EqualTo(3), "one saved frame per requested count");
+            Assert.That(captured.All(s => s.ImageType == ImageTypes.FLAT), Is.True);
+            Assert.That(captured.All(s => Math.Abs(s.ExposureTime - 1) < 1e-6), Is.True);
+            Assert.That(captured[0].Gain, Is.EqualTo(101));
+            Assert.That(captured[0].Offset, Is.EqualTo(7));
+            Assert.That(scene.ProbedExposures, Has.Count.EqualTo(3), "exactly one probe per frame — no panel, no wasted twilight");
+        }
+
+        [Test]
+        public async Task Sky_too_bright_at_the_minimum_exposure_bails_without_capturing() {
+            // 10M ADU/s saturates every frame to full-well (well over the 50000 ceiling); a narrow
+            // exposure window lets the probe walk to the 0.01s floor and hit the bright bail there.
+            scene.AduPerSecond = 10_000_000;
+            var ok = await CreateSUT().CaptureSkyFlatSetAsync(
+                SkyRequest(minSec: 0.01, maxSec: 0.02), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.False, "dawn is too bright — the set must stop, not save blown frames");
+            Assert.That(captured, Is.Empty);
+        }
+
+        [Test]
+        public async Task Sky_too_dark_at_the_maximum_exposure_bails_without_capturing() {
+            scene.AduPerSecond = 100;   // even a 10s frame reads 1000 ADU, under the 5000 floor
+            var ok = await CreateSUT().CaptureSkyFlatSetAsync(SkyRequest(), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.False, "the sky is too dark — stop rather than save under-exposed frames");
+            Assert.That(captured, Is.Empty);
+        }
+
+        [Test]
+        public async Task Sky_pinned_but_inside_the_stop_window_captures_anyway() {
+            // 4,000,000 ADU/s pins the exposure at the 0.01s floor, where a 0.01s frame reads 40000
+            // ADU — off-target (target 25000) but comfortably inside [5000, 50000]. An
+            // off-target-but-usable frame beats losing the twilight window, so it captures anyway.
+            scene.AduPerSecond = 4_000_000;
+            var ok = await CreateSUT().CaptureSkyFlatSetAsync(
+                SkyRequest(frameCount: 2, minSec: 0.01, maxSec: 0.02), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(captured, Has.Count.EqualTo(2));
+            Assert.That(captured.All(s => Math.Abs(s.ExposureTime - 0.01) < 1e-6), Is.True, "captured at the pinned min exposure");
+        }
+
+        [Test]
+        public async Task Sky_zero_light_fails_honestly() {
+            scene.AduPerSecond = 0;
+            var ok = await CreateSUT().CaptureSkyFlatSetAsync(SkyRequest(), new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(captured, Is.Empty);
+        }
+
+        [Test]
+        public async Task Sky_rejects_a_target_outside_its_stop_bounds_before_probing() {
+            var ok = await CreateSUT().CaptureSkyFlatSetAsync(
+                SkyRequest(targetAdu: 60000), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(ok, Is.False, "target ADU above the stop-max ceiling is nonsensical");
+            Assert.That(scene.ProbedExposures, Is.Empty);
+        }
+
+        [Test]
+        public async Task Sky_missing_capture_wiring_fails_instead_of_pretending() {
+            var sut = new FlatCaptureService(frames: null, imaging: null, flatDevice: panel);
+            var ok = await sut.CaptureSkyFlatSetAsync(SkyRequest(), new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(ok, Is.False);
+        }
+
+        [Test]
+        public void Sky_cancellation_mid_set_propagates() {
+            using var cts = new CancellationTokenSource();
+            scene.AduPerSecond = 25000;
+            imagingMock
+                .Setup(x => x.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<string>()))
+                .Returns(async () => {
+                    await cts.CancelAsync();
+                    cts.Token.ThrowIfCancellationRequested();
+                    return (IExposureData)null!;
+                });
+
+            Assert.CatchAsync<OperationCanceledException>(
+                () => CreateSUT().CaptureSkyFlatSetAsync(SkyRequest(), new Progress<ApplicationStatus>(), cts.Token));
+        }
+
+        [Test]
+        public void SkyFlats_throws_when_no_executor_is_wired() {
+            var item = new SkyFlats(flatCaptureExecutor: null);
+            Assert.ThrowsAsync<SequenceEntityFailedException>(
+                () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        [Test]
+        public void SkyFlats_throws_when_the_executor_reports_failure() {
+            var executor = new Mock<IFlatCaptureExecutor>();
+            executor
+                .Setup(x => x.CaptureSkyFlatSetAsync(It.IsAny<SkyFlatSetRequest>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+            var item = new SkyFlats(executor.Object);
+            Assert.ThrowsAsync<SequenceEntityFailedException>(
+                () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        [Test]
+        public async Task SkyFlats_passes_its_fields_through_to_the_executor() {
+            SkyFlatSetRequest? seen = null;
+            var executor = new Mock<IFlatCaptureExecutor>();
+            executor
+                .Setup(x => x.CaptureSkyFlatSetAsync(It.IsAny<SkyFlatSetRequest>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<SkyFlatSetRequest, IProgress<ApplicationStatus>, CancellationToken>((r, _, _) => seen = r)
+                .ReturnsAsync(true);
+            var item = new SkyFlats(executor.Object) {
+                TargetAdu = 20000, TargetAduTolerancePct = 4, FrameCount = 15,
+                MinExposureSec = 0.02, MaxExposureSec = 8, StopAtMaxAdu = 45000, StopAtMinAdu = 4000,
+                Gain = 120, Offset = 30,
+            };
+
+            await item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(seen, Is.EqualTo(new SkyFlatSetRequest(20000, 4, 15, 0.02, 8, 45000, 4000, 120, 30)));
+        }
+
+        [Test]
+        public void SkyFlats_rejects_a_target_outside_the_stop_window_naming_the_fields() {
+            var executor = new Mock<IFlatCaptureExecutor>();
+            var item = new SkyFlats(executor.Object) { TargetAdu = 25000, StopAtMaxAdu = 20000 };
+            var ex = Assert.ThrowsAsync<SequenceEntityFailedException>(
+                () => item.Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("misconfigured"));
+            executor.VerifyNoOtherCalls();
+        }
+
+        [Test]
+        public void SkyFlats_clone_preserves_every_field() {
+            var original = new SkyFlats(flatCaptureExecutor: null) {
+                TargetAdu = 20000, TargetAduTolerancePct = 4, FrameCount = 15,
+                MinExposureSec = 0.02, MaxExposureSec = 8, StopAtMaxAdu = 45000, StopAtMinAdu = 4000,
+                Gain = 120, Offset = 30,
+            };
+            var clone = (SkyFlats)original.Clone();
+            Assert.That(clone, Is.Not.SameAs(original));
+            Assert.That(clone.TargetAdu, Is.EqualTo(20000));
+            Assert.That(clone.TargetAduTolerancePct, Is.EqualTo(4));
+            Assert.That(clone.FrameCount, Is.EqualTo(15));
+            Assert.That(clone.MinExposureSec, Is.EqualTo(0.02));
+            Assert.That(clone.MaxExposureSec, Is.EqualTo(8));
+            Assert.That(clone.StopAtMaxAdu, Is.EqualTo(45000));
+            Assert.That(clone.StopAtMinAdu, Is.EqualTo(4000));
+            Assert.That(clone.Gain, Is.EqualTo(120));
+            Assert.That(clone.Offset, Is.EqualTo(30));
+        }
     }
 }

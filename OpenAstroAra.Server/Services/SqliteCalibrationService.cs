@@ -39,6 +39,14 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     private const int DefaultFlatFrames = 20;
     private const int DefaultTargetAdu = 32000;
     private const double DefaultTargetAduTolerancePct = 5;
+    // §48.7 sky_flat fallbacks (store-less contexts only; production reads the policy fields).
+    private const int DefaultSkyFlatFrames = 20;
+    private const int DefaultSkyTargetAdu = 25000;
+    private const double DefaultSkyStopAtMaxAdu = 50000;
+    private const double DefaultSkyStopAtMinAdu = 5000;
+    private const double DefaultSkySunAltitude = -9;
+    private const double DefaultSkyAzimuth = 90;
+    private const double DefaultSkyAltitude = 75;
 
     private readonly IAraDatabase _db;
     private readonly ISequenceService? _sequences;
@@ -115,15 +123,19 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var session = await BuildSessionDtoAsync(conn, sessionId, ct)
             ?? throw new CalibrationSessionNotFoundException(sessionId);
 
-        // §48.7 flat_panel policy (request overrides win, then the profile, then the fallback
-        // constants for a store-less context).
+        // §48.7 flat_panel / sky_flat policy (request overrides win, then the profile, then the
+        // fallback constants for a store-less context). The sky flavor has its own target/count
+        // defaults — twilight is dimmer and drifts, so §48.7 specs 25000/20 vs the panel's 30000/30.
+        var sky = string.Equals(request.Flavor, "sky", StringComparison.OrdinalIgnoreCase);
         var policies = _profile?.GetSafetyPolicies();
+        var policyFrames = sky ? policies?.SkyFlatFramesPerFilter : policies?.FlatFramesPerFilter;
+        var policyTarget = sky ? policies?.SkyFlatTargetAdu : policies?.FlatTargetAdu;
         var frameCount = request.OverrideFrameCount is int n && n > 0
             ? n
-            : policies?.FlatFramesPerFilter is int p && p > 0 ? p : DefaultFlatFrames;
+            : policyFrames is int p && p > 0 ? p : (sky ? DefaultSkyFlatFrames : DefaultFlatFrames);
         var targetAdu = request.OverrideTargetAdu is int o && o > 0
             ? o
-            : policies?.FlatTargetAdu is int t && t > 0 ? t : DefaultTargetAdu;
+            : policyTarget is int t && t > 0 ? t : (sky ? DefaultSkyTargetAdu : DefaultTargetAdu);
         var tolerancePct = policies?.FlatTargetAduTolerancePct is double tol && tol > 0
             ? tol : DefaultTargetAduTolerancePct;
         // NB: the park rides only the persisted sequence body — GeneratedFlatSequenceDto.Steps
@@ -134,6 +146,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var captureSettings = await ModalCaptureSettingsByFilterAsync(conn, sessionId, ct);
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);
         var specs = new List<FlatStepSpec>(session.FiltersUsed.Count);
+        var skySpecs = new List<SkyFlatStepSpec>(session.FiltersUsed.Count);
         var total = 0;
         foreach (var filter in session.FiltersUsed) {
             steps.Add(new GeneratedFlatStepDto(
@@ -142,25 +155,46 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 TargetAdu: targetAdu,
                 PanelBrightness: null));
             var settings = captureSettings.GetValueOrDefault(filter.FilterName);
-            specs.Add(new FlatStepSpec(
-                FilterName: filter.FilterName == NoFilter ? null : filter.FilterName,
-                FrameCount: frameCount,
-                TargetAdu: targetAdu,
-                TargetAduTolerancePct: tolerancePct,
-                Gain: settings?.Gain,
-                Offset: settings?.Offset,
-                FocuserPosition: settings?.FocuserPosition));
+            var specFilter = filter.FilterName == NoFilter ? null : filter.FilterName;
+            if (sky) {
+                skySpecs.Add(new SkyFlatStepSpec(
+                    FilterName: specFilter,
+                    FrameCount: frameCount,
+                    TargetAdu: targetAdu,
+                    TargetAduTolerancePct: tolerancePct,
+                    StopAtMaxAdu: policies?.SkyFlatStopAtMaxAdu is double mx && mx > targetAdu ? mx : DefaultSkyStopAtMaxAdu,
+                    StopAtMinAdu: policies?.SkyFlatStopAtMinAdu is double mn && mn >= 0 && mn < targetAdu ? mn : DefaultSkyStopAtMinAdu,
+                    Gain: settings?.Gain,
+                    Offset: settings?.Offset,
+                    FocuserPosition: settings?.FocuserPosition));
+            } else {
+                specs.Add(new FlatStepSpec(
+                    FilterName: specFilter,
+                    FrameCount: frameCount,
+                    TargetAdu: targetAdu,
+                    TargetAduTolerancePct: tolerancePct,
+                    Gain: settings?.Gain,
+                    Offset: settings?.Offset,
+                    FocuserPosition: settings?.FocuserPosition));
+            }
             total += frameCount;
         }
 
-        var name = $"Flats — {session.TargetName}";
+        var name = sky ? $"Sky flats — {session.TargetName}" : $"Flats — {session.TargetName}";
 
         // §39.5: materialize the plan into a runnable §38 sequence unless the caller asked for the
         // plan alone. The persisted body is the same NINA-verbatim tree every stored sequence uses,
         // so the WILMA editor renders it and POST /sequences/{id}/start runs it as-is.
         Guid? generatedId = null;
         if (!request.GenerateOnly && _sequences is not null) {
-            var body = CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter);
+            var body = sky
+                ? CalibrationSequenceBuilder.BuildSkyFlatsBody(name, skySpecs,
+                    new SkyFlatEnvelope(
+                        SunAltitudeDeg: policies?.SkyFlatSunAltitude ?? DefaultSkySunAltitude,
+                        AzimuthDeg: policies?.SkyFlatTargetAzimuth ?? DefaultSkyAzimuth,
+                        AltitudeDeg: policies?.SkyFlatTargetAltitude ?? DefaultSkyAltitude),
+                    parkMountAfter: parkAfter)
+                : CalibrationSequenceBuilder.BuildMatchingFlatsBody(name, specs, parkMountAfter: parkAfter);
             var created = await _sequences.CreateAsync(new SequenceCreateRequestDto(
                 Name: name,
                 Description: $"Matching flats generated from the {session.SessionStartUtc:yyyy-MM-dd} {session.TargetName} session ({sessionId:D}).",

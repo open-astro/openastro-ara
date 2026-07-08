@@ -35,6 +35,27 @@ public sealed record FlatStepSpec(
     int? Offset,
     int? FocuserPosition);
 
+/// <summary>One per-filter §48.4 twilight sky-flat set: like <see cref="FlatStepSpec"/> plus the
+/// stop window the drifting sky must stay inside.</summary>
+public sealed record SkyFlatStepSpec(
+    string? FilterName,
+    int FrameCount,
+    int TargetAdu,
+    double TargetAduTolerancePct,
+    double StopAtMaxAdu,
+    double StopAtMinAdu,
+    int? Gain,
+    int? Offset,
+    int? FocuserPosition);
+
+/// <summary>The §48.4 sky-flat pointing + timing envelope (§48.7 sky_flat block): wait until the
+/// sun rises through <paramref name="SunAltitudeDeg"/>, then slew to the flat-friendly patch at
+/// <paramref name="AzimuthDeg"/>/<paramref name="AltitudeDeg"/>.</summary>
+public sealed record SkyFlatEnvelope(
+    double SunAltitudeDeg,
+    double AzimuthDeg,
+    double AltitudeDeg);
+
 /// <summary>One (exposure, gain) dark set inside a temperature group. Null <paramref name="Gain"/>
 /// = camera default (TakeExposure's -1 sentinel, expressed by omitting the property).</summary>
 public sealed record DarkStepSpec(
@@ -82,7 +103,10 @@ public static class CalibrationSequenceBuilder {
     // ARA-only classes still ride the NINA dialect: the loader's type remap is a plain
     // NINA→OpenAstroAra prefix replace, so these resolve to the OpenAstroAra classes on load.
     private const string FlatPanelFlatsType = "NINA.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, NINA.Sequencer";
+    private const string SkyFlatsType = "NINA.Sequencer.SequenceItem.FlatDevice.SkyFlats, NINA.Sequencer";
     private const string ParkScopeType = "NINA.Sequencer.SequenceItem.Telescope.ParkScope, NINA.Sequencer";
+    private const string WaitForSunAltitudeType = "NINA.Sequencer.SequenceItem.Utility.WaitForSunAltitude, NINA.Sequencer";
+    private const string SlewScopeToAltAzType = "NINA.Sequencer.SequenceItem.Telescope.SlewScopeToAltAz, NINA.Sequencer";
 
     /// <summary>
     /// Build the §38.1 body: a SequentialContainer root with one per-filter container —
@@ -110,6 +134,92 @@ public static class CalibrationSequenceBuilder {
             ["Triggers"] = new JsonArray(),
         };
         return JsonSerializer.SerializeToElement(root);
+    }
+
+    /// <summary>
+    /// Build the §48.4 twilight sky-flats body: [WaitForSunAltitude (rising through the
+    /// envelope's sun altitude) → SlewScopeToAltAz (the flat-friendly sky patch) → one
+    /// per-filter SkyFlats block] + an optional trailing ParkScope. The sequence itself owns
+    /// the twilight timing, which is what makes auto-starting it at run completion safe.
+    /// </summary>
+    public static JsonElement BuildSkyFlatsBody(string name, IReadOnlyList<SkyFlatStepSpec> steps, SkyFlatEnvelope envelope, bool parkMountAfter = false) {
+        ArgumentNullException.ThrowIfNull(envelope);
+        var items = new JsonArray {
+            // Comparator LessThan waits WHILE the sun sits at-or-below the offset — i.e. until
+            // it RISES through it (morning twilight; see WaitForSunAltitude.MustWait).
+            new JsonObject {
+                ["$type"] = WaitForSunAltitudeType,
+                ["Data"] = new JsonObject {
+                    ["Offset"] = envelope.SunAltitudeDeg,
+                    ["Comparator"] = (int)OpenAstroAra.Core.Enums.ComparisonOperator.LessThan,
+                },
+            },
+            // Whole-degree pointing (the §48.7 fields are degrees); minutes/seconds stay zero.
+            new JsonObject {
+                ["$type"] = SlewScopeToAltAzType,
+                ["Coordinates"] = new JsonObject {
+                    ["AzDegrees"] = (int)envelope.AzimuthDeg,
+                    ["AltDegrees"] = (int)envelope.AltitudeDeg,
+                },
+            },
+        };
+        foreach (var step in steps) {
+            items.Add(SkyFlatBlock(step));
+        }
+        if (parkMountAfter) {
+            items.Add(new JsonObject { ["$type"] = ParkScopeType });
+        }
+
+        var root = new JsonObject {
+            ["schemaVersion"] = SequenceSchemaValidator.SchemaVersion,
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = name,
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
+        return JsonSerializer.SerializeToElement(root);
+    }
+
+    /// <summary>One per-filter §48.4 sky-flat set: position the wheel + focuser, then hand the
+    /// set to SkyFlats (per-frame re-probe + stop-window bail-outs — its own iteration).</summary>
+    private static JsonObject SkyFlatBlock(SkyFlatStepSpec step) {
+        var items = new JsonArray();
+
+        if (step.FilterName is not null) {
+            items.Add(SwitchFilterStep(step.FilterName));
+        }
+
+        if (step.FocuserPosition is int focus) {
+            items.Add(MoveFocuserStep(focus));
+        }
+
+        var flats = new JsonObject {
+            ["$type"] = SkyFlatsType,
+            ["TargetAdu"] = step.TargetAdu,
+            ["TargetAduTolerancePct"] = step.TargetAduTolerancePct,
+            ["FrameCount"] = step.FrameCount,
+            ["StopAtMaxAdu"] = step.StopAtMaxAdu,
+            ["StopAtMinAdu"] = step.StopAtMinAdu,
+        };
+        if (step.Gain is int gain) {
+            flats["Gain"] = gain;
+        }
+        if (step.Offset is int offset) {
+            flats["Offset"] = offset;
+        }
+        items.Add(flats);
+
+        var label = step.FilterName ?? "no filter";
+        return new JsonObject {
+            ["$type"] = SequentialContainerType,
+            ["Strategy"] = Strategy(),
+            ["Name"] = $"Sky flats — {label} ({step.FrameCount}× auto to {step.TargetAdu} ADU)",
+            ["Conditions"] = new JsonArray(),
+            ["Items"] = items,
+            ["Triggers"] = new JsonArray(),
+        };
     }
 
     /// <summary>The SwitchFilter step, resolving by NAME against the active profile's filter

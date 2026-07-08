@@ -180,6 +180,24 @@ void main() {
       expect(node[r'$type'], isNot(contains('.SequenceItem.Container.')));
     });
 
+    test('SkyFlats emits the field keys the daemon SkyFlats leaf reads', () {
+      final def = instructionForType(
+          'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.SkyFlats, OpenAstroAra.Sequencer')!;
+      expect(def.category, InstructionCategory.calibration);
+      final node = def.build();
+      // These keys mirror the daemon's [JsonProperty] names on SkyFlats — a drift here silently
+      // produces a leaf the daemon can't drive.
+      expect(node['TargetAdu'], 25000.0);
+      expect(node['TargetAduTolerancePct'], 5.0);
+      expect(node['FrameCount'], 20);
+      expect(node['MinExposureSec'], 0.01);
+      expect(node['MaxExposureSec'], 10.0);
+      expect(node['StopAtMaxAdu'], 50000.0);
+      expect(node['StopAtMinAdu'], 5000.0);
+      expect(node['Gain'], -1);
+      expect(node['Offset'], -1);
+    });
+
     test('SlewScopeToRaDec builds nested InputCoordinates', () {
       final node = instructionForType(
               'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer')!

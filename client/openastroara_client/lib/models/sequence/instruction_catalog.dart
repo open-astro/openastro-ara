@@ -440,6 +440,8 @@ const String runAutofocusType =
     'OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus, OpenAstroAra.Sequencer';
 const String flatPanelFlatsType =
     'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.FlatPanelFlats, OpenAstroAra.Sequencer';
+const String skyFlatsType =
+    'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.SkyFlats, OpenAstroAra.Sequencer';
 const String ditherType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer';
 
@@ -630,6 +632,72 @@ const List<InstructionDef> instructionCatalog = [
         'Panel brightness',
         InstructionFieldType.integer,
         defaultValue: 50,
+      ),
+      // -1 is the NINA sentinel for "use the camera's profile default".
+      InstructionField(
+        'Gain',
+        'Gain',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+      InstructionField(
+        'Offset',
+        'Offset',
+        InstructionFieldType.integer,
+        defaultValue: -1,
+      ),
+    ],
+  ),
+  // §48.4 — twilight sky flats. No panel; the daemon re-probes the sky before every frame and
+  // stops when it leaves the [StopAtMinAdu, StopAtMaxAdu] window. The §39.5 generator wraps this
+  // leaf in WaitForSunAltitude + SlewScopeToAltAz; hand-built plans supply their own timing.
+  InstructionDef(
+    type: skyFlatsType,
+    label: 'Sky Flats',
+    category: InstructionCategory.calibration,
+    icon: Icons.wb_twilight_outlined,
+    fields: [
+      InstructionField(
+        'TargetAdu',
+        'Target (mean ADU)',
+        InstructionFieldType.number,
+        defaultValue: 25000.0,
+      ),
+      InstructionField(
+        'TargetAduTolerancePct',
+        'Tolerance (%)',
+        InstructionFieldType.number,
+        defaultValue: 5.0,
+      ),
+      InstructionField(
+        'FrameCount',
+        'Frames',
+        InstructionFieldType.integer,
+        defaultValue: 20,
+      ),
+      InstructionField(
+        'MinExposureSec',
+        'Min exposure (s)',
+        InstructionFieldType.number,
+        defaultValue: 0.01,
+      ),
+      InstructionField(
+        'MaxExposureSec',
+        'Max exposure (s)',
+        InstructionFieldType.number,
+        defaultValue: 10.0,
+      ),
+      InstructionField(
+        'StopAtMaxAdu',
+        'Stop above (ADU)',
+        InstructionFieldType.number,
+        defaultValue: 50000.0,
+      ),
+      InstructionField(
+        'StopAtMinAdu',
+        'Stop below (ADU)',
+        InstructionFieldType.number,
+        defaultValue: 5000.0,
       ),
       // -1 is the NINA sentinel for "use the camera's profile default".
       InstructionField(

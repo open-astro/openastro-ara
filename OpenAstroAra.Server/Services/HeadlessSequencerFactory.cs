@@ -195,6 +195,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // §38k-4 — utility instructions with no equipment deps.
                 new Annotation(),
                 new WaitForTimeSpan(),
+                // §48.4 — WaitForSunAltitude gates the sky-flat generator's body (waits for the sun
+                // to drop through the twilight altitude); profile-only dep for the observer site.
+                new WaitForSunAltitude(profileService),
                 // §38k-9 — first equipment-bound instruction prototype.
                 // WaitUntilSafe polls ISafetyMonitorMediator.GetInfo() until
                 // IsSafe transitions true; with the headless stub it reports
@@ -215,6 +218,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new ParkScope(telescopeMediator, guiderMediator),
                 new FindHome(telescopeMediator, guiderMediator),
                 new SlewScopeToRaDec(telescopeMediator, guiderMediator),
+                // §48.4 — the §39.5 sky-flat generator emits SlewScopeToAltAz (point the mount at
+                // the twilight sky patch) wrapped by a WaitForSunAltitude gate; both must resolve
+                // through the factory or those generated bodies fail to load.
+                new SlewScopeToAltAz(profileService, telescopeMediator, guiderMediator),
                 // §38k-12 — focuser-bound instructions. All three take only
                 // IFocuserMediator. The headless stub no-ops the move ops
                 // and returns 0 for the resulting position.
@@ -274,6 +281,11 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
                 // JSON-resolvable and its Execute fails loudly rather than skipping flats.
                 new FlatPanelFlats(flatCaptureExecutor),
+                // §48.4 — the twilight sky-flat set. Reuses the same IFlatCaptureExecutor seam
+                // (CaptureSkyFlatSetAsync); the generated sky sequence carries its own
+                // WaitForSunAltitude + SlewScopeToAltAz around this leaf, so the leaf only owns
+                // the drift-reprobe capture. Null executor keeps the prototype JSON-resolvable.
+                new SkyFlats(flatCaptureExecutor),
                 // §38k-22 — Connect dir. All take the full 11 device mediators;
                 // Connect*/SwitchProfile also take IProfileService (profile-first),
                 // Disconnect* do not (camera-first). The Disconnect* classes were
