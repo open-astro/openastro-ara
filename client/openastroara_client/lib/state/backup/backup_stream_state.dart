@@ -290,13 +290,29 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   Future<void> _claimOnce() async {
     if (_claiming) return;
     _claiming = true;
+    AraServer? target;
     try {
+      target = ref.read(activeServerProvider);
       final client = _resolveClient();
-      if (client == null) {
+      if (target == null || client == null) {
         state = state.copyWith(active: false, problem: 'Connect to a server first.');
         return;
       }
       final granted = await client.claim(_hostname);
+      // A server switch mid-await means this grant (and any failure below)
+      // belongs to the PREVIOUS server: committing active=true here would
+      // leak its slot AND let _pollOnce hit the new server unclaimed. Hand
+      // the slot back best-effort; the next tick claims on the new server.
+      if (ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
+        if (granted) {
+          try {
+            await client.release(_hostname);
+          } catch (e) {
+            debugPrint('backup-stream release of a stale mid-switch claim failed (best-effort): $e');
+          }
+        }
+        return;
+      }
       if (!granted) {
         String? holder;
         try {
@@ -314,6 +330,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // forever). _pollOnce clears it right after queue() succeeds.
       state = state.copyWith(active: true, clearProblem: true);
     } catch (e) {
+      // A throw from a client the mid-await switch just closed isn't the new
+      // server's problem — stay quiet and let the next tick claim fresh.
+      if (target != null && ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
+        return;
+      }
       state = state.copyWith(active: false, problem: 'Could not start the backup stream: $e');
     } finally {
       _claiming = false;

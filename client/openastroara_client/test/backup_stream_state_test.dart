@@ -35,6 +35,10 @@ class _FakeClient implements BackupStreamClient {
   /// Runs inside a (successful) queue() call — lets a test start an exposure
   /// between the queue read and the entry loop.
   Future<void> Function()? onQueue;
+
+  /// Runs inside claim(), before the grant returns — lets a test switch the
+  /// active server while the claim is in flight.
+  Future<void> Function()? onClaim;
   Uint8List Function(String frameId)? corruptor;
 
   BackupStreamQueueEntry addFrame(String id, String payload, {bool withSha = true}) {
@@ -54,6 +58,7 @@ class _FakeClient implements BackupStreamClient {
   @override
   Future<bool> claim(String hostname) async {
     claimCalls++;
+    await onClaim?.call();
     return grantClaim;
   }
 
@@ -468,6 +473,34 @@ void main() {
     expect(state.active, isTrue);
     expect(fake.claimCalls, greaterThan(claimsBefore), reason: 'a fresh claim on the new server');
     expect(fake.acked, contains('frame-2'));
+  });
+
+  test('a server switch mid-claim hands the stale grant back instead of going active', () async {
+    final c = controller();
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+    fake.onClaim = () async {
+      fake.onClaim = null; // only the first claim straddles the switch
+      (container.read(savedServersProvider.notifier) as _FixedServers)
+          .switchTo(const AraServer(hostname: 'pi-two', port: 5555));
+    };
+
+    await c.setEnabled(true);
+    // Let the stale-grant release and any state writes settle.
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+
+    var state = container.read(backupStreamProvider);
+    expect(state.active, isFalse,
+        reason: 'a grant that resolved after the switch belongs to the old server');
+    expect(fake.releaseCalls, 1, reason: 'the stale mid-switch claim is handed back');
+    expect(state.enabled, isTrue);
+
+    await c.tickNow();
+    await settle();
+    state = container.read(backupStreamProvider);
+    expect(state.active, isTrue, reason: 'the next tick claims cleanly on the new server');
+    expect(fake.acked, contains('frame-1'));
   });
 
   test('disable releases the slot', () async {
