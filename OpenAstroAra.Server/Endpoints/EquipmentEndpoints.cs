@@ -356,8 +356,9 @@ public static class EquipmentEndpoints {
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
 
-        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started/complete)
-        // and a status read for the wizard's "Build dark library" affordance.
+        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started, then
+        // §63.8 guider.dark_library.progress ticks during the build, then complete/failed) and a status read for
+        // the wizard's "Build dark library" affordance.
         guider.MapPost("/darklibrary/build", async ([FromBody] BuildDarkLibraryRequestDto request,
                 [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await BuildDarkLibraryAsync(request, key, svc, ct));
@@ -367,7 +368,8 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetCalibrationFilesStatusAsync(ct);
             return Results.Ok(new CalibrationFilesStatusResponseDto(Connected: dto is not null, Status: dto));
         });
-        // §63.6 defect map: build (202, long-running; WS guider.defect_map.started/complete/failed). Shares the
+        // §63.6 defect map: build (202, long-running; WS guider.defect_map.started, §63.8
+        // guider.defect_map.progress ticks, then complete/failed). Shares the
         // single calibration-build gate with the dark-library build; the status read above already covers the
         // defect-map fields, so there's no separate defect-map status endpoint.
         guider.MapPost("/defectmap/build", async ([FromBody] BuildDefectMapDarksRequestDto request,

@@ -36,6 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Added
+- **§63.8 — dark-library and defect-map builds now show a live progress bar.** Building a dark library or bad-pixel map through the guider is a multi-minute job that used to look frozen — Ara only told you it had started, then nothing until it finished. Ara now polls the daemon's build progress once a second while the build runs and streams `guider.dark_library.progress` / `guider.defect_map.progress` updates (which exposure and frame it's on, out of how many), so WILMA can show a real progress bar the whole way through. A hiccup in a single progress read is skipped silently and polling resumes — it never disturbs the build itself.
 - **A dropped guide camera now pauses your sequence instead of shooting unguided.** When the guiding daemon reports the guide camera disconnected mid-session — e.g. its USB drops — Ara now runs your "when guiding is lost" policy (pause / skip target / abort, per **Settings → Safety → Policies**) rather than quietly continuing to expose without guiding, and alerts you even if no sequence is running. Because the daemon's own link is still up and it recovers the camera on its own, the guider session stays **connected** (no needless teardown) with wording that reflects that — it won't tell you to reconnect a guider that never disconnected. (Reacting to the daemon *giving up* on a stuck reconnect, and re-reacting to repeated drops in one session, are tracked follow-ups.)
 
 ### Fixed
