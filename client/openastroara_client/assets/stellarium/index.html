@@ -913,14 +913,22 @@ function catToggle(id, on, skipPost) {
     if (!API) { setCatMsg('Connect to a server to load catalogs.'); catOn[id] = false; renderCatPanel(); return; }
     catPending[id] = true;
     fetch(API + '/api/v1/catalogs/' + encodeURIComponent(id) + '?limit=500')
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (rows) {
+      // 404 = the OpenNGC source isn't installed; a 200 empty array is an
+      // installed catalog that genuinely matched nothing — different advice.
+      .then(function (r) {
+        if (r.status === 404) return { missing: true };
+        if (!r.ok) return null;
+        return r.json().then(function (rows) { return { rows: rows }; });
+      })
+      .then(function (res) {
         catPending[id] = false;
-        if (rows && rows.length) {
-          catRowsCache[id] = rows;
+        if (res && res.rows && res.rows.length) {
+          catRowsCache[id] = res.rows;
         } else {
           catOn[id] = false;
-          setCatMsg('No data for this catalog — install the OpenNGC deep-sky package under Data.');
+          setCatMsg(!res ? 'Could not load the catalog — is the server reachable?'
+              : res.missing ? 'Install the OpenNGC deep-sky package under Data to highlight catalogs.'
+              : 'The installed data has no objects for this catalog.');
         }
         updateCatGeo(id); renderCatPanel();
         if (!skipPost) postDisplayPrefs();   // persist only what actually stuck
