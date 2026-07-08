@@ -55,18 +55,20 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     public class AutofocusAfterTemperatureChangeTrigger : SequenceTrigger, IValidatable {
 
         [ImportingConstructor]
-        public AutofocusAfterTemperatureChangeTrigger(IFocuserMediator? focuserMediator = null, IImageHistory? history = null) : base() {
+        public AutofocusAfterTemperatureChangeTrigger(IFocuserMediator? focuserMediator = null, IImageHistory? history = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.focuserMediator = focuserMediator;
             this.history = history;
+            this.conditionGate = conditionGate;
             Amount = 5;
         }
 
-        private AutofocusAfterTemperatureChangeTrigger(AutofocusAfterTemperatureChangeTrigger cloneMe) : this(cloneMe.focuserMediator, cloneMe.history) {
+        private AutofocusAfterTemperatureChangeTrigger(AutofocusAfterTemperatureChangeTrigger cloneMe) : this(cloneMe.focuserMediator, cloneMe.history, cloneMe.conditionGate) {
             CopyMetaData(cloneMe);
         }
 
         private readonly IFocuserMediator? focuserMediator;
         private readonly IImageHistory? history;
+        private readonly IAutofocusConditionGate? conditionGate;
         private double initialTemperature = double.NaN;
 
         public override object Clone() {
@@ -142,6 +144,11 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
 
             if (shouldTrigger && IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
+                shouldTrigger = false;
+            }
+            // §59.9 — the temperature delta persists, so a deferred fire retries on the next check.
+            if (shouldTrigger && conditionGate?.DeferralReason() is { } reason) {
+                Logger.Info($"Autofocus deferred — {reason}. Will run when conditions recover.");
                 shouldTrigger = false;
             }
             return shouldTrigger;

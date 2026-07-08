@@ -80,6 +80,28 @@ The **Sequencer** tab is where the night gets defined.
 - **Calibration frames** — the Calibration screen generates flats/darks plans as sequences and
   tracks your library's coverage against what your lights need.
 
+### Automatic refocusing (autofocus triggers)
+
+Add autofocus **triggers** to a sequence container and ARA refocuses on its own when it matters:
+
+- **After N exposures** — the classic cadence trigger.
+- **After time** — once a set number of minutes has passed since the last autofocus (the
+  long-term drift catch-all).
+- **After temperature change** — when the focuser temperature drifts a set number of °C from
+  the last autofocus (temperature is the dominant focus-drift driver).
+- **After HFR increase** — when the measured HFR trend of your recent frames climbs a set
+  percentage above the session's best. Every light frame is star-analyzed seconds after
+  capture, so this reads your actual image quality, not a proxy.
+- **After filter change** — the first light frame on a newly-selected filter refocuses, which
+  is how per-filter focus offsets are learned (autofocus always runs on the current filter —
+  it never swaps to luminance and back).
+
+All of them yield to an imminent meridian flip, and all of them **defer during bad sky** —
+if diagnostics reports clouds passing, a blocked aperture, or dew forming, the trigger waits
+("Autofocus deferred — clouds passing. Will run when conditions recover.") instead of burning
+sky time on a sweep that would fail, then fires as soon as conditions clear. Imported NINA
+plans carry these triggers over natively.
+
 ## 6. Imaging and monitoring
 
 The **Imaging** tab shows the live story: current frame with stretch control, exposure progress,

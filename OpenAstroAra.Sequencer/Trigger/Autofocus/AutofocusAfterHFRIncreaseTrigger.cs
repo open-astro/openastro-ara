@@ -50,19 +50,21 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     public class AutofocusAfterHFRIncreaseTrigger : SequenceTrigger {
 
         [ImportingConstructor]
-        public AutofocusAfterHFRIncreaseTrigger(IImageHistory? history = null, IFilterWheelMediator? filterWheelMediator = null) : base() {
+        public AutofocusAfterHFRIncreaseTrigger(IImageHistory? history = null, IFilterWheelMediator? filterWheelMediator = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.history = history;
             this.filterWheelMediator = filterWheelMediator;
+            this.conditionGate = conditionGate;
             Amount = 5;
             SampleSize = 10;
         }
 
-        private AutofocusAfterHFRIncreaseTrigger(AutofocusAfterHFRIncreaseTrigger cloneMe) : this(cloneMe.history, cloneMe.filterWheelMediator) {
+        private AutofocusAfterHFRIncreaseTrigger(AutofocusAfterHFRIncreaseTrigger cloneMe) : this(cloneMe.history, cloneMe.filterWheelMediator, cloneMe.conditionGate) {
             CopyMetaData(cloneMe);
         }
 
         private readonly IImageHistory? history;
         private readonly IFilterWheelMediator? filterWheelMediator;
+        private readonly IAutofocusConditionGate? conditionGate;
 
         public override object Clone() {
             return new AutofocusAfterHFRIncreaseTrigger(this) {
@@ -200,6 +202,12 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
 
             if (shouldTrigger && IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
+                shouldTrigger = false;
+            }
+            // §59.9 — an HFR trend above the threshold persists (and clouds INFLATE HFR, so
+            // focusing through them would chase a phantom), so a deferred fire retries later.
+            if (shouldTrigger && conditionGate?.DeferralReason() is { } reason) {
+                Logger.Info($"Autofocus deferred — {reason}. Will run when conditions recover.");
                 shouldTrigger = false;
             }
             return shouldTrigger;

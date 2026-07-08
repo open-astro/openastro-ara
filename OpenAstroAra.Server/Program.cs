@@ -139,6 +139,14 @@ public partial class Program {
         // Mode persists in app_config across restart. Monitor worker that
         // *writes* events wires up alongside the §38 sequence orchestrator.
         builder.Services.AddSingleton<IDiagnosticsService, SqliteDiagnosticsService>();
+        // §59.9 — autofocus triggers defer while diagnostics carries an open sky-condition
+        // issue (clouds_passing / aperture_blocked / dew_formation); the user is notified
+        // once per episode. Fail-open: a broken diagnostics read never freezes focusing.
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>(sp =>
+            new DiagnosticsAutofocusGate(
+                sp.GetRequiredService<IDiagnosticsService>(),
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<DiagnosticsAutofocusGate>>()));
         // Phase 13.6 — placeholder IStatsService covering all 8 §50 chart
         // views with synthetic fixture data. Numbers are intentionally small
         // so the Stats tab renders something sensible without claiming the
@@ -723,7 +731,9 @@ public partial class Program {
                 // execute for real instead of failing loudly.
                 autofocusExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>(),
                 // §59.5 — the session history the autofocus trigger family reads.
-                imageHistory: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IImageHistory>()));
+                imageHistory: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IImageHistory>(),
+                // §59.9 — autofocus defers while §51 diagnostics carries an open sky-condition issue.
+                autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();

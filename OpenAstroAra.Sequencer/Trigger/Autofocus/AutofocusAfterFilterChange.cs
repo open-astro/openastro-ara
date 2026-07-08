@@ -55,19 +55,21 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
     public class AutofocusAfterFilterChange : SequenceTrigger, IValidatable {
 
         [ImportingConstructor]
-        public AutofocusAfterFilterChange(IFilterWheelMediator? filterWheelMediator = null, IImageHistory? history = null, IProfileService? profileService = null) : base() {
+        public AutofocusAfterFilterChange(IFilterWheelMediator? filterWheelMediator = null, IImageHistory? history = null, IProfileService? profileService = null, IAutofocusConditionGate? conditionGate = null) : base() {
             this.filterWheelMediator = filterWheelMediator;
             this.history = history;
             this.profileService = profileService;
+            this.conditionGate = conditionGate;
         }
 
-        private AutofocusAfterFilterChange(AutofocusAfterFilterChange cloneMe) : this(cloneMe.filterWheelMediator, cloneMe.history, cloneMe.profileService) {
+        private AutofocusAfterFilterChange(AutofocusAfterFilterChange cloneMe) : this(cloneMe.filterWheelMediator, cloneMe.history, cloneMe.profileService, cloneMe.conditionGate) {
             CopyMetaData(cloneMe);
         }
 
         private readonly IFilterWheelMediator? filterWheelMediator;
         private readonly IImageHistory? history;
         private readonly IProfileService? profileService;
+        private readonly IAutofocusConditionGate? conditionGate;
 
         public override object Clone() {
             return new AutofocusAfterFilterChange(this) {
@@ -144,11 +146,16 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
                 return false;
             }
 
-            // The reference moves only when the trigger actually fires: a meridian-flip veto
-            // must leave it pointing at the OLD filter, or the still-owed autofocus for the
-            // new one would be forgotten forever (the veto would read new==new next check).
+            // The reference moves only when the trigger actually fires: a meridian-flip or
+            // §59.9 conditions veto must leave it pointing at the OLD filter, or the
+            // still-owed autofocus for the new one would be forgotten forever (the veto
+            // would read new==new next check).
             if (IsVetoedByImminentMeridianFlip(nextItem)) {
                 Logger.Warning("Autofocus should be triggered, however the meridian flip is too close to be executed");
+                return false;
+            }
+            if (conditionGate?.DeferralReason() is { } reason) {
+                Logger.Info($"Autofocus deferred — {reason}. Will run when conditions recover.");
                 return false;
             }
             LastAutoFocusFilter = currentFilter;
