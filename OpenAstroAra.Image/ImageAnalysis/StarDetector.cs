@@ -274,6 +274,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // — no branch on scope type. Diameters are 2·(bin radius) in pixels; a sub-pixel blob yields (0, 0).
         private const double DonutRingHalfMaxFraction = 0.5;
         private const int DonutProfileMaxStackBins = 96;
+        // A real central-obstruction shadow spans many pixels; an inner rim of only a pixel or two is centre-bin
+        // noise (bin 0 averages very few pixels), so it's floored to a filled centre (inner 0).
+        private const int DonutMinInnerRadiusBins = 2;
 
         private static (double OuterDiameter, double InnerDiameter) DonutGeometry(
                 List<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
@@ -316,21 +319,31 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 return (0.0, 0.0);
             }
             double half = DonutRingHalfMaxFraction * peakSb;
-            // Inner edge: the first populated bin (scanning out from the centre) whose surface brightness
-            // reaches half-max — bin 0 for a centre-peaked star, the ring's inner rim for a donut.
-            int innerBin = peakBin;
-            for (int b = 0; b <= peakBin; b++) {
-                if (count[b] > 0 && flux[b] / count[b] >= half) {
-                    innerBin = b;
+            // Walk the ring OUT from the peak, contiguously: the first bin that dips below half-max (or is
+            // empty) ends it, so a lone noisy outlier bin past a gap can't stretch the outer diameter.
+            int outerBin = peakBin;
+            for (int b = peakBin + 1; b < bins; b++) {
+                if (count[b] == 0 || flux[b] / count[b] < half) {
                     break;
                 }
+                outerBin = b;
             }
-            // Outer edge: the last populated bin still at half-max, scanning outward from the ring peak.
-            int outerBin = peakBin;
-            for (int b = peakBin; b < bins; b++) {
-                if (count[b] > 0 && flux[b] / count[b] >= half) {
-                    outerBin = b;
+            // Walk the ring IN from the peak, contiguously: the first sub-half / empty bin is the inner rim
+            // (the obstruction-shadow edge). For a centre-peaked star the ring reaches bin 0, so the rim is 0.
+            int innerBin = peakBin;
+            for (int b = peakBin - 1; b >= 0; b--) {
+                if (count[b] == 0 || flux[b] / count[b] < half) {
+                    break;
                 }
+                innerBin = b;
+            }
+            // A hole only a pixel or two across is not a physical central-obstruction shadow — it's centre-bin
+            // noise (on a real frame bin 0's few-pixel mean can dip below half-max even for a filled star, and
+            // noise can nudge the peak off bin 0). Floor a sub-threshold inner rim to 0 so an in-focus /
+            // refractor star robustly reports inner diameter 0 with no branch on scope type; a genuine defocused
+            // donut's obstruction shadow spans many pixels and clears the floor.
+            if (innerBin < DonutMinInnerRadiusBins) {
+                innerBin = 0;
             }
             return (2.0 * outerBin, 2.0 * innerBin);
         }

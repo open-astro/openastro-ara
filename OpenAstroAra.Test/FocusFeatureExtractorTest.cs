@@ -277,6 +277,47 @@ namespace OpenAstroAra.Test {
                 Is.GreaterThan(DetectOne(tight, w, h).DonutOuterDiameter));
         }
 
+        // Add deterministic per-pixel Gaussian read noise (Box–Muller) to every pixel. A tiny inline LCG (not
+        // System.Random — CA5394 flags it, and this is test-only pseudo-noise, not security) keeps it fully
+        // reproducible across runs and platforms.
+        private static void AddReadNoise(ushort[] frame, double sigma, uint seed) {
+            uint state = seed;
+            double Next() {
+                state = (state * 1664525u) + 1013904223u;
+                return (state >> 8) / (double)(1 << 24); // 24-bit mantissa → [0, 1)
+            }
+            for (int i = 0; i < frame.Length; i++) {
+                double u1 = 1.0 - Next(); // (0, 1] so Log is finite
+                double u2 = 1.0 - Next();
+                double gauss = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+                double v = frame[i] + (gauss * sigma);
+                frame[i] = (ushort)Math.Clamp(v, 0, ushort.MaxValue);
+            }
+        }
+
+        [Test]
+        public void Filled_stars_report_zero_inner_diameter_under_read_noise() {
+            // The per-bin surface-brightness profile is noisy on a real sensor — especially bin 0, which averages
+            // very few pixels — so a naive "first bin ≥ half-max" inner edge could report a spurious hole for an
+            // ordinary in-focus/refractor star. The contiguous inner scan + sub-2px inner-rim floor must keep the
+            // per-star inner diameter (and hence the frame median) at 0 despite the noise.
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            (int x, int y)[] centers = { (50, 50), (150, 50), (100, 100), (50, 150), (150, 150) };
+            foreach (var (cx, cy) in centers) {
+                AddStar(frame, w, h, cx, cy, amplitude: 9000, sigmaX: 1.9, sigmaY: 1.9);
+            }
+            AddReadNoise(frame, sigma: 45, seed: 1234u);
+
+            var result = StarDetector.Detect(frame, w, h, NormalParams());
+            Assert.That(result.DetectedStars, Is.GreaterThan(0), "the stars should still detect through the noise");
+            foreach (var star in result.StarList) {
+                Assert.That(star.DonutInnerDiameter, Is.EqualTo(0),
+                    "a filled star must report inner diameter 0 even under read noise");
+            }
+            Assert.That(FocusFeatureExtractor.Extract(result).MedianDonutInnerDiameter, Is.EqualTo(0));
+        }
+
         [Test]
         public void Extract_on_a_donut_frame_yields_positive_median_donut_geometry() {
             int w = 200, h = 200;
