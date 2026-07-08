@@ -86,6 +86,8 @@ public static class WsEventCatalog {
 
     // Phase 8 — frames, sessions, backup, diagnostics
     public const string FrameComplete = "frame.complete";
+    /// <summary>§59.5 — post-capture star analysis landed (HFR + star count written back).</summary>
+    public const string FrameAnalyzed = "frame.analyzed";
     public const string FrameRecoveredOrphan = "frame.recovered_orphan";
     public const string FramePreviewReady = "frame.preview.ready";
     public const string FramePreviewVariantReady = "frame.preview.variant.ready";
@@ -183,7 +185,7 @@ public static class WsEventCatalog {
 
         MosaicCreated, MosaicPanelComplete, MosaicComplete,
 
-        FrameComplete, FrameRecoveredOrphan,
+        FrameComplete, FrameAnalyzed, FrameRecoveredOrphan,
         FramePreviewReady, FramePreviewVariantReady, FramePreviewVariantEvicted,
         FrameQualityScored, FramesBulkOperationComplete,
 

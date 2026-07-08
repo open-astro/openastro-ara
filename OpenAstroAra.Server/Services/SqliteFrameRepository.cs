@@ -186,6 +186,38 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await PublishFrameCompleteAsync(frame, ct).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE frames SET hfr = $hfr, star_count = $star_count WHERE id = $id";
+        cmd.Parameters.AddWithValue("$hfr", hfr);
+        cmd.Parameters.AddWithValue("$star_count", starCount);
+        cmd.Parameters.AddWithValue("$id", frameId.ToString("D"));
+        var updated = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        if (updated == 0) {
+            // The frame vanished between capture and analysis (user delete) — nothing to report.
+            return;
+        }
+        await PublishFrameAnalyzedAsync(frameId, hfr, starCount, ct).ConfigureAwait(false);
+    }
+
+    // §59.5 frame.analyzed — the post-capture star analysis landed; live listeners (library
+    // strips showing the HFR badge) refresh the row without polling. Same raw-JSON posture
+    // as frame.complete: numbers + a Guid are literal-safe.
+    private async Task PublishFrameAnalyzedAsync(Guid frameId, double hfr, int starCount, CancellationToken ct) {
+        if (_ws is null) return;
+        try {
+            var json = $$"""
+                {"frame_id":"{{frameId:D}}","hfr":{{hfr.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}},"star_count":{{starCount}}}
+                """;
+            using var doc = JsonDocument.Parse(json);
+            await _ws.PublishAsync(WsEventCatalog.FrameAnalyzed, doc.RootElement.Clone(), ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogFrameEventFailed(ex);
+        }
+    }
+
     // §60.9 frame.complete — catalogued in WsEventCatalog since Phase 7 but
     // never emitted until the WS-refresh slice: every frame landing through
     // the capture path (this method; the §28.8 rescan emits recovered_orphan

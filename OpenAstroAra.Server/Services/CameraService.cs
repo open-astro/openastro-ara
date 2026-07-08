@@ -20,6 +20,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Fits;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
@@ -27,6 +28,7 @@ using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Threading.Channels;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -84,15 +86,19 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         IProfileStore? profileStore = null,
         string? fallbackFramesDir = null,
         IFocuserMediator? focuser = null,
-        EquipmentEventPublisher? events = null) {
+        EquipmentEventPublisher? events = null,
+        ImageHistoryService? imageHistory = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _events = events;
         _frames = frames;
         _profileStore = profileStore;
         _fallbackFramesDir = fallbackFramesDir;
         _focuser = focuser;
+        _imageHistory = imageHistory;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
+
+    private readonly ImageHistoryService? _imageHistory;
 
     private readonly IFocuserMediator? _focuser;
 
@@ -418,7 +424,104 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return false;
         }
         LogCaptureComplete(frameId, width, height, filePath);
+        if (frameType == FrameType.Light) {
+            // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
+            // time, and delaying frame.complete (or the next exposure) for a statistic is the
+            // wrong trade. The pixels are already in hand; the write-back lands as
+            // frame.analyzed when done.
+            QueueFrameAnalysis(frameId, pixels, width, height,
+                string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName);
+        }
         return true;
+    }
+
+    // Only a measurement with enough stars to be stable feeds the catalog + the §59.5
+    // HFR-drift trigger — a 2-star HFR is noise that would swing the trend line. Deliberately
+    // lower than the §59.6 autofocus bar (30): a statistic can tolerate more scatter than a
+    // decision to refocus, and the trigger's least-squares smoothing absorbs the rest.
+    internal const int MinStarsForAnalysis = 10;
+
+    // Test seam: frame analysis without synthesizing a detectable star field.
+    internal Func<ReadOnlyMemory<ushort>, int, int, (double Hfr, int Stars)>? AnalysisMetricOverride { get; set; }
+
+    private sealed record AnalysisJob(Guid FrameId, ushort[] Pixels, int Width, int Height, string? FilterName);
+
+    // Single-reader worker, NOT Task.Run-per-frame (#747 review): the HFR-drift trigger's
+    // least-squares trend trusts ImageHistoryService's list order as capture chronology, and
+    // per-frame tasks complete in ANALYSIS order — two fast exposures outpacing the detector
+    // would shuffle the trend. One reader also caps StarDetector at one full-frame pass at a
+    // time (the RPi target runs guiding/WS work beside this) and the small bound keeps a
+    // burst of short subs from pinning whole pixel buffers in RAM: when the backlog is full
+    // the NEW frame's analysis is skipped honestly (logged; its HFR simply stays unrecorded,
+    // exactly like a star-starved frame).
+    internal const int AnalysisQueueCapacity = 2;
+    // FullMode stays the default (Wait) — this code only ever uses the non-blocking TryWrite,
+    // which returns false synchronously on a full Wait-mode channel. DropWrite would make
+    // TryWrite return TRUE while silently discarding, so the honest-skip log below could
+    // never fire (round-2 review catch).
+    private readonly Channel<AnalysisJob> _analysisQueue = Channel.CreateBounded<AnalysisJob>(
+        new BoundedChannelOptions(AnalysisQueueCapacity) {
+            SingleReader = true,
+        });
+    private Task? _analysisWorker;
+
+    /// <summary>True when the frame's analysis was queued; false when the backlog was full
+    /// and this frame's analysis is skipped (logged — its HFR stays unrecorded).</summary>
+    internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+        lock (_gate) {
+            if (_disposed) {
+                return false;
+            }
+            _analysisWorker ??= Task.Run(RunAnalysisWorkerAsync);
+        }
+        if (!_analysisQueue.Writer.TryWrite(new AnalysisJob(frameId, pixels, width, height, filterName))) {
+            LogFrameAnalysisBacklogged(frameId);
+            return false;
+        }
+        return true;
+    }
+
+    private async Task RunAnalysisWorkerAsync() {
+        // Per-job faults are absorbed inside AnalyzeFrameAsync; the loop ends only when
+        // Dispose completes the writer, so the worker can never fault-and-strand the queue.
+        await foreach (var job in _analysisQueue.Reader.ReadAllAsync().ConfigureAwait(false)) {
+            await AnalyzeFrameAsync(job.FrameId, job.Pixels, job.Width, job.Height, job.FilterName).ConfigureAwait(false);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fire-and-forget analysis boundary: detector/DB/WS faults must degrade to a logged skip — the frame is already captured, registered, and safe; analysis is enrichment. CA1031's log-and-recover boundary applies.")]
+    internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+        try {
+            var (hfr, stars) = AnalysisMetricOverride is { } metric
+                ? metric(pixels, width, height)
+                : DefaultAnalysisMetric(pixels, width, height);
+            if (stars < MinStarsForAnalysis || double.IsNaN(hfr) || hfr <= 0) {
+                LogFrameAnalysisSkipped(frameId, stars);
+                return;
+            }
+            if (_frames is not null) {
+                await _frames.UpdateAnalysisAsync(frameId, hfr, stars, CancellationToken.None).ConfigureAwait(false);
+            }
+            // The §59.5 HFR-drift trigger's data feed. The filter is the REQUESTED name — the
+            // same name SwitchFilter drives the wheel by, so it matches the trigger's
+            // SelectedFilter comparison.
+            _imageHistory?.RecordImage("LIGHT", hfr, filterName);
+            LogFrameAnalyzed(frameId, hfr, stars);
+        } catch (Exception ex) {
+            LogFrameAnalysisFailed(ex, frameId);
+        }
+    }
+
+    private static (double Hfr, int Stars) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
+        // Same detector, same sensitivity as the §59 sweep metric — HFR values that feed one
+        // trend must come from one instrument. IsAutoFocus=false: full-frame statistics, not
+        // the sweep's center-weighted probe posture.
+        var result = StarDetector.Detect(
+            pixels, width, height,
+            new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false },
+            CancellationToken.None);
+        return (result.AverageHFR, result.DetectedStars);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -1140,6 +1243,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _client = null;
         }
         _refreshTimer.Dispose();
+        // Stop accepting analysis jobs and let the worker drain what it holds; analysis
+        // pending at shutdown is acceptable loss (the frames themselves are safe on disk).
+        _analysisQueue.Writer.TryComplete();
         CancelLiveViewForDispose();
         // Dispose the client directly (guarded): the courtesy AbortExposure/Connected=false are
         // blocking HTTP calls that would hang container shutdown if the device is unreachable.
@@ -1202,4 +1308,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "§29 pre-capture disk probe failed — capture proceeds (the disk monitor owns reporting)")]
     private partial void LogPreCaptureDiskProbeFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§59.5 frame {FrameId} analyzed: HFR {Hfr}, {Stars} stars")]
+    private partial void LogFrameAnalyzed(Guid frameId, double hfr, int stars);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§59.5 frame {FrameId} analysis skipped: only {Stars} stars detected — too few for a stable HFR")]
+    private partial void LogFrameAnalysisSkipped(Guid frameId, int stars);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§59.5 frame {FrameId} analysis failed — the frame itself is safe; HFR stays unrecorded")]
+    private partial void LogFrameAnalysisFailed(Exception ex, Guid frameId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§59.5 frame {FrameId} analysis skipped: the analysis backlog is full (captures are outpacing the detector) — HFR stays unrecorded for this frame")]
+    private partial void LogFrameAnalysisBacklogged(Guid frameId);
 }

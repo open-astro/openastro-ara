@@ -790,6 +790,7 @@ paths:
 #   equipment.state         — connection + per-device runtime state changes
 #   sequence.progress       — frame-completion, target-switch, instruction-step events
 #   frame.complete          — new frame written to library; payload includes preview URL
+#   frame.analyzed          — §59.5 post-capture star analysis landed: {frame_id, hfr, star_count}
 #   log.line                — server log emission (filterable per channel subscribe)
 #   notification            — §46 in-app feed entry (info / warning / critical / urgent)
 #   diagnostic.alert        — §51 real-time acquisition diagnostic flag

@@ -43,13 +43,18 @@ class LiveLibrarySessionsNotifier
   // §60.9 live refresh: frame.complete events (a capture run filling the
   // catalog) refresh the list after 2 s of quiet — debounced so a fast bias
   // run doesn't refetch per frame. Strips invalidate too (new frames belong
-  // in an open card's strip).
+  // in an open card's strip). frame.analyzed rides the same debounce: the
+  // §59.5 post-capture star analysis lands HFR/star-count seconds after the
+  // row, and the strip's HFR badge should follow without polling.
   Timer? _wsDebounce;
 
   void _bindFrameCompleteRefresh() {
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
-      if (event == null || event.type != 'frame.complete') return;
+      if (event == null ||
+          (event.type != 'frame.complete' && event.type != 'frame.analyzed')) {
+        return;
+      }
       _wsDebounce?.cancel();
       _wsDebounce = Timer(const Duration(seconds: 2), () {
         ref.invalidate(sessionFramesProvider);

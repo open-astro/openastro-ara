@@ -447,7 +447,10 @@ public partial class Program {
                 // §60.9 — explicit here because this factory lambda bypasses the
                 // constructor activation that injects the optional param for the
                 // other device services. Forgetting it silences camera events.
-                events: sp.GetRequiredService<EquipmentEventPublisher>()));
+                events: sp.GetRequiredService<EquipmentEventPublisher>(),
+                // §59.5 — post-capture star analysis feeds the session history the
+                // HFR-drift autofocus trigger reads.
+                imageHistory: sp.GetRequiredService<ImageHistoryService>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
