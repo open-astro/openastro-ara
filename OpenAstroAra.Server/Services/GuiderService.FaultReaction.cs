@@ -41,9 +41,11 @@ public sealed partial class GuiderService {
     private readonly IProfileStore? _profileStore;
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly INotificationService? _notifications;
-    // Guarded by _gate. One §42.2 reaction per disconnect episode; cleared by
-    // SetStateLocked on the next successful connect.
-    private bool _faultReactionLatched;
+    // Guarded by _gate. The kind of the fault that most recently latched a §42.2 reaction this episode
+    // (null = not latched); cleared by SetStateLocked on the next successful connect. Kind-aware because
+    // an EquipmentDisconnected fault stays Connected and so never clears the latch — a later, strictly
+    // more severe LinkDown must still be able to react (see BeginFaultReactionLocked).
+    private GuiderFaultKind? _latchedFaultKind;
 
     internal enum GuiderLostAction { PauseAndRetry, SkipTarget, AbortSequence }
 
@@ -75,11 +77,21 @@ public sealed partial class GuiderService {
     // connect (SetStateLocked). Deliberately NOT re-armed on a device reconnect — a flapping guide camera
     // must not re-trigger skip/abort per cycle. (Debounced re-arm for repeated genuine incidents in one
     // session is a tracked follow-up, alongside the guider#66 reconnect-abandonment watchdog.)
+    //
+    // Exception, safety-critical: a LinkDown always reacts even when an EquipmentDisconnected already
+    // latched. An equipment fault stays Connected, so its latch never clears on its own — without this a
+    // genuine link death following an earlier camera glitch in the same episode would be swallowed and the
+    // run would keep shooting unguided through a real disconnect. LinkDown is strictly more severe.
     private void BeginFaultReactionLocked(GuiderFaultKind kind) {
-        if (_disposed || _faultReactionLatched) {
+        if (_disposed) {
             return;
         }
-        _faultReactionLatched = true;
+        var alreadyReacted = _latchedFaultKind is not null
+            && !(kind == GuiderFaultKind.LinkDown && _latchedFaultKind == GuiderFaultKind.EquipmentDisconnected);
+        if (alreadyReacted) {
+            return;
+        }
+        _latchedFaultKind = kind;
         // Fire-and-forget one-shot: ReactToGuidingLossAsync owns no disposables,
         // catches everything itself, and each rung uses CancellationToken.None
         // deliberately (a daemon shutdown mid-reaction should still finish

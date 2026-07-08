@@ -414,7 +414,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (state == EquipmentConnectionState.Connected) {
             // A fresh successful connection starts a new fault episode: the §42.2
             // reaction may fire again on the next mid-session loss.
-            _faultReactionLatched = false;
+            _latchedFaultKind = null;
             StartPingLoopLocked();
         } else {
             StopPingLoopLocked();
