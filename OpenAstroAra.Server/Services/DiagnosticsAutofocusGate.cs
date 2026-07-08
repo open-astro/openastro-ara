@@ -96,22 +96,25 @@ public sealed partial class DiagnosticsAutofocusGate : IAutofocusConditionGate {
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Fail-open boundary: any diagnostics read fault (DB, wrapper, cancellation surfacing as AggregateException) must degrade to 'don't defer' — diagnostics must never freeze focusing. CA1031's log-and-recover boundary applies.")]
+        Justification = "Fail-open boundary: any diagnostics read/shape fault (DB, wrapper, a null issue list or issue type from a future implementation, cancellation surfacing as AggregateException) must degrade to 'don't defer' — diagnostics must never freeze or crash focusing. CA1031's log-and-recover boundary applies.")]
     private string? ReadDeferralReasonLocked() {
-        DiagnosticsStateDto state;
+        // The whole read AND match run inside the fail-open boundary: the class promises
+        // diagnostics can never crash focusing, and a malformed state (null issue list /
+        // null issue type from some future IDiagnosticsService) is a diagnostics fault too.
+        DiagnosticIssueDto? issue;
         try {
             var read = _diagnostics.GetStateAsync(CancellationToken.None);
             if (!read.Wait(ReadTimeout)) {
                 LogReadTimedOut();
                 return null;
             }
-            state = read.Result;
+            issue = read.Result.OpenIssues?.FirstOrDefault(
+                i => i?.IssueType is { } type && SkyConditionIssueTypes.ContainsKey(type));
         } catch (Exception ex) {
             LogReadFailed(ex);
             return null;
         }
 
-        var issue = state.OpenIssues.FirstOrDefault(i => SkyConditionIssueTypes.ContainsKey(i.IssueType));
         if (issue is null) {
             _inEpisode = false;
             return null;

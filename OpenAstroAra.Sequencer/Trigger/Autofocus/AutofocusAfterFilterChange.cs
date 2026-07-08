@@ -155,7 +155,9 @@ namespace OpenAstroAra.Sequencer.Trigger.Autofocus {
                 return false;
             }
             if (conditionGate?.DeferralReason() is { } reason) {
-                Logger.Info($"Autofocus deferred — {reason}. Will run when conditions recover.");
+                // Debug, not Info: this fires on EVERY ShouldTrigger call while deferred (per item
+                // transition), and the gate already logs + notifies once per episode.
+                Logger.Debug($"Autofocus deferred — {reason}. Will run when conditions recover.");
                 return false;
             }
             LastAutoFocusFilter = currentFilter;
