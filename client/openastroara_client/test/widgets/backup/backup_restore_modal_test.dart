@@ -44,8 +44,10 @@ class _FakeBackupClient implements BackupClient {
     return 'op';
   }
 
+  bool? lastRestoreFrameMetadata;
   @override
-  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences}) async {
+  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences, required bool frameMetadata}) async {
+    lastRestoreFrameMetadata = frameMetadata;
     if (throwOnRestore) throw StateError('restore failed');
     return 'op-r';
   }
@@ -188,6 +190,30 @@ void main() {
     expect(find.textContaining('overwrites the selected areas'), findsOneWidget);
     expect(find.text('Profile settings'), findsOneWidget);
     expect(find.text('Sequences'), findsOneWidget);
+  });
+
+  testWidgets('the frame-catalog checkbox is opt-in and flows through the restore', (tester) async {
+    final api = _FakeBackupClient([
+      const BackupSnapshot(
+          backupId: 'b1',
+          downloadUrl: '/dl/b1',
+          includedAreas: ['profiles', 'frames_metadata']),
+    ]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(find.text('Frame catalog (metadata)'), findsOneWidget);
+
+    // Defaults OFF (rolling the catalog back forgets frames captured since the
+    // snapshot) — opt in, then confirm.
+    await tester.tap(find.text('Frame catalog (metadata)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastRestoreFrameMetadata, isTrue);
   });
 
   testWidgets('a failed restore surfaces a snackbar', (tester) async {

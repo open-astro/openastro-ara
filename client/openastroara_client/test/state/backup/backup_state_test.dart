@@ -52,7 +52,7 @@ class _FakeBackupClient implements BackupClient {
   }
 
   @override
-  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences}) async {
+  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences, required bool frameMetadata}) async {
     lastRestoreSource = sourceUrl;
     lastRestoreProfiles = profiles;
     lastRestoreSequences = sequences;
@@ -148,7 +148,7 @@ void main() {
 
       final id = await c
           .read(backupSnapshotsProvider.notifier)
-          .restore(snap, profiles: true, sequences: false);
+          .restore(snap, profiles: true, sequences: false, frameMetadata: false);
       expect(id, 'op-restore');
       expect(api.lastRestoreSource, '/api/v1/backup/snapshot/b1/download');
       expect(api.lastRestoreProfiles, isTrue);
@@ -164,7 +164,7 @@ void main() {
       final listsBefore = api.lists;
 
       await expectLater(
-        c.read(backupSnapshotsProvider.notifier).restore(snap, profiles: true, sequences: true),
+        c.read(backupSnapshotsProvider.notifier).restore(snap, profiles: true, sequences: true, frameMetadata: false),
         throwsA(isA<StateError>()),
       );
       expect(api.lists, listsBefore, reason: 'restore does not refresh the snapshot list');
@@ -262,7 +262,7 @@ void main() {
       expect(await notifier.createBackup(), isNull);
       expect(
         await notifier.restore(const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1'),
-            profiles: true, sequences: true),
+            profiles: true, sequences: true, frameMetadata: false),
         isNull,
       );
     });

@@ -189,7 +189,8 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
     // we don't recognise (e.g. a future daemon area). Otherwise the dialog would open with
     // no checkboxes and a permanently-disabled Restore button the user can't act on.
     final hasRestorable = snapshot.includedAreas.contains(BackupAreas.profiles) ||
-        snapshot.includedAreas.contains(BackupAreas.sequences);
+        snapshot.includedAreas.contains(BackupAreas.sequences) ||
+        snapshot.includedAreas.contains(BackupAreas.framesMetadata);
     if (!hasRestorable) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('This snapshot has no restorable areas.')));
@@ -211,6 +212,7 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
             snapshot,
             profiles: choice.profiles,
             sequences: choice.sequences,
+            frameMetadata: choice.frameMetadata,
           );
       // §43-2b: the restore runs on a background worker, so the 202 doesn't mean
       // it's done — poll clone-status to the real outcome (a worker-side failure
@@ -254,7 +256,9 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text('${_formatBytes(snapshot.sizeBytes)} · ${snapshot.includedAreas.join(', ')}',
+            Text(
+                '${_formatBytes(snapshot.sizeBytes)} · ${snapshot.includedAreas.join(', ')}'
+                '${snapshot.framesMetadataRows is int ? ' · ${snapshot.framesMetadataRows} frame records' : ''}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary)),
           ],
         ),
@@ -281,9 +285,14 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
 
 /// The areas the user chose to restore (returned from [_RestoreDialog]).
 class _RestoreChoice {
-  const _RestoreChoice({required this.profiles, required this.sequences});
+  const _RestoreChoice({
+    required this.profiles,
+    required this.sequences,
+    required this.frameMetadata,
+  });
   final bool profiles;
   final bool sequences;
+  final bool frameMetadata;
 }
 
 /// Destructive-restore confirmation: pick which captured areas to overwrite.
@@ -298,9 +307,14 @@ class _RestoreDialog extends StatefulWidget {
 class _RestoreDialogState extends State<_RestoreDialog> {
   late bool _profiles = _hasProfiles;
   late bool _sequences = _hasSequences;
+  // Defaults OFF, unlike the config areas: rolling the frames catalog back silently
+  // "forgets" every frame captured since the snapshot (the FITS files stay on disk,
+  // per §43.8) — an opt-in surprise, not a default one.
+  bool _frameMetadata = false;
 
   bool get _hasProfiles => widget.snapshot.includedAreas.contains(BackupAreas.profiles);
   bool get _hasSequences => widget.snapshot.includedAreas.contains(BackupAreas.sequences);
+  bool get _hasFrameMetadata => widget.snapshot.includedAreas.contains(BackupAreas.framesMetadata);
 
   @override
   Widget build(BuildContext context) {
@@ -326,14 +340,25 @@ class _RestoreDialogState extends State<_RestoreDialog> {
               value: _sequences,
               onChanged: (v) => setState(() => _sequences = v ?? false),
             ),
+          if (_hasFrameMetadata)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Frame catalog (metadata)'),
+              subtitle: const Text(
+                  'Rolls the image library\'s records back to the snapshot. '
+                  'FITS files on disk are not touched.'),
+              value: _frameMetadata,
+              onChanged: (v) => setState(() => _frameMetadata = v ?? false),
+            ),
         ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
           // Disabled until at least one area is selected — an empty restore is a 422.
-          onPressed: (_profiles || _sequences)
-              ? () => Navigator.of(context).pop(_RestoreChoice(profiles: _profiles, sequences: _sequences))
+          onPressed: (_profiles || _sequences || _frameMetadata)
+              ? () => Navigator.of(context).pop(_RestoreChoice(
+                  profiles: _profiles, sequences: _sequences, frameMetadata: _frameMetadata))
               : null,
           child: const Text('Restore'),
         ),

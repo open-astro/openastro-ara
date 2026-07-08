@@ -26,13 +26,15 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Extract + atomically swap the requested areas from <paramref name="zipPath"/> into
         /// <paramref name="profileDir"/>; returns the areas actually restored.</summary>
         IReadOnlyList<string> Restore(
-            string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, CancellationToken ct);
+            string zipPath, string profileDir, bool restoreProfile, bool restoreSequences,
+            bool restoreFrameMetadata, CancellationToken ct);
     }
 
     /// <summary>Production <see cref="IBackupRestorer"/> — delegates to the real staged-swap restorer.</summary>
     internal sealed class DefaultBackupRestorer : IBackupRestorer {
         public IReadOnlyList<string> Restore(
-            string zipPath, string profileDir, bool restoreProfile, bool restoreSequences, CancellationToken ct) =>
-            BackupRestorer.Restore(zipPath, profileDir, restoreProfile, restoreSequences, ct);
+            string zipPath, string profileDir, bool restoreProfile, bool restoreSequences,
+            bool restoreFrameMetadata, CancellationToken ct) =>
+            BackupRestorer.Restore(zipPath, profileDir, restoreProfile, restoreSequences, restoreFrameMetadata, ct);
     }
 }

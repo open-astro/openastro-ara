@@ -12,6 +12,10 @@ DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 abstract final class BackupAreas {
   static const String profiles = 'profiles';
   static const String sequences = 'sequences';
+
+  /// §43-2b(c) — the frames-catalog snapshot (`db/openastroara.db` in the zip):
+  /// session/frame METADATA only, never the FITS files (§43.8).
+  static const String framesMetadata = 'frames_metadata';
 }
 
 /// One backup ZIP snapshot — client mirror of the daemon's `BackupZipDto`.
@@ -29,6 +33,10 @@ class BackupSnapshot {
   /// Which config areas this snapshot captured (e.g. `["profiles","sequences"]`).
   final List<String> includedAreas;
 
+  /// §43.7 — frame records inside the snapshot's frames_metadata area; null on
+  /// a config-only backup (or a pre-§43-2b(c) daemon that doesn't send it).
+  final int? framesMetadataRows;
+
   const BackupSnapshot({
     required this.backupId,
     this.createdUtc,
@@ -36,6 +44,7 @@ class BackupSnapshot {
     this.sha256 = '',
     this.downloadUrl = '',
     this.includedAreas = const <String>[],
+    this.framesMetadataRows,
   });
 
   factory BackupSnapshot.fromJson(Map<String, dynamic> json) {
@@ -49,6 +58,8 @@ class BackupSnapshot {
       includedAreas: areas is List
           ? areas.whereType<String>().toList(growable: false)
           : const <String>[],
+      framesMetadataRows:
+          json['frames_metadata_rows'] is int ? json['frames_metadata_rows'] as int : null,
     );
   }
 
@@ -60,11 +71,12 @@ class BackupSnapshot {
       other.sizeBytes == sizeBytes &&
       other.sha256 == sha256 &&
       other.downloadUrl == downloadUrl &&
+      other.framesMetadataRows == framesMetadataRows &&
       _listEq(other.includedAreas, includedAreas);
 
   @override
-  int get hashCode => Object.hash(
-      backupId, createdUtc, sizeBytes, sha256, downloadUrl, Object.hashAll(includedAreas));
+  int get hashCode => Object.hash(backupId, createdUtc, sizeBytes, sha256, downloadUrl,
+      framesMetadataRows, Object.hashAll(includedAreas));
 
   static bool _listEq(List<String> a, List<String> b) {
     if (a.length != b.length) return false;

@@ -380,8 +380,9 @@ public static class SystemEndpoints {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
                     } catch (BackupRestoreNoAreaSelectedException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-                    } catch (BackupCorruptException ex) {
-                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                        // No BackupCorruptException catch: since §43-2b(c) the checksum runs on the restore
+                        // worker (local and remote), so a corrupt archive surfaces via the failed clone-status,
+                        // never as a synchronous 422 from this endpoint.
                     } catch (BackupRestoreInProgressException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
                     }

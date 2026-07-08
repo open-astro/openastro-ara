@@ -306,6 +306,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SweepOrphans_removes_a_tmp_db_snapshot_left_by_a_killed_create() {
+            Directory.CreateDirectory(_backupsDir);
+            var temp = Path.Combine(_backupsDir, ".tmp-deadbeef.db");
+            File.WriteAllText(temp, "partial catalog snapshot");
+
+            var removed = BackupService.SweepOrphans(_profileDir);
+
+            Assert.That(removed, Is.EqualTo(1));
+            Assert.That(File.Exists(temp), Is.False,
+                "a §43-2b(c) snapshot temp from a hard-killed create is reclaimed like its .zip sibling");
+        }
+
+        [Test]
         public void SweepOrphans_removes_an_archive_whose_manifest_never_landed() {
             Directory.CreateDirectory(_backupsDir);
             var zip = Path.Combine(_backupsDir, "backup-20260615T000000Z-deadbeef.zip");

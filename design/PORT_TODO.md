@@ -773,14 +773,23 @@ Deferred to **§43-2**:
   the sha256, not the transport); size-capped both by advertised Content-Length and actual bytes received (512 MiB
   default, internal test seam); host-blind absolute URLs naming an on-disk snapshot still restore locally (pre-(b)
   compat). `IBackupSourceFetcher` seam + `HttpBackupSourceFetcher` (redirects off, mirroring sky-data). The client
-  "restore from another daemon" UI is a future slice — the server contract is ready. STILL OPEN for **§43-2b**:
-  (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs` flags) once §43-1 create
-  captures them. **§43-2b(d) DONE 2026-06-15:** the client Backup screen now polls `clone-status` after the restore POST
+  "restore from another daemon" UI is a future slice — the server contract is ready. **§43-2b(c) DONE
+  (2026-07-08): the frames-catalog area.** Every backup zip now carries a consistent `db/openastroara.db`
+  snapshot (`SqliteConnection.BackupDatabase` — point-in-time even with active writers, self-contained so
+  restore is a single-file swap; a catalog hiccup degrades to a config-only backup with a logged warning and
+  an honest area list), the manifest gains the §43.7 `FramesMetadataRows` count (additive-optional), and
+  `restore_frame_metadata` swaps the catalog back through the backup-aside→swap machinery with
+  `ClearAllPools()` first and the stale `-wal`/`-shm` sidecars set aside AS A SET with the old db (SQLite
+  would replay a stale WAL into the restored file). WILMA's restore dialog gains the checkbox —
+  deliberately default-OFF (rolling the catalog back forgets post-snapshot frames; their FITS stay on disk
+  per §43.8 and the §28.8 startup scan can re-register them). `RestoreLogs` is RESERVED BY DESIGN: logs are
+  not a §43.4 zip area (§43.8 only prunes them; the §54 bug report bundles them for diagnostics) — the flag
+  stays accepted-but-inert. **§43-2b(d) DONE 2026-06-15:** the client Backup screen now polls `clone-status` after the restore POST
   (`CloneStatus` model + `cloneStatus()` API + `awaitRestoreTerminal()`) and shows the real terminal outcome — including
   a worker-side failure the 202 couldn't reveal — instead of a premature "complete". §43-2a landed in the restore PR
-  (2026-06-14). **Future (with (c)):** when large areas land, move `ValidateChecksum`'s SHA-256 off the request thread
-  onto the worker — it currently hashes synchronously before the 202 (negligible for config-sized payloads). Flagged by
-  the #458 review.
+  (2026-06-14). ✅ **The ValidateChecksum-on-worker follow-up landed with (c)** (2026-07-08, flagged by the
+  #458 review): the archive outgrew config-sized, so the SHA-256 now hashes on the restore worker — a corrupt
+  archive surfaces as a failed clone-status instead of a synchronous 422 (live config still never touched).
 - **Restore sha-256 gate is bypassable by deleting the manifest (low priority).** `RestoreCore` validates the
   archive against its `.meta.json` sha-256 before touching live config, but a missing/unreadable manifest skips the
   gate (logged at Warning via `LogManifestSkipped`, so it's visible; the restore proceeds unvalidated). Anyone able to
@@ -791,13 +800,18 @@ Deferred to **§43-2**:
   mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low
   priority — §43-1 payloads are config-sized (KB), so disk-full during packaging is unlikely. Surfaced 2026-06-13 by
   the §43-1 round-7 review.
-- **Async packaging + progress WS.** `CreateZipAsync` completes the zip within the request (the payload is config-sized
-  — kilobytes, not the frame library) rather than on a background worker emitting `backup.*` progress events. The
-  202/operation-id contract is already in place so the wire shape won't change when it becomes truly async; add the
-  worker + WS progress if a future area (e.g. frame-metadata) makes the payload large enough to warrant it.
-- **Area selectors beyond profiles+sequences.** §43-1 captures the two config areas only. The frame-metadata and log
-  areas from the §43 selector set (and the `RestoreRequestDto.RestoreFrameMetadata`/`RestoreLogs` flags) arrive with the
-  restore work in §43-2.
+- **Async packaging + progress WS — trigger condition fired (2026-07-08).** `CreateZipAsync` completes the zip within
+  the request rather than on a background worker emitting `backup.*` progress events, and §43-2b(c)'s frames_metadata
+  area made the payload catalog-sized (SQLite `BackupDatabase` page-copy + zip + whole-archive SHA-256, all
+  in-request). Interim mitigation: the client's `createBackup()` carries a 120s per-call read timeout (2× restore's
+  headroom, since restore 202s to a worker while create can't). Durable fix: move create onto a worker like restore —
+  the 202/operation-id contract is already in place so the wire shape won't change. Surfaced by the §43-2b(c) round-3
+  review.
+- ✅ **Area selectors beyond profiles+sequences — RESOLVED (2026-07-08) by §43-2b(c) above.** The
+  frames-catalog area ships end-to-end (create snapshot + manifest count + opt-in restore); logs are
+  reserved-by-design (not a §43.4 zip area). Remaining from the §43.4 list: calibration metadata sidecar
+  JSONs — NOT APPLICABLE to ARA's layout (dark-library/calibration metadata lives in the catalog DB, which
+  the frames_metadata area now carries; there is no `calibration/` sidecar-JSON dir to capture).
 - ✅ **Retention/pruning — DONE (2026-07-06).** `storage.backup_retention_count` (default 20, 0 = keep everything,
   negative rejected 400 at the PUT): after every successful create — still under the create/restore gate, so a
   prune can't interleave with a restore's extract+swap — snapshots beyond the count are pruned oldest-first by

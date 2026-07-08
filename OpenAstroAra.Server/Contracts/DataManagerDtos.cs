@@ -115,7 +115,10 @@ public sealed record BackupZipDto(
     long SizeBytes,
     string Sha256,
     Uri DownloadUrl,
-    IReadOnlyList<string> IncludedAreas);
+    IReadOnlyList<string> IncludedAreas,
+    // §43.7 — frame records inside the snapshot's frames_metadata area; null on a
+    // config-only backup (or a pre-§43-2b(c) manifest). Additive-optional-last.
+    long? FramesMetadataRows = null);
 
 public sealed record RestoreRequestDto(
     Uri BackupSourceUrl,

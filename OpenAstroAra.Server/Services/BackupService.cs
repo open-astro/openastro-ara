@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -54,8 +55,13 @@ namespace OpenAstroAra.Server.Services {
 
         // Areas captured by a §43-1 backup, relative to profileDir. "profiles" = the single profile.json document;
         // "sequences" = the whole sequences/ tree (library + active + templates + imported). Both are config-sized.
+        // §43-2b(c) adds "frames_metadata": a consistent snapshot of the §28 catalog at db/openastroara.db inside
+        // the zip (playbook §43.4 lists it unconditionally) — metadata only, never the FITS files (§43.8).
         private const string ProfileFileName = "profile.json";
         private const string SequencesDirName = "sequences";
+        private const string DatabaseFileName = "openastroara.db";
+        private const string DatabaseZipEntry = "db/openastroara.db";
+        internal const string FrameMetadataArea = "frames_metadata";
 
         // Hard cap on sequences/ nesting depth — guards the recursive AddDirectory against a stack-overflowing
         // (uncatchable) pathological tree. Real trees are a handful of levels; 64 only trips on a corrupt/adversarial one.
@@ -178,6 +184,7 @@ namespace OpenAstroAra.Server.Services {
             var manifestPath = Path.Combine(_backupsDir, baseName + ManifestExtension);
 
             var areas = new List<string>();
+            long? framesRows = null;
             try {
                 using (var zipStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
@@ -194,6 +201,8 @@ namespace OpenAstroAra.Server.Services {
                     if (Directory.Exists(sequencesDir) && AddDirectory(archive, sequencesDir, SequencesDirName, depth: 0, ct)) {
                         areas.Add("sequences");
                     }
+
+                    framesRows = TryAddDatabaseSnapshot(archive, id, areas, ct);
                 }
 
                 // Nothing to back up (no profile.json, no sequences/) — don't reveal a content-free zip that would
@@ -211,7 +220,7 @@ namespace OpenAstroAra.Server.Services {
                 // Reveal the archive first, then its manifest. A reader (ListSnapshots / download) keys off the
                 // manifest, so the zip is always present by the time the manifest names it — never the reverse.
                 File.Move(tempPath, zipPath, overwrite: false);
-                var manifest = new BackupManifest(id, createdUtc, sizeBytes, sha256, areas);
+                var manifest = new BackupManifest(id, createdUtc, sizeBytes, sha256, areas, framesRows);
                 File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, AraJsonSerializerContext.Default.BackupManifest));
             } catch {
                 // Reclaim every artifact this attempt may have created, whichever step failed: the temp archive (if
@@ -227,6 +236,74 @@ namespace OpenAstroAra.Server.Services {
             // interleave with another create or with a restore's extract+swap). Best-effort: a prune
             // fault must never fail the backup that just succeeded.
             PruneOldSnapshots();
+        }
+
+        /// <summary>
+        /// §43-2b(c) — snapshot the §28 catalog into the archive as <c>db/openastroara.db</c> and
+        /// return its frames row count for the manifest. <c>BackupDatabase</c> produces a
+        /// consistent point-in-time copy even while writers are active (the catalog runs WAL),
+        /// and the copy is self-contained — no <c>-wal</c>/<c>-shm</c> sidecars — so restore is a
+        /// single-file swap. Best-effort by design: a catalog hiccup (locked, torn, absent on a
+        /// fresh daemon) must degrade to a config-only backup with a logged warning and an honest
+        /// area list, never deny the profile/sequences backup that motivated the request.
+        /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort area boundary: any SQLite/IO fault while snapshotting degrades to a config-only backup whose manifest honestly omits the area; the fault is logged, not swallowed. CA1031's log-and-recover boundary applies.")]
+        private long? TryAddDatabaseSnapshot(ZipArchive archive, Guid id, List<string> areas, CancellationToken ct) {
+            var dbPath = Path.Combine(_profileDir, DatabaseFileName);
+            if (!File.Exists(dbPath)) {
+                return null; // fresh daemon before first catalog init — nothing to capture
+            }
+            if (IsReparsePoint(dbPath)) {
+                // Same guard as profile.json above: SQLite would faithfully follow a symlinked
+                // db and copy whatever it points at — possibly outside the profile root — into
+                // the archive. A real catalog is a plain file; skip a link honestly.
+                LogDbSnapshotFailed(new IOException($"'{dbPath}' is a symlink/reparse point and was not snapshotted."));
+                return null;
+            }
+            var snapshotTmp = Path.Combine(_backupsDir,
+                TempPrefix + id.ToString("N", CultureInfo.InvariantCulture) + ".db");
+            try {
+                ct.ThrowIfCancellationRequested();
+                long? rows;
+                var sourceCs = new SqliteConnectionStringBuilder {
+                    DataSource = dbPath,
+                    Mode = SqliteOpenMode.ReadOnly,
+                    Pooling = false,
+                }.ToString();
+                var destCs = new SqliteConnectionStringBuilder {
+                    DataSource = snapshotTmp,
+                    Pooling = false,
+                }.ToString();
+                using (var source = new SqliteConnection(sourceCs))
+                using (var dest = new SqliteConnection(destCs)) {
+                    source.Open();
+                    dest.Open();
+                    source.BackupDatabase(dest);
+                    rows = CountFramesRows(dest);
+                }
+                ct.ThrowIfCancellationRequested();
+                archive.CreateEntryFromFile(snapshotTmp, DatabaseZipEntry, CompressionLevel.Optimal);
+                areas.Add(FrameMetadataArea);
+                return rows;
+            } catch (OperationCanceledException) {
+                throw; // cancellation is the caller's contract, not a degradable snapshot fault
+            } catch (Exception ex) {
+                LogDbSnapshotFailed(ex);
+                return null;
+            } finally {
+                TryDelete(snapshotTmp);
+            }
+        }
+
+        private static long? CountFramesRows(SqliteConnection snapshot) {
+            try {
+                using var cmd = snapshot.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM frames";
+                return cmd.ExecuteScalar() is long n ? n : null;
+            } catch (SqliteException) {
+                return null; // no frames table (pre-§28 or empty-schema db) — the snapshot itself still counts
+            }
         }
 
         /// <summary>Keeps the newest <c>storage.backup_retention_count</c> snapshots (by manifest
@@ -373,7 +450,8 @@ namespace OpenAstroAra.Server.Services {
                     SizeBytes: manifest.SizeBytes,
                     Sha256: manifest.Sha256,
                     DownloadUrl: SnapshotDownloadUrl(manifest.BackupId),
-                    IncludedAreas: manifest.IncludedAreas);
+                    IncludedAreas: manifest.IncludedAreas,
+                    FramesMetadataRows: manifest.FramesMetadataRows);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
                 // A single corrupt/locked manifest shouldn't fail the whole list — skip it and report the rest.
                 LogManifestSkipped(manifestPath, ex);
@@ -420,10 +498,11 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// Reclaim crash-only orphan archives under <c>{profileDir}/backups/</c> that <see cref="ListSnapshotsAsync"/>
         /// already ignores but never deletes: (a) a <c>.tmp-*.zip</c> staged by a create that was hard-killed before
-        /// its <c>File.Move</c> reveal, and (b) a fully-named <c>backup-*.zip</c> with no matching <c>.meta.json</c>
-        /// sidecar — a SIGKILL in the window between the reveal and the manifest write. A graceful create reclaims its
-        /// own temp on an exception, so these only linger after a hard kill. Returns the count removed. Best-effort +
-        /// synchronous (a handful of files); a locked/permission-denied file is skipped (the next boot retries). Mirrors
+        /// its <c>File.Move</c> reveal, (b) a fully-named <c>backup-*.zip</c> with no matching <c>.meta.json</c>
+        /// sidecar — a SIGKILL in the window between the reveal and the manifest write — and (c) a <c>.tmp-*.db</c>
+        /// catalog snapshot from a create hard-killed mid-<c>BackupDatabase</c> (§43-2b(c)). A graceful create reclaims
+        /// its own temps on an exception, so these only linger after a hard kill. Returns the count removed. Best-effort
+        /// + synchronous (a handful of files); a locked/permission-denied file is skipped (the next boot retries). Mirrors
         /// §36-2c <see cref="SkyDataInstaller.SweepStaleScratch"/>. Called at startup before the daemon accepts
         /// requests, so no concurrent create can race a half-written archive into the sweep.
         /// </summary>
@@ -437,7 +516,11 @@ namespace OpenAstroAra.Server.Services {
                 }
                 // GetFiles (materialized), not EnumerateFiles: we delete during the loop, and removing entries from a
                 // directory mid lazy-enumeration can skip or repeat names. The read-only instance methods can stream.
-                zips = Directory.GetFiles(backupsDir, "*" + ZipExtension, SearchOption.TopDirectoryOnly);
+                // Both temp extensions we stage: the archive being packaged AND the §43-2b(c) catalog snapshot.
+                zips = [
+                    .. Directory.GetFiles(backupsDir, "*" + ZipExtension, SearchOption.TopDirectoryOnly),
+                    .. Directory.GetFiles(backupsDir, TempPrefix + "*.db", SearchOption.TopDirectoryOnly),
+                ];
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 return 0;
             }
@@ -491,11 +574,12 @@ namespace OpenAstroAra.Server.Services {
         public Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
 
-            // §43-1 backups carry the two config areas; frame-metadata/logs aren't captured yet, so those flags are
-            // honoured only insofar as the archive contains them (it won't) — they're no-ops, not errors.
-            if (!request.RestoreProfiles && !request.RestoreSequences) {
+            // §43-2b(c): three restorable areas — profiles, sequences, frames_metadata (the catalog snapshot).
+            // restore_logs remains reserved: logs are not a §43.4 zip area (§43.8 only prunes them), so the flag
+            // is honoured only insofar as an archive contains a logs area (none do) — a no-op, not an error.
+            if (!request.RestoreProfiles && !request.RestoreSequences && !request.RestoreFrameMetadata) {
                 throw new BackupRestoreNoAreaSelectedException(
-                    "No restorable area selected — set restore_profiles and/or restore_sequences.");
+                    "No restorable area selected — set restore_profiles, restore_sequences and/or restore_frame_metadata.");
             }
 
             // The DTO declares the URL non-nullable, but the JSON deserializer doesn't enforce that at runtime —
@@ -521,10 +605,10 @@ namespace OpenAstroAra.Server.Services {
                     + "or a remote http(s) backup archive URL.");
             }
 
-            // §43-2b: validate cheaply + SYNCHRONOUSLY (so unknown-snapshot 404 and corrupt-archive 422 still surface
-            // as HTTP errors before the 202), then run the slow, live-config-mutating extract+swap on a background
-            // worker and report its progress via the poll-able clone-status. The 202/operation-id wire contract was
-            // already in place for exactly this.
+            // §43-2b: validate cheaply + SYNCHRONOUSLY (so unknown-snapshot 404 still surfaces as an HTTP error
+            // before the 202), then run everything slow — the checksum hash (§43-2b(c)) and the
+            // live-config-mutating extract+swap — on a background worker reporting via the poll-able
+            // clone-status. The 202/operation-id wire contract was already in place for exactly this.
             if (zipPath is null) {
                 throw new BackupSnapshotNotFoundException($"No backup snapshot {id} to restore from.");
             }
@@ -536,7 +620,10 @@ namespace OpenAstroAra.Server.Services {
             if (RestoreInProgress()) {
                 throw new BackupRestoreInProgressException("A restore is already in progress.");
             }
-            ValidateChecksum(id, zipPath);
+            // The checksum hash moved onto the worker with §43-2b(c): the archive now carries the
+            // catalog snapshot, so hashing it can take real time on a large library — a corrupt
+            // archive surfaces as a failed clone-status instead of a synchronous 422 (the flagged
+            // §43-2b follow-up, warranted now that the payload outgrew "config-sized").
 
             // Claim the single clone slot. Only one restore at a time — a second while one runs is a 409, not a
             // queued op (both mutate the same live profile). Atomic under the lock so two requests can't both claim.
@@ -550,7 +637,7 @@ namespace OpenAstroAra.Server.Services {
 
             // Fire-and-forget on the thread pool; the worker owns the gate + the terminal clone-status. ct is the
             // request token — it's cancelled once the 202 response completes, so the worker must NOT observe it.
-            _ = Task.Run(() => RunRestoreAsync(opId, zipPath, request), CancellationToken.None);
+            _ = Task.Run(() => RunRestoreAsync(opId, zipPath, request, snapshotId: id), CancellationToken.None);
             LogRestoreStarted(opId, id);
             return Task.FromResult(new OperationAcceptedDto(
                 OperationId: opId,
@@ -689,21 +776,29 @@ namespace OpenAstroAra.Server.Services {
             Justification = "Top-level fire-and-forget worker: every failure must land in the 'failed' clone-status " +
                 "(and be logged) rather than escaping as an unobserved task exception. It is reported, not swallowed.")]
         [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging",
-            Justification = "The joined argument is at most two short area names ('profiles','sequences') — trivial, " +
+            Justification = "The joined argument is at most three short area names — trivial, " +
                 "once per restore, not a hot path.")]
-        private async Task RunRestoreAsync(Guid opId, string zipPath, RestoreRequestDto request) {
+        private async Task RunRestoreAsync(Guid opId, string zipPath, RestoreRequestDto request, Guid? snapshotId = null) {
             // Default terminal — if the body somehow exits without assigning one (e.g. an OOM while building the
             // success/failure state), the finally still drives clone-status off "running" so it can't 409 every
             // future restore. SetClone runs in the finally so a throw in the catch can't strand the state machine.
             var terminal = FailedFallback;
             try {
+                // §43-2b(c) — the manifest checksum gate runs HERE, off the request thread (the archive now
+                // carries the catalog snapshot, so hashing can take real time on a large library). Only local
+                // snapshots carry a manifest; a remote source was already verified against the request's
+                // required sha256 by the download worker.
+                if (snapshotId is { } localSnapshot) {
+                    ValidateChecksum(localSnapshot, zipPath);
+                }
                 // _shutdown lets a graceful host shutdown unblock this worker: the request token is cancelled once
                 // the 202 is sent, so it can't be used; without a token a shutdown during an in-flight create would
                 // block this WaitAsync (and the restorer) forever. Serialize against create + any other restore.
                 await _gate.WaitAsync(_shutdown.Token).ConfigureAwait(false);
                 try {
                     var restored = _restorer.Restore(
-                        zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, _shutdown.Token);
+                        zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences,
+                        request.RestoreFrameMetadata, _shutdown.Token);
                     terminal = new CloneState(DoneState, 100, null,
                         restored.Count == 0 ? "Nothing to restore" : "Restored: " + string.Join(", ", restored));
                     LogRestored(opId, string.Join(",", restored));
@@ -851,6 +946,10 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Warning,
             Message = "Backup create-zip received an Idempotency-Key but dedup is not implemented (§43-2) — a retry will create another archive")]
         partial void LogDeduplicationNotImplemented();
+
+        [LoggerMessage(Level = LogLevel.Warning,
+            Message = "Backup could not snapshot the frames catalog — this backup is config-only (its manifest omits frames_metadata)")]
+        partial void LogDbSnapshotFailed(Exception ex);
     }
 
     /// <summary>Thrown by <see cref="BackupService.CreateZipAsync"/> when there is nothing to back up — neither a
@@ -920,5 +1019,8 @@ namespace OpenAstroAra.Server.Services {
         DateTimeOffset CreatedUtc,
         long SizeBytes,
         string Sha256,
-        IReadOnlyList<string> IncludedAreas);
+        IReadOnlyList<string> IncludedAreas,
+        // §43.7 contents count — additive-optional so pre-(c) manifests (no field) keep
+        // deserializing; null also means "snapshot skipped" (the area list is authoritative).
+        long? FramesMetadataRows = null);
 }

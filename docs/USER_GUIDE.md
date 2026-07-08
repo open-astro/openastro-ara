@@ -190,10 +190,15 @@ GitHub issue. See `CONTRIBUTING.md`.
 
 ## 10. Backups
 
-Settings → Storage: the daemon snapshots your configuration (profile + sequences) as zip backups,
-keeps the newest N (default 20), and restores atomically — including **from another daemon on your
-LAN** by URL, verified by checksum before anything touches live config. Take a backup before big
-reconfigurations; restore is a two-click undo.
+Settings → Storage: the daemon snapshots your configuration (profile + sequences) **and your
+image library's records** (the frames catalog — sessions, frame metadata, ratings; never the
+FITS files themselves, which back up via drive clone) as zip backups, keeps the newest N
+(default 20), and restores atomically — including **from another daemon on your LAN** by URL,
+verified by checksum before anything touches live config. Take a backup before big
+reconfigurations; restore is a two-click undo. Restoring the frame catalog is a separate
+opt-in checkbox: it rolls the library's records back to the snapshot, so frames captured since
+then disappear from the library (their files stay on disk, and the startup scan can
+re-register them).
 
 **Real-time frame mirroring (§44)** — stream every newly-captured FITS to one desktop as the
 night runs: enable **Settings → Session → Storage → "Stream new frames to this device"**, pick a
