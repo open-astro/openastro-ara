@@ -29,12 +29,19 @@ like the accept path always did.
   `SequenceApi.decideAutoFlats`, the Settings → Session → Calibration panel over the safety-policies
   round-trip (`CalibrationCaptureDefault` enum through model/notifier/ProfileApi), and the
   settings/help registry entries.
-- **§48.3/§48.4 native flat instructions (v0.1.0)**: NINA's FlatPanelFlats/SkyFlats were never
-  ported; v0.0.1's automation is the §39.5 generated sequence (fixed 1 s starting exposure,
-  advisory TargetAdu). The native instructions bring auto-exposure-to-ADU, flat-panel
-  brightness control, and twilight-timed sky flats — at which point "sky_at_twilight" can
-  auto-start instead of generate-and-notify, and the §48.7 flat_panel/sky_flat profile blocks
-  land WITH them (enforcement-first).
+- **§48.3/§48.4 native flat instructions (v0.1.0) — IN PROGRESS (arc started 2026-07-08).**
+  ✅ **PR 1 — the §48.3 auto-exposure core**: `FlatPanelFlats` instruction (one flat SET for the
+  current filter context; per-filter iteration stays the sequence's concern) executing through the
+  new `IFlatCaptureExecutor` seam; `FlatCaptureService` lights the panel via `IFlatDeviceService`
+  (optional — manual panels/sky proceed without one), probes exposures through the §59
+  `IAnalysisFrameSource` (mean-ADU metric, exposure ×= target/mean, bounds-pinned/zero-light
+  honest failures), captures the saved FLATs through the real `IImagingMediator` pipeline, and
+  restores the light on every exit path. Remaining slices: **PR 2** — switch the §39.5 generator's
+  `TakeExposure(FLAT)` leaf to `FlatPanelFlats` (TargetAdu/FrameCount stop being advisory) + the
+  §48.7 `flat_panel` profile block (enforcement-first) + the WILMA instruction-catalog entry (needs
+  a new calibration category); **PR 3** — `SkyFlats` (§48.4 twilight timing, frame-to-frame
+  re-probe, stop_at_max/min_adu) at which point "sky_at_twilight" auto-starts instead of
+  generate-and-notify, + the `sky_flat` profile block.
 
 ## §44 backup stream — the WILMA client half (2026-07-07, after the server PR)
 

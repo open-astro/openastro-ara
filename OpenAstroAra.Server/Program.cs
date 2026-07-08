@@ -479,6 +479,13 @@ public partial class Program {
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AutofocusSweepService>>(),
                 history: sp.GetRequiredService<ImageHistoryService>(),
                 filterWheel: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>()));
+        // §48.3 — the auto-exposure flat set (panel light → probe-to-ADU → saved FLAT frames).
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(sp =>
+            new FlatCaptureService(
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FlatCaptureService>>(),
+                sp.GetRequiredService<IAnalysisFrameSource>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>(),
+                sp.GetRequiredService<IFlatDeviceService>()));
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder
@@ -733,7 +740,9 @@ public partial class Program {
                 // §59.5 — the session history the autofocus trigger family reads.
                 imageHistory: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IImageHistory>(),
                 // §59.9 — autofocus defers while §51 diagnostics carries an open sky-condition issue.
-                autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>()));
+                autofocusConditionGate: sp.GetRequiredService<OpenAstroAra.Sequencer.Interfaces.IAutofocusConditionGate>(),
+                // §48.3 — the auto-exposure flat set, so FlatPanelFlats executes for real.
+                flatCaptureExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
