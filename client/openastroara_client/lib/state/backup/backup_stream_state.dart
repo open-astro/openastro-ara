@@ -63,6 +63,7 @@ class BackupStreamState {
     double? measuredMbps,
     String? problem,
     bool clearProblem = false,
+    bool clearMeasured = false,
   }) =>
       BackupStreamState(
         enabled: enabled ?? this.enabled,
@@ -72,7 +73,7 @@ class BackupStreamState {
         syncedThisSession: syncedThisSession ?? this.syncedThisSession,
         syncedBytesThisSession: syncedBytesThisSession ?? this.syncedBytesThisSession,
         maxMbps: maxMbps ?? this.maxMbps,
-        measuredMbps: measuredMbps ?? this.measuredMbps,
+        measuredMbps: clearMeasured ? null : (measuredMbps ?? this.measuredMbps),
         problem: clearProblem ? null : (problem ?? this.problem),
       );
 }
@@ -103,6 +104,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   bool _exposureInFlight = false;
   DateTime? _exposureSince;
 
+  /// Frames stored + verified on disk this session whose ack failed — the
+  /// next pass acks them directly instead of re-downloading (and re-paying
+  /// the bandwidth cap for) an already-verified file.
+  final Set<String> _storedUnacked = <String>{};
+
   /// If neither `camera.exposure_complete` nor `_failed` arrives within this
   /// window (WS reconnect gap, app backgrounded), assume the event was
   /// missed and resume pulling rather than stalling until restart.
@@ -124,6 +130,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   @override
   BackupStreamState build() {
     ref.onDispose(_teardown);
+    ref.listen<AraServer?>(activeServerProvider, _onServerSwitched);
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       if (event == null) return;
@@ -169,6 +176,33 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   }
 
   String get _hostname => (hostnameResolver ?? () => Platform.localHostname)();
+
+  /// The held slot, queue bookkeeping, ack memo, and link measurement all
+  /// belong to the previous server — a server switch must drop them so the
+  /// next tick claims cleanly on the new one, instead of leaning on the
+  /// slot-lost reclaim to self-heal the mismatch mid-poll.
+  void _onServerSwitched(AraServer? prev, AraServer? next) {
+    if (prev?.baseUrl == next?.baseUrl) return;
+    final oldClient = _client;
+    _client = null;
+    _clientServerId = null;
+    final hadSlot = state.active;
+    if (oldClient != null) {
+      unawaited(() async {
+        try {
+          if (hadSlot) await oldClient.release(_hostname);
+        } catch (e) {
+          debugPrint('backup-stream release on server switch failed (best-effort): $e');
+        }
+        oldClient.close();
+      }());
+    }
+    _reclaimedOnce = false;
+    _storedUnacked.clear();
+    if (state.active || state.pendingCount > 0 || state.measuredMbps != null) {
+      state = state.copyWith(active: false, pendingCount: 0, clearMeasured: true);
+    }
+  }
 
   BackupStreamClient? _resolveClient() {
     final server = ref.read(activeServerProvider);
@@ -325,6 +359,20 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       for (final entry in entries) {
         if (!state.enabled || !state.active) return;
         if (_exposureBlocking) return;
+        if (_storedUnacked.contains(entry.id)) {
+          // Stored + verified on an earlier pass; only the ack failed. Ack
+          // directly instead of moving the bytes again (a throw here — slot
+          // lost or transport — propagates exactly like a first-attempt ack,
+          // and the memo keeps the frame download-free on the pass after).
+          await client.ack(_hostname, entry.id);
+          _storedUnacked.remove(entry.id);
+          state = state.copyWith(
+            pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
+            syncedThisSession: state.syncedThisSession + 1,
+            syncedBytesThisSession: state.syncedBytesThisSession + entry.sizeBytes,
+          );
+          continue;
+        }
         // Null sha = the daemon hasn't hashed it yet (per-page budget) —
         // skip; it returns hashed on a later poll.
         if (entry.sha256 == null) continue;
@@ -357,8 +405,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         // Ack BEFORE pacing: the frame is already verified on disk, and a
         // disable arriving mid-wait must not orphan it un-acked (the daemon
         // would re-serve it next session — wasting exactly the bandwidth
-        // the cap conserves).
+        // the cap conserves). The memo brackets the ack so a failed one
+        // doesn't cost a re-download next pass.
+        _storedUnacked.add(entry.id);
         await client.ack(_hostname, entry.id);
+        _storedUnacked.remove(entry.id);
         state = state.copyWith(
           pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
           syncedThisSession: state.syncedThisSession + 1,
@@ -441,9 +492,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       await tmp.writeAsBytes(bytes, flush: true);
       await tmp.rename(file.path);
       return (null, downloadTime);
-    } on BackupStreamSlotLostException {
-      rethrow;
     } catch (e) {
+      // No slot-lost rethrow here by design: downloadFrame hits the plain
+      // frames endpoint, which is not slot-gated — only queue()/ack() can
+      // lose the slot, and those throw outside this method.
       debugPrint('backup-stream pull failed for ${entry.id}: $e');
       return ('$e', null);
     }

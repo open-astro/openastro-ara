@@ -22,8 +22,12 @@ class _FakeClient implements BackupStreamClient {
   final List<String> acked = [];
   int claimCalls = 0;
   int releaseCalls = 0;
+  int downloadCalls = 0;
   bool grantClaim = true;
   bool throwSlotLostOnQueue = false;
+
+  /// Throws a transport error on this many ack() calls, then acks normally.
+  int ackFailBudget = 0;
 
   /// Throws slot-lost on this many queue() calls, then behaves normally.
   int slotLostBudget = 0;
@@ -73,12 +77,17 @@ class _FakeClient implements BackupStreamClient {
 
   @override
   Future<void> ack(String hostname, String frameId) async {
+    if (ackFailBudget > 0) {
+      ackFailBudget--;
+      throw StateError('ack failed (simulated 500)');
+    }
     acked.add(frameId);
     pending.removeWhere((e) => e.id == frameId);
   }
 
   @override
   Future<Uint8List> downloadFrame(String frameId) async {
+    downloadCalls++;
     final bytes = frames[frameId];
     if (bytes == null) throw StateError('unknown frame $frameId');
     return corruptor?.call(frameId) ?? bytes;
@@ -404,6 +413,63 @@ void main() {
     expect(container.read(backupStreamProvider).maxMbps, 25);
   });
 
+  test('an ack failure does not re-download the already-verified frame next pass', () async {
+    final c = controller();
+    final entry = fake.addFrame('frame-1', 'FITS-DATA-1');
+    fake.ackFailBudget = 1;
+
+    await c.setEnabled(true);
+    await settle();
+    expect(fake.acked, isEmpty, reason: 'the first ack attempt failed');
+    expect(fake.downloadCalls, 1);
+    expect(container.read(backupStreamProvider).syncedThisSession, 0,
+        reason: 'un-acked = not yet counted, so the memo pass counts it exactly once');
+
+    await c.tickNow();
+    await settle();
+
+    expect(fake.acked, contains('frame-1'));
+    expect(fake.downloadCalls, 1,
+        reason: 'the stored-but-unacked memo must ack directly, never re-pull verified bytes');
+    final state = container.read(backupStreamProvider);
+    expect(state.syncedThisSession, 1);
+    expect(state.syncedBytesThisSession, entry.sizeBytes);
+    final stored = File(
+        '${tempDir.path}${Platform.pathSeparator}pi-test${Platform.pathSeparator}session-1${Platform.pathSeparator}frame-1.fits');
+    expect(stored.existsSync(), isTrue);
+  });
+
+  test('switching the active server drops the claim and re-claims cleanly on the new one', () async {
+    final c = controller();
+    fake.addFrame('frame-1', 'X' * 1000);
+    await c.setEnabled(true);
+    await settle();
+    expect(container.read(backupStreamProvider).active, isTrue);
+    expect(container.read(backupStreamProvider).measuredMbps, isNotNull);
+    final claimsBefore = fake.claimCalls;
+
+    (container.read(savedServersProvider.notifier) as _FixedServers)
+        .switchTo(const AraServer(hostname: 'pi-two', port: 5555));
+    // The ref.listen callback + best-effort release land async.
+    for (var i = 0; i < 40 && container.read(backupStreamProvider).active; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+
+    var state = container.read(backupStreamProvider);
+    expect(state.active, isFalse, reason: 'the held slot belonged to the previous server');
+    expect(state.enabled, isTrue, reason: 'a server switch is not a user disable');
+    expect(state.measuredMbps, isNull, reason: 'the link measurement was the old link\'s');
+    expect(fake.releaseCalls, 1, reason: 'the old slot is released best-effort');
+
+    fake.addFrame('frame-2', 'FITS-DATA-2');
+    await c.tickNow();
+    await settle();
+    state = container.read(backupStreamProvider);
+    expect(state.active, isTrue);
+    expect(fake.claimCalls, greaterThan(claimsBefore), reason: 'a fresh claim on the new server');
+    expect(fake.acked, contains('frame-2'));
+  });
+
   test('disable releases the slot', () async {
     final c = controller();
     await c.setEnabled(true);
@@ -416,8 +482,11 @@ void main() {
   });
 }
 
-/// savedServersProvider override with one fixed server.
+/// savedServersProvider override with one fixed server; [switchTo] swaps the
+/// active server (the provider's convention is "last entry wins").
 class _FixedServers extends SavedServersNotifier {
   @override
   Future<List<AraServer>> build() async => const [AraServer(hostname: 'pi-test', port: 5555)];
+
+  void switchTo(AraServer server) => state = AsyncValue.data([server]);
 }
