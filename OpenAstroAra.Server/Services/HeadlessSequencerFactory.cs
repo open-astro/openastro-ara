@@ -24,6 +24,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.SequenceItem.Dome;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
+using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
@@ -150,7 +151,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             ICenteringExecutor? centeringExecutor = null,
             IAutofocusExecutor? autofocusExecutor = null,
             IImageHistory? imageHistory = null,
-            IAutofocusConditionGate? autofocusConditionGate = null) {
+            IAutofocusConditionGate? autofocusConditionGate = null,
+            IFlatCaptureExecutor? flatCaptureExecutor = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -268,6 +270,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // for now rather than silently skipping focus/centering).
                 new RunAutofocus(autofocusExecutor),
                 new CenterAndRotate(centeringExecutor, rotatorMediator),
+                // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
+                // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
+                // JSON-resolvable and its Execute fails loudly rather than skipping flats.
+                new FlatPanelFlats(flatCaptureExecutor),
                 // §38k-22 — Connect dir. All take the full 11 device mediators;
                 // Connect*/SwitchProfile also take IProfileService (profile-first),
                 // Disconnect* do not (camera-first). The Disconnect* classes were
