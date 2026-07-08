@@ -17,6 +17,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Camera;
@@ -35,6 +36,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Trigger.Autofocus;
+using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
@@ -146,7 +148,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IImagingMediator? imagingMediator = null,
             IMeridianFlipExecutor? meridianFlipExecutor = null,
             ICenteringExecutor? centeringExecutor = null,
-            IAutofocusExecutor? autofocusExecutor = null) {
+            IAutofocusExecutor? autofocusExecutor = null,
+            IImageHistory? imageHistory = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -323,6 +326,22 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new DitherAfterExposures(),
                 // §38 NINA import fidelity — the autofocus sibling: run autofocus every N exposures.
                 new AutofocusAfterExposures(),
+                // §59.5 — the remaining autofocus trigger family: time interval, focuser-temp
+                // delta, HFR drift, first-use-of-a-filter. Each reads the daemon's session
+                // image history (plus the equipment it observes); the RunAutofocus inside a
+                // deserialized TriggerRunner resolves through the item prototype above, which
+                // carries the §59 sweep executor.
+                new AutofocusAfterTimeTrigger(imageHistory),
+                new AutofocusAfterTemperatureChangeTrigger(focuserMediator, imageHistory),
+                new AutofocusAfterHFRIncreaseTrigger(imageHistory, filterWheelMediator),
+                new AutofocusAfterFilterChange(filterWheelMediator, imageHistory, profileService),
+                // Previously unregistered: a WILMA-added or NINA-imported ReconnectTrigger
+                // degraded to UnknownSequenceTrigger (never fired). Its ConnectEquipment item
+                // prototype was already registered above; the trigger itself was missed.
+                new ReconnectTrigger(
+                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             });
     }
 }

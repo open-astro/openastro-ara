@@ -43,6 +43,18 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
             if (SelectedDevice == "Telescope") {
                 SelectedDevice = "Mount";
             }
+            // The base [OnDeserializing] clears the ctor-added instruction before Newtonsoft
+            // repopulates the runner from JSON, leaving two broken shapes (flagged on #746):
+            // a WILMA-built node ships the runner EMPTY (Execute silently runs zero items and
+            // the FAILED check reads an instruction that never ran), and a NINA export carries
+            // its OWN ConnectEquipment instance that the trigger's SelectedDevice delegate and
+            // Status check do NOT point at. Re-bind so the runner holds exactly the bound
+            // instruction — SelectedDevice was already populated onto it via the [JsonProperty]
+            // delegate, so the JSON's device survives either way.
+            if (TriggerRunner != null) {
+                TriggerRunner.Items.Clear();
+                TriggerRunner.Add(connectEquipmentInstruction);
+            }
         }
 
         [ImportingConstructor]

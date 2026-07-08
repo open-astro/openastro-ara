@@ -294,12 +294,27 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   per §58.7, never aborts the night). Fully unit-tested with mocked equipment + an injected metric (8 tests:
   single-direction probing, vertex recovery, disconnected/invalid-config/starless/flat-curve/capture-failure/
   cancellation × restore policy). **Still owed:** live end-to-end validation on a real focuser (the dev rig is
-  camera-only — the original physical blocker stands for VALIDATION, not the build), §59.7 backlash
-  auto-discovery, and the `AutofocusAfterExposures` trigger's own wiring check.
+  camera-only — the original physical blocker stands for VALIDATION, not the build) and §59.7 backlash
+  auto-discovery. ✅ The `AutofocusAfterExposures` wiring check happened with the §59.5 trigger-family PR
+  (2026-07-08) and found a REAL gap: a WILMA-built trigger node shipped an **empty `TriggerRunner`**, so a
+  firing trigger executed nothing, silently — fixed in the client trigger catalog (`TriggerDef.runnerItems`
+  seeds the runner with its action item: `RunAutofocus` for the AF family, `Dither` for DitherAfterExposures,
+  matching what NINA's C# constructors serialize).
 - **Smart Focus (§59.2–59.4):** the feature-vector model (donut diameters, asymmetry, telescope-type extractor)
   + inverse-mapping calibration table. Research-grade "better than NINA" feature — likely v0.1.0, not v0.0.1.
-- **AF triggers + sequencer wiring (§59.5):** sequence-start / temp-Δ / HFR-drift / post-flip / first-filter
-  triggers consulting `/diagnostics/current` (§59.9). Sequencer-integration work, gated on the live sweep.
+- **AF triggers + sequencer wiring (§59.5) — trigger family DONE (2026-07-08); two follow-ups open.**
+  ✅ The four remaining NINA AF triggers re-ported headless from `840893eb8^` (time-interval / focuser-temp-Δ /
+  HFR-drift / first-filter — "sequence start" is covered by the imaging-run builder's `autofocusAtStart`
+  RunAutofocus instruction, and post-flip by §58's `AutoFocusAfterFlip`) on the new `IImageHistory` seam
+  (Sequencer), implemented by the daemon's session-scoped `ImageHistoryService`; `AutofocusSweepService`
+  records each completed run (temperature + filter) so "since the last AF" reference points are real; factory
+  prototypes + WILMA trigger-catalog defs. Class defaults keep NINA's values (30 min / 5 °C / 5 %) for import
+  fidelity — the playbook §59.5 defaults (90 min / 1.5 °C / 15 %) are profile-level and apply when ARA builds
+  plans. Open follow-ups: (1) **live per-frame HFR analysis** — captured LIGHT frames currently register with
+  `Hfr: null` (only the §28.8 FITS rescan fills it), so `ImageHistoryService.ImagePoints` is empty and the
+  HFR-drift trigger stays quiet (the safe direction) until StarDetector runs on captured frames and feeds
+  `RecordImage`; (2) **§59.9 diagnostics deferral** — every AF trigger consults `/diagnostics/current` and
+  defers on clouds_passing/aperture_blocked/dew_formation with a "will run when conditions recover" notification.
 
 ## §58 meridian flip — follow-ups (2026-06-11, after the trigger re-port #362)
 
