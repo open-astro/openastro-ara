@@ -238,9 +238,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
 
                     var forkIdentity = IdentifyGuiderFork(
-                        versionRpc?.Fork, versionRpc?.OverlapSupport,
-                        Version?.Fork, Version?.OverlapSupport,
-                        Version?.PHDVersion, Version?.PHDSubver);
+                        versionRpc?.Fork, versionRpc?.OverlapSupport, versionRpc?.PhdVersion, versionRpc?.PhdSubver,
+                        Version?.Fork, Version?.OverlapSupport, Version?.PHDVersion, Version?.PHDSubver);
                     GuiderFork = forkIdentity.ForkName;
                     OverlapSupport = forkIdentity.OverlapSupport;
 

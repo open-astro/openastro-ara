@@ -55,16 +55,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// Resolve the guider fork from the get_version RPC result, the "Version" event, and the legacy
         /// version/subver strings — in that order of authority. An explicit non-OpenAstro fork string is
         /// authoritative (it does NOT fall through to the legacy substring); the legacy path only runs when
-        /// no fork key is present at all (a pre-#57 daemon). OverlapSupport prefers the RPC value, then the
-        /// event, then false.
+        /// no fork key is present at all (a pre-#57 daemon). Every source has both an RPC and an event
+        /// slot; the RPC value is preferred and the event is the fallback — including for the legacy
+        /// version/subver, so a fork marker the synchronous RPC carried in <c>phd_subver</c> isn't lost
+        /// when the catch-up event is slow or missed. OverlapSupport prefers the RPC value, then the event,
+        /// then false.
         /// </summary>
         public static GuiderForkIdentity IdentifyGuiderFork(
-                string? rpcFork, bool? rpcOverlapSupport,
-                string? eventFork, bool? eventOverlapSupport,
-                string? phdVersion, string? phdSubver) {
+                string? rpcFork, bool? rpcOverlapSupport, string? rpcPhdVersion, string? rpcPhdSubver,
+                string? eventFork, bool? eventOverlapSupport, string? eventPhdVersion, string? eventPhdSubver) {
 
             string? fork = !string.IsNullOrEmpty(rpcFork) ? rpcFork
                 : (!string.IsNullOrEmpty(eventFork) ? eventFork : null);
+            string? phdVersion = !string.IsNullOrEmpty(rpcPhdVersion) ? rpcPhdVersion : eventPhdVersion;
+            string? phdSubver = !string.IsNullOrEmpty(rpcPhdSubver) ? rpcPhdSubver : eventPhdSubver;
 
             bool identified = fork is not null
                 ? ForkStringIsOpenAstro(fork)
