@@ -490,10 +490,11 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// Reclaim crash-only orphan archives under <c>{profileDir}/backups/</c> that <see cref="ListSnapshotsAsync"/>
         /// already ignores but never deletes: (a) a <c>.tmp-*.zip</c> staged by a create that was hard-killed before
-        /// its <c>File.Move</c> reveal, and (b) a fully-named <c>backup-*.zip</c> with no matching <c>.meta.json</c>
-        /// sidecar — a SIGKILL in the window between the reveal and the manifest write. A graceful create reclaims its
-        /// own temp on an exception, so these only linger after a hard kill. Returns the count removed. Best-effort +
-        /// synchronous (a handful of files); a locked/permission-denied file is skipped (the next boot retries). Mirrors
+        /// its <c>File.Move</c> reveal, (b) a fully-named <c>backup-*.zip</c> with no matching <c>.meta.json</c>
+        /// sidecar — a SIGKILL in the window between the reveal and the manifest write — and (c) a <c>.tmp-*.db</c>
+        /// catalog snapshot from a create hard-killed mid-<c>BackupDatabase</c> (§43-2b(c)). A graceful create reclaims
+        /// its own temps on an exception, so these only linger after a hard kill. Returns the count removed. Best-effort
+        /// + synchronous (a handful of files); a locked/permission-denied file is skipped (the next boot retries). Mirrors
         /// §36-2c <see cref="SkyDataInstaller.SweepStaleScratch"/>. Called at startup before the daemon accepts
         /// requests, so no concurrent create can race a half-written archive into the sweep.
         /// </summary>
@@ -507,7 +508,11 @@ namespace OpenAstroAra.Server.Services {
                 }
                 // GetFiles (materialized), not EnumerateFiles: we delete during the loop, and removing entries from a
                 // directory mid lazy-enumeration can skip or repeat names. The read-only instance methods can stream.
-                zips = Directory.GetFiles(backupsDir, "*" + ZipExtension, SearchOption.TopDirectoryOnly);
+                // Both temp extensions we stage: the archive being packaged AND the §43-2b(c) catalog snapshot.
+                zips = [
+                    .. Directory.GetFiles(backupsDir, "*" + ZipExtension, SearchOption.TopDirectoryOnly),
+                    .. Directory.GetFiles(backupsDir, TempPrefix + "*.db", SearchOption.TopDirectoryOnly),
+                ];
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 return 0;
             }
