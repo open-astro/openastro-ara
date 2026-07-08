@@ -207,6 +207,26 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return await SendCalibrationStatusRpcAsync(new Phd2GetCalibrationFilesStatus(), "get_calibration_files_status");
         }
 
+        /// <summary>§63.8 — poll the progress of an in-flight dark-library / defect-map build (all zero/false
+        /// when idle). A quick query; because <see cref="SendMessage{T}"/> opens its own short-lived
+        /// connection, this is safe to call CONCURRENTLY with the blocking build RPC — the daemon yields
+        /// between frames, so a caller can drive a progress bar while <see cref="BuildDarkLibraryAsync"/> is
+        /// still awaiting. Requires a connected guider; throws on RPC error.</summary>
+        public async Task<Phd2DarkBuildProgress> GetDarkBuildProgressAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var response = await SendMessage<Phd2GetDarkBuildProgressResponse>(new Phd2GetDarkBuildProgress());
+            if (response.error != null) {
+                throw new GuiderRpcException("get_dark_build_progress", response.error.code, response.error.message);
+            }
+            if (response.result is null) {
+                throw new GuiderRpcException("get_dark_build_progress", 0, "missing result payload");
+            }
+            return response.result;
+        }
+
         /// <summary>§63.6 — enable/disable dark subtraction for the active profile (enabling needs a connected
         /// camera). Returns the updated calibration-files status. Requires a connected guider; throws on RPC error
         /// (e.g. the daemon's "camera not connected" when enabling).</summary>
