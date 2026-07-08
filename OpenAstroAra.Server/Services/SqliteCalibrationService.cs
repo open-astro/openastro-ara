@@ -121,10 +121,13 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         var frameCount = request.OverrideFrameCount is int n && n > 0
             ? n
             : policies?.FlatFramesPerFilter is int p && p > 0 ? p : DefaultFlatFrames;
-        var targetAdu = request.OverrideTargetAdu
-            ?? (policies?.FlatTargetAdu is int t && t > 0 ? t : DefaultTargetAdu);
+        var targetAdu = request.OverrideTargetAdu is int o && o > 0
+            ? o
+            : policies?.FlatTargetAdu is int t && t > 0 ? t : DefaultTargetAdu;
         var tolerancePct = policies?.FlatTargetAduTolerancePct is double tol && tol > 0
             ? tol : DefaultTargetAduTolerancePct;
+        // NB: the park rides only the persisted sequence body — GeneratedFlatSequenceDto.Steps
+        // is the per-filter capture plan and deliberately doesn't model non-capture steps.
         var parkAfter = policies?.PostFlatParkMount ?? false;
         var captureSettings = await ModalCaptureSettingsByFilterAsync(conn, sessionId, ct);
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);

@@ -112,28 +112,34 @@ public static class CalibrationSequenceBuilder {
         return JsonSerializer.SerializeToElement(root);
     }
 
+    /// <summary>The SwitchFilter step, resolving by NAME against the active profile's filter
+    /// list (_position -1 on purpose: only a recorded position >= 0 wins as a slot-index
+    /// fallback, and a stale index from a re-ordered wheel must not).</summary>
+    private static JsonObject SwitchFilterStep(string filterName) => new() {
+        ["$type"] = SwitchFilterType,
+        ["Filter"] = new JsonObject {
+            ["$type"] = FilterInfoType,
+            ["_name"] = filterName,
+            ["_position"] = -1,
+        },
+    };
+
+    private static JsonObject MoveFocuserStep(int position) => new() {
+        ["$type"] = MoveFocuserAbsoluteType,
+        ["Position"] = position,
+    };
+
     /// <summary>One per-filter §48.3 flat set: position the wheel + focuser, then hand the whole
     /// set to FlatPanelFlats (probe-to-ADU + N saved frames — its own iteration, no loop here).</summary>
     private static JsonObject FlatBlock(FlatStepSpec step) {
         var items = new JsonArray();
 
         if (step.FilterName is not null) {
-            items.Add(new JsonObject {
-                ["$type"] = SwitchFilterType,
-                // _position -1 on purpose — see FilterCaptureBlock.
-                ["Filter"] = new JsonObject {
-                    ["$type"] = FilterInfoType,
-                    ["_name"] = step.FilterName,
-                    ["_position"] = -1,
-                },
-            });
+            items.Add(SwitchFilterStep(step.FilterName));
         }
 
         if (step.FocuserPosition is int focus) {
-            items.Add(new JsonObject {
-                ["$type"] = MoveFocuserAbsoluteType,
-                ["Position"] = focus,
-            });
+            items.Add(MoveFocuserStep(focus));
         }
 
         var flats = new JsonObject {
@@ -171,24 +177,11 @@ public static class CalibrationSequenceBuilder {
         var items = new JsonArray();
 
         if (filterName is not null) {
-            items.Add(new JsonObject {
-                ["$type"] = SwitchFilterType,
-                // _position -1 on purpose: SwitchFilter.MatchFilter resolves by NAME against the
-                // active profile's filter list, and only falls back to a slot index when the
-                // recorded position is >= 0. A stale index from a re-ordered wheel must not win.
-                ["Filter"] = new JsonObject {
-                    ["$type"] = FilterInfoType,
-                    ["_name"] = filterName,
-                    ["_position"] = -1,
-                },
-            });
+            items.Add(SwitchFilterStep(filterName));
         }
 
         if (focuserPosition is int focus) {
-            items.Add(new JsonObject {
-                ["$type"] = MoveFocuserAbsoluteType,
-                ["Position"] = focus,
-            });
+            items.Add(MoveFocuserStep(focus));
         }
 
         var exposure = new JsonObject {

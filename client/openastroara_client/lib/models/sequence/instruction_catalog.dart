@@ -605,7 +605,7 @@ const List<InstructionDef> instructionCatalog = [
     type: flatPanelFlatsType,
     label: 'Flat Panel Flats',
     category: InstructionCategory.calibration,
-    icon: Icons.flourescent_outlined,
+    icon: Icons.fluorescent_outlined,
     fields: [
       InstructionField(
         'TargetAdu',
