@@ -574,19 +574,42 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return null;
         }
-        IReadOnlyDictionary<string, string> headers;
-        using (var fits = OpenAstroAra.Fits.FitsImage.Open(filePath)) {
-            headers = fits.ReadHeaders();
+        // The whole read is best-effort: a header hint is optional, so a FITS open/read fault (a corrupt
+        // card, or a TOCTOU delete between the File.Exists check and Open) must degrade to a blind solve —
+        // never surface as a 500 (unlike LoadImageDataAsync, where a corrupt frame IS the exceptional case).
+        try {
+            IReadOnlyDictionary<string, string> headers;
+            using (var fits = OpenAstroAra.Fits.FitsImage.Open(filePath)) {
+                headers = fits.ReadHeaders();
+            }
+            headers.TryGetValue("OBJCTRA", out var raHms);
+            headers.TryGetValue("OBJCTDEC", out var decDms);
+            return ParseTargetCoordinates(raHms, decDms);
+        } catch (Exception ex) when (ex is OpenAstroAra.Fits.FitsException or IOException) {
+            return null;
         }
-        if (!headers.TryGetValue("OBJCTRA", out var raHms) || !headers.TryGetValue("OBJCTDEC", out var decDms)
-            || string.IsNullOrWhiteSpace(raHms) || string.IsNullOrWhiteSpace(decDms)) {
+    }
+
+    /// <summary>
+    /// §18.I — parse a frame's OBJCTRA/OBJCTDEC FITS cards ("H M S" / "D M S", J2000) into (RA°, Dec°), or
+    /// null when they aren't a usable pointing. The digit guard is load-bearing: <c>AstroUtil.DMSToDegrees</c>
+    /// returns 0 rather than throwing when its regex finds no numbers, so a blank/"N/A"/garbage card would
+    /// otherwise resolve to a bogus (0h, 0°) hint instead of falling through to a blind solve. A parsed value
+    /// outside a sane sky range is likewise rejected.
+    /// </summary>
+    internal static (double RaDegrees, double DecDegrees)? ParseTargetCoordinates(string? raHms, string? decDms) {
+        if (string.IsNullOrEmpty(raHms) || string.IsNullOrEmpty(decDms)
+            || !raHms.Any(char.IsDigit) || !decDms.Any(char.IsDigit)) {
             return null;
         }
         try {
-            return (OpenAstroAra.Astrometry.AstroUtil.HMSToDegrees(raHms),
-                OpenAstroAra.Astrometry.AstroUtil.DMSToDegrees(decDms));
+            var raDeg = OpenAstroAra.Astrometry.AstroUtil.HMSToDegrees(raHms);
+            var decDeg = OpenAstroAra.Astrometry.AstroUtil.DMSToDegrees(decDms);
+            if (raDeg is < 0 or >= 360 || decDeg is < -90 or > 90) {
+                return null;
+            }
+            return (raDeg, decDeg);
         } catch (FormatException) {
-            // A malformed OBJCTRA/OBJCTDEC is a missing hint, not a solve failure — fall back to blind.
             return null;
         }
     }

@@ -138,6 +138,42 @@ namespace OpenAstroAra.Test {
             frames.Verify(f => f.TryReadTargetCoordinatesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
+        // ── §18.I OBJCTRA/OBJCTDEC header parsing (SqliteFrameRepository.ParseTargetCoordinates) ──
+
+        [Test]
+        public void ParseTargetCoordinates_reads_well_formed_HMS_DMS_cards() {
+            var coords = SqliteFrameRepository.ParseTargetCoordinates("03 00 00", "+12 00 00");
+            Assert.That(coords, Is.Not.Null);
+            Assert.That(coords!.Value.RaDegrees, Is.EqualTo(45.0).Within(1e-6), "3h → 45°");
+            Assert.That(coords.Value.DecDegrees, Is.EqualTo(12.0).Within(1e-6));
+        }
+
+        [Test]
+        public void ParseTargetCoordinates_reads_a_negative_declination() {
+            var coords = SqliteFrameRepository.ParseTargetCoordinates("12 00 00", "-30 00 00");
+            Assert.That(coords, Is.Not.Null);
+            Assert.That(coords!.Value.RaDegrees, Is.EqualTo(180.0).Within(1e-6));
+            Assert.That(coords.Value.DecDegrees, Is.EqualTo(-30.0).Within(1e-6));
+        }
+
+        // The regression from the #756 review: DMSToDegrees returns 0 (never throws) on a card with no
+        // digits, so these must be rejected rather than resolving to a bogus (0h, 0°) near-solve hint.
+        [TestCase(null, "+12 00 00")]
+        [TestCase("03 00 00", null)]
+        [TestCase("", "+12 00 00")]
+        [TestCase("   ", "+12 00 00")]
+        [TestCase("N/A", "+12 00 00")]
+        [TestCase("unknown", "not available")]
+        public void ParseTargetCoordinates_rejects_missing_or_digitless_cards(string? raHms, string? decDms) {
+            Assert.That(SqliteFrameRepository.ParseTargetCoordinates(raHms, decDms), Is.Null);
+        }
+
+        [TestCase("25 00 00", "+12 00 00")]  // RA 375° — out of [0, 360)
+        [TestCase("03 00 00", "+95 00 00")]  // Dec 95° — out of [-90, 90]
+        public void ParseTargetCoordinates_rejects_an_out_of_range_position(string raHms, string decDms) {
+            Assert.That(SqliteFrameRepository.ParseTargetCoordinates(raHms, decDms), Is.Null);
+        }
+
         [Test]
         public async Task SolveFrame_returns_404_when_the_frame_or_its_file_is_missing() {
             var frames = new Mock<IFrameRepository>();
