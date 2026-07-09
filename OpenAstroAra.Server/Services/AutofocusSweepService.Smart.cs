@@ -92,47 +92,71 @@ public sealed partial class AutofocusSweepService {
             }
         }
 
+        var settings = _profiles.GetAutofocusSettings();
+        // §59.4 — the declared optical design picks the map's magnitude key (donut diameter on obstructed
+        // scopes, when this calibration's data confirms it) and which features may classify the side.
+        var telescopeType = FocusFeatureProfile.Parse(settings.TelescopeType);
+
         var samples = new List<FocusCalibrationSample>(calibration.Samples.Count);
         foreach (var s in calibration.Samples) {
             samples.Add(s.ToSample());
         }
-        var map = FocusInverseMap.Build(samples);
+        var map = FocusInverseMap.Build(samples, telescopeType);
         if (map is null) {
             LogSmartSkipped("stored calibration samples no longer rebuild a usable inverse map");
             return null;
         }
 
-        var settings = _profiles.GetAutofocusSettings();
         var startPosition = info.Position;
         var targetHfr = map.InFocusHfr * (1.0 + TargetHfrTolerancePct / 100.0);
         await PublishAutofocusEventAsync(WsEventCatalog.AutofocusStarted, new JsonObject { ["mode"] = "smart" }).ConfigureAwait(false);
 
         try {
-            // Shot 1 — read the rig's current defocus where it stands.
-            var shot1 = await TakeSmartShotAsync(1, startPosition, settings, progress, token).ConfigureAwait(false);
+            // Shot 1 — read the rig's current defocus where it stands. Published AFTER the prediction so
+            // the §59.15 shot_complete event can carry predicted_offset + direction_source.
+            var shot1 = await CaptureSmartShotAsync(1, startPosition, settings, progress, token).ConfigureAwait(false);
             if (shot1.Features.StarCount < SmartMinStars) {
+                await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
                 return await FallBackAsync($"only {shot1.Features.StarCount} stars on the Smart shot (need {SmartMinStars})",
                     "too_few_stars", startPosition, restore: false).ConfigureAwait(false);
             }
             if (shot1.Hfr <= targetHfr) {
                 // Already in focus — moving would only add backlash noise. One shot, done.
+                await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
                 LogSmartComplete(startPosition, shot1.Hfr, 1);
                 RecordAutofocusQuietly();
                 return true;
             }
             var magnitude = map.PredictOffsetMagnitude(shot1.Features);
             if (magnitude is null or <= 0) {
+                await PublishShotCompleteAsync(1, startPosition, shot1, null, null).ConfigureAwait(false);
                 return await FallBackAsync("the frame is more defocused than anything calibrated (or predicts no move)",
                     "outside_calibrated_range", startPosition, restore: false).ConfigureAwait(false);
             }
 
-            // Direction guess (the map predicts magnitude only, §59.2): toward the calibrated best-focus
-            // position — drift wanders around it, so the far side is the less likely one. Shot 2/3 verify.
-            var direction = map.BestFocusOffset >= startPosition ? 1 : -1;
+            // §59.3/§59.4 direction: ask the side classifier to READ the direction from the frame's
+            // learned arm signature; a confident verdict beats the heuristic. Unresolved (well-corrected
+            // rig, ambiguous frame, `other` type, pre-skew calibration) → the §59.2 heuristic: toward the
+            // calibrated best-focus position (drift wanders around it, so the far side is less likely).
+            // Either way the shot-2/3 ladder verifies — a wrong direction costs one reversal, never more.
+            int direction;
+            string directionSource;
+            var classifier = FocusSideClassifier.Build(samples, map.BestFocusOffset, telescopeType);
+            var side = classifier?.Classify(shot1.Features, magnitude.Value) ?? FocusSideVerdict.Unresolved;
+            if (side.Direction != 0) {
+                direction = side.Direction;
+                directionSource = "classifier";
+                var qualifiedNames = string.Join(",", classifier!.QualifiedFeatureNames);
+                LogSmartDirectionClassified(side.Direction, side.Confidence, qualifiedNames);
+            } else {
+                direction = map.BestFocusOffset >= startPosition ? 1 : -1;
+                directionSource = "heuristic";
+            }
             var move = (int)Math.Round(direction * magnitude.Value);
             if (move == 0) {
                 move = direction; // a sub-step prediction still probes the guessed side
             }
+            await PublishShotCompleteAsync(1, startPosition, shot1, move, directionSource).ConfigureAwait(false);
 
             // Shot 2 — at predicted focus.
             var position2 = await _focuser.MoveFocuser(startPosition + move, token).ConfigureAwait(false);
@@ -207,7 +231,17 @@ public sealed partial class AutofocusSweepService {
 
     private readonly record struct SmartShot(double Hfr, FocusFeatureVector Features);
 
+    // Capture + publish, for shots 2/3 (no prediction fields). Shot 1 captures and publishes separately
+    // so its event can carry predicted_offset + direction_source (computed between the two).
     private async Task<SmartShot> TakeSmartShotAsync(
+            int shotIndex, int position, AutofocusSettingsDto settings,
+            IProgress<ApplicationStatus> progress, CancellationToken token) {
+        var shot = await CaptureSmartShotAsync(shotIndex, position, settings, progress, token).ConfigureAwait(false);
+        await PublishShotCompleteAsync(shotIndex, position, shot, null, null).ConfigureAwait(false);
+        return shot;
+    }
+
+    private async Task<SmartShot> CaptureSmartShotAsync(
             int shotIndex, int position, AutofocusSettingsDto settings,
             IProgress<ApplicationStatus> progress, CancellationToken token) {
         progress.Report(new ApplicationStatus {
@@ -224,13 +258,26 @@ public sealed partial class AutofocusSweepService {
         // outlier resistance matters more here than in the 9-probe sweep.
         var hfr = features.MedianHFR;
         LogSmartShot(shotIndex, position, hfr, features.StarCount);
-        await PublishAutofocusEventAsync(WsEventCatalog.AutofocusShotComplete, new JsonObject {
+        return new SmartShot(hfr, features);
+    }
+
+    // §59.15 — the shot_complete event; shot 1 additionally carries the SIGNED predicted move and where
+    // its direction came from ("classifier" | "heuristic") once a prediction exists.
+    private Task PublishShotCompleteAsync(int shotIndex, int position, SmartShot shot,
+            int? predictedOffset, string? directionSource) {
+        var payload = new JsonObject {
             ["shot_index"] = shotIndex,
             ["position"] = position,
-            ["hfr"] = double.IsFinite(hfr) ? Math.Round(hfr, 3) : 0.0,
-            ["stars"] = features.StarCount,
-        }).ConfigureAwait(false);
-        return new SmartShot(hfr, features);
+            ["hfr"] = double.IsFinite(shot.Hfr) ? Math.Round(shot.Hfr, 3) : 0.0,
+            ["stars"] = shot.Features.StarCount,
+        };
+        if (predictedOffset is { } offset) {
+            payload["predicted_offset"] = offset;
+        }
+        if (directionSource is not null) {
+            payload["direction_source"] = directionSource;
+        }
+        return PublishAutofocusEventAsync(WsEventCatalog.AutofocusShotComplete, payload);
     }
 
     /// <summary>The §59.11 in-run failure exit: optionally restore the start position, announce the
@@ -299,6 +346,9 @@ public sealed partial class AutofocusSweepService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus shot {Shot}: position {Position} HFR {Hfr:0.###} ({Stars} stars)")]
     private partial void LogSmartShot(int shot, int position, double hfr, int stars);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus direction {Direction:+#;-#} read from the frame (confidence {Confidence:0.##}, features: {Features}) — §59.3 side classifier")]
+    private partial void LogSmartDirectionClassified(int direction, double confidence, string features);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Smart Focus complete: position {Position}, HFR {Hfr:0.###}, {Shots} shot(s)")]
     private partial void LogSmartComplete(int position, double hfr, int shots);
