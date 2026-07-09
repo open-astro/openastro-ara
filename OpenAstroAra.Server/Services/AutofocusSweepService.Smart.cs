@@ -72,6 +72,8 @@ public sealed partial class AutofocusSweepService {
     /// started (not calibrated / stale / unusable — the caller runs Classic silently).
     /// Runs INSIDE the sweep gate; cancellation restores the start position and propagates.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Smart-run boundary, same rationale as RunSweepCoreAsync: probe captures / focuser moves / the metric can throw device, HTTP, or math exceptions; any escape must degrade to a restored position + the Classic fallback so the Smart path is never worse than the old behavior. CA1031's log-and-recover boundary applies.")]
     private async Task<bool?> TrySmartFocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
         var calibration = _profiles.GetFocusCalibration();
         if (calibration is null) {
@@ -135,6 +137,12 @@ public sealed partial class AutofocusSweepService {
             // Shot 2 — at predicted focus.
             var position2 = await _focuser.MoveFocuser(startPosition + move, token).ConfigureAwait(false);
             var shot2 = await TakeSmartShotAsync(2, position2, settings, progress, token).ConfigureAwait(false);
+            if (shot2.Features.StarCount < SmartMinStars) {
+                // A starless/thin shot 2 (clouds, a bad move) has MedianHFR 0 and would "win" every raw
+                // HFR comparison — never trust it as an improvement (review round-2 finding).
+                return await FallBackAsync($"only {shot2.Features.StarCount} stars on shot 2 (need {SmartMinStars})",
+                    "too_few_stars", startPosition, restore: settings.RestorePositionOnFailure).ConfigureAwait(false);
+            }
 
             if (shot2.Hfr < shot1.Hfr) {
                 if (shot2.Hfr <= targetHfr) {
@@ -149,7 +157,9 @@ public sealed partial class AutofocusSweepService {
                 }
                 var position3 = await _focuser.MoveFocuser(position2 + trim, token).ConfigureAwait(false);
                 var shot3 = await TakeSmartShotAsync(3, position3, settings, progress, token).ConfigureAwait(false);
-                if (shot3.Hfr > shot2.Hfr) {
+                // An untrustworthy (thin-star) trim shot counts as "worse": shot 2's position is a
+                // VERIFIED improvement, so keep that known-good result rather than falling back.
+                if (shot3.Features.StarCount < SmartMinStars || shot3.Hfr > shot2.Hfr) {
                     await _focuser.MoveFocuser(position2, token).ConfigureAwait(false);
                     LogSmartComplete(position2, shot2.Hfr, 3);
                 } else {
@@ -162,7 +172,8 @@ public sealed partial class AutofocusSweepService {
             // Shot 2 worse — the direction guess was wrong. Reverse from the START with half magnitude.
             var reversed = await _focuser.MoveFocuser(startPosition - Math.Sign(move) * Math.Max(1, Math.Abs(move) / 2), token).ConfigureAwait(false);
             var reversedShot = await TakeSmartShotAsync(3, reversed, settings, progress, token).ConfigureAwait(false);
-            if (reversedShot.Hfr < shot1.Hfr) {
+            // The reversed shot must be BOTH trustworthy and a real improvement to claim success.
+            if (reversedShot.Features.StarCount >= SmartMinStars && reversedShot.Hfr < shot1.Hfr) {
                 LogSmartComplete(reversed, reversedShot.Hfr, 3);
                 RecordAutofocusQuietly();
                 return true;
@@ -177,6 +188,16 @@ public sealed partial class AutofocusSweepService {
         } catch (OperationCanceledException) {
             await RestoreAsync(settings.RestorePositionOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
             throw;
+        } catch (Exception ex) {
+            // Same boundary as RunSweepCoreAsync: a device/comms fault mid-Smart must degrade to a
+            // restored position + the Classic fallback, never propagate out of RunAutofocusAsync
+            // (review round-2 finding — MeridianFlipExecutor relies on the sweep's restore invariant).
+            LogSmartErrored(ex);
+            await RestoreAsync(settings.RestorePositionOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
+            await PublishAutofocusEventAsync(WsEventCatalog.AutofocusFallbackClassic, new JsonObject {
+                ["reason"] = "smart_focus_error",
+            }).ConfigureAwait(false);
+            return false;
         }
     }
 
@@ -251,6 +272,9 @@ public sealed partial class AutofocusSweepService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Smart Focus fell back to the Classic sweep: {Reason}")]
     private partial void LogSmartFellBack(string reason);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Smart Focus errored — restoring and falling back to the Classic sweep")]
+    private partial void LogSmartErrored(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: failed to broadcast the {EventType} WS event — the AF run continues")]
     private partial void LogAutofocusPublishFailed(Exception ex, string eventType);

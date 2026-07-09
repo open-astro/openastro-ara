@@ -89,7 +89,8 @@ namespace OpenAstroAra.Test {
                 double focuserTemperature = 12.5,
                 int starCount = 42,
                 Func<int, int, double>? skyHfr = null,
-                bool restoreOnFailure = true) {
+                bool restoreOnFailure = true,
+                Func<int, int>? skyStars = null) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(Settings(restoreOnFailure));
             if (calibration is not null) {
@@ -122,8 +123,9 @@ namespace OpenAstroAra.Test {
                 metric: (_, _) => {
                     captures++;
                     var hfr = skyHfr is null ? VCurveHfr(position, realBest) : skyHfr(captures, position);
+                    var stars = skyStars is null ? starCount : skyStars(captures);
                     return new StarDetectionResult {
-                        AverageHFR = hfr, DetectedStars = starCount, StarList = Stars(starCount, hfr),
+                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr),
                     };
                 });
             return (svc, store, moves, events, () => captures);
@@ -323,6 +325,68 @@ namespace OpenAstroAra.Test {
             Assert.That(position2, Is.Not.Null);
             Assert.That(rig.Moves[^1], Is.EqualTo(position2), "the trim was worse — keep shot 2's position");
             Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+        }
+
+        [Test]
+        public async Task A_starless_shot_two_never_fakes_success_and_falls_back() {
+            // Clouds roll in between shots: shot 2 detects nothing, so its MedianHFR is 0 — the smallest
+            // possible value, which a raw comparison would call "in focus". The gate must fall back instead.
+            var rig = Build(calibration: Calibration(), skyStars: capture => capture == 2 ? 0 : 42);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "Classic completes the run once the (scripted) sky clears");
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
+            Assert.That(rig.CaptureCount(), Is.EqualTo(2 + 9), "two Smart shots, then the full sweep");
+        }
+
+        [Test]
+        public async Task A_thin_star_trim_shot_keeps_shot_twos_verified_position() {
+            // Shot 2 is a real, verified improvement; the ±20% trim shot comes back starless. The runner
+            // must treat the untrustworthy trim as "worse" and return to shot 2's known-good position.
+            int? position2 = null;
+            var rig = Build(calibration: Calibration(),
+                skyHfr: (capture, position) => {
+                    switch (capture) {
+                        case 1: return 1.95;
+                        case 2: position2 = position; return 1.7; // improved, missed the ≤1.575 target
+                        default: return 0.0;                       // starless trim shot
+                    }
+                },
+                skyStars: capture => capture == 3 ? 0 : 42);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3));
+            Assert.That(rig.Moves[^1], Is.EqualTo(position2), "the starless trim must not win the comparison");
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+        }
+
+        [Test]
+        public async Task A_device_fault_mid_smart_restores_and_falls_back_to_classic() {
+            // The capture/metric path throws on shot 2 (device/comms fault). The Smart boundary must
+            // restore the start position, publish the fallback, and let Classic complete the run —
+            // never propagate out of RunAutofocusAsync (the meridian-flip executor relies on this).
+            var rig = Build(calibration: Calibration(),
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.95, // defocused enough that a shot 2 is needed
+                    2 => throw new InvalidOperationException("camera link dropped"),
+                    _ => VCurveHfr(position, StartPosition),
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "Classic completes the run after the Smart fault");
+            var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
+            Assert.That(fallback, Has.Count.EqualTo(1));
+            Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_error"));
+            Assert.That(rig.Moves, Does.Contain(StartPosition), "the start position is restored before Classic runs");
         }
 
         [Test]
