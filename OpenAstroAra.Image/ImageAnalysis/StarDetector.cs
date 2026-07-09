@@ -410,7 +410,6 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 // decentered secondary tilts the dark region off-centre → the vector points toward it. Bright
                 // ring pixels (flux ≥ half-max) are excluded so the ring itself doesn't wash out the signal.
                 double outerR = outerBin;
-                double half2 = DonutRingHalfMaxFraction * peakSb;
                 double wSum = 0, wX = 0, wY = 0;
                 int ox0 = Math.Max(0, (int)(cx - outerR)), ox1 = Math.Min(width - 1, (int)(cx + outerR));
                 int oy0 = Math.Max(0, (int)(cy - outerR)), oy1 = Math.Min(height - 1, (int)(cy + outerR));
@@ -421,10 +420,15 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                             continue;
                         }
                         double localFlux = pixels[(yy * width) + xx] - background;
-                        if (localFlux >= half2) {
-                            continue; // bright ring, not shadow
+                        if (localFlux >= half) {
+                            continue; // bright ring (reuses the ring half-max cut), not shadow
                         }
-                        double w = peakSb - localFlux; // > 0 since localFlux < half2 ≤ peakSb
+                        // Clamp the flux to ≥ 0 before weighting (as the shadow-depth mean does): a dead/cold
+                        // pixel or a noise dip has a large-negative localFlux, which would otherwise give an
+                        // outsized weight (peakSb − a big negative) and let one outlier dominate the centroid —
+                        // defeating the uncorrelated-per-star-noise-cancels assumption the §59.10 verdict relies
+                        // on. Clamped, the darkest a pixel can weigh is peakSb, same as a background-dark shadow.
+                        double w = peakSb - Math.Max(0.0, localFlux); // ∈ (0, peakSb]
                         wSum += w;
                         wX += w * xx;
                         wY += w * yy;
