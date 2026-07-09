@@ -45,10 +45,11 @@ namespace OpenAstroAra.Test {
         private const int CalibratedBest = 10_000;
         private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
 
-        private static AutofocusSettingsDto Settings(bool restore = true) => new(
+        private static AutofocusSettingsDto Settings(bool restore = true, string telescopeType = "other") => new(
             Method: "hfr_v_curve", Steps: 4, StepSize: 100, ExposureSeconds: 2, Binning: 1,
             AfFilter: "L", RunAfterFilterChange: false, TriggerTempDeltaC: 1.0, TriggerHfrDriftPct: 10,
-            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: restore);
+            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: restore,
+            TelescopeType: telescopeType);
 
         /// <summary>A stored calibration whose V-curve is HFR = 1.5 + 0.2·((p − best)/100)², parabolic
         /// about <paramref name="bestPosition"/> — 9 samples, same shape the scripted sky produces.</summary>
@@ -67,14 +68,34 @@ namespace OpenAstroAra.Test {
         }
 
         private static FocusFeatureVector Features(double hfr, int stars) =>
-            new(stars, hfr, hfr * 2.0, 0.9, 8.0, 0, 0, 0, 0, 0);
+            new(stars, hfr, hfr * 2.0, 0.9, 8.0, hfr * 2.0, 0, hfr * 2.0, 0, 0);
 
-        private static List<DetectedStar> Stars(int count, double hfr) {
+        private static List<DetectedStar> Stars(int count, double hfr, double skew = 0.0) {
             var stars = new List<DetectedStar>(count);
             for (int i = 0; i < count; i++) {
-                stars.Add(new DetectedStar { HFR = hfr, FWHM = hfr * 2.0, Roundness = 0.9, PeakToBackground = 8.0 });
+                stars.Add(new DetectedStar {
+                    HFR = hfr, FWHM = hfr * 2.0, Roundness = 0.9, PeakToBackground = 8.0,
+                    DonutOuterDiameter = hfr * 2.0, // consistent with Features() so a donut-keyed map reads it
+                    RadialProfileSkew = skew,
+                });
             }
             return stars;
+        }
+
+        /// <summary>A calibration whose arms carry the §59.3 side signature: skew
+        /// <paramref name="belowSkew"/> below best, <paramref name="aboveSkew"/> above — what slice B
+        /// records on a rig with spherical aberration.</summary>
+        private static FocusCalibrationDto SignedCalibration(
+                int bestPosition = CalibratedBest, double belowSkew = -0.4, double aboveSkew = 0.4) {
+            var samples = new List<FocusCalibrationSampleDto>();
+            for (int i = -4; i <= 4; i++) {
+                if (i == 0) continue; // the vertex sample carries no side label
+                int position = bestPosition + i * 100;
+                double skew = i < 0 ? belowSkew : aboveSkew;
+                samples.Add(FocusCalibrationSampleDto.From(position,
+                    Features(VCurveHfr(position, bestPosition), 42) with { MedianRadialSkew = skew }));
+            }
+            return new FocusCalibrationDto(samples, new DateTimeOffset(2026, 7, 9, 3, 0, 0, TimeSpan.Zero), 12.5, "L");
         }
 
         // A plain tuple (not a wrapper type) so CA2000 sees the service's ownership transfer to the
@@ -92,9 +113,11 @@ namespace OpenAstroAra.Test {
                 int starCount = 42,
                 Func<int, int, double>? skyHfr = null,
                 bool restoreOnFailure = true,
-                Func<int, int>? skyStars = null) {
+                Func<int, int>? skyStars = null,
+                string telescopeType = "other",
+                Func<int, double>? skySkew = null) {
             var store = new InMemoryProfileStore();
-            store.PutAutofocusSettings(Settings(restoreOnFailure));
+            store.PutAutofocusSettings(Settings(restoreOnFailure, telescopeType));
             if (calibration is not null) {
                 store.PutFocusCalibration(calibration);
             }
@@ -132,8 +155,11 @@ namespace OpenAstroAra.Test {
                     captures++;
                     var hfr = skyHfr is null ? VCurveHfr(position, realBest) : skyHfr(captures, position);
                     var stars = skyStars is null ? starCount : skyStars(captures);
+                    // The physical §59.3 side signal: the sky's skew depends on which side of the REAL
+                    // best focus the focuser currently sits (0 when the rig carries no aberration).
+                    var skew = skySkew?.Invoke(position) ?? 0.0;
                     return new StarDetectionResult {
-                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr),
+                        AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr, skew),
                     };
                 });
             return (svc, store, moves, events, () => captures, posted);
@@ -459,6 +485,86 @@ namespace OpenAstroAra.Test {
             store.PutFocusCalibration(null); // what POST /api/v1/autofocus/recalibrate does
 
             Assert.That(store.GetFocusCalibration(), Is.Null, "cleared — the next AF run recalibrates via Classic");
+        }
+
+        // ── §59.3/§59.4 slice 4 — the classifier drives the direction when the rig permits ──
+
+        [Test]
+        public async Task A_classified_direction_beats_the_heuristic_when_the_rig_drifted_past_calibrated_best() {
+            // The rig drifted so the REAL best (10300) is on the far side of the start (10150) from the
+            // CALIBRATED best (10000): the old heuristic guesses toward 10000 — wrong — and pays a
+            // 3-shot reversal. The calibration arms carry a learned skew signature (−0.4 below best,
+            // +0.4 above), the frame at 10150 reads skew −0.4 (below the real best), so the classifier
+            // sends the run UP on shot 2 directly: the §59.3 payoff, 2 shots instead of 3.
+            var rig = Build(realBest: StartPosition + 150, telescopeType: "sct",
+                calibration: SignedCalibration(),
+                skySkew: position => position < StartPosition + 150 ? -0.4 : 0.4);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(2), "the classifier read the correct side from one frame");
+            Assert.That(rig.Moves[^1], Is.GreaterThan(StartPosition), "moved TOWARD the real best, away from calibrated best");
+            var shot1 = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
+            Assert.That(shot1.Payload.GetProperty("direction_source").GetString(), Is.EqualTo("classifier"));
+            Assert.That(shot1.Payload.GetProperty("predicted_offset").GetInt32(), Is.GreaterThan(0),
+                "the signed §59.15 predicted move rides the shot-1 event");
+        }
+
+        [Test]
+        public async Task An_other_telescope_type_keeps_the_heuristic_direction() {
+            // Identical drifted-rig physics, but the profile declares no optical design: side
+            // classification is disabled, the heuristic guesses wrong, and the §59.11 reversal ladder
+            // pays one extra shot — exactly the pre-§59.4 behavior.
+            var rig = Build(realBest: StartPosition + 150, telescopeType: "other",
+                calibration: SignedCalibration(),
+                skySkew: position => position < StartPosition + 150 ? -0.4 : 0.4);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3), "heuristic wrong → one reversal shot");
+            var shot1 = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
+            Assert.That(shot1.Payload.GetProperty("direction_source").GetString(), Is.EqualTo("heuristic"));
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+        }
+
+        [Test]
+        public async Task A_confidently_wrong_classifier_is_caught_by_the_reversal_ladder() {
+            // The stored calibration's sign convention is INVERTED relative to tonight's physics (a
+            // changed optical train since calibration): the classifier reads the frame to the wrong arm
+            // with full confidence. The §59.11 ladder must absorb it — shot 2 worse → reverse → improved
+            // → success in 3 shots, no fallback. A lying classifier costs exactly what a wrong heuristic
+            // costs; never more.
+            var rig = Build(realBest: StartPosition + 150, telescopeType: "sct",
+                calibration: SignedCalibration(belowSkew: 0.4, aboveSkew: -0.4),
+                skySkew: position => position < StartPosition + 150 ? -0.4 : 0.4);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(3));
+            Assert.That(rig.Moves[^1], Is.GreaterThan(StartPosition), "the reversal landed on the real best's side");
+            Assert.That(Types(rig.Events), Does.Not.Contain(WsEventCatalog.AutofocusFallbackClassic));
+        }
+
+        [Test]
+        public async Task A_signatureless_calibration_on_an_obstructed_scope_stays_heuristic() {
+            // An SCT whose calibration carries no side signature (pre-skew stored data, or a genuinely
+            // symmetric sweep): nothing qualifies, the verdict is Unresolved, and the direction falls
+            // back to the heuristic — never a guess dressed up as a classification.
+            var rig = Build(realBest: CalibratedBest, telescopeType: "sct", calibration: Calibration());
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.CaptureCount(), Is.EqualTo(2), "heuristic direction is correct here — 2 shots");
+            var shot1 = rig.Events.First(e => e.Type == WsEventCatalog.AutofocusShotComplete);
+            Assert.That(shot1.Payload.GetProperty("direction_source").GetString(), Is.EqualTo("heuristic"));
         }
 
         [Test]
