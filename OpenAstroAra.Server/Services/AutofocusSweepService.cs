@@ -69,7 +69,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     private readonly IProfileStore _profiles;
     private readonly IFocuserMediator _focuser;
     private readonly IAnalysisFrameSource _frames;
-    private readonly Func<AnalysisFrame, CancellationToken, (double Hfr, int Stars)> _metric;
+    private readonly Func<AnalysisFrame, CancellationToken, StarDetectionResult> _metric;
     private readonly ILogger<AutofocusSweepService> _logger;
     private readonly ImageHistoryService? _history;
     private readonly IFilterWheelMediator? _filterWheel;
@@ -82,7 +82,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             IFocuserMediator focuser,
             IAnalysisFrameSource frames,
             ILogger<AutofocusSweepService>? logger = null,
-            Func<AnalysisFrame, CancellationToken, (double Hfr, int Stars)>? metric = null,
+            Func<AnalysisFrame, CancellationToken, StarDetectionResult>? metric = null,
             ImageHistoryService? history = null,
             IFilterWheelMediator? filterWheel = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
@@ -96,14 +96,13 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
     // are relative measurements, so the fixed sensitivity matters less than it being IDENTICAL
-    // for every probe of the sweep.
-    private static (double Hfr, int Stars) DefaultMetric(AnalysisFrame frame, CancellationToken ct) {
-        var result = StarDetector.Detect(
+    // for every probe of the sweep. Returns the whole result (not just HFR + count) so the sweep can
+    // also read each probe's per-star donut metrics for the §59.10 end-of-sweep collimation check.
+    private static StarDetectionResult DefaultMetric(AnalysisFrame frame, CancellationToken ct) =>
+        StarDetector.Detect(
             frame.Pixels.Span, frame.Width, frame.Height,
             new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = true },
             ct);
-        return (result.AverageHFR, result.DetectedStars);
-    }
 
     /// <inheritdoc/>
     public async Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
@@ -133,6 +132,11 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
         try {
             var points = new List<FocusPoint>(ProbeCount(settings));
+            // §59.10 — accumulate every probe's detected stars for the end-of-sweep collimation read. The
+            // most-defocused probes carry the widest, best-resolved donuts; near-focus probes contribute
+            // hole-less stars the evaluator skips, so the union is safe (it normalises + vector-averages).
+            var collimationStars = new List<DetectedStar>();
+            int frameWidth = 0, frameHeight = 0;
             // Outermost-first, stepping DOWN through every position: one approach direction means
             // backlash biases every sample identically instead of splitting the curve in two.
             var top = startPosition + settings.Steps * settings.StepSize;
@@ -157,7 +161,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 });
                 var reached = await _focuser.MoveFocuser(position, token).ConfigureAwait(false);
                 var frame = await _frames.CaptureForAnalysisAsync(settings.ExposureSeconds, settings.Binning, token).ConfigureAwait(false);
-                var (hfr, stars) = _metric(frame, token);
+                var result = _metric(frame, token);
+                var hfr = result.AverageHFR;
+                var stars = result.DetectedStars;
                 if (stars < MinStarsPerProbe || hfr <= 0 || double.IsNaN(hfr)) {
                     LogSweepFailed($"probe at {reached} was untrustworthy ({stars} stars, HFR {hfr:0.###}) — clouds or a slew smear can cause this");
                     await RestoreAsync(restoreOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
@@ -165,6 +171,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 }
                 LogProbe(reached, hfr, stars);
                 points.Add(new FocusPoint(reached, hfr, stars));
+                collimationStars.AddRange(result.StarList);
+                frameWidth = frame.Width;
+                frameHeight = frame.Height;
             }
 
             var fit = FocusCurveFit.FitBest(points);
@@ -185,6 +194,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
+            EvaluateCollimationQuietly(collimationStars, frameWidth, frameHeight);
             RecordAutofocusQuietly();
             return true;
         } catch (OperationCanceledException) {
@@ -215,6 +225,25 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 _filterWheel?.GetInfo()?.SelectedFilter?.Name);
         } catch (Exception ex) {
             LogHistoryRecordFailed(ex);
+        }
+    }
+
+    // §59.10 collimation health — a free byproduct of the completed sweep. The donut stars captured across
+    // every probe vector-average (in CollimationEvaluator) into an obstruction-shadow decentering verdict;
+    // a refractor / in-focus field yields no donut stars → Insufficient, which we simply don't log. This
+    // slice only records the verdict to the log; surfacing it as a WS event + notification is the next slice.
+    // Post-success + best-effort: a diagnostic read must never turn a completed autofocus into a failure.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Post-success diagnostic boundary: the §59.10 collimation read runs after a successful sweep and must never fail it; any fault is logged and swallowed. CA1031's log-and-recover boundary applies.")]
+    private void EvaluateCollimationQuietly(IReadOnlyList<DetectedStar> stars, int width, int height) {
+        try {
+            var verdict = CollimationEvaluator.Evaluate(stars, width, height);
+            if (verdict.Severity == CollimationSeverity.Insufficient) {
+                return; // no confident read (refractor, in-focus, or too few near-centre donut stars)
+            }
+            LogCollimation(verdict.Severity, verdict.OffsetPercent, verdict.DirectionDegrees, verdict.StarsUsed);
+        } catch (Exception ex) {
+            LogCollimationFailed(ex);
         }
     }
 
@@ -258,4 +287,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: completed sweep could not be recorded into the session history — the §59.5 triggers keep their previous reference point")]
     private partial void LogHistoryRecordFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus collimation ({Severity}): centroid offset {OffsetPercent:0.#}% of donut diameter toward {DirectionDegrees:0.#}° in the image frame, from {StarsUsed} donut stars")]
+    private partial void LogCollimation(CollimationSeverity severity, double offsetPercent, double directionDegrees, int starsUsed);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: §59.10 collimation evaluation failed on a completed sweep — the sweep still succeeded")]
+    private partial void LogCollimationFailed(Exception ex);
 }
