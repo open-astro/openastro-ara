@@ -55,11 +55,11 @@ namespace OpenAstroAra.Test {
         }
 
         /// <summary>A focuser whose position tracks MoveFocuser calls; records the move history.</summary>
-        private static (Mock<IFocuserMediator> Mock, List<int> Moves) Focuser(bool connected = true) {
+        private static (Mock<IFocuserMediator> Mock, List<int> Moves) Focuser(bool connected = true, double temperature = double.NaN) {
             var moves = new List<int>();
             var position = StartPosition;
             var focuser = new Mock<IFocuserMediator>();
-            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = connected, Position = position });
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = connected, Position = position, Temperature = temperature });
             focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
                 .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
             return (focuser, moves);
@@ -402,14 +402,8 @@ namespace OpenAstroAra.Test {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(settings);
 
-            var moves = new List<int>();
-            var position = StartPosition;
-            var focuser = new Mock<IFocuserMediator>();
-            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo {
-                Connected = true, Position = position, Temperature = focuserTemperature,
-            });
-            focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
+            var (focuser, moves) = Focuser(temperature: focuserTemperature);
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
 
             var wheel = new Mock<IFilterWheelMediator>();
             wheel.Setup(w => w.GetInfo()).Returns(new FilterWheelInfo {
@@ -421,7 +415,7 @@ namespace OpenAstroAra.Test {
                 store, focuser.Object, Frames().Object,
                 filterWheel: wheel.Object,
                 metric: (_, _) => {
-                    var delta = (position - bestPosition) / 100.0;
+                    var delta = (Current() - bestPosition) / 100.0;
                     var hfr = 1.5 + 0.2 * delta * delta;
                     return Result(hfr, 42, fixedStarList ?? FeatureStars(12, hfr));
                 });
@@ -445,13 +439,7 @@ namespace OpenAstroAra.Test {
 
             // The stored DTO samples must survive the round-trip back into a usable inverse map — the
             // whole point of recording them (the slice-C one-frame runner's load path).
-            var samples = cal.Samples
-                .Select(s => new FocusCalibrationSample(s.FocuserPosition, new FocusFeatureVector(
-                    s.StarCount, s.MedianHfr, s.MedianFwhm, s.MedianRoundness, s.MedianPeakToBackground,
-                    s.MedianDonutOuterDiameter, s.MedianDonutInnerDiameter, s.MedianRingThickness,
-                    s.MedianDonutShadowDepth)))
-                .ToList();
-            var map = FocusInverseMap.Build(samples);
+            var map = FocusInverseMap.Build(cal.Samples.Select(s => s.ToSample()).ToList());
             Assert.That(map, Is.Not.Null);
             Assert.That(map!.BestFocusOffset, Is.EqualTo(StartPosition - 150).Within(30));
         }

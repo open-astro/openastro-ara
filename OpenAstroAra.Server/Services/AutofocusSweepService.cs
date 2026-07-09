@@ -257,28 +257,18 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         Justification = "Post-success bookkeeping boundary: the calibration write touches device info + the profile store; the sweep already succeeded and must be reported as such. CA1031's log-and-recover boundary applies.")]
     private void RecordCalibrationQuietly(List<(int Position, FocusFeatureVector Features)> probeFeatures) {
         try {
+            // Gate on the ROUND-TRIPPED wire shape — Build validates exactly what a later session will
+            // reload, so a DTO-bridge regression can never store samples the load path can't use.
+            var dtos = new List<FocusCalibrationSampleDto>(probeFeatures.Count);
             var samples = new List<FocusCalibrationSample>(probeFeatures.Count);
             foreach (var (position, features) in probeFeatures) {
-                samples.Add(new FocusCalibrationSample(position, features));
+                var dto = FocusCalibrationSampleDto.From(position, features);
+                dtos.Add(dto);
+                samples.Add(dto.ToSample());
             }
             if (FocusInverseMap.Build(samples) is null) {
                 LogCalibrationSkipped(samples.Count);
                 return;
-            }
-
-            var dtos = new List<FocusCalibrationSampleDto>(probeFeatures.Count);
-            foreach (var (position, f) in probeFeatures) {
-                dtos.Add(new FocusCalibrationSampleDto(
-                    FocuserPosition: position,
-                    StarCount: f.StarCount,
-                    MedianHfr: f.MedianHFR,
-                    MedianFwhm: f.MedianFWHM,
-                    MedianRoundness: f.MedianRoundness,
-                    MedianPeakToBackground: f.MedianPeakToBackground,
-                    MedianDonutOuterDiameter: f.MedianDonutOuterDiameter,
-                    MedianDonutInnerDiameter: f.MedianDonutInnerDiameter,
-                    MedianRingThickness: f.MedianRingThickness,
-                    MedianDonutShadowDepth: f.MedianDonutShadowDepth));
             }
 
             // NaN (focuser has no temperature probe) is unrepresentable in JSON — store null instead.

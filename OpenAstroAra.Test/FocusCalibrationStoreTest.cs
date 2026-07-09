@@ -170,16 +170,7 @@ namespace OpenAstroAra.Test {
             // The persistence shape exists to feed FocusInverseMap.Build on a later session — prove the
             // DTO→sample bridge produces a map that predicts a sane move magnitude from a defocused frame.
             var cal = Calibration(bestPosition: 10_000);
-            var samples = cal.Samples
-                .Select(s => new FocusCalibrationSample(
-                    s.FocuserPosition,
-                    new FocusFeatureVector(
-                        s.StarCount, s.MedianHfr, s.MedianFwhm, s.MedianRoundness, s.MedianPeakToBackground,
-                        s.MedianDonutOuterDiameter, s.MedianDonutInnerDiameter, s.MedianRingThickness,
-                        s.MedianDonutShadowDepth)))
-                .ToList();
-
-            var map = FocusInverseMap.Build(samples);
+            var map = FocusInverseMap.Build(cal.Samples.Select(s => s.ToSample()).ToList());
             Assert.That(map, Is.Not.Null, "a full sweep's stored samples must rebuild a usable map");
             Assert.That(map!.BestFocusOffset, Is.EqualTo(10_000).Within(30));
 
