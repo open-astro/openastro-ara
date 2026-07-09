@@ -212,6 +212,10 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
     steps: af.steps,
     stepSize: af.stepSize,
     runAfterFilterChange: af.runAfterFilterChange,
+    // §59.4 — the draft carries the wire string (null = untouched, keep base).
+    telescopeType: af.telescopeType == null
+        ? null
+        : telescopeTypeFromWire(af.telescopeType),
   );
 }
 
