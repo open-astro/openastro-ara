@@ -120,6 +120,17 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     public async Task<bool> RunAutofocusAsync(IProgress<ApplicationStatus> progress, CancellationToken token) {
         await _sweepGate.WaitAsync(token).ConfigureAwait(false);
         try {
+            // §59.1 mode routing: Smart when the profile carries a usable calibration, Classic otherwise
+            // and as the §59.11 safety net. true = Smart succeeded; false = Smart ran and fell back
+            // (restore policy applied, `fallback_classic` published — that event IS the mode hand-off,
+            // so no second `started`); null = Smart never started (announce the run as classic).
+            var smart = await TrySmartFocusAsync(progress, token).ConfigureAwait(false);
+            if (smart == true) {
+                return true;
+            }
+            if (smart is null) {
+                await PublishAutofocusEventAsync(WsEventCatalog.AutofocusStarted, new JsonObject { ["mode"] = "classic" }).ConfigureAwait(false);
+            }
             return await RunSweepCoreAsync(progress, token).ConfigureAwait(false);
         } finally {
             _sweepGate.Release();
