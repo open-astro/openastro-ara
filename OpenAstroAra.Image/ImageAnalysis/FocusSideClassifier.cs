@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenAstroAra.Image.ImageAnalysis {
 
@@ -81,6 +82,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         ];
 
         private sealed record QualifiedFeature(
+            string Name,
             Func<FocusFeatureVector, double> Get,
             double Weight,
             (double M, double Value)[] InTable,
@@ -100,6 +102,17 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// the classifier is alive but every verdict will be Unresolved (a symmetric, well-corrected rig).</summary>
         public int QualifiedFeatureCount => _features.Count;
 
+        /// <summary>The qualified features' names, for the runner's "direction came from ..." logging.</summary>
+        public IReadOnlyList<string> QualifiedFeatureNames {
+            get {
+                var names = new string[_features.Count];
+                for (int i = 0; i < _features.Count; i++) {
+                    names[i] = _features[i].Name;
+                }
+                return names;
+            }
+        }
+
         private FocusSideClassifier(List<QualifiedFeature> features, double minMagnitude, double maxMagnitude) {
             _features = features;
             _minMagnitude = minMagnitude;
@@ -114,7 +127,19 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// range; returns a classifier with <see cref="QualifiedFeatureCount"/> 0 (every verdict
         /// Unresolved) when the arms exist but nothing separates them.
         /// </summary>
-        public static FocusSideClassifier? Build(IReadOnlyList<FocusCalibrationSample> samples, double bestFocusOffset) {
+        public static FocusSideClassifier? Build(IReadOnlyList<FocusCalibrationSample> samples, double bestFocusOffset) =>
+            Build(samples, bestFocusOffset, allowedFeatures: null);
+
+        /// <summary>§59.4 typed build: only the telescope type's candidate features may qualify (a
+        /// refractor has no donut, so donut features would only ever qualify off noise;
+        /// <see cref="TelescopeType.Other"/> allows nothing — side classification disabled).</summary>
+        public static FocusSideClassifier? Build(
+                IReadOnlyList<FocusCalibrationSample> samples, double bestFocusOffset, TelescopeType type) =>
+            Build(samples, bestFocusOffset, FocusFeatureProfile.SideFeatureNames(type));
+
+        private static FocusSideClassifier? Build(
+                IReadOnlyList<FocusCalibrationSample> samples, double bestFocusOffset,
+                IReadOnlyList<string>? allowedFeatures) {
             ArgumentNullException.ThrowIfNull(samples);
 
             List<(double M, FocusFeatureVector F)> inArm = [], outArm = [];
@@ -144,9 +169,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 return null;
             }
 
-            // Probe points: every sampled magnitude (either arm) inside the overlap — the places where at
-            // least one arm has a real measurement rather than pure interpolation.
-            var probes = new List<double>();
+            // Probe points: every DISTINCT sampled magnitude (either arm) inside the overlap — the places
+            // where at least one arm has a real measurement rather than pure interpolation. A symmetric
+            // sweep samples the same |offset| on both arms; the set dedups it to one probe.
+            var probes = new SortedSet<double>();
             foreach (var (m, _) in inArm) {
                 if (m >= mLo && m <= mHi) probes.Add(m);
             }
@@ -155,7 +181,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             }
 
             var qualified = new List<QualifiedFeature>();
-            foreach (var (_, get) in CandidateFeatures) {
+            foreach (var (name, get) in CandidateFeatures) {
+                if (allowedFeatures is not null && !allowedFeatures.Contains(name)) {
+                    continue; // §59.4 — not a side candidate for this telescope type
+                }
                 var inTable = BuildTable(inArm, get);
                 var outTable = BuildTable(outArm, get);
 
@@ -190,7 +219,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 if (meanRel < MinRelativeSeparation) {
                     continue;
                 }
-                qualified.Add(new QualifiedFeature(get, Math.Min(meanRel, 1.0), inTable, outTable));
+                qualified.Add(new QualifiedFeature(name, get, Math.Min(meanRel, 1.0), inTable, outTable));
             }
 
             return new FocusSideClassifier(qualified, mLo, mHi);

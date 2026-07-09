@@ -156,6 +156,49 @@ namespace OpenAstroAra.Test {
             Assert.That(verdict, Is.EqualTo(FocusSideVerdict.Unresolved));
         }
 
+        // ── §59.4 — telescope-type feature gating ──
+
+        [Test]
+        public void Telescope_type_gates_which_features_may_qualify() {
+            // ONLY the shadow depth separates these arms — a donut-derived signal. An obstructed scope may
+            // trust it; a refractor has no donut (any separation there is noise), and `other` assumes
+            // nothing, so both must qualify zero features from the same data.
+            var samples = new List<FocusCalibrationSample>();
+            foreach (var m in new[] { 100.0, 200.0, 300.0 }) {
+                samples.Add(At(Best - m, Vec(m, shadow: 0.8)));
+                samples.Add(At(Best + m, Vec(m, shadow: 0.5)));
+            }
+
+            var sct = FocusSideClassifier.Build(samples, Best, TelescopeType.Sct);
+            Assert.That(sct, Is.Not.Null);
+            Assert.That(sct!.QualifiedFeatureCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(sct.Classify(Vec(150, shadow: 0.8), 150).Direction, Is.EqualTo(1));
+
+            Assert.That(FocusSideClassifier.Build(samples, Best, TelescopeType.Refractor)!.QualifiedFeatureCount,
+                Is.EqualTo(0), "donut features are not refractor side candidates");
+            Assert.That(FocusSideClassifier.Build(samples, Best, TelescopeType.Other)!.QualifiedFeatureCount,
+                Is.EqualTo(0), "`other` disables side classification entirely");
+        }
+
+        [Test]
+        public void Qualified_feature_names_report_what_the_rig_separates_on() {
+            var classifier = FocusSideClassifier.Build(AberratedRig(), Best, TelescopeType.Sct)!;
+            Assert.That(classifier.QualifiedFeatureNames, Does.Contain("radial_skew"));
+            Assert.That(classifier.QualifiedFeatureNames, Does.Contain("donut_shadow_depth"));
+        }
+
+        [Test]
+        public void Wire_strings_parse_to_types_and_unknown_reads_as_other() {
+            Assert.That(FocusFeatureProfile.Parse("sct"), Is.EqualTo(TelescopeType.Sct));
+            Assert.That(FocusFeatureProfile.Parse("refractor"), Is.EqualTo(TelescopeType.Refractor));
+            Assert.That(FocusFeatureProfile.Parse("newtonian"), Is.EqualTo(TelescopeType.Newtonian));
+            Assert.That(FocusFeatureProfile.Parse("mak"), Is.EqualTo(TelescopeType.Mak));
+            Assert.That(FocusFeatureProfile.Parse("rc"), Is.EqualTo(TelescopeType.Rc));
+            Assert.That(FocusFeatureProfile.Parse(null), Is.EqualTo(TelescopeType.Other));
+            Assert.That(FocusFeatureProfile.Parse("SCT"), Is.EqualTo(TelescopeType.Other),
+                "wire strings are exact — anything else assumes nothing rather than guessing");
+        }
+
         [Test]
         public void A_starless_query_is_unresolved() {
             var classifier = FocusSideClassifier.Build(AberratedRig(), Best)!;
