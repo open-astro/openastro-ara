@@ -103,6 +103,22 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel> {
             if (v != null) n.setMethod(v);
           },
         ),
+        SettingsDropdownRow<TelescopeType>(
+          label: 'Telescope type',
+          helpKey: 'img.autofocus.telescope_type',
+          value: s.telescopeType,
+          items: const {
+            TelescopeType.refractor: 'Refractor',
+            TelescopeType.sct: 'Schmidt-Cassegrain (SCT)',
+            TelescopeType.mak: 'Maksutov-Cassegrain',
+            TelescopeType.rc: 'Ritchey-Chrétien (RC)',
+            TelescopeType.newtonian: 'Newtonian',
+            TelescopeType.other: 'Other / unknown',
+          },
+          onChanged: (v) {
+            if (v != null) n.setTelescopeType(v);
+          },
+        ),
         EditableNumberRow(
           label: 'Number of steps (3..31)',
           helpKey: 'img.autofocus.steps',

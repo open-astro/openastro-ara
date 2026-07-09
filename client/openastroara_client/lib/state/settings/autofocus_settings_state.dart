@@ -8,6 +8,30 @@ import '../../services/profile_api.dart';
 
 enum AutofocusMethod { hfrVCurve, brightestStarHfr, fwhm }
 
+/// §59.4 — the optical design, declared once (wizard §59.14 or this panel).
+/// Smart Focus picks its defocus features from it; [other] assumes nothing
+/// (HFR-only, no side classification) and is the safe default.
+enum TelescopeType { refractor, sct, mak, rc, newtonian, other }
+
+/// §59.13 wire strings (exact; the daemon treats anything else as `other`).
+TelescopeType telescopeTypeFromWire(String? s) => switch (s) {
+      'refractor' => TelescopeType.refractor,
+      'sct' => TelescopeType.sct,
+      'mak' => TelescopeType.mak,
+      'rc' => TelescopeType.rc,
+      'newtonian' => TelescopeType.newtonian,
+      _ => TelescopeType.other,
+    };
+
+String telescopeTypeToWire(TelescopeType t) => switch (t) {
+      TelescopeType.refractor => 'refractor',
+      TelescopeType.sct => 'sct',
+      TelescopeType.mak => 'mak',
+      TelescopeType.rc => 'rc',
+      TelescopeType.newtonian => 'newtonian',
+      TelescopeType.other => 'other',
+    };
+
 class AutofocusSettings {
   final AutofocusMethod method;
   final int steps;
@@ -21,6 +45,7 @@ class AutofocusSettings {
   final int everyNHours;
   final bool abortSequenceOnAfFailure;
   final bool restorePositionOnFailure;
+  final TelescopeType telescopeType;
 
   const AutofocusSettings({
     this.method = AutofocusMethod.hfrVCurve,
@@ -35,6 +60,7 @@ class AutofocusSettings {
     this.everyNHours = 2,
     this.abortSequenceOnAfFailure = true,
     this.restorePositionOnFailure = true,
+    this.telescopeType = TelescopeType.other,
   });
 
   AutofocusSettings copyWith({
@@ -50,6 +76,7 @@ class AutofocusSettings {
     int? everyNHours,
     bool? abortSequenceOnAfFailure,
     bool? restorePositionOnFailure,
+    TelescopeType? telescopeType,
   }) =>
       AutofocusSettings(
         method: method ?? this.method,
@@ -67,6 +94,7 @@ class AutofocusSettings {
             abortSequenceOnAfFailure ?? this.abortSequenceOnAfFailure,
         restorePositionOnFailure:
             restorePositionOnFailure ?? this.restorePositionOnFailure,
+        telescopeType: telescopeType ?? this.telescopeType,
       );
 }
 
@@ -126,6 +154,8 @@ class AutofocusSettingsNotifier extends Notifier<AutofocusSettings> {
       state = state.copyWith(abortSequenceOnAfFailure: v);
   void setRestorePositionOnFailure(bool v) =>
       state = state.copyWith(restorePositionOnFailure: v);
+  void setTelescopeType(TelescopeType v) =>
+      state = state.copyWith(telescopeType: v);
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getAutofocusSettings();
