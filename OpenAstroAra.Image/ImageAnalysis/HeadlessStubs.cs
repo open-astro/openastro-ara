@@ -126,6 +126,15 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// convenience only: the collimation verdict averages the signed vector components (which cancel random
         /// error), NOT this magnitude (whose per-star noise would not cancel).</summary>
         public double DonutCentroidOffset => Math.Sqrt((DonutCentroidOffsetX * DonutCentroidOffsetX) + (DonutCentroidOffsetY * DonutCentroidOffsetY));
+
+        /// <summary>§59.3 — skew (third standardized moment) of the star's radial flux profile. Skew reads
+        /// the tail direction: positive = flux concentrated inward with a soft OUTWARD halo (long right
+        /// tail), negative = flux packed against a hard bright outer shell (tail pointing inward); ≈ 0 for
+        /// a radially symmetric flux distribution. On a rig with spherical aberration this signature flips
+        /// sign between the intra- and extra-focal sides of focus — the raw material for the §59.3
+        /// side-of-focus classifier. The sign convention is rig-specific (depends on the aberration sign),
+        /// so consumers must LEARN it from a calibration sweep's labelled arms, never assume it.</summary>
+        public double RadialProfileSkew { get; set; }
     }
 
     public interface IStarDetection {

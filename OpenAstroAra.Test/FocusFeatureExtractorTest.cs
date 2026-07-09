@@ -431,5 +431,84 @@ namespace OpenAstroAra.Test {
             Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
             Assert.That(star.DonutShadowDepth, Is.EqualTo(0));
         }
+
+        // ── §59.3 — the radial-profile skew (the intra/extra-focal asymmetry measurable) ──
+
+        /// <summary>A ring whose brightness ramps linearly across its width — toward the outer edge
+        /// (<paramref name="outward"/> true, a "hard outer shell") or toward the inner edge. A 15% floor
+        /// keeps the dim edge above the detection threshold so the whole ramp survives into the blob.</summary>
+        private static void AddRampedDonut(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double innerRadius, double outerRadius, bool outward) {
+            int r = (int)Math.Ceiling(outerRadius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    double dist = Math.Sqrt(dx * dx + dy * dy);
+                    if (dist < innerRadius || dist > outerRadius) continue;
+                    double t = (dist - innerRadius) / (outerRadius - innerRadius);
+                    double ramp = outward ? t : 1.0 - t;
+                    double v = amplitude * (0.15 + 0.85 * ramp);
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + v);
+                }
+            }
+        }
+
+        private static double SkewOfRampedDonut(bool outward) {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddRampedDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 10, outward: outward);
+            return DetectOne(frame, w, h).RadialProfileSkew;
+        }
+
+        [Test]
+        public void Mirror_image_ramped_rings_skew_in_opposite_directions() {
+            // The discriminating physics claim: intra vs extra-focal profiles are (approximately) mirror
+            // images, so the skew must SEPARATE them with opposite signs. Skew reads the tail direction:
+            // mass packed against the outer edge → inward tail → negative; mass at the inner edge →
+            // outward tail → positive.
+            var hardOuterShell = SkewOfRampedDonut(outward: true);
+            var innerCondensed = SkewOfRampedDonut(outward: false);
+
+            Assert.That(hardOuterShell, Is.LessThan(0), "a hard bright outer shell tails inward → negative skew");
+            Assert.That(innerCondensed, Is.GreaterThan(0), "inner-condensed flux tails outward → positive skew");
+            Assert.That(innerCondensed - hardOuterShell, Is.GreaterThan(0.3),
+                "the two sides must be well separated — this gap is what the §59.3 side-classifier learns");
+        }
+
+        [Test]
+        public void A_uniform_ring_sits_between_the_two_ramped_signatures() {
+            // A symmetric (unramped) profile carries no side signal; its skew must land strictly between
+            // the two mirror-image ramps rather than being pinned to either side.
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 10);
+            var uniform = DetectOne(frame, w, h).RadialProfileSkew;
+
+            Assert.That(uniform, Is.GreaterThan(SkewOfRampedDonut(outward: true)));
+            Assert.That(uniform, Is.LessThan(SkewOfRampedDonut(outward: false)));
+        }
+
+        [Test]
+        public void Extract_medians_the_signed_per_star_skews() {
+            // The SIGN is the §59.3 side signal — aggregation must preserve it (a median of magnitudes
+            // would erase exactly the information the classifier needs).
+            var result = new StarDetectionResult {
+                DetectedStars = 3,
+                AverageHFR = 2.0,
+                StarList = new List<DetectedStar> {
+                    new() { HFR = 2.0, FWHM = 4.0, Roundness = 0.9, PeakToBackground = 8.0, RadialProfileSkew = -0.5 },
+                    new() { HFR = 2.0, FWHM = 4.0, Roundness = 0.9, PeakToBackground = 8.0, RadialProfileSkew = 0.2 },
+                    new() { HFR = 2.0, FWHM = 4.0, Roundness = 0.9, PeakToBackground = 8.0, RadialProfileSkew = 0.8 },
+                },
+            };
+
+            var features = FocusFeatureExtractor.Extract(result);
+
+            Assert.That(features.MedianRadialSkew, Is.EqualTo(0.2), "median of SIGNED values — the sign survives");
+        }
     }
 }

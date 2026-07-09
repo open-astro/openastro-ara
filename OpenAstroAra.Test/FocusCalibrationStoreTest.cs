@@ -166,6 +166,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Radial_skew_round_trips_and_a_pre_skew_dto_defaults_to_zero() {
+            var dir = TempDir();
+            try {
+                // §59.3 — a signed skew survives the profile.json round-trip through the source-gen serializer…
+                var sample = FocusCalibrationSampleDto.From(10_000, new FocusFeatureVector(
+                    42, 2.0, 4.0, 0.9, 8.0, 12.0, 4.0, 8.0, 0.5, MedianRadialSkew: -0.37));
+                var store = new FileProfileStore(dir);
+                store.PutFocusCalibration(new FocusCalibrationDto(
+                    new[] { sample }, new DateTimeOffset(2026, 7, 9, 3, 0, 0, TimeSpan.Zero), 12.5, "L"));
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetFocusCalibration()!.Samples[0].MedianRadialSkew, Is.EqualTo(-0.37));
+
+                // …and a pre-skew DTO (the trailing param omitted, as an old profile.json deserializes)
+                // reads 0 — the flat-0 value the side-classifier's separation gate deliberately ignores.
+                var preSkew = new FocusCalibrationSampleDto(10_000, 42, 2.0, 4.0, 0.9, 8.0, 12.0, 4.0, 8.0, 0.5);
+                Assert.That(preSkew.MedianRadialSkew, Is.EqualTo(0.0));
+                Assert.That(preSkew.ToSample().Features.MedianRadialSkew, Is.EqualTo(0.0));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void Stored_samples_rebuild_a_usable_inverse_map() {
             // The persistence shape exists to feed FocusInverseMap.Build on a later session — prove the
             // DTO→sample bridge produces a map that predicts a sane move magnitude from a defocused frame.
@@ -175,7 +198,7 @@ namespace OpenAstroAra.Test {
             Assert.That(map!.BestFocusOffset, Is.EqualTo(10_000).Within(30));
 
             // A frame measured at the +300 probe (HFR 1.5 + 0.2·3² = 3.3) should predict ≈ 300 steps.
-            var defocused = new FocusFeatureVector(42, 3.3, 6.6, 0.9, 8.0, 18.0, 6.0, 12.0, 0.6);
+            var defocused = new FocusFeatureVector(42, 3.3, 6.6, 0.9, 8.0, 18.0, 6.0, 12.0, 0.6, 0.0);
             var magnitude = map.PredictOffsetMagnitude(defocused);
             Assert.That(magnitude, Is.Not.Null);
             Assert.That(magnitude!.Value, Is.EqualTo(300).Within(40));

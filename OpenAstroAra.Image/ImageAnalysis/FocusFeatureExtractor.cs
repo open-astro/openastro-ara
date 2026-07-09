@@ -36,11 +36,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         double MedianDonutOuterDiameter,
         double MedianDonutInnerDiameter,
         double MedianRingThickness,
-        double MedianDonutShadowDepth) {
+        double MedianDonutShadowDepth,
+        double MedianRadialSkew) {
 
         /// <summary>The empty-field vector — no stars, every metric zero. Returned for a starless frame so
         /// callers never branch on null; a zero <see cref="StarCount"/> is the "unusable sample" signal.</summary>
-        public static readonly FocusFeatureVector Empty = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        public static readonly FocusFeatureVector Empty = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     /// <summary>
@@ -68,6 +69,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             var innerDiameter = new double[n];
             var ringThickness = new double[n];
             var shadowDepth = new double[n];
+            var radialSkew = new double[n];
             for (int i = 0; i < n; i++) {
                 var s = stars[i];
                 hfr[i] = s.HFR;
@@ -78,6 +80,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 innerDiameter[i] = s.DonutInnerDiameter;
                 ringThickness[i] = s.RingThickness;
                 shadowDepth[i] = s.DonutShadowDepth;
+                radialSkew[i] = s.RadialProfileSkew;
             }
 
             return new FocusFeatureVector(
@@ -91,7 +94,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 // Median of per-star (outer − inner), NOT median(outer) − median(inner): the median is
                 // non-linear, so this is a distinct statistic worth carrying.
                 MedianRingThickness: Median(ringThickness),
-                MedianDonutShadowDepth: Median(shadowDepth));
+                MedianDonutShadowDepth: Median(shadowDepth),
+                // Median of SIGNED per-star skews — the sign is the §59.3 side signal, so it must survive
+                // aggregation (a median of magnitudes would erase it).
+                MedianRadialSkew: Median(radialSkew));
         }
 
         // Median of a non-empty sample; sorts in place (each array is a private per-call copy). Even counts

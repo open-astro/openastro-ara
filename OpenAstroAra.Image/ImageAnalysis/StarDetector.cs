@@ -253,7 +253,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // A single-pixel-tight star yields HFR 0; clamp to a small floor so it's a usable focus metric.
             double hfr = Math.Max(0.5, sumFR / sumF);
 
-            var (outerDiameter, innerDiameter, shadowDepth, centroidOffsetX, centroidOffsetY) =
+            var (outerDiameter, innerDiameter, shadowDepth, centroidOffsetX, centroidOffsetY, radialSkew) =
                 DonutGeometry(blob, pixels, width, cx, cy, background);
 
             return new DetectedStar {
@@ -275,6 +275,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 DonutShadowDepth = shadowDepth,
                 DonutCentroidOffsetX = centroidOffsetX,
                 DonutCentroidOffsetY = centroidOffsetY,
+                RadialProfileSkew = radialSkew,
             };
         }
 
@@ -308,7 +309,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         private const int DonutMinInnerRadiusBins = 2;
 
         private static (double OuterDiameter, double InnerDiameter, double ShadowDepth,
-                double CentroidOffsetX, double CentroidOffsetY) DonutGeometry(
+                double CentroidOffsetX, double CentroidOffsetY, double RadialProfileSkew) DonutGeometry(
                 List<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
             double maxR = 0;
             foreach (int p in blob) {
@@ -346,7 +347,43 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 }
             }
             if (peakSb <= 0) {
-                return (0.0, 0.0, 0.0, 0.0, 0.0);
+                return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            }
+
+            // §59.3 — the radial-profile SKEW: the third standardized moment of the blob's radial flux
+            // distribution (per-bin TOTAL flux, so outer bins weigh by their real light share). Skew reads
+            // the TAIL direction: positive = mass concentrated inward with a soft outward halo (a long
+            // right tail), negative = flux packed against a hard bright outer shell (tail pointing inward).
+            // For a rig with spherical aberration this signature flips sign across focus — the
+            // intra/extra-focal asymmetry the §59.3 side-classifier learns from the calibration sweep's
+            // labelled arms. The SIGN CONVENTION is rig-specific (depends on the SA sign), so nothing here
+            // assumes which side is which; the classifier learns it. The detection threshold truncates
+            // faint wings, but the truncation is identical for every star of a frame and consistent across
+            // a rig's frames, so the learned separation survives it.
+            double radialSkew = 0.0;
+            {
+                double w = 0, sumB = 0;
+                for (int b = 0; b < bins; b++) {
+                    double f = Math.Max(0.0, flux[b]);
+                    w += f;
+                    sumB += f * b;
+                }
+                if (w > 0) {
+                    double meanR = sumB / w;
+                    double m2 = 0, m3 = 0;
+                    for (int b = 0; b < bins; b++) {
+                        double f = Math.Max(0.0, flux[b]);
+                        double d = b - meanR;
+                        m2 += f * d * d;
+                        m3 += f * d * d * d;
+                    }
+                    m2 /= w;
+                    m3 /= w;
+                    // A sub-pixel-spread profile has no meaningful shape; the floor also guards the σ³ division.
+                    if (m2 > 1e-6) {
+                        radialSkew = m3 / Math.Pow(m2, 1.5);
+                    }
+                }
             }
             double half = DonutRingHalfMaxFraction * peakSb;
             // Walk the ring OUT from the peak, contiguously: the first bin that dips below half-max (or is
@@ -433,7 +470,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     offsetY = (wY / wSum) - cy;
                 }
             }
-            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth, offsetX, offsetY);
+            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth, offsetX, offsetY, radialSkew);
         }
 
         // For a 2D Gaussian the flux-weighted radial second moment ⟨r²⟩ = cxx + cyy equals 2σ², so
