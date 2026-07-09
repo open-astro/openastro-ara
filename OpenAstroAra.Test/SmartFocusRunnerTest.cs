@@ -44,10 +44,10 @@ namespace OpenAstroAra.Test {
         private const int CalibratedBest = 10_000;
         private static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>();
 
-        private static AutofocusSettingsDto Settings() => new(
+        private static AutofocusSettingsDto Settings(bool restore = true) => new(
             Method: "hfr_v_curve", Steps: 4, StepSize: 100, ExposureSeconds: 2, Binning: 1,
             AfFilter: "L", RunAfterFilterChange: false, TriggerTempDeltaC: 1.0, TriggerHfrDriftPct: 10,
-            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: true);
+            EveryNHours: 0, AbortSequenceOnAfFailure: false, RestorePositionOnFailure: restore);
 
         /// <summary>A stored calibration whose V-curve is HFR = 1.5 + 0.2·((p − best)/100)², parabolic
         /// about <paramref name="bestPosition"/> — 9 samples, same shape the scripted sky produces.</summary>
@@ -88,9 +88,10 @@ namespace OpenAstroAra.Test {
                 FocusCalibrationDto? calibration = null,
                 double focuserTemperature = 12.5,
                 int starCount = 42,
-                Func<int, int, double>? skyHfr = null) {
+                Func<int, int, double>? skyHfr = null,
+                bool restoreOnFailure = true) {
             var store = new InMemoryProfileStore();
-            store.PutAutofocusSettings(Settings());
+            store.PutAutofocusSettings(Settings(restoreOnFailure));
             if (calibration is not null) {
                 store.PutFocusCalibration(calibration);
             }
@@ -202,6 +203,8 @@ namespace OpenAstroAra.Test {
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("too_few_stars"));
+            Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusStarted), Is.EqualTo(1),
+                "fallback_classic IS the mode hand-off — never a second started");
         }
 
         [Test]
@@ -269,8 +272,33 @@ namespace OpenAstroAra.Test {
             var fallback = rig.Events.Where(e => e.Type == WsEventCatalog.AutofocusFallbackClassic).ToList();
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_diverged"));
+            Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusStarted), Is.EqualTo(1),
+                "one run, one started — the hand-off is fallback_classic");
             // The restore-then-sweep is visible in the move history: back at the start before probing.
             Assert.That(rig.Moves, Does.Contain(StartPosition), "the start position is restored before Classic runs");
+        }
+
+        [Test]
+        public async Task A_diverging_run_with_restore_off_leaves_the_focuser_where_the_ladder_ended() {
+            // RestorePositionOnFailure: false — the profile asked for no restores, so the diverged Smart
+            // run must NOT move back to the start; Classic simply centers its sweep on where it stands.
+            var rig = Build(calibration: Calibration(), restoreOnFailure: false,
+                skyHfr: (capture, position) => capture switch {
+                    1 => 1.95,
+                    2 or 3 => 9.0,
+                    _ => VCurveHfr(position, StartPosition),
+                });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            // Moves: shot 2, the reversed shot 3, then straight into Classic's overshoot — the third
+            // move must NOT be a restore to the start. (Classic may legitimately LAND at the start
+            // later; that's it finding real focus, not a restore.)
+            Assert.That(rig.Moves.Take(3), Does.Not.Contain(StartPosition),
+                "with restore off, the ladder must hand over without moving back to the pre-Smart position");
+            Assert.That(Types(rig.Events).Count(t => t == WsEventCatalog.AutofocusFallbackClassic), Is.EqualTo(1));
         }
 
         [Test]

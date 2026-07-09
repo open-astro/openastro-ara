@@ -169,10 +169,13 @@ public sealed partial class AutofocusSweepService {
             }
 
             // Diverged — three shots, still worse than where we started (§59.11).
+            // Restore honors the profile's RestorePositionOnFailure like every Classic restore path —
+            // a user who wants the focuser left where a failed run stopped gets that here too (the
+            // Classic fallback then simply centers its sweep on wherever the ladder ended).
             return await FallBackAsync($"diverged after 3 shots (start HFR {shot1.Hfr:0.###}, best attempt {Math.Min(shot2.Hfr, reversedShot.Hfr):0.###})",
-                "smart_focus_diverged", startPosition, restore: true).ConfigureAwait(false);
+                "smart_focus_diverged", startPosition, restore: settings.RestorePositionOnFailure).ConfigureAwait(false);
         } catch (OperationCanceledException) {
-            await RestoreAsync(true, startPosition, CancellationToken.None).ConfigureAwait(false);
+            await RestoreAsync(settings.RestorePositionOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
     }
