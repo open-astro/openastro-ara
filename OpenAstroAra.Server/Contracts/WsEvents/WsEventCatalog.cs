@@ -59,6 +59,12 @@ public static class WsEventCatalog {
     public const string PolarAlignStarted = "polar_align.started";
     public const string PolarAlignStopped = "polar_align.stopped";
 
+    // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
+    // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
+    // refractors / in-focus fields produce no donut and are skipped. Payload:
+    // { severity, offset_percent, direction_degrees, stars_used }.
+    public const string AutofocusCollimationVerdict = "autofocus.collimation_verdict";
+
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
     public const string SequenceUpdated = "sequence.updated";
@@ -175,6 +181,7 @@ public static class WsEventCatalog {
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
+        AutofocusCollimationVerdict,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
         SequenceStarted, SequencePaused, SequenceResumed, SequenceAborted,

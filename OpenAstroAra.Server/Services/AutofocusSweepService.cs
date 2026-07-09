@@ -20,8 +20,11 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -73,6 +76,11 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
     private readonly ILogger<AutofocusSweepService> _logger;
     private readonly ImageHistoryService? _history;
     private readonly IFilterWheelMediator? _filterWheel;
+    // §59.10 — optional surfacing of the collimation verdict (both nullable, guarded per-use like the
+    // Safety precedent): a WS event for every confident read, a user notification only for the actionable
+    // Slight/Significant bands. Absent in tests that don't exercise surfacing.
+    private readonly IWsBroadcaster? _ws;
+    private readonly INotificationService? _notifications;
     // One sweep at a time — the focuser is a single physical axis, and interleaved sweeps would
     // corrupt each other's curves. Waiters queue (same philosophy as the capture gate).
     private readonly SemaphoreSlim _sweepGate = new(1, 1);
@@ -84,7 +92,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             ILogger<AutofocusSweepService>? logger = null,
             Func<AnalysisFrame, CancellationToken, StarDetectionResult>? metric = null,
             ImageHistoryService? history = null,
-            IFilterWheelMediator? filterWheel = null) {
+            IFilterWheelMediator? filterWheel = null,
+            IWsBroadcaster? ws = null,
+            INotificationService? notifications = null) {
         _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         _focuser = focuser ?? throw new ArgumentNullException(nameof(focuser));
         _frames = frames ?? throw new ArgumentNullException(nameof(frames));
@@ -92,6 +102,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         _metric = metric ?? DefaultMetric;
         _history = history;
         _filterWheel = filterWheel;
+        _ws = ws;
+        _notifications = notifications;
     }
 
     // Production metric: the §59 StarDetector at the autofocus-canonical parameters. HFR probes
@@ -132,10 +144,11 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
         try {
             var points = new List<FocusPoint>(ProbeCount(settings));
-            // §59.10 — accumulate every probe's detected stars for the end-of-sweep collimation read. The
-            // most-defocused probes carry the widest, best-resolved donuts; near-focus probes contribute
-            // hole-less stars the evaluator skips, so the union is safe (it normalises + vector-averages).
-            var collimationStars = new List<DetectedStar>();
+            // §59.10 — retain each probe's (position, detected stars) for the end-of-sweep collimation read.
+            // At completion we feed the evaluator the single MOST-DEFOCUSED probe's stars (widest, best-resolved
+            // donuts, each near-centre star once) rather than the union across steps, which would double-count
+            // the same physical star and inflate the independent-star confidence.
+            var probeStars = new List<(int Position, IReadOnlyList<DetectedStar> Stars)>(ProbeCount(settings));
             int frameWidth = 0, frameHeight = 0;
             // Outermost-first, stepping DOWN through every position: one approach direction means
             // backlash biases every sample identically instead of splitting the curve in two.
@@ -171,7 +184,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 }
                 LogProbe(reached, hfr, stars);
                 points.Add(new FocusPoint(reached, hfr, stars));
-                collimationStars.AddRange(result.StarList);
+                probeStars.Add((reached, result.StarList));
                 frameWidth = frame.Width;
                 frameHeight = frame.Height;
             }
@@ -194,7 +207,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             await _focuser.MoveFocuser(best + settings.StepSize, token).ConfigureAwait(false);
             var final = await _focuser.MoveFocuser(best, token).ConfigureAwait(false);
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
-            EvaluateCollimationQuietly(collimationStars, frameWidth, frameHeight);
+            await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
             return true;
         } catch (OperationCanceledException) {
@@ -228,22 +241,94 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         }
     }
 
-    // §59.10 collimation health — a free byproduct of the completed sweep. The donut stars captured across
-    // every probe vector-average (in CollimationEvaluator) into an obstruction-shadow decentering verdict;
-    // a refractor / in-focus field yields no donut stars → Insufficient, which we simply don't log. This
-    // slice only records the verdict to the log; surfacing it as a WS event + notification is the next slice.
-    // Post-success + best-effort: a diagnostic read must never turn a completed autofocus into a failure.
+    // §59.10 collimation health — a free byproduct of the completed sweep. The MOST-DEFOCUSED probe's donut
+    // stars (widest, best-resolved obstruction shadow) vector-average (in CollimationEvaluator) into a
+    // decentering verdict; a refractor / in-focus field yields no donut stars → Insufficient, silently skipped.
+    // A confident read is logged + broadcast as a WS event; the actionable Slight/Significant bands also post a
+    // user notification. Post-success + best-effort: a diagnostic read must never turn a completed autofocus
+    // into a failure.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Post-success diagnostic boundary: the §59.10 collimation read runs after a successful sweep and must never fail it; any fault is logged and swallowed. CA1031's log-and-recover boundary applies.")]
-    private void EvaluateCollimationQuietly(IReadOnlyList<DetectedStar> stars, int width, int height) {
+    private async Task EvaluateCollimationQuietlyAsync(
+            IReadOnlyList<(int Position, IReadOnlyList<DetectedStar> Stars)> probeStars,
+            double bestPosition, int width, int height) {
         try {
+            // Pick the probe furthest from the fitted best focus — the widest donut with the deepest, best-
+            // resolved obstruction shadow, and each near-centre star counted once (no cross-step double-count).
+            IReadOnlyList<DetectedStar> stars = Array.Empty<DetectedStar>();
+            double maxDist = -1;
+            foreach (var (position, list) in probeStars) {
+                double dist = Math.Abs(position - bestPosition);
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    stars = list;
+                }
+            }
+
             var verdict = CollimationEvaluator.Evaluate(stars, width, height);
             if (verdict.Severity == CollimationSeverity.Insufficient) {
                 return; // no confident read (refractor, in-focus, or too few near-centre donut stars)
             }
             LogCollimation(verdict.Severity, verdict.OffsetPercent, verdict.DirectionDegrees, verdict.StarsUsed);
+            await PublishCollimationAsync(verdict).ConfigureAwait(false);
+            if (verdict.Severity is CollimationSeverity.Slight or CollimationSeverity.Significant) {
+                await NotifyCollimationAsync(verdict).ConfigureAwait(false);
+            }
         } catch (Exception ex) {
             LogCollimationFailed(ex);
+        }
+    }
+
+    // Broadcast every confident verdict on the WS channel (cheap; the client decides what to show). AOT-safe
+    // JsonElement construction (ToJsonString → Parse) per the GuiderService/SafetyReactionService precedent.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort; a broadcaster fault must never abort the post-success collimation read. Log-and-recover boundary.")]
+    private async Task PublishCollimationAsync(CollimationVerdict verdict) {
+        if (_ws is null) {
+            return;
+        }
+        try {
+            var payload = new JsonObject {
+                ["severity"] = verdict.Severity.ToString().ToLowerInvariant(),
+                ["offset_percent"] = Math.Round(verdict.OffsetPercent, 2),
+                ["direction_degrees"] = Math.Round(verdict.DirectionDegrees, 1),
+                ["stars_used"] = verdict.StarsUsed,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(WsEventCatalog.AutofocusCollimationVerdict, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogCollimationPublishFailed(ex);
+        }
+    }
+
+    // Only the actionable bands notify the user (§59.10): Slight → a warning, Significant → critical with the
+    // "collimate before continuing" recommendation. The eyepiece-referenced clock-position direction is a later
+    // slice (it needs the optical train's mirror flips), so the message reports magnitude, not a clock face.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never mask the completed sweep. Log-and-recover boundary.")]
+    private async Task NotifyCollimationAsync(CollimationVerdict verdict) {
+        if (_notifications is null) {
+            return;
+        }
+        try {
+            bool significant = verdict.Severity == CollimationSeverity.Significant;
+            var message = $"Collimation check after autofocus: the obstruction-shadow centroid is offset {verdict.OffsetPercent:0.#}% of the donut diameter, measured across {verdict.StarsUsed} donut stars."
+                + (significant ? " Recommended to collimate before continuing." : string.Empty);
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: significant ? NotificationSeverity.Critical : NotificationSeverity.Warning,
+                Category: NotificationCategory.Equipment,
+                Title: significant ? "Significant miscollimation detected" : "Slight miscollimation detected",
+                Message: message,
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogCollimationNotifyFailed(ex);
         }
     }
 
@@ -293,4 +378,10 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: §59.10 collimation evaluation failed on a completed sweep — the sweep still succeeded")]
     private partial void LogCollimationFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: failed to broadcast the §59.10 collimation verdict WS event — the sweep still succeeded")]
+    private partial void LogCollimationPublishFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: failed to post the §59.10 collimation notification — the sweep still succeeded")]
+    private partial void LogCollimationNotifyFailed(Exception ex);
 }

@@ -19,9 +19,11 @@ using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -268,6 +270,112 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(logger.Messages, Has.None.Contains("collimation"),
                 "a refractor / hole-less field is Insufficient and logs no collimation verdict");
+        }
+
+        private static (Mock<IWsBroadcaster> Ws, List<(string Type, JsonElement Payload)> Events) CapturingWs() {
+            var events = new List<(string, JsonElement)>();
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Returns<string, JsonElement, CancellationToken>((t, p, _) => { events.Add((t, p.Clone())); return Task.CompletedTask; });
+            return (ws, events);
+        }
+
+        private static (Mock<INotificationService> Svc, List<NotificationDto> Posted) CapturingNotifications() {
+            var posted = new List<NotificationDto>();
+            var svc = new Mock<INotificationService>();
+            svc.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Returns<NotificationDto, CancellationToken>((d, _) => { posted.Add(d); return Task.CompletedTask; });
+            return (svc, posted);
+        }
+
+        private static AutofocusSweepService SurfacingSvc(
+                Mock<IWsBroadcaster> ws, Mock<INotificationService> notifications,
+                IReadOnlyList<DetectedStar> stars) {
+            var (focuser, moves) = Focuser();
+            // The V-curve tracks this focuser's real move history so the sweep succeeds and reaches the verdict.
+            return new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, FramesSized(200, 200).Object,
+                metric: (_, _) => {
+                    var delta = (moves.Count == 0 ? StartPosition : moves[^1]) - (StartPosition - 150);
+                    return Result(1.5 + 0.2 * (delta / 100.0) * (delta / 100.0), 42, stars);
+                },
+                ws: ws.Object, notifications: notifications.Object);
+        }
+
+        [Test]
+        public async Task A_significant_verdict_broadcasts_a_ws_event_and_notifies() {
+            var (ws, events) = CapturingWs();
+            var (notif, posted) = CapturingNotifications();
+            var decentered = DonutStars(8, 200, 100, 100, offsetX: 4.0, offsetY: 0.0, outer: 20.0); // 20% → Significant
+            using var svc = SurfacingSvc(ws, notif, decentered);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(events, Has.Count.EqualTo(1));
+            Assert.That(events[0].Type, Is.EqualTo(WsEventCatalog.AutofocusCollimationVerdict));
+            Assert.That(events[0].Payload.GetProperty("severity").GetString(), Is.EqualTo("significant"));
+            Assert.That(events[0].Payload.GetProperty("offset_percent").GetDouble(), Is.EqualTo(20.0).Within(0.5));
+            Assert.That(events[0].Payload.GetProperty("stars_used").GetInt32(), Is.GreaterThan(0));
+            Assert.That(posted, Has.Count.EqualTo(1), "a Significant verdict posts a user notification");
+            Assert.That(posted[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
+            Assert.That(posted[0].Message, Does.Contain("collimate before continuing"));
+        }
+
+        [Test]
+        public async Task A_good_verdict_broadcasts_but_does_not_notify() {
+            var (ws, events) = CapturingWs();
+            var (notif, posted) = CapturingNotifications();
+            var nearlyConcentric = DonutStars(8, 200, 100, 100, offsetX: 0.6, offsetY: 0.0, outer: 20.0); // 3% → Good
+            using var svc = SurfacingSvc(ws, notif, nearlyConcentric);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(events, Has.Count.EqualTo(1), "a Good verdict still broadcasts (the client decides what to show)");
+            Assert.That(events[0].Payload.GetProperty("severity").GetString(), Is.EqualTo("good"));
+            Assert.That(posted, Is.Empty, "a Good verdict must not nag the user with a notification");
+        }
+
+        [Test]
+        public async Task A_refractor_field_neither_broadcasts_nor_notifies() {
+            var (ws, events) = CapturingWs();
+            var (notif, posted) = CapturingNotifications();
+            var holeLess = new List<DetectedStar> {
+                new() { Position = (100 * 200) + 100, DonutInnerDiameter = 0, DonutOuterDiameter = 8.0 },
+            };
+            using var svc = SurfacingSvc(ws, notif, holeLess);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(events, Is.Empty, "an Insufficient (refractor) read broadcasts nothing");
+            Assert.That(posted, Is.Empty);
+        }
+
+        [Test]
+        public async Task The_most_defocused_probe_drives_the_verdict() {
+            // Only the most-defocused probe (the top, StartPosition+400, furthest from best StartPosition-150)
+            // carries decentered donuts; every other probe is concentric. The verdict must reflect the former.
+            var (focuser, moves) = Focuser();
+            var logger = new RecordingLogger();
+            var decentered = DonutStars(8, 200, 100, 100, offsetX: 4.0, offsetY: 0.0, outer: 20.0);
+            var concentric = DonutStars(8, 200, 100, 100, offsetX: 0.0, offsetY: 0.0, outer: 20.0);
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, FramesSized(200, 200).Object,
+                logger: logger,
+                metric: (_, _) => {
+                    var pos = moves.Count == 0 ? StartPosition : moves[^1];
+                    var delta = (pos - (StartPosition - 150)) / 100.0;
+                    var stars = pos == StartPosition + 400 ? decentered : concentric;
+                    return Result(1.5 + 0.2 * delta * delta, 42, stars);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(logger.Messages, Has.Some.Contains("Significant"),
+                "the verdict must come from the most-defocused probe, not the near-focus concentric ones");
         }
 
         // Captures formatted log messages so the collimation-verdict log line can be asserted.
