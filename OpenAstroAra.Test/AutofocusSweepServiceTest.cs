@@ -17,6 +17,7 @@ using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -66,14 +67,19 @@ namespace OpenAstroAra.Test {
             return frames;
         }
 
+        // Build a StarDetectionResult carrying a given HFR + star count (and optionally a per-star list for the
+        // §59.10 collimation read), so the widened metric seam stays terse in the tests that don't exercise it.
+        private static StarDetectionResult Result(double hfr, int stars, IReadOnlyList<DetectedStar>? starList = null) =>
+            new() { AverageHFR = hfr, DetectedStars = stars, StarList = starList ?? Array.Empty<DetectedStar>() };
+
         /// <summary>A V-curve metric: HFR is minimal at <paramref name="bestPosition"/>. The service
         /// reads the CURRENT focuser position through the shared closure, so the metric returns the
         /// HFR "measured" at wherever the sweep just moved the focuser.</summary>
-        private static Func<AnalysisFrame, CancellationToken, (double, int)> VCurveMetric(
+        private static Func<AnalysisFrame, CancellationToken, StarDetectionResult> VCurveMetric(
                 Func<int> currentPosition, double bestPosition) =>
             (_, _) => {
                 var delta = (currentPosition() - bestPosition) / 100.0;
-                return (1.5 + 0.2 * delta * delta, 42);
+                return Result(1.5 + 0.2 * delta * delta, 42);
             };
 
         private static (AutofocusSweepService Service, List<int> Moves, Func<int> Position) Build(
@@ -132,7 +138,7 @@ namespace OpenAstroAra.Test {
             var (focuser, moves) = Focuser();
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
-                metric: (_, _) => (1.5, 0)); // no stars — clouds
+                metric: (_, _) => Result(1.5, 0)); // no stars — clouds
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
@@ -143,7 +149,7 @@ namespace OpenAstroAra.Test {
             var (focuser, moves) = Focuser();
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(restore: false)).Object, focuser.Object, Frames().Object,
-                metric: (_, _) => (1.5, 0));
+                metric: (_, _) => Result(1.5, 0));
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
             Assert.That(moves[^1], Is.Not.EqualTo(StartPosition), "no restore when the policy is off");
@@ -154,7 +160,7 @@ namespace OpenAstroAra.Test {
             var (focuser, moves) = Focuser();
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
-                metric: (_, _) => (2.0, 42)); // identical HFR everywhere — no minimum to find
+                metric: (_, _) => Result(2.0, 42)); // identical HFR everywhere — no minimum to find
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
             Assert.That(moves[^1], Is.EqualTo(StartPosition));
@@ -168,7 +174,7 @@ namespace OpenAstroAra.Test {
                 .ThrowsAsync(new InvalidOperationException("camera fell over"));
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(restore: true)).Object, focuser.Object, frames.Object,
-                metric: (_, _) => (1.5, 42));
+                metric: (_, _) => Result(1.5, 42));
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
             Assert.That(moves[^1], Is.EqualTo(StartPosition));
@@ -183,11 +189,95 @@ namespace OpenAstroAra.Test {
                 Profiles(Settings(restore: true)).Object, focuser.Object, Frames().Object,
                 metric: (_, _) => {
                     if (++probes == 3) cts.Cancel(); // abort mid-sweep
-                    return (1.5, 42);
+                    return Result(1.5, 42);
                 });
             Assert.ThrowsAsync<OperationCanceledException>(
                 () => svc.RunAutofocusAsync(NoProgress, cts.Token));
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "a cancelled sweep must not strand focus at a probe position");
+        }
+
+        // ─── §59.10 collimation read on a completed sweep ───
+
+        private static Mock<IAnalysisFrameSource> FramesSized(int w, int h) {
+            var frames = new Mock<IAnalysisFrameSource>();
+            frames.Setup(f => f.CaptureForAnalysisAsync(It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new AnalysisFrame(new ushort[w * h], w, h, DateTimeOffset.UnixEpoch));
+            return frames;
+        }
+
+        // A cluster of near-centre donut stars each carrying the same shadow-centroid offset (a coherent tilt).
+        private static List<DetectedStar> DonutStars(int count, int width, int cx, int cy,
+                double offsetX, double offsetY, double outer = 20.0) {
+            var list = new List<DetectedStar>(count);
+            for (int i = 0; i < count; i++) {
+                int x = cx + ((i % 3) - 1) * 15;
+                int y = cy + ((i / 3) - 1) * 15;
+                list.Add(new DetectedStar {
+                    Position = (y * width) + x,
+                    DonutOuterDiameter = outer,
+                    DonutInnerDiameter = 6.0,
+                    DonutCentroidOffsetX = offsetX,
+                    DonutCentroidOffsetY = offsetY,
+                });
+            }
+            return list;
+        }
+
+        [Test]
+        public async Task A_completed_sweep_logs_a_collimation_verdict_from_decentered_donut_stars() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var logger = new RecordingLogger();
+            // Every probe reports the same near-centre donut stars with a coherent +4 px shadow shift on a
+            // 20 px donut → 20% of the diameter, well past the 15% "Significant" threshold.
+            var donuts = DonutStars(8, width: 200, cx: 100, cy: 100, offsetX: 4.0, offsetY: 0.0, outer: 20.0);
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, FramesSized(200, 200).Object,
+                logger: logger,
+                metric: (_, _) => {
+                    var delta = (Current() - (StartPosition - 150)) / 100.0;
+                    return Result(1.5 + 0.2 * delta * delta, 42, donuts);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(logger.Messages, Has.Some.Contains("collimation").And.Contains("Significant"),
+                "a completed sweep with decentered donut stars logs the §59.10 collimation verdict");
+        }
+
+        [Test]
+        public async Task A_refractor_field_logs_no_collimation_verdict() {
+            // Hole-less stars (no obstruction shadow) → the evaluator returns Insufficient → nothing logged.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            var logger = new RecordingLogger();
+            var flat = new List<DetectedStar> {
+                new() { Position = (100 * 200) + 100, DonutInnerDiameter = 0, DonutOuterDiameter = 8.0 },
+            };
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, FramesSized(200, 200).Object,
+                logger: logger,
+                metric: (_, _) => {
+                    var delta = (Current() - (StartPosition - 150)) / 100.0;
+                    return Result(1.5 + 0.2 * delta * delta, 42, flat);
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(logger.Messages, Has.None.Contains("collimation"),
+                "a refractor / hole-less field is Insufficient and logs no collimation verdict");
+        }
+
+        // Captures formatted log messages so the collimation-verdict log line can be asserted.
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<AutofocusSweepService> {
+            public List<string> Messages { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                Messages.Add(formatter(state, exception));
         }
     }
 }
