@@ -183,6 +183,8 @@ public sealed partial class AutofocusSweepService {
             // Restore honors the profile's RestorePositionOnFailure like every Classic restore path —
             // a user who wants the focuser left where a failed run stopped gets that here too (the
             // Classic fallback then simply centers its sweep on wherever the ladder ended).
+            await NotifySmartFallbackQuietlyAsync(
+                "Smart Focus diverged after 3 shots, so a full focus sweep ran instead. The sweep recalibrates automatically; if this repeats, check for passing clouds or a slipping focuser.").ConfigureAwait(false);
             return await FallBackAsync($"diverged after 3 shots (start HFR {shot1.Hfr:0.###}, best attempt {Math.Min(shot2.Hfr, reversedShot.Hfr):0.###})",
                 "smart_focus_diverged", startPosition, restore: settings.RestorePositionOnFailure).ConfigureAwait(false);
         } catch (OperationCanceledException) {
@@ -194,6 +196,8 @@ public sealed partial class AutofocusSweepService {
             // (review round-2 finding — MeridianFlipExecutor relies on the sweep's restore invariant).
             LogSmartErrored(ex);
             await RestoreAsync(settings.RestorePositionOnFailure, startPosition, CancellationToken.None).ConfigureAwait(false);
+            await NotifySmartFallbackQuietlyAsync(
+                "Smart Focus hit a device error mid-run, so a full focus sweep ran instead. See the daemon log for the fault.").ConfigureAwait(false);
             await PublishAutofocusEventAsync(WsEventCatalog.AutofocusFallbackClassic, new JsonObject {
                 ["reason"] = "smart_focus_error",
             }).ConfigureAwait(false);
@@ -242,6 +246,35 @@ public sealed partial class AutofocusSweepService {
         return false;
     }
 
+    // §59.11 — only the SURPRISING fallbacks notify the user (a diverged ladder or a device fault);
+    // condition-driven ones (thin stars, out-of-range defocus) stay log + WS-event only, since Classic
+    // quietly completes the run and a notification per passing cloud would be noise. Best-effort like
+    // every other post-hoc surfacing path.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never mask or abort the AF run. Log-and-recover boundary.")]
+    private async Task NotifySmartFallbackQuietlyAsync(string message) {
+        if (_notifications is null) {
+            return;
+        }
+        try {
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Equipment,
+                Title: "Smart Focus fell back to a full sweep",
+                Message: message,
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogSmartNotifyFailed(ex);
+        }
+    }
+
     // Best-effort WS publish shared by the §59.15 lifecycle events; same AOT-safe construction and
     // log-and-recover boundary as the §59.10 collimation publish.
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -275,6 +308,9 @@ public sealed partial class AutofocusSweepService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Smart Focus errored — restoring and falling back to the Classic sweep")]
     private partial void LogSmartErrored(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Smart Focus: failed to post the fallback notification — the AF run continues")]
+    private partial void LogSmartNotifyFailed(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: failed to broadcast the {EventType} WS event — the AF run continues")]
     private partial void LogAutofocusPublishFailed(Exception ex, string eventType);

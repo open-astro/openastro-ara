@@ -20,6 +20,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -83,7 +84,8 @@ namespace OpenAstroAra.Test {
         /// <paramref name="skyHfr"/> (defaults to the V-curve about <paramref name="realBest"/>), with
         /// <paramref name="starCount"/> stars. Captures are counted so tests can assert the shot budget.</summary>
         private static (AutofocusSweepService Service, InMemoryProfileStore Store, List<int> Moves,
-                List<(string Type, JsonElement Payload)> Events, Func<int> CaptureCount) Build(
+                List<(string Type, JsonElement Payload)> Events, Func<int> CaptureCount,
+                List<NotificationDto> Notifications) Build(
                 int realBest = CalibratedBest,
                 FocusCalibrationDto? calibration = null,
                 double focuserTemperature = 12.5,
@@ -116,10 +118,16 @@ namespace OpenAstroAra.Test {
                 .Callback<string, JsonElement, CancellationToken>((t, p, _) => events.Add((t, p)))
                 .Returns(Task.CompletedTask);
 
+            var posted = new List<NotificationDto>();
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Returns<NotificationDto, CancellationToken>((d, _) => { posted.Add(d); return Task.CompletedTask; });
+
             int captures = 0;
             var svc = new AutofocusSweepService(
                 store, focuser.Object, frames.Object,
                 ws: ws.Object,
+                notifications: notifications.Object,
                 metric: (_, _) => {
                     captures++;
                     var hfr = skyHfr is null ? VCurveHfr(position, realBest) : skyHfr(captures, position);
@@ -128,7 +136,7 @@ namespace OpenAstroAra.Test {
                         AverageHFR = hfr, DetectedStars = stars, StarList = Stars(stars, hfr),
                     };
                 });
-            return (svc, store, moves, events, () => captures);
+            return (svc, store, moves, events, () => captures, posted);
         }
 
         private static List<string> Types(List<(string Type, JsonElement Payload)> events) =>
@@ -387,6 +395,70 @@ namespace OpenAstroAra.Test {
             Assert.That(fallback, Has.Count.EqualTo(1));
             Assert.That(fallback[0].Payload.GetProperty("reason").GetString(), Is.EqualTo("smart_focus_error"));
             Assert.That(rig.Moves, Does.Contain(StartPosition), "the start position is restored before Classic runs");
+        }
+
+        [Test]
+        public async Task A_diverged_fallback_posts_a_warning_notification() {
+            var rig = Build(calibration: Calibration(), skyHfr: (capture, position) => capture switch {
+                1 => 1.95,
+                2 or 3 => 9.0,
+                _ => VCurveHfr(position, StartPosition),
+            });
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.Notifications, Has.Count.EqualTo(1), "a diverged ladder is surprising — tell the user");
+            Assert.That(rig.Notifications[0].Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(rig.Notifications[0].Message, Does.Contain("diverged"));
+        }
+
+        [Test]
+        public async Task A_condition_driven_fallback_does_not_notify() {
+            // Thin stars (a passing cloud) → Classic quietly completes; a notification per cloud is noise.
+            var rig = Build(calibration: Calibration(), starCount: 12, realBest: StartPosition - 150);
+            using var _ = rig.Service;
+
+            var ok = await rig.Service.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(rig.Notifications, Is.Empty, "condition-driven fallbacks stay log + WS-event only");
+        }
+
+        // ── §59.2 slice D — mode-aware job progress + the calibration endpoints' store contract ──
+
+        [Test]
+        public void Progress_scaling_is_identity_for_a_classic_run() {
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(5, 9, 9), Is.EqualTo(5));
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(9, 9, 9), Is.EqualTo(9));
+        }
+
+        [Test]
+        public void Progress_scaling_maps_smart_shots_onto_the_job_total() {
+            // A Smart run reports 3 shots; the job's denominator is the Classic probe count (9).
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(1, 3, 9), Is.EqualTo(3), "shot 1 ≈ a third done");
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(2, 3, 9), Is.EqualTo(6));
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(3, 3, 9), Is.EqualTo(9));
+        }
+
+        [Test]
+        public void Progress_scaling_clamps_to_the_job_total() {
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(4, 3, 9), Is.EqualTo(9), "never overshoot the total");
+            Assert.That(EquipmentEndpoints.ScaleAutofocusProgress(0.1, 3, 9), Is.EqualTo(1), "a started run is at least 1 tick in");
+        }
+
+        [Test]
+        public void Recalibrate_clears_the_stored_calibration_so_the_next_run_routes_classic() {
+            // The endpoint's whole mechanism (§59.15): Put(null) → §59.1 routing picks Classic →
+            // the successful sweep records fresh samples. Prove the store contract end-to-end.
+            var store = new InMemoryProfileStore();
+            store.PutFocusCalibration(Calibration());
+            Assert.That(store.GetFocusCalibration(), Is.Not.Null);
+
+            store.PutFocusCalibration(null); // what POST /api/v1/autofocus/recalibrate does
+
+            Assert.That(store.GetFocusCalibration(), Is.Null, "cleared — the next AF run recalibrates via Classic");
         }
 
         [Test]

@@ -206,7 +206,12 @@ public static class EquipmentEndpoints {
             var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
                 var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
                     if (s.MaxProgress > 0 && s.Progress > 0) {
-                        tick((int)s.Progress);
+                        // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
+                        // totalProbes probes — scale whatever denominator the run declares onto the
+                        // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
+                        // service's monotone tick guard keeps a Smart→Classic fallback sane (the
+                        // fraction never goes backwards).
+                        tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));
                     }
                 });
                 var ok = await autofocus.RunAutofocusAsync(progress, ct);
@@ -415,6 +420,14 @@ public static class EquipmentEndpoints {
     //   202 Accepted   — at least one connect was dispatched; each connects in the background.
     //   502 Bad Gateway — devices were remembered but every dispatch threw synchronously (e.g. all
     //                     their Alpaca servers are down on a rig restart), so don't claim "reconnecting".
+    // §59.2 — map a run's own (progress, maxProgress) onto the job's fixed step total: identity for a
+    // Classic run whose denominator matches, a 1/3-per-shot scale for a Smart run. Clamped to [1, total]
+    // so a mid-run denominator oddity can never tick 0 or overshoot the job service's total.
+    internal static int ScaleAutofocusProgress(double progress, int maxProgress, int totalSteps) {
+        var scaled = (int)System.Math.Round(progress / maxProgress * totalSteps);
+        return System.Math.Clamp(scaled, 1, totalSteps);
+    }
+
     private static async Task<IResult> ReconnectAsync(IEquipmentReconnector reconnector, DeviceType type, CancellationToken ct) {
         var outcome = await reconnector.ReconnectAsync(type, ct);
         if (outcome.Attempted == 0) {
