@@ -40,6 +40,8 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     private readonly ILogger<FilterWheelService> _logger;
     private readonly EquipmentEventPublisher? _events;
+    private readonly IEquipmentFaultSink? _faults;
+    private readonly DeviceConnectionProbe _probe = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     // The Sequencer-facing profile (null in REST-only unit tests): the §14e mediator partial imports
@@ -58,9 +60,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     public FilterWheelService(
         ILogger<FilterWheelService>? logger = null,
         OpenAstroAra.Profile.Interfaces.IProfileService? profileService = null,
-        EquipmentEventPublisher? events = null) {
+        EquipmentEventPublisher? events = null,
+        IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<FilterWheelService>.Instance;
         _events = events;
+        _faults = faults;
         _profileService = profileService;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
@@ -183,6 +187,18 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             if (client is null) {
                 return;
             }
+            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
+            // below deliberately swallow failures (an unsupported property must stay benign), so
+            // this probe is the only disconnect-detection source: Connected throws on transport
+            // death and reads false on a driver-side disconnect; a consecutive-failure streak
+            // (not one blip) trips the device to Error + publishes the §42.2 fault.
+            if (!ProbeConnected(client)) {
+                if (_probe.Observe(false) == ProbeVerdict.Lost) {
+                    TripConnectionLost();
+                }
+                return; // the device didn't answer — skip this tick's reads
+            }
+            _probe.Observe(true);
             var runtime = ReadRuntime(client);
             var slots = needSlots ? ReadSlots(client) : null;
             var adoptedSlots = false;
@@ -261,6 +277,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
                     _client = client;
                     _slots = null;          // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
+                    _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -321,6 +338,35 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
+    private static bool ProbeConnected(AlpacaFilterWheel c) {
+        try { return c.Connected; } catch (Exception) { return false; }
+    }
+
+    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
+    // reconnect can find it; the state publisher already maps Error to
+    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
+    private void TripConnectionLost() {
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (_state != EquipmentConnectionState.Connected) {
+                return;
+            }
+            device = _device;
+            SetState(EquipmentConnectionState.Error);
+        }
+        _probe.Reset();
+        LogConnectionLost(device?.Name ?? "?");
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.FilterWheel, device?.UniqueId, device?.Name,
+            EquipmentFaultKind.Disconnected,
+            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
+            DateTimeOffset.UtcNow));
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "FilterWheel '{Device}' stopped answering — marked Error (§42.3)")]
+    private partial void LogConnectionLost(string device);
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {

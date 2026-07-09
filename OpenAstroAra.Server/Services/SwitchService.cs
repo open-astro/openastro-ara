@@ -52,6 +52,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
 
     private readonly ILogger<SwitchService> _logger;
     private readonly EquipmentEventPublisher? _events;
+    private readonly IEquipmentFaultSink? _faults;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     // Connected (and recently-disconnected) switches keyed by AlpacaDeviceNumber. Mutated only under
@@ -74,11 +75,16 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         public IReadOnlyList<SwitchPortSnapshot> CachedSnapshots { get; set; } = Array.Empty<SwitchPortSnapshot>();
         public long Generation { get; set; }
         public int DeviceNumber => Device.AlpacaDeviceNumber;
+        // §42.3 — per-connection disconnect-detection streak (multi-instance: each connected switch
+        // is probed independently). Only touched from the single-flighted refresh path.
+        public DeviceConnectionProbe Probe { get; } = new();
     }
 
-    public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null) {
+    public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
+            IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<SwitchService>.Instance;
         _events = events;
+        _faults = faults;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -224,6 +230,18 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 return;
             }
             foreach (var (conn, client) in targets) {
+                // §42.3 — the ONE deliberate connection probe per device per tick. The per-port reads
+                // below deliberately swallow failures (an unsupported port must stay benign), so
+                // this probe is the only disconnect-detection source: Connected throws on transport
+                // death and reads false on a driver-side disconnect; a consecutive-failure streak
+                // (not one blip) trips the device to Error + publishes the §42.2 fault.
+                if (!ProbeConnected(client)) {
+                    if (conn.Probe.Observe(false) == ProbeVerdict.Lost) {
+                        TripConnectionLost(conn);
+                    }
+                    continue; // this device didn't answer — skip its reads, not the whole tick
+                }
+                conn.Probe.Observe(true);
                 // Isolate each device: a read failure (ASCOM timeout / network hiccup) on one switch
                 // must not drop the rest of this tick's devices from the refresh.
                 try {
@@ -324,6 +342,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                     && conn.Generation == generation) {
                     conn.Client = client;
                     conn.CachedSnapshots = Array.Empty<SwitchPortSnapshot>(); // don't serve a prior device's ports
+                    conn.Probe.Reset(); // §42.3 — a fresh session starts a fresh streak
                     SetState(conn, EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -391,6 +410,37 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
+    private static bool ProbeConnected(AlpacaSwitch c) {
+        try { return c.Connected; } catch (Exception) { return false; }
+    }
+
+    // §42.3 — declare the device lost: Connected → Error (keeps the connection entry remembered so
+    // a reconnect can find it; the state publisher already maps Error to
+    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
+    private void TripConnectionLost(SwitchConnection conn) {
+        lock (_gate) {
+            // Only trip the connection we probed if it is still the live entry for its device
+            // number and still Connected (a concurrent disconnect/replace supersedes the probe).
+            if (conn.State != EquipmentConnectionState.Connected
+                || !_connections.TryGetValue(conn.DeviceNumber, out var current)
+                || !ReferenceEquals(current, conn)) {
+                return;
+            }
+            SetState(conn, EquipmentConnectionState.Error);
+        }
+        conn.Probe.Reset();
+        LogConnectionLost(conn.Device.Name);
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name,
+            EquipmentFaultKind.Disconnected,
+            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
+            DateTimeOffset.UtcNow));
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Switch '{Device}' stopped answering — marked Error (§42.3)")]
+    private partial void LogConnectionLost(string device);
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     // Instance (not static) since §60.9: transitions publish equipment.* events.

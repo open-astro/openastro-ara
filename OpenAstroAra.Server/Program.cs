@@ -204,6 +204,13 @@ public partial class Program {
         // service below takes this via its optional ctor param and publishes
         // from its SetState choke point.
         builder.Services.AddSingleton<EquipmentEventPublisher>();
+        // §42.2 — the one place detected equipment faults converge (log + equipment.fault WS
+        // broadcast). The §42.3 connection probes in the device services below publish into it via
+        // their optional IEquipmentFaultSink ctor param — injected by constructor activation
+        // exactly like EquipmentEventPublisher above (factory-lambda registrations pass it by hand,
+        // the #711 lesson).
+        builder.Services.AddSingleton<EquipmentFaultHub>();
+        builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
@@ -468,7 +475,11 @@ public partial class Program {
                 events: sp.GetRequiredService<EquipmentEventPublisher>(),
                 // §59.5 — post-capture star analysis feeds the session history the
                 // HFR-drift autofocus trigger reads.
-                imageHistory: sp.GetRequiredService<ImageHistoryService>()));
+                imageHistory: sp.GetRequiredService<ImageHistoryService>(),
+                // §42.2/§42.3 — explicit for the same reason as events above: this factory
+                // lambda bypasses constructor activation, and forgetting it would silence
+                // camera disconnect faults.
+                faults: sp.GetRequiredService<IEquipmentFaultSink>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
