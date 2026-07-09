@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static FocusFeatureVector Features(double hfr, int stars) =>
-            new(stars, hfr, hfr * 2.0, 0.9, 8.0, 0, 0, 0, 0);
+            new(stars, hfr, hfr * 2.0, 0.9, 8.0, 0, 0, 0, 0, 0);
 
         private static List<DetectedStar> Stars(int count, double hfr) {
             var stars = new List<DetectedStar>(count);
