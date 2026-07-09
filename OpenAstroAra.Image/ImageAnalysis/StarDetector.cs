@@ -253,7 +253,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // A single-pixel-tight star yields HFR 0; clamp to a small floor so it's a usable focus metric.
             double hfr = Math.Max(0.5, sumFR / sumF);
 
-            var (outerDiameter, innerDiameter, shadowDepth) = DonutGeometry(blob, pixels, width, cx, cy, background);
+            var (outerDiameter, innerDiameter, shadowDepth, centroidOffsetX, centroidOffsetY) =
+                DonutGeometry(blob, pixels, width, cx, cy, background);
 
             return new DetectedStar {
                 Position = Math.Round(cy) * width + Math.Round(cx),
@@ -272,6 +273,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 DonutOuterDiameter = outerDiameter,
                 DonutInnerDiameter = innerDiameter,
                 DonutShadowDepth = shadowDepth,
+                DonutCentroidOffsetX = centroidOffsetX,
+                DonutCentroidOffsetY = centroidOffsetY,
             };
         }
 
@@ -290,13 +293,21 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // below the detection threshold, so they're absent from the blob — its brightness is sampled directly
         // from the frame over the inner-rim disk: ShadowDepth = clamp((ringPeak − holeMean) / ringPeak, 0, 1),
         // 1 for a background-dark hole, →0 as the hole fills in (and exactly 0 for a filled star with no hole).
+        //
+        // §59.10 collimation: over that same inner-rim disk, take the brightness-DEFICIT-weighted centroid of
+        // the hole (weight = peakSb − localFlux, so the deepest-shadow pixels pull hardest) and return its
+        // offset from the ring's flux centroid (cx, cy). A concentric shadow (good collimation) centroids back
+        // to (cx, cy) → offset 0; a decentered secondary tilts the dark hole off-centre → the offset vector
+        // points toward the displacement. 0 for a star with no hole. Raw image-frame pixels; the verdict slice
+        // vector-averages many stars and maps direction to a clock position.
         private const double DonutRingHalfMaxFraction = 0.5;
         private const int DonutProfileMaxStackBins = 96;
         // A real central-obstruction shadow spans many pixels; an inner rim of only a pixel or two is centre-bin
         // noise (bin 0 averages very few pixels), so it's floored to a filled centre (inner 0).
         private const int DonutMinInnerRadiusBins = 2;
 
-        private static (double OuterDiameter, double InnerDiameter, double ShadowDepth) DonutGeometry(
+        private static (double OuterDiameter, double InnerDiameter, double ShadowDepth,
+                double CentroidOffsetX, double CentroidOffsetY) DonutGeometry(
                 List<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
             double maxR = 0;
             foreach (int p in blob) {
@@ -334,7 +345,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 }
             }
             if (peakSb <= 0) {
-                return (0.0, 0.0, 0.0);
+                return (0.0, 0.0, 0.0, 0.0, 0.0);
             }
             double half = DonutRingHalfMaxFraction * peakSb;
             // Walk the ring OUT from the peak, contiguously: the first bin that dips below half-max (or is
@@ -364,20 +375,20 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 innerBin = 0;
             }
 
-            // Shadow depth: only a genuine hole (innerBin > 0 after the floor) has one. Sample the hole's
-            // brightness straight from the frame over the inner-rim disk — those pixels are below the detection
-            // threshold so they're not in the blob — and compare it to the ring peak. A background-dark hole
-            // gives depth ≈ 1; a partially-filled hole less; a filled star (no hole) exactly 0.
+            // Shadow depth + §59.10 centroid: only a genuine hole (innerBin > 0 after the floor) has one.
             double shadowDepth = 0.0;
+            double offsetX = 0.0, offsetY = 0.0;
             if (innerBin > 0) {
                 int height = pixels.Length / width;
+                // Shadow depth: mean brightness over the inner-rim disk (sampled straight from the frame — the
+                // hole's pixels are below the detection threshold, so absent from the blob) vs the ring peak.
                 double innerR = innerBin;
                 double holeSum = 0;
                 int holeCount = 0;
-                int x0 = Math.Max(0, (int)(cx - innerR)), x1 = Math.Min(width - 1, (int)(cx + innerR));
-                int y0 = Math.Max(0, (int)(cy - innerR)), y1 = Math.Min(height - 1, (int)(cy + innerR));
-                for (int yy = y0; yy <= y1; yy++) {
-                    for (int xx = x0; xx <= x1; xx++) {
+                int ix0 = Math.Max(0, (int)(cx - innerR)), ix1 = Math.Min(width - 1, (int)(cx + innerR));
+                int iy0 = Math.Max(0, (int)(cy - innerR)), iy1 = Math.Min(height - 1, (int)(cy + innerR));
+                for (int yy = iy0; yy <= iy1; yy++) {
+                    for (int xx = ix0; xx <= ix1; xx++) {
                         double dx = xx - cx, dy = yy - cy;
                         if ((dx * dx) + (dy * dy) >= innerR * innerR) {
                             continue;
@@ -390,8 +401,41 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     double holeMean = Math.Max(0.0, holeSum / holeCount);
                     shadowDepth = Math.Clamp((peakSb - holeMean) / peakSb, 0.0, 1.0);
                 }
+
+                // §59.10 decentering: deficit-weight the DARK (sub-half-max) pixels over the whole OUTER disk —
+                // the obstruction shadow plus the gap just inside the rim — and offset that centroid from the
+                // ring's flux centroid (cx, cy). Scanning the full outer disk (not the inner-rim disk) keeps the
+                // shadow locatable even when it has decentered off the flux centroid, which is exactly the
+                // collimation case. A concentric shadow's weights are symmetric about (cx, cy) → offset ≈ 0; a
+                // decentered secondary tilts the dark region off-centre → the vector points toward it. Bright
+                // ring pixels (flux ≥ half-max) are excluded so the ring itself doesn't wash out the signal.
+                double outerR = outerBin;
+                double half2 = DonutRingHalfMaxFraction * peakSb;
+                double wSum = 0, wX = 0, wY = 0;
+                int ox0 = Math.Max(0, (int)(cx - outerR)), ox1 = Math.Min(width - 1, (int)(cx + outerR));
+                int oy0 = Math.Max(0, (int)(cy - outerR)), oy1 = Math.Min(height - 1, (int)(cy + outerR));
+                for (int yy = oy0; yy <= oy1; yy++) {
+                    for (int xx = ox0; xx <= ox1; xx++) {
+                        double dx = xx - cx, dy = yy - cy;
+                        if ((dx * dx) + (dy * dy) >= outerR * outerR) {
+                            continue;
+                        }
+                        double localFlux = pixels[(yy * width) + xx] - background;
+                        if (localFlux >= half2) {
+                            continue; // bright ring, not shadow
+                        }
+                        double w = peakSb - localFlux; // > 0 since localFlux < half2 ≤ peakSb
+                        wSum += w;
+                        wX += w * xx;
+                        wY += w * yy;
+                    }
+                }
+                if (wSum > 0) {
+                    offsetX = (wX / wSum) - cx;
+                    offsetY = (wY / wSum) - cy;
+                }
             }
-            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth);
+            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth, offsetX, offsetY);
         }
 
         // For a 2D Gaussian the flux-weighted radial second moment ⟨r²⟩ = cxx + cyy equals 2σ², so
