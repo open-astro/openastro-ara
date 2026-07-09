@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Image.ImageAnalysis;
 using System;
 using System.Collections.Generic;
 
@@ -21,6 +22,8 @@ namespace OpenAstroAra.Server.Contracts;
 /// One §59.2 Smart Focus calibration sample: the absolute focuser position of a sweep probe plus the §59.3
 /// <c>FocusFeatureVector</c> measured there — flattened field-by-field so the profile wire shape doesn't
 /// couple to the Image-layer record (its ctor can grow; these names are the stable on-disk contract).
+/// The field-by-field bridge lives HERE, in both directions (<see cref="From"/> / <see cref="ToSample"/>),
+/// so a feature-vector addition means updating exactly one mapping, not every call site.
 /// </summary>
 public sealed record FocusCalibrationSampleDto(
     int FocuserPosition,
@@ -32,7 +35,33 @@ public sealed record FocusCalibrationSampleDto(
     double MedianDonutOuterDiameter,
     double MedianDonutInnerDiameter,
     double MedianRingThickness,
-    double MedianDonutShadowDepth);
+    double MedianDonutShadowDepth) {
+
+    /// <summary>Flatten a probe's measured feature vector into the wire shape (the sweep's store path).</summary>
+    public static FocusCalibrationSampleDto From(int focuserPosition, FocusFeatureVector features) {
+        ArgumentNullException.ThrowIfNull(features);
+        return new FocusCalibrationSampleDto(
+            FocuserPosition: focuserPosition,
+            StarCount: features.StarCount,
+            MedianHfr: features.MedianHFR,
+            MedianFwhm: features.MedianFWHM,
+            MedianRoundness: features.MedianRoundness,
+            MedianPeakToBackground: features.MedianPeakToBackground,
+            MedianDonutOuterDiameter: features.MedianDonutOuterDiameter,
+            MedianDonutInnerDiameter: features.MedianDonutInnerDiameter,
+            MedianRingThickness: features.MedianRingThickness,
+            MedianDonutShadowDepth: features.MedianDonutShadowDepth);
+    }
+
+    /// <summary>Rebuild the Image-layer sample this DTO stores — the <c>FocusInverseMap.Build</c> load path
+    /// (the §59.2 one-frame runner reconstructs the map from these on a later session).</summary>
+    public FocusCalibrationSample ToSample() => new(
+        FocuserPosition,
+        new FocusFeatureVector(
+            StarCount, MedianHfr, MedianFwhm, MedianRoundness, MedianPeakToBackground,
+            MedianDonutOuterDiameter, MedianDonutInnerDiameter, MedianRingThickness,
+            MedianDonutShadowDepth));
+}
 
 /// <summary>
 /// §59.2/§59.3 — the Smart Focus calibration a Classic AF sweep produces, persisted in the profile so a later

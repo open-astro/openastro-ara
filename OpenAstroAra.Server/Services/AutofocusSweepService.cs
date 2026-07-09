@@ -149,6 +149,9 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             // donuts, each near-centre star once) rather than the union across steps, which would double-count
             // the same physical star and inflate the independent-star confidence.
             var probeStars = new List<(int Position, IReadOnlyList<DetectedStar> Stars)>(ProbeCount(settings));
+            // §59.2 — every probe also yields a labelled (position, feature-vector) calibration sample for
+            // free: the sweep IS the Smart Focus calibration pass (§59.15 "calibration piggybacks on Classic").
+            var probeFeatures = new List<(int Position, FocusFeatureVector Features)>(ProbeCount(settings));
             int frameWidth = 0, frameHeight = 0;
             // Outermost-first, stepping DOWN through every position: one approach direction means
             // backlash biases every sample identically instead of splitting the curve in two.
@@ -185,6 +188,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 LogProbe(reached, hfr, stars);
                 points.Add(new FocusPoint(reached, hfr, stars));
                 probeStars.Add((reached, result.StarList));
+                probeFeatures.Add((reached, FocusFeatureExtractor.Extract(result)));
                 frameWidth = frame.Width;
                 frameHeight = frame.Height;
             }
@@ -209,6 +213,7 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
             LogSweepComplete(final, fit.PredictedHfr, fit.RSquared, fit.Method);
             await EvaluateCollimationQuietlyAsync(probeStars, fit.BestPosition, frameWidth, frameHeight).ConfigureAwait(false);
             RecordAutofocusQuietly();
+            RecordCalibrationQuietly(probeFeatures);
             return true;
         } catch (OperationCanceledException) {
             // A cancelled sweep (abort/stop/shutdown) restores best-effort and propagates — the
@@ -238,6 +243,48 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
                 _filterWheel?.GetInfo()?.SelectedFilter?.Name);
         } catch (Exception ex) {
             LogHistoryRecordFailed(ex);
+        }
+    }
+
+    // §59.2 — refresh the Smart Focus calibration from THIS sweep's labelled samples. Every successful
+    // Classic sweep recalibrates (the newest sweep reflects the rig's current optical + thermal state —
+    // design decision flagged in PR #780), but only when the samples actually rebuild a usable
+    // FocusInverseMap: a sweep whose feature medians can't anchor an inverse map (e.g. probes with junk
+    // star lists despite a fittable AverageHFR curve) must not clobber a good stored calibration.
+    // Post-success + best-effort like the other bookkeeping: a store/device fault here must never turn
+    // a completed autofocus into a reported failure.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Post-success bookkeeping boundary: the calibration write touches device info + the profile store; the sweep already succeeded and must be reported as such. CA1031's log-and-recover boundary applies.")]
+    private void RecordCalibrationQuietly(List<(int Position, FocusFeatureVector Features)> probeFeatures) {
+        try {
+            // Gate on the ROUND-TRIPPED wire shape — Build validates exactly what a later session will
+            // reload, so a DTO-bridge regression can never store samples the load path can't use.
+            var dtos = new List<FocusCalibrationSampleDto>(probeFeatures.Count);
+            var samples = new List<FocusCalibrationSample>(probeFeatures.Count);
+            foreach (var (position, features) in probeFeatures) {
+                var dto = FocusCalibrationSampleDto.From(position, features);
+                dtos.Add(dto);
+                samples.Add(dto.ToSample());
+            }
+            if (FocusInverseMap.Build(samples) is null) {
+                LogCalibrationSkipped(samples.Count);
+                return;
+            }
+
+            // NaN (focuser has no temperature probe) is unrepresentable in JSON — store null instead.
+            double? temperature = _focuser.GetInfo()?.Temperature;
+            if (temperature is { } t && !double.IsFinite(t)) {
+                temperature = null;
+            }
+
+            _profiles.PutFocusCalibration(new FocusCalibrationDto(
+                Samples: dtos,
+                CalibratedUtc: DateTimeOffset.UtcNow,
+                FocuserTemperatureC: temperature,
+                Filter: _filterWheel?.GetInfo()?.SelectedFilter?.Name));
+            LogCalibrationRecorded(dtos.Count);
+        } catch (Exception ex) {
+            LogCalibrationRecordFailed(ex);
         }
     }
 
@@ -372,6 +419,15 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: completed sweep could not be recorded into the session history — the §59.5 triggers keep their previous reference point")]
     private partial void LogHistoryRecordFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus: §59.2 Smart Focus calibration refreshed from this sweep ({Samples} labelled samples)")]
+    private partial void LogCalibrationRecorded(int samples);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: this sweep's {Samples} samples could not rebuild a usable inverse map — keeping the previously stored §59.2 Smart Focus calibration")]
+    private partial void LogCalibrationSkipped(int samples);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Autofocus: failed to record the §59.2 Smart Focus calibration — the sweep still succeeded")]
+    private partial void LogCalibrationRecordFailed(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Autofocus collimation ({Severity}): centroid offset {OffsetPercent:0.#}% of donut diameter toward {DirectionDegrees:0.#}° in the image frame, from {StarsUsed} donut stars")]
     private partial void LogCollimation(CollimationSeverity severity, double offsetPercent, double directionDegrees, int starsUsed);

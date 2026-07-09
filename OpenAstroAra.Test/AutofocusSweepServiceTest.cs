@@ -15,6 +15,8 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
@@ -23,6 +25,7 @@ using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -52,11 +55,11 @@ namespace OpenAstroAra.Test {
         }
 
         /// <summary>A focuser whose position tracks MoveFocuser calls; records the move history.</summary>
-        private static (Mock<IFocuserMediator> Mock, List<int> Moves) Focuser(bool connected = true) {
+        private static (Mock<IFocuserMediator> Mock, List<int> Moves) Focuser(bool connected = true, double temperature = double.NaN) {
             var moves = new List<int>();
             var position = StartPosition;
             var focuser = new Mock<IFocuserMediator>();
-            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = connected, Position = position });
+            focuser.Setup(f => f.GetInfo()).Returns(() => new FocuserInfo { Connected = connected, Position = position, Temperature = temperature });
             focuser.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
                 .Returns<int, CancellationToken>((p, _) => { position = p; moves.Add(p); return Task.FromResult(p); });
             return (focuser, moves);
@@ -376,6 +379,122 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(logger.Messages, Has.Some.Contains("Significant"),
                 "the verdict must come from the most-defocused probe, not the near-focus concentric ones");
+        }
+
+        // ---- §59.2 slice B — a successful sweep records the Smart Focus calibration ----
+
+        /// <summary>Stars whose per-star metrics all reflect the given HFR, so the probe's
+        /// <see cref="FocusFeatureExtractor"/> medians trace the same V-curve the fit sees.</summary>
+        private static List<DetectedStar> FeatureStars(int count, double hfr) {
+            var stars = new List<DetectedStar>(count);
+            for (int i = 0; i < count; i++) {
+                stars.Add(new DetectedStar { HFR = hfr, FWHM = hfr * 2.0, Roundness = 0.9, PeakToBackground = 8.0 });
+            }
+            return stars;
+        }
+
+        /// <summary>A sweep rig over a REAL <see cref="InMemoryProfileStore"/> (so PutFocusCalibration
+        /// actually lands) whose metric carries feature-bearing star lists along the V-curve.</summary>
+        private static (AutofocusSweepService Service, InMemoryProfileStore Store) CalibrationRig(
+                double bestPosition, double focuserTemperature = 12.5, string? filter = "Ha",
+                IReadOnlyList<DetectedStar>? fixedStarList = null) {
+            var settings = Settings(steps: 4, stepSize: 100);
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(settings);
+
+            var (focuser, moves) = Focuser(temperature: focuserTemperature);
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+
+            var wheel = new Mock<IFilterWheelMediator>();
+            wheel.Setup(w => w.GetInfo()).Returns(new FilterWheelInfo {
+                Connected = true,
+                SelectedFilter = filter is null ? null! : new FilterInfo(filter, 0, 0),
+            });
+
+            var svc = new AutofocusSweepService(
+                store, focuser.Object, Frames().Object,
+                filterWheel: wheel.Object,
+                metric: (_, _) => {
+                    var delta = (Current() - bestPosition) / 100.0;
+                    var hfr = 1.5 + 0.2 * delta * delta;
+                    return Result(hfr, 42, fixedStarList ?? FeatureStars(12, hfr));
+                });
+            return (svc, store);
+        }
+
+        [Test]
+        public async Task A_successful_sweep_records_a_calibration_that_rebuilds_a_usable_map() {
+            var (svc, store) = CalibrationRig(bestPosition: StartPosition - 150);
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            var cal = store.GetFocusCalibration();
+            Assert.That(cal, Is.Not.Null, "every successful sweep refreshes the calibration");
+            Assert.That(cal!.Samples, Has.Count.EqualTo(AutofocusSweepService.ProbeCount(Settings(steps: 4, stepSize: 100))));
+            Assert.That(cal.FocuserTemperatureC, Is.EqualTo(12.5));
+            Assert.That(cal.Filter, Is.EqualTo("Ha"));
+            Assert.That(cal.CalibratedUtc, Is.GreaterThan(DateTimeOffset.UtcNow.AddMinutes(-5)));
+
+            // The stored DTO samples must survive the round-trip back into a usable inverse map — the
+            // whole point of recording them (the slice-C one-frame runner's load path).
+            var map = FocusInverseMap.Build(cal.Samples.Select(s => s.ToSample()).ToList());
+            Assert.That(map, Is.Not.Null);
+            Assert.That(map!.BestFocusOffset, Is.EqualTo(StartPosition - 150).Within(30));
+        }
+
+        [Test]
+        public async Task A_failed_sweep_records_no_calibration() {
+            // A flat AverageHFR everywhere: the fit finds no minimum, the sweep fails, and the
+            // calibration write (post-success bookkeeping) must never run.
+            var store = new InMemoryProfileStore();
+            store.PutAutofocusSettings(Settings(steps: 4, stepSize: 100));
+            using var svc = new AutofocusSweepService(
+                store, Focuser().Mock.Object, Frames().Object,
+                metric: (_, _) => Result(2.0, 42, FeatureStars(12, 2.0)));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.False, "a flat curve has no minimum");
+            Assert.That(store.GetFocusCalibration(), Is.Null, "a failed sweep must not write a calibration");
+        }
+
+        [Test]
+        public async Task Unusable_feature_samples_keep_the_previous_calibration() {
+            // The probes' AverageHFR traces a fittable V-curve (the sweep succeeds), but every star LIST is
+            // empty, so the feature medians carry no signal and can't rebuild an inverse map. The previously
+            // stored calibration must survive — junk samples never clobber a good one.
+            var (svc, store) = CalibrationRig(bestPosition: StartPosition - 150,
+                fixedStarList: Array.Empty<DetectedStar>());
+            using var _ = svc;
+            var previous = new FocusCalibrationDto(
+                Samples: new[] { new FocusCalibrationSampleDto(9_000, 30, 2.0, 4.0, 0.9, 8.0, 0, 0, 0, 0) },
+                CalibratedUtc: new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                FocuserTemperatureC: 5.0,
+                Filter: "L");
+            store.PutFocusCalibration(previous);
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "the sweep itself succeeds on AverageHFR");
+            Assert.That(store.GetFocusCalibration(), Is.EqualTo(previous),
+                "unusable feature samples must not overwrite the stored calibration");
+        }
+
+        [Test]
+        public async Task A_focuser_without_a_temperature_probe_stores_a_null_temperature() {
+            var (svc, store) = CalibrationRig(bestPosition: StartPosition - 150,
+                focuserTemperature: double.NaN, filter: null);
+            using var _ = svc;
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            var cal = store.GetFocusCalibration();
+            Assert.That(cal, Is.Not.Null);
+            Assert.That(cal!.FocuserTemperatureC, Is.Null, "NaN is unrepresentable in JSON — stored as null");
+            Assert.That(cal.Filter, Is.Null);
         }
 
         // Captures formatted log messages so the collimation-verdict log line can be asserted.
