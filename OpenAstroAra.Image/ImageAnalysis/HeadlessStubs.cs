@@ -107,6 +107,25 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// / heavier defocus), lower as the hole fills in, and exactly 0 for a star with no hole (a refractor or
         /// an in-focus star, where <see cref="DonutInnerDiameter"/> is 0).</summary>
         public double DonutShadowDepth { get; set; }
+
+        /// <summary>§59.10 — X component (pixels, image frame) of the obstruction-shadow decentering: the
+        /// brightness-deficit-weighted centroid of the donut hole minus the ring's flux centroid. A perfectly
+        /// collimated scope images a shadow concentric with the ring (offset ≈ 0); a decentered secondary
+        /// (mirror tilt) shifts the dark hole off-centre and this vector points toward the displacement. 0 for a
+        /// star with no hole. Per-star and noisy on any single star — the §59.10 verdict vector-averages many
+        /// near-centre stars across defocus steps, where random per-star error cancels but a real tilt adds
+        /// coherently. Raw image-frame offset; the clock-position mapping is the verdict slice's concern.</summary>
+        public double DonutCentroidOffsetX { get; set; }
+
+        /// <summary>§59.10 — Y component (pixels, image frame) of the obstruction-shadow decentering. See
+        /// <see cref="DonutCentroidOffsetX"/>.</summary>
+        public double DonutCentroidOffsetY { get; set; }
+
+        /// <summary>§59.10 — magnitude (pixels) of the obstruction-shadow decentering vector
+        /// (<see cref="DonutCentroidOffsetX"/>, <see cref="DonutCentroidOffsetY"/>). Derived. A per-star
+        /// convenience only: the collimation verdict averages the signed vector components (which cancel random
+        /// error), NOT this magnitude (whose per-star noise would not cancel).</summary>
+        public double DonutCentroidOffset => Math.Sqrt((DonutCentroidOffsetX * DonutCentroidOffsetX) + (DonutCentroidOffsetY * DonutCentroidOffsetY));
     }
 
     public interface IStarDetection {

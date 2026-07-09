@@ -280,6 +280,76 @@ namespace OpenAstroAra.Test {
                 Is.GreaterThan(DetectOne(tight, w, h).DonutOuterDiameter));
         }
 
+        // Fill a bright disk out to outerRadius about (cx,cy) but leave a dark hole of holeRadius about a hole
+        // centre that can be offset from the ring centre — a decentered central-obstruction shadow (the §59.10
+        // collimation signal). holeOffset (0,0) is a concentric (well-collimated) donut.
+        private static void AddDecenteredDonut(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double holeRadius, double outerRadius, double holeOffsetX, double holeOffsetY) {
+            int r = (int)Math.Ceiling(outerRadius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    if (Math.Sqrt(dx * dx + dy * dy) > outerRadius) continue;      // outside the ring
+                    double hx = x - (cx + holeOffsetX), hy = y - (cy + holeOffsetY);
+                    if (Math.Sqrt(hx * hx + hy * hy) < holeRadius) continue;       // inside the (shifted) hole → stays dark
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + amplitude);
+                }
+            }
+        }
+
+        [Test]
+        public void Concentric_donut_has_a_near_zero_centroid_offset() {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDecenteredDonut(frame, w, h, 70, 70, amplitude: 6000, holeRadius: 5, outerRadius: 10,
+                holeOffsetX: 0, holeOffsetY: 0);
+
+            var star = DetectOne(frame, w, h);
+            Assert.That(star.DonutInnerDiameter, Is.GreaterThan(0), "a real hole is needed for a shadow centroid to exist");
+            // A shadow concentric with the ring centroids back onto the ring centre — the decentering vector is ~0.
+            Assert.That(star.DonutCentroidOffset, Is.LessThan(1.0),
+                "a well-collimated (concentric) donut should have a near-zero shadow-centroid offset");
+        }
+
+        [Test]
+        public void Decentered_obstruction_shifts_the_shadow_centroid_toward_the_hole() {
+            int w = 140, h = 140;
+            var concentric = FlatField(w, h);
+            AddDecenteredDonut(concentric, w, h, 70, 70, amplitude: 6000, holeRadius: 5, outerRadius: 10,
+                holeOffsetX: 0, holeOffsetY: 0);
+            var tilted = FlatField(w, h);
+            AddDecenteredDonut(tilted, w, h, 70, 70, amplitude: 6000, holeRadius: 5, outerRadius: 10,
+                holeOffsetX: 2, holeOffsetY: 0);  // obstruction shadow pushed +x (mirror tilt), ~10% of the donut
+
+            var tiltedStar = DetectOne(tilted, w, h);
+            // The deficit-weighted shadow centroid pulls toward the darker (+x) side, so the vector points +x.
+            Assert.That(tiltedStar.DonutCentroidOffsetX, Is.GreaterThan(0.5),
+                "a +x-decentered hole should push the shadow centroid in +x");
+            Assert.That(Math.Abs(tiltedStar.DonutCentroidOffsetX), Is.GreaterThan(Math.Abs(tiltedStar.DonutCentroidOffsetY)),
+                "the decentering is along x, so |offsetX| should dominate |offsetY|");
+            Assert.That(tiltedStar.DonutCentroidOffset,
+                Is.GreaterThan(DetectOne(concentric, w, h).DonutCentroidOffset),
+                "a decentered obstruction should read a larger offset than a concentric one");
+        }
+
+        [Test]
+        public void Filled_star_has_a_zero_centroid_offset() {
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            var star = DetectOne(frame, w, h);
+            // No hole (inner diameter 0) → no shadow to centroid → exactly zero offset on both components.
+            Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(star.DonutCentroidOffsetX, Is.EqualTo(0.0));
+            Assert.That(star.DonutCentroidOffsetY, Is.EqualTo(0.0));
+            Assert.That(star.DonutCentroidOffset, Is.EqualTo(0.0));
+        }
+
         // Add deterministic per-pixel Gaussian read noise (Box–Muller) to every pixel. A tiny inline LCG (not
         // System.Random — CA5394 flags it, and this is test-only pseudo-noise, not security) keeps it fully
         // reproducible across runs and platforms.
