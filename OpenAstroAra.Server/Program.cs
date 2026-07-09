@@ -792,6 +792,9 @@ public partial class Program {
         // Phase 6 equipment endpoints (501 stubs except discovery).
         app.MapEquipmentEndpoints();
 
+        // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
+        app.MapAutofocusEndpoints();
+
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();
         app.MapCalibrationEndpoints();
