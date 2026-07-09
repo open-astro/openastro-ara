@@ -35,31 +35,53 @@ namespace OpenAstroAra.Image.ImageAnalysis {
     /// feature, which isn't built yet — a Phase-2 second-shot confirm (§59.11) resolves the sign. Predicting
     /// magnitude from one frame is already the core §59.2 win over a full sweep.</para>
     /// </summary>
+    /// <summary>§59.4 — the feature the inverse table is keyed on. <see cref="MedianHfr"/> is the
+    /// universal default; <see cref="DonutOuterDiameter"/> is the obstructed-scope upgrade (linear in
+    /// defocus where the calibration data confirms it — see <c>FocusInverseMap.Build</c>).</summary>
+    public enum FocusMagnitudeKey {
+        MedianHfr,
+        DonutOuterDiameter,
+    }
+
     public sealed class FocusInverseMap {
 
         /// <summary>Minimum labelled samples needed to fit the calibrating V-curve.</summary>
         public const int MinSamples = FocusCurveFit.MinPoints;
 
+        /// <summary>§59.4 — the fraction of adjacent table pairs that must be strictly monotone for the
+        /// donut-diameter key to be trusted; below it (near-focus degeneracy, noisy diameters) the map
+        /// silently falls back to the HFR key.</summary>
+        public const double MinKeyConcordance = 0.8;
+
         /// <summary>The focuser offset of best focus (the fitted V-curve vertex).</summary>
         public double BestFocusOffset { get; }
 
-        /// <summary>The HFR the fit predicts at best focus — the in-focus end of the map (magnitude 0).</summary>
+        /// <summary>The HFR the fit predicts at best focus — the Smart runner's success reference
+        /// (HFR is minimal at focus regardless of optic or magnitude key).</summary>
         public double InFocusHfr { get; }
 
-        /// <summary>The most-defocused calibrated HFR; a query beyond this is an out-of-range extrapolation.</summary>
+        /// <summary>The most-defocused calibrated HFR (informational; range checks use the key axis).</summary>
         public double MaxCalibratedHfr { get; }
 
-        /// <summary>The move magnitude at <see cref="MaxCalibratedHfr"/> — the widest calibrated defocus.</summary>
+        /// <summary>The move magnitude at the widest calibrated defocus.</summary>
         public double MaxCalibratedMagnitude { get; }
 
-        // (HFR → |Δoffset to focus|), sorted by HFR ascending; [0] is the vertex anchor (InFocusHfr, 0).
-        private readonly (double Hfr, double Magnitude)[] _table;
+        /// <summary>§59.4 — which feature this map's table is keyed on. <see cref="FocusMagnitudeKey.MedianHfr"/>
+        /// unless the telescope type prefers the donut diameter AND the calibration data confirmed it
+        /// monotone (≥ <see cref="MinKeyConcordance"/> concordance).</summary>
+        public FocusMagnitudeKey Key { get; }
 
-        private FocusInverseMap(double bestFocusOffset, double inFocusHfr, (double Hfr, double Magnitude)[] table) {
+        // (key value → |Δoffset to focus|), sorted by key ascending; [0] is the in-focus anchor
+        // (fitted vertex HFR for the HFR key, 0 for the donut key — a zero-diameter donut IS focus).
+        private readonly (double KeyValue, double Magnitude)[] _table;
+
+        private FocusInverseMap(double bestFocusOffset, double inFocusHfr, double maxCalibratedHfr,
+                FocusMagnitudeKey key, (double KeyValue, double Magnitude)[] table) {
             BestFocusOffset = bestFocusOffset;
             InFocusHfr = inFocusHfr;
+            MaxCalibratedHfr = maxCalibratedHfr;
+            Key = key;
             _table = table;
-            MaxCalibratedHfr = table[^1].Hfr;
             MaxCalibratedMagnitude = table[^1].Magnitude;
         }
 
@@ -69,9 +91,20 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// clean focus minimum that the sweep actually brackets (<see cref="FocusCurveFitResult.WithinSampledRange"/>
         /// — an extrapolated vertex means the sweep never captured focus, so the folded distances are
         /// unreliable). Starless samples (<see cref="FocusFeatureVector.StarCount"/> 0) carry no defocus
-        /// signal and are dropped.
+        /// signal and are dropped. This overload keys on HFR (the pre-§59.4 behavior).
         /// </summary>
-        public static FocusInverseMap? Build(IReadOnlyList<FocusCalibrationSample> samples) {
+        public static FocusInverseMap? Build(IReadOnlyList<FocusCalibrationSample> samples) =>
+            Build(samples, TelescopeType.Other);
+
+        /// <summary>
+        /// §59.4 typed build: an obstructed <paramref name="type"/> prefers the donut OUTER diameter as the
+        /// magnitude key (linear in defocus, unlike HFR's curve) — but only when THIS calibration's data
+        /// walks monotonically with defocus (≥ <see cref="MinKeyConcordance"/> of adjacent pairs strictly
+        /// increasing); a near-focus sweep whose diameters degrade to FWHM-like extents, or noisy data,
+        /// silently falls back to the HFR key. The V-curve fit itself is ALWAYS on HFR — only the inverse
+        /// table's axis changes.
+        /// </summary>
+        public static FocusInverseMap? Build(IReadOnlyList<FocusCalibrationSample> samples, TelescopeType type) {
             ArgumentNullException.ThrowIfNull(samples);
 
             var usable = new List<FocusCalibrationSample>(samples.Count);
@@ -91,17 +124,49 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             }
 
             double best = fit.BestPosition;
+            double maxHfr = 0;
+            foreach (var s in usable) {
+                maxHfr = Math.Max(maxHfr, s.Features.MedianHFR);
+            }
+
+            if (FocusFeatureProfile.PrefersDonutMagnitudeKey(type)) {
+                var donutTable = FoldTable(usable, best, static f => f.MedianDonutOuterDiameter, anchorKeyValue: 0.0);
+                if (IsConcordant(donutTable)) {
+                    return new FocusInverseMap(best, fit.PredictedHfr, maxHfr, FocusMagnitudeKey.DonutOuterDiameter, donutTable);
+                }
+            }
+
             // Fold both arms onto one feature→magnitude curve: |offset − best| is the move that nulls the
             // defocus. The vertex anchors the in-focus end at (predicted HFR, magnitude 0).
-            var table = new List<(double Hfr, double Magnitude)>(usable.Count + 1) {
-                (fit.PredictedHfr, 0.0),
+            var hfrTable = FoldTable(usable, best, static f => f.MedianHFR, anchorKeyValue: fit.PredictedHfr);
+            return new FocusInverseMap(best, fit.PredictedHfr, maxHfr, FocusMagnitudeKey.MedianHfr, hfrTable);
+        }
+
+        private static (double KeyValue, double Magnitude)[] FoldTable(
+                List<FocusCalibrationSample> usable, double best,
+                Func<FocusFeatureVector, double> key, double anchorKeyValue) {
+            var table = new List<(double KeyValue, double Magnitude)>(usable.Count + 1) {
+                (anchorKeyValue, 0.0),
             };
             foreach (var s in usable) {
-                table.Add((s.Features.MedianHFR, Math.Abs(s.FocuserOffset - best)));
+                table.Add((key(s.Features), Math.Abs(s.FocuserOffset - best)));
             }
-            table.Sort(static (a, b) => a.Hfr.CompareTo(b.Hfr));
+            table.Sort(static (a, b) => a.KeyValue.CompareTo(b.KeyValue));
+            return [.. table];
+        }
 
-            return new FocusInverseMap(best, fit.PredictedHfr, table.ToArray());
+        // Sorted by KEY — a trustworthy key must walk the magnitude up with it. Concordance counts the
+        // NON-INVERTED adjacent pairs (magnitude not decreasing): folding two symmetric arms produces
+        // coincident key values at equal magnitudes, which are consistent, not violations — only a
+        // magnitude that DROPS as the key grows (near-focus degeneracy, noisy diameters) betrays the key.
+        private static bool IsConcordant((double KeyValue, double Magnitude)[] table) {
+            int nonInverted = 0, pairs = table.Length - 1;
+            for (int i = 1; i < table.Length; i++) {
+                if (table[i].Magnitude >= table[i - 1].Magnitude - 1e-9) {
+                    nonInverted++;
+                }
+            }
+            return pairs > 0 && (double)nonInverted / pairs >= MinKeyConcordance;
         }
 
         /// <summary>
@@ -116,31 +181,32 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             if (query.StarCount == 0) {
                 return null;
             }
-            double q = query.MedianHFR;
-            if (q > MaxCalibratedHfr) {
+            double q = Key == FocusMagnitudeKey.DonutOuterDiameter ? query.MedianDonutOuterDiameter : query.MedianHFR;
+            if (q > _table[^1].KeyValue) {
                 return null; // beyond the calibrated defocus — an extrapolation we won't trust
             }
-            // In-focus floor keyed off the fitted vertex HFR (a scalar), NOT _table[0]: with noisy real data
-            // a sample's measured HFR can land BELOW the least-squares vertex, taking index 0 after the sort,
-            // which would otherwise make this branch return that sample's non-zero magnitude for a genuinely
-            // sharp frame. A query at or sharper than best focus needs no move.
-            if (q <= InFocusHfr) {
+            // In-focus floor keyed off the anchor's key value (the fitted vertex HFR / a zero-diameter
+            // donut), NOT _table[0]: with noisy real data a sample's measured value can land BELOW the
+            // least-squares vertex, taking index 0 after the sort, which would otherwise make this branch
+            // return that sample's non-zero magnitude for a genuinely sharp frame. A query at or sharper
+            // than best focus needs no move.
+            if (q <= (Key == FocusMagnitudeKey.DonutOuterDiameter ? 0.0 : InFocusHfr)) {
                 return 0.0;
             }
-            // Piecewise-linear interpolation over the sorted (HFR → magnitude) table.
+            // Piecewise-linear interpolation over the sorted (key → magnitude) table.
             for (int i = 1; i < _table.Length; i++) {
-                if (q <= _table[i].Hfr) {
+                if (q <= _table[i].KeyValue) {
                     var lo = _table[i - 1];
                     var hi = _table[i];
-                    double span = hi.Hfr - lo.Hfr;
+                    double span = hi.KeyValue - lo.KeyValue;
                     if (span <= 0) {
-                        return hi.Magnitude; // coincident HFR (folded arms) → the shared magnitude
+                        return hi.Magnitude; // coincident key values (folded arms) → the shared magnitude
                     }
-                    double t = (q - lo.Hfr) / span;
+                    double t = (q - lo.KeyValue) / span;
                     return lo.Magnitude + t * (hi.Magnitude - lo.Magnitude);
                 }
             }
-            return MaxCalibratedMagnitude; // q == MaxCalibratedHfr exactly — the last bracket
+            return MaxCalibratedMagnitude; // q == the max key value exactly — the last bracket
         }
     }
 }

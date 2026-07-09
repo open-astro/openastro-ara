@@ -53,6 +53,53 @@ namespace OpenAstroAra.Test {
             return list;
         }
 
+        // ── §59.4 — typed magnitude-key selection ──
+
+        [Test]
+        public void An_obstructed_type_keys_on_the_donut_diameter_when_monotone() {
+            var map = FocusInverseMap.Build(Sweep(4600, 100, 9), TelescopeType.Sct);
+            Assert.That(map, Is.Not.Null);
+            Assert.That(map!.Key, Is.EqualTo(FocusMagnitudeKey.DonutOuterDiameter));
+
+            // The prediction must ride the DONUT axis: this query's donut diameter matches a ~250-step
+            // defocus while its HFR field is deliberately near-zero — under the HFR key it would predict
+            // 0 ("already in focus"), so a ~250 answer proves which axis the table is on.
+            var query = Feature(HfrAt(Best + 250)) with { MedianHFR = 0.1 };
+            var predicted = map.PredictOffsetMagnitude(query);
+            Assert.That(predicted, Is.Not.Null);
+            Assert.That(predicted!.Value, Is.EqualTo(250).Within(20));
+        }
+
+        [Test]
+        public void Degenerate_donut_diameters_fall_back_to_the_hfr_key() {
+            // A pathological calibration whose donut diameters SHRINK with defocus (heavy noise / a
+            // near-focus sweep where the ring never forms): the concordance check must reject the donut
+            // key and fall back to HFR — silently, with the map still fully usable.
+            var samples = new List<FocusCalibrationSample>();
+            for (int i = 0; i < 9; i++) {
+                double offset = 4600 + i * 100;
+                double m = Math.Abs(offset - Best);
+                samples.Add(new FocusCalibrationSample(offset,
+                    Feature(HfrAt(offset)) with { MedianDonutOuterDiameter = 30.0 - m / 50.0 }));
+            }
+
+            var map = FocusInverseMap.Build(samples, TelescopeType.Rc);
+
+            Assert.That(map, Is.Not.Null);
+            Assert.That(map!.Key, Is.EqualTo(FocusMagnitudeKey.MedianHfr));
+            var predicted = map.PredictOffsetMagnitude(Feature(HfrAt(Best + 250)));
+            Assert.That(predicted, Is.Not.Null);
+            Assert.That(predicted!.Value, Is.EqualTo(250).Within(20), "the HFR fallback still predicts normally");
+        }
+
+        [Test]
+        public void Refractor_and_other_types_key_on_hfr() {
+            Assert.That(FocusInverseMap.Build(Sweep(4600, 100, 9), TelescopeType.Refractor)!.Key,
+                Is.EqualTo(FocusMagnitudeKey.MedianHfr), "a refractor has no donut to key on");
+            Assert.That(FocusInverseMap.Build(Sweep(4600, 100, 9))!.Key,
+                Is.EqualTo(FocusMagnitudeKey.MedianHfr), "the untyped overload is the pre-§59.4 behavior");
+        }
+
         [Test]
         public void Build_locates_best_focus_at_the_vertex() {
             var map = FocusInverseMap.Build(Sweep(4600, 100, 9));

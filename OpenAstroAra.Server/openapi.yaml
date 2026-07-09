@@ -1192,6 +1192,8 @@ components:
         every_n_hours:                { type: integer, minimum: 0 }
         abort_sequence_on_af_failure: { type: boolean }
         restore_position_on_failure:  { type: boolean }
+        # §59.4/§59.13 — optional (defaults to `other`) so pre-§59.4 clients' PUTs stay valid.
+        telescope_type:               { type: string, enum: [refractor, sct, mak, rc, newtonian, other], default: other }
 
     SafetyPolicies:
       type: object

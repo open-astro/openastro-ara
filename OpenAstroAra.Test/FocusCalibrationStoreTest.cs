@@ -189,6 +189,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Telescope_type_defaults_to_other_and_round_trips_through_profile_json() {
+            var dir = TempDir();
+            try {
+                // §59.4 — a DTO built without the trailing param (as a pre-§59.4 profile.json deserializes)
+                // reads `other`, the assume-nothing type…
+                var store = new FileProfileStore(dir);
+                Assert.That(store.GetAutofocusSettings().TelescopeType, Is.EqualTo("other"));
+
+                // …and a declared type survives the restart round-trip through the source-gen serializer.
+                store.PutAutofocusSettings(store.GetAutofocusSettings() with { TelescopeType = "sct" });
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetAutofocusSettings().TelescopeType, Is.EqualTo("sct"));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void Stored_samples_rebuild_a_usable_inverse_map() {
             // The persistence shape exists to feed FocusInverseMap.Build on a later session — prove the
             // DTO→sample bridge produces a map that predicts a sane move magnitude from a defocused frame.
