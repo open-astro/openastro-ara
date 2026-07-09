@@ -294,10 +294,11 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // from the frame over the inner-rim disk: ShadowDepth = clamp((ringPeak − holeMean) / ringPeak, 0, 1),
         // 1 for a background-dark hole, →0 as the hole fills in (and exactly 0 for a filled star with no hole).
         //
-        // §59.10 collimation: over that same inner-rim disk, take the brightness-DEFICIT-weighted centroid of
-        // the hole (weight = peakSb − localFlux, so the deepest-shadow pixels pull hardest) and return its
-        // offset from the ring's flux centroid (cx, cy). A concentric shadow (good collimation) centroids back
-        // to (cx, cy) → offset 0; a decentered secondary tilts the dark hole off-centre → the offset vector
+        // §59.10 collimation: over the OUTER disk, take the brightness-DEFICIT-weighted centroid of the dark
+        // (sub-half-max) pixels — the obstruction shadow — each weight clamped to (0, peakSb] so one dead/cold
+        // pixel can't dominate, and return its offset from the ring's flux centroid (cx, cy). Scanning the full
+        // outer disk (not just the inner-rim disk) keeps the shadow locatable once it has decentered off the flux
+        // centroid — the collimation case. A concentric shadow → offset ≈ 0; a decentered secondary → the offset
         // points toward the displacement. 0 for a star with no hole. Raw image-frame pixels; the verdict slice
         // vector-averages many stars and maps direction to a clock position.
         private const double DonutRingHalfMaxFraction = 0.5;
@@ -375,66 +376,59 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 innerBin = 0;
             }
 
-            // Shadow depth + §59.10 centroid: only a genuine hole (innerBin > 0 after the floor) has one.
+            // Shadow depth + §59.10 centroid, in ONE pass over the outer disk (the inner-rim disk the shadow
+            // depth needs is contained in it, so a second scan would just re-read the same pixels). Only a
+            // genuine hole (innerBin > 0 after the floor) has either.
             double shadowDepth = 0.0;
             double offsetX = 0.0, offsetY = 0.0;
             if (innerBin > 0) {
                 int height = pixels.Length / width;
-                // Shadow depth: mean brightness over the inner-rim disk (sampled straight from the frame — the
-                // hole's pixels are below the detection threshold, so absent from the blob) vs the ring peak.
-                double innerR = innerBin;
-                double holeSum = 0;
+                double innerR = innerBin, outerR = outerBin;
+                double innerR2 = innerR * innerR, outerR2 = outerR * outerR; // hoisted out of the pixel loop
+                double holeSum = 0;               // Σ flux over the inner-rim disk → shadow depth
                 int holeCount = 0;
-                int ix0 = Math.Max(0, (int)(cx - innerR)), ix1 = Math.Min(width - 1, (int)(cx + innerR));
-                int iy0 = Math.Max(0, (int)(cy - innerR)), iy1 = Math.Min(height - 1, (int)(cy + innerR));
-                for (int yy = iy0; yy <= iy1; yy++) {
-                    for (int xx = ix0; xx <= ix1; xx++) {
+                double wSum = 0, wX = 0, wY = 0;   // deficit-weighted centroid over the outer disk's dark pixels
+                int ox0 = Math.Max(0, (int)(cx - outerR)), ox1 = Math.Min(width - 1, (int)(cx + outerR));
+                int oy0 = Math.Max(0, (int)(cy - outerR)), oy1 = Math.Min(height - 1, (int)(cy + outerR));
+                for (int yy = oy0; yy <= oy1; yy++) {
+                    for (int xx = ox0; xx <= ox1; xx++) {
                         double dx = xx - cx, dy = yy - cy;
-                        if ((dx * dx) + (dy * dy) >= innerR * innerR) {
+                        double r2 = (dx * dx) + (dy * dy);
+                        if (r2 >= outerR2) {
                             continue;
                         }
-                        holeSum += pixels[(yy * width) + xx] - background;
-                        holeCount++;
+                        double localFlux = pixels[(yy * width) + xx] - background;
+                        // Shadow depth: mean brightness over the inner-rim disk (sampled straight from the frame —
+                        // the hole's pixels are below the detection threshold, so absent from the blob).
+                        if (r2 < innerR2) {
+                            holeSum += localFlux;
+                            holeCount++;
+                        }
+                        // §59.10 decentering: deficit-weight the DARK (sub-half-max) pixels — the obstruction
+                        // shadow plus the gap just inside the rim. Bright ring pixels (flux ≥ half-max) are
+                        // excluded so the ring can't wash out the signal. Clamp the flux to ≥ 0 before weighting
+                        // (as the shadow-depth mean does): a dead/cold pixel's large-negative flux would otherwise
+                        // carry an outsized weight and let one outlier dominate the centroid, defeating the
+                        // uncorrelated-per-star-noise-cancels assumption the verdict relies on. Clamped, the
+                        // darkest a pixel can weigh is peakSb, same as a background-dark shadow pixel.
+                        if (localFlux < half) {
+                            double w = peakSb - Math.Max(0.0, localFlux); // ∈ (0, peakSb]
+                            wSum += w;
+                            wX += w * xx;
+                            wY += w * yy;
+                        }
                     }
                 }
                 if (holeCount > 0) {
                     double holeMean = Math.Max(0.0, holeSum / holeCount);
                     shadowDepth = Math.Clamp((peakSb - holeMean) / peakSb, 0.0, 1.0);
                 }
-
-                // §59.10 decentering: deficit-weight the DARK (sub-half-max) pixels over the whole OUTER disk —
-                // the obstruction shadow plus the gap just inside the rim — and offset that centroid from the
-                // ring's flux centroid (cx, cy). Scanning the full outer disk (not the inner-rim disk) keeps the
-                // shadow locatable even when it has decentered off the flux centroid, which is exactly the
-                // collimation case. A concentric shadow's weights are symmetric about (cx, cy) → offset ≈ 0; a
-                // decentered secondary tilts the dark region off-centre → the vector points toward it. Bright
-                // ring pixels (flux ≥ half-max) are excluded so the ring itself doesn't wash out the signal.
-                double outerR = outerBin;
-                double wSum = 0, wX = 0, wY = 0;
-                int ox0 = Math.Max(0, (int)(cx - outerR)), ox1 = Math.Min(width - 1, (int)(cx + outerR));
-                int oy0 = Math.Max(0, (int)(cy - outerR)), oy1 = Math.Min(height - 1, (int)(cy + outerR));
-                for (int yy = oy0; yy <= oy1; yy++) {
-                    for (int xx = ox0; xx <= ox1; xx++) {
-                        double dx = xx - cx, dy = yy - cy;
-                        if ((dx * dx) + (dy * dy) >= outerR * outerR) {
-                            continue;
-                        }
-                        double localFlux = pixels[(yy * width) + xx] - background;
-                        if (localFlux >= half) {
-                            continue; // bright ring (reuses the ring half-max cut), not shadow
-                        }
-                        // Clamp the flux to ≥ 0 before weighting (as the shadow-depth mean does): a dead/cold
-                        // pixel or a noise dip has a large-negative localFlux, which would otherwise give an
-                        // outsized weight (peakSb − a big negative) and let one outlier dominate the centroid —
-                        // defeating the uncorrelated-per-star-noise-cancels assumption the §59.10 verdict relies
-                        // on. Clamped, the darkest a pixel can weigh is peakSb, same as a background-dark shadow.
-                        double w = peakSb - Math.Max(0.0, localFlux); // ∈ (0, peakSb]
-                        wSum += w;
-                        wX += w * xx;
-                        wY += w * yy;
-                    }
-                }
                 if (wSum > 0) {
+                    // Offset from the ring's FLUX centroid (cx, cy) — not the geometric ring centre. For a
+                    // symmetric ring they coincide, but an intrinsically asymmetric ring (coma / tilt / heavy
+                    // elongation) pulls (cx, cy) off centre and can read a nonzero offset even on a well-collimated
+                    // star. That per-star false signal is why the §59.10 verdict vector-averages many near-centre
+                    // stars: uncorrelated ring asymmetry cancels, a real secondary decentering adds coherently.
                     offsetX = (wX / wSum) - cx;
                     offsetY = (wY / wSum) - cy;
                 }
