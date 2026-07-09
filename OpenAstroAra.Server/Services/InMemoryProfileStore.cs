@@ -403,6 +403,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // §59.2 Smart Focus calibration — null until a Classic AF sweep records one.
+    private FocusCalibrationDto? _focusCalibration;
+
+    public FocusCalibrationDto? GetFocusCalibration() {
+        lock (_lock) { return _focusCalibration; }
+    }
+
+    public void PutFocusCalibration(FocusCalibrationDto? value) {
+        lock (_lock) { _focusCalibration = value; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(

@@ -41,7 +41,8 @@ public static class ProfileStoreSnapshot {
         CameraElectronics: s.GetCameraElectronics(),
         FilterSet: s.GetFilterSet(),
         FilterWheelLabels: s.GetFilterWheelLabels(),
-        CustomHorizon: s.GetCustomHorizon());
+        CustomHorizon: s.GetCustomHorizon(),
+        FocusCalibration: s.GetFocusCalibration());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -67,5 +68,8 @@ public static class ProfileStoreSnapshot {
         // Normalized snapshots always carry a non-null horizon; the fallback keeps
         // Apply safe for a hand-built DTO that skipped the optional param.
         s.PutCustomHorizon(snap.CustomHorizon ?? new CustomHorizonDto(Points: []));
+        // §59.2 — null is meaningful here ("not calibrated"), so it round-trips as-is: switching to a
+        // never-calibrated profile must CLEAR the live store's calibration, not keep the old rig's.
+        s.PutFocusCalibration(snap.FocusCalibration);
     }
 }

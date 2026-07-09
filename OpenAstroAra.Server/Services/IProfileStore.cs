@@ -113,4 +113,11 @@ public interface IProfileStore {
     /// <summary>§36 custom terrain horizon (sorted az/alt skyline; empty = none entered).</summary>
     CustomHorizonDto GetCustomHorizon();
     void PutCustomHorizon(CustomHorizonDto value);
+
+    /// <summary>§59.2 Smart Focus calibration — daemon-owned derived data written by the autofocus sweep,
+    /// never by the client. Null means "not calibrated" (a fresh profile, or cleared by the recalibrate
+    /// command); Put(null) clears. Single-writer (the sweep runs under its own gate), so plain Get/Put —
+    /// no read-modify-write contract needed.</summary>
+    FocusCalibrationDto? GetFocusCalibration();
+    void PutFocusCalibration(FocusCalibrationDto? value);
 }
