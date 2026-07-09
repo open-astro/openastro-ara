@@ -315,11 +315,11 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(events, Has.Count.EqualTo(1));
-            Assert.That(events[0].Type, Is.EqualTo(WsEventCatalog.AutofocusCollimationVerdict));
-            Assert.That(events[0].Payload.GetProperty("severity").GetString(), Is.EqualTo("significant"));
-            Assert.That(events[0].Payload.GetProperty("offset_percent").GetDouble(), Is.EqualTo(20.0).Within(0.5));
-            Assert.That(events[0].Payload.GetProperty("stars_used").GetInt32(), Is.GreaterThan(0));
+            var verdicts = events.Where(e => e.Type == WsEventCatalog.AutofocusCollimationVerdict).ToList();
+            Assert.That(verdicts, Has.Count.EqualTo(1));
+            Assert.That(verdicts[0].Payload.GetProperty("severity").GetString(), Is.EqualTo("significant"));
+            Assert.That(verdicts[0].Payload.GetProperty("offset_percent").GetDouble(), Is.EqualTo(20.0).Within(0.5));
+            Assert.That(verdicts[0].Payload.GetProperty("stars_used").GetInt32(), Is.GreaterThan(0));
             Assert.That(posted, Has.Count.EqualTo(1), "a Significant verdict posts a user notification");
             Assert.That(posted[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
             Assert.That(posted[0].Message, Does.Contain("collimate before continuing"));
@@ -335,8 +335,9 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(events, Has.Count.EqualTo(1), "a Good verdict still broadcasts (the client decides what to show)");
-            Assert.That(events[0].Payload.GetProperty("severity").GetString(), Is.EqualTo("good"));
+            var verdicts = events.Where(e => e.Type == WsEventCatalog.AutofocusCollimationVerdict).ToList();
+            Assert.That(verdicts, Has.Count.EqualTo(1), "a Good verdict still broadcasts (the client decides what to show)");
+            Assert.That(verdicts[0].Payload.GetProperty("severity").GetString(), Is.EqualTo("good"));
             Assert.That(posted, Is.Empty, "a Good verdict must not nag the user with a notification");
         }
 
@@ -352,7 +353,8 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(events, Is.Empty, "an Insufficient (refractor) read broadcasts nothing");
+            Assert.That(events.Where(e => e.Type == WsEventCatalog.AutofocusCollimationVerdict), Is.Empty,
+                "an Insufficient (refractor) read broadcasts no verdict");
             Assert.That(posted, Is.Empty);
         }
 

@@ -65,6 +65,14 @@ public static class WsEventCatalog {
     // { severity, offset_percent, direction_degrees, stars_used }.
     public const string AutofocusCollimationVerdict = "autofocus.collimation_verdict";
 
+    // §59.15 — the Smart Focus run lifecycle (§59.2 one-frame runner). `started` fires once per AF run with
+    // the resolved mode ("smart" | "classic"); `shot_complete` per Smart shot with
+    // { shot_index, position, hfr, stars, predicted_offset? }; `fallback_classic` when an in-run Smart
+    // failure (§59.11 ladder) hands the run to the full Classic sweep, with { reason }.
+    public const string AutofocusStarted = "autofocus.started";
+    public const string AutofocusShotComplete = "autofocus.shot_complete";
+    public const string AutofocusFallbackClassic = "autofocus.fallback_classic";
+
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
     public const string SequenceUpdated = "sequence.updated";
@@ -182,6 +190,9 @@ public static class WsEventCatalog {
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
         AutofocusCollimationVerdict,
+        AutofocusStarted,
+        AutofocusShotComplete,
+        AutofocusFallbackClassic,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
         SequenceStarted, SequencePaused, SequenceResumed, SequenceAborted,
