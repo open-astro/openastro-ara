@@ -209,6 +209,31 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_diag_detected_utc ON diagnostic_events(detected_utc);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_diag_open ON diagnostic_events(cleared_utc) WHERE cleared_utc IS NULL;", ct);
 
+        // §42.5 fault log. Every detected equipment fault (the EquipmentFaultHub
+        // choke point) lands here with the §42.3 reaction outcome stamped onto
+        // the same row (action_taken / resolved_at) as the episode progresses.
+        // session_id is nullable — faults fire from watch/refresh timers outside
+        // any sequence run. affected_frames (JSON id array) stays NULL until the
+        // §42.6 frame-correlation slice populates it.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS faults (
+                id              TEXT PRIMARY KEY NOT NULL,
+                session_id      TEXT REFERENCES sessions(id),
+                detected_at     TEXT NOT NULL,
+                equipment_type  TEXT NOT NULL,
+                equipment_id    TEXT,
+                equipment_name  TEXT,
+                fault_type      TEXT NOT NULL,
+                details         TEXT,
+                action_taken    TEXT,
+                resolved_at     TEXT,
+                affected_frames TEXT
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_faults_detected_at ON faults(detected_at);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_faults_session_id ON faults(session_id);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_faults_unresolved ON faults(resolved_at) WHERE resolved_at IS NULL;", ct);
+
         LogCatalogInitialized(DatabasePath);
     }
 

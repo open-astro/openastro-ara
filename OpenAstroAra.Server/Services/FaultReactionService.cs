@@ -49,6 +49,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<FaultReactionService> _logger;
+    private readonly IFaultLogService? _faultLog;
 
     private readonly object _gate = new();
     // Keyed by normalized DeviceType for recovery-running kinds (their ladder must not stack);
@@ -71,7 +72,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             ITelescopeService? telescope = null,
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
-            ILogger<FaultReactionService>? logger = null) {
+            ILogger<FaultReactionService>? logger = null,
+            IFaultLogService? faultLog = null) {
         _hub = hub;
         _reconnector = reconnector;
         _profiles = profiles;
@@ -80,6 +82,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<FaultReactionService>.Instance;
+        _faultLog = faultLog;
     }
 
     public Task StartAsync(CancellationToken cancellationToken) {
@@ -233,7 +236,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             default:
                 break;
         }
-        await PublishActionAsync(fault, "gave_up", extra: p => {
+        // The stored action carries the terminal outcome inline (gave_up:abort_and_park)
+        // — the DB row has no extras object like the WS payload does.
+        await PublishActionAsync(fault, "gave_up", persistAs: $"gave_up:{terminal}", extra: p => {
             p["terminal"] = terminal;
             p["attempts"] = plan.RetrySchedule.Count;
             if (aborted > 0) {
@@ -395,7 +400,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort; a broadcaster fault must never abort the reaction. CA1031's log-and-recover boundary applies.")]
-    private async Task PublishActionAsync(EquipmentFaultEvent fault, string action, Action<JsonObject>? extra = null) {
+    private async Task PublishActionAsync(EquipmentFaultEvent fault, string action, Action<JsonObject>? extra = null,
+            string? persistAs = null) {
+        // §42.5 — every reaction outcome is stamped onto the fault's history row
+        // (last write wins across the episode); 'recovered' also resolves it.
+        await RecordActionQuietlyAsync(fault, persistAs ?? action).ConfigureAwait(false);
         if (_ws is null) {
             return;
         }
@@ -415,6 +424,20 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 .ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed("ws_publish", ex);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "§42.5 fault-log persistence is best-effort; a store fault must never abort the reaction. CA1031's log-and-recover boundary applies.")]
+    private async Task RecordActionQuietlyAsync(EquipmentFaultEvent fault, string action) {
+        if (_faultLog is null) {
+            return;
+        }
+        try {
+            var resolvedUtc = action == "recovered" ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
+            await _faultLog.RecordActionAsync(fault, action, resolvedUtc, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRungFailed("fault_log", ex);
         }
     }
 
