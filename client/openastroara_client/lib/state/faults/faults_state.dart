@@ -2,9 +2,30 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/fault_row.dart';
+import '../../models/server.dart';
 import '../../models/ws_event.dart';
+import '../../services/faults_api.dart';
 import '../../widgets/status_indicator.dart';
+import '../saved_server_state.dart';
 import '../ws/ws_providers.dart';
+
+/// Builds a [FaultsClient] for a server. Overridable in tests.
+final faultsApiFactoryProvider =
+    Provider<FaultsClient Function(AraServer)>((ref) => FaultsApi.new);
+
+/// [FaultsClient] bound to the active server, or null when none is saved.
+final faultsApiProvider = Provider.autoDispose<FaultsClient?>((ref) {
+  final server =
+      ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+            data: (list) => list.isEmpty ? null : list.last,
+            orElse: () => null,
+          )));
+  if (server == null) return null;
+  final api = ref.watch(faultsApiFactoryProvider)(server);
+  ref.onDispose(api.close);
+  return api;
+});
 
 /// §42 `equipment.*` fault WS event-type tokens (mirrors `WsEventCatalog` on
 /// the server). Routing is by these strings.
@@ -109,6 +130,7 @@ StatusLevel blendFaultLevel(StatusLevel base, StatusLevel? fault) =>
 class ActiveFaultsAccumulator {
   ActiveFaultsAccumulator({
     this.advisoryTtl = const Duration(minutes: 10),
+    this.staleRedGuard = const Duration(hours: 24),
     this.maxDevices = 32,
   });
 
@@ -116,11 +138,22 @@ class ActiveFaultsAccumulator {
   /// its chip amber before the periodic prune drops it.
   final Duration advisoryTtl;
 
+  /// [seed] skips unresolved recovery-tracked history rows older than this:
+  /// a `gave_up` fault the user fixed by hand stays unresolved in the server's
+  /// fault log (no `recovered` ever fires), and seeding it days later would
+  /// permanently redden a healthy chip with no clear signal in sight.
+  final Duration staleRedGuard;
+
   /// Defence against a misbehaving server flooding fabricated device_type
   /// tokens — the real vocabulary is the 12 `DeviceType` values.
   final int maxDevices;
 
   final Map<String, ActiveFault> _active = <String, ActiveFault>{};
+  // Device types a LIVE signal (recovered / reconnect) has cleared during this
+  // accumulator's life. [seed] skips them: a seed response that was in flight
+  // when the clear arrived must not resurrect the fault from stale history
+  // (the server resolves the row on `recovered`, but the read raced it).
+  final Set<String> _liveCleared = <String>{};
 
   /// Fold one event and return the new snapshot, or `null` when the event was
   /// not one this accumulator folds or was a no-op — the null lets the caller
@@ -172,7 +205,9 @@ class ActiveFaultsAccumulator {
     // reconnecting) and the terminal `gave_up` all leave the device faulted.
     if (_string(event.payload['action']) != 'recovered') return false;
     final deviceType = _string(event.payload['device_type']);
-    return deviceType != null && _active.remove(deviceType) != null;
+    if (deviceType == null) return false;
+    _liveCleared.add(deviceType);
+    return _active.remove(deviceType) != null;
   }
 
   /// A fresh successful connect is the heal for a standing red fault whose
@@ -182,10 +217,49 @@ class ActiveFaultsAccumulator {
   bool _applyConnected(WsEvent event) {
     final deviceType = _string(event.payload['device_type']);
     if (deviceType == null) return false;
+    _liveCleared.add(deviceType);
     final existing = _active[deviceType];
     if (existing == null || existing.level != StatusLevel.error) return false;
     _active.remove(deviceType);
     return true;
+  }
+
+  /// Fold unresolved history rows (`GET /api/v1/faults?unresolvedOnly=true`)
+  /// into the standing set — the launch/reconnect resync the transition-edge
+  /// WS events can't provide (each fault broadcasts exactly once, so a fault
+  /// that fired while WILMA was closed is otherwise invisible until the next
+  /// transition). Live state always wins: a seeded row never downgrades or
+  /// replaces an equal-or-worse entry that live events already produced.
+  /// Advisory rows older than [advisoryTtl] and recovery-tracked rows older
+  /// than [staleRedGuard] are skipped. Returns the new snapshot, or null when
+  /// nothing folded.
+  ActiveFaultsSnapshot? seed(Iterable<FaultRow> rows, DateTime now) {
+    var changed = false;
+    for (final row in rows) {
+      if (row.resolved) continue; // defence — the caller queries unresolvedOnly
+      if (_liveCleared.contains(row.equipmentType)) continue;
+      final level = faultKindLevel(row.faultType);
+      final age = now.difference(row.detectedUtc);
+      if (age > (level == StatusLevel.error ? staleRedGuard : advisoryTtl)) {
+        continue;
+      }
+      final existing = _active[row.equipmentType];
+      if (existing != null &&
+          statusLevelRank(existing.level) >= statusLevelRank(level)) {
+        continue;
+      }
+      if (existing == null && _active.length >= maxDevices) continue;
+      _active[row.equipmentType] = ActiveFault(
+        deviceType: row.equipmentType,
+        deviceName: row.equipmentName,
+        kind: row.faultType,
+        details: row.details,
+        at: row.detectedUtc,
+        level: level,
+      );
+      changed = true;
+    }
+    return changed ? snapshot : null;
   }
 
   /// Drop advisory faults older than [advisoryTtl]. Returns the new snapshot
@@ -210,13 +284,21 @@ class ActiveFaultsNotifier extends Notifier<ActiveFaultsSnapshot> {
   /// Test seam — how often the advisory-TTL prune runs.
   static const pruneInterval = Duration(minutes: 1);
 
+  // The accumulator owned by the CURRENT build — an async seed that resolves
+  // after a rebuild (server switch) must not write a stale server's faults
+  // into the fresh state.
+  ActiveFaultsAccumulator? _acc;
+  int _seedGen = 0;
+
   @override
   ActiveFaultsSnapshot build() {
     final stream = ref.watch(wsEventStreamProvider);
     if (stream == null) {
+      _acc = null;
       return const ActiveFaultsSnapshot();
     }
     final acc = ActiveFaultsAccumulator();
+    _acc = acc;
     // Safe to assign state from the listener: wsEventsProvider delivers
     // asynchronously (next microtask), never synchronously inside this build().
     ref.listen(wsEventsProvider, (prev, next) {
@@ -224,6 +306,15 @@ class ActiveFaultsNotifier extends Notifier<ActiveFaultsSnapshot> {
       if (event == null || !event.type.startsWith('equipment.')) return;
       final folded = acc.apply(event);
       if (folded != null) state = folded;
+    });
+    // The fault WS events are transition-edge one-shots — a fault that fired
+    // while WILMA was closed (or while the socket was down past the resume
+    // window) never re-broadcasts. Seed the standing set from the §42.5 fault
+    // log now, and re-seed whenever the server link comes back.
+    final api = ref.watch(faultsApiProvider);
+    _seed(acc, api);
+    ref.listen(serverLinkUpProvider, (prev, next) {
+      if (prev == false && next == true) _seed(acc, api);
     });
     // Advisory faults have no clear signal — age them out so a one-shot
     // mismatch from hours ago doesn't hold a chip amber all night.
@@ -233,6 +324,21 @@ class ActiveFaultsNotifier extends Notifier<ActiveFaultsSnapshot> {
     });
     ref.onDispose(timer.cancel);
     return acc.snapshot;
+  }
+
+  Future<void> _seed(ActiveFaultsAccumulator acc, FaultsClient? api) async {
+    if (api == null) return;
+    final gen = ++_seedGen;
+    try {
+      final page = await api.list(unresolvedOnly: true);
+      // Superseded by a newer seed or a rebuild (server switch) — drop it.
+      if (gen != _seedGen || !identical(acc, _acc)) return;
+      final folded = acc.seed(page.items, DateTime.now());
+      if (folded != null) state = folded;
+    } on Exception {
+      // Best-effort: live events still fold, and the next link-up re-seeds.
+      // A failed REST read must never break the WS-driven overlay.
+    }
   }
 }
 
