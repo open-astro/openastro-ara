@@ -107,8 +107,10 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   `rename_profile` mapped onto ARA profile lifecycle hooks (which don't exist headless yet).
 - **e-4b-2 leftover** — record `calibration_state.guider.dark_library` on build completion
   (waits on a server-side calibration-state store existing).
-- **Poll-failure visibility** (#770 round-2) — warn-once when a whole build's progress polls all
-  fail (today an unreachable daemon yields an indeterminate bar with debug-only logging).
+- ~~**Poll-failure visibility**~~ (#770 round-2) — shipped: `PollBuildProgressAsync` logs ONE
+  Warning per build after 5 consecutive failed polls, plus a drain-time Warning when a whole
+  build produced zero successful reads (covers builds shorter than the streak threshold); the
+  per-tick swallow stays (a dropped frame is cosmetic) and the build is never disturbed.
 
 ## 5. Imaging pipeline tail (§26 / §2105 / §64)
 

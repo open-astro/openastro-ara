@@ -51,6 +51,12 @@ public sealed partial class GuiderService {
     // frame is cosmetic; the next tick recovers.
     private const int BuildProgressPollReceiveTimeoutMs = 5000;
 
+    // #770 round-2 follow-up — after this many CONSECUTIVE poll failures, log one Warning for the build (the
+    // per-tick swallow is deliberate — a dropped frame is cosmetic — but a persistently-unreachable progress RPC
+    // used to leave only debug-level traces while WILMA sat on an indeterminate bar). One warning per build, not
+    // per tick: the operator needs "the progress feed is down", not a page of repeats.
+    private const int BuildProgressPollWarnAfterFailures = 5;
+
     // A calibration build (dark library OR defect-map darks) is a single blocking RPC on the daemon, so two
     // concurrent builds are undefined behavior there (and would emit ambiguous paired started/complete events) —
     // this serializes ALL calibration builds under _gate. A second build with the SAME non-null idempotency key
@@ -273,29 +279,53 @@ public sealed partial class GuiderService {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Progress polling is best-effort telemetry running alongside the build: a poll RPC can throw arbitrary socket/IO/protocol exceptions (or the guider can drop mid-build), and none of that must disturb the build or surface as an unobserved task exception. Each fault is contained to its tick so the next tick can recover; cancellation (build done) ends the loop cleanly.")]
     private async Task PollBuildProgressAsync(PHD2Guider guider, string progressEvent, CancellationToken ct) {
-        while (!ct.IsCancellationRequested) {
-            try {
-                await Task.Delay(BuildProgressPollIntervalMs, ct).ConfigureAwait(false);
-                var progress = await guider.GetDarkBuildProgressAsync(ct, BuildProgressPollReceiveTimeoutMs).ConfigureAwait(false);
-                // Re-check cancellation right before emitting: the build may have settled (and the drain begun)
-                // while this tick was mid-RPC. Skipping a cancelled tick's emit — together with the caller
-                // draining this loop BEFORE it publishes complete/failed — guarantees no progress event lands on
-                // the WS stream after the build's terminal event.
-                if (progress.Active && !ct.IsCancellationRequested) {
-                    await EmitCalibrationEventAsync(progressEvent, new JsonObject {
-                        ["exposure_index"] = progress.ExposureIndex,
-                        ["exposure_count"] = progress.ExposureCount,
-                        ["exposure_ms"] = progress.ExposureMs,
-                        ["frame"] = progress.Frame,
-                        ["frame_count"] = progress.FrameCount,
-                    });
+        // #770 round-2 — per-build failure accounting behind the deliberate per-tick swallow: one Warning when
+        // failures run to BuildProgressPollWarnAfterFailures consecutive ticks, and one on exit when the WHOLE
+        // build produced no successful read (a build shorter than the streak threshold would otherwise stay
+        // silent). Never more than one warning per build either way.
+        var consecutiveFailures = 0;
+        var failedAttempts = 0;
+        var succeededOnce = false;
+        var warned = false;
+        Exception? lastFailure = null;
+        try {
+            while (!ct.IsCancellationRequested) {
+                try {
+                    await Task.Delay(BuildProgressPollIntervalMs, ct).ConfigureAwait(false);
+                    var progress = await guider.GetDarkBuildProgressAsync(ct, BuildProgressPollReceiveTimeoutMs).ConfigureAwait(false);
+                    succeededOnce = true;
+                    consecutiveFailures = 0;
+                    // Re-check cancellation right before emitting: the build may have settled (and the drain begun)
+                    // while this tick was mid-RPC. Skipping a cancelled tick's emit — together with the caller
+                    // draining this loop BEFORE it publishes complete/failed — guarantees no progress event lands on
+                    // the WS stream after the build's terminal event.
+                    if (progress.Active && !ct.IsCancellationRequested) {
+                        await EmitCalibrationEventAsync(progressEvent, new JsonObject {
+                            ["exposure_index"] = progress.ExposureIndex,
+                            ["exposure_count"] = progress.ExposureCount,
+                            ["exposure_ms"] = progress.ExposureMs,
+                            ["frame"] = progress.Frame,
+                            ["frame_count"] = progress.FrameCount,
+                        });
+                    }
+                } catch (OperationCanceledException) {
+                    // Linked token cancelled → the build finished (or shutdown). Normal loop termination.
+                    return;
+                } catch (Exception ex) {
+                    // Transient poll fault (e.g. a socket hiccup or a same-instant disconnect the build will report):
+                    // skip this tick and keep polling. The Task.Delay at the top bounds the retry to one per second.
+                    failedAttempts++;
+                    consecutiveFailures++;
+                    lastFailure = ex;
+                    if (!warned && consecutiveFailures >= BuildProgressPollWarnAfterFailures) {
+                        warned = true;
+                        LogBuildProgressPollFailing(progressEvent, consecutiveFailures, ex);
+                    }
                 }
-            } catch (OperationCanceledException) {
-                // Linked token cancelled → the build finished (or shutdown). Normal loop termination.
-                return;
-            } catch (Exception) {
-                // Transient poll fault (e.g. a socket hiccup or a same-instant disconnect the build will report):
-                // skip this tick and keep polling. The Task.Delay at the top bounds the retry to one per second.
+            }
+        } finally {
+            if (!warned && !succeededOnce && failedAttempts > 0) {
+                LogBuildProgressPollNeverSucceeded(progressEvent, failedAttempts, lastFailure);
             }
         }
     }
@@ -318,6 +348,12 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Calibration WS event '{EventType}' failed to publish")]
     partial void LogCalibrationWsPublishFailed(string eventType, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Build progress poll ({ProgressEvent}) has failed {ConsecutiveFailures} consecutive times — the build continues, but its progress bar will sit indeterminate until the poll recovers")]
+    partial void LogBuildProgressPollFailing(string progressEvent, int consecutiveFailures, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Build progress poll ({ProgressEvent}) never succeeded across the whole build ({FailedAttempts} failed attempt(s)) — the progress RPC may be unsupported or unreachable on this guider daemon")]
+    partial void LogBuildProgressPollNeverSucceeded(string progressEvent, int failedAttempts, Exception? ex);
 
     // ── §63.6 guider-e-4c-b-2: defect-map (bad-pixel) build — mirrors the dark-library build above, sharing the
     // single calibration-build gate + the calibration WS-emit helper. ──

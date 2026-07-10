@@ -119,6 +119,137 @@ namespace OpenAstroAra.Test {
             AssertNoProgressAfterTerminal(events, GuiderService.DefectMapProgressEvent, GuiderService.DefectMapCompleteEvent);
         }
 
+        [Test]
+        public async Task A_build_whose_progress_polls_all_fail_logs_one_warning() {
+            using var buildGate = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var pollAttempts = 0;
+            // Every progress poll errors (the fake maps a throwing factory to a JSON-RPC error response) — the
+            // #770 round-2 case: an older/unreachable daemon whose progress RPC never answers usefully.
+            fake.OnRpc("get_dark_build_progress", _ => {
+                Interlocked.Increment(ref pollAttempts);
+                throw new InvalidOperationException("progress unavailable");
+            });
+            fake.OnRpc("build_dark_library", _ => {
+                buildGate.Wait(TimeSpan.FromSeconds(20));
+                return new JsonObject {
+                    ["profile_id"] = 3, ["dark_library_path"] = "/darks/ara.fits",
+                    ["frame_count"] = 5, ["exposure_count"] = 4,
+                    ["exposures_ms"] = new JsonArray(1000, 2000, 3000, 5000),
+                };
+            });
+
+            var events = new ConcurrentQueue<string>();
+            var logger = new RecordingLogger();
+            using var svc = await ConnectGuiderAsync(fake, events, logger).ConfigureAwait(false);
+            try {
+                _ = await svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 5), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+                // Hold the build open until the poll has demonstrably failed at least once, so the drain path
+                // sees a zero-success build with a non-zero attempt count.
+                var polled = await WaitUntilAsync(() => Volatile.Read(ref pollAttempts) >= 1).ConfigureAwait(false);
+                Assert.That(polled, Is.True, "the progress poll never reached the fake's failing RPC");
+            } finally {
+                buildGate.Set();
+            }
+
+            var sawComplete = await WaitForEventAsync(events, GuiderService.DarkLibraryCompleteEvent).ConfigureAwait(false);
+            Assert.That(sawComplete, Is.True, "the build should still complete — failing progress polls never disturb it");
+            // The poll is drained before the complete event publishes, so the warning is on the log by now.
+            var warnings = logger.Warnings.FindAll(m => m.Contains("progress poll", StringComparison.OrdinalIgnoreCase));
+            Assert.That(warnings, Has.Count.EqualTo(1),
+                "exactly one poll-failure warning per build — silent is invisible, per-tick is noise");
+            Assert.That(warnings[0], Does.Contain(GuiderService.DarkLibraryProgressEvent));
+            // No progress event can have fired — every poll failed.
+            Assert.That(events, Does.Not.Contain(GuiderService.DarkLibraryProgressEvent));
+        }
+
+        [Test]
+        public async Task Five_consecutive_poll_failures_mid_build_log_the_streak_warning() {
+            using var buildGate = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var pollAttempts = 0;
+            fake.OnRpc("get_dark_build_progress", _ => {
+                Interlocked.Increment(ref pollAttempts);
+                throw new InvalidOperationException("progress unavailable");
+            });
+            fake.OnRpc("build_dark_library", _ => {
+                buildGate.Wait(TimeSpan.FromSeconds(30));
+                return new JsonObject {
+                    ["profile_id"] = 3, ["dark_library_path"] = "/darks/ara.fits",
+                    ["frame_count"] = 5, ["exposure_count"] = 4,
+                    ["exposures_ms"] = new JsonArray(1000, 2000, 3000, 5000),
+                };
+            });
+
+            var events = new ConcurrentQueue<string>();
+            var logger = new RecordingLogger();
+            using var svc = await ConnectGuiderAsync(fake, events, logger).ConfigureAwait(false);
+            try {
+                _ = await svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 5), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+                // Hold the build open past the streak threshold (5 consecutive failures at the 1 s poll cadence)
+                // so the MID-BUILD warning fires while the build is still running — the headline behavior, as
+                // opposed to the drain-time zero-success fallback the other bench exercises.
+                var streaked = await WaitUntilAsync(() => Volatile.Read(ref pollAttempts) >= 5, TimeSpan.FromSeconds(20))
+                    .ConfigureAwait(false);
+                Assert.That(streaked, Is.True, "the poll never accumulated 5 attempts against the failing RPC");
+                var warnedMidBuild = await WaitUntilAsync(() => {
+                    lock (logger.Warnings) {
+                        return logger.Warnings.Exists(m => m.Contains("consecutive", StringComparison.OrdinalIgnoreCase));
+                    }
+                }, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                Assert.That(warnedMidBuild, Is.True,
+                    "the streak warning should fire MID-BUILD, on the 5th consecutive failure — not wait for the drain");
+            } finally {
+                buildGate.Set();
+            }
+
+            var sawComplete = await WaitForEventAsync(events, GuiderService.DarkLibraryCompleteEvent).ConfigureAwait(false);
+            Assert.That(sawComplete, Is.True, "the build should still complete — failing progress polls never disturb it");
+            // Still exactly ONE warning for the whole build: the streak warning suppresses the drain-time one.
+            var warnings = logger.Warnings.FindAll(m => m.Contains("progress poll", StringComparison.OrdinalIgnoreCase));
+            Assert.That(warnings, Has.Count.EqualTo(1), "the drain must not add a second warning after the streak one");
+            Assert.That(warnings[0], Does.Contain("consecutive"));
+        }
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition) =>
+            await WaitUntilAsync(condition, TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan deadline) {
+            using var cts = new CancellationTokenSource(deadline);
+            try {
+                while (!cts.IsCancellationRequested) {
+                    if (condition()) {
+                        return true;
+                    }
+                    await Task.Delay(50, cts.Token).ConfigureAwait(false);
+                }
+            } catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token) {
+                // Deadline elapsed — the caller's assertion reports the miss.
+            }
+            return false;
+        }
+
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<GuiderService> {
+            public System.Collections.Generic.List<string> Warnings { get; } = new();
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) {
+                    lock (Warnings) {
+                        Warnings.Add(formatter(state, exception));
+                    }
+                }
+            }
+        }
+
         // The poll is drained before the terminal event, so every progress tick must precede complete on the
         // stream — a progress event after complete would flicker a WILMA progress bar backward after it finished.
         private static void AssertNoProgressAfterTerminal(ConcurrentQueue<string> events, string progressEvent, string terminalEvent) {
@@ -132,14 +263,15 @@ namespace OpenAstroAra.Test {
         }
 
         // Connects the real GuiderService to the fake with a capturing WS broadcaster that records every published
-        // event type into <paramref name="events"/>.
-        private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake, ConcurrentQueue<string> events) {
+        // event type into <paramref name="events"/>. Pass a logger to additionally capture log output.
+        private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake, ConcurrentQueue<string> events,
+                Microsoft.Extensions.Logging.ILogger<GuiderService>? logger = null) {
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
                 .Returns(Task.CompletedTask);
             var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object);
+                logger ?? NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object);
             await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
                 .ConfigureAwait(false);
             var connected = await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false);

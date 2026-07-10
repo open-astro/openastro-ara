@@ -798,11 +798,11 @@ ARA now drives a real progress bar WITHOUT any progress event: #769 shipped the 
 #770 added the `GuiderService` poll-loop (`PollBuildProgressAsync`, own short-lived connection, drained before
 the terminal event for ordering) that calls it once a second during a build and promotes the
 `guider.{dark_library,defect_map}.*` WS stream from indeterminate to granular `exposure_index/exposure_count`
-progress. **Open follow-up (#770 review round-2 non-blocking note):** warn-once visibility when the poll produces
-zero successful reads across a whole build — a persistently-unreachable daemon currently yields an indeterminate
-bar with only a debug-level `SendMessage` log; that swallow is pre-existing but polling makes silent repeated
-failures more likely to go unnoticed. A "warn after N consecutive poll failures" pass is a candidate for a later
-guider slice.
+progress. ✅ **Follow-up CLOSED (2026-07-10, the #770 review round-2 note):** `PollBuildProgressAsync` now logs
+ONE Warning per build after 5 consecutive failed polls (`BuildProgressPollWarnAfterFailures`), plus a drain-time
+Warning when the whole build produced zero successful reads (covers builds shorter than the streak threshold);
+the per-tick swallow and build isolation are unchanged. Bench:
+`A_build_whose_progress_polls_all_fail_logs_one_warning`.
 
 **Shipped:** e-4b-2 — service + REST surface. `GuiderService.BuildDarkLibraryAsync` (202-Accepted background
 `Task.Run`, validates synchronously → 400 on bad request / 409 when disconnected) + `GetCalibrationFilesStatusAsync`
