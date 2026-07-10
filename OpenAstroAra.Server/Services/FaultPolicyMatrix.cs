@@ -35,13 +35,17 @@ public enum FaultTerminalAction {
 /// BEFORE each recovery attempt (empty = no recovery, straight to the terminal action);
 /// <see cref="PauseWhileRecovering"/> pauses any running sequence immediately, before the first
 /// attempt, so a sequence-critical device (camera/mount) can't burn frames or slew unguarded
-/// while recovery runs — the runs are resumed if recovery succeeds.
+/// while recovery runs — the runs are resumed if recovery succeeds. <see cref="Escalated"/>
+/// marks a §42.2 persistent-op-fault escalation: there is nothing to recover (the device is
+/// still connected — it keeps failing its ops), so the terminal action runs immediately and the
+/// episode reports as an escalation, not a failed recovery.
 /// </summary>
 public sealed record FaultPlan(
     IReadOnlyList<TimeSpan> RetrySchedule,
     FaultTerminalAction TerminalAction,
     NotificationSeverity GiveUpSeverity,
-    bool PauseWhileRecovering);
+    bool PauseWhileRecovering,
+    bool Escalated = false);
 
 /// <summary>
 /// §42.2 — the pure policy table mapping (device type, fault kind, profile policies) to a
@@ -65,8 +69,11 @@ public static class FaultPolicyMatrix {
     /// Resolve the plan for a fault. Returns <c>null</c> when the fault is NOT the reaction
     /// service's to handle: the guider owns its own §42.2 reaction + §63.3 recovery
     /// (GuiderService.FaultReaction — its hub publishes are for logging/broadcast only).
+    /// <paramref name="persistentOpFault"/> is the <see cref="OpFaultEscalator"/>'s verdict that
+    /// this op fault tipped its device over the persistence threshold.
     /// </summary>
-    public static FaultPlan? Resolve(DeviceType deviceType, EquipmentFaultKind kind, SafetyPoliciesDto? policies) {
+    public static FaultPlan? Resolve(DeviceType deviceType, EquipmentFaultKind kind, SafetyPoliciesDto? policies,
+            bool persistentOpFault = false) {
         if (deviceType == DeviceType.Guider) {
             return null;
         }
@@ -90,6 +97,25 @@ public static class FaultPolicyMatrix {
                 return FromPolicy(policies?.OnTrackingLost, "reenable_then_pause",
                     hot, NotificationSeverity.Error, pauseWhileRecovering: true);
             default:
+                // §42.2 escalation rows — PERSISTENT op failures stop being instruction-level
+                // news: a mount that keeps failing slews may be against an obstruction
+                // ("Retry → Abort + park", physical safety), a camera that keeps failing
+                // captures is burning sky time for nothing ("Pause if persistent"). No retry
+                // schedule: the device is still connected, there is nothing to reconnect.
+                if (persistentOpFault) {
+                    switch (deviceType) {
+                        case DeviceType.Telescope:
+                            return new FaultPlan(NoRetries, FaultTerminalAction.AbortAndPark,
+                                NotificationSeverity.Error, PauseWhileRecovering: false, Escalated: true);
+                        case DeviceType.Camera:
+                            return new FaultPlan(NoRetries, FaultTerminalAction.PauseSequence,
+                                NotificationSeverity.Error, PauseWhileRecovering: false, Escalated: true);
+                        default:
+                            break; // peripherals stay notify-only however often they fail —
+                                   // their matrix rows all end in "Notify", and §42.4
+                                   // instruction_failed already surfaces each failure
+                    }
+                }
                 // Op/state-channel faults (§42.4 stall_timeout/op_error/value_mismatch/
                 // cooling_drift): the device is still connected — nothing to reconnect;
                 // surface the fault and let sequence-level handling own the consequence.

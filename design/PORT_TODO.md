@@ -37,8 +37,14 @@ Missing, by user value:
    `Attempts` retries, `sequence.instruction_failed`, and `ErrorBehavior` engage; cancellation and
    not-connected pre-checks untouched; best-effort call sites (filter restores, fire-and-forget
    switch wrapper) guarded.
-2. **Mount slew persistent-failure terminal** (matrix: Retry → Abort+park) — policy piece on top
-   of 1; extend `FaultPolicyMatrix` or instruction ErrorBehavior. Physical-safety row.
+2. ✅ **Mount slew persistent-failure terminal — DONE (with item 5, the sub-PR after #802).**
+   `OpFaultEscalator` (sliding 10-min window, threshold 3, StallTimeout/OpError only) feeds
+   `FaultPolicyMatrix.Resolve(..., persistentOpFault:)`: Telescope → `AbortAndPark` (Escalated
+   plan — no retry ladder, the device is still connected), executed by the reaction service's
+   `ExecuteEscalationAsync` (abort runs + best-effort park; `escalated:abort_and_park` on the
+   fault-log row + WS action + Error notification). Escalation threshold/window are constants
+   for now; profile policy tokens (e.g. `OnMountOpFaultPersistent`) are a cheap follow-up if a
+   user ever wants a notify-only mount.
 3. ✅ **Switch re-command-once before faulting — DONE (the sub-PR after #800).**
    `SwitchReadbackWatch` yields a one-per-episode `Recommand` verdict at the first exhausted
    streak; the refresh loop re-issues the same value best-effort (raw device write — not the
@@ -53,8 +59,14 @@ Missing, by user value:
    fault once, in-tolerance read after a fire clears the record. Sync/reverse-flip/failed/stalled
    moves and disconnects reset the expectation (frame redefined / angle unknown). Tolerance is a
    constant for now; a `RotatorAngleToleranceDeg` safety policy is a cheap follow-up if needed.
-5. **Pause-on-persistent-op-fault surface** (rows 1b/13: "Pause") — a `PauseOnError` instruction
-   behavior wired to `PauseActiveRunsAsync`, or map op kinds to `FaultTerminalAction.PauseSequence`. M.
+5. ✅ **Pause-on-persistent-op-fault — DONE (with item 2, the sub-PR after #802).** Same
+   escalator: Camera → `PauseSequence` (row 1b "Pause if persistent"). The camera capture path
+   now publishes the op faults that feed it (`StallTimeout` when ImageReady never signals,
+   `OpError` on device exceptions during expose/download, via a live-client-gated
+   `PublishOpFault`; the abandoned/disconnect path stays silent — the §42.3 probe owns it).
+   Row 13's plate-solve-failure pause is NOT this row: solve failures aren't equipment faults
+   (CaptureSolver's §28.2 retry loop owns them) — if a pause surface is ever wanted there it's
+   a sequencer-side behavior, tracked separately.
 6. ✅ **ASTAP crash detection — DONE (the sub-PR after #800).** `CLISolver.StartCLI` logs non-zero
    exit codes with a solver-specific `DescribeExitCode` mapping (ASTAP's documented 1/2/16/32/33;
    anything else flagged as a possible crash), so environment problems (missing star DB) and

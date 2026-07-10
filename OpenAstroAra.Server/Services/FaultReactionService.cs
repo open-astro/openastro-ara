@@ -55,6 +55,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // Keyed by normalized DeviceType for recovery-running kinds (their ladder must not stack);
     // notify-only kinds get a unique key so they always run — see OnFault.
     private readonly Dictionary<object, Task> _episodes = [];
+    // §42.2 items 2+5 — persistence counter for op-channel faults (mutated under _gate).
+    private readonly OpFaultEscalator _escalator = new();
     private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
 
@@ -121,7 +123,12 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 LogEpisodeAlreadyActive(fault.DeviceType, fault.Kind);
                 return;
             }
-            _episodes[key] = Task.Run(() => RunEpisodeAsync(key, fault), CancellationToken.None);
+            // §42.2 items 2+5 — non-recoverable kinds also feed the persistence counter: the
+            // fault that tips its device over the threshold escalates (its episode runs the
+            // matrix's escalation plan instead of the plain notify).
+            var escalated = !recoverable
+                && _escalator.Observe(NormalizeType(fault.DeviceType), fault.Kind, DateTimeOffset.UtcNow);
+            _episodes[key] = Task.Run(() => RunEpisodeAsync(key, fault, escalated), CancellationToken.None);
         }
     }
 
@@ -141,14 +148,19 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Episode boundary: a reaction episode runs on a fire-and-forget task; any escape must be logged and contained, never surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
-    private async Task RunEpisodeAsync(object key, EquipmentFaultEvent fault) {
+    private async Task RunEpisodeAsync(object key, EquipmentFaultEvent fault, bool escalated = false) {
         try {
-            var plan = FaultPolicyMatrix.Resolve(fault.DeviceType, fault.Kind, ReadPolicies());
+            var plan = FaultPolicyMatrix.Resolve(fault.DeviceType, fault.Kind, ReadPolicies(), escalated);
             if (plan is null) {
                 return; // the guider's — GuiderService.FaultReaction owns it
             }
             var label = fault.DeviceName ?? fault.DeviceId ?? fault.DeviceType.ToString();
             LogEpisodeStarted(fault.DeviceType, fault.Kind, label, plan.RetrySchedule.Count, plan.TerminalAction);
+
+            if (plan.Escalated) {
+                await ExecuteEscalationAsync(fault, plan, label).ConfigureAwait(false);
+                return;
+            }
 
             if (plan.RetrySchedule.Count == 0 && plan.TerminalAction == FaultTerminalAction.None) {
                 await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
@@ -209,6 +221,46 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 _episodes.Remove(key);
             }
         }
+    }
+
+    // §42.2 items 2+5 — a persistent-op-fault escalation is not a failed recovery: the device is
+    // still connected, it just keeps failing its ops, so the terminal action runs immediately and
+    // the record/notification say "escalated", not "did not recover after N attempts".
+    private async Task ExecuteEscalationAsync(EquipmentFaultEvent fault, FaultPlan plan, string label) {
+        var terminal = plan.TerminalAction == FaultTerminalAction.AbortAndPark ? "abort_and_park" : "pause_sequence";
+        var paused = 0;
+        var aborted = 0;
+        var parked = false;
+        if (plan.TerminalAction == FaultTerminalAction.AbortAndPark) {
+            aborted = await AbortActiveRunsAsync().ConfigureAwait(false);
+            // Unlike the give-up park, the mount is still answering here (its faults are op
+            // failures, not a disconnect) — but a mount that keeps failing slews may fail the
+            // park too, so it stays best-effort and the outcome is reported honestly.
+            parked = await ParkQuietlyAsync().ConfigureAwait(false);
+        } else {
+            paused = (await PauseActiveRunsAsync().ConfigureAwait(false)).Count;
+        }
+        await PublishActionAsync(fault, "escalated", persistAs: $"escalated:{terminal}", extra: p => {
+            p["terminal"] = terminal;
+            p["threshold"] = OpFaultEscalator.DefaultThreshold;
+            if (aborted > 0) {
+                p["aborted_runs"] = aborted;
+            }
+            if (paused > 0) {
+                p["paused_runs"] = paused;
+            }
+            if (plan.TerminalAction == FaultTerminalAction.AbortAndPark) {
+                p["parked"] = parked;
+            }
+        }).ConfigureAwait(false);
+        var outcome = plan.TerminalAction == FaultTerminalAction.AbortAndPark
+            ? $"; {aborted} run(s) aborted, park {(parked ? "dispatched" : "failed")}"
+            : $"; sequence paused ({paused} run(s))";
+        await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{fault.DeviceType}: persistent op faults",
+            $"'{label}' has failed {OpFaultEscalator.DefaultThreshold} operations within "
+            + $"{OpFaultEscalator.DefaultWindow.TotalMinutes:0} min (latest: {EquipmentFaultHub.WireToken(fault.Kind)}{Detail(fault)})"
+            + $"{outcome}.").ConfigureAwait(false);
+        LogEscalated(fault.DeviceType, terminal);
     }
 
     private async Task ExecuteTerminalAsync(EquipmentFaultEvent fault, FaultPlan plan, string label,
@@ -491,6 +543,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: {DeviceType} not recovered after {Attempts} attempt(s) — terminal action '{Terminal}' executed (§42.3)")]
     private partial void LogGaveUp(DeviceType deviceType, int attempts, string terminal);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: persistent op faults on {DeviceType} — escalated to '{Terminal}' (§42.2)")]
+    private partial void LogEscalated(DeviceType deviceType, string terminal);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: {Stage} attempt for {DeviceType} failed; the ladder moves on")]
     private partial void LogAttemptFailed(string stage, DeviceType deviceType, Exception ex);

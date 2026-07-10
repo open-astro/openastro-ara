@@ -48,6 +48,7 @@ namespace OpenAstroAra.Test {
         private static readonly string[] PauseReconnectRecover = ["sequence_paused", "reconnecting", "recovered"];
         private static readonly string[] ReconnectRecover = ["reconnecting", "recovered"];
         private static readonly string[] NotifyOnly = ["notify_only"];
+        private static readonly string[] NotifyNotifyEscalated = ["notify_only", "notify_only", "escalated"];
 
         [SetUp]
         public void SetUp() {
@@ -127,6 +128,70 @@ namespace OpenAstroAra.Test {
                 return published.First(e => e.Type == WsEventCatalog.EquipmentFaultActionTaken
                     && e.Payload.GetProperty("action").GetString() == action).Payload;
             }
+        }
+
+        [Test]
+        public async Task The_third_mount_op_fault_within_the_window_aborts_and_parks() {
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(2);
+            for (var i = 0; i < 3; i++) {
+                service.OnFault(Fault(DeviceType.Telescope, EquipmentFaultKind.StallTimeout));
+                await service.WhenIdleAsync();
+            }
+
+            Assert.That(Actions(), Is.EqualTo(NotifyNotifyEscalated),
+                "the first two are instruction-level news; the third is persistence");
+            var payload = ActionPayload("escalated");
+            Assert.That(payload.GetProperty("terminal").GetString(), Is.EqualTo("abort_and_park"));
+            Assert.That(payload.GetProperty("aborted_runs").GetInt32(), Is.EqualTo(2));
+            Assert.That(payload.GetProperty("parked").GetBoolean(), Is.True);
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(posted.Any(n => n.Severity == NotificationSeverity.Error
+                    && n.Title.Contains("persistent op faults", StringComparison.Ordinal)),
+                Is.True, "the escalation posts an Error notification naming the pattern");
+        }
+
+        [Test]
+        public async Task The_third_camera_op_fault_pauses_the_sequence() {
+            var run = Guid.NewGuid();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { run });
+            for (var i = 0; i < 3; i++) {
+                service.OnFault(Fault(DeviceType.Camera, EquipmentFaultKind.OpError));
+                await service.WhenIdleAsync();
+            }
+
+            Assert.That(Actions().Last(), Is.EqualTo("escalated"));
+            var payload = ActionPayload("escalated");
+            Assert.That(payload.GetProperty("terminal").GetString(), Is.EqualTo("pause_sequence"));
+            Assert.That(payload.GetProperty("paused_runs").GetInt32(), Is.EqualTo(1));
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
+                "a camera escalation pauses — it never touches the mount");
+        }
+
+        [Test]
+        public async Task Peripheral_op_fault_bursts_never_escalate() {
+            for (var i = 0; i < 5; i++) {
+                service.OnFault(Fault(DeviceType.Focuser, EquipmentFaultKind.StallTimeout));
+                await service.WhenIdleAsync();
+            }
+
+            Assert.That(Actions(), Is.All.EqualTo("notify_only"),
+                "focuser stalls stay notify-only however often they repeat (matrix row: Retry → Notify)");
+            sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Advisory_kinds_never_feed_the_escalation_streak() {
+            for (var i = 0; i < 5; i++) {
+                service.OnFault(Fault(DeviceType.Camera, EquipmentFaultKind.CoolingDrift));
+                await service.WhenIdleAsync();
+            }
+            service.OnFault(Fault(DeviceType.Camera, EquipmentFaultKind.OpError));
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Is.All.EqualTo("notify_only"),
+                "five cooling-drift advisories plus one op error is not persistence");
         }
 
         [Test]

@@ -343,12 +343,31 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// (no §72 FITS write, no §28 catalog row — AF probe frames are throwaway measurements, not
     /// data). Returns null on the abandoned (disconnect/supersede) and not-ready paths, which are
     /// logged here exactly as before; cancellation aborts the exposure and propagates.
+    /// §42.2 — the two definite capture failures publish op faults (a not-ready timeout as
+    /// stall_timeout, a device error as op_error) so the reaction service's persistence
+    /// escalation can see a camera that keeps failing captures; the abandoned path stays
+    /// silent (the §42.3 probe owns disconnects).
     /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
             AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
         // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
+        try {
+            return await ExposeAndDownloadCoreAsync(client, frameId, request, ct).ConfigureAwait(false);
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw; // genuine caller cancellation — not a device fault
+        } catch (Exception ex) {
+            PublishOpFault(client, EquipmentFaultKind.OpError,
+                $"capture of frame {frameId} failed: {ex.Message}");
+            throw;
+        }
+    }
+
+    private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
+            AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
         ApplyExposureSettings(client, request);
         // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
@@ -374,6 +393,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         if (ready == false) {
             LogCaptureFailedNotReady(frameId, request.ExposureSec);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout,
+                $"camera never signaled ImageReady for a {request.ExposureSec:0.###}s exposure within the wait bound");
             return null;
         }
 
@@ -1302,6 +1323,26 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             EquipmentFaultKind.Disconnected,
             $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
             DateTimeOffset.UtcNow));
+    }
+
+    // §42.4 — op-channel fault publish for capture failures: snapshot the device under the gate,
+    // publish off-lock. A fault may only be blamed on the LIVE client — a capture whose client was
+    // superseded or disposed by a user disconnect/reconnect mid-exposure must stay a log line (the
+    // §42.3 probe owns genuine disconnects), so the liveness check and the device snapshot share
+    // one critical section (the peripheral mediators' PublishOpFault pattern).
+    private void PublishOpFault(AlpacaCamera client, EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
+            device = _device;
+        }
+        _faults.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' stopped answering — marked Error (§42.3)")]
