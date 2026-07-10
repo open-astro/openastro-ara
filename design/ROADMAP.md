@@ -142,11 +142,15 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   `focalLengthMm`/`reducer`/`sensorW`/`sensorH`/`pixelUm` + `mosaicX`/`mosaicY` as per-request
   overrides; blank fields merge from the profile server-side, the icon tints while active,
   Reset restores the profile's rig. Session-scoped by design (a what-if, not a setting).
-- **Custom-horizon (terrain) integration** in Tonight's Sky scoring when `UseCustomHorizon`.
+- ~~**Custom-horizon (terrain) integration**~~ — already shipped (stale entry, corrected
+  2026-07-10): `TonightSkyService.Rank` takes the profile's `CustomHorizonDto` and, when
+  `UseCustomHorizon` is on with a non-empty skyline, evaluates "above the horizon" per-azimuth
+  via a 361-entry sin lookup; the endpoint passes `GetCustomHorizon()`.
 - **On-device window-scan profiling** — confirm the ±12 h / 288-sample scan against the real
   installed OpenNGC catalog (<100 ms expected).
-- **Responsive dashboard tiles** — replace fixed-width 200 tiles in a `Wrap` with a
-  dashboard-wide responsive `BoxConstraints` pass.
+- ~~**Responsive dashboard tiles**~~ — shipped: `ResponsiveTileGrid` (LayoutBuilder → shared
+  computed tile width, min 180 / max 280 / 12 spacing) replaces the fixed-200 `Wrap` for the
+  Overview + Achievements tiles and the milestone badges.
 - **Wizard "clear field" affordance** — null=keep-base mappers can't blank a value back to empty
   when re-running the wizard on an existing profile.
 - **§37.5 wizard safety/site extras (enforcement-first)** — per-weather granular actions,

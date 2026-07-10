@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../theme/ara_colors.dart';
 
 /// One Overview tile on the §50 Stats dashboard — large value + caption + icon.
+/// Width comes from the parent (the sections lay tiles out in a
+/// [ResponsiveTileGrid], which sizes every tile to share the row).
 class StatTile extends StatelessWidget {
   final IconData icon;
   final String value;
@@ -20,7 +22,6 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 200,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
