@@ -402,7 +402,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
         var items = new List<FrameListItemDto>(pageSize);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct) && items.Count < pageSize) {
+        // Count check BEFORE the read — the reversed order consumed the LIMIT
+        // pageSize+1 sentinel row inside the loop, so the has-more read below
+        // always came up empty and every page reported has_more=false.
+        while (items.Count < pageSize && await reader.ReadAsync(ct)) {
             double? composite = null;
             if (!await reader.IsDBNullAsync(9, ct)) {
                 try {
