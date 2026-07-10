@@ -135,7 +135,48 @@ namespace OpenAstroAra.Test {
                 var plan = FaultPolicyMatrix.Resolve(DeviceType.Camera, kind, Policies())!;
                 Assert.That(plan.RetrySchedule, Is.Empty, $"{kind}: the device is still connected — nothing to reconnect");
                 Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.None), $"{kind}");
+                Assert.That(plan.Escalated, Is.False, $"{kind}: a single op fault is instruction-level news");
             }
+        }
+
+        [Test]
+        public void Persistent_mount_op_faults_escalate_to_abort_and_park() {
+            foreach (var kind in new[] { EquipmentFaultKind.StallTimeout, EquipmentFaultKind.OpError }) {
+                var plan = FaultPolicyMatrix.Resolve(DeviceType.Telescope, kind, Policies(), persistentOpFault: true)!;
+                Assert.That(plan.Escalated, Is.True, $"{kind}");
+                Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.AbortAndPark),
+                    $"{kind}: a mount that keeps failing slews may be against an obstruction — physical safety row");
+                Assert.That(plan.RetrySchedule, Is.Empty, "the mount is still connected — nothing to reconnect");
+                Assert.That(plan.GiveUpSeverity, Is.EqualTo(NotificationSeverity.Error));
+            }
+        }
+
+        [Test]
+        public void Persistent_camera_op_faults_escalate_to_pause() {
+            var plan = FaultPolicyMatrix.Resolve(DeviceType.Camera, EquipmentFaultKind.OpError, Policies(), persistentOpFault: true)!;
+            Assert.That(plan.Escalated, Is.True);
+            Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.PauseSequence),
+                "a camera that keeps failing captures is burning sky time for nothing");
+            Assert.That(plan.RetrySchedule, Is.Empty);
+        }
+
+        [Test]
+        public void Persistent_peripheral_op_faults_stay_notify_only() {
+            foreach (var deviceType in new[] { DeviceType.Focuser, DeviceType.FilterWheel, DeviceType.Rotator,
+                    DeviceType.Switch, DeviceType.Dome, DeviceType.CoverCalibrator }) {
+                var plan = FaultPolicyMatrix.Resolve(deviceType, EquipmentFaultKind.StallTimeout, Policies(), persistentOpFault: true)!;
+                Assert.That(plan.Escalated, Is.False,
+                    $"{deviceType}: its matrix rows all end in 'Notify' — instruction_failed already surfaces each failure");
+                Assert.That(plan.TerminalAction, Is.EqualTo(FaultTerminalAction.None), $"{deviceType}");
+            }
+        }
+
+        [Test]
+        public void The_persistence_flag_never_changes_recovery_tracked_kinds() {
+            var plan = FaultPolicyMatrix.Resolve(DeviceType.Telescope, EquipmentFaultKind.Disconnected, Policies(),
+                persistentOpFault: true)!;
+            Assert.That(plan.Escalated, Is.False, "disconnects run the §42.3 reconnect episode, never the op escalation");
+            Assert.That(plan.RetrySchedule, Is.EqualTo(FaultPolicyMatrix.HotReconnectLadder));
         }
     }
 }
