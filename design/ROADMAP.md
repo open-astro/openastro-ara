@@ -23,10 +23,11 @@
 ## 1. In flight — hardware-fault surfaces epic (§42)
 
 The epic currently being shipped, slice by slice (~~§42.4 slice 4c~~ shipped #793; ~~§42.5 fault
-log + REST~~ shipped — `faults` table + `GET /api/v1/faults`):
+log + REST~~ shipped #795; ~~§42 WILMA surfaces~~ shipped #797/#798 — live fault chips w/ history
+seeding, Imaging-tab fault feed, §42.6 per-session timeline + library badges):
 
-- **§42 WILMA surfaces** — client-side display of the fault channel (feed, per-device chips) +
-  the §42.6 per-session fault timeline off `GET /api/v1/faults` (populate `affected_frames` with it).
+- **§42.6 `affected_frames` population** — correlate frames whose exposure overlapped a fault
+  window (server-side; the column + DTO + client tiles are ready for it).
 - **§42.2 matrix, remaining rows** — camera / mount / focuser / EFW mid-sequence fault reactions
   (the guider-lost row is enforced; the others follow the same §35 bulk-pause machinery).
 - **§42.3 generalized hot-reconnect** — device comes back mid-run → re-adopt without user surgery.
