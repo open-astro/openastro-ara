@@ -49,10 +49,13 @@ public sealed partial class EquipmentEventPublisher {
 
     private readonly IWsBroadcaster _broadcaster;
     private readonly ILogger<EquipmentEventPublisher> _logger;
+    private readonly IFaultLogService? _faultLog;
 
-    public EquipmentEventPublisher(IWsBroadcaster broadcaster, ILogger<EquipmentEventPublisher>? logger = null) {
+    public EquipmentEventPublisher(IWsBroadcaster broadcaster, ILogger<EquipmentEventPublisher>? logger = null,
+            IFaultLogService? faultLog = null) {
         _broadcaster = broadcaster ?? throw new ArgumentNullException(nameof(broadcaster));
         _logger = logger ?? NullLogger<EquipmentEventPublisher>.Instance;
+        _faultLog = faultLog;
     }
 
     /// <summary>Publish a device's connection-state transition. Callers gate on an
@@ -91,6 +94,34 @@ public sealed partial class EquipmentEventPublisher {
         } catch (Exception ex) {
             LogPublishFailed(ex, WsEventCatalog.EquipmentStateChanged);
         }
+        if (state == EquipmentConnectionState.Connected && _faultLog is not null) {
+            // §42.5 — a connected transition ends any standing disconnect fault
+            // regardless of how it healed; the ladder's own recoveries already
+            // stamped `recovered` before this fires (their UPDATE is a no-op
+            // here), so this covers the gave-up-then-manually-fixed rows that
+            // would otherwise read unresolved forever. Fire-and-forget like the
+            // event publishes: the log must never slow a connect path.
+            _ = ResolveQuietlyAsync(deviceType);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "§42.5 resolution is best-effort off a connect path: a store fault is logged and dropped, never propagated — and the task is fire-and-forget, so the catch also keeps it from dying unobserved. CA1031's log-and-recover boundary applies.")]
+    private async System.Threading.Tasks.Task ResolveQuietlyAsync(DeviceType deviceType) {
+        try {
+            var now = DateTimeOffset.UtcNow;
+            // FlatDevice/CoverCalibrator are one physical device under two wire
+            // tokens (the EquipmentReconnector grouping) — a reconnect of either
+            // resolves both tokens' standing disconnect rows.
+            if (deviceType is DeviceType.FlatDevice or DeviceType.CoverCalibrator) {
+                await _faultLog!.ResolveOnReconnectAsync(DeviceType.FlatDevice, now, CancellationToken.None).ConfigureAwait(false);
+                await _faultLog.ResolveOnReconnectAsync(DeviceType.CoverCalibrator, now, CancellationToken.None).ConfigureAwait(false);
+            } else {
+                await _faultLog!.ResolveOnReconnectAsync(deviceType, now, CancellationToken.None).ConfigureAwait(false);
+            }
+        } catch (Exception ex) {
+            LogResolveFailed(ex, deviceType);
+        }
     }
 
     private void Publish(string eventType, JsonElement payload) {
@@ -108,4 +139,7 @@ public sealed partial class EquipmentEventPublisher {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "equipment event {EventType} could not be published")]
     private partial void LogPublishFailed(Exception ex, string eventType);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "reconnect of {DeviceType} could not resolve its standing fault rows — the §42.5 log may still read unresolved")]
+    private partial void LogResolveFailed(Exception ex, DeviceType deviceType);
 }

@@ -130,6 +130,31 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
         }
     }
 
+    public async Task<int> ResolveOnReconnectAsync(DeviceType deviceType, DateTimeOffset resolvedUtc, CancellationToken ct) {
+        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            // action_taken is deliberately untouched: it records what the §42.3
+            // reaction DID (e.g. gave_up:pause_sequence) — the resolution here
+            // is an observed reconnect, not a reaction outcome.
+            cmd.CommandText = """
+                UPDATE faults SET resolved_at = $resolved
+                WHERE equipment_type = $etype AND fault_type = 'disconnected'
+                  AND resolved_at IS NULL;
+                """;
+            cmd.Parameters.AddWithValue("$etype", deviceType.ToString().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("$resolved", resolvedUtc.ToString("O"));
+            var resolved = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (resolved > 0) {
+                LogResolvedOnReconnect(deviceType, resolved);
+            }
+            return resolved;
+        } finally {
+            _writeGate.Release();
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The command text is assembled from compile-time-constant fragments only; every caller-supplied value is bound through $-parameters, never concatenated into the SQL.")]
     public async Task<CursorPage<FaultDto>> ListAsync(
@@ -253,4 +278,7 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fault log: recorded {DeviceType} {Kind} (§42.5)")]
     private partial void LogFaultRecorded(DeviceType deviceType, EquipmentFaultKind kind);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} reconnected — {Count} unresolved disconnect fault(s) marked resolved (§42.5)")]
+    private partial void LogResolvedOnReconnect(DeviceType deviceType, int count);
 }

@@ -231,6 +231,59 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Reconnect_resolves_only_that_types_unresolved_disconnect_rows() {
+            var t0 = new DateTimeOffset(2026, 7, 10, 3, 0, 0, TimeSpan.Zero);
+            await service.RecordFaultAsync(Fault(DeviceType.Camera, EquipmentFaultKind.Disconnected, t0), CancellationToken.None);
+            await service.RecordActionAsync(Fault(DeviceType.Camera, EquipmentFaultKind.Disconnected, t0),
+                "gave_up:pause_sequence", null, CancellationToken.None);
+            await service.RecordFaultAsync(Fault(DeviceType.Camera, EquipmentFaultKind.OpError, t0.AddMinutes(1)), CancellationToken.None);
+            await service.RecordFaultAsync(Fault(DeviceType.Telescope, EquipmentFaultKind.Disconnected, t0.AddMinutes(2)), CancellationToken.None);
+            var alreadyResolved = t0.AddMinutes(3);
+            await service.RecordFaultAsync(Fault(DeviceType.Camera, EquipmentFaultKind.Disconnected, alreadyResolved), CancellationToken.None);
+            await service.RecordActionAsync(Fault(DeviceType.Camera, EquipmentFaultKind.Disconnected, alreadyResolved),
+                "recovered", alreadyResolved.AddMinutes(1), CancellationToken.None);
+
+            var reconnectAt = t0.AddHours(1);
+            var resolved = await service.ResolveOnReconnectAsync(DeviceType.Camera, reconnectAt, CancellationToken.None);
+            Assert.That(resolved, Is.EqualTo(1), "only the camera's unresolved disconnect row resolves");
+
+            var all = await service.ListAsync(50, null, null, null, null, null, CancellationToken.None);
+            var gaveUp = all.Items.Single(f => f.ActionTaken == "gave_up:pause_sequence");
+            Assert.That(gaveUp.ResolvedUtc, Is.EqualTo(reconnectAt), "the manual-fix row is resolved by the reconnect");
+            Assert.That(gaveUp.ActionTaken, Is.EqualTo("gave_up:pause_sequence"),
+                "the reaction outcome is history, not rewritten by the resolution");
+            Assert.That(all.Items.Single(f => f.FaultType == "op_error").ResolvedUtc, Is.Null,
+                "advisories are one-shots — a connect doesn't retract them");
+            Assert.That(all.Items.Single(f => f.EquipmentType == "telescope").ResolvedUtc, Is.Null,
+                "another device's rows are untouched");
+            Assert.That(all.Items.Single(f => f.ActionTaken == "recovered").ResolvedUtc,
+                Is.EqualTo(alreadyResolved.AddMinutes(1)), "an already-resolved row keeps its original resolution time");
+        }
+
+        [Test]
+        public void A_connected_transition_at_the_publisher_resolves_the_fault_log() {
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            var log = new Mock<IFaultLogService>();
+            var publisher = new EquipmentEventPublisher(ws.Object, logger: null, faultLog: log.Object);
+
+            publisher.StateChanged(DeviceType.Camera, "dev-1", "Cam", EquipmentConnectionState.Connected);
+            log.Verify(l => l.ResolveOnReconnectAsync(DeviceType.Camera, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
+
+            publisher.StateChanged(DeviceType.Camera, "dev-1", "Cam", EquipmentConnectionState.Disconnected);
+            publisher.StateChanged(DeviceType.Camera, "dev-1", "Cam", EquipmentConnectionState.Error);
+            log.Verify(l => l.ResolveOnReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once,
+                "only the connected transition resolves");
+
+            // One physical device under two wire tokens — either token's
+            // reconnect resolves both.
+            publisher.StateChanged(DeviceType.FlatDevice, "dev-2", "Panel", EquipmentConnectionState.Connected);
+            log.Verify(l => l.ResolveOnReconnectAsync(DeviceType.FlatDevice, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
+            log.Verify(l => l.ResolveOnReconnectAsync(DeviceType.CoverCalibrator, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
         public void The_hub_persists_every_published_fault() {
             var ws = new Mock<IWsBroadcaster>();
             var log = new Mock<IFaultLogService>();

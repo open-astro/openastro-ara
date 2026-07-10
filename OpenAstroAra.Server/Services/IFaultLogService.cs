@@ -42,6 +42,16 @@ public interface IFaultLogService {
     /// unresolved.</param>
     Task RecordActionAsync(EquipmentFaultEvent fault, string action, DateTimeOffset? resolvedUtc, CancellationToken ct);
 
+    /// <summary>Stamp <c>resolved_at</c> on the device type's unresolved
+    /// <c>disconnected</c> rows — the device reported connected again, so a
+    /// standing disconnect fault is over regardless of how it healed (the
+    /// §42.3 ladder stamps `recovered` itself; this covers the gave-up-then-
+    /// manually-fixed path, where no `recovered` ever fires and the row would
+    /// otherwise read unresolved forever). Other kinds are untouched:
+    /// a connect doesn't prove tracking, and advisories are one-shots.
+    /// Returns the number of rows resolved.</summary>
+    Task<int> ResolveOnReconnectAsync(DeviceType deviceType, DateTimeOffset resolvedUtc, CancellationToken ct);
+
     /// <summary>Fault history, newest first. All filters are optional and AND-combined;
     /// <paramref name="equipmentType"/> and <paramref name="faultType"/> take the
     /// lowercase wire tokens (see <see cref="FaultDto"/>).</summary>
