@@ -63,12 +63,18 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 - **Live V-curve sweep validation** — the sweep orchestration is built; live end-to-end
   validation on a real focuser is owed (focuser-hardware-gated).
 - **§59.7 backlash auto-discovery.**
-- **Smart Focus (§59.2–59.4)** — in progress as headless slices. Shipped: per-star feature
-  vector, `FocusInverseMap`, donut geometry, obstruction depth. Remaining: the intra/extra-focal
-  **asymmetry coefficient** (no clean single-frame definition yet — co-design), the §59.4
-  telescope-type extractor selector, and wiring `FocusInverseMap` into `AutofocusSweepService`
-  as the Phase-2 one-frame run (needs a calibration-table profile store).
-- **§59.10 collimation verdict** — its own slice on top of Smart Focus.
+- **Smart Focus (§59.2–59.4)** — the headless build is essentially COMPLETE. Shipped: per-star
+  feature vector, `FocusInverseMap`, donut geometry, obstruction depth, the calibration profile
+  store, the Phase-2 one-frame Smart runner (`TrySmartFocusAsync` — 2-3 shots with the §59.11
+  fallback ladder to Classic), ~~the §59.4 telescope-type extractor selector~~
+  (`FocusFeatureProfile`: wire-string parse → per-type magnitude key + side-classifier feature
+  sets, consulted by `FocusInverseMap.Build` and `FocusSideClassifier`; client picker in
+  Settings → Autofocus + the wizard). Remaining: only the intra/extra-focal **asymmetry
+  coefficient** (no clean single-frame definition yet — co-design with the user; the shipped
+  `RadialProfileSkew` side classifier covers the direction read meanwhile).
+- ~~**§59.10 collimation verdict**~~ — shipped server-side: `CollimationEvaluator` runs after
+  each Classic sweep (donut-shadow centroid vector average → severity verdict → WS publish +
+  notification). A dedicated WILMA visualization beyond the notification remains client debt.
 - ~~**Sequencer instructions**~~ — COMPLETE: ~~port **Run Autofocus** and **Center (and
   Rotate)**~~ (both landed: `RunAutofocus` wraps `AutofocusSweepService` via
   `IAutofocusExecutor`; `CenterAndRotate` wraps `CenteringService` via `ICenteringExecutor`);
@@ -119,9 +125,9 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   registrations) or guard with `NotSupportedException`.
 - **OSC display wiring** — `BaseImageData.RenderBitmapSource` renders the raw grey CFA mosaic
   until the render path calls Debayer for OSC display.
-- **Live-view detection cost** — offload `StarDetector.Detect` off the `_captureInFlight` gate
-  (or detect on a downsized copy); give `LiveViewMaxMarkers` a real early-out instead of
-  measure-then-discard.
+- ~~**Live-view detection cost**~~ — shipped: the live loop split moves detection + render off
+  the `_captureInFlight` gate (#809), and `StarDetector` honours the marker cap with a
+  brightest-first early-out instead of measure-then-discard (#810).
 - **Deep offline star catalogue** — bundle deeper Norder tiles (mag ~12–14) to replace the
   reverted online Gaia layer (bundled catalogue stops at mag 7).
 
@@ -130,8 +136,10 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 - **Canonical "active server" provider** — replace `servers.last` (insertion order) with an
   explicit active-server provider routing all per-server API construction; latent bug once >1
   server is saved.
-- **Tonight's Sky slice 4b** — client FOV/mosaic override controls (server side is done): send
-  `focalLengthMm`/`reducer`/`sensorW`/`sensorH`/`pixelUm` + `mosaicX`/`mosaicY`.
+- ~~**Tonight's Sky slice 4b**~~ — shipped: the panel's what-if dialog (tune button) sends
+  `focalLengthMm`/`reducer`/`sensorW`/`sensorH`/`pixelUm` + `mosaicX`/`mosaicY` as per-request
+  overrides; blank fields merge from the profile server-side, the icon tints while active,
+  Reset restores the profile's rig. Session-scoped by design (a what-if, not a setting).
 - **Custom-horizon (terrain) integration** in Tonight's Sky scoring when `UseCustomHorizon`.
 - **On-device window-scan profiling** — confirm the ±12 h / 288-sample scan against the real
   installed OpenNGC catalog (<100 ms expected).

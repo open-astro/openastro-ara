@@ -221,6 +221,83 @@ class TonightSkyObject {
   }
 }
 
+/// §36.8 slice 4b — a per-request "what-if" optical train + mosaic layout for
+/// Tonight's Sky. Every optics field is nullable: null means "use the active
+/// profile's value" (the server merges per-field, so overriding just the
+/// reducer is valid). Mosaic tile counts default to 1×1 (no mosaic). The
+/// bounds mirror the server's request validation ([maxReducer] /
+/// [maxMosaicTiles]) so a value the dialog accepts can't come back as a 400.
+class TonightOverrides {
+  /// Server-side reducer ceiling (TonightSkyOverrides.MaxReducerFactor).
+  static const double maxReducer = 10;
+
+  /// Server-side per-axis mosaic tile cap.
+  static const int maxMosaicTiles = 20;
+
+  final double? focalLengthMm;
+  final double? reducer;
+  final int? sensorW;
+  final int? sensorH;
+  final double? pixelUm;
+  final int mosaicX;
+  final int mosaicY;
+
+  const TonightOverrides({
+    this.focalLengthMm,
+    this.reducer,
+    this.sensorW,
+    this.sensorH,
+    this.pixelUm,
+    this.mosaicX = 1,
+    this.mosaicY = 1,
+  });
+
+  /// The no-override sentinel — profile optics at 1×1.
+  static const TonightOverrides none = TonightOverrides();
+
+  /// Whether this override changes the request at all. An inactive override
+  /// sends no extra query parameters, keeping the common path identical to
+  /// the pre-slice-4b request (no profile merge server-side).
+  bool get isActive =>
+      focalLengthMm != null ||
+      reducer != null ||
+      sensorW != null ||
+      sensorH != null ||
+      pixelUm != null ||
+      mosaicX != 1 ||
+      mosaicY != 1;
+
+  /// The query parameters this override adds to `GET /planning/tonight`.
+  /// Only supplied fields are sent (the server merges the rest from the
+  /// profile); a 1 tile count is omitted since it's the server default.
+  Map<String, dynamic> toQueryParameters() => <String, dynamic>{
+        if (focalLengthMm != null) 'focalLengthMm': focalLengthMm,
+        if (reducer != null) 'reducer': reducer,
+        if (sensorW != null) 'sensorW': sensorW,
+        if (sensorH != null) 'sensorH': sensorH,
+        if (pixelUm != null) 'pixelUm': pixelUm,
+        if (mosaicX != 1) 'mosaicX': mosaicX,
+        if (mosaicY != 1) 'mosaicY': mosaicY,
+      };
+
+  /// Value equality so the overrides provider only notifies (and Tonight's
+  /// Sky only refetches) when a field actually changed.
+  @override
+  bool operator ==(Object other) =>
+      other is TonightOverrides &&
+      other.focalLengthMm == focalLengthMm &&
+      other.reducer == reducer &&
+      other.sensorW == sensorW &&
+      other.sensorH == sensorH &&
+      other.pixelUm == pixelUm &&
+      other.mosaicX == mosaicX &&
+      other.mosaicY == mosaicY;
+
+  @override
+  int get hashCode => Object.hash(
+      focalLengthMm, reducer, sensorW, sensorH, pixelUm, mosaicX, mosaicY);
+}
+
 class TonightSkyApi {
   final Dio _dio;
 
@@ -237,10 +314,18 @@ class TonightSkyApi {
   /// The curated objects above the active profile's site horizon right now,
   /// highest first (server-ranked). Throws `DioException` on transport failure.
   /// The owning provider holds the lifecycle — call [close] when done with it.
-  Future<List<TonightSkyObject>> fetch({int limit = 12}) async {
+  /// An active [overrides] re-frames the ranking against a what-if optical
+  /// train / mosaic layout (§36.8 slice 4b) instead of the profile's optics.
+  Future<List<TonightSkyObject>> fetch({
+    int limit = 12,
+    TonightOverrides? overrides,
+  }) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/planning/tonight',
-      queryParameters: <String, dynamic>{'limit': limit},
+      queryParameters: <String, dynamic>{
+        'limit': limit,
+        ...?overrides?.toQueryParameters(),
+      },
     );
     // A well-behaved server returns a JSON array; anything else (an error object,
     // an HTML body, null) is not iterable — treat it as "nothing to show" rather

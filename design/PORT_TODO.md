@@ -483,17 +483,20 @@ annotation remain, both Live-View-gated (ROADMAP part 5).
   firing trigger executed nothing, silently — fixed in the client trigger catalog (`TriggerDef.runnerItems`
   seeds the runner with its action item: `RunAutofocus` for the AF family, `Dither` for DitherAfterExposures,
   matching what NINA's C# constructors serialize).
-- **Smart Focus (§59.2–59.4) — IN PROGRESS (ROADMAP part 3), landing as pure-headless slices:** ✅ per-star feature
-  vector `FWHM`/`Roundness`/`PeakToBackground` (#758); ✅ `FocusInverseMap` defocus→offset magnitude table (#768);
-  ✅ donut geometry `DonutOuterDiameter`/`DonutInnerDiameter`/`RingThickness` for obstructed scopes (#771);
-  ✅ obstruction `DonutShadowDepth` (#594 branch). Remaining: the intra/extra-focal **asymmetry coefficient**
-  (resolves the §59.2 defocus sign — NOTE: no clean/honest single-frame definition exists yet, so this is
-  co-design work with the Phase-2 sign resolution it feeds, not a mechanical metric add), the §59.4
-  **telescope-type extractor selector** (field weighting per optical design — the obstructed-scope fields all
-  exist now; refractor still wants the asymmetry field), and wiring `FocusInverseMap` into `AutofocusSweepService`
-  as the Phase-2 one-frame run (server/orchestration + a NEW calibration-table profile store — a multi-slice
-  effort, see the AutofocusSweepService gap). §59.10 collimation verdict reuses the donut ring centroids (its own
-  slice).
+- **Smart Focus (§59.2–59.4) — headless build ESSENTIALLY COMPLETE (status corrected 2026-07-10; this entry
+  had gone stale):** ✅ per-star feature vector `FWHM`/`Roundness`/`PeakToBackground` (#758); ✅ `FocusInverseMap`
+  defocus→offset magnitude table (#768); ✅ donut geometry + `DonutShadowDepth`; ✅ the calibration profile store
+  (`GetFocusCalibration` + `FocusCalibrationDtos`); ✅ the Phase-2 one-frame Smart runner
+  (`AutofocusSweepService.Smart` — `TrySmartFocusAsync`, 2-3 shots, §59.11 fallback ladder, §59.15 WS events);
+  ✅ the **§59.4 telescope-type extractor selector** (`FocusFeatureProfile`: `Parse` wire strings, per-type
+  magnitude key via `PrefersDonutMagnitudeKey` consulted by `FocusInverseMap.Build` with per-calibration
+  concordance fallback, per-type `SideFeatureNames` consulted by `FocusSideClassifier`; `TelescopeType` on
+  `AutofocusSettingsDto` + WILMA picker in Settings → Autofocus and the wizard); ✅ `RadialProfileSkew` + the
+  learned side classifier (direction read); ✅ §59.10 collimation verdict (`CollimationEvaluator` after each
+  Classic sweep → WS publish + notification; a WILMA visualization beyond the notification is client debt).
+  Remaining: ONLY the intra/extra-focal **asymmetry coefficient** (no clean/honest single-frame definition
+  exists yet — co-design work with the user, not a mechanical metric add; the shipped skew classifier covers
+  the §59.2 sign read meanwhile).
 - **AF triggers + sequencer wiring (§59.5) — trigger family DONE (2026-07-08); two follow-ups open.**
   ✅ The four remaining NINA AF triggers re-ported headless from `840893eb8^` (time-interval / focuser-temp-Δ /
   HFR-drift / first-filter — "sequence start" is covered by the imaging-run builder's `autofocusAtStart`
