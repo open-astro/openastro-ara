@@ -17,6 +17,7 @@ using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -53,6 +54,8 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     private readonly ILogger<SwitchService> _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
+    private readonly IProfileStore? _profileStore;
+    private readonly IWsBroadcaster? _ws;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     // Connected (and recently-disconnected) switches keyed by AlpacaDeviceNumber. Mutated only under
@@ -78,13 +81,17 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         // §42.3 — per-connection disconnect-detection streak (multi-instance: each connected switch
         // is probed independently). Only touched from the single-flighted refresh path.
         public DeviceConnectionProbe Probe { get; } = new();
+        // §42.4 — per-connection commanded-value read-back watch (only ports the daemon wrote).
+        public SwitchReadbackWatch Readback { get; } = new();
     }
 
     public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null) {
+            IEquipmentFaultSink? faults = null, IProfileStore? profileStore = null, IWsBroadcaster? ws = null) {
         _logger = logger ?? NullLogger<SwitchService>.Instance;
         _events = events;
         _faults = faults;
+        _profileStore = profileStore;
+        _ws = ws;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -168,6 +175,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 client = conn.Client;
                 conn.Client = null;
                 conn.CachedSnapshots = Array.Empty<SwitchPortSnapshot>();
+                conn.Readback.Reset(); // §42.4 — commanded values don't survive a disconnect
                 SetState(conn, EquipmentConnectionState.Disconnected);
             }
         }
@@ -197,6 +205,10 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         }
         // Write off the request thread (blocking ASCOM HTTP PUT). The port id is a short in ASCOM.
         await Task.Run(() => client.SetSwitchValue((short)request.PortId, request.Value), ct).ConfigureAwait(false);
+        // §42.4 — the write succeeded: remember what was commanded so the refresh loop can check
+        // the read-back. Only recorded against the still-live connection+client (a concurrent
+        // disconnect/replace supersedes the write we just did — same staleness rule as the cache).
+        RecordCommandedValue(client, (short)request.PortId, request.Value);
         // Reflect the new value promptly (best-effort; the next timer tick would also pick it up).
         RefreshCacheOnce();
     }
@@ -229,6 +241,8 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             if (targets is null) {
                 return;
             }
+            // §42.4 — one best-effort policy read per pass (profile IO stays off the gate).
+            var tolerancePct = ReadTolerancePct();
             foreach (var (conn, client) in targets) {
                 // §42.3 — the ONE deliberate connection probe per device per tick. The per-port reads
                 // below deliberately swallow failures (an unsupported port must stay benign), so
@@ -246,6 +260,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 // must not drop the rest of this tick's devices from the refresh.
                 try {
                     var ports = ReadPorts(client);
+                    List<(SwitchPortSnapshot Port, double Commanded)>? mismatched = null;
                     lock (_gate) {
                         // Write back only if this exact connection + client is still the live one (a
                         // concurrent disconnect/replace supersedes the read we just did).
@@ -255,6 +270,20 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                             && conn.State == EquipmentConnectionState.Connected
                             && ReferenceEquals(conn.Client, client)) {
                             conn.CachedSnapshots = ports;
+                            // §42.4 — read-back check for ports the daemon wrote, under the same
+                            // commit lock as the liveness check (the #789 one-critical-section
+                            // lesson). Verdicts are collected here, published off-lock below.
+                            foreach (var port in ports) {
+                                if (conn.Readback.Observe(port.Id, port.Value, port.Min, port.Max,
+                                        tolerancePct, DateTimeOffset.UtcNow) == ReadbackVerdict.Mismatch) {
+                                    (mismatched ??= []).Add((port, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
+                                }
+                            }
+                        }
+                    }
+                    if (mismatched is not null) {
+                        foreach (var (port, commanded) in mismatched) {
+                            PublishValueMismatch(conn, port, commanded, tolerancePct);
                         }
                     }
                 } catch (Exception ex) {
@@ -342,7 +371,8 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                     && conn.Generation == generation) {
                     conn.Client = client;
                     conn.CachedSnapshots = Array.Empty<SwitchPortSnapshot>(); // don't serve a prior device's ports
-                    conn.Probe.Reset(); // §42.3 — a fresh session starts a fresh streak
+                    conn.Probe.Reset();    // §42.3 — a fresh session starts a fresh streak
+                    conn.Readback.Reset(); // §42.4 — a fresh session has no commanded values
                     SetState(conn, EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -427,6 +457,63 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     // between them (review finding; the connect path's fresh-SwitchConnection-per-reconnect
     // invariant makes that benign today, but the probe path now defends it itself). Returns null
     // when the probed pair is stale (the observation is discarded).
+    // §42.4 — remember a successful write's commanded value against the still-live connection
+    // + client (a concurrent disconnect/replace supersedes the write — same staleness rule as
+    // the snapshot commit); shared by the REST SetValueAsync and the mediator write path.
+    private void RecordCommandedValue(AlpacaSwitch client, short portId, double value) {
+        lock (_gate) {
+            foreach (var conn in _connections.Values) {
+                if (conn.State == EquipmentConnectionState.Connected && ReferenceEquals(conn.Client, client)) {
+                    conn.Readback.Command(portId, value, DateTimeOffset.UtcNow);
+                    return;
+                }
+            }
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort policy read on the refresh tick: a profile store fault falls back to the default tolerance rather than skipping the whole pass. CA1031's log-and-recover boundary applies.")]
+    private double ReadTolerancePct() {
+        try {
+            return _profileStore?.GetSafetyPolicies()?.SwitchValueTolerancePct ?? 5.0;
+        } catch (Exception ex) {
+            LogPortReadFailed(ex);
+            return 5.0;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort; a broadcaster/serialization fault must never abort the refresh pass — the hub fault (published first) already carries the detection. CA1031's log-and-recover boundary applies.")]
+    private void PublishValueMismatch(SwitchConnection conn, SwitchPortSnapshot port, double commanded, double tolerancePct) {
+        LogValueMismatch(conn.Device.Name, port.Id, port.Name, commanded, port.Value);
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name,
+            EquipmentFaultKind.ValueMismatch,
+            $"port {port.Id} ('{port.Name}') commanded {commanded:0.##}, reads {port.Value:0.##} (tolerance ±{tolerancePct:0.##}% of range)",
+            DateTimeOffset.UtcNow));
+        if (_ws is null) {
+            return;
+        }
+        try {
+            var payload = new System.Text.Json.Nodes.JsonObject {
+                ["device_id"] = conn.Device.UniqueId,
+                ["device_name"] = conn.Device.Name,
+                ["port_id"] = port.Id,
+                ["port_name"] = port.Name,
+                ["commanded"] = commanded,
+                ["read_back"] = port.Value,
+                ["tolerance_pct"] = tolerancePct,
+            };
+            // ToJsonString()+Parse is the AOT-safe JsonElement construction (EquipmentFaultHub pattern).
+            using var doc = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
+            _ = _ws.PublishAsync(WsEventCatalog.SwitchValueMismatch, doc.RootElement.Clone(), CancellationToken.None);
+        } catch (Exception ex) {
+            LogPortReadFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Switch '{Device}' port {PortId} ('{PortName}') read-back disagrees with the commanded value: commanded {Commanded}, reads {ReadBack} — §42.4 fault published")]
+    private partial void LogValueMismatch(string device, short portId, string portName, double commanded, double readBack);
+
     private ProbeVerdict? ObserveProbeIfLive(SwitchConnection conn, AlpacaSwitch client, bool probeSucceeded) {
         lock (_gate) {
             if (_disposed
@@ -451,6 +538,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             }
             SetState(conn, EquipmentConnectionState.Error);
             conn.Probe.Reset();
+            conn.Readback.Reset();
         }
         LogConnectionLost(conn.Device.Name);
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name,

@@ -244,7 +244,12 @@ public sealed record SafetyPoliciesDto(
     string OnMountLost = "reconnect_then_abort_park",
     // Tracking silently dropped (§42.4 emits the fault; the reaction handles the kind from
     // day one): "reenable_then_pause" (default) | "pause" | "notify_only".
-    string OnTrackingLost = "reenable_then_pause");
+    string OnTrackingLost = "reenable_then_pause",
+    // §42.4 — value-based ISwitch read-back tolerance, percent of the port's min/max range
+    // (a boolean port's range is 1, so 5% catches a commanded-ON/read-OFF flip). A written
+    // port whose read-back stays outside this band past the settle window publishes a
+    // value_mismatch fault. Optional ctor default keeps an older profile.json deserializing.
+    double SwitchValueTolerancePct = 5.0);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

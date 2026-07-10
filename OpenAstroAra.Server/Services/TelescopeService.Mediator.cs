@@ -314,8 +314,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (TimeoutException ex) {
+            // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
+            LogMountOpFailed(ex, op);
+            PublishOpFault(EquipmentFaultKind.StallTimeout, ex.Message);
+            return false;
         } catch (Exception ex) {
             LogMountOpFailed(ex, op);
+            PublishOpFault(EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
             return false;
         }
     }
@@ -441,6 +447,20 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+    }
+
+    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller).
+    private void PublishOpFault(EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            device = _device;
+        }
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Telescope, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an

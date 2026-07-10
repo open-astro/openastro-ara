@@ -200,11 +200,42 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
                 await linked.CancelAsync().ConfigureAwait(false);
             }
             await writeTask.ConfigureAwait(false); // observe the write's result / surface its exception
+            // §42.4 — the write succeeded: remember what was commanded so the refresh loop can
+            // check the read-back (same recording the REST SetValueAsync path does).
+            RecordCommandedValue(client, portId, value);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (TimeoutException ex) {
+            // The wall-clock bound above: the blocking write never returned — a stalled op (§42.4).
+            LogSwitchWriteFailed(ex, portId, value);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
         } catch (Exception ex) {
             LogSwitchWriteFailed(ex, portId, value);
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"switch write to port {portId} failed: {ex.Message}");
         }
+    }
+
+    // §42.4 — op-channel fault publish: the service is multi-instance (no single _device), so the
+    // faulted device's identity is resolved from the live connection whose client ran the write
+    // (TripConnectionLost-style ReferenceEquals scan under the gate); a write that outlived its
+    // connection (disconnected / superseded) publishes with a null id/name rather than blaming a
+    // different device. Publish runs off-lock (EquipmentFaultHub.Publish is non-blocking and never
+    // throws into the caller).
+    private void PublishOpFault(AlpacaSwitch client, EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device = null;
+        lock (_gate) {
+            foreach (var conn in _connections.Values) {
+                if (ReferenceEquals(conn.Client, client)) {
+                    device = conn.Device;
+                    break;
+                }
+            }
+        }
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Switch, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Observes an abandoned (cancelled/timed-out) write task so a later fault can't surface as an

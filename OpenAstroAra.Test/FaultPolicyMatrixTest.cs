@@ -38,8 +38,10 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void The_guider_is_never_the_reaction_services_to_handle() {
-            Assert.That(FaultPolicyMatrix.Resolve(DeviceType.Guider, EquipmentFaultKind.Disconnected, Policies()), Is.Null,
-                "GuiderService.FaultReaction owns guider faults — a duplicate reaction here would double-pause (#760 regression)");
+            foreach (var kind in Enum.GetValues<EquipmentFaultKind>()) {
+                Assert.That(FaultPolicyMatrix.Resolve(DeviceType.Guider, kind, Policies()), Is.Null,
+                    $"{kind}: GuiderService.FaultReaction owns guider faults — a duplicate reaction here would double-pause (#760 regression)");
+            }
         }
 
         [Test]
