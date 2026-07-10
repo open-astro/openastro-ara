@@ -165,8 +165,61 @@ namespace OpenAstroAra.Test {
             Assert.That(events, Does.Not.Contain(GuiderService.DarkLibraryProgressEvent));
         }
 
-        private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        [Test]
+        public async Task Five_consecutive_poll_failures_mid_build_log_the_streak_warning() {
+            using var buildGate = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var pollAttempts = 0;
+            fake.OnRpc("get_dark_build_progress", _ => {
+                Interlocked.Increment(ref pollAttempts);
+                throw new InvalidOperationException("progress unavailable");
+            });
+            fake.OnRpc("build_dark_library", _ => {
+                buildGate.Wait(TimeSpan.FromSeconds(30));
+                return new JsonObject {
+                    ["profile_id"] = 3, ["dark_library_path"] = "/darks/ara.fits",
+                    ["frame_count"] = 5, ["exposure_count"] = 4,
+                    ["exposures_ms"] = new JsonArray(1000, 2000, 3000, 5000),
+                };
+            });
+
+            var events = new ConcurrentQueue<string>();
+            var logger = new RecordingLogger();
+            using var svc = await ConnectGuiderAsync(fake, events, logger).ConfigureAwait(false);
+            try {
+                _ = await svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 5), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+                // Hold the build open past the streak threshold (5 consecutive failures at the 1 s poll cadence)
+                // so the MID-BUILD warning fires while the build is still running — the headline behavior, as
+                // opposed to the drain-time zero-success fallback the other bench exercises.
+                var streaked = await WaitUntilAsync(() => Volatile.Read(ref pollAttempts) >= 5, TimeSpan.FromSeconds(20))
+                    .ConfigureAwait(false);
+                Assert.That(streaked, Is.True, "the poll never accumulated 5 attempts against the failing RPC");
+                var warnedMidBuild = await WaitUntilAsync(() => {
+                    lock (logger.Warnings) {
+                        return logger.Warnings.Exists(m => m.Contains("consecutive", StringComparison.OrdinalIgnoreCase));
+                    }
+                }, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                Assert.That(warnedMidBuild, Is.True,
+                    "the streak warning should fire MID-BUILD, on the 5th consecutive failure — not wait for the drain");
+            } finally {
+                buildGate.Set();
+            }
+
+            var sawComplete = await WaitForEventAsync(events, GuiderService.DarkLibraryCompleteEvent).ConfigureAwait(false);
+            Assert.That(sawComplete, Is.True, "the build should still complete — failing progress polls never disturb it");
+            // Still exactly ONE warning for the whole build: the streak warning suppresses the drain-time one.
+            var warnings = logger.Warnings.FindAll(m => m.Contains("progress poll", StringComparison.OrdinalIgnoreCase));
+            Assert.That(warnings, Has.Count.EqualTo(1), "the drain must not add a second warning after the streak one");
+            Assert.That(warnings[0], Does.Contain("consecutive"));
+        }
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition) =>
+            await WaitUntilAsync(condition, TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan deadline) {
+            using var cts = new CancellationTokenSource(deadline);
             try {
                 while (!cts.IsCancellationRequested) {
                     if (condition()) {
