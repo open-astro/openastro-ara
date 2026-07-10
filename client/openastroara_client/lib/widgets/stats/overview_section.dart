@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/stats/stats_overview.dart';
 import '../../state/stats/stats_overview_state.dart';
 import '../../theme/ara_colors.dart';
+import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 import 'stats_format.dart';
 
@@ -112,9 +113,7 @@ class _OverviewSectionState extends ConsumerState<OverviewSection> {
     if (data.isEmpty) {
       return const _Hint('No frames captured yet — your totals appear here once you start imaging.');
     }
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+    return ResponsiveTileGrid(
       children: [
         StatTile(
           icon: Icons.list_alt,

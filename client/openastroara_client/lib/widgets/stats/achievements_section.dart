@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/stats/achievements.dart';
 import '../../state/stats/achievements_state.dart';
 import '../../theme/ara_colors.dart';
+import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
 
 /// §50.19 Achievements section on the Stats dashboard. Unlike the demo-data
@@ -168,9 +169,7 @@ class _Achievements extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        ResponsiveTileGrid(
           children: [
             StatTile(
               icon: Icons.local_fire_department,
@@ -223,9 +222,7 @@ class _Achievements extends StatelessWidget {
                     color: AraColors.textSecondary,
                   )),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          ResponsiveTileGrid(
             children: [
               for (final m in data.milestones) _MilestoneBadge(milestone: m),
             ],
@@ -275,7 +272,6 @@ class _MilestoneBadge extends StatelessWidget {
     final achieved = milestone.achieved;
     final accent = achieved ? AraColors.accentConnected : AraColors.textDisabled;
     return Container(
-      width: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
