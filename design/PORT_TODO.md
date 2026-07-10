@@ -16,15 +16,16 @@ the other design docs.
 
 ## §42.5 fault log — follow-ups (2026-07-10, from the fault-log sub-PR)
 
-- **Pre-existing `has_more` pagination bug in three sqlite list methods.** Found while testing the
-  new fault log's pagination: the shared loop shape `while (await reader.ReadAsync(ct) &&
-  items.Count < pageSize)` consumes the LIMIT pageSize+1 sentinel row *before* the count check, so
-  the follow-up `hasMore = await reader.ReadAsync(ct)` always reads past the LIMIT and returns
-  false — `has_more` is false on every page and a well-behaved client stops paginating after page 1.
-  Affected: `SqliteNotificationService.ListAsync`, `SqliteDiagnosticsService.GetHistoryAsync`,
-  `SqliteFrameRepository` (frames list, ~L405). `SqliteCalibrationService.ListSessionsAsync` has the
-  correct read-all-then-trim shape (which the new `SqliteFaultLogService.ListAsync` follows, with a
-  regression test). Fix is a small reorder + tests per service — its own follow-up sub-PR.
+- ✅ **Pre-existing `has_more` pagination bug in three sqlite list methods — FIXED (2026-07-10, the
+  sub-PR after #795).** Found while testing the new fault log's pagination: the shared loop shape
+  `while (await reader.ReadAsync(ct) && items.Count < pageSize)` consumed the LIMIT pageSize+1
+  sentinel row *before* the count check, so the follow-up `hasMore = await reader.ReadAsync(ct)`
+  always read past the LIMIT and returned false — `has_more` was false on every page and a
+  well-behaved client stopped paginating after page 1. Fixed by reordering the condition (count
+  check first) in `SqliteNotificationService.ListAsync`, `SqliteDiagnosticsService.GetHistoryAsync`,
+  and the `SqliteFrameRepository` frames list, with a 3-page walk regression test per service
+  (`SqlitePaginationHasMoreTest`). `SqliteCalibrationService.ListSessionsAsync` already had the
+  correct read-all-then-trim shape (which `SqliteFaultLogService.ListAsync` follows).
 - **Guider faults aren't persisted to the §42.5 log.** The guider is deliberately NOT on the
   `EquipmentFaultHub` channel (`GuiderService.FaultReaction.cs` owns its §42.2 reaction + §63.3
   recovery), so guider link drops / star-lost episodes don't land in the `faults` table. If
