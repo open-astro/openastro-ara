@@ -218,8 +218,44 @@ The former version-bucketed roadmap, regrouped. Source §s preserved; nothing dr
 | **WCAG 2.1 AA formal certification** | former §55.2 | From AA-leaning baseline (§53) to formal third-party-audited compliance — only if observatory/outreach use justifies it. |
 | **Light-mode theme variant** | former §55.2 | Daytime planning + outreach demo contexts. |
 | **Web UI option** | former §55.2 | Web frontend reusing the OpenAPI client + API surface. |
+| **General command palette** | §61.10 | Expand the ⌘K settings search into a full command palette (actions, navigation, equipment ops) — explicitly committed expansion. |
+| **Client distribution channels** | §75.3, §75.7 | Homebrew cask, Chocolatey, AUR PKGBUILD, Windows `.msix`, optional Flatpak; in-app updater (+ its settings registrations) when auto-update ships. Mobile stores are the §41 row above. |
+| **NINA database importer** | §56.2.2 | Import NINA's `data.db` session/frame/calibration history (profiles + sequences already import per §56.4); only if user demand emerges. |
+| **Mount Safety v2** | §57.9 | The deferred slew-safety expansion pass beyond lean §57, once the panic-button baseline proves out in the field. |
 | **In-app equipment database / curated gear registry** | former §55.2 | Curated defaults surfaced in the §37 wizard. Strict scope guard retained: defaults-pre-fill for owned gear only, never a recommendation engine; community wiki proves the format first. |
 | ~~Native Flutter sky-renderer~~ | former §55.2 | **Superseded** — Aladin/CEF were removed and replaced by the native Stellarium-based atlas (#611/#649). Kept for the record. |
+
+### 7.7 Per-section expansion-path index
+
+The playbook keeps per-section "Future expansion paths" / "What's deferred" / "Out of initial
+scope" subsections. Every **committed** item from them already has a row in 7.1–7.6 above (or a
+part-3–6 workstream entry); this index catches the **speculative tails** so nothing scattered in
+the playbook is lost. One line per subsection; the playbook text is the reference:
+
+- **§27.4 / §28.5 / §44.11 / §53.5 / §66.8** — "out of initial scope" boundary lists (spectator +
+  admin override; mid-instruction resume, durability-mode knob, UPS GPIO, FITS checksum scrubbing;
+  multi-target/cloud backup; formal WCAG; runtime pool/queue tuning). Committed pieces have rows above.
+- **§28.14** — migration follow-ups: down-migrations reconsideration, encrypted backups
+  (`PRAGMA key`), the `restore-from-backup` endpoint (today a 501 pointer).
+- **§33.6** — sibling WILMA-push updates (row in 7.3) + Ed25519 signature verification addition.
+- **§45.14 / §46.9 / §47.13 / §48.9 / §49.7 / §51.9 / §52.7 / §59.18 / §62.16 / §63.16 / §64.17 /
+  §65.10 / §70.6 / §71.6** — the per-feature expansion subsections behind the 7.1–7.6 rows
+  (PA cameras; notification channels/scripting; mosaic; flats; API SDKs/docs; diagnostics
+  learning; driver registry/tips; Smart-Focus extensions incl. ML feature extraction + tilt-aware
+  focus; dither variants; guider profile lifecycle; Live View extensions incl. stacking preview;
+  channel-independent stretching; OpenAstro Hub; plugin-SDK AOT constraint).
+- **§56.2.2** — NINA database importer (row in 7.6).
+- **§57.9 / §58.17** — Mount Safety v2 (row in 7.6); flip hook scripts (fold into plugin SDK),
+  mount-driven trigger mode, lock-screen push (fold into notification channels).
+- **§60.7.1 / §60.8.1** — CORS tightening and a first `/api/v2` surface, only when auth/breaking
+  changes actually accumulate.
+- **§66.7 / §66.10** — perf-metrics endpoint + Stats panel; promoting SLO targets to CI gates.
+- **§67.4** — remote-access mode (row in 7.3: TLS / remote access; re-adds tokens, rate limiting,
+  4001 WS close code).
+- **Inline notes** — one-liner "a future release may…" ideas stay in place throughout the playbook
+  (e.g. §29.5 storage rotation policies, §29.9 log-rotation knobs, §30.8 remote-wake surface,
+  §36 CDN hosting); grep `future release` to enumerate them. They graduate to rows here only when
+  actually committed.
 
 ## 8. Verify / audit passes
 
@@ -346,6 +382,7 @@ Deliberately on no path (guard against scope-creep pull):
 ### What's NOT on this list (and why)
 
 If something seems missing it's likely: (1) **already shipped** — check the playbook TOC and
-section checklist; (2) **AI-handled during the port** — docs, NINA-parity verification, NOTICE.md,
-README; (3) **a user-policy knob, not a feature** — anything already configurable via settings;
-or (4) **outside ARA's product scope** — see part 11 above.
+section checklist; (2) **a speculative per-section expansion idea** — indexed in part 7.7, with
+the playbook subsection as the reference; (3) **AI-handled during the port** — docs, NINA-parity
+verification, NOTICE.md, README; (4) **a user-policy knob, not a feature** — anything already
+configurable via settings; or (5) **outside ARA's product scope** — see part 11 above.

@@ -333,7 +333,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | State management | Riverpod |
 | API client | generated from server's OpenAPI spec via `openapi_generator` |
 | mDNS discovery | `multicast_dns` plugin (cross-platform) |
-| Secure storage | `flutter_secure_storage` reserved for future future remote-access tokens (§67.4); not used in the initial release |
+| Secure storage | `flutter_secure_storage` reserved for future remote-access tokens (§67.4); not used in the initial release |
 | File picker | `file_picker` plugin |
 | Image rendering | Flutter's built-in `Image` widget for JPEG previews; FITS handled by a Dart FITS package (or inline parser if no suitable package exists) |
 | Build outputs | macOS `.app` + `.dmg`, iOS `.ipa`, Android `.apk`/`.aab`, Windows `.exe`/`.zip`, Linux AppImage |
@@ -1794,7 +1794,7 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 
 ### 19.4 Secrets safety
 
-- Do not commit `.pfx`, `.key`, `.pem`, `.env`, `appsettings.Secrets.json`, `secrets.dart`, or files containing `password`/`secret`/`token`. Add patterns to `.gitignore` if found. (There is no server auth today per §67, but the rule still applies — protects against future future remote-access tokens, plus any third-party API keys that may show up in dependencies or example configs.)
+- Do not commit `.pfx`, `.key`, `.pem`, `.env`, `appsettings.Secrets.json`, `secrets.dart`, or files containing `password`/`secret`/`token`. Add patterns to `.gitignore` if found. (There is no server auth today per §67, but the rule still applies — protects against future remote-access tokens, plus any third-party API keys that may show up in dependencies or example configs.)
 - Do not echo or log API keys, tokens, auth headers that may exist in third-party integrations or future remote-access mode.
 
 ### 19.5 Scope safety
@@ -2734,7 +2734,7 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 
 - A user (or buggy build) edited a checkpoint JSON by hand and produced invalid syntax
 - A disk-level FS error left a FITS file with a truncated header
-- A bug in the initial release-ara.N wrote a row with NULL where the schema expects non-null, exposed only after upgrading to v0.0.1-ara.N+1
+- A bug in v0.0.1-ara.N wrote a row with NULL where the schema expects non-null, exposed only after upgrading to v0.0.1-ara.N+1
 - SQLite WAL recovery succeeded but `PRAGMA integrity_check` reports `*** in database main *** corruption messages`
 - DB and filesystem disagree: row points at `frame-42.fits` but the file isn't there (different from §28.8 orphan — that's "file exists with no row"; this is "row exists with no file")
 
@@ -3277,7 +3277,7 @@ Modal with a file picker:
 - No auth tokens to manage per §67
 - Settings → Server panel: shows current server + connection state, "Forget this server" button
 - Forget = removes the saved server entry; next launch shows the discovery flow for that server again (Pi-side state is unaffected)
-- the planned remote-access mode (§67.4, ROADMAP) is — that's when tokens come back, scoped to remote endpoints only
+- the planned remote-access mode (§67.4, ROADMAP) is when tokens come back, scoped to remote endpoints only
 
 §61 search registry entries (§30.2-§30.6 coverage):
 
