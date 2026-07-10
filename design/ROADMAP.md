@@ -69,13 +69,13 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   telescope-type extractor selector, and wiring `FocusInverseMap` into `AutofocusSweepService`
   as the Phase-2 one-frame run (needs a calibration-table profile store).
 - **§59.10 collimation verdict** — its own slice on top of Smart Focus.
-- **Sequencer instructions** — ~~port **Run Autofocus** and **Center (and Rotate)**~~ (both
-  already landed: `RunAutofocus` wraps `AutofocusSweepService` via `IAutofocusExecutor`;
-  `CenterAndRotate` wraps `CenteringService` via `ICenteringExecutor`); ~~rotation fidelity
-  (solve-driven rotator moves)~~ shipped — `CenterAndRotateAsync` rotates to the plan's position
-  angle (solve → sync → folded relative move to the profile's rotation tolerance) before
-  centring. Remaining: carrying the §36 framing position angle into the run (`SlewScopeToRaDec`
-  has no PA field; the framing flow could now emit a `CenterAndRotate`).
+- ~~**Sequencer instructions**~~ — COMPLETE: ~~port **Run Autofocus** and **Center (and
+  Rotate)**~~ (both landed: `RunAutofocus` wraps `AutofocusSweepService` via
+  `IAutofocusExecutor`; `CenterAndRotate` wraps `CenteringService` via `ICenteringExecutor`);
+  ~~rotation fidelity~~ shipped #806 (`CenterAndRotateAsync` rotates to the plan's position
+  angle before centring); ~~carrying the §36 framing position angle into the run~~ shipped —
+  a dialed framing PA now emits a `CenterAndRotate` in place of the blind slew (untouched 0°
+  dial keeps the slew so runs never require a solver the user didn't opt into).
 - **§58 tail** — refocus-after-flip (lands once the AF sweep is validated); §58.6 profile schema
   gaps (`refocus_after_flip` / `guider_recal` mode enums, added together with the orchestration
   they configure); §58.12 client settings entries; §58.13 morning summary.

@@ -38,10 +38,11 @@ import 'trigger_catalog.dart';
 /// - `StartGuiding` / `Dither`: the daemon's guider mediator is still the
 ///   headless stub — both would fail validation on every run and read as
 ///   FAILED steps in the report.
-/// - `CenterAndRotate`: the rotate half isn't ported; the instruction throws
-///   when a rotator IS connected, so a plain slew is the reliable default.
-///   (The framing position angle is therefore still not acted on — the §36
-///   sequencer-fidelity TODO in `stellarium_view.dart` stands.)
+///
+/// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
+/// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now);
+/// with no PA the plain slew stays the default, so a run never requires a
+/// plate solver the user didn't opt into by framing with rotation.
 ///
 /// The body is editable afterwards in the Run tab like any hand-built
 /// sequence — this is a starting point that actually images, not a template
@@ -60,6 +61,7 @@ Map<String, dynamic> buildImagingRunBody({
   bool warmAtEnd = false,
   bool autofocusAtStart = true,
   int? autofocusEveryNExposures,
+  double? positionAngleDeg,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -73,6 +75,7 @@ Map<String, dynamic> buildImagingRunBody({
     filterName: filterName,
     autofocusAtStart: autofocusAtStart,
     autofocusEveryNExposures: autofocusEveryNExposures,
+    positionAngleDeg: positionAngleDeg,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -116,6 +119,7 @@ Map<String, dynamic> buildTargetBlock({
   String? filterName,
   bool autofocusAtStart = true,
   int? autofocusEveryNExposures,
+  double? positionAngleDeg,
 }) {
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
@@ -163,9 +167,19 @@ Map<String, dynamic> buildTargetBlock({
     imaging = withTriggers(imaging, [afTrigger]);
   }
 
+  // §36/§38 — a dialed framing position angle upgrades the plain slew to a
+  // Center and Rotate carrying it (slew + plate-solve centre + rotate); with
+  // no PA the blind slew stays, so runs never require a solver the user
+  // didn't opt into by framing with rotation.
+  final goToTarget = positionAngleDeg != null
+      ? (_item(centerAndRotateType)
+          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+          ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360)
+      : (_item(slewScopeToRaDecType)
+          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg));
+
   final children = <Map<String, dynamic>>[
-    _item(slewScopeToRaDecType)
-      ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg),
+    goToTarget,
     if (filterName != null && filterName.trim().isNotEmpty)
       _item(switchFilterType)..['Filter'] = buildFilterInfo(filterName.trim()),
     if (autofocusAtStart) _item(runAutofocusType),
