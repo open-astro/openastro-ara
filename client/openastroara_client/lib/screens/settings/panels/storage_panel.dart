@@ -78,15 +78,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
   }
 
   ProfileApi? _api() {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) return null;
-    // Most-recently-saved server is the de-facto active one — same
-    // convention as §52.2 Alpaca chooser + §54 help dialog. Multi-server
-    // active selection arrives with the §55.1 v0.1.0 roadmap.
-    return ProfileApi(servers.last);
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
   }
 
   @override

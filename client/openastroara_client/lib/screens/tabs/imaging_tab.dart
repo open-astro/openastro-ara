@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/server.dart';
 import '../../services/camera_exposure_api.dart';
 import '../../services/frames_api.dart';
 import '../../state/imaging/exposure_state.dart';
@@ -103,18 +102,14 @@ class ImagingTab extends ConsumerWidget {
   /// just surface accepted/failed to the user.
   Future<void> _takeOne(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const <AraServer>[],
-        );
-    if (servers.isEmpty) {
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Not connected to a server.')),
       );
       return;
     }
     final params = ref.read(exposureControllerProvider);
-    final server = servers.last;
     // Notifier handles, captured before any await so the finally-reset and the
     // result update don't go through WidgetRef after a possible unmount.
     final progress = ref.read(captureInProgressProvider.notifier);

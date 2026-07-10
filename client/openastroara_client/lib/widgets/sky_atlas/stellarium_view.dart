@@ -91,9 +91,9 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             ref.read(siteLocationProvider).asData?.value ??
             await ref.read(siteLocationProvider.future);
         if (!mounted) return;
-        final servers = await ref.read(savedServersProvider.future);
+        final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
-        final api = servers.isNotEmpty ? servers.last.baseUrl : '';
+        final api = activeServer?.baseUrl ?? '';
         // Saved Display-panel toggles + `cat:`-namespaced Catalogs overlays
         // (empty on first run → the page keeps its defaults). The page applies
         // these on load and posts changes back via _onPageEvent, so a user's

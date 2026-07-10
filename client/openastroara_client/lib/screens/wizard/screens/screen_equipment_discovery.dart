@@ -73,11 +73,8 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       ref.read(wizardStepValidProvider.notifier).setValid(valid);
 
   Future<void> _test() async {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) {
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
       setState(() {
         _ok = false;
         _noServer = true;
@@ -95,7 +92,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
     });
     // One-shot client per probe — close it (each instance owns its own Dio;
     // the auto-run-on-entry + retry cadence would otherwise stack leaked pools).
-    final api = ref.read(equipmentDiscoveryApiFactoryProvider)(servers.last);
+    final api = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
     try {
       // Probe the daemon's discovery path with a single type; a clean response
       // (even an empty list) means the AlpacaBridge path is reachable.
@@ -387,13 +384,10 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
 
   Future<void> _choose(_Slot slot) async {
     final type = slot.type;
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
+    final server = ref.read(activeServerProvider);
     // One-shot client for the sheet's scans — closed when the sheet is done
     // (same leak avoidance as the Screen-2 probe).
-    final api = servers.isEmpty ? null : EquipmentDiscoveryApi(servers.last);
+    final api = server == null ? null : EquipmentDiscoveryApi(server);
     final picked = await showModalBottomSheet<_Choice>(
       context: context,
       backgroundColor: AraColors.bgPanel,

@@ -45,8 +45,13 @@ class SavedServerService {
 
   Future<void> add(AraServer server) async {
     final existing = await loadAll();
-    if (existing.contains(server)) return;
-    await saveAll([...existing, server]);
+    // Re-confirming a known server (equality is host:port) moves it to the
+    // END — "the last one used is the default on next launch" was a lie while
+    // this early-returned: with two saved rigs, reconnecting to the older one
+    // left the other as `activeServerProvider`'s pick. The re-add also
+    // refreshes stored metadata (serverVersion/mdnsName can change between
+    // confirmations).
+    await saveAll([...existing.where((s) => s != server), server]);
   }
 
   Map<String, dynamic> _serverToJson(AraServer s) => <String, dynamic>{

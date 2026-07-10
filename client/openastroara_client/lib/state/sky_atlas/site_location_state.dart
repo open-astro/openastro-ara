@@ -45,9 +45,8 @@ class SiteLocation {
 /// site can't be read. The planetarium listens and re-points the observer.
 final siteLocationProvider =
     FutureProvider.autoDispose<SiteLocation?>((ref) async {
-  final servers = await ref.watch(savedServersProvider.future);
-  if (servers.isEmpty) return null;
-  final server = servers.last;
+  final server = await ref.watch(activeServerFutureProvider.future);
+  if (server == null) return null;
   final dio = Dio(BaseOptions(
     baseUrl: server.baseUrl,
     connectTimeout: const Duration(seconds: 3),

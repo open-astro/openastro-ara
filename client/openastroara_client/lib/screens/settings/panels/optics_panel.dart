@@ -73,12 +73,9 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
   /// Pull the connected camera's sensor geometry into the form (and persist it).
   /// The daemon also caches this on connect; this is the on-demand re-pull.
   Future<void> _refreshFromCamera() async {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const <dynamic>[],
-        );
+    final server = ref.read(activeServerProvider);
     final messenger = ScaffoldMessenger.of(context);
-    if (servers.isEmpty) {
+    if (server == null) {
       messenger.showSnackBar(const SnackBar(content: Text('No active server — connect to a daemon first.')));
       return;
     }
@@ -87,7 +84,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
       _lastError = null;
     });
     try {
-      final geometry = await CameraGeometryApi(servers.last).read();
+      final geometry = await CameraGeometryApi(server).read();
       // ref.read on a disposed WidgetRef throws; bail if the panel went away mid-request.
       if (!mounted) return;
       if (geometry == null) {
@@ -122,15 +119,8 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
   }
 
   ProfileApi? _api() {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) return null;
-    // Most-recently-saved server is the de-facto active one — same convention
-    // as the other Settings panels (a dedicated active-server provider lands
-    // with §55.1 multi-server switching).
-    return ProfileApi(servers.last);
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
   }
 
   @override

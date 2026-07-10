@@ -216,13 +216,9 @@ Future<RemoveTargetOutcome> removeTargetFromSequence(
 /// active server's profile (imaging defaults + autofocus). No server → no-op;
 /// a transport failure keeps the notifiers' current state.
 Future<void> _hydratePlanningSettings(ProviderContainer container) async {
-  final servers = container
-      .read(savedServersProvider)
-      .maybeWhen(data: (list) => list, orElse: () => const []);
-  if (servers.isEmpty) return;
-  // Most-recently-saved server is the de-facto active one — same convention
-  // as the settings panels' own hydration.
-  final api = ProfileApi(servers.last);
+  final server = container.read(activeServerProvider);
+  if (server == null) return;
+  final api = ProfileApi(server);
   try {
     await Future.wait([
       container.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),

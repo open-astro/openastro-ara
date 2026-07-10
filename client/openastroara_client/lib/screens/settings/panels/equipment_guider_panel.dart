@@ -73,14 +73,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   }
 
   ProfileApi? _api() {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) return null;
-    // Most-recently-saved server is the de-facto active one — same
-    // convention as §52.2 Alpaca chooser + §54 help dialog.
-    return ProfileApi(servers.last);
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
   }
 
   @override
