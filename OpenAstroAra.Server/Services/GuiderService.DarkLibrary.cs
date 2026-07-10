@@ -287,6 +287,7 @@ public sealed partial class GuiderService {
         var failedAttempts = 0;
         var succeededOnce = false;
         var warned = false;
+        Exception? lastFailure = null;
         try {
             while (!ct.IsCancellationRequested) {
                 try {
@@ -315,6 +316,7 @@ public sealed partial class GuiderService {
                     // skip this tick and keep polling. The Task.Delay at the top bounds the retry to one per second.
                     failedAttempts++;
                     consecutiveFailures++;
+                    lastFailure = ex;
                     if (!warned && consecutiveFailures >= BuildProgressPollWarnAfterFailures) {
                         warned = true;
                         LogBuildProgressPollFailing(progressEvent, consecutiveFailures, ex);
@@ -323,7 +325,7 @@ public sealed partial class GuiderService {
             }
         } finally {
             if (!warned && !succeededOnce && failedAttempts > 0) {
-                LogBuildProgressPollNeverSucceeded(progressEvent, failedAttempts);
+                LogBuildProgressPollNeverSucceeded(progressEvent, failedAttempts, lastFailure);
             }
         }
     }
@@ -351,7 +353,7 @@ public sealed partial class GuiderService {
     partial void LogBuildProgressPollFailing(string progressEvent, int consecutiveFailures, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Build progress poll ({ProgressEvent}) never succeeded across the whole build ({FailedAttempts} failed attempt(s)) — the progress RPC may be unsupported or unreachable on this guider daemon")]
-    partial void LogBuildProgressPollNeverSucceeded(string progressEvent, int failedAttempts);
+    partial void LogBuildProgressPollNeverSucceeded(string progressEvent, int failedAttempts, Exception? ex);
 
     // ── §63.6 guider-e-4c-b-2: defect-map (bad-pixel) build — mirrors the dark-library build above, sharing the
     // single calibration-build gate + the calibration WS-emit helper. ──
