@@ -129,12 +129,14 @@ overlay"; these are genuine but larger and tracked here per §0 rule 6.
   annotated encoder, shared draw-and-encode tail, downscale-first + output-space rings) draws
   the overlay on the colour frame. No effective-annotate echo needed — the flag now does what it
   says on both sensor types.
-- **Detection runs inside the `_captureInFlight` gate, unoffloaded.** `RenderLiveFrame` runs the
-  synchronous full-frame `StarDetector.Detect` on the live loop's continuation while it holds
-  `_captureInFlight = 1`; a user-initiated catalog capture arbitrates on the same gate, so with annotate
-  on, every live frame extends the window a real capture is blocked. `StarDetector`'s own doc says
-  callers must offload the CPU-bound work. Follow-up: offload detection off the capture continuation (or
-  detect on a downsized copy) so annotation doesn't lengthen the shared capture gate.
+- ✅ **Detection off the `_captureInFlight` gate — DONE (the sub-PR after #808).** The live loop
+  is split: `AcquireLiveFramePixelsAsync` (settings → expose → ImageReady poll → download →
+  pixel conversion) is the only part still under the gate; `PublishLiveFrame` (RenderLiveFrame —
+  stretch/debayer/JPEG and, with annotate, the full-frame `StarDetector` pass — plus the
+  `_liveViewFrame` write) runs after the gate releases, so a manual catalog capture can
+  interleave while a frame renders. The loop stays the single writer (publish ordering
+  unchanged); a render failure still counts toward `LiveViewMaxConsecutiveFailures` (self-stop
+  preserved) but no longer resets `settingsApplied` — the device was untouched by a render.
 - **Marker cap bounds the draw, not detection cost.** `LiveViewMaxMarkers` trims the returned/drawn
   markers *after* `FindStars`+`Measure` have run the full per-blob pipeline on every blob. A dense field
   (Milky Way, low threshold) fully measures thousands of blobs each annotated frame, then discards all
