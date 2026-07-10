@@ -226,6 +226,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                         }
 
                         var success = false;
+                        Exception? lastAttemptException = null;
                         for (int i = 0; i < Attempts; i++) {
                             using var checkTokenSource = new CancellationTokenSource();
                             var checkTimeout = TimeSpan.FromMinutes(2);
@@ -272,6 +273,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                                 // then the retry loop / configured InstructionErrorBehavior takes over.
                                 Logger.Error($"{this} - ", ex);
                                 success = false;
+                                lastAttemptException = ex;
                                 root?.RaiseFailureEvent(this, ex);
                             } finally {
                                 try {
@@ -282,6 +284,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
 
                         if (!success) {
                             RunErrorBehavior(root);
+                            // Attempts exhausted: the per-attempt raises above all fired while the
+                            // item was still RUNNING (it might yet have succeeded on a retry); this
+                            // is the raise that carries the actual FAILED transition. Every path
+                            // that turns an item FAILED must raise exactly once with that status —
+                            // FailureEvent subscribers (the server's per-occurrence
+                            // instruction-failure channel) rely on it as their only signal.
+                            root?.RaiseFailureEvent(this, lastAttemptException
+                                ?? new SequenceEntityFailedException($"{this} failed after {Attempts} attempt(s)"));
                         }
                     } catch (SequenceEntityFailedException ex) {
                         Logger.Error($"Failed: {this} - " + ex.Message);

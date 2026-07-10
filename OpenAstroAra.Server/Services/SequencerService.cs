@@ -626,8 +626,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // their terminal emits; null until the run body constructs it.
         CoalescingAsyncPublisher? progressPublisher = null;
         // Same hoisting for the §42.4 failure-report drain: the exception/cancellation
-        // paths below must also scan-and-await before their terminal emits, or an
-        // instruction_failed could land after sequence.failed/stopped (review finding).
+        // paths below must also await in-flight failure emits before their terminal
+        // emits, or an instruction_failed could land after sequence.failed/stopped
+        // (review finding).
         Func<Task>? drainFailureReports = null;
         // The run's §40 catalog session; null when no frame repository is wired
         // or its creation failed. Closed in the finally on every terminal path.
@@ -646,53 +647,30 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
 
-                // §42.4 — sequence.instruction_failed: each leaf whose Status turns FAILED is
-                // reported exactly once (Progress<T> callbacks can run concurrently, so the
-                // scan-and-mark is gated). Scanned on every progress tick AND at the final
-                // snapshot — a fast failure may finish without ever firing a tick. This is the
+                // §42.4 — sequence.instruction_failed: the engine raises FailureEvent with the
+                // item already FAILED exactly once per failure OCCURRENCE (the exception and
+                // validation paths, plus the retries-exhausted transition in SequenceItem.Run) —
+                // so this single subscription IS the whole reporting channel. One event source
+                // means one reporter per occurrence: no per-leaf latch to race a status scan
+                // against (the round-3 review's duplicate under ParallelStrategy), and no latch
+                // to go stale when a loop container resets and re-fails a child between progress
+                // ticks (the round-2 review's swallowed repeat). Mid-attempt raises arrive with
+                // the item still RUNNING (it may yet succeed on a retry) and are skipped; the
+                // engine raises again, FAILED, if the attempts run out. This is the
                 // instruction-level failure channel; the §42.4 equipment.fault publishes cover
                 // the mediator degrade paths that complete "successfully" at this level.
-                // Per-leaf "this FAILED status is already reported" latch. NOT a once-per-run
-                // set: loop containers reset their children (FAILED → CREATED) and re-run them,
-                // and a repeat failure is a NEW occurrence the live view must see — an observed
-                // non-FAILED status re-arms the leaf (review finding).
-                var reportedFailed = new bool[leaves.Count];
+                //
+                // Ordering: RaiseFailureEvent dispatches subscribers synchronously up to their
+                // first await (async-method prefix + Task.WhenAll's eager enumeration in
+                // InvokeAsync), so the lock section below — including registering the emit in
+                // failureEmits — completes on the failing thread inside the raise statement,
+                // before the engine can reset the leaf or let Start() return. The terminal
+                // drain therefore sees every emit the run ever started.
                 var failedGate = new object();
                 var failureEmits = new List<Task>(); // every emit ever started, guarded by failedGate
-                Task ReportNewFailuresAsync() {
-                    // Mark + start + register under ONE lock acquisition: if the mark and the
-                    // emit registration were separate critical sections, the terminal drain
-                    // below could snapshot failureEmits in the gap and miss an emit that a
-                    // tick had marked but not yet registered — instruction_failed would then
-                    // land after the terminal event.
-                    lock (failedGate) {
-                        List<Task>? emits = null;
-                        for (var i = 0; i < leaves.Count; i++) {
-                            if (leaves[i].Status == SequenceEntityStatus.FAILED) {
-                                if (!reportedFailed[i]) {
-                                    reportedFailed[i] = true;
-                                    var name = leaves[i].Name;
-                                    var label = string.IsNullOrWhiteSpace(name) ? leaves[i].GetType().Name : name;
-                                    LogInstructionFailed(sequenceId, i, label);
-                                    (emits ??= []).Add(EmitInstructionFailedAsync(sequenceId, run, i, label));
-                                }
-                            } else if (reportedFailed[i]) {
-                                reportedFailed[i] = false; // reset observed — re-armed for the next iteration
-                            }
-                        }
-                        if (emits is null) {
-                            return Task.CompletedTask;
-                        }
-                        var all = Task.WhenAll(emits);
-                        failureEmits.Add(all);
-                        return all;
-                    }
-                }
-                // The terminal-ordering barrier: one last scan, then await every emit any tick
-                // ever started — a tick-path fire-and-forget that already MARKED a leaf could
-                // otherwise still be publishing while the terminal event goes out.
                 async Task DrainFailureReportsAsync() {
-                    await ReportNewFailuresAsync();
+                    // The terminal-ordering barrier: await every emit before the terminal event,
+                    // or a still-publishing instruction_failed could land after it.
                     Task[] pending;
                     lock (failedGate) {
                         pending = [.. failureEmits];
@@ -700,23 +678,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     await Task.WhenAll(pending);
                 }
                 drainFailureReports = DrainFailureReportsAsync;
-                // The occurrence channel: the engine raises FailureEvent on every failure, awaited
-                // inline by the run thread. When the leaf's status is already FAILED at raise time
-                // (the exception/validation paths — including a loop container re-running a failing
-                // child, whose FAILED→CREATED reset happens between ticks where the status scan
-                // can't see it) emit directly. Mid-attempt raises with the leaf still RUNNING (the
-                // retry loop) are left to the status scan: they may yet succeed, and the leaf only
-                // turns FAILED after the raises when its attempts are exhausted.
                 Task OnLeafFailure(object _, OpenAstroAra.Sequencer.Utility.SequenceEntityFailureEventArgs args) {
                     if (args.Entity is not ISequenceItem item || item.Status != SequenceEntityStatus.FAILED) {
-                        return Task.CompletedTask;
+                        return Task.CompletedTask; // mid-attempt raise — not (yet) a FAILED transition
                     }
                     var index = leaves.IndexOf(item);
                     if (index < 0) {
-                        return Task.CompletedTask; // containers report through their leaves
+                        return Task.CompletedTask; // triggers/conditions/containers report through their leaves
                     }
                     lock (failedGate) {
-                        reportedFailed[index] = true; // the scan must not re-report this occurrence
                         var name = item.Name;
                         var label = string.IsNullOrWhiteSpace(name) ? item.GetType().Name : name;
                         LogInstructionFailed(sequenceId, index, label);
@@ -739,7 +709,6 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     run.SetDescription(status.Status);
                     run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
                     progressPublisher.Poke();
-                    _ = ReportNewFailuresAsync(); // fire-and-forget on ticks; the emit never throws
                     WriteCheckpointIfOwner(run, sequenceId);
                 });
 
@@ -766,8 +735,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Final snapshot — fast instructions may finish without firing a
                 // progress tick, so settle the completed count after the run.
                 run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), runningIndex: null);
-                // Awaited (unlike the tick-path scans) so every instruction_failed for this
-                // run is published before its terminal event below.
+                // Every instruction_failed for this run is published before its
+                // terminal event below.
                 await DrainFailureReportsAsync();
 
                 // r1 ordering: seal (late queued Progress<T> ticks become no-ops — the
