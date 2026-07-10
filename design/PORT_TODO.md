@@ -98,11 +98,17 @@ Missing, by user value:
   and the `SqliteFrameRepository` frames list, with a 3-page walk regression test per service
   (`SqlitePaginationHasMoreTest`). `SqliteCalibrationService.ListSessionsAsync` already had the
   correct read-all-then-trim shape (which `SqliteFaultLogService.ListAsync` follows).
-- **Guider faults aren't persisted to the §42.5 log.** The guider is deliberately NOT on the
-  `EquipmentFaultHub` channel (`GuiderService.FaultReaction.cs` owns its §42.2 reaction + §63.3
-  recovery), so guider link drops / star-lost episodes don't land in the `faults` table. If
-  per-session guider fault history is wanted (§42.6 session badges), have the guider flow call
-  `IFaultLogService` directly with its own action vocabulary.
+- ✅ **Guider faults now persisted to the §42.5 log — DONE (the sub-PR after #810).** The guider
+  stays deliberately OFF the `EquipmentFaultHub` channel; `GuiderService` calls `IFaultLogService`
+  directly: the §42.2 latch records a `Guider`/`disconnected` row the moment it fires (details
+  distinguish "guider link down…" from "guide camera disconnected — link still up"), the reaction
+  stamps its policy action (`pause_and_retry`/`skip_target`/`abort_sequence`, or `notify_only`
+  when idle) onto the same natural-keyed row, and a successful connect resolves the open rows
+  (the publisher hook's observed-reconnect semantics). Guider outages now show in the fault feed
+  + §42.6 session timeline. Refinement tracked: the camera-drop row's TRUE recovery signal (link
+  never dropped) needs the guider#57 structured reconnect events (ROADMAP part 4); until then it
+  closes on the next guider connect. Star-lost episodes stay unlogged by design (transient,
+  guider-owned).
 - ✅ **`affected_frames` populated — DONE (the sub-PR after #804, closing the §42 epic).** Filled
   the moment `resolved_at` is stamped (both the `recovered` action paths and
   `ResolveOnReconnectAsync`): the fault's session's frames whose exposure window

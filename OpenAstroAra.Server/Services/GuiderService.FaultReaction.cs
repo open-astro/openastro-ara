@@ -41,6 +41,9 @@ public sealed partial class GuiderService {
     private readonly IProfileStore? _profileStore;
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly INotificationService? _notifications;
+    // §42.5 — the guider is deliberately OFF the EquipmentFaultHub channel (this partial owns its
+    // §42.2 reaction), so it writes its faults to the persistent log directly.
+    private readonly IFaultLogService? _faultLog;
     // Guarded by _gate. The kind of the fault that most recently latched a §42.2 reaction this episode
     // (null = not latched); cleared by SetStateLocked on the next successful connect. Kind-aware because
     // an EquipmentDisconnected fault stays Connected and so never clears the latch — a later, strictly
@@ -92,16 +95,27 @@ public sealed partial class GuiderService {
             return;
         }
         _latchedFaultKind = kind;
+        // §42.5 — the fault goes on the record the moment it latches, natural-keyed by this
+        // event instance so the reaction's later action stamp lands on the same row. Kind is
+        // Disconnected for both (the log's wire vocabulary; a link-down IS a disconnect, and
+        // the camera drop is a guiding disconnect in effect) — the details distinguish them.
+        var fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2",
+            EquipmentFaultKind.Disconnected,
+            kind == GuiderFaultKind.LinkDown
+                ? "guider link down (socket dropped or daemon unresponsive)"
+                : "guide camera disconnected — guider link still up",
+            DateTimeOffset.UtcNow);
+        RecordFaultQuietly(fault);
         // Fire-and-forget one-shot: ReactToGuidingLossAsync owns no disposables,
         // catches everything itself, and each rung uses CancellationToken.None
         // deliberately (a daemon shutdown mid-reaction should still finish
         // pausing the run — the sequencer's own shutdown path wins regardless).
-        _ = Task.Run(() => ReactToGuidingLossAsync(kind), CancellationToken.None);
+        _ = Task.Run(() => ReactToGuidingLossAsync(kind, fault), CancellationToken.None);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background reaction boundary: a fault is logged and the sequence simply keeps its prior state — never an unobserved task exception, and never a blocked recovery (which runs on its own task).")]
-    internal async Task ReactToGuidingLossAsync(GuiderFaultKind kind) {
+    internal async Task ReactToGuidingLossAsync(GuiderFaultKind kind, EquipmentFaultEvent? fault = null) {
         try {
             SafetyPoliciesDto? policy = null;
             try {
@@ -129,6 +143,14 @@ public sealed partial class GuiderService {
                         break;
                 }
                 LogFaultReacted(GuiderLostActionToken(action), affected);
+            }
+
+            // §42.5 — stamp what the reaction DID onto the fault's history row: the policy
+            // token when it acted on running sequences, notify_only when there was nothing
+            // to act on (the FaultReactionService's idle vocabulary).
+            if (fault is not null) {
+                await RecordActionQuietlyAsync(fault, affected > 0 ? GuiderLostActionToken(action) : "notify_only")
+                    .ConfigureAwait(false);
             }
 
             if (affected == 0) {
@@ -227,6 +249,59 @@ public sealed partial class GuiderService {
             LogFaultNotifyFailed(ex);
         }
     }
+
+    // §42.5 — best-effort persistence: a fault-log store hiccup must never touch the reaction.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort fault-log write on a fire-and-forget task; any store fault is logged and the reaction proceeds. Log-and-recover boundary.")]
+    private void RecordFaultQuietly(EquipmentFaultEvent fault) {
+        if (_faultLog is null) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                await _faultLog.RecordFaultAsync(fault, CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogFaultLogWriteFailed(ex);
+            }
+        }, CancellationToken.None);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort fault-log write; any store fault is logged and the reaction proceeds. Log-and-recover boundary.")]
+    private async Task RecordActionQuietlyAsync(EquipmentFaultEvent fault, string action) {
+        if (_faultLog is null) {
+            return;
+        }
+        try {
+            await _faultLog.RecordActionAsync(fault, action, resolvedUtc: null, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogFaultLogWriteFailed(ex);
+        }
+    }
+
+    // §42.5 — an observed reconnect resolves this guider's open disconnect rows (the same
+    // semantics EquipmentEventPublisher gives Alpaca devices). The camera-drop row (link
+    // still up) also closes here — its true recovery signal needs the guider#57 structured
+    // reconnect events (tracked, ROADMAP part 4), and closing on the next guider connect is
+    // the conservative approximation until then.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort fault-log resolve on a fire-and-forget task; any store fault is logged. Log-and-recover boundary.")]
+    private void ResolveGuiderFaultsQuietly() {
+        if (_faultLog is null) {
+            return;
+        }
+        _ = Task.Run(async () => {
+            try {
+                await _faultLog.ResolveOnReconnectAsync(DeviceType.Guider, DateTimeOffset.UtcNow, CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogFaultLogWriteFailed(ex);
+            }
+        }, CancellationToken.None);
+    }
+
+    [LoggerMessage(EventId = 4227, Level = LogLevel.Warning, Message = "§42.5 guider fault-log write failed (best-effort; the reaction is unaffected)")]
+    private partial void LogFaultLogWriteFailed(Exception exception);
 
     [LoggerMessage(EventId = 4221, Level = LogLevel.Warning, Message = "§42.2 guider-lost reaction executed: action={Action} runsAffected={RunsAffected}")]
     private partial void LogFaultReacted(string action, int runsAffected);

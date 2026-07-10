@@ -39,6 +39,7 @@ namespace OpenAstroAra.Test {
         private Mock<ISequencerService> sequencer = null!;
         private Mock<INotificationService> notifications = null!;
         private Mock<IWsBroadcaster> ws = null!;
+        private Mock<IFaultLogService> faultLog = null!;
         private List<string> publishedEvents = null!;
         private List<NotificationDto> postedNotifications = null!;
         private GuiderService service = null!;
@@ -49,6 +50,7 @@ namespace OpenAstroAra.Test {
             sequencer = new Mock<ISequencerService>();
             notifications = new Mock<INotificationService>();
             ws = new Mock<IWsBroadcaster>();
+            faultLog = new Mock<IFaultLogService>();
             publishedEvents = new List<string>();
             postedNotifications = new List<NotificationDto>();
 
@@ -72,7 +74,8 @@ namespace OpenAstroAra.Test {
                 ws.Object,
                 profiles.Object,
                 () => sequencer.Object,
-                notifications.Object);
+                notifications.Object,
+                faultLog.Object);
         }
 
         [TearDown]
@@ -144,6 +147,40 @@ namespace OpenAstroAra.Test {
 
             Assert.That(publishedEvents, Is.Empty);
             Assert.That(postedNotifications, Is.Empty);
+        }
+
+        private static EquipmentFaultEvent GuiderFault(string details = "guider link down") =>
+            new(DeviceType.Guider, null, "PHD2", EquipmentFaultKind.Disconnected, details,
+                new DateTimeOffset(2026, 7, 10, 4, 0, 0, TimeSpan.Zero));
+
+        [Test]
+        public async Task The_reaction_stamps_the_policy_action_onto_the_fault_row() {
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            var fault = GuiderFault();
+
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown, fault);
+
+            faultLog.Verify(f => f.RecordActionAsync(fault, "pause_and_retry", null, It.IsAny<CancellationToken>()),
+                Times.Once, "§42.5 — the fault row must carry what the reaction DID");
+        }
+
+        [Test]
+        public async Task An_idle_reaction_stamps_notify_only() {
+            var fault = GuiderFault("guide camera disconnected — guider link still up");
+
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.EquipmentDisconnected, fault);
+
+            faultLog.Verify(f => f.RecordActionAsync(fault, "notify_only", null, It.IsAny<CancellationToken>()),
+                Times.Once, "no runs to act on — the row still records that the reaction ran");
+        }
+
+        [Test]
+        public async Task A_reaction_without_a_fault_event_writes_no_action() {
+            await service.ReactToGuidingLossAsync(GuiderService.GuiderFaultKind.LinkDown);
+
+            faultLog.Verify(f => f.RecordActionAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<string>(),
+                It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]

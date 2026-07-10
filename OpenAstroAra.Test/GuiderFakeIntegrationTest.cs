@@ -225,6 +225,66 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_mid_session_link_drop_lands_in_the_fault_log_and_a_reconnect_resolves() {
+            // §42.5 — the guider is deliberately off the EquipmentFaultHub channel, so its fault
+            // flow writes the persistent log DIRECTLY: connect (resolves any open rows — the
+            // observed-reconnect semantics), drop the socket (records a Guider/disconnected row
+            // and stamps the policy action onto it).
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
+                OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
+                OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false));
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+
+            var faultLog = new Mock<IFaultLogService>();
+            EquipmentFaultEvent? recorded = null;
+            var recordedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            faultLog.Setup(f => f.RecordFaultAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<CancellationToken>()))
+                .Callback<EquipmentFaultEvent, CancellationToken>((f, _) => { recorded = f; recordedTcs.TrySetResult(); })
+                .Returns(Task.CompletedTask);
+            var actionTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            string? stampedAction = null;
+            faultLog.Setup(f => f.RecordActionAsync(It.IsAny<EquipmentFaultEvent>(), It.IsAny<string>(),
+                    It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
+                .Callback<EquipmentFaultEvent, string, DateTimeOffset?, CancellationToken>((_, a, _, _) => { stampedAction = a; actionTcs.TrySetResult(); })
+                .Returns(Task.CompletedTask);
+            var resolvedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            faultLog.Setup(f => f.ResolveOnReconnectAsync(DeviceType.Guider, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+                .Callback(() => resolvedTcs.TrySetResult())
+                .ReturnsAsync(0);
+
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: profiles.Object, sequencerResolver: () => sequencer.Object,
+                notifications: Mock.Of<INotificationService>(), faultLog: faultLog.Object);
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+            Assert.That(await Task.WhenAny(resolvedTcs.Task, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false),
+                Is.SameAs(resolvedTcs.Task),
+                "a successful connect must resolve the guider's open disconnect fault rows");
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1).ConfigureAwait(false), Is.True);
+
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0));
+            Assert.That(await Task.WhenAny(recordedTcs.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(recordedTcs.Task), "the link drop never landed in the fault log");
+            Assert.That(recorded!.DeviceType, Is.EqualTo(DeviceType.Guider));
+            Assert.That(recorded.Kind, Is.EqualTo(EquipmentFaultKind.Disconnected));
+            Assert.That(recorded.Details, Does.Contain("link down"));
+            Assert.That(await Task.WhenAny(actionTcs.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(actionTcs.Task), "the reaction never stamped its action onto the fault row");
+            Assert.That(stampedAction, Is.EqualTo("pause_and_retry"));
+        }
+
+        [Test]
         public async Task A_structured_equipment_fault_reacts_per_policy_but_stays_connected() {
             // §42.2 (openastro-guider #57): the daemon reports the guide camera dropped
             // (EquipmentDisconnected). The guider LINK is still up, so — unlike a socket drop — the

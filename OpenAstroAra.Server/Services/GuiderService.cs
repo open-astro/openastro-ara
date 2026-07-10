@@ -82,7 +82,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
             IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null,
             IProfileStore? profileStore = null, Func<ISequencerService?>? sequencerResolver = null,
-            INotificationService? notifications = null) {
+            INotificationService? notifications = null, IFaultLogService? faultLog = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -91,6 +91,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _profileStore = profileStore;
         _sequencerResolver = sequencerResolver;
         _notifications = notifications;
+        _faultLog = faultLog;
     }
 
     public Task<GuiderDto?> GetAsync(CancellationToken ct) {
@@ -417,6 +418,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // A fresh successful connection starts a new fault episode: the §42.2
             // reaction may fire again on the next mid-session loss.
             _latchedFaultKind = null;
+            // §42.5 — the reconnect resolves this guider's open disconnect fault rows (the
+            // same observed-reconnect semantics the Alpaca devices get from the publisher
+            // hook); best-effort and off-lock.
+            ResolveGuiderFaultsQuietly();
             StartPingLoopLocked();
         } else {
             StopPingLoopLocked();
