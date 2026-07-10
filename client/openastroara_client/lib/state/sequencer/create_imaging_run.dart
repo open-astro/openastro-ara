@@ -92,6 +92,9 @@ Future<ImagingRunResult?> createImagingRun(
   required double decDeg,
   required String targetName,
   double? remainingDarkHours,
+  // §36/§38 — a framing position angle to carry into the run: the target's
+  // slew becomes a Center and Rotate at this angle. Null = plain slew.
+  double? positionAngleDeg,
 }) async {
   final api = ref.read(sequenceApiProvider);
   if (api == null) return null;
@@ -132,6 +135,7 @@ Future<ImagingRunResult?> createImagingRun(
       binning: defaults.defaultBin,
       frameCount: frameCount,
       autofocusEveryNExposures: afEveryExposures,
+      positionAngleDeg: positionAngleDeg,
     );
     // Only PRE-PATCH problems (running, vanished, non-container root,
     // transport failure while reading) fall back to creating a fresh run. A
@@ -159,6 +163,7 @@ Future<ImagingRunResult?> createImagingRun(
     coolToC: defaults.coolerTargetC,
     warmAtEnd: defaults.warmupAtSessionEnd,
     autofocusEveryNExposures: afEveryExposures,
+    positionAngleDeg: positionAngleDeg,
   );
 
   final id = await api.create(targetName, body);

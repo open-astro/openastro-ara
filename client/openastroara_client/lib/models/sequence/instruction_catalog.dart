@@ -444,6 +444,8 @@ const String skyFlatsType =
     'OpenAstroAra.Sequencer.SequenceItem.FlatDevice.SkyFlats, OpenAstroAra.Sequencer';
 const String ditherType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer';
+const String centerAndRotateType =
+    'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 
 /// The daemon `FilterInfo` `$type` — the value shape of `SwitchFilter.Filter`.
 /// Build instances with [buildFilterInfo] so the `{_name, _position}` wire
@@ -743,8 +745,7 @@ const List<InstructionDef> instructionCatalog = [
   ),
   // §38 NINA import — center-and-rotate: slew + plate-solve to centre, then rotate to PositionAngle.
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer',
+    type: centerAndRotateType,
     label: 'Center and Rotate',
     category: InstructionCategory.telescope,
     icon: Icons.crop_rotate_outlined,

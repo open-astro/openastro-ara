@@ -179,12 +179,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     if (raDeg == null || decDeg == null) return;
     final name = (event['name'] as String?)?.trim();
     final targetName = (name == null || name.isEmpty) ? 'Target' : name;
-    // NOTE: the page also sends `rotationDeg` (the framing position angle), but the
-    // run built below slews with a SlewScopeToRaDec, which has no PA field —
-    // carrying the framing PA into the Run needs CenterAndRotate, whose rotate
-    // half isn't ported yet (and which throws when a rotator IS connected).
-    // Tracked in the NINA sequencer-fidelity epic (design/PORT_TODO.md); until
-    // then the PA is deliberately not applied (the overlay is preview-only).
+    // §36/§38 — a DIALED framing position angle rides into the run as a
+    // Center and Rotate at that angle (the rotate half executes since #806).
+    // The dial's untouched default (0°) keeps the plain blind slew: carrying
+    // it would make every framing run require a configured plate solver, and
+    // 0° almost always means "I didn't rotate", not "hold exactly 0°" — a
+    // deliberate 0° framing can still add centring in the sequence editor.
+    final rotationDeg = (event['rotationDeg'] as num?)?.toDouble();
+    final positionAngleDeg =
+        (rotationDeg != null && rotationDeg != 0) ? rotationDeg : null;
 
     final messenger = ScaffoldMessenger.of(context);
     ImagingRunResult? result;
@@ -197,6 +200,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         raDeg: raDeg,
         decDeg: decDeg,
         targetName: targetName,
+        positionAngleDeg: positionAngleDeg,
       );
     } catch (e, st) {
       debugPrint('[planning] framing create-run failed: $e\n$st');

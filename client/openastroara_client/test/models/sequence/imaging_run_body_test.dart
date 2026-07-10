@@ -13,6 +13,7 @@ void main() {
       int? afEvery,
       String? filterName,
       int binning = 1,
+      double? positionAngleDeg,
     }) =>
         buildImagingRunBody(
           raDeg: 83.8,
@@ -28,6 +29,7 @@ void main() {
           autofocusAtStart: autofocusAtStart,
           autofocusEveryNExposures: afEvery,
           filterName: filterName,
+          positionAngleDeg: positionAngleDeg,
         );
 
     String type(Map<String, dynamic> node) => node[r'$type'] as String;
@@ -99,6 +101,42 @@ void main() {
       expect(coords['NegativeDec'], true);
       expect(coords['DecDegrees'], 5);
       expect(coords['DecMinutes'], 24);
+    });
+
+    test(
+        'a framing position angle upgrades the slew to a Center and Rotate '
+        'carrying it', () {
+      final root = build(positionAngleDeg: 137.5);
+      final target = targetBlockOf(root);
+      final types = childrenOf(target).map(type).toList();
+      expect(
+        types.where((t) => t.contains('SlewScopeToRaDec')),
+        isEmpty,
+        reason: 'Center and Rotate owns the slew — a second slew would race it',
+      );
+      final car = childrenOf(target)
+          .singleWhere((c) => type(c).contains('CenterAndRotate'));
+      expect(car['PositionAngle'], 137.5);
+      final coords = car['Coordinates'] as Map<String, dynamic>;
+      expect(coords['RAHours'], 5, reason: 'same target coordinates as a slew');
+      expect(coords['DecMinutes'], 24);
+    });
+
+    test('a negative framing angle is normalized into [0, 360)', () {
+      final root = build(positionAngleDeg: -10);
+      final car = childrenOf(targetBlockOf(root))
+          .singleWhere((c) => type(c).contains('CenterAndRotate'));
+      expect(car['PositionAngle'], 350.0);
+    });
+
+    test('no position angle keeps the plain slew (no solver requirement)', () {
+      final root = build();
+      final types = childrenOf(targetBlockOf(root)).map(type).toList();
+      expect(types.where((t) => t.contains('CenterAndRotate')), isEmpty);
+      expect(
+        types.where((t) => t.contains('SlewScopeToRaDec')),
+        hasLength(1),
+      );
     });
 
     test('optional steps drop out when not configured', () {
