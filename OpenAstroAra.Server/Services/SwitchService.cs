@@ -261,6 +261,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 try {
                     var ports = ReadPorts(client);
                     List<(SwitchPortSnapshot Port, double Commanded)>? mismatched = null;
+                    List<(short PortId, double Commanded)>? recommand = null;
                     lock (_gate) {
                         // Write back only if this exact connection + client is still the live one (a
                         // concurrent disconnect/replace supersedes the read we just did).
@@ -272,12 +273,26 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                             conn.CachedSnapshots = ports;
                             // §42.4 — read-back check for ports the daemon wrote, under the same
                             // commit lock as the liveness check (the #789 one-critical-section
-                            // lesson). Verdicts are collected here, published off-lock below.
+                            // lesson). Verdicts are collected here, acted on off-lock below.
                             foreach (var port in ports) {
-                                if (conn.Readback.Observe(port.Id, port.Value, port.Min, port.Max,
-                                        tolerancePct, DateTimeOffset.UtcNow) == ReadbackVerdict.Mismatch) {
+                                var verdict = conn.Readback.Observe(port.Id, port.Value, port.Min, port.Max,
+                                    tolerancePct, DateTimeOffset.UtcNow);
+                                if (verdict == ReadbackVerdict.Mismatch) {
                                     (mismatched ??= []).Add((port, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
+                                } else if (verdict == ReadbackVerdict.Recommand) {
+                                    (recommand ??= []).Add((port.Id, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
                                 }
+                            }
+                        }
+                    }
+                    if (recommand is not null) {
+                        // §42.2 rows 15/16 — one best-effort re-issue of the same value before the
+                        // fault fires. Deliberately a raw device write (not RunSwitchWriteAsync,
+                        // whose Command() recording would restart the episode and erase the
+                        // one-recommand budget); the watch already re-armed its settle window.
+                        foreach (var (portId, commanded) in recommand) {
+                            if (!double.IsNaN(commanded)) {
+                                RecommandQuietly(conn, client, portId, commanded);
                             }
                         }
                     }
@@ -513,6 +528,27 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             LogMismatchPublishFailed(ex);
         }
     }
+
+    // §42.2 rows 15/16 — the one pre-fault recovery attempt. Fire-and-forget off the refresh
+    // tick: the outcome is judged by the watch's next read-backs, not by this call.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort recovery write: a failed re-command simply leaves the port mismatched and the watch fires the fault after the re-armed window; the failure is logged, never propagated into the refresh tick or left as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
+    private void RecommandQuietly(SwitchConnection conn, AlpacaSwitch client, short portId, double commanded) {
+        LogRecommand(conn.Device.Name, portId, commanded);
+        _ = Task.Run(() => {
+            try {
+                client.SetSwitchValue(portId, commanded);
+            } catch (Exception ex) {
+                LogRecommandFailed(ex, conn.Device.Name, portId);
+            }
+        }, CancellationToken.None);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Switch '{Device}' port {PortId} read-back disagrees with the commanded value — re-issuing {Commanded} once before declaring a fault (§42.2)")]
+    private partial void LogRecommand(string device, short portId, double commanded);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Switch '{Device}' port {PortId}: the §42.2 re-command write failed — the read-back watch will fault after the settle window")]
+    private partial void LogRecommandFailed(Exception ex, string device, short portId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Switch: safety-policy read for the §42.4 read-back tolerance failed — using the default")]
     private partial void LogToleranceReadFailed(Exception ex);
