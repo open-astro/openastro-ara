@@ -121,6 +121,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_stale_read_racing_a_deliberate_tracking_off_cannot_poison_the_expectation() {
+            var w = new MountTrackingWatch();
+            w.Observe(true, false, false); // armed
+            w.NoteTrackingCommanded(false);
+            // The refresh tick's GET raced the command's PUT and still reads the PRE-write
+            // tracking=true mid-grace (review finding): it must not resurrect the expectation
+            // the off-command just cleared.
+            Assert.That(w.Observe(true, false, false), Is.EqualTo(TrackingWatchVerdict.Suppressed));
+            // The command lands; every later read is a legitimate off — never a drop.
+            for (var i = 0; i < MountTrackingWatch.DefaultCommandGraceTicks + 10; i++) {
+                Assert.That(w.Observe(false, false, false), Is.Not.EqualTo(TrackingWatchVerdict.Lost),
+                    "the daemon must not fight the user's own tracking-off command");
+            }
+            // A genuine tracking-on observed AFTER the grace re-arms normally.
+            w.Observe(true, false, false);
+            w.Observe(false, false, false);
+            w.Observe(false, false, false);
+            Assert.That(w.Observe(false, false, false), Is.EqualTo(TrackingWatchVerdict.Lost), "still a working watch");
+        }
+
+        [Test]
         public void A_rejected_reenable_does_not_refire_but_an_observed_recovery_rearms() {
             var w = new MountTrackingWatch();
             w.Observe(true, false, false);

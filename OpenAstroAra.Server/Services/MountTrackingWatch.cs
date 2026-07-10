@@ -66,6 +66,12 @@ public sealed class MountTrackingWatch {
     private readonly int _threshold;
     private readonly int _graceTicks;
     private bool _expectTracking;
+    // What the in-flight command said tracking should become (null = the last command carries
+    // no tracking intent). Held for the grace window so a stale read that raced the command's
+    // device write can't resurrect the expectation the command just set (review finding): the
+    // GET behind a refresh tick has no ordering guarantee against the command's PUT, so a
+    // tracking=true read arriving mid-grace after a deliberate off may predate the write.
+    private bool? _commandedTracking;
     private int _dropStreak;
     private int _graceRemaining;
     private bool _episodeFired;
@@ -80,6 +86,7 @@ public sealed class MountTrackingWatch {
     /// rejected §42.3 re-enable must not re-fire, only an observed recovery re-arms.</summary>
     public void NoteTrackingCommanded(bool enabled) {
         _expectTracking = enabled;
+        _commandedTracking = enabled;
         _dropStreak = 0;
         _graceRemaining = _graceTicks;
         if (!enabled) {
@@ -90,6 +97,7 @@ public sealed class MountTrackingWatch {
     /// <summary>A park/home command — parking legitimately ends with tracking off.</summary>
     public void NoteParkCommanded() {
         _expectTracking = false;
+        _commandedTracking = false; // parking ends with tracking off
         _dropStreak = 0;
         _graceRemaining = _graceTicks;
         _episodeFired = false;
@@ -98,6 +106,7 @@ public sealed class MountTrackingWatch {
     /// <summary>Any other motion command (slew, unpark, axis move, abort) — arms the grace
     /// window without changing what tracking state is expected afterwards.</summary>
     public void NoteMotionCommanded() {
+        _commandedTracking = null; // motion carries no tracking intent — supersede any stale one
         _dropStreak = 0;
         _graceRemaining = _graceTicks;
     }
@@ -105,6 +114,7 @@ public sealed class MountTrackingWatch {
     /// <summary>Fresh session — called at connect adoption and on connection-lost trip.</summary>
     public void Reset() {
         _expectTracking = false;
+        _commandedTracking = null;
         _dropStreak = 0;
         _graceRemaining = 0;
         _episodeFired = false;
@@ -115,11 +125,18 @@ public sealed class MountTrackingWatch {
         if (_graceRemaining > 0) {
             _graceRemaining--;
             _dropStreak = 0;
-            // Sync expectations from whatever the command settled into.
+            // Sync expectations from whatever the command settled into — but an observation may
+            // only move the expectation TOWARD the commanded direction: a tracking=true read
+            // arriving mid-grace after a deliberate off can be a stale GET that raced the
+            // command's PUT, and letting it win would poison the expectation and fire a
+            // spurious TrackingLost right after the user's own command (review finding).
             if (parked) {
                 _expectTracking = false;
-            } else if (tracking && !slewing) {
+            } else if (tracking && !slewing && _commandedTracking != false) {
                 _expectTracking = true;
+            }
+            if (_graceRemaining == 0) {
+                _commandedTracking = null; // grace over — the command's effect is now settled state
             }
             return TrackingWatchVerdict.Suppressed;
         }
