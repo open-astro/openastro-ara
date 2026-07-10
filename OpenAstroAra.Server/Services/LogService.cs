@@ -95,53 +95,111 @@ public sealed partial class LogService : ILogService {
         var contains = request.ContainsSubstring;
 
         // Tail across the roll boundary: walk the rolling files newest → oldest,
-        // pulling each file's newest matching entries until the window is full. A
+        // reading each file BACKWARDS from its end, until the window is full. A
         // just-rolled (near-empty) newest file then falls back to the prior file
-        // instead of returning almost nothing. Memory stays bounded to `max`: each
-        // file is scanned through a ring sized to the entries still needed.
+        // instead of returning almost nothing. Reading backwards means a 200-line
+        // tail of a large day-log touches only its final chunks and stops the
+        // moment the window fills — the old forward scan read every byte of every
+        // file it visited regardless of how few lines were wanted.
         var result = new List<LogEntryDto>(Math.Min(max, 1024));
         foreach (var path in LogFilesNewestFirst()) {
             ct.ThrowIfCancellationRequested();
             if (result.Count >= max) {
                 break;
             }
-            var remaining = max - result.Count;
-            var window = new Queue<LogEntryDto>(Math.Min(remaining, 1024));
-
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-            using (var reader = new StreamReader(fs)) {
-                string? line;
-                while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) is not null) {
-                    if (line.Length == 0) {
-                        continue;
-                    }
-                    var entry = TryParse(line);
-                    if (entry is null) {
-                        continue; // a torn final line or a non-CLEF row — skip, never throw
-                    }
-                    if (LevelRank(entry.Level) < minRank) {
-                        continue;
-                    }
-                    if (!string.IsNullOrEmpty(contains) &&
-                        !entry.Message.Contains(contains, StringComparison.OrdinalIgnoreCase)) {
-                        continue;
-                    }
-                    window.Enqueue(entry);
-                    if (window.Count > remaining) {
-                        window.Dequeue();
-                    }
+            await foreach (var line in ReadLinesBackwardAsync(path, ct).ConfigureAwait(false)) {
+                if (line.Length == 0) {
+                    continue;
                 }
-            }
-
-            // `window` holds this file's newest `remaining` matches oldest-first;
-            // reverse to newest-first and append after the already-collected newer
-            // entries, keeping `result` globally newest-first.
-            foreach (var entry in window.Reverse()) {
+                var entry = TryParse(line);
+                if (entry is null) {
+                    continue; // a torn final line or a non-CLEF row — skip, never throw
+                }
+                if (LevelRank(entry.Level) < minRank) {
+                    continue;
+                }
+                if (!string.IsNullOrEmpty(contains) &&
+                    !entry.Message.Contains(contains, StringComparison.OrdinalIgnoreCase)) {
+                    continue;
+                }
+                // Lines arrive newest-first, so matches append in final order.
                 result.Add(entry);
+                if (result.Count >= max) {
+                    break;
+                }
             }
         }
 
         return result;
+    }
+
+    // Reverse-scan chunk size. Big enough that a typical 200-line tail completes
+    // in one or two reads; a test can shrink it to force many chunk boundaries.
+    internal int ReverseScanChunkSize { get; set; } = 64 * 1024;
+
+    /// <summary>
+    /// The file's complete lines, LAST line first. Reads fixed-size chunks
+    /// backwards from a length snapshot (the sink may still be appending) and
+    /// splits on the newline BYTE — safe under UTF-8, where 0x0A never occurs
+    /// inside a multi-byte sequence, so a chunk boundary can split a character
+    /// but never mis-split a line; each complete line's bytes are reassembled
+    /// before decoding. Trailing \r (CRLF logs) is trimmed per line.
+    /// </summary>
+    private async IAsyncEnumerable<string> ReadLinesBackwardAsync(
+            string path, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct) {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var pos = fs.Length;
+        // Bytes before the earliest newline seen so far — the (yet-incomplete)
+        // tail of a line that continues into the previous chunk.
+        var carry = Array.Empty<byte>();
+        var buffer = new byte[Math.Max(1, ReverseScanChunkSize)];
+
+        while (pos > 0) {
+            ct.ThrowIfCancellationRequested();
+            var readLen = (int)Math.Min(buffer.Length, pos);
+            pos -= readLen;
+            fs.Position = pos;
+            await fs.ReadExactlyAsync(buffer.AsMemory(0, readLen), ct).ConfigureAwait(false);
+
+            // Scan the chunk backwards for newlines; every segment BETWEEN two
+            // newlines (plus the carry after the chunk's last newline) is one
+            // complete line, yielded newest-first.
+            var end = readLen; // exclusive end of the segment being built
+            for (var i = readLen - 1; i >= 0; i--) {
+                if (buffer[i] != (byte)'\n') {
+                    continue;
+                }
+                yield return DecodeLine(buffer, i + 1, end - (i + 1), carry);
+                carry = Array.Empty<byte>();
+                end = i;
+            }
+            // No newline before the chunk start — everything up to `end` belongs
+            // to a line continuing into the previous chunk. Prepend to the carry.
+            if (end > 0) {
+                var merged = new byte[end + carry.Length];
+                Array.Copy(buffer, 0, merged, 0, end);
+                Array.Copy(carry, 0, merged, end, carry.Length);
+                carry = merged;
+            }
+        }
+
+        if (carry.Length > 0) {
+            yield return DecodeLine(carry, 0, carry.Length, Array.Empty<byte>());
+        }
+    }
+
+    // One complete line = this chunk's segment + any carry from later chunks.
+    private static string DecodeLine(byte[] segment, int offset, int count, byte[] carry) {
+        string text;
+        if (carry.Length == 0) {
+            text = System.Text.Encoding.UTF8.GetString(segment, offset, count);
+        } else {
+            var whole = new byte[count + carry.Length];
+            Array.Copy(segment, offset, whole, 0, count);
+            Array.Copy(carry, 0, whole, count, carry.Length);
+            text = System.Text.Encoding.UTF8.GetString(whole);
+        }
+        return text.Length > 0 && text[^1] == '\r' ? text[..^1] : text;
     }
 
     /// <summary>
