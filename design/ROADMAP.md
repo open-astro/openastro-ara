@@ -28,9 +28,13 @@ seeding, Imaging-tab fault feed, §42.6 per-session timeline + library badges):
 
 - **§42.6 `affected_frames` population** — correlate frames whose exposure overlapped a fault
   window (server-side; the column + DTO + client tiles are ready for it).
-- **§42.2 matrix, remaining rows** — camera / mount / focuser / EFW mid-sequence fault reactions
-  (the guider-lost row is enforced; the others follow the same §35 bulk-pause machinery).
-- **§42.3 generalized hot-reconnect** — device comes back mid-run → re-adopt without user surgery.
+- ~~**§42.2 matrix, remaining rows**~~ — shipped #800/#801/#802/#803: op-failure enforcement,
+  switch re-command + solver exit codes, rotator drift watch, persistent-op-fault escalation
+  (mount abort+park, camera pause). Every buildable audit item done (see PORT_TODO's audit list).
+- ~~**§42.3 generalized hot-reconnect**~~ — shipped: the 0/5/15/30/60 s ladder landed with the
+  reaction service; this slice adds the post-give-up linger re-adopt (device comes back mid-run
+  → re-adopted without user surgery, paused runs resumed) + the per-mediator
+  disconnect-mid-wait regression harness owed from the #800 arc.
 
 ## 2. First public release (release-blocking engineering + external gates)
 

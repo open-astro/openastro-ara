@@ -80,6 +80,7 @@ namespace OpenAstroAra.Test {
                 DelayShaper = _ => TimeSpan.Zero,             // collapse the ladder for tests
                 ConnectConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 ConnectPollInterval = TimeSpan.FromMilliseconds(5),
+                LingerMaxAttempts = 0,                        // linger tests opt in explicitly
             };
         }
 
@@ -229,6 +230,89 @@ namespace OpenAstroAra.Test {
             sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never,
                 "a dead camera must leave the sequence paused");
             Assert.That(posted.Select(n => n.Severity), Does.Contain(NotificationSeverity.Error));
+        }
+
+        [Test]
+        public async Task A_device_that_comes_back_after_give_up_is_readopted_and_paused_runs_resume() {
+            var run = Guid.NewGuid();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { run });
+            sequencer.Setup(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(run)), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(1);
+            // 5 ladder attempts + linger tick 1 all read Error (calls 1-7 include tick 1's
+            // failed re-dispatch); from call 8 the device is back — the user re-seated the hub.
+            var stateCalls = 0;
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ReconnectOutcome(1, 1));
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ++stateCalls <= 7 ? EquipmentConnectionState.Error : EquipmentConnectionState.Connected);
+            service.LingerMaxAttempts = 10;
+
+            service.OnFault(Fault());
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("gave_up"), "the ladder still gave up first");
+            Assert.That(Actions().Last(), Is.EqualTo("readopted"), "the linger picked the device back up");
+            var readopted = ActionPayload("readopted");
+            Assert.That(readopted.GetProperty("resumed_runs").GetInt32(), Is.EqualTo(1),
+                "the runs the terminal pause left paused resume on re-adoption");
+            sequencer.Verify(s => s.ResumeRunsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(run)), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(posted.Any(n => n.Severity == NotificationSeverity.Info
+                    && n.Title.Contains("re-adopted", StringComparison.Ordinal)), Is.True);
+        }
+
+        [Test]
+        public async Task A_deliberate_user_disconnect_stops_the_linger_silently() {
+            ReconnectAlwaysFails(DeviceType.Camera);
+            var gaveUp = false;
+            // After the ladder gives up, the user disconnects the camera on purpose: the
+            // service state reads Disconnected (only a LOST device parks in Error).
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => gaveUp ? EquipmentConnectionState.Disconnected : EquipmentConnectionState.Error);
+            service.LingerMaxAttempts = 10;
+
+            service.OnFault(Fault());
+            // Flip to "user disconnected" the moment the give-up lands (the WS publish is the signal).
+            _ = Task.Run(async () => {
+                while (!Actions().Contains("gave_up")) {
+                    await Task.Delay(5);
+                }
+                gaveUp = true;
+            });
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Not.Contain("readopted"),
+                "the daemon must not fight the user for a deliberately disconnected device");
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task An_exhausted_linger_stops_re_dispatching() {
+            ReconnectAlwaysFails(DeviceType.Camera);
+            service.LingerMaxAttempts = 3;
+
+            service.OnFault(Fault());
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Not.Contain("readopted"));
+            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()),
+                Times.Exactly(5 + 3), "5 ladder rungs, then exactly LingerMaxAttempts linger re-dispatches");
+        }
+
+        [Test]
+        public async Task A_tracking_lost_episode_never_lingers() {
+            telescope.Setup(t => t.SetTrackingAsync(true, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("mount refuses"));
+            service.LingerMaxAttempts = 10;
+
+            service.OnFault(Fault(DeviceType.Telescope, EquipmentFaultKind.TrackingLost));
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("gave_up"));
+            Assert.That(Actions(), Does.Not.Contain("readopted"),
+                "tracking-lost means the mount is still CONNECTED — there is nothing to re-adopt");
+            reconnector.Verify(r => r.GetConnectionStateAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()),
+                Times.Never);
         }
 
         [Test]
