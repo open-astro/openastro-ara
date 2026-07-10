@@ -43,6 +43,10 @@ public static class WsEventCatalog {
     public const string EquipmentDisconnected = "equipment.disconnected";
     public const string EquipmentConnectionFailed = "equipment.connection_failed";
     public const string EquipmentDiscoveryRefreshed = "equipment.discovery_refreshed";
+    // §42.2 — a DETECTED device fault (disconnect streak, stall, value mismatch, …); payload
+    // { device_type, device_id, device_name, kind, details, detected_utc }. What was done about
+    // it (retries/pause/abort+park) is the §42.3 reaction slice's separate event.
+    public const string EquipmentFault = "equipment.fault";
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
@@ -186,7 +190,7 @@ public static class WsEventCatalog {
     /// </summary>
     public static readonly IReadOnlyList<string> All = new[] {
         EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
-        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed,
+        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
