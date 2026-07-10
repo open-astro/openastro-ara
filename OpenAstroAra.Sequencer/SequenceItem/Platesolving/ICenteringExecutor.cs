@@ -44,5 +44,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
         /// throw for unrecoverable failures (no solver installed, no camera).
         /// </summary>
         Task<bool> CenterAsync(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>
+        /// Rotate the camera to <paramref name="positionAngleDeg"/> (solve → sync rotator →
+        /// move by the folded delta, looping until within the profile's rotation tolerance —
+        /// NINA's rotate-first order), then centre on <paramref name="target"/> exactly like
+        /// <see cref="CenterAsync"/>. A 180°-rotated field is the same framing, so deltas fold
+        /// into (-90°, +90°]. Returns false when either half fails to converge within the
+        /// profile's attempts; throws for unrecoverable failures (no solver, no rotator wired).
+        /// </summary>
+        Task<bool> CenterAndRotateAsync(Coordinates target, double positionAngleDeg,
+            IProgress<ApplicationStatus> progress, CancellationToken token);
     }
 }

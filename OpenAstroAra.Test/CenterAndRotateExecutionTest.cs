@@ -28,9 +28,9 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// §28/§38 — <see cref="CenterAndRotate"/> execution through the
-    /// <see cref="ICenteringExecutor"/> seam: the centre half runs for real; the
-    /// rotate half fails loudly with a rotator connected and is a documented skip
-    /// without one (NINA itself only rotates with a rotator).
+    /// <see cref="ICenteringExecutor"/> seam: with a rotator connected the rotate-then-centre
+    /// path runs (§38 rotation fidelity); without one, centring alone is faithful (NINA itself
+    /// only rotates with a rotator) and the position angle stays in the plan.
     /// </summary>
     [TestFixture]
     public class CenterAndRotateExecutionTest {
@@ -92,14 +92,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Connected_rotator_fails_loudly_instead_of_skipping_rotation() {
-            // With a rotator the user expects the rotate half — until rotation is wired,
-            // failing loudly beats silently mis-framing.
+        public async Task Connected_rotator_runs_the_rotate_then_centre_path_with_the_plans_angle() {
             var executor = new Mock<ICenteringExecutor>();
+            Coordinates? seenTarget = null;
+            double seenAngle = double.NaN;
+            executor.Setup(e => e.CenterAndRotateAsync(It.IsAny<Coordinates>(), It.IsAny<double>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, double, IProgress<ApplicationStatus>, CancellationToken>((c, pa, _, _) => {
+                    seenTarget = c;
+                    seenAngle = pa;
+                })
+                .ReturnsAsync(true);
+
+            var target = SomeTarget();
+            var item = new CenterAndRotate(executor.Object, Rotator(connected: true).Object) {
+                Coordinates = target,
+                PositionAngle = 137.5,
+            };
+            await item.Execute(NoProgress, CancellationToken.None);
+
+            Assert.That(seenAngle, Is.EqualTo(137.5), "the plan's position angle drives the rotation");
+            Assert.That(seenTarget!.RA, Is.EqualTo(target.Coordinates.RA).Within(1e-9));
+            executor.Verify(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()),
+                Times.Never, "the combined path owns both halves — no separate centre call");
+        }
+
+        [Test]
+        public void An_unconverged_rotate_or_centre_fails_the_instruction() {
+            // A mis-rotated or un-centred target would quietly ruin every subsequent frame.
+            var executor = new Mock<ICenteringExecutor>();
+            executor.Setup(e => e.CenterAndRotateAsync(It.IsAny<Coordinates>(), It.IsAny<double>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
             var item = new CenterAndRotate(executor.Object, Rotator(connected: true).Object) { Coordinates = SomeTarget() };
             Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
-            executor.VerifyNoOtherCalls();
         }
 
         [Test]
@@ -114,6 +141,21 @@ namespace OpenAstroAra.Test {
             };
             await item.Execute(NoProgress, CancellationToken.None);
             executor.Verify(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        // §38 — the rotation-delta fold: a 180°-rotated frame is the same framing, so every
+        // delta folds into (-90°, +90°] and the rotator always takes the short way around.
+        [TestCase(172.0, 350.0, 2.0, TestName = "Fold_wraps_across_zero")]
+        [TestCase(0.0, 178.0, 2.0, TestName = "Fold_uses_the_180_symmetry")]
+        [TestCase(10.0, 350.0, 20.0, TestName = "Fold_positive_short_way")]
+        [TestCase(350.0, 10.0, -20.0, TestName = "Fold_negative_short_way")]
+        [TestCase(90.0, 0.0, 90.0, TestName = "Fold_keeps_the_boundary_at_plus_90")]
+        [TestCase(91.0, 0.0, -89.0, TestName = "Fold_past_the_boundary_goes_negative")]
+        [TestCase(45.0, 45.0, 0.0, TestName = "Fold_zero_when_already_there")]
+        [TestCase(45.0, 225.0, 0.0, TestName = "Fold_zero_for_the_180_flipped_equivalent")]
+        public void FoldRotationDelta_takes_the_shortest_equivalent_rotation(double target, double solved, double expected) {
+            Assert.That(OpenAstroAra.Server.Services.CenteringService.FoldRotationDelta(target, solved),
+                Is.EqualTo(expected).Within(1e-9));
         }
 
         [Test]

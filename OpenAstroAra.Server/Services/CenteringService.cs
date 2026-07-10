@@ -40,6 +40,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
     private readonly IFilterWheelMediator filterWheelMediator;
     private readonly IDomeMediator domeMediator;
     private readonly IDomeFollower domeFollower;
+    private readonly IRotatorMediator? rotatorMediator; // §38 rotation fidelity — null on rigs without a rotator
 
     public CenteringService(
             IProfileService profileService,
@@ -48,7 +49,8 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
             ITelescopeMediator telescopeMediator,
             IFilterWheelMediator filterWheelMediator,
             IDomeMediator domeMediator,
-            IDomeFollower domeFollower) {
+            IDomeFollower domeFollower,
+            IRotatorMediator? rotatorMediator = null) {
         this.profileService = profileService;
         this.plateSolverFactory = plateSolverFactory;
         this.imagingMediator = imagingMediator;
@@ -56,6 +58,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
         this.filterWheelMediator = filterWheelMediator;
         this.domeMediator = domeMediator;
         this.domeFollower = domeFollower;
+        this.rotatorMediator = rotatorMediator;
     }
 
     public async Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,

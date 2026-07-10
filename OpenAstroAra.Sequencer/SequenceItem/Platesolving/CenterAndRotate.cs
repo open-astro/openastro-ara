@@ -32,11 +32,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
     /// Inherited survive import) instead of degrading to an <see cref="UnknownSequenceItem"/>.
     ///
     /// EXECUTION: the centre half runs for real through <see cref="ICenteringExecutor"/> (the §28
-    /// capture → plate-solve → sync → re-slew loop). The ROTATE half is not wired yet: with a
-    /// rotator connected this step still fails loudly rather than silently skipping the rotation
-    /// (a mis-rotated field ruins framing); with no rotator — the common case, and the only case
-    /// NINA itself rotates in — the position angle is preserved in the plan but deliberately not
-    /// applied, matching NINA's no-rotator behaviour. Rotation fidelity is tracked in PORT_TODO
+    /// capture → plate-solve → sync → re-slew loop). With a rotator connected the ROTATE half
+    /// runs first (§38 rotation fidelity, NINA's order — solve → sync rotator → folded relative
+    /// move until within the profile's rotation tolerance) and then the centre; with no rotator
+    /// — the common case — the position angle is preserved in the plan but deliberately not
+    /// applied, matching NINA's no-rotator behaviour. Originally tracked in PORT_TODO
     /// alongside the framing position-angle item.
     /// </summary>
     [ExportMetadata("Name", "Lbl_SequenceItem_Platesolving_CenterAndRotate_Name")]
@@ -98,15 +98,20 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
             }
             var target = Coordinates?.Coordinates
                 ?? throw new SequenceEntityFailedException("Center-and-rotate has no target coordinates.");
-            // Rotation is not wired yet. With a rotator CONNECTED the user expects the
-            // rotate half to happen — fail loudly instead of quietly mis-framing. With no
-            // rotator, NINA itself never rotates, so centring alone is faithful; keep the
-            // position angle in the plan and note the skip.
             if (rotatorMediator?.GetInfo()?.Connected == true) {
-                throw new SequenceEntityFailedException(
-                    "Center-and-rotate: rotator rotation is not wired for sequence execution yet — " +
-                    "use Center (or disconnect the rotator) until rotation lands.");
+                // §38 rotation fidelity — the executor rotates to the plan's position angle
+                // (solve → sync → folded relative move, rotate-first like NINA) then centres.
+                Logger.Info($"Center-and-rotate: rotating to position angle {PositionAngle}° then centering on {target}");
+                var ok = await centeringExecutor.CenterAndRotateAsync(target, PositionAngle, progress, token);
+                if (!ok) {
+                    // A mis-rotated or un-centred target would quietly ruin every subsequent frame.
+                    throw new SequenceEntityFailedException(
+                        "Center-and-rotate did not converge within the profile's rotation tolerance / centering threshold and attempts.");
+                }
+                return;
             }
+            // No rotator — the common case, and the only case NINA itself skips rotation in:
+            // the position angle stays in the plan but is deliberately not applied.
             Logger.Info($"Center-and-rotate: centering on {target} (position angle {PositionAngle}° preserved; no rotator connected, rotation skipped — matches NINA without a rotator)");
             var converged = await centeringExecutor.CenterAsync(target, progress, token);
             if (!converged) {
