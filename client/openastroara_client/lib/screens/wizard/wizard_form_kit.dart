@@ -121,6 +121,14 @@ class WizardTextField extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String> onChanged;
 
+  /// §37 clear-field affordance. When set, the field shows a reset suffix
+  /// button that empties the text and invokes this callback — the screen marks
+  /// the field in `ProfileDraft.clearedFields` so Save writes the section
+  /// DEFAULT instead of keeping the cloned profile's value (a blank field
+  /// alone means "keep"). Typing again un-marks it via the screen's
+  /// [onChanged].
+  final VoidCallback? onCleared;
+
   const WizardTextField({
     super.key,
     required this.label,
@@ -132,6 +140,7 @@ class WizardTextField extends StatefulWidget {
     this.required = false,
     this.keyboardType,
     this.inputFormatters,
+    this.onCleared,
   });
 
   @override
@@ -172,6 +181,16 @@ class _WizardTextFieldState extends State<WizardTextField> {
           filled: true,
           fillColor: AraColors.bgInput,
           border: const OutlineInputBorder(),
+          suffixIcon: widget.onCleared == null
+              ? null
+              : IconButton(
+                  tooltip: 'Reset to default on Save',
+                  icon: const Icon(Icons.settings_backup_restore, size: 18),
+                  onPressed: () {
+                    _controller.clear();
+                    widget.onCleared!();
+                  },
+                ),
         ),
       ),
     );

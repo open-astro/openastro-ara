@@ -27,7 +27,8 @@ class ScreenPlateSolve extends ConsumerStatefulWidget {
 }
 
 class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
-  late final PlateSolveSettings _ps = _draftOf(ref).plateSolve;
+  late final ProfileDraft _draft = _draftOf(ref);
+  late final PlateSolveSettings _ps = _draft.plateSolve;
   // Advisory display only: an invalid radius is never written to the draft, so
   // Save is safe even if the user advances with the error showing. The wizard
   // shell has no per-screen validity gate yet (tracked in design/PORT_TODO.md).
@@ -40,20 +41,42 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
       intro: 'ASTAP solves your frames to confirm pointing and drive centering. '
           'Point ARA at the ASTAP program and its star database.',
       children: [
+        // The paths carry a clear affordance (the reset suffix): the wizard's
+        // new profile clones the active one, so blank alone KEEPS the old
+        // rig's path — reset marks the field to take the daemon default on
+        // Save; typing anything un-marks it (the typed value wins).
         WizardTextField(
           label: 'ASTAP binary path',
           initialValue: _ps.astapBinaryPath,
           hint: r'/usr/bin/astap  ·  C:\Program Files\astap\astap.exe',
-          onChanged: (v) =>
-              _ps.astapBinaryPath = v.trim().isEmpty ? null : v.trim(),
+          onChanged: (v) {
+            final t = v.trim();
+            _ps.astapBinaryPath = t.isEmpty ? null : t;
+            if (t.isNotEmpty) {
+              _draft.clearedFields.remove(ClearableField.astapBinaryPath);
+            }
+          },
+          onCleared: () {
+            _ps.astapBinaryPath = null;
+            _draft.clearedFields.add(ClearableField.astapBinaryPath);
+          },
         ),
         WizardTextField(
           label: 'Star database path',
           initialValue: _ps.starDatabasePath,
           helperText:
               'Folder holding the ASTAP star database (e.g. the D50 index).',
-          onChanged: (v) =>
-              _ps.starDatabasePath = v.trim().isEmpty ? null : v.trim(),
+          onChanged: (v) {
+            final t = v.trim();
+            _ps.starDatabasePath = t.isEmpty ? null : t;
+            if (t.isNotEmpty) {
+              _draft.clearedFields.remove(ClearableField.starDatabasePath);
+            }
+          },
+          onCleared: () {
+            _ps.starDatabasePath = null;
+            _draft.clearedFields.add(ClearableField.starDatabasePath);
+          },
         ),
         WizardTextField(
           label: 'Search radius (°)',
@@ -256,7 +279,8 @@ class ScreenFileSaving extends ConsumerStatefulWidget {
 }
 
 class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
-  late final FileSavingSettings _fs = _draftOf(ref).fileSaving;
+  late final ProfileDraft _draft = _draftOf(ref);
+  late final FileSavingSettings _fs = _draft.fileSaving;
 
   @override
   Widget build(BuildContext context) {
@@ -269,9 +293,19 @@ class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
           label: 'Save directory',
           initialValue: _fs.saveDirectory,
           hint: r'/media/usb/astro  ·  D:\Astro\Captures',
-          helperText: 'Leave blank to keep the profile default.',
-          onChanged: (v) =>
-              _fs.saveDirectory = v.trim().isEmpty ? null : v.trim(),
+          helperText: 'Blank keeps the current profile\'s directory; the reset '
+              'button takes the daemon default instead.',
+          onChanged: (v) {
+            final t = v.trim();
+            _fs.saveDirectory = t.isEmpty ? null : t;
+            if (t.isNotEmpty) {
+              _draft.clearedFields.remove(ClearableField.saveDirectory);
+            }
+          },
+          onCleared: () {
+            _fs.saveDirectory = null;
+            _draft.clearedFields.add(ClearableField.saveDirectory);
+          },
         ),
         WizardDropdown<ImageFormat?>(
           label: 'File format',
@@ -301,9 +335,18 @@ class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
           label: 'Filename template',
           initialValue: _fs.filenameTemplate,
           helperText: r'Tokens like $$DATETIME$$, $$FILTER$$, $$EXPOSURETIME$$. '
-              'Leave blank to keep the profile default.',
-          onChanged: (v) =>
-              _fs.filenameTemplate = v.trim().isEmpty ? null : v.trim(),
+              'Blank keeps the current template; reset takes the default.',
+          onChanged: (v) {
+            final t = v.trim();
+            _fs.filenameTemplate = t.isEmpty ? null : t;
+            if (t.isNotEmpty) {
+              _draft.clearedFields.remove(ClearableField.filenameTemplate);
+            }
+          },
+          onCleared: () {
+            _fs.filenameTemplate = null;
+            _draft.clearedFields.add(ClearableField.filenameTemplate);
+          },
         ),
       ],
     );

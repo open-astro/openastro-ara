@@ -56,10 +56,30 @@ class ProfileDraft {
   // please review in Settings" markers per §37.8.
   final Set<int> skippedScreens = <int>{};
 
+  /// §37 clear-field affordance — [ClearableField] keys the user explicitly
+  /// reset. The wizard's new profile CLONES the active one, and the mappers
+  /// treat a blank field as "keep the cloned value" — so without this, an old
+  /// rig's ASTAP path or save directory silently survives into the new
+  /// profile with no way to shed it. A key here makes the mapper write the
+  /// section DEFAULT instead of keeping the clone; typing into the field
+  /// again removes the key (the typed value wins).
+  final Set<String> clearedFields = <String>{};
+
   // Server id of the profile this draft was persisted as, set on the first
   // successful create during Save. A retry after a mid-save failure re-uses it
   // (re-applying the sections) instead of orphaning a new profile each attempt.
   String? savedProfileId;
+}
+
+/// Canonical [ProfileDraft.clearedFields] keys — the string fields where a
+/// stale cloned value is actively harmful (wrong solver paths on a new rig,
+/// frames landing in the old rig's directory). One key per clearable field so
+/// the screens and the wizard_save mappers can't drift on spelling.
+abstract final class ClearableField {
+  static const String astapBinaryPath = 'plateSolve.astapBinaryPath';
+  static const String starDatabasePath = 'plateSolve.starDatabasePath';
+  static const String saveDirectory = 'fileSaving.saveDirectory';
+  static const String filenameTemplate = 'fileSaving.filenameTemplate';
 }
 
 class EquipmentSlots {

@@ -191,12 +191,20 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
 /// §37.4 screen 11 — map the draft's ASTAP paths + search tuning onto the
 /// plate-solve section. The screen stores trimmed-or-null values, so every field
 /// passes straight through: copyWith treats null as "keep", so a blank/untouched
-/// field preserves the base profile's value.
+/// field preserves the base profile's value. A path the user explicitly RESET
+/// ([ClearableField] in [ProfileDraft.clearedFields]) writes the section
+/// default instead — the new profile clones the active one, so keep-on-blank
+/// alone would trap an old rig's path with no way to shed it.
 PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft d) {
   final ps = d.plateSolve;
+  const defaults = PlateSolveSettings();
   return base.copyWith(
-    pathOrEndpoint: ps.astapBinaryPath,
-    indexDownloadPath: ps.starDatabasePath,
+    pathOrEndpoint: d.clearedFields.contains(ClearableField.astapBinaryPath)
+        ? defaults.pathOrEndpoint
+        : ps.astapBinaryPath,
+    indexDownloadPath: d.clearedFields.contains(ClearableField.starDatabasePath)
+        ? defaults.indexDownloadPath
+        : ps.starDatabasePath,
     searchRadiusDeg: ps.searchRadiusDeg,
     downsampleFactor: ps.downsampleFactor,
   );
@@ -225,9 +233,15 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
 /// (compress true → Rice, false → Off; gzip stays a Settings-only choice).
 StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
   final f = d.fileSaving;
+  // Explicitly-reset fields take the section default (see applyDraftToPlateSolve).
+  const defaults = StorageSettings();
   return base.copyWith(
-    saveDirectory: f.saveDirectory,
-    filenameTemplate: f.filenameTemplate,
+    saveDirectory: d.clearedFields.contains(ClearableField.saveDirectory)
+        ? defaults.saveDirectory
+        : f.saveDirectory,
+    filenameTemplate: d.clearedFields.contains(ClearableField.filenameTemplate)
+        ? defaults.filenameTemplate
+        : f.filenameTemplate,
     fileFormat: switch (f.format) {
       ImageFormat.fits => StorageFileFormat.fits,
       ImageFormat.xisf => StorageFileFormat.xisf,

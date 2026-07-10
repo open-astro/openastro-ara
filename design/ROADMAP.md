@@ -153,8 +153,11 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 - ~~**Responsive dashboard tiles**~~ — shipped: `ResponsiveTileGrid` (LayoutBuilder → shared
   computed tile width, min 180 / max 280 / 12 spacing) replaces the fixed-200 `Wrap` for the
   Overview + Achievements tiles and the milestone badges.
-- **Wizard "clear field" affordance** — null=keep-base mappers can't blank a value back to empty
-  when re-running the wizard on an existing profile.
+- ~~**Wizard "clear field" affordance**~~ — shipped for the fields where a stale clone is
+  actively harmful (ASTAP binary/database paths, save directory, filename template): a reset
+  suffix on the field marks it in `ProfileDraft.clearedFields`, and the Save mappers write the
+  section DEFAULT instead of keeping the cloned value; typing un-marks. Other sections' fields
+  stay keep-on-blank (their defaults are benign); extend per-field if friction emerges.
 - **§37.5 wizard safety/site extras (enforcement-first)** — per-weather granular actions,
   WILMA-offline auto-abort timer, alarm sound/vibrate, soft-warning altitude, max-sequence-runtime
   cap: add each field together with the engine/planner surface that consumes it.
