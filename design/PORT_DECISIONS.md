@@ -238,3 +238,26 @@ machine to flap; (3) the conservative combined verdict (any source unsafe → un
 ALL sources safe) is only coherent with one reaction. `weather_triggers_enabled` defaults OFF so
 an upgrading rig never surprise-parks; a sensor the station doesn't report skips its check (no
 data is not a breach).
+
+## 2026-07-09 — Version-based planning removed; ROADMAP.md is the remaining-work list
+
+The design docs organized remaining work by release version (the playbook's "v0.0.1 section
+checklist" legend, §55's v0.1.0/v0.2.0 roadmap tiers, ~14 per-section "v0.1.0 expansion"
+subsections, dozens of inline "deferred to v0.1.0" tags, PORT_PROGRESS's version-labeled phase
+banners, NEXTGEN_PLANNING "bookmarked behind the v1 release"). User call: drop the version
+framing entirely and keep **one complete list of what is truly missing**, ordered as a design
+path — by dependency and theme, not by version bucket.
+
+- **`design/ROADMAP.md` created** as that list (in-flight §42 epic → release gates → the §59
+  autofocus arc that unblocks §58/§38 → guider-gated work → imaging-pipeline tail → client debt
+  → themed feature backlog → verify passes → user-parked decisions → complete follow-ups
+  appendix → permanent non-goals). Playbook §55 reduced to a pointer (number kept — §s are never
+  renumbered); the checklist legend/markers, expansion-subsection headings, and inline tags were
+  de-versioned across all living docs.
+- **Untouched by design:** this log and `API_CONTRACT.md` (append-only — prior version-worded
+  entries stand as historical record), `archive/`, `/api/v1` REST paths and the §60.8.1 API
+  versioning policy, wire-format versions (`profile-share-v1`, `schemaVersion`), dependency
+  pins, and the literal first-release tag name `v0.0.1-ara.1` (a real artifact, still pending
+  user authority + the RPi smoke test).
+- Encoded in: `design/ROADMAP.md`, `design/README.md` ("Where what's left lives" now points at
+  ROADMAP), playbook checklist + §55.
