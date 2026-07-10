@@ -74,8 +74,15 @@ class _FakeFaultsClient implements FaultsClient {
   void close() {}
 }
 
-String _frame(String type, Map<String, dynamic> payload, int seq) => jsonEncode(
-    {'type': type, 'ts': '2026-07-10T04:00:00.000Z', 'seq': seq, 'payload': payload});
+// Live frames carry a current server timestamp — the clear-vs-seed ordering
+// guard compares it against history rows' detected_utc, so a fixed past ts
+// would misorder a clear against a now-relative seeded row.
+String _frame(String type, Map<String, dynamic> payload, int seq) => jsonEncode({
+      'type': type,
+      'ts': DateTime.now().toUtc().toIso8601String(),
+      'seq': seq,
+      'payload': payload
+    });
 
 // Uses `pumpEventQueue()` like diagnostics_provider_test — the fake socket and
 // fake client are microtask-only. The notifier's periodic prune Timer never

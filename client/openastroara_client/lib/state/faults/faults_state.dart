@@ -149,11 +149,21 @@ class ActiveFaultsAccumulator {
   final int maxDevices;
 
   final Map<String, ActiveFault> _active = <String, ActiveFault>{};
-  // Device types a LIVE signal (recovered / reconnect) has cleared during this
-  // accumulator's life. [seed] skips them: a seed response that was in flight
-  // when the clear arrived must not resurrect the fault from stale history
-  // (the server resolves the row on `recovered`, but the read raced it).
-  final Set<String> _liveCleared = <String>{};
+  // When a LIVE signal (recovered / reconnect) last cleared each device type.
+  // [seed] skips a history row detected at-or-before that instant: a seed
+  // response that was in flight when the clear arrived must not resurrect the
+  // fault from stale history (the server resolves the row on `recovered`, but
+  // the read raced it). Timestamp-scoped, not a permanent flag — a genuinely
+  // NEWER fault (detected after the clear, e.g. while the socket was down)
+  // still seeds (review finding on #797).
+  final Map<String, DateTime> _clearedAt = <String, DateTime>{};
+
+  void _recordClear(String deviceType, DateTime at) {
+    final prev = _clearedAt[deviceType];
+    if (prev == null || at.isAfter(prev)) {
+      _clearedAt[deviceType] = at;
+    }
+  }
 
   /// Fold one event and return the new snapshot, or `null` when the event was
   /// not one this accumulator folds or was a no-op — the null lets the caller
@@ -206,7 +216,7 @@ class ActiveFaultsAccumulator {
     if (_string(event.payload['action']) != 'recovered') return false;
     final deviceType = _string(event.payload['device_type']);
     if (deviceType == null) return false;
-    _liveCleared.add(deviceType);
+    _recordClear(deviceType, event.ts);
     return _active.remove(deviceType) != null;
   }
 
@@ -217,7 +227,7 @@ class ActiveFaultsAccumulator {
   bool _applyConnected(WsEvent event) {
     final deviceType = _string(event.payload['device_type']);
     if (deviceType == null) return false;
-    _liveCleared.add(deviceType);
+    _recordClear(deviceType, event.ts);
     final existing = _active[deviceType];
     if (existing == null || existing.level != StatusLevel.error) return false;
     _active.remove(deviceType);
@@ -237,7 +247,10 @@ class ActiveFaultsAccumulator {
     var changed = false;
     for (final row in rows) {
       if (row.resolved) continue; // defence — the caller queries unresolvedOnly
-      if (_liveCleared.contains(row.equipmentType)) continue;
+      // Cleared-then-seeded race guard: skip only rows the clear supersedes;
+      // a fault detected AFTER the clear is genuinely new and must seed.
+      final clearedAt = _clearedAt[row.equipmentType];
+      if (clearedAt != null && !row.detectedUtc.isAfter(clearedAt)) continue;
       final level = faultKindLevel(row.faultType);
       final age = now.difference(row.detectedUtc);
       if (age > (level == StatusLevel.error ? staleRedGuard : advisoryTtl)) {

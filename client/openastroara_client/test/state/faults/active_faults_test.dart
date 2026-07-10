@@ -201,6 +201,34 @@ void main() {
       expect(acc.snapshot.byDeviceType, isEmpty);
     });
 
+    test('a fault genuinely newer than the clear still seeds', () {
+      final now = DateTime.utc(2026, 7, 10, 4);
+      final acc = ActiveFaultsAccumulator();
+      acc.apply(_fault('camera', 'disconnected', ts: now));
+      acc.apply(_event(FaultWsEvents.actionTaken,
+          {'device_type': 'camera', 'action': 'recovered'}, ts: now));
+      // A NEW fault fired while the socket was down (event dropped) — the
+      // link-up reseed must still surface it; the clear guard is scoped to
+      // rows the clear supersedes, not a permanent per-device flag.
+      final later = now.add(const Duration(minutes: 30));
+      final snap = acc.seed([
+        FaultRow(
+          id: 'f2',
+          sessionId: null,
+          detectedUtc: later,
+          equipmentType: 'camera',
+          equipmentId: 'dev-1',
+          equipmentName: 'Cam',
+          faultType: 'disconnected',
+          details: null,
+          actionTaken: null,
+          resolvedUtc: null,
+        ),
+      ], later.add(const Duration(minutes: 1)));
+      expect(snap, isNotNull);
+      expect(snap!.byDeviceType['camera']!.level, StatusLevel.error);
+    });
+
     test('live state always wins over a seed', () {
       final now = DateTime.utc(2026, 7, 10, 4);
       final acc = ActiveFaultsAccumulator();
