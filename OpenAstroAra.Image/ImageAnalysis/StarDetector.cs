@@ -79,16 +79,16 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             double k = parameters.Sensitivity > 0 ? parameters.Sensitivity : 8.0;
             double threshold = median + k * Math.Max(1.0, sigma);
 
-            var stars = FindStars(work, width, height, threshold, background: median, token);
+            var stars = FindStars(work, width, height, threshold, background: median,
+                maxStars: parameters.MaxNumberOfStars, token);
 
-            // Highest-quality stars first, then honour an explicit cap (≤ 0 = no cap). With a cap, the
-            // returned count + HFR stats reflect the brightest-N, not the whole field — this is the NINA
-            // convention (bright stars give the cleanest, least-noisy HFR for focus), but a §59 autofocus
-            // caller passing a small cap should know its HFR is a bright-star statistic, not a field average.
+            // Highest-quality stars first (a capped FindStars already returns brightest-first —
+            // this sort is then a no-op — but the uncapped path measures in scan order). With a
+            // cap, the returned count + HFR stats reflect the brightest-N, not the whole field —
+            // this is the NINA convention (bright stars give the cleanest, least-noisy HFR for
+            // focus), but a §59 autofocus caller passing a small cap should know its HFR is a
+            // bright-star statistic, not a field average.
             stars.Sort((a, b) => b.MaxBrightness.CompareTo(a.MaxBrightness));
-            if (parameters.MaxNumberOfStars > 0 && stars.Count > parameters.MaxNumberOfStars) {
-                stars.RemoveRange(parameters.MaxNumberOfStars, stars.Count - parameters.MaxNumberOfStars);
-            }
 
             return Summarize(stars);
         }
@@ -133,8 +133,18 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
         // 8-connected flood-fill over every above-threshold pixel not yet claimed. Each blob is reduced
         // to a measured star (or rejected). Iterative stack — recursion would blow the stack on a big blob.
-        private static List<DetectedStar> FindStars(ReadOnlySpan<ushort> pixels, int width, int height, double threshold, double background, CancellationToken token) {
+        //
+        // With a cap (maxStars > 0) the expensive per-blob Measure runs LAZILY: the fill phase only
+        // collects candidate blobs with their peak — a value it touches anyway — then candidates are
+        // measured brightest-peak-first until the cap is filled. Selection is unchanged (the old path
+        // measured everything, sorted by MaxBrightness — the same peak — and trimmed; a rejected
+        // candidate just hands its slot to the next-brightest either way), but a dense field no longer
+        // pays the full two-pass centroid/HFR/moments measurement for thousands of blobs it then
+        // discards. Uncapped (≤ 0) measures inline exactly as before, so no candidate list accumulates.
+        private static List<DetectedStar> FindStars(ReadOnlySpan<ushort> pixels, int width, int height,
+                double threshold, double background, int maxStars, CancellationToken token) {
             var stars = new List<DetectedStar>();
+            var candidates = maxStars > 0 ? new List<(int[] Blob, ushort Peak)>() : null;
             // BitArray (1 bit/pixel) over bool[] (1 byte/pixel): ~6 MB vs ~50 MB for a 50 MP frame —
             // meaningful headroom on the Raspberry Pi target that shares RAM with the OS + FITS I/O.
             var visited = new System.Collections.BitArray(pixels.Length);
@@ -158,6 +168,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 visited[start] = true;
                 bool touchesEdge = false;
                 bool oversized = false;
+                ushort blobPeak = 0;
 
                 while (stack.Count > 0) {
                     // The outer check fires per start-pixel, but a single frame-spanning component drains
@@ -179,6 +190,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     // profiling ever flags this, swap to a scanline fill (frontier = spans, not pixels).
                     if (!oversized) {
                         blob.Add(p);
+                        if (pixels[p] > blobPeak) {
+                            blobPeak = pixels[p]; // the lazy-measure sort key — free while we're here
+                        }
                         if (blob.Count > maxArea) {
                             oversized = true;
                         }
@@ -206,9 +220,30 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 if (oversized || touchesEdge || blob.Count < MinStarPixels) {
                     continue;
                 }
-                var star = Measure(blob, pixels, width, background);
-                if (star != null) {
-                    stars.Add(star);
+                if (candidates != null) {
+                    candidates.Add((blob.ToArray(), blobPeak));
+                } else {
+                    var star = Measure(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(blob), pixels, width, background);
+                    if (star != null) {
+                        stars.Add(star);
+                    }
+                }
+            }
+
+            if (candidates != null) {
+                // Brightest peak first, then measure only until the cap is filled. A candidate
+                // Measure rejects (saturated core) hands its slot to the next-brightest — the same
+                // outcome the old measure-all-then-trim produced, without measuring the tail.
+                candidates.Sort((a, b) => b.Peak.CompareTo(a.Peak));
+                foreach (var (candidate, _) in candidates) {
+                    token.ThrowIfCancellationRequested();
+                    var star = Measure(candidate, pixels, width, background);
+                    if (star != null) {
+                        stars.Add(star);
+                        if (stars.Count >= maxStars) {
+                            break;
+                        }
+                    }
                 }
             }
             return stars;
@@ -219,7 +254,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // needed. HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak
         // is rejected — its clipped-flat core biases both centroid and HFR. The same second pass folds in
         // the flux-weighted second-moment tensor that yields the §59 Smart Focus shape features.
-        private static DetectedStar? Measure(List<int> blob, ReadOnlySpan<ushort> pixels, int width, double background) {
+        private static DetectedStar? Measure(ReadOnlySpan<int> blob, ReadOnlySpan<ushort> pixels, int width, double background) {
             double sumF = 0, sumX = 0, sumY = 0, sumV = 0;
             ushort peak = 0;
             foreach (int p in blob) {
@@ -259,7 +294,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return new DetectedStar {
                 Position = Math.Round(cy) * width + Math.Round(cx),
                 HFR = hfr,
-                AverageBrightness = sumV / blob.Count, // mean raw brightness over every blob pixel
+                AverageBrightness = sumV / blob.Length, // mean raw brightness over every blob pixel
                 MaxBrightness = peak,
                 Background = background,
                 FWHM = FwhmFromMoments(mxx / sumF, myy / sumF),
@@ -310,7 +345,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
         private static (double OuterDiameter, double InnerDiameter, double ShadowDepth,
                 double CentroidOffsetX, double CentroidOffsetY, double RadialProfileSkew) DonutGeometry(
-                List<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
+                ReadOnlySpan<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
             double maxR = 0;
             foreach (int p in blob) {
                 int x = p % width, y = p / width;

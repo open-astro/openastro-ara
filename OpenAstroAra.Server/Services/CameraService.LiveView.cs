@@ -417,11 +417,12 @@ public sealed partial class CameraService {
         return (JpegEncoder.EncodeGray(stretched, width, height, maxDim: LiveViewMaxDim), width, height);
     }
 
-    // §64/§59 — run the shared star detector on a mono live frame and turn each detected star into an overlay
+    // §64/§59 — run the shared star detector on a live frame and turn each detected star into an overlay
     // circle, its radius scaled from the star's HFR (with a floor so tight stars stay visible). Uses the shared
     // AnalysisDetectionParams so the overlay matches what the §59 HFR trend sees. LiveViewMaxMarkers caps the
-    // returned/drawn markers so a rich field doesn't bury the preview — it bounds the draw, NOT the detector's
-    // per-blob measurement cost (the full frame is still flood-filled and measured every annotated frame).
+    // returned/drawn markers so a rich field doesn't bury the preview — and the detector's capped path
+    // measures brightest-first only until the cap fills, so a dense field's tail blobs cost a flood-fill
+    // but no per-blob measurement.
     private static List<StarMarker> DetectStarMarkers(ushort[] pixels, int width, int height) {
         var result = StarDetector.Detect(
             pixels, width, height, AnalysisDetectionParams(LiveViewMaxMarkers), CancellationToken.None);
