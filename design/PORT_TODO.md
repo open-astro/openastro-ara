@@ -44,8 +44,15 @@ Missing, by user value:
    streak; the refresh loop re-issues the same value best-effort (raw device write — not the
    episode-restarting mediator path) and the watch re-arms its settle window; a second
    exhaustion faults as before. A nudge that fixes the port never notifies.
-4. **Rotator angle-drift watch** (row 9: reported vs commanded > 0.5°) — no drift detection today,
-   only move-op timeouts; needs a `SwitchReadbackWatch` analog + re-issue. M.
+4. ✅ **Rotator angle-drift watch — DONE (the sub-PR after #801).** `RotatorDriftWatch`
+   (a `SwitchReadbackWatch` analog sharing `ReadbackVerdict`) remembers the last commanded move
+   (target + mechanical/sky domain, recorded at both the REST and mediator move sites), and the
+   refresh tick compares the reported angle in that domain against it — proper circular distance
+   (359.8° vs 0.1° = 0.3°), absolute ±0.5° tolerance, reads gated off while `IsMoving` or inside
+   a 10 s settle window. Same episode protocol: streak → one raw re-issued move → `ValueMismatch`
+   fault once, in-tolerance read after a fire clears the record. Sync/reverse-flip/failed/stalled
+   moves and disconnects reset the expectation (frame redefined / angle unknown). Tolerance is a
+   constant for now; a `RotatorAngleToleranceDeg` safety policy is a cheap follow-up if needed.
 5. **Pause-on-persistent-op-fault surface** (rows 1b/13: "Pause") — a `PauseOnError` instruction
    behavior wired to `PauseActiveRunsAsync`, or map op kinds to `FaultTerminalAction.PauseSequence`. M.
 6. ✅ **ASTAP crash detection — DONE (the sub-PR after #800).** `CLISolver.StartCLI` logs non-zero

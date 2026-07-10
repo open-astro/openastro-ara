@@ -114,6 +114,7 @@ public sealed partial class RotatorService : IRotatorMediator {
     private void TrySync(AlpacaRotator client, float skyAngle) {
         try {
             client.Sync(skyAngle);
+            ResetDriftIfLive(client); // sync redefines the sky-angle frame — the old expectation is stale
         } catch (Exception ex) {
             LogSyncIgnored(ex);
         }
@@ -173,6 +174,9 @@ public sealed partial class RotatorService : IRotatorMediator {
                 await linked.CancelAsync().ConfigureAwait(false); // move won the race: cancel the timer so it can't leak
             }
             await moveTask.ConfigureAwait(false); // observe the move's result / surface its exception
+            // §42.2 item 4 — the move dispatched: arm the drift watch on the commanded target so a
+            // rotator that settles off-target (or slips later) is caught by the refresh tick.
+            RecordMoveIfLive(client, target, useMechanical);
             if (!await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false)) {
                 // §42.2 — the move dispatched fine but was never confirmed settled (still moving
                 // after the full bound, or the connection dropped mid-move — the publish gate
@@ -183,16 +187,23 @@ public sealed partial class RotatorService : IRotatorMediator {
                 throw new SequenceEntityFailedException(msg);
             }
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            // On every failure path the drift watch forgets the expectation: the fault (if any) is
+            // already classified above, and where the rotator sits after a cancelled/failed/stalled
+            // move is unknown — a lingering record would double-report the same episode ~16s later.
+            ResetDriftIfLive(client);
             throw; // genuine sequencer cancellation — propagate so the run aborts
         } catch (SequenceEntityFailedException) {
+            ResetDriftIfLive(client);
             throw; // already classified + published above
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking move never returned — a stalled op (§42.4).
             // §42.2: publish AND fail the instruction so retries/instruction_failed engage.
+            ResetDriftIfLive(client);
             LogMoveFailed(ex, target);
             PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
             throw new SequenceEntityFailedException(ex.Message, ex);
         } catch (Exception ex) {
+            ResetDriftIfLive(client);
             LogMoveFailed(ex, target);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"rotator move to {target}° failed: {ex.Message}");
             throw new SequenceEntityFailedException($"rotator move to {target}° failed: {ex.Message}", ex);

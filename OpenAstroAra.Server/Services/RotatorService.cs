@@ -41,6 +41,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
     private readonly DeviceConnectionProbe _probe = new();
+    private readonly RotatorDriftWatch _drift = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaRotator? _client;
@@ -104,6 +105,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             _connectGeneration++;
             client = _client;
             _client = null;
+            _drift.Reset();
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -179,6 +181,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     private void SetReverseInBackground(AlpacaRotator client, bool reverse) {
         try {
             client.Reverse = reverse;
+            ResetDriftIfLive(client); // reverse remaps the angle domains — the old expectation is stale
             RefreshCacheOnce();
         } catch (Exception ex) {
             LogReverseFailed(ex, reverse);
@@ -190,6 +193,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     private void SyncInBackground(AlpacaRotator client, float angle) {
         try {
             client.Sync(angle);
+            ResetDriftIfLive(client); // sync redefines the sky-angle frame — the old expectation is stale
             RefreshCacheOnce();
         } catch (Exception ex) {
             LogSyncFailed(ex, angle);
@@ -207,8 +211,10 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             } else {
                 client.MoveMechanical(target);
             }
+            RecordMoveIfLive(client, target, mechanical: !useSkyAngle);
             RefreshCacheOnce();
         } catch (Exception ex) {
+            ResetDriftIfLive(client); // the move failed — where the rotator sits now is unknown
             LogMoveFailed(ex, target);
         }
     }
@@ -245,9 +251,34 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
+            var verdict = ReadbackVerdict.Idle;
+            (float TargetDeg, bool Mechanical)? commanded = null;
+            string? deviceName = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
+                    // §42.2 item 4 — angle-drift check against the last commanded move, under the
+                    // same commit lock as the liveness check (the #789 one-critical-section
+                    // lesson). The verdict is acted on off-lock below.
+                    verdict = _drift.Observe(runtime.MechanicalAngleDeg, runtime.SkyAngleDeg,
+                        isMoving: runtime.State == "moving",
+                        RotatorDriftWatch.DefaultToleranceDeg, DateTimeOffset.UtcNow);
+                    if (verdict is ReadbackVerdict.Recommand or ReadbackVerdict.Mismatch) {
+                        commanded = _drift.Commanded;
+                        deviceName = _device?.Name;
+                    }
+                }
+            }
+            if (commanded is { } move) {
+                var domain = move.Mechanical ? "mechanical" : "sky";
+                if (verdict == ReadbackVerdict.Recommand) {
+                    RecommandMoveQuietly(client, move.TargetDeg, move.Mechanical);
+                } else {
+                    var reported = move.Mechanical ? runtime.MechanicalAngleDeg : runtime.SkyAngleDeg;
+                    LogAngleDrift(deviceName ?? "?", domain, reported ?? double.NaN, move.TargetDeg);
+                    PublishOpFault(client, EquipmentFaultKind.ValueMismatch,
+                        $"rotator {domain} angle reads {reported:0.##}°, commanded {move.TargetDeg:0.##}° " +
+                        $"(tolerance ±{RotatorDriftWatch.DefaultToleranceDeg:0.##}°) — persists after one re-command");
                 }
             }
         } catch (Exception ex) {
@@ -308,6 +339,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _capabilities = caps;
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
+                    _drift.Reset();         // a prior session's commanded angle means nothing here
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -376,6 +408,55 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
         }
     }
 
+    // §42.2 item 4 — the drift watch may only track (or forget) an expectation for the LIVE
+    // client: the move calls run off the gate, so a concurrent disconnect/reconnect can have
+    // swapped the client while a stale move's bookkeeping was still in flight.
+    private void RecordMoveIfLive(AlpacaRotator client, float targetDeg, bool mechanical) {
+        lock (_gate) {
+            if (ReferenceEquals(_client, client)) {
+                _drift.Command(targetDeg, mechanical, DateTimeOffset.UtcNow);
+            }
+        }
+    }
+
+    private void ResetDriftIfLive(AlpacaRotator client) {
+        lock (_gate) {
+            if (ReferenceEquals(_client, client)) {
+                _drift.Reset();
+            }
+        }
+    }
+
+    // §42.2 — one best-effort re-issue of the same move before the drift fault fires.
+    // Deliberately a raw device call (not the REST/mediator move paths, whose Command()
+    // recording would restart the episode and erase the one-recommand budget); the watch
+    // already re-armed its settle window.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort recovery step in a fire-and-forget task: the re-issued ASCOM move can throw arbitrary driver/HTTP exceptions; a failure is logged and the drift episode simply proceeds to its fault. CA1031's log-and-recover boundary applies.")]
+    private void RecommandMoveQuietly(AlpacaRotator client, float targetDeg, bool mechanical) {
+        LogRecommandMove(targetDeg, mechanical ? "mechanical" : "sky");
+        _ = Task.Run(() => {
+            try {
+                if (mechanical) {
+                    client.MoveMechanical(targetDeg);
+                } else {
+                    client.MoveAbsolute(targetDeg);
+                }
+            } catch (Exception ex) {
+                LogRecommandMoveFailed(ex, targetDeg);
+            }
+        }, CancellationToken.None);
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Rotator drifted off its commanded {Domain} angle — re-issuing move to {Target}° once before faulting (§42.2)")]
+    private partial void LogRecommandMove(float target, string domain);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator re-command to {Target}° failed")]
+    private partial void LogRecommandMoveFailed(Exception ex, float target);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator '{Device}' {Domain} angle reads {Reported}°, commanded {Target}° — §42.2 drift fault")]
+    private partial void LogAngleDrift(string device, string domain, double reported, float target);
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
     private static bool ProbeConnected(AlpacaRotator c) {
@@ -408,6 +489,7 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             device = _device;
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
+            _drift.Reset();
         }
         LogConnectionLost(device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Rotator, device?.UniqueId, device?.Name,
