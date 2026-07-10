@@ -1221,6 +1221,11 @@ components:
         # §29 — action when the disk-space monitor hits the critical threshold. Optional for back-compat
         # (defaults to "warn"); "abort" also halts any running sequence.
         on_disk_space_critical:        { type: string, enum: [warn, abort], default: warn }
+        # §42.2/§42.3 — equipment-fault reaction policies. Optional for back-compat.
+        hot_reconnect_enabled:         { type: boolean, default: true }
+        on_camera_lost:                { type: string, enum: [reconnect_then_pause, pause, notify_only], default: reconnect_then_pause }
+        on_mount_lost:                 { type: string, enum: [reconnect_then_abort_park, reconnect_then_pause, pause, notify_only], default: reconnect_then_abort_park }
+        on_tracking_lost:              { type: string, enum: [reenable_then_pause, pause, notify_only], default: reenable_then_pause }
 
     FilenamesSettings:
       type: object

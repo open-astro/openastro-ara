@@ -602,6 +602,24 @@ public partial class Program {
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
 
+        // §42.3 — equipment-fault reaction: subscribes to the EquipmentFaultHub and executes
+        // the FaultPolicyMatrix plan per fault (pause-first for camera/mount, hot-reconnect
+        // ladder via IEquipmentReconnector, resume on recovery, pause/abort+park on give-up).
+        // Same optional-dep + sequencer-resolver pattern as the safety-reaction engine.
+        builder.Services.AddSingleton<FaultReactionService>(sp =>
+            new FaultReactionService(
+                sp.GetService<EquipmentFaultHub>(),
+                sp.GetService<IEquipmentReconnector>(),
+                sp.GetService<IProfileStore>(),
+                () => sp.GetService<ISequencerService>(),
+                sp.GetService<ITelescopeService>(),
+                sp.GetService<INotificationService>(),
+                sp.GetService<IWsBroadcaster>(),
+                sp.GetService<ILogger<FaultReactionService>>()));
+        // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
+        // any in-flight reconnect ladder.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
+
         // §35.3 — emergency stop (abort runs → abort exposure → stop guiding →
         // park → flat light off), behind POST /api/v1/server/emergency-stop.
         // Same optional-dep + sequencer-resolver pattern as the reaction engine.
