@@ -256,7 +256,7 @@ public sealed partial class CameraService {
                     await Task.Delay(LiveViewInterFrameDelay, token).ConfigureAwait(false);
                     continue;
                 }
-                var produced = false;
+                (ushort[] Pixels, int Width, int Height)? acquired = null;
                 try {
                     AlpacaCamera? client;
                     lock (_gate) {
@@ -265,9 +265,8 @@ public sealed partial class CameraService {
                     if (client is null) {
                         break; // disconnected/disposed — end the loop
                     }
-                    produced = await CaptureLiveFrameAsync(
-                        client, request, session, bayerPattern,
-                        applySettings: !settingsApplied, token).ConfigureAwait(false);
+                    acquired = await AcquireLiveFramePixelsAsync(
+                        client, request, applySettings: !settingsApplied, token).ConfigureAwait(false);
                     settingsApplied = true; // settings are current (just applied, or unchanged since we hold the gate)
                 } catch (OperationCanceledException) when (token.IsCancellationRequested) {
                     throw;
@@ -276,6 +275,24 @@ public sealed partial class CameraService {
                     settingsApplied = false; // device state unknown after a failure — re-apply next frame
                 } finally {
                     Interlocked.Exchange(ref _captureInFlight, 0);
+                }
+                // §64 — the CPU half runs OFF the capture gate (PORT_TODO follow-up from #775):
+                // RenderLiveFrame (stretch/debayer/JPEG and, with annotate, the full-frame
+                // StarDetector pass — real CPU time on a big sensor) used to run inside
+                // _captureInFlight, so every annotated live frame extended the window a manual
+                // catalog capture was blocked. The device work is finished by here; a capture
+                // can interleave while this frame renders.
+                var produced = false;
+                if (acquired is { } frame) {
+                    try {
+                        PublishLiveFrame(frame.Pixels, frame.Width, frame.Height, request, session, bayerPattern);
+                        produced = true;
+                    } catch (Exception ex) {
+                        // Render/encode failure: the device was untouched (settings stay
+                        // current), but no frame landed — still counted below so a render that
+                        // always throws self-stops the loop instead of spinning forever.
+                        LogLiveViewFrameFailed(ex);
+                    }
                 }
                 // Self-stop on persistent failure rather than spin forever delivering nothing (a
                 // rejected setting, a device that never reaches ImageReady, a render that always
@@ -306,11 +323,13 @@ public sealed partial class CameraService {
         }
     }
 
-    // Returns true if a frame was published, false if the frame was skipped (device never reached
-    // ImageReady / dropped). Throwing propagates to the loop's catch, which counts it as a failure.
-    private async Task<bool> CaptureLiveFrameAsync(
-            AlpacaCamera client, LiveViewStartRequestDto request, long session,
-            BayerPattern? bayerPattern, bool applySettings, CancellationToken token) {
+    // The DEVICE half of one live frame, run under the _captureInFlight gate: settings →
+    // expose → ImageReady poll → download → pixel conversion. Returns the raw pixels (the
+    // CPU render half runs off-gate in the loop), or null when the frame was skipped (device
+    // never reached ImageReady / dropped). Throwing propagates to the loop's catch, which
+    // counts it as a failure.
+    private async Task<(ushort[] Pixels, int Width, int Height)?> AcquireLiveFramePixelsAsync(
+            AlpacaCamera client, LiveViewStartRequestDto request, bool applySettings, CancellationToken token) {
         // Reuse the capture path's settings application (bin/gain, full-frame subframe). Applied only
         // when the loop knows the device settings may be stale (first frame of a session, or after a
         // manual capture / error) — see RunLiveViewLoopAsync's settingsApplied tracking.
@@ -337,7 +356,7 @@ public sealed partial class CameraService {
             // before the loop's next StartExposure (most ASCOM drivers reject a re-StartExposure
             // while one is still in flight). Quiet: a throw here (disconnected client) is ignored.
             TryAbortQuietly(client);
-            return false; // skip this frame, the loop retries
+            return null; // skip this frame, the loop retries
         }
         // Exposure already completed (ImageReady): the camera holds a finished image, so a cancel
         // here needs no abort — nothing is running to stop.
@@ -350,15 +369,19 @@ public sealed partial class CameraService {
         } finally {
             Interlocked.Exchange(ref _downloading, 0);
         }
-        var (pixels, width, height) = ConvertImageArray(imageArray);
-        var (jpeg, outWidth, outHeight) = RenderLiveFrame(pixels, width, height, bayerPattern, request.Annotate);
+        return ConvertImageArray(imageArray);
+    }
 
-        // Single writer (this loop). Meta (exposure/start) was set once at start and isn't touched
-        // here, so the only per-frame publish is the frame itself — one atomic volatile write
-        // carrying seq + dimensions + capture time, so status reads can't tear.
+    // The CPU half of one live frame, run OFF the capture gate: render (stretch / debayer /
+    // detect / JPEG) and publish. Single writer (the live loop). Meta (exposure/start) was set
+    // once at start and isn't touched here, so the only per-frame publish is the frame itself —
+    // one atomic volatile write carrying seq + dimensions + capture time, so status reads can't
+    // tear.
+    private void PublishLiveFrame(ushort[] pixels, int width, int height,
+            LiveViewStartRequestDto request, long session, BayerPattern? bayerPattern) {
+        var (jpeg, outWidth, outHeight) = RenderLiveFrame(pixels, width, height, bayerPattern, request.Annotate);
         var nextSeq = (_liveViewFrame?.Seq ?? 0) + 1;
         _liveViewFrame = new LiveViewFrameData(jpeg, nextSeq, session, outWidth, outHeight, DateTimeOffset.UtcNow);
-        return true;
     }
 
     // §64 render: raw pixels → live JPEG. An OSC session at 1×1 (bayerPattern set at start) renders
