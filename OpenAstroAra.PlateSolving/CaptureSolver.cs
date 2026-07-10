@@ -77,7 +77,15 @@ namespace OpenAstroAra.PlateSolving {
                         }
                     );
 
-                    await filterChangeTask;
+                    try {
+                        await filterChangeTask;
+                    } catch (SequenceEntityFailedException ex) {
+                        // §42.2 — ChangeFilter now fails loudly on an unconfirmed change. This
+                        // restore runs AFTER the exposure, so the solve of the already-captured
+                        // frame is valid regardless; like CenteringSolver's finally-restore it is
+                        // best-effort and must not mask the solve result.
+                        Logger.Warning($"Restoring filter after plate-solve capture failed: {ex.Message}");
+                    }
 
                     if (!plateSolveResult.Success && remainingAttempts > 0) {
                         await CoreUtil.Wait(parameter.ReattemptDelay, true, progress, "", ct);

@@ -293,8 +293,15 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
             return;
         }
         _ = Task.Run(async () => {
-            await RunSwitchWriteAsync(client, portId, value, CancellationToken.None).ConfigureAwait(false);
-            RefreshCacheOnce();
+            try {
+                await RunSwitchWriteAsync(client, portId, value, CancellationToken.None).ConfigureAwait(false);
+                RefreshCacheOnce();
+            } catch (SequenceEntityFailedException) {
+                // §42.2 — the write path now fails loudly for the sequencer's benefit, but this
+                // wrapper is fire-and-forget by contract (IWritableSwitch.SetValue returns void):
+                // the failure was already logged + fault-published inside RunSwitchWriteAsync,
+                // and rethrowing here would only die as an unobserved task exception.
+            }
         }, CancellationToken.None);
     }
 

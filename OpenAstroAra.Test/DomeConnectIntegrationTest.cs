@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -106,33 +107,45 @@ namespace OpenAstroAra.Test {
             await PollUntilAsync(svc, _ => svc.GetInfo().CanSetAzimuth || svc.GetInfo().CanSetShutter).ConfigureAwait(false);
             Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected once the REST connect lands");
 
-            // Drive the dome through the live mediator. NOTE: the OmniSim dome's shutter/slew ops are
-            // state-dependent (it starts parked, and shutter support varies), so a blocking op
-            // legitimately returns false when the device rejects/can't complete it — that's correct
-            // production behaviour (the op faulted and was logged), not a bug. We therefore exercise
-            // the real mediator path end-to-end and assert *consistency on success* (a true result
-            // must be backed by the device actually reaching the state) rather than hard-requiring
-            // success against the sim's park state. The deterministic contracts are covered by the
+            // Drive the dome through the live mediator. NOTE: the OmniSim dome's shutter/slew ops
+            // are state-dependent (it starts parked, and shutter support varies), so a blocking op
+            // legitimately gets REJECTED by the device — which since §42.2 fails loudly
+            // (SequenceEntityFailedException, after publishing the fault) so the instruction's
+            // retry/failure machinery engages. That's correct production behaviour against the
+            // sim's park state, not a bug: we exercise the real mediator path end-to-end and
+            // assert *consistency on success* (a completed op must be backed by the device
+            // actually reaching the state). The deterministic contracts are covered by the
             // sim-free unit tests; the focuser/rotator integration tests cover the move-settle path.
-            var openOk = await svc.OpenShutter(CancellationToken.None).ConfigureAwait(false);
+            var openOk = await TryOpAsync(() => svc.OpenShutter(CancellationToken.None)).ConfigureAwait(false);
             if (openOk) {
                 Assert.That(svc.GetInfo().ShutterStatus,
                     Is.EqualTo(OpenAstroAra.Equipment.Interfaces.ShutterState.ShutterOpen),
-                    "a true OpenShutter result must be backed by ShutterStatus == ShutterOpen");
+                    "a completed OpenShutter must be backed by ShutterStatus == ShutterOpen");
             }
 
-            var slewOk = await svc.SlewToAzimuth(120.0, CancellationToken.None).ConfigureAwait(false);
+            var slewOk = await TryOpAsync(() => svc.SlewToAzimuth(120.0, CancellationToken.None)).ConfigureAwait(false);
             if (slewOk) {
                 Assert.That(svc.GetInfo().Azimuth, Is.EqualTo(120.0).Within(2.0),
-                    "a true SlewToAzimuth result must leave the dome near the requested azimuth");
+                    "a completed SlewToAzimuth must leave the dome near the requested azimuth");
             }
 
-            // Leave tidy (best-effort).
-            await svc.CloseShutter(CancellationToken.None).ConfigureAwait(false);
+            // Leave tidy (best-effort — a state-dependent rejection here is fine).
+            await TryOpAsync(() => svc.CloseShutter(CancellationToken.None)).ConfigureAwait(false);
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
+        // §42.2 — a state-dependent rejection from the sim (e.g. "Shutter failed to open" while
+        // parked) now surfaces as SequenceEntityFailedException; for this consistency-on-success
+        // test that's the legitimate "device declined" path, not a failure.
+        private static async Task<bool> TryOpAsync(Func<Task<bool>> op) {
+            try {
+                return await op().ConfigureAwait(false);
+            } catch (SequenceEntityFailedException) {
+                return false;
+            }
         }
 
         private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
