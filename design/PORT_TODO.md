@@ -137,10 +137,15 @@ overlay"; these are genuine but larger and tracked here per §0 rule 6.
   interleave while a frame renders. The loop stays the single writer (publish ordering
   unchanged); a render failure still counts toward `LiveViewMaxConsecutiveFailures` (self-stop
   preserved) but no longer resets `settingsApplied` — the device was untouched by a render.
-- **Marker cap bounds the draw, not detection cost.** `LiveViewMaxMarkers` trims the returned/drawn
-  markers *after* `FindStars`+`Measure` have run the full per-blob pipeline on every blob. A dense field
-  (Milky Way, low threshold) fully measures thousands of blobs each annotated frame, then discards all
-  but 250. Comment corrected in this PR; a real early-out (cap detection, not just the draw) is follow-up.
+- ✅ **Marker cap now bounds measurement cost too — DONE (the sub-PR after #809).**
+  `StarDetector.Detect` with a `MaxNumberOfStars` cap no longer measures every blob and trims:
+  the flood-fill phase collects candidate blobs with their peak (a value the fill touches
+  anyway — the SAME key the old path sorted on), then measures brightest-peak-first, stopping
+  once the cap is filled; a Measure-rejected candidate (saturated core) hands its slot to the
+  next-brightest, exactly like measure-all-then-trim did. Selection semantics pinned by an
+  equivalence test (capped result == uncapped-then-trimmed, star for star). Uncapped callers
+  measure inline as before (no candidate list accumulates). A dense Milky-Way field's annotated
+  live frame now pays the fill plus ~cap measurements, not thousands.
 
 ## Flaky bench test — AlpacaFaultProxy header-forward — ✅ FIXED (2026-07-08)
 

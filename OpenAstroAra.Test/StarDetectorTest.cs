@@ -173,6 +173,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Detect_capped_selects_the_same_brightest_N_as_uncapped_then_trimmed() {
+            // The capped path measures lazily (brightest-peak-first, stopping at the cap) instead
+            // of measuring every blob and trimming — this pins that the SELECTION is unchanged:
+            // a dense field of distinct-amplitude stars must yield exactly the uncapped result's
+            // brightest N, star for star.
+            int w = 400, h = 400;
+            var frame = FlatField(w, h);
+            var rng = 0;
+            for (int y = 40; y < 400; y += 45) {
+                for (int x = 40; x < 400; x += 45) {
+                    AddStar(frame, w, h, x, y, amplitude: 3000 + 137 * rng++); // strictly increasing peaks — no ties
+                }
+            }
+
+            var uncapped = StarDetector.Detect(frame, w, h, NormalParams());
+            Assert.That(uncapped.DetectedStars, Is.GreaterThan(20), "the field must be dense enough to exercise the cap");
+            var capped = StarDetector.Detect(frame, w, h,
+                new StarDetectionParams { Sensitivity = 8.0, MaxNumberOfStars = 10 });
+
+            Assert.That(capped.DetectedStars, Is.EqualTo(10));
+            var expectedBrightest = uncapped.StarList
+                .OrderByDescending(s => s.MaxBrightness).Take(10).Select(s => s.Position).ToArray();
+            Assert.That(capped.StarList.Select(s => s.Position), Is.EquivalentTo(expectedBrightest),
+                "lazy brightest-first measurement must pick the identical star set");
+        }
+
+        [Test]
+        public void Detect_capped_passes_a_rejected_candidates_slot_to_the_next_brightest() {
+            // The brightest blob is saturated (Measure rejects it) — the capped path must keep
+            // measuring past it and fill the cap with the next-brightest real stars, exactly like
+            // the old measure-all-then-trim did.
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 100, 100, amplitude: 70000, sigma: 2.0); // saturated — rejected
+            AddStar(frame, w, h, 40, 40, amplitude: 8000);
+            AddStar(frame, w, h, 160, 160, amplitude: 6000);
+
+            var result = StarDetector.Detect(frame, w, h,
+                new StarDetectionParams { Sensitivity = 8.0, MaxNumberOfStars = 2 });
+
+            Assert.That(result.DetectedStars, Is.EqualTo(2),
+                "the saturated candidate's slot goes to the remaining real stars");
+            foreach (var s in result.StarList) {
+                Assert.That(s.MaxBrightness, Is.LessThan(65000), "the saturated blob itself never lands in the result");
+            }
+        }
+
+        [Test]
         public void Detect_with_noise_reduction_still_finds_a_star_and_suppresses_salt() {
             // Exercises the Median3x3 pre-filter path: a real star (multi-pixel, survives the median)
             // is still found, while scattered single-pixel salt spikes are smoothed below threshold.
