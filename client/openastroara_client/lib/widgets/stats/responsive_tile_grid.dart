@@ -28,9 +28,9 @@ class ResponsiveTileGrid extends StatelessWidget {
   double tileWidthFor(double available) {
     if (!available.isFinite || available <= minTileWidth) {
       // Unbounded (shouldn't happen on the dashboard) or too narrow to fit
-      // even one minimum tile: one column at whatever space there is, floored
-      // at the minimum so the tile content lays out sanely and lets the
-      // parent scroll/clip instead of squeezing to zero.
+      // even one minimum tile: one column floored at the minimum so the tile
+      // content lays out sanely — below-min panes overflow the row edge
+      // (visually clipped) rather than squeezing the tile toward zero width.
       return available.isFinite ? math.max(available, minTileWidth) : minTileWidth;
     }
     final columns =
