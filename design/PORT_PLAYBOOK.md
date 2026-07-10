@@ -28,22 +28,22 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 
 ---
 
-## Port completion status — v0.0.1 section checklist
+## Port completion status — section checklist
 
-**Maintained going forward; cross-reference `design/PORT_PROGRESS.md` Completed section for per-PR detail.** Updated 2026-07-06 (after #706).
+**Maintained going forward; cross-reference `design/PORT_PROGRESS.md` Completed section for per-PR detail.** Updated 2026-07-09 (de-versioned + reconciled with PORT_TODO).
 
-Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where status needs confirming) · ⬜ pending / placeholder service · 🚫 deferred to v0.1.0 (§55) · ⚙️ agent operating rule, not a shippable feature.
+Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where status needs confirming) · ⬜ pending / placeholder service · 🚫 deferred — see `design/ROADMAP.md` · ⚙️ agent operating rule, not a shippable feature.
 
 - ⚙️ **§0/§0.5/§3/§16/§18/§19/§20/§22/§24/§55** — operating rules, design principles, phased plan, merge model, "done" definition, roadmap. Process guidance, not features.
 - ✅ **§1** Branch + tracking files · ✅ **§2** Target stack (.NET 10 / Flutter / Alpaca, locked).
 - ✅ **§4** Phase 0.5 fork hygiene + demolition (`phase-0.5a..p-complete`) · ✅ **§5** Phase 1 .NET 10 (folded into 0.5p).
 - ✅ **§6** Phase 2 Alpaca-only equipment · ✅ **§7** Phase 3 PHD2 repoint · ✅ **§8** Phase 4 Server scaffold (`:5555`, `/healthz`).
 - ✅ **§9** Phase 5 API contract (`openapi.yaml`) · ✅ **§10** Phases 6-9 endpoints (141 routes) · ✅ **§11** Phase 10 smoke test.
-- ✅ **§12** Phases 11-13 Flutter client (shell, 7 tabs, wizard, settings; mobile → §41/v0.1.0).
+- ✅ **§12** Phases 11-13 Flutter client (shell, 7 tabs, wizard, settings; mobile → §41, ROADMAP).
 - 🟡 **§13** RPi deployment — DEPLOY.md + .deb-in-CI done; actual Pi install + smoke = **physical-blocked** (PORT_TODO).
 - 🟡 **§14** Testing — 14a-d + 14e sim pinning (#321) done; ~1,590 server + ~1,340 client tests; integration tests gated on sims/hardware.
 - ✅ **§15** Build + verification gate (analyzer gate warnings=errors + CI smoke gate) · ✅ **§17** Fork hygiene / MPL headers / NOTICE.md.
-- 🚫 **§21** Localization — en-only for v0.0.1 (non-English stripped 0.5e/f); i18n is v0.1.0.
+- 🚫 **§21** Localization — en-only (non-English stripped 0.5e/f); i18n is on the ROADMAP.
 - ✅ **§23** Quick reference (+ §23.1 macOS dev-run) · ✅ **§25** Visual design — NINA UX cloned (placeholder icons).
 - 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 in-memory render **fully un-stubbed (#354–#358):** RenderBitmapSource/RenderImage, GetThumbnail, ReRender, Stretch, full-res Debayer, **DetectStars/UpdateAnalysis (from-scratch `StarDetector` — median+MAD threshold → blobs → flux-weighted centroid + HFR, no OpenCvSharp4)**. Only **libraw RAW decode** still pending (PORT_TODO).
 - ✅ **§27** Single-client connection policy — connect handshake + idempotent re-claim + 4004 takeover, server #705 + WILMA client #706 (2026-07-06): `ClientSessionService` slot with 30s modal / 60s dead-holder sweep, WS client→server half (X-Ara-Session bind, app-level ping/pong, connection.request/response), takeover + session-transferred modals.
@@ -52,43 +52,43 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - ✅ **§30** First-run + launch flow (`phase-11-complete`, mDNS + handshake).
 - 🟡 **§31** Time + location sync — site settings round-trip done; full waterfall = verify.
 - ✅ **§32** Network resilience (§60.9 WS resume + 30/60s heartbeat, #172-176).
-- 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates = v0.1.0.
-- 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); releases ship via apt.openastro.net (user decision 2026-07-07, reversing the earlier post-v0.0.1 deferral) — the repo publish pipeline (reprepro/aptly on tag push per §34.5) is still to build.
+- 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates on the ROADMAP.
+- 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); releases ship via apt.openastro.net (user decision 2026-07-07, reversing the earlier post-release deferral) — the repo publish pipeline (reprepro/aptly on tag push per §34.5) is still to build.
 - ✅ **§35** Safety policies (editable per-profile, #94) + the §35.4 unsafe-reaction engine (`SafetyReactionService`: SafetyMonitor poll → on_unsafe policy pause/abort + stop-guiding + park + auto-resume-when-safe, 2026-07-07). §35.1's granular weather-threshold triggers (wind/humidity/dew via ObservingConditions) + the §35.3 emergency-stop endpoint remain follow-ups (PORT_TODO).
 - ✅ **§36** Sky imagery + Data Manager — real Data Manager (packages, downloads, catalog reads) + §36 planetarium native-webview (#611) + catalog overlay drawer/persistence/labels (#639/#640/#650) + §36.8 Tonight's Sky planner (#612-#660). Sharpless/Herschel overlays remain data-blocked.
 - ✅ **§37** Profile setup wizard (18-screen + round-trip persistence).
 - ✅ **§38** Sequence format + NINA import + real execution engine (#319-320).
 - ✅ **§39** Calibration + dark library — full epic #670-#688 (2026-07-02): widened schema, flats/darks as generated sequences, calibration screen + library + bulk ops + Resume Target + stats CSV + previews + live `frame.complete` refresh.
 - ✅ **§40** Captured-image library (list/preview/thumbnail/download, bulk ops, hfr-analysis).
-- 🚫 **§41** Mobile companion — iOS/Android deferred (§18.G), v0.1.0.
+- 🚫 **§41** Mobile companion — iOS/Android deferred (§18.G) — ROADMAP.
 - 🟡 **§42** Hardware fault recovery — guider-d crash-recovery (#351) done; the §42.2 guider-lost row is ENFORCED (2026-07-07: link drop mid-run → on_guider_lost pause/skip/abort via the §35 bulk-pause machinery); the rest of the §42.2 matrix (camera/mount/focuser/EFW rows) + §42.3 generalized hot-reconnect remain follow-ups.
-- ✅ **§43** Backup + restore — real `BackupService` (zip snapshots, §43-2 validated restore with atomic swap, snapshot download). · 🟡 **§44** Real-time backup stream — server half + the WILMA puller/toggle/registry-entries LIVE (2026-07-07); remaining: footer/tile/per-frame-icon progress surfaces + the §44.4 token-bucket bandwidth cap (PORT_TODO §44).
+- ✅ **§43** Backup + restore — real `BackupService` (zip snapshots, §43-2 validated restore with atomic swap, snapshot download). · ✅ **§44** Real-time backup stream — server half + the WILMA puller/toggle/registry-entries LIVE (2026-07-07); footer/tile/per-frame-icon progress surfaces + the §44.4 token-bucket bandwidth cap landed 2026-07-08 (PORT_TODO §44 closed).
 - 🟡 **§45** Polar alignment — phase 1 landed (#703): `PolarAlignGeometry` two-point RA-axis fit (nearest-pole disambiguation + 30° refusal guard, Bennett refraction, alt/az error split) + the guider-fork RPC classes (capture_single_frame / centroids / pa_session). Phases 2+ (daemon FITS spike, live flow) need the guider daemon running; `PlaceholderPolarAlignService` still registered until then.
 - ✅ **§46** Notifications (SQLite, #201/203).
-- 🚫 **§47** Mosaic imaging — `PlaceholderMosaicService`; v0.1.0.
-- 🟡 **§48** Auto-flats + dark library — dark library + matching-flats generation shipped inside the §39 epic; the §48.1/.2 prompt flow is ENFORCED server-side (2026-07-07: `calibration_capture_default` + prompt/decide/auto-execute on completion via §39.5, `IAutoFlatsService` served by the SequencerService singleton). Remaining: the WILMA prompt dialog + Settings → Calibration panel (client slice), §48.3/.4 native FlatPanelFlats/SkyFlats instructions with auto-exposure + twilight timing (v0.1.0 — §39.5 generation is the v0.0.1 automation).
+- 🚫 **§47** Mosaic imaging — `PlaceholderMosaicService`; deferred — ROADMAP.
+- ✅ **§48** Auto-flats + dark library — dark library + matching-flats generation shipped inside the §39 epic; the §48.1/.2 prompt flow is ENFORCED server-side (2026-07-07: `calibration_capture_default` + prompt/decide/auto-execute on completion via §39.5, `IAutoFlatsService` served by the SequencerService singleton); the WILMA prompt dialog + Settings → Calibration panel client slice and the §48.3/.4 native FlatPanelFlats/SkyFlats instructions (auto-exposure + twilight timing) landed 2026-07-08 (3-PR arc). One accepted watch-item: per-filter probe bounds (#754, ROADMAP appendix).
 - ✅ **§49** API doc serving (Scalar UI) · ✅ **§50** Session analytics + Stats (SQLite, 8 views) · ✅ **§51** Real-time diagnostics (SQLite).
 - ✅ **§52** Mount Alpaca-only (AlpacaTelescope + sequencer mediator).
 - 🟡 **§53** Accessibility — baseline; full WCAG audit = ongoing.
 - ✅ **§54** Bug report + push channels — real `IBugReportService` (logs + profile + system-info bundle, §70-stripped) and Pushover/Telegram push forwarding of Warning+ notifications (#704).
 - ✅ **§56** Migrating from NINA (`.json` import).
 - 🟡 **§57** Stop Mount + slew safety — telescope abort/park done; full slew-safety policy = verify.
-- 🟡 **§58** Meridian flip — decision-logic trigger (#362) + the real §58.4 orchestration executor (#366, replacing the throwing placeholder + wiring the trigger into the sequencer factory) + the side-of-pier projection test matrix all landed; **functionally complete for the attended/auto flip, and the §58.9 four-layer unattended safety landed 2026-07-01** (#629 Layers 1+2: pre-flip flight check + in-slew watchdog; Layers 3+4 PR: hard post-flip plate-solve verification gate ±2° + park-on-failure safe rest; profile toggle `flip_safety_enabled` default ON + `expected_flip_slew_seconds`). §58.7 flip notifications, §58.8 first-flip confirm (+ daemon-owned rearm #701), and §58.10 dark-hours severity escalation (#700) landed 2026-07-05/06; remaining: §58.12 unattended-shutdown countdown (needs a sequencer paused_awaiting_user state — engine halts, doesn't pause) and refocus-after-flip (focuser-gated) — PORT_TODO. · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; remaining: the live focuser V-curve sweep + AF-sequence wiring (focuser-gated physical blocker), and Smart Focus (§59.2-4, likely v0.1.0).
+- 🟡 **§58** Meridian flip — decision-logic trigger (#362) + the real §58.4 orchestration executor (#366, replacing the throwing placeholder + wiring the trigger into the sequencer factory) + the side-of-pier projection test matrix all landed; **functionally complete for the attended/auto flip, and the §58.9 four-layer unattended safety landed 2026-07-01** (#629 Layers 1+2: pre-flip flight check + in-slew watchdog; Layers 3+4 PR: hard post-flip plate-solve verification gate ±2° + park-on-failure safe rest; profile toggle `flip_safety_enabled` default ON + `expected_flip_slew_seconds`). §58.7 flip notifications, §58.8 first-flip confirm (+ daemon-owned rearm #701), and §58.10 dark-hours severity escalation (#700) landed 2026-07-05/06, and the §58.12 unattended-shutdown countdown landed 2026-07-06; remaining: refocus-after-flip (focuser-gated), §58.6 schema enums, §58.12 client settings entries, §58.13 morning summary — ROADMAP part 3. · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; the live V-curve sweep orchestration is built; remaining: live validation on a real focuser (hardware-gated), §59.7 backlash auto-discovery, and Smart Focus (§59.2-4, in progress — ROADMAP part 3).
 - ✅ **§60** API conventions (pagination, Idempotency-Key, RFC7807, 202-Accepted, WS envelope).
 - ✅ **§61** Smart settings search (⌘K, #110-123) · ✅ **§62** Dither policy.
-- 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) + e-2 §63.5 profile push (#371/#372/#373) + e-3 §63.4 profile-name mapping (#375 RPC classes + slug helper; e-3b connect select-or-create wiring) done; e-3c length-cap CLOSED 2026-07-06 (the fork stores profile names as wxConfig VALUES — no cap exists; collision disambiguation unnecessary); e-4 dark-library superseded by the §39 daemon-side library; §63.3 active-poll pending.
+- 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) + e-2 §63.5 profile push (#371/#372/#373) + e-3 §63.4 profile-name mapping (#375 RPC classes + slug helper; e-3b connect select-or-create wiring) done; e-3c length-cap CLOSED 2026-07-06 (the fork stores profile names as wxConfig VALUES — no cap exists; collision disambiguation unnecessary); e-4 dark-library superseded by the §39 daemon-side library; §63.3 active poll + auto-reconnect landed 2026-07-07. Remaining: live integration runs (hardware-gated) + §63.4 profile-lifecycle hooks (ROADMAP part 4).
 - ✅ **§64** Live View / Loop — camera `/liveview/start|stop` + status DTOs + drain-on-stop semantics shipped (was stale-listed as gated; verified against code 2026-07-05).
 - ✅ **§65** Image stretching + preview API (7 algorithms, variant cache, OSC colour #349; AutoStf bug fixed #354).
-- ✅ **§66** Server concurrency model · ✅ **§67** Security model (trusted-LAN no-auth; remote = v0.1.0).
+- ✅ **§66** Server concurrency model · ✅ **§67** Security model (trusted-LAN no-auth; remote access on the ROADMAP).
 - 🟡 **§68** AlpacaBridge integration — Alpaca discovery/connect/drive done; full bridge contract = verify.
 - ✅ **§69** In-app contextual help (registry + tooltips).
-- 🚫 **§70** Profile + sequence sharing — `PlaceholderProfileShareService`; v0.1.0.
-- 🟡 **§71** Native AOT — paused for §38 Newtonsoft (`<PublishAot>` off; revisit via `[JsonPolymorphic]` post-v0.0.1).
+- 🚫 **§70** Profile + sequence sharing — `PlaceholderProfileShareService`; deferred — ROADMAP.
+- 🟡 **§71** Native AOT — paused for §38 Newtonsoft (`<PublishAot>` off; revisit via `[JsonPolymorphic]` post-release).
 - ✅ **§72** FITS library (cfitsio P/Invoke + atomic write, #197-200) · ✅ **§73** Exception handling (CA1031 boundaries, log-and-recover).
 - 🟡 **§74** Contributor/dev-onboarding doc — README + §23.1; full onboarding doc pending.
-- 🟡 **§75** Client distribution — Flutter builds all platforms; signed/store packaging = v0.1.0.
+- 🟡 **§75** Client distribution — Flutter builds all platforms; signed/store packaging on the ROADMAP.
 
-**Rollup:** the v0.0.1 critical path — equipment discover→connect→capture→§72 FITS→§28 catalog→§65 preview→§38 sequencer→§63 guiding — is **✅ complete and live-validated**. Remaining v0.0.1 feature work: finish §2105 render (Debayer/DetectStars), §45 polar-align, guider-e profile push, §58 meridian flip, §59 autofocus. The 🚫 items are explicitly v0.1.0 (§55). The release itself (§13/§34 RPi smoke + `v0.0.1-ara.1` tag) is the **user/Pi-gated terminus**.
+**Rollup:** the critical path — equipment discover→connect→capture→§72 FITS→§28 catalog→§65 preview→§38 sequencer→§63 guiding — is **✅ complete and live-validated**. Everything remaining (the 🟡 tails, the 🚫 deferrals, and all follow-on feature work) lives in **`design/ROADMAP.md`**, ordered as a design path. The first public release itself (§13/§34 RPi smoke + the `v0.0.1-ara.1` tag) is the **user/Pi-gated terminus**.
 
 **Repository:** single monorepo at `github.com/open-astro/openastro-ara`. Server (.NET) and client (Flutter) live in the same repo because the client is generated from the server's OpenAPI spec — they must move together. Final layout after the port:
 
@@ -227,7 +227,7 @@ openastro-ara/                              (repo root, default branch: master)
 - [§54 Bug report submission + PII handling](#54-bug-report-submission--pii-handling)
 
 **Forward-looking (§55–56)**
-- [§55 v0.1.0+ Roadmap (consolidated)](#55-v010-roadmap-consolidated)
+- [§55 Roadmap (moved to design/ROADMAP.md)](#55-roadmap-moved-to-designroadmapmd)
 - [§56 Migrating from NINA](#56-migrating-from-nina)
 
 **API conventions (§60)**
@@ -257,7 +257,7 @@ openastro-ara/                              (repo root, default branch: master)
 4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it in `design/PORT_TODO.md`, and move on. Sweep TODOs in Phase 15.
 5. **Verify continuously.** After every phase, run the build + tests gate in §15. Do not start the next phase until the gate is green for everything completed so far.
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
-7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred to v0.1.0** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
+7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred — see design/ROADMAP.md** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
 9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of PRs (each phase, plus sub-PRs within Phase 0.5 and Phase 12) cut from `master` and merged **directly back to `master`** — no integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the feature branch, open the PR, run the review poll-and-fix loop (see COMMIT-PR-RULES.md), then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; review quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean), deleting the branch on merge. After merge, pull the updated `master` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
 10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
@@ -270,9 +270,9 @@ Three pillars guide every UX decision in this document. Every section that follo
 
 1. **Better than NINA.** ARA imitates NINA's layout (§25) to make existing users feel at home, but every UX decision *beyond* layout is evaluated against "would a NINA user notice this is better?" If a decision lands merely equivalent to NINA, the bar isn't met. Areas where ARA must clearly beat NINA: settings discoverability (§61), real-time diagnostics (§51), session analytics (§50), calibration workflows (§39), mount safety (§57).
 
-2. **AI-assisted design, native polish.** ARA's design is produced with AI collaboration, which lets us spend more time on UX coherence than NINA's solo-developer model could. We do **not** ship an AI assistant inside v0.0.1 — we ship the *outcome* of using AI during design: better defaults, better discoverability, better wording, fewer half-finished surfaces, fewer abandoned settings panels.
+2. **AI-assisted design, native polish.** ARA's design is produced with AI collaboration, which lets us spend more time on UX coherence than NINA's solo-developer model could. We do **not** ship an AI assistant inside the initial release — we ship the *outcome* of using AI during design: better defaults, better discoverability, better wording, fewer half-finished surfaces, fewer abandoned settings panels.
 
-3. **Robust capabilities, friendly surfaces.** All the power-user features (§35 safety policies, §39 calibration, §47 mosaics, §50 stats, §51 diagnostics, §57 mount safety, §58 meridian flip) ship in v0.0.1, but **finding them must be easy**. The §61 smart settings search makes every setting discoverable in under 10 seconds without prior knowledge of where it lives. PR review rule: a setting that isn't searchable doesn't merge.
+3. **Robust capabilities, friendly surfaces.** All the power-user features (§35 safety policies, §39 calibration, §47 mosaics, §50 stats, §51 diagnostics, §57 mount safety, §58 meridian flip) ship in the initial release, but **finding them must be easy**. The §61 smart settings search makes every setting discoverable in under 10 seconds without prior knowledge of where it lives. PR review rule: a setting that isn't searchable doesn't merge.
 
 The AI executing this port should reject its own work if a feature lands behind buried menus, vague labels, or "find the right tab" UX. Capability without discoverability is a regression against NINA, not an improvement.
 
@@ -333,7 +333,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | State management | Riverpod |
 | API client | generated from server's OpenAPI spec via `openapi_generator` |
 | mDNS discovery | `multicast_dns` plugin (cross-platform) |
-| Secure storage | `flutter_secure_storage` reserved for future v0.1.0 remote-access tokens (§67.4); not used in v0.0.1 |
+| Secure storage | `flutter_secure_storage` reserved for future future remote-access tokens (§67.4); not used in the initial release |
 | File picker | `file_picker` plugin |
 | Image rendering | Flutter's built-in `Image` widget for JPEG previews; FITS handled by a Dart FITS package (or inline parser if no suitable package exists) |
 | Build outputs | macOS `.app` + `.dmg`, iOS `.ipa`, Android `.apk`/`.aab`, Windows `.exe`/`.zip`, Linux AppImage |
@@ -343,11 +343,11 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 
 | Concern | Value |
 |---|---|
-| Transport | HTTP/1.1 over TCP (no TLS in v0.0.1 — local LAN only; opt-in TLS for v0.1.0) |
+| Transport | HTTP/1.1 over TCP (no TLS today — local LAN only; opt-in TLS planned with remote-access mode) |
 | Encoding | JSON for ops; JPEG bytes for image previews; FITS bytes for full-frame downloads |
 | Operations | REST endpoints under `/api/v1/...` |
 | Live updates | WebSocket at `/api/v1/stream` — server pushes sequence progress, frame complete, log lines, equipment state changes |
-| Authentication | **None in v0.0.1.** Trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir; see §67 for the full security model. All endpoints open. v0.1.0 introduces opt-in remote-access mode with TLS + token auth for over-internet deployments. |
+| Authentication | **None in the initial release.** Trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir; see §67 for the full security model. All endpoints open. A planned remote-access mode (§67.4, ROADMAP) introduces opt-in TLS + token auth for over-internet deployments. |
 | Discovery | mDNS service type `_openastroara._tcp.local`; TXT records expose version, hostname, port |
 | Contract | OpenAPI 3.1 spec at `OpenAstroAra.Server/openapi.yaml` — source of truth; Dart client and server-side validation both derive from it |
 
@@ -399,7 +399,7 @@ Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client displa
 Phase 14  — Tests + GitHub Actions CI matrix
             §14, §14.3
 Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
-            §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred to v0.1.0)
+            §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see design/ROADMAP.md)
 ```
 
 **Sub-PR rhythm (Phase 0.5 + Phase 12):** Each sub-PR is opened as a separate GitHub PR targeting `master`. AI runs `scripts/pre-pr-check.sh` (§14.4) → opens PR with screenshots if user-visible UI changed → review poll-and-fix loop runs (per COMMIT-PR-RULES.md) → PR merges to `master` (branch deleted) → AI pulls updated `master` and starts the next sub-PR automatically.
@@ -523,7 +523,7 @@ client/openastroara_client/android/local.properties
 client/openastroara_client/linux/flutter/ephemeral/
 client/openastroara_client/macos/Flutter/ephemeral/
 client/openastroara_client/windows/flutter/ephemeral/
-client/openastroara_client/web/  # not built in v0.0.1 per §18.G
+client/openastroara_client/web/  # not built in the initial release per §18.G
 
 # === ARA-specific runtime + dev paths ===
 /publish/
@@ -772,7 +772,7 @@ NINA's `CompositionRoot.cs` is deeply WPF-entangled (UI VMs, dispatcher-affinity
 | NINA registration | Why dropped |
 |---|---|
 | `IApplicationMediator` | WPF app-lifecycle; no equivalent in headless server |
-| `IPluginProvider` / `IPluginLoader` | Plugin SDK deferred to v0.1.0 per §18.B |
+| `IPluginProvider` / `IPluginLoader` | Plugin SDK deferred — see design/ROADMAP.md per §18.B |
 | All `*ViewModel` / `*VM` classes | UI layer; replaced by REST + WS event API |
 | `IDockManager` | AvalonDock layout; N/A (Flutter client) |
 | `IInputDialogService` / `IDialogService` | UI modal services; client handles modals |
@@ -780,7 +780,7 @@ NINA's `CompositionRoot.cs` is deeply WPF-entangled (UI VMs, dispatcher-affinity
 | `IThemeManager` | UI theming; Flutter handles per §25 |
 | `ITabService` | UI tab routing; N/A |
 | `IUpdateCheckService` (WPF in-app updater) | Dropped per §18.A; replaced by §33 WILMA-push + §34 apt |
-| `IWebProxyService` | Dropped; ARA doesn't make outbound HTTP calls in v0.0.1 (per §18.C local-only telemetry) |
+| `IWebProxyService` | Dropped; ARA doesn't make outbound HTTP calls in the initial release (per §18.C local-only telemetry) |
 
 **Added net-new for ARA (no NINA equivalent):**
 
@@ -836,7 +836,7 @@ Hand-write `OpenAstroAra.Server/openapi.yaml`. Endpoint groups:
 | Log | `/api/v1/log` | Recent log lines |
 | Stream | `/api/v1/stream` | Single WebSocket for live updates |
 
-**Auth:** none in v0.0.1 per §67 (trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir). All endpoints open. No `X-OpenAstroAra-Token` header, no rate limiting on auth attempts, no `/api/v1/server/handshake` token-validation endpoint. v0.1.0 introduces opt-in remote-access mode that re-adds TLS + token auth for over-internet deployments.
+**Auth:** none in the initial release per §67 (trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir). All endpoints open. No `X-OpenAstroAra-Token` header, no rate limiting on auth attempts, no `/api/v1/server/handshake` token-validation endpoint. a planned remote-access mode (§67.4, ROADMAP) re-adds opt-in TLS + token auth for over-internet deployments.
 
 **Versioning:** URL versioning (`/api/v1/...`). Within v0.x, breaking changes within `/api/v1/` permitted and documented in `design/API_CONTRACT.md`.
 
@@ -1002,7 +1002,7 @@ mkdir client
 cd client
 flutter create --org org.openastro --project-name openastroara \
     --platforms macos,windows,linux openastroara_client
-# Note: iOS + Android platforms NOT added in v0.0.1 per §18.G mobile-deferred-to-v0.1.0;
+# Note: iOS + Android platforms NOT added in the initial release per §18.G mobile-deferred (ROADMAP);
 # Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
 cd openastroara_client
 echo "3.27.1" > .flutter-version
@@ -1049,7 +1049,7 @@ The client UX deliberately mirrors NINA so existing users feel at home. **See §
 
 **Theme:** dark, astro-friendly. Near-black background (`#1a1a1a`), darker panels (`#262626`), accent colors for status (green `#4caf50`, yellow `#ffb300`, red `#e53935`, blue `#42a5f5`), text in soft white (`#e0e0e0`). Exact tokens defined in §25.
 
-**Resizable splits:** use `multi_split_view` Flutter package for resizable side panels. **Dockable/rearrangeable panels are a v0.1.0 feature** — for v0.0.1, panels are positioned fixed (left/right/bottom) and only resizable, not draggable.
+**Resizable splits:** use `multi_split_view` Flutter package for resizable side panels. **Dockable/rearrangeable panels are a future feature** — for the initial release, panels are positioned fixed (left/right/bottom) and only resizable, not draggable.
 
 **No bitmap icons from NINA.** All icons are placeholders (Flutter's `Icons.*` material set or simple SVG primitives) until the user supplies real ARA assets. Layout is the clone; pixels are original.
 
@@ -1071,7 +1071,7 @@ Commit per stage: `port(client): mDNS discovery + connect`, `port(client): app s
 
 ## 13. RPi deployment (Phase 10 + Phase 15)
 
-DEPLOY.md is the user-facing version of this section (Phase 15 deliverable per §22 / §55.4). The subsections below define what DEPLOY.md must cover; everything from §13.3 onward is engineering-side detail that doesn't need to surface to end users verbatim.
+DEPLOY.md is the user-facing version of this section (Phase 15 deliverable per §22). The subsections below define what DEPLOY.md must cover; everything from §13.3 onward is engineering-side detail that doesn't need to surface to end users verbatim.
 
 ### 13.1 Hardware support matrix
 
@@ -1080,16 +1080,16 @@ ARA Core targets the Raspberry Pi family on **64-bit Debian Trixie or newer**. T
 | Pi model | Status | RAM | Notes |
 |---|---|---|---|
 | **Pi 5 (8 GB)** | ★ Ideal | 8 GB | First-class platform. USB3, PCIe 2.0 for optional NVMe HAT, faster CPU, better memory bandwidth. ASTAP solves + image processing per §66.10 SLO measure on this model. |
-| **Pi 5 (4 GB)** | ★ Recommended | 4 GB | Same I/O as the 8 GB; just less headroom for v0.1.0 expansions (live stacking, ML diagnostics). Fine for v0.0.1 DSO workloads. |
+| **Pi 5 (4 GB)** | ★ Recommended | 4 GB | Same I/O as the 8 GB; just less headroom for future expansions (live stacking, ML diagnostics). Fine for the initial release DSO workloads. |
 | **Pi 4 (8 GB)** | ✓ Excellent | 8 GB | Per §66.5 memory budget table: comfortable peak RSS ~600 MB on AOT runtime; substantial idle headroom. |
-| **Pi 4 (4 GB)** | ✓ Recommended baseline | 4 GB | Reference platform for the §66.10 SLO table. All v0.0.1 features tested here. |
+| **Pi 4 (4 GB)** | ✓ Recommended baseline | 4 GB | Reference platform for the §66.10 SLO table. All shipped features tested here. |
 | **Pi 4 (2 GB)** | ⚠ Works but tight | 2 GB | Boots and runs sessions, but the §66.5 budget leaves ~1.4 GB OS headroom — tight if user also runs AlpacaBridge + openastro-phd2 + ASTAP concurrently. Recommended only for users who already own one. |
 | **Pi 4 (1 GB)** | ✗ Unsupported | 1 GB | Below §66.5 working set; ASTAP + image processing will swap and crawl. Server refuses to start if it detects ≤ 1 GB total RAM (defense against accidental flash to wrong SKU). |
 | **Pi 3 B / B+** | ✗ Unsupported | 1 GB | No USB3 (USB2 caps SSD throughput, breaks the §28.7 atomic-write latency budget), no 64-bit-OS officially supported across the line, half the CPU per core. Server refuses to start. |
 | **Pi Zero / Zero 2 W** | ✗ Unsupported | 512 MB | Wildly under budget; ARM Cortex-A53 vs A72/A76. Server refuses to start. |
 | **Pi 400** | ⚠ Works | 4 GB | Same chip as Pi 4; mechanically inconvenient (keyboard built in) for an observatory mount, but the software runs identically. |
 | **Compute Module 4** (with carrier board) | ⚠ Untested | varies | Same CPU/RAM as Pi 4; should work but no Open Astro CI runs against CM4. Community-supported. |
-| **Non-Pi ARM64 SBC** (Orange Pi 5, Rock Pi, etc.) | ⚠ Best-effort | varies | If it boots Debian Trixie arm64 + has USB3, the binary runs. Not CI-tested; vendor-specific quirks (camera busses, GPIO, thermals) are user-debugged. v0.1.0 may add tested SBCs based on community signal. |
+| **Non-Pi ARM64 SBC** (Orange Pi 5, Rock Pi, etc.) | ⚠ Best-effort | varies | If it boots Debian Trixie arm64 + has USB3, the binary runs. Not CI-tested; vendor-specific quirks (camera busses, GPIO, thermals) are user-debugged. a future release may add tested SBCs based on community signal. |
 
 **Hardware refuse logic** (server startup check, fails fast with a clear journal entry):
 1. `uname -m` → must equal `aarch64` (refuses 32-bit `armv7l`)
@@ -1099,7 +1099,7 @@ ARA Core targets the Raspberry Pi family on **64-bit Debian Trixie or newer**. T
 
 Refusal is configurable via `ARA_SKIP_HARDWARE_CHECK=1` env var for advanced users testing on exotic boards (e.g., Pi 5 with externally-attached extra RAM, or a future SBC the CI hasn't validated). Documented in DEPLOY.md as "if you know what you're doing."
 
-**Pi 5 vs Pi 4 trade-offs** (informs §66.10 SLO target picking — Pi 4 is the "v0.0.1 target" column; Pi 5 numbers in parens):
+**Pi 5 vs Pi 4 trade-offs** (informs §66.10 SLO target picking — Pi 4 is the baseline-target column; Pi 5 numbers in parens):
 
 | Dimension | Pi 4 | Pi 5 |
 |---|---|---|
@@ -1470,14 +1470,14 @@ When AI can't run the UI locally (e.g., CI environment, headless), AI states thi
 
 ### 14.7 Coverage policy
 
-**v0.0.1: soft target.** No hard percentage. Requirements:
+**Current: soft target.** No hard percentage. Requirements:
 
 1. **All existing NINA tests still pass.** The inherited test suite stays green throughout the port; a passing baseline is non-negotiable.
 2. **New or substantively changed code ships with tests.** "Substantively changed" means logic changed; pure renames, pure formatting, pure import-path adjustments don't require new tests.
 3. **Integration tests for cross-cutting features.** §28 recovery, §28.7 FITS atomic-write, §29.1 storage configure, §39 calibration matching, §63 PHD2 lifecycle, §65 stretch palette — each gets at least one integration test exercising the happy path + one for each documented failure mode.
 4. **UI flows hit by integration tests.** First-run, wizard completion, sequence start, frame capture-to-library, settings change-and-save.
 
-**v0.1.0+ may add hard coverage thresholds** once the codebase stabilizes and the inherited NINA code has been pruned. Until then, the soft target keeps friction low during the port.
+**a future release may add hard coverage thresholds** once the codebase stabilizes and the inherited NINA code has been pruned. Until then, the soft target keeps friction low during the port.
 
 ### 14.8 §61 search registry entries
 
@@ -1490,7 +1490,7 @@ When AI can't run the UI locally (e.g., CI environment, headless), AI states thi
 
 **Location:** `client/openastroara_client/integration_test/e2e_*.dart` files. Uses Flutter's `integration_test` package (already added in §12.1's `flutter pub add`).
 
-**Test inventory (v0.0.1):**
+**Test inventory (current):**
 
 | Test | Coverage |
 |---|---|
@@ -1531,12 +1531,12 @@ e2e-smoke:
         path: client/openastroara_client/integration_test/screenshots/
 ```
 
-**Why Linux x64 only in v0.0.1:**
+**Why Linux x64 only in the initial release:**
 
-- Mobile builds deferred to v0.1.0 per §18.G (no iOS/Android in CI)
+- Mobile builds deferred — see design/ROADMAP.md per §18.G (no iOS/Android in CI)
 - macOS + Windows E2E adds runner cost without much new coverage (UI is Flutter — identical rendering across desktop platforms)
 - Linux x64 is the native CI environment + matches the production Pi (Linux ARM64) closely enough that platform-specific UI bugs are caught in §14.2 widget tests + §14.6 manual UI screenshots
-- v0.1.0 may expand to macOS + Windows runners if Flutter platform-specific bugs emerge
+- a future release may expand to macOS + Windows runners if Flutter platform-specific bugs emerge
 
 **Runtime:** ~3-5 min per E2E test; 5 tests ≈ 15-25 min total CI time. Runs in parallel with other CI jobs to keep total wall-clock within ~30 min budget.
 
@@ -1681,8 +1681,8 @@ Rules:
 ### 18.A — Updater: **DROP**
 No in-app updater. README points users to GitHub Releases. Server announces its version in `/api/v1/server/info`; client displays "Server version X — see GitHub for updates."
 
-### 18.B — Plugin system: **DEFERRED to v0.1.0**
-Phase 0.5 deletes `NINA.Plugin` entirely. No plugin loader, no browser UI in the client, no SDK published. Plugin design happens post-v0.0.1 once architecture is stable.
+### 18.B — Plugin system: **DEFERRED — see design/ROADMAP.md**
+Phase 0.5 deletes `NINA.Plugin` entirely. No plugin loader, no browser UI in the client, no SDK published. Plugin design happens post-release once architecture is stable.
 
 ### 18.C — Telemetry: **LOCAL LOGS ONLY, NO NETWORK**
 Server: Serilog file sink, daily rotation, 14-day retention.
@@ -1695,7 +1695,7 @@ Crash handling: server logs unhandled exceptions and continues where safe. Clien
 - No Patreon/donate/Discord links until those channels exist; `TODO(community): add links when channels exist`
 
 ### 18.E — Localization: **ENGLISH ONLY**
-Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Hard-code `CultureInfo.InvariantCulture` where formatting was locale-influenced. Client is English-only; localization is a v0.2.0 problem.
+Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Hard-code `CultureInfo.InvariantCulture` where formatting was locale-influenced. Client is English-only; localization is a deferred problem (ROADMAP).
 
 ### 18.F — Code signing: **SHIP UNSIGNED**
 - Server: no signing (Linux daemons don't typically sign).
@@ -1703,30 +1703,30 @@ Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Ha
   - macOS: right-click → Open, or `xattr -d com.apple.quarantine "/Applications/OpenAstro Ara.app"`
   - Windows: SmartScreen → More info → Run anyway
   - Linux: `chmod +x` the AppImage and run
-- iOS/Android out of scope for v0.0.1 (per §18.G + §41 mobile-deferred-to-v0.1.0 decision)
+- iOS/Android out of scope for the initial release (per §18.G + §41 mobile-deferred decision (ROADMAP))
 - `TODO(signing): revisit when project has funding` in release workflow
 
-### 18.G — Distribution formats: **DESKTOP ONLY in v0.0.1; mobile deferred to v0.1.0**
+### 18.G — Distribution formats: **DESKTOP ONLY for now; mobile deferred — see design/ROADMAP.md**
 - **Server**: `.deb` for `arm64` via apt.openastro.net per §34 (primary); `.tar.gz` of self-contained publish (`linux-arm64`, `linux-x64`) as a fallback tarball for manual installs.
-- **Client (v0.0.1 — desktop only)**:
+- **Client (desktop only for now)**:
   - macOS: `.dmg` via `create-dmg`, unsigned (per §18.F)
   - Windows: `.zip` of release build (later `.msix`), unsigned
   - Linux desktop: AppImage (Flatpak optional)
-- **Client mobile (iOS / Android): deferred to v0.1.0.** Mobile distribution requires:
+- **Client mobile (iOS / Android): deferred — see design/ROADMAP.md.** Mobile distribution requires:
   - Apple Developer Program account ($99/yr) for any iOS distribution including TestFlight
   - Google Play Console account ($25 one-time) for Play Store distribution
   - Per-platform review processes (App Store ~2–7 days, Play Store ~hours-to-days)
   - Ongoing signing-cert + privacy-manifest + capabilities maintenance per OS update
   - Per-platform manual QA each release (Flutter web-target isn't a substitute — different code paths trigger different bugs)
-  - This effort is real but disproportionate to v0.0.1's "validate the architecture" goals. Pushing it to v0.1.0 lets the desktop client + server stabilize first and lets the project decide whether to fund the accounts based on early-adopter signal.
-- The §41 mobile companion *spec* still informs v0.0.1 API design (so v0.1.0 mobile doesn't require server changes) — but no mobile builds ship in v0.0.1.
-- All built by GitHub Actions on tag push (desktop platforms only in v0.0.1).
+  - This effort is real but disproportionate to the initial release's "validate the architecture" goals. Deferring it lets the desktop client + server stabilize first and lets the project decide whether to fund the accounts based on early-adopter signal.
+- The §41 mobile companion *spec* still informs today's API design (so future mobile builds don't require server changes) — but no mobile builds ship in the initial release.
+- All built by GitHub Actions on tag push (desktop platforms only in the initial release).
 
 ### 18.H — Branding assets
 Placeholders during port. Every icon/splash/logo reference carries `TODO(branding): replace with ARA asset before public release`. User supplies real assets.
 
 ### 18.J — Imaging scope: **DSO + COMETS ONLY**
-ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) capture workflow where Alpaca's image-grab API is the right primitive. **Planetary and lunar lucky-imaging are out of scope, permanently, not deferred.** The architectural reason: ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca), so high-frame-rate (5–30 fps) capture isn't possible through the protocol ARA has committed to (§52). NINA has the same limitation; this isn't an ARA-specific gap. Users who want planetary capture use FireCapture, SharpCap, or AstroDMx with vendor-native drivers — different tool category. ARA's sky atlas (§36) still browses planets and moon for educational purposes, but capture is DSO + comets. This decision propagates: no `lunar.json` / `planetary.json` sequence templates (§38.7), no SER file format support, no ROI capture, no high-frame-rate workflows. Anything reading "v0.1.0 planetary support" in older revisions of this doc is wrong — corrected by this section.
+ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) capture workflow where Alpaca's image-grab API is the right primitive. **Planetary and lunar lucky-imaging are out of scope, permanently, not deferred.** The architectural reason: ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca), so high-frame-rate (5–30 fps) capture isn't possible through the protocol ARA has committed to (§52). NINA has the same limitation; this isn't an ARA-specific gap. Users who want planetary capture use FireCapture, SharpCap, or AstroDMx with vendor-native drivers — different tool category. ARA's sky atlas (§36) still browses planets and moon for educational purposes, but capture is DSO + comets. This decision propagates: no `lunar.json` / `planetary.json` sequence templates (§38.7), no SER file format support, no ROI capture, no high-frame-rate workflows. Anything reading "future planetary support" in older revisions of this doc is wrong — corrected by this section.
 
 ### 18.I — Plate solving
 - **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
@@ -1746,10 +1746,10 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 - **Solve robustness — hinted → blind failover (validated against a real ASTAP failure, 2026-06-02).** A hinted solve hands the mount's *reported* position to ASTAP as `-ra`/`-spd` and bounds the search to `-r <SearchRadius>` (default 30°). If that reported position is wrong — mount unsynced, parked, or still near the home/pole position — ASTAP searches the wrong patch of sky and returns `PLTSOLVD=F`, regardless of how good the frame is. Diagnosed example: RedCat 91 (448 mm f/4.9) + ASI2600MM, L frame, target at Dec −19.5°, but NINA passed `-spd 177.9` (≈ Dec +87.9°, the pole) with `-r 30` — the search circle never overlapped the real field. FOV (`-fov 2.008`), pixel scale, D80 database, and star count were all correct; only the position hint was bad. The lesson: **the thing that makes the ASIAIR "just work" is that it effectively always blind-solves and never trusts a stale mount position.** ARA's design already mirrors this:
   - **Already handled (verified present, no new code):** `ASTAPSolver.ReadResult` returns `Success=false` (not an exception) on `PLTSOLVD!=T`, so `ImageSolver.Solve`'s blind failover fires (on by default: `BlindFailoverEnabled=true`, `BlindSolverType=ASTAP`) — it drops the coordinates and retries blind via ASTAP `-r 180` whole-sky. `CenteringSolver.Center` then syncs the mount to the solved coordinates (`CenteringSolver.cs:107`) and re-slews, so a single blind solve repairs the bad mount position for every subsequent hinted solve. This is why ARA recovers from the failure above **without** astrometry.net.
   - **Done (this branch):** decoded failover logging — `ImageSolver.cs` now logs the hint coordinates + search radius at `Info` before falling back, so a bad/unsynced mount position is visible in the log instead of presenting as a silent slow retry (this is the only reason the example above was diagnosable — it required reading the `.ini` `CMDLINE`). Also corrected the misleading `-ra` comment in `ASTAPSolver.cs`: ASTAP's `-ra` is in **hours** and `Coordinates.RA` is in hours — the value is correct; do not "fix" it to `RADegrees`.
-  - **Planned (needs telescope-mediator plumbing; not v0.0.1-critical):** gate the hinted attempt on mount sync/park state — when the mount reports no valid sync / parked / near-home, pass `Coordinates=null` up front to skip the doomed hinted pass and go straight to blind. This is prevention rather than recovery, and avoids one wasted solve attempt per bad-position event.
+  - **Planned (needs telescope-mediator plumbing; not release-critical):** gate the hinted attempt on mount sync/park state — when the mount reports no valid sync / parked / near-home, pass `Coordinates=null` up front to skip the doomed hinted pass and go straight to blind. This is prevention rather than recovery, and avoids one wasted solve attempt per bad-position event.
   - **Explicitly NOT doing — search-radius escalation.** The binary hinted (`-r 30`) → blind (`-r 180`) path already covers the bad-hint case. A larger *hinted* radius only slows ASTAP and raises false-match risk; multi-tier escalation adds complexity for no gain over the blind retry.
   - **Dependency on the FOV-aware `-d` work above:** blind failover only *succeeds* if the Pi-side database has adequate sky coverage at the rig's FOV. Wiring `-d <database_dir>` (the Phase 8 code gap) is therefore also failover insurance, not just a wide-field nicety.
-- **Astrometry.net**: **deferred to v0.1.0.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for v0.0.1. Phase 8 strips astrometry.net call sites from inherited NINA code; v0.1.0 may add it back if there's user demand.
+- **Astrometry.net**: **deferred — see design/ROADMAP.md.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for the initial release. Phase 8 strips astrometry.net call sites from inherited NINA code; a future release may add it back if there's user demand.
 - **PlateSolve2**: deleted entirely (Windows-only legacy).
 
 ---
@@ -1794,8 +1794,8 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 
 ### 19.4 Secrets safety
 
-- Do not commit `.pfx`, `.key`, `.pem`, `.env`, `appsettings.Secrets.json`, `secrets.dart`, or files containing `password`/`secret`/`token`. Add patterns to `.gitignore` if found. (v0.0.1 has no server auth per §67, but the rule still applies — protects against future v0.1.0 remote-access tokens, plus any third-party API keys that may show up in dependencies or example configs.)
-- Do not echo or log API keys, tokens, auth headers that may exist in third-party integrations or v0.1.0+ remote-access mode.
+- Do not commit `.pfx`, `.key`, `.pem`, `.env`, `appsettings.Secrets.json`, `secrets.dart`, or files containing `password`/`secret`/`token`. Add patterns to `.gitignore` if found. (There is no server auth today per §67, but the rule still applies — protects against future future remote-access tokens, plus any third-party API keys that may show up in dependencies or example configs.)
+- Do not echo or log API keys, tokens, auth headers that may exist in third-party integrations or future remote-access mode.
 
 ### 19.5 Scope safety
 
@@ -1843,9 +1843,9 @@ Then resume the current task. If `git diff HEAD` shows uncommitted changes, fini
 
 ## 21. Localization
 
-ARA is English-only in v0.0.1. The English `Locale.resx` is preserved for remaining `Locale.Instance[...]` references in non-UI code. All other language files were deleted in §4.3.
+ARA is English-only in the initial release. The English `Locale.resx` is preserved for remaining `Locale.Instance[...]` references in non-UI code. All other language files were deleted in §4.3.
 
-When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]` in API responses with hard-coded English strings — the API does not localize. Client-side localization is a v0.2.0 feature.
+When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]` in API responses with hard-coded English strings — the API does not localize. Client-side localization is deferred (ROADMAP).
 
 ---
 
@@ -1887,12 +1887,12 @@ Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are
 4. Update `CHANGELOG.md` (per §33.7) — rename `## [Unreleased]` → `## [0.0.1-ara.1] — <date>` with sections:
    - Headless server + cross-platform desktop client architecture
    - Alpaca-only equipment (per §52, §68)
-   - Plugin support deferred to v0.1.0
-   - Mobile (iOS / Android) deferred to v0.1.0 per §18.G + §41
+   - Plugin support deferred — see design/ROADMAP.md
+   - Mobile (iOS / Android) deferred — see design/ROADMAP.md per §18.G + §41
    - Behavioral parity goals vs. upstream NINA where applicable
    - Lineage attribution
    - Known issues, install instructions
-   - Create fresh `## [Unreleased]` placeholder for v0.0.2 work
+   - Create fresh `## [Unreleased]` placeholder for the next release's work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
 6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: `design/PORT_DECISIONS.md` contents. The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
 
@@ -2000,7 +2000,7 @@ connected device's state lives daemon-side, so the app reflects it on reconnect.
 
 - Server builds on Linux ARM64, x64, Windows, macOS via `dotnet build`. Linux ARM64 publish is the canonical artifact.
 - Client builds on macOS (Apple Silicon), iOS, Android, Windows, Linux desktop via `flutter build`. Every platform produces a working binary.
-- `OpenAstroAra.Server` runs as a systemd daemon on a Pi, discovered via mDNS, accepts **unauthenticated** client connections per the §67 trusted-LAN security model (no auth in v0.0.1; v0.1.0 remote-access mode reintroduces token + TLS on the remote interface only).
+- `OpenAstroAra.Server` runs as a systemd daemon on a Pi, discovered via mDNS, accepts **unauthenticated** client connections per the §67 trusted-LAN security model (no auth in the initial release; future remote-access mode reintroduces token + TLS on the remote interface only).
 - `OpenAstro Ara` (Flutter client) on a Mac discovers the server via mDNS, connects (no auth per §67), displays equipment status, runs a sequence to completion, displays preview JPEGs as frames complete, supports clean disconnect/reconnect mid-sequence.
 - Smoke test in §22 (step 3) passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
 - No bundled native vendor SDKs, no WPF UI code, no plugin loader, no upstream-NINA branding (except attributions in NOTICE.md, AUTHORS, About, README per §17).
@@ -2032,7 +2032,7 @@ The Flutter client deliberately mirrors NINA's UX so existing astrophotographers
 - Specific photographs or imagery (any sample images that ship with NINA — do not include)
 - The NINA wordmark or any stylized "N.I.N.A." rendering
 
-For v0.0.1: every icon is a Flutter Material icon (`Icons.camera_alt`, `Icons.adjust`, etc.) or a simple SVG primitive drawn from scratch. Mark each with `// TODO(branding): replace with custom ARA icon before public release`.
+For the initial release: every icon is a Flutter Material icon (`Icons.camera_alt`, `Icons.adjust`, etc.) or a simple SVG primitive drawn from scratch. Mark each with `// TODO(branding): replace with custom ARA icon before public release`.
 
 ### 25.2 Color tokens (Flutter theme)
 
@@ -2070,7 +2070,7 @@ Use Material 3 `ThemeData` with these tokens. Material's default dark theme is t
 ### 25.3 Top equipment bar
 
 A horizontal `Row` of equipment "chips" — one per device type. Each chip:
-- Icon (Material icon for v0.0.1)
+- Icon (Material icon for now)
 - Device-type label below the icon (small caps: "CAM", "FW", "FOC", "MOUNT", "ROT", "GUIDE", "DOME", "SW", "FLAT", "WX", "SAFE")
 - Colored dot indicator (top-right of icon): gray (disconnected), green (connected + idle), amber (busy), red (error)
 - Tap: opens chooser bottom sheet listing discovered Alpaca devices
@@ -2148,7 +2148,7 @@ Three stacked sections, each collapsible:
 
 iPad: same desktop layout, slightly more compact, side panels can be drawer-style if needed.
 
-iPhone/Android: bottom-tab navigation as in §12.3. Per-tab the layout collapses to the relevant content only (no side panels). Sequence editing is read-only or limited on phone in v0.0.1 — full editing is a desktop-class workflow; phone is for monitoring.
+iPhone/Android: bottom-tab navigation as in §12.3. Per-tab the layout collapses to the relevant content only (no side panels). Sequence editing is read-only or limited on phone in the initial release — full editing is a desktop-class workflow; phone is for monitoring.
 
 ### 25.9 Reference materials
 
@@ -2163,9 +2163,9 @@ The implementation does not need to be pixel-perfect to NINA — it needs to be 
 
 These are deliberate departures, documented up front so the AI doesn't try to clone them:
 
-- **AvalonDock panel rearrangement** — not supported in v0.0.1. Static layout only.
+- **AvalonDock panel rearrangement** — not supported in the initial release. Static layout only.
 - **MGEN guider tab** — gone (NINA.MGEN deleted). Guider section is PHD2-only.
-- **Plugin browser tab** — gone (plugin support deferred to v0.1.0).
+- **Plugin browser tab** — gone (plugin support deferred — see design/ROADMAP.md).
 - **Built-in updater UI** — gone (per §18.A).
 - **Patreon / donate banner** — gone (per §18.D).
 - **Language picker** — gone (English-only, §18.E).
@@ -2323,10 +2323,10 @@ new client → POST /api/v1/server/connect  (no auth per §67)
 - `POST /api/v1/server/disconnect` → graceful disconnect, releases the slot
 - `GET /api/v1/server/session` → current session info (controller hostname, since when, idle time)
 
-### 27.4 Out of scope for v0.0.1
+### 27.4 Out of initial scope
 
-- Multi-client read-only spectator mode (a "watch only" connection) — could be v0.1.0
-- Persistent admin override / force-disconnect mechanism — could be v0.1.0 (paired with §67.4 remote-access mode where auth re-enters)
+- Multi-client read-only spectator mode (a "watch only" connection) — future — see ROADMAP
+- Persistent admin override / force-disconnect mechanism — future — see ROADMAP (paired with §67.4 remote-access mode where auth re-enters)
 
 ### 27.5 §61 search registry entries
 
@@ -2403,14 +2403,14 @@ The same warning pattern fires during normal sequence execution, not just recove
 - If < 30° (but ≥ hard floor): queue `altitude.warning` notification with [Continue]/[Skip] actions
 - Default (no response): continue imaging — the user put it in the sequence, server respects that
 
-### 28.5 Out of scope for v0.0.1
+### 28.5 Out of initial scope
 
-- Resume mid-instruction (e.g., picking up frame 4 of 10 when the crash happened at frame 3 of 10). For v0.0.1 we resume at instruction granularity; the in-progress instruction restarts from its first frame.
+- Resume mid-instruction (e.g., picking up frame 4 of 10 when the crash happened at frame 3 of 10). For the initial release we resume at instruction granularity; the in-progress instruction restarts from its first frame.
 - Multi-mount / multi-camera sessions.
 - Resume across multiple nights with target re-acquisition based on actual time skew (assumes user resumes the same night).
-- `durability_mode` config knob (paranoid / balanced / fast) — single fixed safe mode in v0.0.1; v0.1.0 if users ask for paranoid (synchronous=FULL) or fast (no fsync, test-only).
-- Active power-loss detection (UPS GPIO signal triggers proactive checkpoint + park) — v0.1.0.
-- Background scrubbing of FITS files against checksums — v0.1.0.
+- `durability_mode` config knob (paranoid / balanced / fast) — single fixed safe mode in the initial release; future if users ask for paranoid (synchronous=FULL) or fast (no fsync, test-only).
+- Active power-loss detection (UPS GPIO signal triggers proactive checkpoint + park) — future (ROADMAP).
+- Background scrubbing of FITS files against checksums — future (ROADMAP).
 - Multi-disk RAID-style redundancy — out of scope entirely; §44 backup stream covers the "second copy" use case.
 
 ### 28.6 Data durability — SQLite settings
@@ -2481,7 +2481,7 @@ Auto-recovery is **silent + notification-only** (per the bake decision): the use
 1. **At configure time** — the §29.1.4 helper script validates `blkid` reports ext4 before mounting; non-ext4 drives are rejected with `code: not_ext4`, surfaced to WILMA as the in-app reformat flow (§29.1.3).
 2. **At startup** — ARA refuses to start if the configured save path's filesystem is not ext4 (defense in depth against fstab edits, manual remounts of a different drive, or drives swapped while server was off).
 
-Rationale: NTFS / exFAT / FAT32 have weaker durability semantics (no journaling, weaker fsync guarantees, no proper Unix permissions), and Btrfs / ZFS while excellent are out of scope for v0.0.1 (untested + larger DEPLOY.md surface area).
+Rationale: NTFS / exFAT / FAT32 have weaker durability semantics (no journaling, weaker fsync guarantees, no proper Unix permissions), and Btrfs / ZFS while excellent are out of scope for the initial release (untested + larger DEPLOY.md surface area).
 
 Detection: server queries `stat -f -c %T <save-path>` at startup; rejects anything other than `ext2/ext3` (which is the ext4 family name returned by stat). exFAT returns `msdos`, NTFS returns `fuseblk` or `ntfs`, etc.
 
@@ -2503,7 +2503,7 @@ A USB-attached UPS keeps the Pi alive long enough on power loss to finish the in
 
 DEPLOY.md adds a "Recommended hardware" section listing options (Geekworm X728, PiJuice, generic 12 V UPS HATs) with one-line summaries. ARA works fine without a UPS — this is a "for night-long unattended runs, strongly consider" recommendation, not a requirement.
 
-Future (v0.1.0): UPS GPIO signal pin can trigger a proactive checkpoint + park sequence ahead of battery exhaustion. Out of scope for v0.0.1 because every UPS exposes its signal differently and ARA would need device-specific shims.
+Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence ahead of battery exhaustion. Out of scope for the initial release because every UPS exposes its signal differently and ARA would need device-specific shims.
 
 ### 28.11 Scenario matrix — what's lost vs preserved
 
@@ -2519,7 +2519,7 @@ Future (v0.1.0): UPS GPIO signal pin can trigger a proactive checkpoint + park s
 | Mid-WAL-checkpoint | both durable | WAL replay completes on next open | No data loss. |
 | USB drive yanked mid-write | `.fits` partial in OS page cache, never reaches drive | DB write fails | Server logs `storage.unavailable`; on next mount + restart, §28.8 cleans up `.tmp` and any orphans. |
 
-**Net property of v0.0.1's durability design:** no partial FITS files ever appear under their real name; no orphan FITS file ever becomes invisible to the library; no SQLite corruption is possible on power loss; the maximum data loss from a power event is "the single exposure that was actively integrating when power died."
+**Net property of the initial release's durability design:** no partial FITS files ever appear under their real name; no orphan FITS file ever becomes invisible to the library; no SQLite corruption is possible on power loss; the maximum data loss from a power event is "the single exposure that was actively integrating when power died."
 
 ### 28.12 "Paused sequence" semantics
 
@@ -2560,7 +2560,7 @@ When a sequence ends (graceful completion, user abort, emergency stop) or the us
 
 | Value | Behavior |
 |---|---|
-| `off` *(v0.0.1 default)* | Disconnect immediately. Camera reports warm-up complete when its internal thermal mass equalizes — ARA doesn't wait. Recommended for modern ZWO / QHY CMOS cameras, which tolerate rapid temperature change. |
+| `off` *(current default)* | Disconnect immediately. Camera reports warm-up complete when its internal thermal mass equalizes — ARA doesn't wait. Recommended for modern ZWO / QHY CMOS cameras, which tolerate rapid temperature change. |
 | `ramp` | Ramp the cooler power back toward 0% at the configured rate (default 1 °C/min, configurable via `cooler_warmup_rate_c_per_min`); when temp reaches ambient ± 1°C, disconnect. Adds ~30s–2min depending on the cold delta. Recommended for cooled CCDs and humid environments — prevents thermal-shock condensation on the sensor window. |
 | `immediate` | Explicit "warm now" command (sets cooler power to 0% directly), then disconnect. Functionally similar to `off` but issues the explicit Alpaca `CoolerOn = false` before disconnect for drivers that need it. |
 
@@ -2584,13 +2584,13 @@ When a sequence ends (graceful completion, user abort, emergency stop) or the us
 - `camera.cooler_warmup_on_session_end` — keywords: `warmup, ramp down, session end, cooler shutdown, thermal shock, condensation, cooldown`
 - `camera.cooler_warmup_rate_c_per_min` — keywords: `warmup rate, ramp rate, cooldown speed`
 
-**v0.1.0 paths:**
+**Future paths:**
 - **Detect-camera-type default** — auto-pick `off` for CMOS / `ramp` for CCD via Alpaca `CameraType` property. Some cameras misreport, so override stays available.
 - **Humidity-aware ramp** — if observing-conditions reports humidity > 80%, force `ramp` regardless of setting.
 
 ### 28.14 SQLite schema migrations across releases — EF Core + mandatory pre-migration backup
 
-When a new ARA Core version ships with schema changes (new columns on `frames`, new tables for v0.1.0 Live Stacking, etc.), existing users' databases must migrate forward without data loss. ARA uses **EF Core migrations** as the migration framework, with a **mandatory pre-migration backup** policy that always runs before any schema change touches the database.
+When a new ARA Core version ships with schema changes (new columns on `frames`, new tables for future Live Stacking, etc.), existing users' databases must migrate forward without data loss. ARA uses **EF Core migrations** as the migration framework, with a **mandatory pre-migration backup** policy that always runs before any schema change touches the database.
 
 **Why EF Core (not hand-rolled SQL or recreate-on-mismatch):**
 
@@ -2642,7 +2642,7 @@ Before applying any pending migration on startup, ARA always backs up the curren
 
 For most upgrades (small schema changes — adding a nullable column, creating a new table), the entire backup + migrate flow completes in 1–5 seconds. The user sees nothing different from a normal restart.
 
-For larger migrations (e.g., a v0.1.0 backfill that touches every row in `frames`), startup time can stretch to 30–60+ seconds. To prevent the user thinking the server crashed:
+For larger migrations (e.g., a future backfill that touches every row in `frames`), startup time can stretch to 30–60+ seconds. To prevent the user thinking the server crashed:
 
 - Server emits `server.migrating_database` WS events with progress (per-migration name + estimated row count + completed count) — but this is best-effort since most clients are disconnected during startup
 - WILMA's connect screen detects "server unreachable for > 10 seconds after expected boot" and shows: "Server is taking longer than usual to start — it may be applying a database upgrade. Wait up to 5 minutes before troubleshooting."
@@ -2655,9 +2655,9 @@ Server refuses to start if the DB's `__EFMigrationsHistory` contains migrations 
 - Server logs `DB_SCHEMA_AHEAD_OF_BINARY: db_max_migration=<name>, binary_max_migration=<name>` (critical)
 - Server exits with non-zero status; systemd restart loop keeps trying but failure persists
 - WILMA on next connect sees this via a `/healthz` (per Tier 2 health-check gap) or `/api/v1/server/state` 503 with `code: "schema_ahead_of_binary"`
-- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred to v0.1.0 — for v0.0.1, this is a DEPLOY.md manual SSH instruction)
+- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred — see design/ROADMAP.md; for now this is a DEPLOY.md manual SSH instruction)
 
-ARA does **not** generate down-migrations in v0.0.1. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. v0.1.0 may reconsider for specific high-risk migration types.
+ARA does **not** generate down-migrations in the initial release. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. a future release may reconsider for specific high-risk migration types.
 
 **Bundled migrations structure:**
 
@@ -2699,7 +2699,7 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 |---|---|---|
 | `/api/v1/server/migrations/history` | GET | Returns ordered list of applied migrations + timestamps from `__EFMigrationsHistory` + paths to corresponding backups still on disk |
 | `/api/v1/server/migrations/backups` | GET | Lists existing pre-migration backups in `/media/openastroara/.araback/migrations/` with size + timestamp + source/target versions |
-| `/api/v1/server/restore-from-backup` | POST | v0.1.0 — pointer-only endpoint in v0.0.1 returning 501 "use manual restore procedure in DEPLOY.md" |
+| `/api/v1/server/restore-from-backup` | POST | Future (ROADMAP) — pointer-only endpoint today returning 501 "use manual restore procedure in DEPLOY.md" |
 
 **WebSocket events added:**
 
@@ -2722,11 +2722,11 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 - `pre_migration_backup_integrity_check_fails_aborts` — corrupt the source DB → start server → assert migration aborts + no schema change + critical log line
 - `backup_retention_keeps_last_5` — apply 7 sequential migrations with backups → assert 5 most-recent remain + 2 oldest deleted
 
-**v0.1.0 follow-ups:**
+**Future follow-ups (ROADMAP):**
 
 - WILMA UI for browsing backups + one-click restore (currently DEPLOY.md manual SSH path)
 - Server-side downgrade flow: when user explicitly requests rollback, server stops + binary swaps + DB restores from pre-migration backup atomically
-- Optional encrypted backups (`PRAGMA key`) for the v0.1.0 remote-access mode
+- Optional encrypted backups (`PRAGMA key`) for the future remote-access mode
 
 ### 28.15 Corrupted state recovery — beyond power loss
 
@@ -2734,7 +2734,7 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 
 - A user (or buggy build) edited a checkpoint JSON by hand and produced invalid syntax
 - A disk-level FS error left a FITS file with a truncated header
-- A bug in v0.0.1-ara.N wrote a row with NULL where the schema expects non-null, exposed only after upgrading to v0.0.1-ara.N+1
+- A bug in the initial release-ara.N wrote a row with NULL where the schema expects non-null, exposed only after upgrading to v0.0.1-ara.N+1
 - SQLite WAL recovery succeeded but `PRAGMA integrity_check` reports `*** in database main *** corruption messages`
 - DB and filesystem disagree: row points at `frame-42.fits` but the file isn't there (different from §28.8 orphan — that's "file exists with no row"; this is "row exists with no file")
 
@@ -2771,7 +2771,7 @@ The unifying principle: **never lose the user's data silently, but never block s
 │       └── <session-id>/session_meta.json.corrupt.<unix-ts>
 ```
 
-Quarantine is **append-only, never auto-pruned** in v0.0.1 — a damaged DB is the kind of thing a user might want to ship to support 6 months later. DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. v0.1.0 may add Settings → Storage → Quarantine browser with size + age + one-click delete.
+Quarantine is **append-only, never auto-pruned** in the initial release — a damaged DB is the kind of thing a user might want to ship to support 6 months later. DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. a future release may add Settings → Storage → Quarantine browser with size + age + one-click delete.
 
 **Cross-quarantine consistency check** runs at the end of every startup:
 - If `data.db` was just restored from backup AND there are FITS files newer than the backup's timestamp → run an unscheduled §28.8 orphan scan over just the post-backup FITS to recover them into the restored DB
@@ -3066,8 +3066,8 @@ Or if low / on SD card:
 - Capture write fails (`IOException: No space left on device`)
 - Sequencer pauses at that instruction; state is checkpointed
 - Queued notification: *"Capture failed — disk full at frame N. Free space or change save location, then resume."*
-- No automatic deletion or rotation in v0.0.1. User intervenes.
-- v0.1.0 may add rotation policies (delete oldest unflagged, archive to cloud, etc.)
+- No automatic deletion or rotation in the initial release. User intervenes.
+- a future release may add rotation policies (delete oldest unflagged, archive to cloud, etc.)
 
 ### 29.6 Settings → Storage panel (client)
 
@@ -3207,7 +3207,7 @@ Settings → Storage adds a "Logs" sub-panel showing:
 - [Force rotate now] (calls `POST /api/v1/server/logs/rotate` — runs `logrotate -f`; returns 200 + new disk usage)
 - [Download current log] (streams `/var/log/openastroara/ara-<today>.log`)
 
-No user-facing knobs for rotation cadence / size cap in v0.0.1 — Linux logrotate defaults are battle-tested; per-user tuning has no real demand. v0.1.0 could expose them if observatory operators ask.
+No user-facing knobs for rotation cadence / size cap in the initial release — Linux logrotate defaults are battle-tested; per-user tuning has no real demand. a future release could expose them if observatory operators ask.
 
 **§14.5 integration test cases (added):**
 
@@ -3277,7 +3277,7 @@ Modal with a file picker:
 - No auth tokens to manage per §67
 - Settings → Server panel: shows current server + connection state, "Forget this server" button
 - Forget = removes the saved server entry; next launch shows the discovery flow for that server again (Pi-side state is unaffected)
-- v0.1.0 introduces remote-access mode (§67.4) — that's when tokens come back, scoped to remote endpoints only
+- the planned remote-access mode (§67.4, ROADMAP) is — that's when tokens come back, scoped to remote endpoints only
 
 §61 search registry entries (§30.2-§30.6 coverage):
 
@@ -3352,7 +3352,7 @@ When user confirms a gear change (checkbox ticked + [Continue]), the affected su
 | **Camera** | Pixel scale → dither auto-magnitude (§62); cooler ramp targets sanity-check | Dither magnitude recomputed lazily on next exposure; cooler config flagged "verify in Settings → Camera" |
 | **Telescope / focal length / reducer** | Pixel scale (affects §62 dither + §59 AF feature sizing + framing FOV); §58 first-flip-confirm reset | All of the above; user reminded to verify focal length in Settings → Telescope |
 | **Focuser** | Smart Focus calibration table (§59); backlash values (§59.7); focus-temp slope | Smart Focus recalibrates on next AF trigger (~5 min one-time cost) |
-| **Filter wheel / filters** | Per-filter focus offsets (§59); filter-specific dither cadence (v0.1.0); flat library matching (§39) | Per-filter AF runs on first use of each filter; flat-matching warns if filter names changed |
+| **Filter wheel / filters** | Per-filter focus offsets (§59); filter-specific dither cadence (future); flat library matching (§39) | Per-filter AF runs on first use of each filter; flat-matching warns if filter names changed |
 | **Mount** | §58 first-flip-confirm reset; meridian flip pause windows verified; polar-align result flagged stale | First flip on new mount fires the §58.8 60-second confirm prompt again |
 | **Pier / tripod / dovetail / saddle** | §58 first-flip-confirm reset; `pause_after_min` flagged for verification | First flip fires confirm; wizard's mount screen surfaces a banner *"Verify your `pause_after_min` value still fits your physical rig"* |
 | **Guide scope / guide camera / PHD2** | PHD2 calibration; dither settle params; guider RMS baseline (§50) | PHD2 recalibrates on next guiding start (full cal, not auto-restore) |
@@ -3417,15 +3417,15 @@ User can search "equipment changed" and jump to the equipment-change-check scree
 
 ### 30.8 Multi-server support (observatory with 2+ Pis)
 
-ARA's typical deployment is one Pi per rig. Observatory operators sometimes run two scopes on two Pis simultaneously, controlled from a single WILMA app. v0.0.1 supports this via **one-server-at-a-time** with explicit server switching — distinct from §27's per-server single-client policy, which governs how many WILMAs can talk to one Pi. This section governs how one WILMA tracks multiple Pis.
+ARA's typical deployment is one Pi per rig. Observatory operators sometimes run two scopes on two Pis simultaneously, controlled from a single WILMA app. ARA supports this today via **one-server-at-a-time** with explicit server switching — distinct from §27's per-server single-client policy, which governs how many WILMAs can talk to one Pi. This section governs how one WILMA tracks multiple Pis.
 
-**v0.0.1 model: known servers list + one active connection at a time.**
+**Current model: known servers list + one active connection at a time.**
 
 WILMA maintains a local list of known servers (per §30.6) with per-server metadata: nickname, last-seen address, last-seen version, last-connected timestamp, last-known online state. WILMA is connected to exactly one server at any moment; switching disconnects the current connection cleanly before establishing the new one.
 
-**Why not concurrent connections in v0.0.1:**
+**Why not concurrent connections in the initial release:**
 
-Multi-server-concurrent introduces per-server state forking throughout WILMA (per-server notification feeds, per-server diagnostics state, per-server WS reconnect logic, per-server pending_restart banners, cross-rig dashboards, "which Pi is this safety modal coming from" disambiguation). Each addition is small; together they touch nearly every screen. The engineering payoff is real but disproportionate to the v0.0.1 user count. Single-active-server is shippable in Phase 12a (existing connection flow scales trivially); concurrent multi-server becomes a clean v0.1.0 effort once the v0.0.1 baseline is proven.
+Multi-server-concurrent introduces per-server state forking throughout WILMA (per-server notification feeds, per-server diagnostics state, per-server WS reconnect logic, per-server pending_restart banners, cross-rig dashboards, "which Pi is this safety modal coming from" disambiguation). Each addition is small; together they touch nearly every screen. The engineering payoff is real but disproportionate to the early user count. Single-active-server is shippable in Phase 12a (existing connection flow scales trivially); concurrent multi-server becomes a clean follow-on effort once the single-server baseline is proven.
 
 **Discovery model:**
 
@@ -3483,9 +3483,9 @@ When user clicks a non-active server:
 3. **Background watcher mode** (when [Switch + monitor]):
    - WILMA opens a *minimal* WS connection to the leaving server (low-traffic — only `notification.critical` and `notification.urgent` events; no frames, no telemetry, no stats)
    - Cross-server notifications surface in a separate "Other rigs" section of the §46 notification feed with the source server prefixed (`[joey-north] Sequence completed: NGC 7000 — 47 frames`)
-   - Background watcher auto-closes if WILMA's process is killed or if the user switches WILMA's primary connection a second time (only one background watcher at a time in v0.0.1)
+   - Background watcher auto-closes if WILMA's process is killed or if the user switches WILMA's primary connection a second time (only one background watcher at a time in the initial release)
    - Critical/urgent notifications from the watched server can pop a modal in the active context — the user is reminded which Pi it's from
-   - This is the minimum-viable cross-rig awareness for v0.0.1; full concurrent multi-server arrives in v0.1.0
+   - This is the minimum-viable cross-rig awareness for the initial release; full concurrent multi-server is on the ROADMAP
 
 **Settings → Servers panel (`[⚙ Manage servers]`):**
 
@@ -3521,14 +3521,14 @@ WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K 
 - Quiet hours (§46.5) apply globally regardless of source server
 - Emergency alarms (§35.5) from a watched server still fire the alarm modal — safety wins over context-switching cost
 
-**v0.0.1 limitations (documented in DEPLOY.md):**
+**Current limitations (documented in DEPLOY.md):**
 
 - One active server + one optional background watcher; no >2-server concurrent monitoring
 - No cross-rig stats rollups (§50 Stats are per-server only)
 - No cross-rig sequence orchestration ("alternate N frames on north, M frames on south")
 - No cross-rig single-emergency-stop button (each server has its own §35.3)
 
-**v0.1.0+ concurrent multi-server roadmap** (added to §55):
+**Concurrent multi-server roadmap** (see design/ROADMAP.md):
 
 - Concurrent WebSocket connections, one per server
 - Tabbed top-level UI (one tab per server, plus a "Rigs overview" tab)
@@ -3571,8 +3571,8 @@ WebSocket events from background-watcher mode use the same shapes as §46 notifi
 - §32.4 + §32.5 — mDNS discovery + state hydration on connect
 - §35.5 — emergency alarms from watched servers still fire
 - §46 — notification feed (background-watcher notifications are a section within the same feed)
-- §55 — v0.1.0+ concurrent multi-server roadmap entry
-- §67 — security model (no auth between WILMA and any Pi in v0.0.1; switching adds no new attack surface)
+- design/ROADMAP.md — concurrent multi-server entry
+- §67 — security model (no auth between WILMA and any Pi in the initial release; switching adds no new attack surface)
 
 ---
 
@@ -3683,7 +3683,7 @@ systemd-timesyncd ships enabled by default on Trixie and will keep the clock wit
 - gpsd shared-memory ref-clock setup is a power-user workflow — wiki + DEPLOY.md document the path without ARA forcing the setup
 - ARA stays out of the OS-level time-sync stack; respects what the user (or distribution) chose
 
-**v0.1.0 reconsideration:** if remote-observatory users (the new v0.1.0 §67.4 remote-access mode) report systematic clock-drift issues, revisit. Possible v0.1.0 path: ARA optionally installs + configures chrony with gpsd ref-clock when the user opts into "observatory mode" during the wizard.
+**Future reconsideration:** if remote-observatory users (the future §67.4 remote-access mode) report systematic clock-drift issues, revisit. Possible path: ARA optionally installs + configures chrony with gpsd ref-clock when the user opts into "observatory mode" during the wizard.
 
 ### 31.5 DST + timezone policy (explicit)
 
@@ -3752,7 +3752,7 @@ WILMA loses Wi-Fi mid-session. WebSocket dies. The sequence keeps running on the
 ### 32.5 Reconnect behavior
 
 - Server is source of truth — client fetches `GET /api/v1/server/state` snapshot on reconnect and rehydrates UI
-- Client-side in-flight mutations that didn't receive an HTTP response are **dropped** (v0.0.1) rather than retried — avoids double-execution risk
+- Client-side in-flight mutations that didn't receive an HTTP response are **dropped** (today) rather than retried — avoids double-execution risk
 - Sequence keeps running on the Pi throughout — disconnect doesn't pause
 
 ### 32.6 Pi Wi-Fi mode (operational, not in scope for ARA Core .deb)
@@ -3777,7 +3777,7 @@ Disconnect handling (§32.1–§32.5) is what WILMA does *after* the link breaks
 | **2.4 GHz Wi-Fi (Pi joined to home AP)** | Last resort | Range OK, but congestion + Bluetooth + microwave + neighbor APs cause drops. Power-save off + channel-pin same as above. Expect more §32 modal fires. |
 | **Pi AP mode (§32.6)** with WILMA on phone/laptop | Standard for field rigs | Best when there's no other network. Phone Wi-Fi power-save can drop the connection even with the Pi rock-solid — phone-side §32 reconnect is what saves it. |
 | **USB tethering** (phone-to-Pi) | Untested | May work; ARA doesn't test against it; community-supported. |
-| **Cellular hotspot upstream** | Not a thing for v0.0.1 | LAN-only architecture per §67; cellular for remote-internet imaging is v0.1.0 (§55.1). |
+| **Cellular hotspot upstream** | Not a thing for the initial release | LAN-only architecture per §67; cellular for remote-internet imaging is on the ROADMAP. |
 
 **Wi-Fi power-save on the Pi side** (the dominant cause of "WS heartbeat missed" on Wi-Fi):
 
@@ -3806,7 +3806,7 @@ Pi 4 / Pi 5 hardware **does not** support WoL on the onboard Ethernet (the Broad
 - An external smart plug / network-attached PDU (recommended; per §57.7 hardware kill switch advisory pairs well)
 - A USB Ethernet adapter that supports WoL (some Realtek-based ones do; user's responsibility to verify)
 
-ARA does NOT advertise WoL support. v0.1.0 may add a Settings → System → "remote wake" UI surface IF the project picks up an external-wake-device integration; deferred to community signal.
+ARA does NOT advertise WoL support. a future release may add a Settings → System → "remote wake" UI surface IF the project picks up an external-wake-device integration; deferred to community signal.
 
 **DHCP behavior + "use saved server" reliability:**
 
@@ -3831,7 +3831,7 @@ WILMA does NOT request "make me reachable from the LAN" firewall changes — it'
 
 **Network MTU + path-MTU-discovery quirks:**
 
-LAN imaging is uniformly 1500-byte MTU; ARA assumes this. If a VPN / WireGuard interposes (v0.1.0 remote-access mode), MTU drops to ~1420 and PMTU-D needs to work cleanly. Out of scope for v0.0.1 — flagged here so a v0.1.0 remote-access design picks it up.
+LAN imaging is uniformly 1500-byte MTU; ARA assumes this. If a VPN / WireGuard interposes (future remote-access mode), MTU drops to ~1420 and PMTU-D needs to work cleanly. Out of scope for the initial release — flagged here so a future remote-access design picks it up.
 
 **The "midnight modem reboot" problem:**
 
@@ -3935,7 +3935,7 @@ The **WILMA-ahead** path is the cross-version intersection of §75 (manual WILMA
 
 **Introspection over guessing**: WILMA never branches on `server_version` directly to decide whether to call an endpoint. Instead, it calls and handles 404 + the §73 RFC 7807 error envelope. Reasons:
 - Forward-compat: a backport could land a feature in an older server line
-- Plugin v0.1.0 (§55.1): plugins extend the endpoint surface; version number alone doesn't reflect what's actually present
+- Plugins (ROADMAP): plugins extend the endpoint surface; version number alone doesn't reflect what's actually present
 - Testing: the 404 path needs coverage anyway, so making it the normal control flow eliminates a parallel "version-string-comparison" code path
 
 **Per-API-version negotiation** (deferred to v2 — informational here): once v2 ships per §60.8.1's coexistence policy, WILMA picks the highest API version present in `state.api_versions` it was built to consume and uses that prefix (`/api/v2/...`) for the session. Endpoints not yet rev'd to v2 fall through to v1 paths. The compatibility matrix above continues to apply within each API major.
@@ -4016,18 +4016,18 @@ Modal closes.                           mv previous → current; restart
                                        "Update failed, rolled back."
 ```
 
-### 33.4 Trust & integrity (v0.0.1)
+### 33.4 Trust & integrity (current)
 
 - No auth on the endpoint per §67 (trusted-LAN posture); same as every other ARA endpoint
 - **SHA-256 checksum match before swap** — the integrity gate. An attacker would need to upload a binary whose SHA-256 matches the one they declared, which requires already possessing a legitimate signed binary; mere LAN access isn't enough
 - WILMA's UX requires the user to click [Update Ara Core] — opportunistic API access can't trigger an update silently
-- **v0.1.0 addition**: Ed25519 signature verification with Open Astro's pinned public key (so the user can't push a tampered binary to their own Pi by accident or malice; provides strong integrity even on hostile networks once remote-access mode ships)
+- **Future addition (with remote-access mode)**: Ed25519 signature verification with Open Astro's pinned public key (so the user can't push a tampered binary to their own Pi by accident or malice; provides strong integrity even on hostile networks once remote-access mode ships)
 
 ### 33.5 Coexistence with APT updates (per §34)
 
 `update.sh` runs `dpkg-divert --add /opt/openastroara/OpenAstroAra.Server` so APT knows the binary is locally-overridden. On subsequent `apt upgrade`, the new APT version stages as a `.dpkg-new` file but does not replace the WILMA-pushed binary. User can manually clear the divert (`dpkg-divert --remove`) to return to APT-managed state.
 
-### 33.6 v0.1.0 scope (noted, not implemented yet)
+### 33.6 Future update scope (noted, not implemented yet)
 
 Same push-from-WILMA mechanism extended to:
 - **AlpacaBridge** — bundled binary, `/opt/alpaca-bridge/`, restart via systemd
@@ -4061,7 +4061,7 @@ Example structure:
 - Mosaic RA-wrap math for panels crossing 0h (§47.3)
 
 ### Security
-- AlpacaBridge version handshake now enforced (§68.1)
+- Bug-report bundles now strip §70 share-sensitive fields (§54.3)
 
 ## [0.0.1-ara.5] — 2026-05-25
 
@@ -4132,8 +4132,8 @@ WILMA persists `last_seen_server_version` in `flutter_secure_storage`, keyed per
 │ • PHD2 reconnect after USB hub sleep                    │
 │                                                         │
 │ ── Security ───────────────────────────────────────     │
-│ • AlpacaBridge version handshake now enforced          │
-│   → Equipment screen blocks if bridge < 1.2.0          │
+│ • Bug-report bundles strip share-sensitive fields      │
+│   → §54.3 bug-report privacy disclosure                │
 │                                                         │
 │                                                         │
 │ [View full changelog]               [Don't show again]  │
@@ -4184,7 +4184,7 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 - The Phase 15 PR (final port → master) adds the initial CHANGELOG.md with `## [0.0.1-ara.1] — <date>` entry
 - COMMIT-PR-RULES.md's per-phase PR rhythm (future bake) adds "update CHANGELOG.md [Unreleased] section" to the pre-PR gate (§14.4) for any PR with user-visible changes — same enforcement style as the settings-registry gate
 - Release tags (manual, user-driven): rename `[Unreleased]` → `[<version>] — <date>`, create fresh `[Unreleased]`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
-- Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-v0.0.1 entry (future-scope section) inherits the changelog discipline
+- Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
 
 **Cross-references:**
 
@@ -4241,14 +4241,14 @@ sudo apt install openastroara-server
 - Installs `/etc/logrotate.d/openastroara` per §29.9
 - Enables + starts the service: `systemctl enable --now openastroara-server.service`
 
-(No token generation per §67 — v0.0.1 has no auth. v0.1.0 remote-access mode adds a token-generation step at enable time.)
+(No token generation per §67 — there is no auth today. The future remote-access mode adds a token-generation step at enable time.)
 
 ARA Core's .deb does **only** these things. It does **not** touch:
 - Wi-Fi or hostapd (per §32.6 — wiki handles this)
 - OS install (wiki)
 - Equipment driver configuration (camera-specific udev rules ship with AlpacaBridge's .deb per §68 + the vendor SDK packages it depends on; ARA Core stays vendor-agnostic)
 
-**Device permission philosophy (per fourth-pass Tier 1 #6):** ARA Core ships NO vendor-specific udev rules in v0.0.1. The split of responsibilities:
+**Device permission philosophy (per fourth-pass Tier 1 #6):** ARA Core ships NO vendor-specific udev rules in the initial release. The split of responsibilities:
 - **AlpacaBridge** ships udev rules for the cameras it directly supports (or pulls them in via vendor-SDK .debs it depends on)
 - **ARA Core** ensures its `openastroara` user is in the standard device groups so it inherits access to whatever AlpacaBridge or the kernel exposes
 - **The user** can `sudo usermod -aG <group> openastroara` for non-standard devices; DEPLOY.md troubleshooting documents this
@@ -4438,7 +4438,7 @@ After successful restart, server boots on the new version, deletes `.needs-resta
 - `stale_lock_does_not_defer_restart` — lock file with old heartbeat, postinst restarts normally
 - `pending_restart_clears_on_successful_restart` — flag set, user triggers restart, new binary starts, flag is gone
 
-**v0.1.0 follow-ups:**
+**Future follow-ups (ROADMAP):**
 
 - WILMA UI for "Auto-restart at astronomical dawn" — for users who run long unattended sessions and want updates to apply between nights
 - Telemetry on deferral patterns (per §67 local-only) to inform whether default behavior should change
@@ -4535,7 +4535,7 @@ Server reads this at session start and behaves accordingly.
 
 ## 36. Sky imagery + Data Manager (WILMA)
 
-WILMA owns the sky atlas (per §2 responsibility split). ARA ships a **slim ~50 MB installer** and uses an in-app **Data Manager** for everything else, modeled on SkySafari's catalog-download pattern. The full feature surface ships in v0.0.1 — Tonight's Sky planetarium, all 21 surveys, full DE440 ephemerides, comet motion trails, star-catalog supplements — but as opt-in downloads rather than bundled assets. Users complete the mandatory wizard (§37) on first run; the wizard suggests downloads keyed to the user's focal length before any imaging begins. Aladin Lite is the differentiator vs NINA — by giving users the full atlas with on-demand depth, ARA delivers a sky-data experience NINA cannot match.
+WILMA owns the sky atlas (per §2 responsibility split). ARA ships a **slim ~50 MB installer** and uses an in-app **Data Manager** for everything else, modeled on SkySafari's catalog-download pattern. The full feature surface ships in the initial release — Tonight's Sky planetarium, all 21 surveys, full DE440 ephemerides, comet motion trails, star-catalog supplements — but as opt-in downloads rather than bundled assets. Users complete the mandatory wizard (§37) on first run; the wizard suggests downloads keyed to the user's focal length before any imaging begins. Aladin Lite is the differentiator vs NINA — by giving users the full atlas with on-demand depth, ARA delivers a sky-data experience NINA cannot match.
 
 ### 36.1 Installer base + Data Manager pattern
 
@@ -4657,7 +4657,7 @@ When a thumbnail exists locally, framing assistant uses it. When absent, framing
 | Asset | Size | Purpose |
 |---|---|---|
 | **Full DE440 ephemerides** | ~50 MB | Sub-milliarcsecond Sun/Moon/planet positions. Required for accurate Tonight's Sky planetarium planet rendering, comet motion-trail precision, occultation events. Without it, planetarium falls back to a minimal analytical formula for Sun/Moon only; planets are not shown. **Default-recommended in the wizard for any rig.** |
-| MPC asteroid catalog (bulk) | placeholder, v0.1.0 | Bulk asteroid layer (~1.4M numbered) — deferred to v0.1.0 per §36.8 |
+| MPC asteroid catalog (bulk) | placeholder, future | Bulk asteroid layer (~1.4M numbered) — deferred — see design/ROADMAP.md per §36.8 |
 
 ### 36.3 Per-asset controls
 
@@ -4681,7 +4681,7 @@ Applies across all four tabs:
 - Parallel tile fetcher with per-CDS-host rate limiting (default 8 parallel connections, user-configurable)
 - README + Data Manager explainer notes: CDS infrastructure is shared by astronomers worldwide. Download "Everything full res" only when you actually need it, preferably overnight.
 - Implement HTTP `If-Modified-Since` so updates only fetch changed tiles
-- Star catalogs, thumbnails, and DE440 are served from ARA's own release-asset hosting (GitHub Releases or similar; v0.0.1 picks a host, v0.1.0 may move to a CDN). Same politeness — parallel cap + `If-Modified-Since` — applies. These are static per-release assets, not live CDS pulls.
+- Star catalogs, thumbnails, and DE440 are served from ARA's own release-asset hosting (GitHub Releases or similar today; a CDN is a future option). Same politeness — parallel cap + `If-Modified-Since` — applies. These are static per-release assets, not live CDS pulls.
 
 ### 36.6 Local asset serving to Aladin Lite
 
@@ -4700,7 +4700,7 @@ The **Planning tab** (the merged Sky Atlas + Framing surface, §25.5) has a view
 toggle: **[Explore]** ↔ **[Tonight's Sky]** (plus the orthogonal **Frame** overlay
 toggle). Tonight's Sky is the planetarium mode.
 
-> **Implementation status (v0.1.0).** What shipped is the **altitude-ranked
+> **Implementation status.** What shipped is the **altitude-ranked
 > best-objects side panel**: the server (`ITonightSkyService`, `GET
 > /api/v1/planning/tonight`) ranks a curated catalog by current altitude above the
 > profile's site horizon (self-contained Meeus GMST→LST→hour-angle→altitude, no
@@ -4735,7 +4735,7 @@ Search bar at the top of the Planning tab (Explore mode):
 - **Offline**: fall back to bundled name resolver index (HYG common names + NGC/IC/M/HD/HIP/Tycho-2 designations + Bayer/Flamsteed + bundled comets). ~5-10 MB index, ~50-100k entries.
 - **Coordinate parsing**: accept RA/Dec strings in multiple formats (HH:MM:SS / decimal degrees / mixed).
 - **Comets**: searchable by designation (`C/2023 A3`) or common name (`Tsuchinshan-ATLAS`).
-- **Asteroids** (v0.0.1): targeted lookup only (type "Ceres", "(1) Ceres", "433 Eros" → WILMA fetches that single object from MPC on demand). Bulk asteroid catalog deferred to v0.1.0.
+- **Asteroids** (today): targeted lookup only (type "Ceres", "(1) Ceres", "433 Eros" → WILMA fetches that single object from MPC on demand). Bulk asteroid catalog deferred — see design/ROADMAP.md.
 
 ### 36.9 Comet support
 
@@ -4794,7 +4794,7 @@ Flutter's desktop WebView story on Linux is patchy across packages (`webview_flu
 
 **Help-wiki entry:** the OpenAstro wiki documents the Linux WebView dependency install steps (typically `sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev` or equivalent per distro). If the user installs the missing deps + restarts WILMA, the embedded WebView typically works on the next launch.
 
-**v0.1.0 path:** the §55.2 v0.2.0 "Native Flutter sky-renderer" entry (replace Aladin WebView with pure-Flutter Skia rendering) eliminates this Linux-only issue entirely — but that's a substantial v0.2.0 design pass.
+**Future path:** a pure-Flutter Skia sky-renderer (the ROADMAP entry now largely superseded by the #611 native Stellarium atlas) eliminates this Linux-only issue entirely — but that's a substantial design pass.
 
 ### 36.11 Aladin Lite license requirements
 
@@ -5264,7 +5264,7 @@ By default, ARA preserves spaces in `$$TARGETNAME$$` (sanitization only replaces
 - `template_lacking_framenr_and_datetime_returns_422`
 - `template_with_targetname_containing_unicode_normalizes_to_ascii_safe`
 
-### 38.7 Bundled starter templates (v0.0.1)
+### 38.7 Bundled starter templates (initial set)
 
 Ship 3 templates with the `openastroara-server` .deb at `/opt/openastroara/templates/`. Templates cover the DSO + comet imaging workflows ARA supports (per §18.J):
 
@@ -5272,13 +5272,13 @@ Ship 3 templates with the `openastroara-server` .deb at `/opt/openastroara/templ
 |---|---|
 | `lrgb-dso.json` | LRGB on a DSO — luminance + RGB filters, dither cadence, auto-focus on temp change |
 | `narrowband-shoo.json` | SHO narrowband — Hα, OIII, SII filters with longer exposures |
-| `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion in v0.0.1 (deferred per §55.2). User points at a comet from the §36.9 catalog. |
+| `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion yet (deferred — see design/ROADMAP.md). User points at a comet from the §36.9 catalog. |
 
 No lunar / planetary templates — per §18.J, ARA's scope is DSO + comets only because Alpaca lacks a video API. Lunar/planetary lucky-imaging is permanently out of scope, not deferred. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
 
 ### 38.8 Schema evolution policy
 
-- v0.0.1 ships `openastroara-sequence-v1` (NINA-compatible)
+- ARA ships `openastroara-sequence-v1` (NINA-compatible)
 - Backwards-compatible additions within v1 (new optional fields) are allowed; ARA bumps a `protocol_minor` in `/api/v1/server/info` and clients respect missing-field defaults
 - Breaking changes go to `openastroara-sequence-v2` — server reads both, writes current; user-managed migration only if they want new v2-only features
 - Schema version is independent from API version and from app version
@@ -5679,9 +5679,9 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 
 ## 41. Mobile companion mode (iOS / Android)
 
-**v0.0.1 scope status: SPEC ONLY — no mobile builds ship.** Mobile distribution is deferred to v0.1.0 per §18.G (requires funded Apple Developer + Play Console accounts + per-platform review workflow + ongoing signing maintenance). The §41 spec stays in the playbook because it informs v0.0.1 API decisions (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) — so the server-side API surface is correct when v0.1.0 turns on mobile builds. Flutter codebase already supports iOS/Android targets; what's missing is the distribution + signing + review pipeline, not the code.
+**Scope status: SPEC ONLY — no mobile builds ship yet.** Mobile distribution is deferred — see design/ROADMAP.md per §18.G (requires funded Apple Developer + Play Console accounts + per-platform review workflow + ongoing signing maintenance). The §41 spec stays in the playbook because it informs today's API decisions (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) — so the server-side API surface is correct when mobile builds turn on. Flutter codebase already supports iOS/Android targets; what's missing is the distribution + signing + review pipeline, not the code.
 
-When v0.1.0 enables mobile builds, no server changes are needed — the same WILMA codebase compiles for iOS/Android with platform-detection-driven shell selection per §41.4. The spec below describes the *intended* mobile UX; treat as v0.1.0 design with v0.0.1 API forward-compatibility.
+When mobile builds are enabled, no server changes are needed — the same WILMA codebase compiles for iOS/Android with platform-detection-driven shell selection per §41.4. The spec below describes the *intended* mobile UX; treat as future design with current API forward-compatibility.
 
 WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the desktop client, but the UI is tailored for phone/tablet form factors and many "configuration" workflows are intentionally absent (replaced by a "Open ARA on your desktop to do this" prompt). The phone is for monitoring, viewing, and emergencies — not for planning tomorrow's session.
 
@@ -5718,10 +5718,10 @@ When a mobile user taps something disallowed, they get a polite modal with a "Co
 ### 41.3 Mobile-specific UX considerations
 
 - **Always-on bottom bar**: [Dashboard] [Library] [Logs] [Emergency Stop] — emergency button is permanently visible regardless of which tab is active
-- **Push notifications**: Firebase Cloud Messaging on Android, APNs on iOS, **but only between WILMA and the Pi** — no third-party telemetry path; Pi sends webhook to client's notification endpoint. (v0.0.1 may defer push and rely on in-app foreground notifications only — depends on Apple/Google account setup effort)
+- **Push notifications**: Firebase Cloud Messaging on Android, APNs on iOS, **but only between WILMA and the Pi** — no third-party telemetry path; Pi sends webhook to client's notification endpoint. (the first mobile release may defer push and rely on in-app foreground notifications only — depends on Apple/Google account setup effort)
 - **Background mode caveat**: iOS aggressively suspends backgrounded apps; Android less so. App in background may miss WebSocket events; user opens app → fresh state pulled via REST snapshot. Push notifications wake the user for critical events even if app is suspended.
 - **Tablet (iPad / Android tablet)**: companion mode renders with more density (split view: dashboard + library side-by-side); pinch-to-zoom on frames goes huge; otherwise same scope as phone. iPad Pro users get a perfectly usable casual-monitor experience.
-- **Apple Watch / Wear OS**: out of scope for v0.0.1. Could be a future "notifications only" companion app.
+- **Apple Watch / Wear OS**: out of scope for the initial release. Could be a future "notifications only" companion app.
 
 ### 41.4 Shared Flutter codebase, conditional shell
 
@@ -5738,7 +5738,7 @@ Shared:
 - API client (auto-generated from OpenAPI)
 - State management (Riverpod providers)
 - WebSocket connection + event handlers
-- Saved-server state (no auth tokens in v0.0.1 per §67; storage layer is reserved for v0.1.0 remote-access tokens)
+- Saved-server state (no auth tokens in the initial release per §67; storage layer is reserved for future remote-access tokens)
 - Common widgets (frame viewer, dashboard tiles, status indicators)
 
 Different:
@@ -5929,7 +5929,7 @@ sudo dd if=/dev/sda of=/dev/sdb bs=4M status=progress
 sudo rsync -aAXxv --delete /media/openastroara/ /mnt/backup-drive/openastroara/
 ```
 
-ARA does not automate this — the user manages their backup drive(s). v0.1.0 may add a "backup wizard" that guides the user through this with checks (drive size, free space, integrity verify) but stays out of the user's hardware.
+ARA does not automate this — the user manages their backup drive(s). a future release may add a "backup wizard" that guides the user through this with checks (drive size, free space, integrity verify) but stays out of the user's hardware.
 
 ### 43.4 Server-generated backup ZIP
 
@@ -6139,8 +6139,8 @@ WILMA pulling FROM the Pi (Pi is the LAN-stable listener) just works. No port fo
 
 - **Desktop WILMA only** (Windows, macOS, Linux desktop). Mobile companion mode (§41) does NOT participate — phones don't have terabytes of storage and would burn cellular data.
 - **Same LAN recommended** but not required (can work over VPN, just slower)
-- **Single active stream target per Pi for v0.0.1** — only one WILMA at a time is the "backup target." If two desktops both enable backup stream, Pi designates whichever connects first as the active one and tells the other "another WILMA is already streaming."
-- v0.1.0 may add multi-target (mirror to two PCs simultaneously)
+- **Single active stream target per Pi for the initial release** — only one WILMA at a time is the "backup target." If two desktops both enable backup stream, Pi designates whichever connects first as the active one and tells the other "another WILMA is already streaming."
+- a future release may add multi-target (mirror to two PCs simultaneously)
 
 ### 44.4 Bandwidth throttling
 
@@ -6228,9 +6228,9 @@ Compared to drive-clone backups (which happen weekly) and ZIP backups (which hap
 
 Combined with §29's mandatory-USB design, this makes ARA's reliability model significantly stronger than NINA's (where the only protection against drive failure is the user remembering to copy files off).
 
-### 44.11 NOT in v0.0.1 scope
+### 44.11 Out of initial scope
 
-Deferred to v0.1.0:
+Deferred — see design/ROADMAP.md:
 - **Multi-target streaming** (mirror to two desktops simultaneously)
 - **Cloud streaming** (rclone-based push to S3, Google Drive, etc.) — same protocol model but pull from a third-party endpoint
 - **Selective stream** (only stream frames matching certain filters / rated 3⭐+) — initial version streams everything
@@ -6262,7 +6262,7 @@ ARA does the same workflow but **with the user's main imaging camera** (no extra
 4. **Loop at ~500 ms** like iPolar — fast feedback, smoothed errors
 5. **Zooming bullseye UI** — magnifies as the user converges toward the pole
 
-This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA camera. v0.1.0 will add native support for an actual iPolar / PoleMaster / dedicated PA camera (see §45.10).
+This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA camera. The ROADMAP adds native support for an actual iPolar / PoleMaster / dedicated PA camera (see §45.10).
 
 ### 45.3 Workflow
 
@@ -6469,9 +6469,9 @@ CREATE TABLE polar_alignments (
 
 WILMA's Image Library + Dashboard can display: *"Polar alignment quality: 0.7' (last performed 2 nights ago)"* as a small status chip. Gives users awareness of when re-alignment might help.
 
-### 45.14 v0.1.0 — dedicated PA camera support
+### 45.14 Future expansion — dedicated PA camera support
 
-When v0.1.0 adds support for an iPolar / PoleMaster / dedicated PA camera attached via Alpaca:
+When support is added for an iPolar / PoleMaster / dedicated PA camera attached via Alpaca:
 
 - Polar Align workflow auto-detects an Alpaca camera tagged as "PolarAlignCamera" (separate from main imaging camera)
 - Uses that camera's FOV / pixel scale for the math instead of binning the main camera
@@ -6488,7 +6488,7 @@ When v0.1.0 adds support for an iPolar / PoleMaster / dedicated PA camera attach
 
 ## 46. Notifications system
 
-In-app notifications only — no push, no email, no webhooks in v0.0.1 (field users often have no internet). Every meaningful server event becomes a notification. Per-event opt-in/out, quiet hours, four severity levels with distinct UX treatments.
+In-app notifications only — no push, no email, no webhooks in the initial release (field users often have no internet). Every meaningful server event becomes a notification. Per-event opt-in/out, quiet hours, four severity levels with distinct UX treatments.
 
 ### 46.1 Delivery model
 
@@ -6737,9 +6737,9 @@ Settings → Notifications panel in WILMA:
 | `GET` | `/api/v1/notifications/preferences` | Get user's notification preferences |
 | `PUT` | `/api/v1/notifications/preferences` | Update preferences |
 
-### 46.9 v0.1.0 expansion paths
+### 46.9 Future expansion paths
 
-Out of scope for v0.0.1, queued in GAPS-ARA for future:
+Out of scope for the initial release, queued in GAPS-ARA for future:
 
 - **Push notifications** (FCM / APNs) — requires Firebase + Apple Developer accounts + privacy review
 - **Email integration** — outbound SMTP from Pi (requires user to configure their mail server)
@@ -6776,7 +6776,7 @@ UI flow:
 5. Aladin Lite overlay renders the panel grid as colored rectangles on the sky map — user sees exactly which areas each panel covers, can drag the whole mosaic to recenter, can rotate
 6. User confirms → mosaic saved as a single logical entity with N×M panels
 
-> **Implementation status (v0.1.0).** The Frame-mode FOV overlay and the **mosaic
+> **Implementation status.** The Frame-mode FOV overlay and the **mosaic
 > panel-grid preview** (cols × rows × overlap, profile-derived field rectangle)
 > shipped. **"Build Mosaic Sequence"** — turning the previewed grid into N×M
 > sequencer sub-targets — is **deferred (1e)**: it needs the server-side
@@ -6959,7 +6959,7 @@ ARA's contribution: ensure every panel's FITS file has consistent metadata, pane
 - Default per-filter frame count per panel: inherit from user's standard sequence preferences
 - Mosaic naming pattern: `<target> Mosaic` (e.g., "M31 Mosaic")
 
-### 47.13 v0.1.0 expansion paths
+### 47.13 Future expansion paths
 
 - Adaptive panel sizing (variable focal length / FOV per panel — for super-wide mosaics combining wide-field and tighter panels)
 - ARA-side stitching preview (low-res, just for sanity-check before user processes in PixInsight)
@@ -7045,7 +7045,7 @@ Inherits NINA's implementation.
 
 ### 48.5 Dark library — manual user-initiated, not prompted
 
-Darks are NOT included in the sequence-start prompt for v0.0.1 because:
+Darks are NOT included in the sequence-start prompt for the initial release because:
 - Darks don't match a specific session (they match camera + gain + temp + exposure — much more reusable)
 - Building a dark library is typically a multi-hour overnight task, NOT a "tack onto tonight's imaging" thing
 - Users typically build darks on cloudy/moony/full-moon nights when DSO imaging is impossible
@@ -7110,7 +7110,7 @@ Mirrors the schema above with editable fields, plus:
 - "What ARA will do at sequence start" preview ("Will ask each time" / "Will capture sky flats automatically" / etc.)
 - Link to §39.5 "Capture Matching Flats" workflow in Image Library
 
-### 48.9 v0.1.0 expansion paths
+### 48.9 Future expansion paths
 
 - **Scheduled dark library** — "build dark library every Sunday night if no sequence planned" — runs automatically when imaging is impossible
 - **Smart dark management** — server identifies when dark library is stale (camera replaced, gain settings changed since last darks captured) and prompts user
@@ -7139,7 +7139,7 @@ Source-of-truth spec is **generated** from endpoint metadata at build time (code
 | `/api/v1/openapi.yaml` | Raw OpenAPI 3.1 spec (YAML) — for tools that consume the spec directly |
 | `/api/v1/openapi.json` | Same spec, JSON format — Swagger UI fetches this |
 
-All three are **open** — no auth required. Per §67, *all* endpoints (not just docs) are open in v0.0.1. v0.1.0 remote-access mode will gate state-mutating operations behind TLS + token.
+All three are **open** — no auth required. Per §67, *all* endpoints (not just docs) are open in the initial release. future remote-access mode will gate state-mutating operations behind TLS + token.
 
 ### 49.3 Swagger UI styling
 
@@ -7175,14 +7175,14 @@ Per §9 endpoint groups + later additions:
 - Calibration library
 - Profiles
 
-All request/response shapes typed via OpenAPI components. No authentication scheme declared in v0.0.1 per §67. v0.1.0 remote-access mode will add a bearer-token scheme so Swagger UI's "Authorize" button works against remote endpoints.
+All request/response shapes typed via OpenAPI components. No authentication scheme declared in the initial release per §67. future remote-access mode will add a bearer-token scheme so Swagger UI's "Authorize" button works against remote endpoints.
 
 ### 49.5 "Try It Out" from the docs page
 
-Swagger UI's built-in "Try It Out" works on every endpoint immediately — no auth setup required in v0.0.1 per §67. Useful for:
+Swagger UI's built-in "Try It Out" works on every endpoint immediately — no auth setup required in the initial release per §67. Useful for:
 - Debugging during development
 - Power users exploring the API
-- Plugin authors testing endpoints before integrating (when plugin SDK ships in v0.1.0)
+- Plugin authors testing endpoints before integrating (when the plugin SDK ships — ROADMAP)
 
 ### 49.6 Where Swagger UI is reachable
 
@@ -7192,16 +7192,16 @@ Same port as the API (default 5400). On a Pi at `pi-observatory.local`:
 
 WILMA's About panel can link to `<server>/api/v1/docs` so users discover it.
 
-### 49.7 v0.1.0 expansion
+### 49.7 Future expansion
 
 - Generated SDK packages from the OpenAPI spec for popular languages (Python, JavaScript, Go) — useful for plugin authors + community integrations
-- Versioned doc browser (current v0.0.1, future v0.1.0, etc.) — Swagger UI supports multi-spec selection
+- Versioned doc browser (spec revisions as they accrue) — Swagger UI supports multi-spec selection
 
 ---
 
 ## 50. Session analytics + Stats dashboard
 
-ARA's analytics layer is the v0.0.1 feature designed to **leave NINA in the dust**. NINA captures rich session metadata but exposes almost none of it as insight. ARA mines that data to surface trends, correlations, equipment health, and milestones users have never had access to.
+ARA's analytics layer is the feature designed to **leave NINA in the dust**. NINA captures rich session metadata but exposes almost none of it as insight. ARA mines that data to surface trends, correlations, equipment health, and milestones users have never had access to.
 
 ### 50.1 Why this matters as a differentiator
 
@@ -7470,11 +7470,11 @@ Analytics queries can be expensive on large datasets (years of frames). Two-tier
 
 Heaviest charts (HFR-vs-temp with all-history) downsample on the server side (max 10k data points per chart) to keep frontend rendering snappy.
 
-### 50.19 v0.0.1 vs v0.1.0 honest scope split
+### 50.19 Shipped vs deferred — honest scope split
 
 User wants the full dashboard. Here's the honest split given the engineering reality:
 
-**Ship in v0.0.1:**
+**Ship in the initial release:**
 - §50.2 data foundation (already captured)
 - §50.4 Overview tiles
 - §50.5 Targets view + per-target detail
@@ -7486,14 +7486,14 @@ User wants the full dashboard. Here's the honest split given the engineering rea
 - §50.15 CSV export
 - §50.16 API endpoints (all of them — server-side is straightforward)
 
-**Defer to v0.0.2 / v0.1.0:**
+**Deferred (ROADMAP):**
 - §50.9 Equipment Health (requires careful threshold-tuning per equipment type)
 - §50.11 Session Efficiency (requires instrumenting per-instruction timing in the sequencer — preserved from NINA but needs analytics hookup)
 - §50.12 Conditions correlation (requires reliable weather data; many users don't have weather stations)
 - §50.13 Achievements (nice but not essential; defining "interesting" milestones takes design iteration)
 - §50.15 PDF + Astrobin exports (PDF generation is real work; Astrobin format is small)
 
-That's still a substantial v0.0.1 — leaves NINA's "no analytics" approach in the dust without overscoping.
+That's still substantial — it leaves NINA's "no analytics" approach in the dust without overscoping.
 
 ### 50.20 Privacy
 
@@ -7637,17 +7637,17 @@ Modes:
 - **aggressive** — ARA acts on warnings (auto-refocus, auto-pause, auto-skip) without asking; maximizes uptime
 - **balanced** — acts on critical signals (pause for clouds, refocus for focus drift); notifies on warnings; user decides
 - **conservative** — notifies only; doesn't auto-correct; user takes action manually
-- **notify_only** *(v0.0.1 default)* — alerts but never acts; for users who want full manual control. The Diagnostic Panel + Health Indicator + per-frame FITS metadata enrichment all still run; ARA simply doesn't take autonomous corrective action
+- **notify_only** *(current default)* — alerts but never acts; for users who want full manual control. The Diagnostic Panel + Health Indicator + per-frame FITS metadata enrichment all still run; ARA simply doesn't take autonomous corrective action
 
-**Why notify_only is the v0.0.1 default (instead of balanced):**
+**Why notify_only is the initial default (instead of balanced):**
 
-1. **Thresholds are uncalibrated.** The 40% star-drop threshold, HFR 1.5× refocus trigger, etc. are educated defaults — not per-user-tuned values. v0.1.0 ships per-user threshold calibration (§51.9); until then, the risk of false-positive auto-actions outweighs the benefit. A spurious auto-pause during a clean Bortle 1 session would teach users to distrust + disable the feature entirely.
+1. **Thresholds are uncalibrated.** The 40% star-drop threshold, HFR 1.5× refocus trigger, etc. are educated defaults — not per-user-tuned values. per-user threshold calibration (§51.9) is on the ROADMAP; until then, the risk of false-positive auto-actions outweighs the benefit. A spurious auto-pause during a clean Bortle 1 session would teach users to distrust + disable the feature entirely.
 2. **Matches competitor posture.** NINA has no smart corrections at all. ZWO ASIAir auto-pauses only on hardware safety signals (cloud sensor, rain). `notify_only` aligns ARA's out-of-box behavior with what users already expect from the rest of the ecosystem.
 3. **First-do-no-harm.** The diagnostic value (you see WHY a frame went bad) is preserved without surprise behavior. Power users who want auto-correction opt into `balanced` / `aggressive` in Settings → Diagnostics; that's a deliberate "I trust the smart features" choice rather than a default surprise.
 
-When `balanced` graduates to v0.0.2 / v0.1.0 default depends on telemetry from real users (per-user calibration must work reliably first). Until then, opt-in.
+When `balanced` graduates to being the default depends on telemetry from real users (per-user calibration must work reliably first). Until then, opt-in.
 
-Settings → Diagnostics has the mode picker; no wizard screen added in v0.0.1 (the default of `notify_only` is safe; users discover the picker via §61 search or while exploring Settings). Mode picker is registered in §51.12.
+Settings → Diagnostics has the mode picker; no wizard screen added in the initial release (the default of `notify_only` is safe; users discover the picker via §61 search or while exploring Settings). Mode picker is registered in §51.12.
 
 ### 51.6 Server-side monitor loop
 
@@ -7697,9 +7697,9 @@ Each frame's FITS header (per §39.3) is enriched with the diagnostic context at
 
 Post-processing tools and ARA's own §50 Frame Quality view can filter by diagnostic state — e.g., "show me all frames captured during cloudy windows" or "exclude all `clouds_passing` frames from stacking."
 
-### 51.9 Learning over time (v0.1.0)
+### 51.9 Learning over time (future expansion)
 
-Rule-based diagnosis is v0.0.1. v0.1.0 adds:
+Rule-based diagnosis is what ships today. Future expansion adds:
 
 - **Per-user calibration** — threshold-tuning from observed normal ranges. After a few sessions, ARA learns what "normal" star count looks like for the user's gear, sky, location; adjusts diagnostic thresholds rather than relying on global defaults.
 - **ML pattern detection** — small on-device model trained on user's labeled diagnostic events ("yes, that was clouds" / "no, that was just dew"); improves diagnosis accuracy
@@ -7718,13 +7718,13 @@ All optional; user explicitly opts in to the learning system (no silent ML on pr
 | Auto-correction (refocus, skip target, re-slew) | Limited | Manual | No | **Yes** |
 | Configurable aggression level | No | Threshold settings only | Limited | **Yes** (§51.5) |
 | Per-frame diagnostic FITS metadata | No | No | No | **Yes** (§51.8) |
-| Learning over time (v0.1.0) | No | No | No | **Planned** |
+| Learning over time (future) | No | No | No | **Planned** |
 
 This is the section that's worth showing in marketing screenshots: a side-by-side of "ARA detected: clouds passing, pausing until recovery (4 frames in queue)" vs ASIAir's "HFR is high."
 
-### 51.11 v0.0.1 vs v0.1.0 honest scope split
+### 51.11 Shipped vs deferred — honest scope split
 
-**v0.0.1 ships:**
+**Shipped:**
 - Diagnostic decision tree (§51.2) with all 12 patterns — runs on every frame regardless of mode
 - Auto-actions defined: `auto_refocus`, `pause_until_recovery`, `skip_to_next_target`, `re_slew_and_plate_solve`, `notify_only`, `safety_abort`
 - Real-time Health Indicator + Diagnostic Panel UI (§51.4) — always visible during a session
@@ -7733,9 +7733,9 @@ This is the section that's worth showing in marketing screenshots: a side-by-sid
 - Per-frame FITS metadata enrichment (§51.8)
 - API endpoints + WebSocket events (§51.7)
 
-**v0.1.0:**
+**Future (ROADMAP):**
 - Per-user threshold calibration (§51.9 first bullet) — once thresholds calibrate per user, `balanced` can become a safe default
-- Promotion path: `balanced` becomes the default mode in v0.0.2 / v0.1.0 once telemetry confirms calibrated thresholds rarely false-positive
+- Promotion path: `balanced` becomes the default mode once telemetry confirms calibrated thresholds rarely false-positive
 - ML pattern detection (§51.9 second bullet)
 - Predictive alerts (§51.9 third bullet)
 - More sophisticated patterns (we'll learn what works from real user feedback)
@@ -7754,7 +7754,7 @@ This is the section that's worth showing in marketing screenshots: a side-by-sid
 
 ### 52.1 Alpaca-only is a permanent architectural commitment
 
-ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not become, native protocols.** This is not "deferred to v0.1.0" — it's a permanent design choice. Reasons:
+ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not become, native protocols.** This is not "deferred — see design/ROADMAP.md" — it's a permanent design choice. Reasons:
 
 | Standard | Conformance validation | Driver quality bar |
 |---|---|---|
@@ -7815,7 +7815,7 @@ When ARA connects to an Alpaca mount for the first time, it can optionally run a
 - **Warning**: e.g., *"Driver reports tracking but `CanSetTracking = false` — vendor bug? Behavior may be undefined."* — mount added but flagged
 - **Fail (critical)**: e.g., driver returns malformed JSON or wrong types — surface error to user with link to driver project's issue tracker
 
-This is **optional, off by default** in v0.0.1 (requires implementation work). User toggle in Settings → Equipment → "Run conformance check on connection." v0.1.0 may turn it on by default as ARA's compliance testing matures.
+This is **optional, off by default** in the initial release (requires implementation work). User toggle in Settings → Equipment → "Run conformance check on connection." a future release may turn it on by default as ARA's compliance testing matures.
 
 Reporting workflow when a driver fails: ARA shows a "Report this issue" button that opens the driver's GitHub issues with a pre-filled bug report including the failing tests + Alpaca conformance test number. Encourages users to push driver quality upstream rather than have ARA work around bugs.
 
@@ -7830,7 +7830,7 @@ If a brand-specific behavior turns out to genuinely require special handling, th
 
 This is firm. The maintenance burden of one mount-quirk-database is genuinely worse than the inconvenience of waiting for a driver update.
 
-### 52.7 What v0.1.0 may add (without changing the core philosophy)
+### 52.7 What future releases may add (without changing the core philosophy)
 
 - **Community-curated tips file** — shared markdown file (e.g., `MOUNT_TIPS.md` in the open-astro/openastro-ara-community repo) where users contribute *user-knowledge* tips for specific mounts ("On Mach3, I found setting X helps for my setup"). This is documentation, not hardcoded behavior — ARA doesn't read it programmatically.
 - **First-connect ConformU integration** — optional auto-run of the official ASCOM ConformU tool against connected mount, with results saved to the session log. Tightens feedback loop for surfacing driver bugs.
@@ -7840,7 +7840,7 @@ None of these change the core: **ARA stays Alpaca-only, trusts the standard, and
 
 ### 52.8 Cross-section updates this commitment implies
 
-- **§2.1** Equipment row — "Alpaca only" language is now permanent (not v0.0.1-only)
+- **§2.1** Equipment row — "Alpaca only" language is now permanent (not initial-release-only)
 - **§6 / §20.3** Equipment provider abstraction stays at one implementation (`AlpacaEquipmentProvider`); the `IEquipmentProvider` interface need never be re-implemented
 - **§37.2** Wizard's "Protocol choice" screen — drop INDI/INDIGO entirely (no "future support" placeholder). Just shows "ASCOM Alpaca" with a tooltip explaining the bridge path
 - **§24 done criteria** — confirms Alpaca-only-forever as the architectural baseline
@@ -7867,7 +7867,7 @@ ARA commits to a **targeted accessibility baseline** that benefits many user gro
 | Visible focus indicators | Flutter Material default (focus ring on focused element); ARA does not strip them |
 | Touch targets ≥ 44pt | Flutter Material default for most controls; verified on custom controls |
 | Semantic widget annotations on custom controls | Custom CustomPaint widgets (e.g., polar-align bullseye, frame viewer, sky atlas overlays) wrapped in `Semantics(label: ...)` to give screen readers a description |
-| Screen reader smoke test | Manual test of major flows on VoiceOver (macOS/iOS) + TalkBack (Android) before v0.0.1 release. Verify nav rail, equipment chips, sequence editor, settings are announceable. |
+| Screen reader smoke test | Manual test of major flows on VoiceOver (macOS/iOS) + TalkBack (Android) before the first public release. Verify nav rail, equipment chips, sequence editor, settings are announceable. |
 
 ### 53.2 Color-blind friendly status indicators
 
@@ -7906,7 +7906,7 @@ Also includes:
 - Thicker focus indicator borders
 - Disable subtle hover/elevation effects that low-contrast users can't perceive
 
-No light-theme variant in v0.0.1 — observatory astrophotography is universally dark-themed (preserves night vision). Light theme is a v0.1.0+ consideration if users ask.
+No light-theme variant in the initial release — observatory astrophotography is universally dark-themed (preserves night vision). Light theme is a future consideration if users ask (ROADMAP).
 
 ### 53.4 Implementation notes
 
@@ -7924,7 +7924,7 @@ No light-theme variant in v0.0.1 — observatory astrophotography is universally
 - Visible focus indicator on every focusable element
 - Custom CustomPaint widgets wrapped in Semantics
 
-### 53.5 What's explicitly NOT in v0.0.1
+### 53.5 What's explicitly out of initial scope
 
 - Formal WCAG 2.1 AA certification or compliance audit
 - Paid third-party accessibility testing
@@ -7934,7 +7934,7 @@ No light-theme variant in v0.0.1 — observatory astrophotography is universally
 - Light theme variant (observatory software is dark-themed)
 - Voice control or Switch Control specific testing beyond what Flutter handles automatically
 
-These are deferred to v0.1.0+ if user demand or legal requirements emerge (e.g., observatory deploying ARA for public outreach may need formal compliance).
+These are deferred — see design/ROADMAP.md if user demand or legal requirements emerge (e.g., observatory deploying ARA for public outreach may need formal compliance).
 
 ### 53.6 Acknowledgment
 
@@ -8086,7 +8086,7 @@ The "Sharing mode used" line tells the maintainer how much redaction was applied
 
 ### 54.8 What about private bug reports?
 
-For users who absolutely don't want any info on a public GitHub issue, v0.0.1 has no built-in private channel. Recommended path documented in About → Help: email the maintainer directly with the zip. v0.1.0+ may add a private-submission backend (with TLS, auth, rate-limiting) if user demand justifies the infrastructure.
+For users who absolutely don't want any info on a public GitHub issue, there is no built-in private channel. Recommended path documented in About → Help: email the maintainer directly with the zip. a future release may add a private-submission backend (with TLS, auth, rate-limiting) if user demand justifies the infrastructure.
 
 ### 54.9 Privacy-by-default summary
 
@@ -8101,82 +8101,19 @@ This matches the §18.C "no network telemetry" commitment: anything leaving the 
 
 ---
 
-## 55. v0.1.0+ Roadmap (consolidated)
+## 55. Roadmap (moved to design/ROADMAP.md)
 
-Items deferred to v0.1.0+ are scattered across the playbook as one-liner notes. This section aggregates them so the AI (and the user) can see the post-v0.0.1 trajectory in one place.
+**Moved 2026-07-09.** The consolidated roadmap that lived here — previously organized by
+version tier (committed features / larger projects / out-of-scope) — is now
+[`design/ROADMAP.md`](ROADMAP.md): the single, version-free list of everything remaining,
+ordered as a design path (in-flight epic → release gates → dependency-ordered workstreams →
+themed feature backlog → verify passes → user-parked decisions → follow-ups appendix →
+permanent non-goals). The former §55.3 "out of scope indefinitely" list and §55.4 "what's NOT
+on this list" rationale moved there too (ROADMAP parts 11 and its closing note).
 
-### 55.1 v0.1.0 — Committed features
-
-These were explicitly marked as v0.1.0 commitments during planning (not "maybe"):
-
-| Feature | Source | Notes |
-|---|---|---|
-| **Live stacking** | GAPS-ARA Tier 3 | User explicit: "will do it for sure just later." Real-time integration preview during imaging; star registration + sigma-clipped running stack. EAA + "is this target worth tonight" feedback. ASIAir/SharpCap parity. |
-| **Plugin SDK + equipment scripting hooks** | §10, GAPS-ARA Tier 3 | Bundled together; same v0.1.0 design pass. Pre-sequence / post-frame hook scripts; custom equipment control; community plugin ecosystem. Fresh Avalonia-native SDK schema. |
-| **AlpacaBridge + openastro-phd2 WILMA-push updates** | §33.6 | Same atomic-swap + rollback pattern as ARA Core's WILMA push, extended to siblings. WILMA app size grows ~50-100 MB combined. |
-| **Bulk asteroid catalog** | §36.8 | Currently targeted-lookup-only ("Ceres", "433 Eros"). v0.1.0 adds smart-culled MPC asteroid layer (~1.4M numbered asteroids) with visibility/magnitude filtering. |
-| **Survey downloader polish** | §36 | Parallel downloads with resume across app restarts; background download on mobile; incremental updates via `If-Modified-Since`. |
-| **Dedicated polar-alignment camera support** | §45.14 | Native handling for iPolar / PoleMaster / other Alpaca-tagged "PolarAlignCamera" devices. Same UI + math, just smaller frames. |
-| **Per-user diagnostic threshold calibration** | §51.9 | ARA learns user's normal HFR / star-count / etc. baselines from observed sessions; adjusts diagnostic thresholds rather than relying on global defaults. |
-| **ML pattern detection for diagnostics** | §51.9 | Small on-device model trained on user-labeled diagnostic events; improves cause-diagnosis accuracy over rule-based approach. Opt-in. |
-| **Predictive alerts** | §51.9 | "Based on the last 3 nights you usually hit dew formation around 03:30 — your heaters aren't keeping up." Proactive vs reactive. |
-| **Multi-target stream backup** | §44.11 | Mirror frames to two desktop WILMAs simultaneously. |
-| **Cloud streaming backup** | §44.11 | rclone-based push to S3 / Google Drive / etc. for off-site backup. |
-| **Stats: Equipment Health view** | §50.19 | Cooler power trend, fault-rate analytics, mechanical-drift detection. Threshold tuning per equipment type. |
-| **Stats: Session Efficiency view** | §50.19 | Time-breakdown analysis (light vs autofocus vs slewing vs faults). Requires sequencer instrumentation. |
-| **Stats: Conditions correlation view** | §50.19 | Quality vs weather + lunar correlations. Requires reliable weather data. |
-| **Stats: Achievements / milestones** | §50.19 | Light gamification (streaks, records, discovery badges). |
-| **Stats exports: PDF + Astrobin format** | §50.19 | Per-target PDF reports; Astrobin-ready JSON for direct posting. |
-| **Notification channels: push, email, Discord/Slack webhooks** | §46.9 | Outbound integrations beyond in-app feed. Requires FCM/APNs setup (push) or SMTP config (email). |
-| **Notification scripting** | §46.9 | User-defined "when X happens, do Y" rules (IFTTT-style). |
-| **TLS / remote-internet access** | GAPS-ARA Tier 3 late | TLS termination + remote-access mode with warnings. v0.0.1 documented workaround is VPN. |
-| **Multi-device WILMA settings sync** | GAPS-ARA Tier 3 late | Server-side storage of WILMA UI preferences; sync across user's Mac + iPad + phone on connect. |
-| **Read-only multi-client / spectator mode** | §27.4 | Beyond single-client; add "spectator" connections (e.g., remote-observatory viewer). |
-| **First-connect conformance check (default on)** | §52.5 | Currently optional + off; v0.1.0 turns on by default once compliance testing matures. |
-| **Driver-version-awareness registry** | §52.7 | Community-curated registry of "driver X v1.2.3 has bug Y, fixed in v1.2.4." |
-| **Community-curated MOUNT_TIPS.md** | §52.7 | User-contributed mount-specific tips, as documentation (not hardcoded behavior). |
-| **Comet motion tracking during exposure** | GAPS-ARA Tier 3 late | Update RA/Dec per exposure from orbital elements for moving targets. |
-| **Astrometry.net solver support** | §18.I | If user demand emerges, with Survey-Manager-style UI for 4100/4200/5000-series index downloads. |
-| **OpenAPI-generated SDKs** | §49.7 | Auto-generated client packages for Python/JS/Go from the OpenAPI spec. Useful for community integrations. |
-| **Generated docs for multiple versions** | §49.7 | Swagger UI multi-spec selector showing v0.0.1, v0.1.0, etc. |
-| **Sequence templates expansion** | GAPS-ARA Tier 3 | Beyond the 3 v0.0.1 templates (LRGB, SHO, comet). Community-contributed templates registry for DSO + comet workflows. |
-| **WILMA mobile builds (iOS + Android)** | §18.G, §41 | Mobile companion mode (§41) shipped as iOS App Store + Google Play listings. Requires Apple Developer Program ($99/yr) + Play Console ($25 one-time) + per-platform review processes + signing-cert + privacy-manifest maintenance. v0.0.1 spec'd the mobile companion API surface so no server changes needed when v0.1.0 turns this on. TestFlight public beta as the iOS rollout-staging mechanism; Play Store open-testing track as the Android equivalent. |
-| **OpenAstro Hub (community profile + sequence sharing)** | §70.6 | Central catalog at openastro.net/hub for browsing/rating/contributing share files. WILMA browse-and-import in-app. Curated starter packs per scope class. Builds on the v0.0.1 `profile-share-v1` / `.araseq.json` wire formats — no breaking changes. |
-| **Concurrent multi-server (observatory mode)** | §30.8 | One WILMA managing N Pis with concurrent WS connections + tabbed UI + cross-rig stats rollups + aggregated notification feed + cross-rig single-emergency-stop + optional cross-rig sequence orchestration (mosaic-split, alternating targets). Engineering touch is per-server state forking throughout the app shell. |
-
-### 55.2 v0.2.0 — Larger projects
-
-Genuinely ambitious work for the v0.2.0 milestone:
-
-| Feature | Notes |
-|---|---|
-| **Pre-built RPi OS image** | Alternative to .deb install — flashable image with everything pre-configured. Requires CI image-build pipeline. ASIAir-level zero-friction install. |
-| **WCAG 2.1 AA formal certification** | Move from "AA-leaning baseline" (§53) to formal compliance with third-party audit. Only if observatory/outreach use justifies the cost. |
-| **Light-mode theme variant** | Most users want dark; this is for daytime planning + outreach demo contexts. |
-| **Web UI option** | A web frontend (Vue/React/Svelte) for users who don't want a desktop app. Same OpenAPI client + API surface. |
-| **Native Flutter sky-renderer** | Replace Aladin Lite WebView with a pure-Flutter sky atlas using Skia direct rendering. SharpCap/SkySafari quality, no WebView overhead. |
-| **Imaging campaigns / adaptive scheduling** | Multi-target survey programs; "image whichever target is best right now" scheduler. Beyond manual sequences. |
-| **Plugin marketplace UI** | Once SDK is stable, an in-app browsable plugin store (the plugin browser UI §10 ships in v0.0.1 but pointing at an empty manifest). |
-| **In-app equipment database / curated gear registry** | Catalog of "tested + recommended" mounts/cameras/focusers per telescope class, surfaced inside the §37 wizard to pre-populate sensible defaults (autofocus step size for ZWO EAF on an 80mm refractor, dither magnitude for an ASI2600 + 350mm focal length, etc.). v0.0.1 deliberately punts: §52.3's brand-agnostic feature detection covers connection-time needs without hard-coding device knowledge; §37 wizard uses telescope-type heuristics only; per-device tuning is community-wiki territory at `wiki.openastro.org/recommended-gear`. v0.0.2+ may add an in-app catalog with curated defaults if the community wiki proves the format. Strict scope guard: ARA does NOT become an equipment-recommendation engine ("buy this camera!") — only a defaults-pre-fill convenience for already-owned gear. |
-
-### 55.3 Out of scope indefinitely
-
-Items deliberately not on any roadmap (avoid scope-creep pull):
-
-- **Native INDI / INDIGO protocol support** — committed Alpaca-only forever per §52. Bridges only.
-- **In-app FITS post-processing** (stacking, integration, gradient removal, etc.) — out of scope; users use PixInsight/Siril/AstroPixelProcessor for that. ARA captures + organizes; processing is its own tool category.
-- **Solar imaging specifics** (solar filter detection, prominence tracking) — niche; not on roadmap. Solar imagers can use ARA but ARA won't specialize for them.
-- **Mount homing mechanical-knob automation** — physical altitude/azimuth knob automation requires hardware. ARA guides the human; doesn't drive knobs.
-- **Astrometric measurement tools** (asteroid astrometry submission to MPC, supernovae search workflows) — research-grade workflows; out of scope for the imaging tool.
-- **Planetary / lunar lucky-imaging** — high-frame-rate (5–30 fps) capture, ROI streaming, SER file output, surface-feature tracking. Architecturally blocked: Alpaca has no video API (per §52 Alpaca-only commitment), so the workflow primitive isn't available. NINA has the same limitation. Users wanting planetary use FireCapture / SharpCap / AstroDMx with vendor-native drivers — different tool category. Per §18.J this is permanent, not deferred.
-
-### 55.4 What's NOT on this list (and why)
-
-If a feature seems missing from this roadmap, it's likely either:
-1. **Already in v0.0.1** — check the TOC; many things you might expect to be "future" are already in scope
-2. **AI-handled during the port** — documentation, NINA-feature preservation verification, NOTICE.md, README rewrite, CONTRIBUTING.md updates
-3. **A user-policy decision rather than a feature** — anything the user can already configure via existing settings (e.g., "make autofocus more aggressive") isn't a roadmap item
-4. **Outside ARA's product scope** — see §55.3
+§ cross-references to "§55" throughout this playbook and the other design docs should be read
+as pointing at `design/ROADMAP.md`. This section number is retained because §s are never
+renumbered.
 
 ---
 
@@ -8199,17 +8136,17 @@ For existing NINA users coming to ARA, here's what's different and how to bring 
 | Lost | Why |
 |---|---|
 | Your NINA profile | Different schema; rebuild in the wizard (§37) — ~10-15 minutes for a typical rig |
-| Your AvalonDock UI layout | ARA's UI is fixed (§25); no dockable panels in v0.0.1 |
-| NINA plugins | No plugin support in v0.0.1; plugin SDK in v0.1.0 (per §55.1) and authors must port to Avalonia-native API |
-| Crowdin translations | English-only in v0.0.1 (§18.E); other languages may return in future versions |
+| Your AvalonDock UI layout | ARA's UI is fixed (§25); no dockable panels in the initial release |
+| NINA plugins | No plugin support yet; the plugin SDK is on the ROADMAP and authors must port to Avalonia-native API |
+| Crowdin translations | English-only in the initial release (§18.E); other languages may return in future versions |
 | ASCOM COM equipment | Use AlpacaBridge on Windows to expose COM drivers as Alpaca (§52.2). Direct COM is gone permanently. |
 | Native vendor SDK support | All native SDKs removed (Nikon, Canon, ZWO direct, QHY direct, etc.). Use the vendor's Alpaca driver (most vendors ship one) or AlpacaBridge. |
 | MGEN guider integration | Removed; use PHD2 (via openastro-phd2 for cross-platform) |
 | PlateSolve2 | Removed; use ASTAP (§18.I) |
 | In-app updater | Removed (§18.A); update via APT (`sudo apt upgrade openastroara-server`) or WILMA-push (§33) |
-| **NINA's session database (data.db)** | **ARA v0.0.1 ships with a greenfield EF Core schema (per §28.14); NINA's session/frame/calibration history is NOT imported.** Profiles + sequence files ARE importable per §56.4. Keep NINA installed if you need historical session lookups. v0.0.2+ may add a NINA-DB importer if user demand emerges. |
+| **NINA's session database (data.db)** | **ARA ships with a greenfield EF Core schema (per §28.14); NINA's session/frame/calibration history is NOT imported.** Profiles + sequence files ARE importable per §56.4. Keep NINA installed if you need historical session lookups. a future release may add a NINA-DB importer if user demand emerges. |
 
-### 56.2.1 Why no NINA database import in v0.0.1
+### 56.2.1 Why no NINA database import (yet)
 
 The choice was deliberate, not an oversight. Three reasons:
 
@@ -8226,9 +8163,9 @@ What the user retains across the boundary:
 - **All FITS frames** are filesystem-portable (copy them into ARA's `/media/openastroara/` and use §40 library's "Resume Target" workflow to re-associate)
 - **Calibration frames (FITS)** copy over the same way; ARA reads them via §39's session-metadata-driven matching even though it didn't capture them
 
-### 56.2.2 v0.0.2+ NINA database importer (deferred)
+### 56.2.2 NINA database importer (deferred)
 
-If real users ask for it post-v0.0.1, the path is:
+If real users ask for it post-release, the path is:
 
 - Single-shot CLI: `openastroara-server import-nina --source /path/to/nina/data.db`
 - Read-only on the NINA DB; ARA's DB is the write target
@@ -8238,7 +8175,7 @@ If real users ask for it post-v0.0.1, the path is:
 - Idempotent: re-running the import doesn't double-create rows (keyed by NINA's original timestamps)
 - Importer is **always optional** — never run automatically. User triggers explicitly.
 
-Not in v0.0.1. Tracked in §55 v0.1.0+ roadmap if the user-demand signal materializes.
+Not in the initial release. Tracked in design/ROADMAP.md if the user-demand signal materializes.
 
 ### 56.3 What's BETTER in ARA
 
@@ -8291,7 +8228,7 @@ The reasons to migrate, honestly:
 
 In the interest of setting accurate expectations:
 - ARA is not "NINA on Mac." It's a different architecture (headless server + cross-platform client) with different strengths and trade-offs.
-- ARA is in v0.0.1. Polished UX takes iteration. Expect some rough edges that NINA-3.2 doesn't have.
+- ARA is in the initial release. Polished UX takes iteration. Expect some rough edges that NINA-3.2 doesn't have.
 - ARA is open-source and donation-supported. There's no commercial backing or guaranteed support timeline.
 - Some NINA users will find ARA isn't right for them and will stay on NINA — that's a perfectly fine outcome. Stefan's NINA continues to be excellent for Windows users.
 
@@ -8420,9 +8357,9 @@ WebSocket events:
 { "type": "mount.slew_complete", "payload": { "final_ra": ..., "final_dec": ..., "duration_seconds": ... } }
 ```
 
-### 57.9 What's deferred to v0.1.0 (Mount Safety v2)
+### 57.9 What's deferred (Mount Safety v2)
 
-The lean v0.0.1 scope addresses the panic-button gap. The following are deferred to a v0.1.0 "Mount Safety v2" pass once we see how lean §57 lands in practice:
+The lean initial scope addresses the panic-button gap. The following are deferred to a "Mount Safety v2" pass (ROADMAP) once we see how lean §57 lands in practice:
 
 - Horizon profile (alt-vs-azimuth table for declared obstructions)
 - HA limit configuration (separate from `pause_after_min`)
@@ -8592,13 +8529,13 @@ Same events, louder consequences, only when the user is presumed asleep. User ad
 
 ### 58.11 Connecting to "how the user hears about it"
 
-v0.0.1's "no push notifications" limitation (§46.9) means the practical answer for the sleeping user is:
+the initial release's "no push notifications" limitation (§46.9) means the practical answer for the sleeping user is:
 
 **Keep a desktop or tablet running WILMA on a device that is audibly near where you sleep.** The bundled safety alarm (§35.5) loops at max volume on urgent notifications until acknowledged. A Mac in the bedroom, an iPad on the nightstand, or a Linux laptop downstairs — anything that can play audio and has WILMA running.
 
 DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep at least one WILMA device running with audio enabled near where you sleep. The urgent-alarm pattern is your wake-up signal."*
 
-True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed v0.1.0 per §46.9 and §55.1.
+True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed on the ROADMAP per §46.9.
 
 ### 58.12 Unattended-failure graceful shutdown (10-minute countdown)
 
@@ -8726,13 +8663,13 @@ Beyond the §46.3 catalog entries (`meridian_flip.imminent` info, `meridian_flip
 
 All mutating endpoints require `Idempotency-Key` (§60.5).
 
-### 58.17 What's deferred to v0.1.0
+### 58.17 What's deferred
 
 - Per-target flip overrides in the sequence (per-target "always re-focus after flip" etc.)
-- Custom `BeforeMeridianFlip` / `AfterMeridianFlip` user hook scripts (folds into plugin/scripting v0.1.0 per §55.1)
-- Mount-driven trigger mode (using mount's reported pier-side change instead of HA timing — relies on driver honesty; v0.1.0 once Alpaca driver compliance settles per §52.5)
+- Custom `BeforeMeridianFlip` / `AfterMeridianFlip` user hook scripts (folds into the plugin/scripting ROADMAP work)
+- Mount-driven trigger mode (using mount's reported pier-side change instead of HA timing — relies on driver honesty; future once Alpaca driver compliance settles per §52.5)
 - "Permitted side of meridian" constraint (advanced — force always-east or always-west imaging)
-- Push notifications to phone lock screen (FCM/APNs — §46.9 v0.1.0)
+- Push notifications to phone lock screen (FCM/APNs — §46.9, ROADMAP)
 
 ---
 
@@ -8947,11 +8884,11 @@ In perfect collimation, outer and inner centroids coincide. Offset → secondary
 
 Notification stays in the feed; user can revisit anytime.
 
-**What v0.0.1 does NOT do:**
+**What ARA does NOT do yet:**
 
-- Prescriptive screw-turning guidance (per-scope-model + per-mount-orientation; consequences of bad guidance are real — wait for community-curated knowledge base in v0.1.0)
+- Prescriptive screw-turning guidance (per-scope-model + per-mount-orientation; consequences of bad guidance are real — wait for the community-curated knowledge base (ROADMAP))
 - Auto-collimation routines (require motorized secondary or robotic collimation tools — out of scope)
-- Refractor collimation detection (signature is subtle in defocus images; deferred to v0.1.0 design pass)
+- Refractor collimation detection (signature is subtle in defocus images; deferred — see design/ROADMAP.md design pass)
 
 ### 59.11 Failure handling
 
@@ -9149,16 +9086,16 @@ Search for "collimation" surfaces both the check-enabled toggle and the latest r
 - Settings reduced from 17 to 6 visible
 - §50 Stats Focus & Temperature integration (every AF run's curve / shots stored)
 
-### 59.18 v0.1.0 expansion paths
+### 59.18 Future expansion paths
 
-- **ML-driven feature extraction** — small on-device CNN trained on (out-of-focus image → focuser offset) pairs collected from v0.0.1 users' calibration runs (opt-in telemetry). Improves prediction accuracy and reduces shot count to 1-2 typical.
+- **ML-driven feature extraction** — small on-device CNN trained on (out-of-focus image → focuser offset) pairs collected from early users' calibration runs (opt-in telemetry). Improves prediction accuracy and reduces shot count to 1-2 typical.
 - **Temperature-aware backlash model** — backlash varies with lubricant viscosity at cold temps. Build backlash-vs-temp curve per profile.
 - **Load-aware backlash** — vertical-hang imaging trains pull on the focuser differently than horizontal pointing. Account for mount altitude.
 - **Prescriptive collimation guidance** — per-scope-model + per-mounting-orientation screw-direction guidance, community-curated knowledge base (paired with `MOUNT_TIPS.md` pattern from §52.7).
 - **Star-test mode** — dedicated workflow for diagnosing collimation without running a sequence. User taps "Check Collimation"; server takes a single defocused image, shows annotated centroid offsets per star across the field.
 - **Refractor collimation detection** — research-grade signal extraction from out-of-focus Airy disk distortion.
 - **Collimation drift trending** — multi-session collimation tracking in §50 Stats Equipment Health.
-- **Tilt-aware focus** — focus position varies across the field. v0.1.0 measures sensor tilt and accounts for it.
+- **Tilt-aware focus** — focus position varies across the field. a future release measures sensor tilt and accounts for it.
 - **Adaptive step pattern in Classic AF** — start wide, narrow on subsequent steps once a rough minimum is found.
 - **Multi-star sampling** — track 5 specific named stars instead of bulk HFR median (better for non-uniform fields).
 
@@ -9184,7 +9121,7 @@ Every non-2xx response carries an `application/problem+json` body following RFC 
 }
 ```
 
-- `type` URLs do **not** need to resolve to a live page in v0.0.1 (they're identifiers, not docs links). v0.1.0 may publish a real `/errors/` site.
+- `type` URLs do **not** need to resolve to a live page in the initial release (they're identifiers, not docs links). a future release may publish a real `/errors/` site.
 - ARA-specific context lives as top-level extension fields, not nested under `extensions` (per RFC 7807 §3.2 — extension members are inline).
 - 422 validation errors include an `errors` map keyed by JSON-pointer path, mirroring ASP.NET Core's default:
   ```json
@@ -9291,7 +9228,7 @@ WILMA generates a fresh UUID per user-initiated mutation; HTTP-level retries aft
 
 ### 60.6 Rate limiting
 
-v0.0.1 keeps it minimal — LAN-only, single user, no auth (per §67), no real abuse vector:
+ARA keeps it minimal today — LAN-only, single user, no auth (per §67), no real abuse vector:
 
 | Surface | Limit |
 |---|---|
@@ -9299,7 +9236,7 @@ v0.0.1 keeps it minimal — LAN-only, single user, no auth (per §67), no real a
 | General API requests | None |
 | Backup-stream pull (§44) | Client-side token-bucket bandwidth limit; no server-side cap |
 
-v0.1.0 may add per-endpoint limits once §67.4 remote-access mode lands — at that point auth, TLS, and rate limiting all enter together for the internet-facing surface.
+a future release may add per-endpoint limits once §67.4 remote-access mode lands — at that point auth, TLS, and rate limiting all enter together for the internet-facing surface.
 
 ### 60.7 Cross-section updates
 
@@ -9315,7 +9252,7 @@ Lightweight HTTP probes for external monitoring (uptime-kuma, Prometheus blackbo
 
 **Path convention.** Both endpoints live at the root, NOT under `/api/v1/` — they exist outside the versioned API surface because external monitors expect well-known names regardless of API version, and we want them callable even during partial startup states when the v1 router may not be fully mounted.
 
-**Authentication.** None, matching §67 (trusted-LAN posture). Both endpoints are safe to expose on any interface the server binds to. v0.1.0 remote-access mode keeps them open on the LAN interface but adds auth on the remote interface.
+**Authentication.** None, matching §67 (trusted-LAN posture). Both endpoints are safe to expose on any interface the server binds to. future remote-access mode keeps them open on the LAN interface but adds auth on the remote interface.
 
 **`GET /healthz` — liveness:**
 
@@ -9339,7 +9276,7 @@ Lightweight HTTP probes for external monitoring (uptime-kuma, Prometheus blackbo
   |---|---|---|
   | `database` | `SELECT 1` returns within 50 ms | Capture pipeline writes to DB per §28.6; failure = no new frames recorded |
   | `storage` | `/media/openastroara` is mounted + writable (stat + a 1-byte test write to `.araback/.readyz_probe`, cleaned up next probe) | FITS writes per §28.7 fail without writable storage |
-  | `alpaca_bridge` | Cached handshake result from §68.1 within last 30 s shows version-acceptable status | Equipment ops fail without a healthy bridge |
+  | `alpaca_bridge` | Cached handshake result from §68.1 within last 30 s shows the bridge reachable | Equipment ops fail without a healthy bridge |
   | `pending_restart` | `/var/lib/openastroara/.needs-restart` flag is NOT set (per §34.7) | Server is running on stale binary; user should be aware |
   | `migration_state` | `__EFMigrationsHistory` matches expected current version (per §28.14) | Confirms schema is consistent with running binary |
 - **Response (200 OK — all checks pass):**
@@ -9410,9 +9347,9 @@ Lightweight HTTP probes for external monitoring (uptime-kuma, Prometheus blackbo
    - Both are unauthenticated per §67 trusted-LAN posture
    - Example Prometheus blackbox config snippet (one-liner)
 
-### 60.7.1 CORS policy (allow any origin in v0.0.1)
+### 60.7.1 CORS policy (allow any origin for now)
 
-`OpenAstroAra.Server` applies the most permissive CORS policy in v0.0.1:
+`OpenAstroAra.Server` applies the most permissive CORS policy in the initial release:
 
 ```csharp
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
@@ -9432,11 +9369,11 @@ This matches §67's trusted-LAN posture (no auth, all endpoints open). Cross-ori
 
 **Why not tighter:**
 
-CORS protects against browser-mediated CSRF when a malicious site can trick the browser into making authenticated requests to a target with the user's credentials. v0.0.1 has no auth (§67) — there are no credentials to steal and no CSRF surface to protect. Tightening CORS in this environment just makes legitimate cross-origin tooling harder without adding any real security.
+CORS protects against browser-mediated CSRF when a malicious site can trick the browser into making authenticated requests to a target with the user's credentials. ARA has no auth (§67) — there are no credentials to steal and no CSRF surface to protect. Tightening CORS in this environment just makes legitimate cross-origin tooling harder without adding any real security.
 
-**v0.1.0 remote-access mode (§67.4):**
+**future remote-access mode (§67.4):**
 
-When auth + TLS enter via the v0.1.0 remote-access interface, CORS tightens on that interface only:
+When auth + TLS enter via the future remote-access interface, CORS tightens on that interface only:
 - Remote interface: `AllowedOrigins` list configured by user (typically the URLs of dashboards / management consoles they trust)
 - LAN interface: keeps `AllowAnyOrigin` (trusted LAN posture unchanged)
 
@@ -9448,7 +9385,7 @@ ASP.NET Core's `AddCors` middleware is fully AOT-compatible per §71. No reflect
 
 ### 60.8.1 API versioning policy (v1 forever-additive; v2 only for breaking changes)
 
-`/api/v1/` is the v0.0.1 API surface and stays additive-only forever. Breaking changes ship under `/api/v2/`; both versions coexist in the same binary for at least one release cycle (~1 year) after v2 GA, with explicit deprecation headers + CHANGELOG-documented sunset dates ≥ 6 months out.
+`/api/v1/` is the current API surface and stays additive-only forever. Breaking changes ship under `/api/v2/`; both versions coexist in the same binary for at least one release cycle (~1 year) after v2 GA, with explicit deprecation headers + CHANGELOG-documented sunset dates ≥ 6 months out.
 
 **Additive changes (stay in v1):**
 
@@ -9468,7 +9405,7 @@ ASP.NET Core's `AddCors` middleware is fully AOT-compatible per §71. No reflect
 - Changing a field's semantics (e.g., a "duration" field switches from seconds → milliseconds)
 - Making an optional field required in requests
 - Renaming an endpoint (also `v1/old` 308-redirects to `v1/old-renamed` only if the change is truly cosmetic — otherwise it's v2)
-- Changing authentication requirements on an endpoint (v0.1.0 only; v0.0.1 has no auth per §67)
+- Changing authentication requirements on an endpoint (remote-access mode only; there is no auth today per §67)
 - Restructuring nested objects (e.g., flattening or deepening)
 - Changing pagination behavior (cursor format, page-size meaning)
 - Changing error code semantics for existing endpoints
@@ -9537,13 +9474,13 @@ WILMA picks `recommended` unless the user-installed WILMA version doesn't suppor
 - §49 — Swagger UI shows both v1 + v2 specs side-by-side once v2 ships
 - §60.9 — WebSocket protocol versioning is independent (X-Ara-WS-Version header)
 - §71.3 — OpenAPI spec generated for both versions from endpoint metadata
-- §55 — v0.1.0+ roadmap entry: "First v2 API surface" added when known breaking changes accumulate
+- design/ROADMAP.md — add a "first v2 API surface" entry when known breaking changes accumulate
 
 ### 60.9 WebSocket wire protocol
 
 §60.1–§60.8 govern the REST surface. WebSocket has its own conventions, pinned here so client + server stay consistent.
 
-**Endpoint:** `ws://<host>:5555/api/v1/ws` (no auth in v0.0.1 per §67; v0.1.0 remote-access mode adds `wss://` + token via `Authorization` header on the upgrade request).
+**Endpoint:** `ws://<host>:5555/api/v1/ws` (no auth in the initial release per §67; future remote-access mode adds `wss://` + token via `Authorization` header on the upgrade request).
 
 **Version negotiation:** the upgrade request includes header `X-Ara-WS-Version: 1`. Server responds:
 - `101 Switching Protocols` on success
@@ -9594,13 +9531,13 @@ Resume tokens are issued by REST (`GET /api/v1/server/state` per §60.4) and hav
 | 1001 | both | Going away (network change, app backgrounded) |
 | 1011 | server → client | Server-side error (unrecoverable; client should reconnect after backoff) |
 | 1012 | server → client | Service restart imminent (pairs with `server.restart_imminent` event from §34.7); client should reconnect after the configured delay |
-| 4000 | reserved | (placeholder, unused in v0.0.1) |
-| 4001 | server → client | (v0.1.0 only) Auth required / token invalid for remote-access mode (§67.4) |
+| 4000 | reserved | (placeholder, unused in the initial release) |
+| 4001 | server → client | (future remote-access mode only) Auth required / token invalid (§67.4) |
 | 4002 | server → client | Resume token expired (client clears + reconnects with REST snapshot) |
 | 4003 | server → client | WS protocol version mismatch (client must downgrade or upgrade) |
 | 4004 | server → client | Single-client policy: another WILMA took over (§27) |
 
-Codes 4000-4099 reserved for ARA-specific close reasons; 4100+ available for future v0.1.0 additions (per-channel close, per-subscription close, etc.).
+Codes 4000-4099 reserved for ARA-specific close reasons; 4100+ available for future additions (per-channel close, per-subscription close, etc.).
 
 **Backpressure** (per §60.6 + §66.4): if a client's WS send buffer exceeds 256 messages (per-client bound from §66.2), server closes the connection with code 1011 + reason `client_too_slow`. Client reconnect uses the resume protocol to catch up.
 
@@ -9631,7 +9568,7 @@ Codes 4000-4099 reserved for ARA-specific close reasons; 4100+ available for fut
 - §34.7 — code 1012 pairs with `server.restart_imminent` event
 - §60.4 — `ws_resume_token` issued by `/api/v1/server/state`
 - §66.4 — backpressure → code 1011 reason `client_too_slow`
-- §67 — no auth in v0.0.1; 4001 reserved for v0.1.0 remote-access mode
+- §67 — no auth in the initial release; 4001 reserved for future remote-access mode
 - §27 — code 4004 single-client takeover
 
 ### 60.10 WebSocket event catalog — consolidated reference
@@ -9690,167 +9627,167 @@ Domain reservations (so AI doesn't invent overlapping namespaces):
 | `share` | §70 share | `share.export_complete` |
 | `api` | API-level meta-events | `api.deprecation_used` |
 
-#### 60.10.3 Catalog table (v0.0.1 baseline)
+#### 60.10.3 Catalog table (initial baseline)
 
 Catalog is implementation source-of-truth in code; table here is the human-readable reference. Severity column key: D=debug, I=info, W=warning, C=critical, U=urgent.
 
-| Event type | Payload type | §Source | Sev | Since |
+| Event type | Payload type | §Source | Sev | API |
 |---|---|---|---|---|
 | **Capture pipeline** | | | | |
-| `capture.started` | `CaptureStartedPayload` | §28 | I | v0.0.1 |
-| `capture.progress` | `CaptureProgressPayload` | §28 | D | v0.0.1 |
-| `capture.complete` | `CaptureCompletePayload` | §28 | I | v0.0.1 |
-| `capture.aborted` | `CaptureAbortedPayload` | §28 | W | v0.0.1 |
-| `capture.backpressure` | `BackpressurePayload` | §66 | W | v0.0.1 |
+| `capture.started` | `CaptureStartedPayload` | §28 | I | v1 |
+| `capture.progress` | `CaptureProgressPayload` | §28 | D | v1 |
+| `capture.complete` | `CaptureCompletePayload` | §28 | I | v1 |
+| `capture.aborted` | `CaptureAbortedPayload` | §28 | W | v1 |
+| `capture.backpressure` | `BackpressurePayload` | §66 | W | v1 |
 | **Frames + previews** | | | | |
-| `frame.complete` | `FrameCompletePayload` | §28, §40 | I | v0.0.1 |
-| `frame.recovered_orphan` | `FrameRecoveredPayload` | §28.8 | I | v0.0.1 |
-| `frame.preview.ready` | `FramePreviewReadyPayload` | §65 | I | v0.0.1 |
-| `frame.preview.variant.ready` | `FramePreviewVariantPayload` | §65 | I | v0.0.1 |
-| `frame.preview.variant.evicted` | `FramePreviewVariantPayload` | §65 | D | v0.0.1 |
-| `frame.quality_scored` | `FrameQualityPayload` | §50.10 | I | v0.0.1 |
-| `frame.quality_drift_detected` | `FrameQualityDriftPayload` | §51 | W | v0.0.1 |
-| `frame.filename_truncated` | `FilenameTruncatedPayload` | §38.6.1 | W | v0.0.1 |
+| `frame.complete` | `FrameCompletePayload` | §28, §40 | I | v1 |
+| `frame.recovered_orphan` | `FrameRecoveredPayload` | §28.8 | I | v1 |
+| `frame.preview.ready` | `FramePreviewReadyPayload` | §65 | I | v1 |
+| `frame.preview.variant.ready` | `FramePreviewVariantPayload` | §65 | I | v1 |
+| `frame.preview.variant.evicted` | `FramePreviewVariantPayload` | §65 | D | v1 |
+| `frame.quality_scored` | `FrameQualityPayload` | §50.10 | I | v1 |
+| `frame.quality_drift_detected` | `FrameQualityDriftPayload` | §51 | W | v1 |
+| `frame.filename_truncated` | `FilenameTruncatedPayload` | §38.6.1 | W | v1 |
 | **Sequence runtime** | | | | |
-| `sequence.created` | `SequenceCreatedPayload` | §38 | I | v0.0.1 |
-| `sequence.updated` | `SequenceUpdatedPayload` | §38 | I | v0.0.1 |
-| `sequence.deleted` | `SequenceDeletedPayload` | §38 | I | v0.0.1 |
-| `sequence.started` | `SequenceStartedPayload` | §38 | I | v0.0.1 |
-| `sequence.paused` | `SequencePausedPayload` | §28.12 | I | v0.0.1 |
-| `sequence.resumed` | `SequenceResumedPayload` | §28.12 | I | v0.0.1 |
-| `sequence.aborted` | `SequenceAbortedPayload` | §38 | W | v0.0.1 |
-| `sequence.stopped` | `SequenceStoppedPayload` | §38 | I | v0.0.1 |
-| `sequence.complete` | `SequenceCompletePayload` | §38 | I | v0.0.1 |
-| `sequence.instruction_started` | `InstructionEventPayload` | §38 | D | v0.0.1 |
-| `sequence.instruction_complete` | `InstructionEventPayload` | §38 | D | v0.0.1 |
-| `sequence.instruction_failed` | `InstructionEventPayload` | §38 | W | v0.0.1 |
-| `sequence.progress` | `SequenceProgressPayload` | §38 | D | v0.0.1 |
-| `sequence.imported` | `SequenceImportedPayload` | §38.4 | I | v0.0.1 |
-| `sequence.import_warning` | `SequenceImportWarningPayload` | §38.4 | W | v0.0.1 |
-| `sequence.auto_flats_prompt` | `AutoFlatsPromptPayload` | §48 | I | v0.0.1 |
-| `sequence.auto_flats_decided` | `AutoFlatsDecisionPayload` | §48 | I | v0.0.1 |
+| `sequence.created` | `SequenceCreatedPayload` | §38 | I | v1 |
+| `sequence.updated` | `SequenceUpdatedPayload` | §38 | I | v1 |
+| `sequence.deleted` | `SequenceDeletedPayload` | §38 | I | v1 |
+| `sequence.started` | `SequenceStartedPayload` | §38 | I | v1 |
+| `sequence.paused` | `SequencePausedPayload` | §28.12 | I | v1 |
+| `sequence.resumed` | `SequenceResumedPayload` | §28.12 | I | v1 |
+| `sequence.aborted` | `SequenceAbortedPayload` | §38 | W | v1 |
+| `sequence.stopped` | `SequenceStoppedPayload` | §38 | I | v1 |
+| `sequence.complete` | `SequenceCompletePayload` | §38 | I | v1 |
+| `sequence.instruction_started` | `InstructionEventPayload` | §38 | D | v1 |
+| `sequence.instruction_complete` | `InstructionEventPayload` | §38 | D | v1 |
+| `sequence.instruction_failed` | `InstructionEventPayload` | §38 | W | v1 |
+| `sequence.progress` | `SequenceProgressPayload` | §38 | D | v1 |
+| `sequence.imported` | `SequenceImportedPayload` | §38.4 | I | v1 |
+| `sequence.import_warning` | `SequenceImportWarningPayload` | §38.4 | W | v1 |
+| `sequence.auto_flats_prompt` | `AutoFlatsPromptPayload` | §48 | I | v1 |
+| `sequence.auto_flats_decided` | `AutoFlatsDecisionPayload` | §48 | I | v1 |
 | **Equipment lifecycle (per-type repeats: camera/telescope/focuser/filterwheel/rotator/dome/switch/observingconditions/safetymonitor/flatdevice/guider)** | | | | |
-| `equipment.{type}.connected` | `EquipmentConnectedPayload` | §6, §42 | I | v0.0.1 |
-| `equipment.{type}.disconnected` | `EquipmentDisconnectedPayload` | §6, §42 | W | v0.0.1 |
-| `equipment.{type}.state` | `Equipment{Type}StatePayload` | §6 | D | v0.0.1 |
-| `equipment.{type}.error` | `EquipmentErrorPayload` | §42 | W | v0.0.1 |
-| `equipment.{type}.reconnected` | `EquipmentReconnectedPayload` | §42 | I | v0.0.1 |
-| `equipment.signature_changed` | `EquipmentSignaturePayload` | §30.7 | W | v0.0.1 |
-| `equipment.alpaca_bridge_outdated_warn` | `AlpacaBridgeVersionPayload` | §68.1 | W | v0.0.1 |
+| `equipment.{type}.connected` | `EquipmentConnectedPayload` | §6, §42 | I | v1 |
+| `equipment.{type}.disconnected` | `EquipmentDisconnectedPayload` | §6, §42 | W | v1 |
+| `equipment.{type}.state` | `Equipment{Type}StatePayload` | §6 | D | v1 |
+| `equipment.{type}.error` | `EquipmentErrorPayload` | §42 | W | v1 |
+| `equipment.{type}.reconnected` | `EquipmentReconnectedPayload` | §42 | I | v1 |
+| `equipment.signature_changed` | `EquipmentSignaturePayload` | §30.7 | W | v1 |
+| ~~`equipment.alpaca_bridge_outdated_warn`~~ | ~~`AlpacaBridgeVersionPayload`~~ | §68.1 | W | REMOVED with the §68.1 version gate (2026-06-21) |
 | **Equipment detail events** | | | | |
-| `mount.slewing` | `MountSlewPayload` | §57 | I | v0.0.1 |
-| `mount.slew_complete` | `MountSlewPayload` | §57 | I | v0.0.1 |
-| `mount.slew_aborted` | `MountSlewAbortedPayload` | §57 | W | v0.0.1 |
-| `mount.parked` | `MountParkPayload` | §57 | I | v0.0.1 |
-| `mount.unparked` | `MountParkPayload` | §57 | I | v0.0.1 |
-| `focuser.moving` | `FocuserMovePayload` | §59 | D | v0.0.1 |
-| `focuser.settled` | `FocuserMovePayload` | §59 | D | v0.0.1 |
-| `focuser.backlash_compensating` | `FocuserBacklashPayload` | §59 | D | v0.0.1 |
-| `filterwheel.rotating` | `FilterWheelChangePayload` | §6 | D | v0.0.1 |
-| `filterwheel.settled` | `FilterWheelChangePayload` | §6 | D | v0.0.1 |
-| `rotator.moving` | `RotatorMovePayload` | §47 | D | v0.0.1 |
-| `rotator.settled` | `RotatorMovePayload` | §47 | D | v0.0.1 |
-| `dome.slewing` | `DomeSlewPayload` | §6 | D | v0.0.1 |
-| `dome.settled` | `DomeSlewPayload` | §6 | D | v0.0.1 |
-| `switch.value_changed` | `SwitchValueChangedPayload` | §6 | D | v0.0.1 |
-| `switch.value_mismatch` | `SwitchValueMismatchPayload` | §42.4 | W | v0.0.1 |
-| `flatpanel.cover_moving` | `FlatPanelCoverPayload` | §48 | D | v0.0.1 |
-| `flatpanel.cover_settled` | `FlatPanelCoverPayload` | §48 | D | v0.0.1 |
-| `flatpanel.light_changed` | `FlatPanelLightPayload` | §48 | D | v0.0.1 |
-| `observingconditions.reading` | `ObservingConditionsPayload` | §6 | D | v0.0.1 |
-| `observingconditions.unsafe` | `ObservingConditionsUnsafePayload` | §35 | C | v0.0.1 |
-| `safetymonitor.safe` | `SafetyMonitorPayload` | §35 | I | v0.0.1 |
-| `safetymonitor.unsafe` | `SafetyMonitorPayload` | §35 | C | v0.0.1 |
+| `mount.slewing` | `MountSlewPayload` | §57 | I | v1 |
+| `mount.slew_complete` | `MountSlewPayload` | §57 | I | v1 |
+| `mount.slew_aborted` | `MountSlewAbortedPayload` | §57 | W | v1 |
+| `mount.parked` | `MountParkPayload` | §57 | I | v1 |
+| `mount.unparked` | `MountParkPayload` | §57 | I | v1 |
+| `focuser.moving` | `FocuserMovePayload` | §59 | D | v1 |
+| `focuser.settled` | `FocuserMovePayload` | §59 | D | v1 |
+| `focuser.backlash_compensating` | `FocuserBacklashPayload` | §59 | D | v1 |
+| `filterwheel.rotating` | `FilterWheelChangePayload` | §6 | D | v1 |
+| `filterwheel.settled` | `FilterWheelChangePayload` | §6 | D | v1 |
+| `rotator.moving` | `RotatorMovePayload` | §47 | D | v1 |
+| `rotator.settled` | `RotatorMovePayload` | §47 | D | v1 |
+| `dome.slewing` | `DomeSlewPayload` | §6 | D | v1 |
+| `dome.settled` | `DomeSlewPayload` | §6 | D | v1 |
+| `switch.value_changed` | `SwitchValueChangedPayload` | §6 | D | v1 |
+| `switch.value_mismatch` | `SwitchValueMismatchPayload` | §42.4 | W | v1 |
+| `flatpanel.cover_moving` | `FlatPanelCoverPayload` | §48 | D | v1 |
+| `flatpanel.cover_settled` | `FlatPanelCoverPayload` | §48 | D | v1 |
+| `flatpanel.light_changed` | `FlatPanelLightPayload` | §48 | D | v1 |
+| `observingconditions.reading` | `ObservingConditionsPayload` | §6 | D | v1 |
+| `observingconditions.unsafe` | `ObservingConditionsUnsafePayload` | §35 | C | v1 |
+| `safetymonitor.safe` | `SafetyMonitorPayload` | §35 | I | v1 |
+| `safetymonitor.unsafe` | `SafetyMonitorPayload` | §35 | C | v1 |
 | **Guider (PHD2 wrapper)** | | | | |
-| `guider.calibrating` | `GuiderCalibratingPayload` | §63 | I | v0.0.1 |
-| `guider.calibrated` | `GuiderCalibratedPayload` | §63 | I | v0.0.1 |
-| `guider.guiding` | `GuiderGuidingPayload` | §63 | I | v0.0.1 |
-| `guider.paused` | `GuiderPausedPayload` | §63 | I | v0.0.1 |
-| `guider.star_lost` | `GuiderStarLostPayload` | §63 | W | v0.0.1 |
-| `guider.settled` | `GuiderSettledPayload` | §63 | D | v0.0.1 |
-| `guider.dither_started` | `GuiderDitherPayload` | §62 | D | v0.0.1 |
-| `guider.dither_settled` | `GuiderDitherPayload` | §62 | D | v0.0.1 |
-| `guider.recovered` | `GuiderRecoveredPayload` | §63 | I | v0.0.1 |
-| `guider.crashed` | `GuiderCrashedPayload` | §63 | C | v0.0.1 |
-| `guider.restart` | `GuiderRestartPayload` | §63 | W | v0.0.1 |
+| `guider.calibrating` | `GuiderCalibratingPayload` | §63 | I | v1 |
+| `guider.calibrated` | `GuiderCalibratedPayload` | §63 | I | v1 |
+| `guider.guiding` | `GuiderGuidingPayload` | §63 | I | v1 |
+| `guider.paused` | `GuiderPausedPayload` | §63 | I | v1 |
+| `guider.star_lost` | `GuiderStarLostPayload` | §63 | W | v1 |
+| `guider.settled` | `GuiderSettledPayload` | §63 | D | v1 |
+| `guider.dither_started` | `GuiderDitherPayload` | §62 | D | v1 |
+| `guider.dither_settled` | `GuiderDitherPayload` | §62 | D | v1 |
+| `guider.recovered` | `GuiderRecoveredPayload` | §63 | I | v1 |
+| `guider.crashed` | `GuiderCrashedPayload` | §63 | C | v1 |
+| `guider.restart` | `GuiderRestartPayload` | §63 | W | v1 |
 | **Polar alignment** | | | | |
-| `polar_align.started` | `PolarAlignStartedPayload` | §45 | I | v0.0.1 |
-| `polar_align.frame_complete` | `PolarAlignFramePayload` | §45 | D | v0.0.1 |
-| `polar_align.paused` | `PolarAlignPausedPayload` | §45 | I | v0.0.1 |
-| `polar_align.stopped` | `PolarAlignStoppedPayload` | §45 | I | v0.0.1 |
-| `polar_align.solved` | `PolarAlignSolvedPayload` | §45 | I | v0.0.1 |
-| `polar_align.unsolved` | `PolarAlignUnsolvedPayload` | §45 | W | v0.0.1 |
+| `polar_align.started` | `PolarAlignStartedPayload` | §45 | I | v1 |
+| `polar_align.frame_complete` | `PolarAlignFramePayload` | §45 | D | v1 |
+| `polar_align.paused` | `PolarAlignPausedPayload` | §45 | I | v1 |
+| `polar_align.stopped` | `PolarAlignStoppedPayload` | §45 | I | v1 |
+| `polar_align.solved` | `PolarAlignSolvedPayload` | §45 | I | v1 |
+| `polar_align.unsolved` | `PolarAlignUnsolvedPayload` | §45 | W | v1 |
 | **Meridian flip** | | | | |
-| `meridian_flip.imminent` | `MeridianFlipImminentPayload` | §58 | I | v0.0.1 |
-| `meridian_flip.preflight_failed` | `MeridianFlipPreflightPayload` | §58 | W | v0.0.1 |
-| `meridian_flip.starting` | `MeridianFlipStartingPayload` | §58 | I | v0.0.1 |
-| `meridian_flip.watchdog_aborted` | `MeridianFlipWatchdogPayload` | §58 | C | v0.0.1 |
-| `meridian_flip.postflip_solve_failed` | `MeridianFlipSolvePayload` | §58 | W | v0.0.1 |
-| `meridian_flip.complete` | `MeridianFlipCompletePayload` | §58 | I | v0.0.1 |
-| `meridian_flip.failed` | `MeridianFlipFailedPayload` | §58 | C | v0.0.1 |
+| `meridian_flip.imminent` | `MeridianFlipImminentPayload` | §58 | I | v1 |
+| `meridian_flip.preflight_failed` | `MeridianFlipPreflightPayload` | §58 | W | v1 |
+| `meridian_flip.starting` | `MeridianFlipStartingPayload` | §58 | I | v1 |
+| `meridian_flip.watchdog_aborted` | `MeridianFlipWatchdogPayload` | §58 | C | v1 |
+| `meridian_flip.postflip_solve_failed` | `MeridianFlipSolvePayload` | §58 | W | v1 |
+| `meridian_flip.complete` | `MeridianFlipCompletePayload` | §58 | I | v1 |
+| `meridian_flip.failed` | `MeridianFlipFailedPayload` | §58 | C | v1 |
 | **Calibration + dark library** | | | | |
-| `calibration.flats_generated` | `CalibrationFlatsGeneratedPayload` | §39 | I | v0.0.1 |
-| `calibration.dark_library.build_started` | `DarkLibraryBuildPayload` | §39, §63 | I | v0.0.1 |
-| `calibration.dark_library.frame_complete` | `DarkLibraryFramePayload` | §39 | D | v0.0.1 |
-| `calibration.dark_library.build_complete` | `DarkLibraryBuildPayload` | §39 | I | v0.0.1 |
-| `calibration.dark_library.build_failed` | `DarkLibraryBuildPayload` | §39 | W | v0.0.1 |
+| `calibration.flats_generated` | `CalibrationFlatsGeneratedPayload` | §39 | I | v1 |
+| `calibration.dark_library.build_started` | `DarkLibraryBuildPayload` | §39, §63 | I | v1 |
+| `calibration.dark_library.frame_complete` | `DarkLibraryFramePayload` | §39 | D | v1 |
+| `calibration.dark_library.build_complete` | `DarkLibraryBuildPayload` | §39 | I | v1 |
+| `calibration.dark_library.build_failed` | `DarkLibraryBuildPayload` | §39 | W | v1 |
 | **Mosaic** | | | | |
-| `mosaic.created` | `MosaicCreatedPayload` | §47 | I | v0.0.1 |
-| `mosaic.panel_complete` | `MosaicPanelPayload` | §47 | I | v0.0.1 |
-| `mosaic.complete` | `MosaicCompletePayload` | §47 | I | v0.0.1 |
+| `mosaic.created` | `MosaicCreatedPayload` | §47 | I | v1 |
+| `mosaic.panel_complete` | `MosaicPanelPayload` | §47 | I | v1 |
+| `mosaic.complete` | `MosaicCompletePayload` | §47 | I | v1 |
 | **Sessions + restretch** | | | | |
-| `session.started` | `SessionStartedPayload` | §40 | I | v0.0.1 |
-| `session.ended` | `SessionEndedPayload` | §40 | I | v0.0.1 |
-| `session.restretch.progress` | `RestretchProgressPayload` | §65 | D | v0.0.1 |
-| `session.restretch.complete` | `RestretchCompletePayload` | §65 | I | v0.0.1 |
-| `session.restretch.failed` | `RestretchFailedPayload` | §65 | W | v0.0.1 |
+| `session.started` | `SessionStartedPayload` | §40 | I | v1 |
+| `session.ended` | `SessionEndedPayload` | §40 | I | v1 |
+| `session.restretch.progress` | `RestretchProgressPayload` | §65 | D | v1 |
+| `session.restretch.complete` | `RestretchCompletePayload` | §65 | I | v1 |
+| `session.restretch.failed` | `RestretchFailedPayload` | §65 | W | v1 |
 | **Notifications + alarms** | | | | |
-| `notification.posted` | `NotificationPayload` | §46 | varies | v0.0.1 |
-| `notification.dismissed` | `NotificationDismissedPayload` | §46 | D | v0.0.1 |
-| `notification.cleared` | `NotificationClearedPayload` | §46 | D | v0.0.1 |
-| `notification.alarm.started` | `AlarmStartedPayload` | §35.5 | U | v0.0.1 |
-| `notification.alarm.stopped` | `AlarmStoppedPayload` | §35.5 | I | v0.0.1 |
+| `notification.posted` | `NotificationPayload` | §46 | varies | v1 |
+| `notification.dismissed` | `NotificationDismissedPayload` | §46 | D | v1 |
+| `notification.cleared` | `NotificationClearedPayload` | §46 | D | v1 |
+| `notification.alarm.started` | `AlarmStartedPayload` | §35.5 | U | v1 |
+| `notification.alarm.stopped` | `AlarmStoppedPayload` | §35.5 | I | v1 |
 | **Safety triggers** | | | | |
-| `safety.policy_triggered` | `SafetyPolicyPayload` | §35 | C | v0.0.1 |
-| `safety.emergency_stop` | `EmergencyStopPayload` | §35.3 | U | v0.0.1 |
+| `safety.policy_triggered` | `SafetyPolicyPayload` | §35 | C | v1 |
+| `safety.emergency_stop` | `EmergencyStopPayload` | §35.3 | U | v1 |
 | **Diagnostics** | | | | |
-| `diagnostics.health_changed` | `DiagnosticsHealthPayload` | §51 | varies | v0.0.1 |
-| `diagnostics.issue_detected` | `DiagnosticsIssuePayload` | §51 | W | v0.0.1 |
-| `diagnostics.auto_action_taken` | `DiagnosticsActionPayload` | §51 | I | v0.0.1 |
-| `diagnostics.auto_action_skipped` | `DiagnosticsActionPayload` | §51 | D | v0.0.1 |
-| `diagnostics.cleared` | `DiagnosticsClearedPayload` | §51 | I | v0.0.1 |
+| `diagnostics.health_changed` | `DiagnosticsHealthPayload` | §51 | varies | v1 |
+| `diagnostics.issue_detected` | `DiagnosticsIssuePayload` | §51 | W | v1 |
+| `diagnostics.auto_action_taken` | `DiagnosticsActionPayload` | §51 | I | v1 |
+| `diagnostics.auto_action_skipped` | `DiagnosticsActionPayload` | §51 | D | v1 |
+| `diagnostics.cleared` | `DiagnosticsClearedPayload` | §51 | I | v1 |
 | **Storage** | | | | |
-| `storage.usb_unplugged` | `StorageUsbPayload` | §29.1.2 | C | v0.0.1 |
-| `storage.log_pressure` | `StorageLogPressurePayload` | §29.9 | varies | v0.0.1 |
-| `storage.unavailable` | `StorageUnavailablePayload` | §28 | C | v0.0.1 |
-| `storage.full_warning` | `StorageFullPayload` | §29 | W | v0.0.1 |
+| `storage.usb_unplugged` | `StorageUsbPayload` | §29.1.2 | C | v1 |
+| `storage.log_pressure` | `StorageLogPressurePayload` | §29.9 | varies | v1 |
+| `storage.unavailable` | `StorageUnavailablePayload` | §28 | C | v1 |
+| `storage.full_warning` | `StorageFullPayload` | §29 | W | v1 |
 | **Backup + data manager** | | | | |
-| `backup.zip_created` | `BackupZipPayload` | §43 | I | v0.0.1 |
-| `backup.restore_progress` | `BackupRestorePayload` | §43 | D | v0.0.1 |
-| `backup.restore_complete` | `BackupRestorePayload` | §43 | I | v0.0.1 |
-| `backup.stream.frame_available` | `BackupStreamPayload` | §44 | D | v0.0.1 |
-| `backup.stream.frame_claimed` | `BackupStreamPayload` | §44 | D | v0.0.1 |
-| `backup.stream.backpressure` | `BackupStreamPayload` | §44 | W | v0.0.1 |
-| `data_manager.download.progress` | `DataDownloadPayload` | §36.2 | D | v0.0.1 |
-| `data_manager.download.complete` | `DataDownloadPayload` | §36.2 | I | v0.0.1 |
-| `data_manager.download.failed` | `DataDownloadPayload` | §36.2 | W | v0.0.1 |
+| `backup.zip_created` | `BackupZipPayload` | §43 | I | v1 |
+| `backup.restore_progress` | `BackupRestorePayload` | §43 | D | v1 |
+| `backup.restore_complete` | `BackupRestorePayload` | §43 | I | v1 |
+| `backup.stream.frame_available` | `BackupStreamPayload` | §44 | D | v1 |
+| `backup.stream.frame_claimed` | `BackupStreamPayload` | §44 | D | v1 |
+| `backup.stream.backpressure` | `BackupStreamPayload` | §44 | W | v1 |
+| `data_manager.download.progress` | `DataDownloadPayload` | §36.2 | D | v1 |
+| `data_manager.download.complete` | `DataDownloadPayload` | §36.2 | I | v1 |
+| `data_manager.download.failed` | `DataDownloadPayload` | §36.2 | W | v1 |
 | **Server lifecycle** | | | | |
-| `server.pending_restart` | `PendingRestartPayload` | §34.7 | I | v0.0.1 |
-| `server.restart_imminent` | `RestartImminentPayload` | §34.7 | C | v0.0.1 |
-| `server.migrating_database` | `MigrationProgressPayload` | §28.14 | I | v0.0.1 |
-| `server.migration_complete` | `MigrationCompletePayload` | §28.14 | I | v0.0.1 |
-| `server.migration_failed` | `MigrationFailedPayload` | §28.14 | C | v0.0.1 |
+| `server.pending_restart` | `PendingRestartPayload` | §34.7 | I | v1 |
+| `server.restart_imminent` | `RestartImminentPayload` | §34.7 | C | v1 |
+| `server.migrating_database` | `MigrationProgressPayload` | §28.14 | I | v1 |
+| `server.migration_complete` | `MigrationCompletePayload` | §28.14 | I | v1 |
+| `server.migration_failed` | `MigrationFailedPayload` | §28.14 | C | v1 |
 | **Workers + meta** | | | | |
-| `worker.repeated_failure` | `WorkerFailurePayload` | §73.4 | W | v0.0.1 |
-| `api.deprecation_used` | `ApiDeprecationPayload` | §60.8.1 | I | v0.0.1 |
+| `worker.repeated_failure` | `WorkerFailurePayload` | §73.4 | W | v1 |
+| `api.deprecation_used` | `ApiDeprecationPayload` | §60.8.1 | I | v1 |
 | **Live View** | | | | |
-| `live_view.started` | `LiveViewStatePayload` | §64 | I | v0.0.1 |
-| `live_view.frame_ready` | `LiveViewFramePayload` | §64 | D | v0.0.1 |
-| `live_view.stopped` | `LiveViewStatePayload` | §64 | I | v0.0.1 |
-| `live_view.aborted` | `LiveViewAbortedPayload` | §64 | W | v0.0.1 |
+| `live_view.started` | `LiveViewStatePayload` | §64 | I | v1 |
+| `live_view.frame_ready` | `LiveViewFramePayload` | §64 | D | v1 |
+| `live_view.stopped` | `LiveViewStatePayload` | §64 | I | v1 |
+| `live_view.aborted` | `LiveViewAbortedPayload` | §64 | W | v1 |
 | **Bug report + share** | | | | |
-| `bugreport.prepared` | `BugReportPreparedPayload` | §54 | I | v0.0.1 |
-| `bugreport.sharing_mode_set` | `BugReportModePayload` | §54 | D | v0.0.1 |
+| `bugreport.prepared` | `BugReportPreparedPayload` | §54 | I | v1 |
+| `bugreport.sharing_mode_set` | `BugReportModePayload` | §54 | D | v1 |
 
 #### 60.10.4 §14 test cases
 
@@ -9969,7 +9906,7 @@ There is intentionally no opt-out. Discoverability is a first-class requirement 
   - "PA" → polar alignment
   - "cam" → camera
 - Recent searches saved per WILMA device (top of dropdown when search is empty)
-- Empty search shows: recent searches + "Common settings" curated list (top 8 most-edited settings across all users — could be a hand-curated list or telemetry-derived; v0.0.1 hand-curated since no telemetry)
+- Empty search shows: recent searches + "Common settings" curated list (top 8 most-edited settings across all users — could be a hand-curated list or telemetry-derived; hand-curated since no telemetry)
 
 ### 61.6 Coverage scope
 
@@ -10022,7 +9959,7 @@ Sequence → Guider settings — desktop only
 
 Tapping [Open on desktop] copies an `araapp://settings/guider/dither_pixels` deep-link to clipboard (per §41.2 desktop-redirect pattern), which the desktop WILMA picks up.
 
-### 61.10 v0.1.0 expansion — general command palette
+### 61.10 Future expansion — general command palette
 
 Same `⌘K` / `Ctrl+K` shortcut, registry expands to include:
 
@@ -10034,13 +9971,13 @@ Same `⌘K` / `Ctrl+K` shortcut, registry expands to include:
 
 VS Code's `Cmd+Shift+P` pattern applied to astrophotography. Builds on §61's foundation — the registry just gains new entry kinds (`ActionEntry`, `TargetEntry`, `SessionEntry`, etc.) with the same search/dropdown/inline-action UX.
 
-Committed v0.1.0 per §55.1.
+Committed on the ROADMAP.
 
 ### 61.11 Cross-section updates this enables
 
 - **§25 UI sections** — every settings-bearing section is re-evaluated through the "is this discoverable via search?" lens
 - **§37 wizard** — wizard remains the friendly setup flow; search is the friendly *re-find* flow afterwards
-- **§55.1 roadmap** — general command palette explicitly added as a v0.1.0 commitment
+- **design/ROADMAP.md** — general command palette explicitly listed as a committed expansion
 
 ---
 
@@ -10104,13 +10041,13 @@ When the §58 meridian flip's `guider_recal: auto_restore` path runs (PHD2's "Au
 
 If `guider_recal: full` (full re-calibration after flip), dither resumes after the new calibration completes. Equally automatic.
 
-### 62.7 No-guider fallback (v0.0.1 = disabled)
+### 62.7 No-guider fallback (currently disabled)
 
 If the profile has no guider configured OR PHD2 is connected but unresponsive: dither is disabled with a one-time per-session notification:
 
 > *"Dither requires a guider — your sequence will continue without dithering. Hot pixels may persist in stacked images."*
 
-Direct-mount-pulse dither (without guider) is technically possible but only useful for short-exposure workflows where dither matters less anyway. Deferred to v0.1.0.
+Direct-mount-pulse dither (without guider) is technically possible but only useful for short-exposure workflows where dither matters less anyway. Deferred — see design/ROADMAP.md.
 
 ### 62.8 Diagnostic-aware skip (the §59.9 pattern repeated)
 
@@ -10227,7 +10164,7 @@ WebSocket events:
 - Wizard reduced to 2 dither questions
 - §30.7 equipment-change check invalidates dither magnitude when camera or telescope changes
 
-### 62.16 v0.1.0 expansion paths
+### 62.16 Future expansion paths
 
 - **Direct-mount-pulse dither** for no-guider workflows
 - **Adaptive magnitude** — if server detects walking-noise patterns persisting in stacked frames, auto-increase dither magnitude
@@ -10510,9 +10447,9 @@ Replace any earlier wording about "one-time VNC setup of PHD2" with:
 - Equipment-change auto-update via the §30.7 invalidation pipeline
 - Graceful handling when openastro-phd2 not installed
 
-### 63.16 v0.1.0 expansion paths
+### 63.16 Future expansion paths
 
-- **WILMA-pushed openastro-phd2 binary updates** (§33.6, §55.1) — same atomic-swap + rollback pattern as ARA Core's WILMA push, applied to the openastro-phd2 sibling package
+- **WILMA-pushed openastro-phd2 binary updates** (§33.6, ROADMAP) — same atomic-swap + rollback pattern as ARA Core's WILMA push, applied to the openastro-phd2 sibling package
 - **AI-driven calibration assistance** — ARA observes user's manual PHD2 calibration once; learns optimal params; suggests improvements in subsequent sessions
 - **Multi-guider support** — second OAG camera, dual-rig observatory setups
 - **PHD2 advanced algorithm tuner** — visual UI for `set_algo_param` parameters with explanations, since PHD2's own UI is dense and headless ARA users can't access it
@@ -10543,7 +10480,7 @@ Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (plan
 
 ### 64.3 Scope — framing + focus-check, not stacking
 
-**In scope for v0.0.1:**
+**In scope for the initial release:**
 - Continuous loop of single short exposures
 - Live preview JPEG per frame via WS
 - Inline frame stats (HFR, star count, mean ADU) on each frame
@@ -10551,8 +10488,8 @@ Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (plan
 - Single Save Current Frame action
 - Mutual exclusion with Sequence, Polar Align, Smart Focus, plate-solve (all use the same camera)
 
-**Out of scope for v0.0.1 (deferred to v0.1.0):**
-- Running-average / live stacking (covered by v0.1.0 live stacking commitment in §55)
+**Out of scope for the initial release (deferred — see design/ROADMAP.md):**
+- Running-average / live stacking (covered by the live-stacking commitment in design/ROADMAP.md)
 - Multi-frame averaging for visible noise reduction during display
 
 **Permanently out of scope (per §18.J):**
@@ -10620,7 +10557,7 @@ Pi 4 can keep up with JPEG generation at this cadence with OpenCvSharp4 (full-se
 
 **Cache-busting**: each WS `live.frame` event carries an incrementing `frame_seq` counter. WILMA's `Image.network` URL is `/api/v1/imaging/live/current.jpg?seq=<N>` so Flutter's image cache treats each frame as a new resource.
 
-**Why not WS binary frames**: tmpfile + URL preserves the same delivery pattern as `frame.complete` (§40), simplifies WILMA's `Image.network` wiring, and keeps WS messages small (just metadata + URL). The HTTP round-trip on LAN is 5-20 ms — well under per-frame readout. Trade-off accepted; v0.1.0 may revisit if native video mode lands and frame rates climb above ~5 fps.
+**Why not WS binary frames**: tmpfile + URL preserves the same delivery pattern as `frame.complete` (§40), simplifies WILMA's `Image.network` wiring, and keeps WS messages small (just metadata + URL). The HTTP round-trip on LAN is 5-20 ms — well under per-frame readout. Trade-off accepted; a future release may revisit if native video mode lands and frame rates climb above ~5 fps.
 
 **Cleanup**: server deletes the file on `live.stopped` and on server startup (in case of crash). The file is also harmless if it persists — it's just a stale preview.
 
@@ -10703,7 +10640,7 @@ Phones / tablets are **monitor-only** during Live View, consistent with §41's m
 - ❌ Cannot change exposure / gain / binning / filter
 - ❌ Cannot tap Save Current (desktop-only action)
 
-Rationale: Live View is a setup workflow (framing, focus). The user is at the rig, not across the house. Mobile relevance is mostly "show the partner what I'm seeing." If mobile demand emerges, v0.1.0 can promote mobile to full control.
+Rationale: Live View is a setup workflow (framing, focus). The user is at the rig, not across the house. Mobile relevance is mostly "show the partner what I'm seeing." If mobile demand emerges, a future release can promote mobile to full control.
 
 Emergency Stop (§35.3) on mobile is **always active** and stops Live View as a side effect — same as it stops anything else.
 
@@ -10739,7 +10676,7 @@ Per §60 conventions: RFC 7807 errors, idempotency-key on mutating endpoints, JS
 | `GET` | `/api/v1/imaging/live/state` | UI rehydrate. Returns `{ state: "idle"|"starting"|"looping"|"stopping", settings, frames_delivered, started_at, last_frame: { seq, hfr, stars, mean, timestamp } | null }`. Surfaced via `/api/v1/server/state` snapshot per §60 too. |
 | `GET` | `/api/v1/imaging/live/current.jpg` | Latest preview JPEG. `Cache-Control: no-store`. 404 if state != `looping`. Optional `?seq=N` query honored for cache-busting (server ignores the value). |
 
-All endpoints are open per §67 (no auth in v0.0.1). Rate-limiting deferred per §60.
+All endpoints are open per §67 (no auth in the initial release). Rate-limiting deferred per §60.
 
 Errors (per §60 RFC 7807):
 | Code | Status | When |
@@ -10798,9 +10735,9 @@ All searchable from the §61 omnibar.
 - §61 settings registry entries
 - Frame stat extraction reused from §51 / Hocus Focus (no new code, just calling existing analyzers)
 
-### 64.17 v0.1.0 expansion paths
+### 64.17 Future expansion paths
 
-- **Live stacking integration (§55 commitment)** — Live View becomes the realtime preview surface for the v0.1.0 live-stacking pipeline. User taps "Stack" instead of (or in addition to) Live View; same loop, but each frame is registered + integrated into a running stack; preview shows the integrated result, not the latest frame.
+- **Live stacking integration (§55 commitment)** — Live View becomes the realtime preview surface for the future live-stacking pipeline. User taps "Stack" instead of (or in addition to) Live View; same loop, but each frame is registered + integrated into a running stack; preview shows the integrated result, not the latest frame.
 - **Mobile full control** — if demand emerges, promote mobile companion from read-only to full Live View control.
 - **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
 - **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
@@ -10811,11 +10748,11 @@ All searchable from the §61 omnibar.
 
 ## 65. Image stretching pipeline + preview API
 
-§40.2 generates two JPEG previews per captured FITS using the user's default stretch. This section specs the stretch palette, defaults policy, server-side compute + cache strategy, and the API knobs the client uses to request alternative renderings. All pixel processing happens server-side via OpenCvSharp4 (per §26); the WILMA client receives JPEGs over HTTP and never touches FITS pixels in v0.0.1 (real-time client-side slider deferred to v0.1.0, see §65.10).
+§40.2 generates two JPEG previews per captured FITS using the user's default stretch. This section specs the stretch palette, defaults policy, server-side compute + cache strategy, and the API knobs the client uses to request alternative renderings. All pixel processing happens server-side via OpenCvSharp4 (per §26); the WILMA client receives JPEGs over HTTP and never touches FITS pixels in the initial release (real-time client-side slider deferred — see design/ROADMAP.md, see §65.10).
 
-### 65.1 Stretch palette (v0.0.1)
+### 65.1 Stretch palette (initial set)
 
-Seven stretch IDs ship in v0.0.1:
+Seven stretch IDs ship in the initial release:
 
 | Stretch ID | Algorithm | Use case |
 |---|---|---|
@@ -10827,15 +10764,15 @@ Seven stretch IDs ship in v0.0.1:
 | `equalized` | Full histogram equalization. | "What's there?" quick-look pass; ignores absolute brightness. |
 | `manual` | User-supplied `blackpoint`, `midpoint`, `whitepoint` (0–1 range). | Power-user override; backs the manual sliders in the frame viewer. |
 
-No per-filter stretch palette in v0.0.1 — stretches are universal across filters. (Per-filter defaults are a different question, addressed in §65.2.)
+No per-filter stretch palette in the initial release — stretches are universal across filters. (Per-filter defaults are a different question, addressed in §65.2.)
 
 ### 65.2 Defaults policy
 
 Defaults compose as: **(frame-type auto-override) overrides (per-profile default) overrides (request-time `?stretch=` param)**.
 
-- **Per-profile default for Light frames** — single setting in profile, default `auto_stf`. Applies to all filters; no per-filter override in v0.0.1.
-- **Frame-type auto-override (automatic)** — Dark / Bias / Flat frames always render at `linear` regardless of profile default. Histogram games on calibration frames mislead users about clipping, signal-vs-noise, and bias level. No way to disable this auto-override in v0.0.1 (power users can still request `?stretch=` per-request).
-- **Per-filter defaults** — explicitly out of scope for v0.0.1. Profile carries one default for Lights; if the user wants different stretches per filter, they pick per-frame in the viewer. Adds complexity now without proven UX win; reconsider in v0.1.0 if users ask.
+- **Per-profile default for Light frames** — single setting in profile, default `auto_stf`. Applies to all filters; no per-filter override in the initial release.
+- **Frame-type auto-override (automatic)** — Dark / Bias / Flat frames always render at `linear` regardless of profile default. Histogram games on calibration frames mislead users about clipping, signal-vs-noise, and bias level. No way to disable this auto-override in the initial release (power users can still request `?stretch=` per-request).
+- **Per-filter defaults** — explicitly out of scope for the initial release. Profile carries one default for Lights; if the user wants different stretches per filter, they pick per-frame in the viewer. Adds complexity now without proven UX win; reconsider in future if users ask.
 
 Profile schema additions:
 
@@ -10857,7 +10794,7 @@ Server-side, on top of OpenCvSharp4 (per §26):
 - **Capture-time preview** (`<frame>.preview.jpg`): generated server-side at capture time, using the profile's `light_default` (or frame-type auto-override). Cached on disk alongside the FITS. Always exists for completed frames.
 - **Alternative stretches**: server compute on first request, cached at `<frame>.preview.<stretch-id>.jpg` (or `<frame>.preview.manual.<hash-of-params>.jpg` for manual stretch). Subsequent requests serve from cache.
 - **Manual stretch sliders (frame viewer)**: each slider drag fires `GET /api/v1/frames/{id}/preview?stretch=manual&blackpoint=...&midpoint=...&whitepoint=...` debounced 200 ms. Server computes + caches; cache key includes the rounded param values (3 decimal places) to bound the cache entry count.
-- **Client-side real-time slider (no server round-trip)**: deferred to v0.1.0 (see §65.10). v0.0.1's 200 ms debounce + LAN-only deployment makes server round-trip adequate for the slider UX.
+- **Client-side real-time slider (no server round-trip)**: deferred — see design/ROADMAP.md (see §65.10). the initial release's 200 ms debounce + LAN-only deployment makes server round-trip adequate for the slider UX.
 
 ### 65.4 Cache strategy
 
@@ -10867,7 +10804,7 @@ Per-frame variant cache:
 - **LRU eviction** within a frame when cap is exceeded.
 - **Cache cap configurable** via Settings → Image Processing → Preview Cache (range 1–20).
 - **Manual-stretch entries** count against the cap but are coalesced by rounded params; rapid slider dragging doesn't blow the cache because near-identical param tuples hash to the same cache key.
-- **Thumbnails** (`<frame>.thumb.jpg`) are **default stretch only** — re-stretch on thumbnails is not supported in v0.0.1 (would multiply cache cost for negligible UX gain; frame viewer uses the full preview).
+- **Thumbnails** (`<frame>.thumb.jpg`) are **default stretch only** — re-stretch on thumbnails is not supported in the initial release (would multiply cache cost for negligible UX gain; frame viewer uses the full preview).
 - **Disk overhead estimate**: 6 variants × 3–8 MB ≈ 18–48 MB extra per frame in the worst case (every variant requested). Most frames will have 0–2 alternate variants in practice. USB storage from §29 has plenty of headroom.
 - **Eviction policy on storage pressure**: when free space on the configured save path drops below the §29 critical threshold, preview variants (NOT defaults, NOT FITS, NOT thumbnails) evict first as recoverable cache. WS event `frame.preview.variant.evicted` notifies the client so its UI knows to fall back to default if it had been showing an alt.
 
@@ -10955,12 +10892,12 @@ The §40.5 frame viewer mockup gets a stretch picker:
 
 The picker is a popover with the 7 stretch IDs + the current default highlighted. **[⚙ Manual sliders]** expands an inline panel with blackpoint / midpoint / whitepoint sliders + asinh-β input (when `asinh` selected). Slider drags fire the debounced `?stretch=manual` request. "Reset to profile default" button.
 
-### 65.10 v0.1.0 paths
+### 65.10 Future paths
 
-- **Real-time client-side slider on desktop**: WILMA desktop downloads the full FITS on user-initiated "Power Stretch" mode, parses it with a Dart FITS library, and re-stretches locally on every slider event with no server round-trip. Sub-frame-rate response. Out of scope for v0.0.1 because of FITS-parser dependency + desktop-only execution model.
+- **Real-time client-side slider on desktop**: WILMA desktop downloads the full FITS on user-initiated "Power Stretch" mode, parses it with a Dart FITS library, and re-stretches locally on every slider event with no server round-trip. Sub-frame-rate response. Out of scope for the initial release because of FITS-parser dependency + desktop-only execution model.
 - **Per-filter stretch defaults**: if users request it, add `per_filter` map to `stretch_defaults` profile block.
-- **Color-channel stretching**: for OSC cameras + LRGB composites, independent R/G/B blackpoint/midpoint/whitepoint (PixInsight's screen-color-balance equivalent). v0.0.1 stretches the channels uniformly.
-- **STF refinement**: NINA/PI users have tuned shadows/highlights clipping params over time; v0.1.0 could expose those as advanced knobs (currently fixed at the PI defaults).
+- **Color-channel stretching**: for OSC cameras + LRGB composites, independent R/G/B blackpoint/midpoint/whitepoint (PixInsight's screen-color-balance equivalent). ARA stretches the channels uniformly today.
+- **STF refinement**: NINA/PI users have tuned shadows/highlights clipping params over time; a future release could expose those as advanced knobs (currently fixed at the PI defaults).
 - **GraXpert / starless preview**: starnet-style background extraction as a preview-only filter. Big win for inspecting nebulosity without star clutter, but ships ML model weights (~50 MB) — defer.
 - **Per-target preferred stretch**: profile remembers "M31 always looks best at log; M42 at asinh β=4" via the §40.6 Resume Target flow.
 
@@ -10983,7 +10920,7 @@ Per §0.5 pillar 3 + COMMIT-PR-RULES settings-registry gate. Every stretch knob 
 
 - All stretch algorithms operate on the FITS as float-normalized (0.0–1.0) in OpenCvSharp4. STF auto-params computed from the histogram of a single channel (mono) or luminance (color).
 - Manual-stretch param cache key: `sha1(blackpoint_3dp || midpoint_3dp || whitepoint_3dp || asinh_beta_3dp)` truncated to 8 chars.
-- Color frames (OSC): preview generation applies STF/log/asinh/etc. to luminance, then re-applies channel ratios. Doesn't re-balance channels (that's v0.1.0).
+- Color frames (OSC): preview generation applies STF/log/asinh/etc. to luminance, then re-applies channel ratios. Doesn't re-balance channels (that's future work).
 - Saturation handling: in linear mode, saturated pixels (>= whitepoint) render as pure white. In other modes, they render at the algorithm's max output (255 after rescale).
 - JPEG quality for alt variants matches §40.2 preview (quality 90).
 - Compute budget per alt variant: ~50–200 ms on a Pi 4 for a 16 MP frame; faster on Pi 5. Capture pipeline (§28.5) is not blocked by alt-stretch compute (separate worker pool, lower priority).
@@ -11040,13 +10977,13 @@ ASP.NET Core's thread pool keeps its own policy; the explicit-priority pools abo
 
 ### 66.4 Backpressure events
 
-The only steady-state backpressure path is **image processor → capture**, and it should virtually never fire under normal v0.0.1 workloads (DSO 30 s+). When it does fire (storage slow, USB stick instead of SSD, sustained short-exposure burst longer than the queue can hold), the server emits:
+The only steady-state backpressure path is **image processor → capture**, and it should virtually never fire under normal workloads (DSO 30 s+). When it does fire (storage slow, USB stick instead of SSD, sustained short-exposure burst longer than the queue can hold), the server emits:
 
 ```json
 { "type": "capture.backpressure", "payload": { "queue_depth": 10, "queue_max": 10, "exposure_paused_ms": 1850 } }
 ```
 
-**Silent + WS event only** per the bake decision — no user notification. Visible in the WILMA Stats dashboard if/when the §50 Pi performance panel ships (v0.1.0; see §66.7).
+**Silent + WS event only** per the bake decision — no user notification. Visible in the WILMA Stats dashboard if/when the §50 Pi performance panel ships (future; see §66.7).
 
 Other backpressure-adjacent events:
 
@@ -11089,41 +11026,41 @@ This cascade is self-healing once the user upgrades storage; no permanent damage
 
 ### 66.7 Telemetry surface
 
-v0.0.1 ships **log-only** telemetry:
+ARA ships **log-only** telemetry today:
 - Per-executor queue depth, throughput EWMA, backpressure event count written to the server log every 60 s during active session
 - `capture.backpressure`, `storage.slow`, `diagnostics.frame_dropped`, `ws.client_disconnected` WS events for real-time visibility
 
-v0.0.1 does **not** ship:
+It does **not** ship:
 - `GET /api/v1/server/internal-state` endpoint exposing live executor metrics
 - WILMA Stats "Pi performance" panel
 
-Both are v0.1.0 paths. Rationale: under DSO workloads the backpressure events fire essentially never, so the operational value of live metrics is low; if a user does hit storage problems, the WS event + log entry is sufficient diagnosis. Adding the endpoint + panel is ~2 days of work that's better spent elsewhere in v0.0.1.
+Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure events fire essentially never, so the operational value of live metrics is low; if a user does hit storage problems, the WS event + log entry is sufficient diagnosis. Adding the endpoint + panel is ~2 days of work that's better spent elsewhere in the initial release.
 
-### 66.8 What's out of scope for v0.0.1
+### 66.8 Out of initial scope
 
-- Live performance dashboard in WILMA (deferred to v0.1.0 — `GET /api/v1/server/internal-state` + Stats "Pi performance" panel)
-- Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in v0.0.1
+- Live performance dashboard in WILMA (deferred — see design/ROADMAP.md — `GET /api/v1/server/internal-state` + Stats "Pi performance" panel)
+- Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in the initial release
 - Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
 - Hot-reload of executor config without server restart
 - High-frame-rate / planetary concurrency model — permanently out of scope per §18.J (no video API in Alpaca)
 
 ### 66.9 §61 search registry entries
 
-Pool sizes + queue depths are not exposed as user-facing settings in v0.0.1 (fixed at the values above). No registry entries needed; if v0.1.0 adds runtime tuning per §66.8, those settings register at that time.
+Pool sizes + queue depths are not exposed as user-facing settings in the initial release (fixed at the values above). No registry entries needed; if a future release adds runtime tuning per §66.8, those settings register at that time.
 
-The only related entry needed in v0.0.1:
+The only related entry needed in the initial release:
 
 - `diagnostics.troubleshoot_storage_slow` — keywords: `storage slow, usb performance, fsync slow, capture pausing, backpressure, slow drive, upgrade ssd`
 
-### 66.10 Performance SLO / latency-budget table (v0.0.1 aspirational)
+### 66.10 Performance SLO / latency-budget table (aspirational)
 
-Consolidates targets that exist scattered through the playbook into one reference. Two columns: **v0.0.1 target** (what we aim for on a Pi 4; what feels good in a session) and **hard limit** (degraded but acceptable — beyond this number, user experience suffers enough that we should investigate). All measurements are on Pi 4 with USB 3.0 SSD storage and AlpacaBridge + openastro-phd2 colocated unless noted; Pi 5 numbers are typically 1.5–3× better.
+Consolidates targets that exist scattered through the playbook into one reference. Two columns: **baseline target** (what we aim for on a Pi 4; what feels good in a session) and **hard limit** (degraded but acceptable — beyond this number, user experience suffers enough that we should investigate). All measurements are on Pi 4 with USB 3.0 SSD storage and AlpacaBridge + openastro-phd2 colocated unless noted; Pi 5 numbers are typically 1.5–3× better.
 
-In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 may add opt-in perf tests that record measurements without failing the build; v0.1.0+ may promote specific operations to hard CI gates once we have baseline data. Community contributors and the AI use the table as the design bar: anything materially worse than the target should be investigated; anything worse than the hard limit is a regression and should be fixed before merge.
+In the initial release, these are **aspirational** — no automated gating in CI. Phase 14 may add opt-in perf tests that record measurements without failing the build; a future release may promote specific operations to hard CI gates once we have baseline data. Community contributors and the AI use the table as the design bar: anything materially worse than the target should be investigated; anything worse than the hard limit is a regression and should be fixed before merge.
 
 **HTTP / WebSocket endpoints:**
 
-| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+| Operation | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | `GET /healthz` response | < 10 ms | 100 ms | §60.8 |
 | `GET /readyz` response | < 100 ms | 500 ms | §60.8 |
@@ -11135,7 +11072,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 **Image / capture pipeline:**
 
-| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+| Operation | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | FITS atomic write (16 MP frame, USB 3.0 SSD) | < 200 ms | 1 s | §28.7 |
 | Frame → default-stretch preview JPEG (16 MP) | < 500 ms | 2 s | §65 |
@@ -11147,7 +11084,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 **Equipment + integration:**
 
-| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+| Operation | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | AlpacaBridge call (typical, LAN-local) | < 100 ms | 1 s | §68 |
 | AlpacaBridge handshake on connect | < 200 ms | 2 s | §68.1 |
@@ -11160,7 +11097,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 **Polar alignment + autofocus:**
 
-| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+| Operation | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | Polar-align loop (capture + solve + display, Pi 5) | < 500 ms | 1 s | §45 |
 | Polar-align loop (Pi 4) | < 800 ms | 1.5 s | §45 |
@@ -11170,7 +11107,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 **Server lifecycle:**
 
-| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+| Operation | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | Server cold boot to `/readyz` 200 | < 5 s | 30 s | §71 (AOT helps), §60.8 |
 | EF Core migration (no pending migrations) | < 100 ms | 500 ms | §28.14 |
@@ -11182,7 +11119,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 **Memory / resource (steady-state on Pi 4 4 GB):**
 
-| Metric | v0.0.1 target | Hard limit | Source / cross-ref |
+| Metric | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | Server idle RSS | ~50 MB | 200 MB | §66.5, §71 |
 | Server peak RSS (active capture + diagnostics + WS + backup) | ~600 MB | 1.5 GB | §66.5 |
@@ -11192,7 +11129,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 **WILMA-side (desktop):**
 
-| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+| Operation | Baseline target | Hard limit | Source / cross-ref |
 |---|---|---|---|
 | App cold start to "Servers" menu | < 2 s | 10 s | §25 |
 | Connect to known server (mDNS cached) | < 1 s | 5 s | §30 |
@@ -11207,12 +11144,12 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 - "Target" exceeded but under hard limit → investigate when convenient; no PR-blocking gate
 - Phase 14 testing strategy may add opt-in perf-recording in CI that posts measurements as PR comments without failing the build — gives contributors visibility without nag-blocking
 
-**v0.1.0 path:**
+**Future path:**
 
 - Hard CI gates on the highest-leverage targets (`/healthz`, capture accept, WS event latency, polar-align loop)
 - Per-Pi-model SLO variants (Pi 5 gets tighter targets; Orange Pi 5 / Rock Pi sensible defaults)
 - User-facing "performance health" view in §50 Stats showing rolling p50/p95/p99 against the table
-- Telemetry-driven SLO adjustment based on field measurements from opted-in users (per §18.C: local-only by default; v0.1.0 may add opt-in upload)
+- Telemetry-driven SLO adjustment based on field measurements from opted-in users (per §18.C: local-only by default; a future release may add opt-in upload)
 
 **§61 search registry entries:**
 
@@ -11223,7 +11160,7 @@ In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 ma
 
 ## 67. Security model
 
-ARA's security model matches **ASCOM Alpaca and ZWO ASIAir**: trusted-LAN deployment, **no authentication on the API**, no transport encryption in v0.0.1. This is a deliberate choice that reflects how astrophotography software is actually used.
+ARA's security model matches **ASCOM Alpaca and ZWO ASIAir**: trusted-LAN deployment, **no authentication on the API**, no transport encryption in the initial release. This is a deliberate choice that reflects how astrophotography software is actually used.
 
 ### 67.1 Threat model
 
@@ -11236,10 +11173,10 @@ In every case the people on the network are imaging peers, not adversaries. Star
 
 ARA inherits this posture:
 
-| Threat | v0.0.1 protection | Notes |
+| Threat | Current protection | Notes |
 |---|---|---|
 | Casual API access on shared LAN | None | Same as Alpaca + ASIAir. Single-client policy (§27) provides session ownership UX but isn't auth. |
-| Network sniffing on shared Wi-Fi | None | Same as Alpaca + ASIAir. No TLS in v0.0.1 (§2.3). |
+| Network sniffing on shared Wi-Fi | None | Same as Alpaca + ASIAir. No TLS in the initial release (§2.3). |
 | MITM attacks | None | Same as Alpaca + ASIAir. |
 | Accidental reformat / wipe by another user | Label-echo confirmation (§29.1.3) | Destructive ops require typing the drive's exact label — protects against accidents, not malice |
 | Malicious binary push to overwrite the server | SHA-256 verification (§33.4) | Binary integrity check is independent of auth; an attacker would need to upload a correctly-hashed binary, which requires already having the binary |
@@ -11262,33 +11199,33 @@ DEPLOY.md (per §34.6) documents:
 - **Home network**: trust your own LAN. Standard deployment.
 - **Star party / shared LAN**: same posture as ASIAir. Standard deployment is fine. If you want isolation, run the Pi in AP mode (§32.6) so only your devices connect, or use the Pi's Ethernet interface with a dedicated cable.
 - **Public Wi-Fi (coffee shop, airport, hotel)**: don't. Image on private networks.
-- **Remote observatory access (over internet)**: out of scope for v0.0.1 — use a VPN. v0.1.0 may add an opt-in remote-access mode with TLS + token auth.
+- **Remote observatory access (over internet)**: out of scope for the initial release — use a VPN. a future release may add an opt-in remote-access mode with TLS + token auth.
 
-### 67.4 v0.1.0 remote-access mode (deferred)
+### 67.4 Remote-access mode (deferred — see design/ROADMAP.md)
 
-When users want to image from a remote observatory over the internet, the open-LAN model breaks down — the internet has actual adversaries. v0.1.0 adds an opt-in **remote-access mode**:
+When users want to image from a remote observatory over the internet, the open-LAN model breaks down — the internet has actual adversaries. The ROADMAP adds an opt-in **remote-access mode**:
 
 - TLS termination (Let's Encrypt or self-signed)
-- Token authentication (re-introduces the auth that v0.0.1 dropped)
+- Token authentication (re-introduces the auth that the initial release dropped)
 - Rate limiting + optional IP allowlist
 - Binds on a separate interface so internal LAN access stays unauthenticated
 
 Remote-access mode is **opt-in** — users explicitly enable it in Settings. Default deployment stays unauthenticated.
 
-### 67.5 What ARA does NOT do (anti-features in v0.0.1)
+### 67.5 What ARA does NOT do (current anti-features)
 
 - **No authentication** — explicitly removed per §67. This is the whole point.
-- **No transport encryption** — no TLS in v0.0.1 (§2.3); v0.1.0 with remote-access mode
+- **No transport encryption** — no TLS today (§2.3); arrives with remote-access mode
 - **No audit logging** — events go to log files but aren't designed for security forensics
 - **No anti-virus or behavior detection** — out of scope
 - **No security scanning of equipment drivers** — ASCOM Alpaca trusts drivers; ARA inherits that
-- **No code signing in v0.0.1** (per §18.F) — ships unsigned for cost reasons
+- **No code signing in the initial release** (per §18.F) — ships unsigned for cost reasons
 
 ### 67.6 If a security issue is found
 
-Responsible disclosure: private email rather than public GitHub issue. Channel TBD on the OpenAstro wiki (`security@open-astro.dev` placeholder). v0.0.1 has no formal bug bounty.
+Responsible disclosure: private email rather than public GitHub issue. Channel TBD on the OpenAstro wiki (`security@open-astro.dev` placeholder). There is no formal bug bounty.
 
-The §54 bug report flow's redaction list still scrubs hostnames, paths, internal IPs, and any tokens that may exist (in case v0.1.0 or future deployments do use auth and a user submits a v0.1.0 bug report from a remote-access-mode deployment) — defense in depth.
+The §54 bug report flow's redaction list still scrubs hostnames, paths, internal IPs, and any tokens that may exist (in case future deployments do use auth and a user submits a bug report from a remote-access-mode deployment) — defense in depth.
 
 ### 67.7 §61 search registry
 
@@ -11302,33 +11239,29 @@ The §54 bug report flow's redaction list still scrubs hostnames, paths, interna
 
 ARA Core depends on [AlpacaBridge](https://github.com/AlpacaBridge) as the canonical equipment hub — it bridges ASCOM COM drivers (Windows) and direct USB drivers to standard ASCOM Alpaca, exposing devices over HTTP that ARA consumes. ARA does NOT re-document the ASCOM Alpaca protocol; for the authoritative protocol reference see [ascom-standards.org/api/](https://ascom-standards.org/api/) and the Alpaca DeviceAPI specification.
 
-This section specs only the AlpacaBridge-specific assumptions ARA makes (minimum version, handshake, missing-bridge UX, upgrade path) — everything else is "whatever ASCOM Alpaca says."
+This section specs only the AlpacaBridge-specific assumptions ARA makes (handshake, missing-bridge UX, upgrade path) — everything else is "whatever ASCOM Alpaca says."
 
-### 68.1 Minimum version + handshake
+### 68.1 Handshake (no version gate)
 
-**Minimum supported version:** `alpaca-bridge >= 1.2.0`. Pinned in the .deb's `Recommends` (per §34.2) and verified at runtime via handshake.
+> **Version gate REMOVED** (user decision 2026-06-21; reconciled here 2026-07-09): "Alpaca doesn't
+> have a protection layer — it's supposed to be open by default." ASCOM Alpaca has no version
+> handshake and AlpacaBridge serves no `/version` endpoint, so the previously-specced probe/gate
+> (minimum 1.2.0, warn band, 503 `alpaca_bridge_outdated` block, advisory banner, and the
+> `equipment.alpaca_bridge_outdated_warn` WS event) was pure friction and was deleted wholesale —
+> probe, handshake service, gate, notifier, client banner/state, connect-path wiring, and all gate
+> tests. Equipment connects go straight to the Alpaca client. `alpaca-bridge` remains pinned in the
+> .deb's `Recommends` (per §34.2) as the distribution-level compatibility mechanism.
 
-**Handshake on connect** (runs in §63.2-style state machine, every time ARA's equipment layer establishes a connection to AlpacaBridge):
+**Handshake on connect** (every time ARA's equipment layer establishes a connection to AlpacaBridge):
 
-1. **Discovery.** Either auto-discover via Alpaca's standard UDP broadcast on port 32227 (default) or use the static address user entered in wizard Screen 2 (§37.3).
-2. **Probe `/version`.** ARA fetches `GET <bridge>/version` (AlpacaBridge-specific endpoint, not standard Alpaca). Expected response:
-   ```json
-   { "alpaca_bridge_version": "1.2.3", "alpaca_api_version": "1", "build": "..." }
-   ```
-3. **Version gate.**
-   | Version | Behavior |
-   |---|---|
-   | `>= 1.5.0` | Accept; full feature support. |
-   | `>= 1.2.0` and `< 1.5.0` | Accept with warning. WILMA's Equipment screen shows non-modal banner: "AlpacaBridge 1.x.x detected — version 1.5.0+ recommended. [Update]". Banner dismissible per-session. |
-   | `< 1.2.0` | Refuse. Block the Equipment screen entirely; show modal: "AlpacaBridge version 1.x.x is too old. ARA requires 1.2.0 or newer. [How to update]". Equipment-dependent features (capture, mount control, focuser, etc.) all return 503 with `code: "alpaca_bridge_outdated"` until upgrade. |
-   | `/version` unreachable / non-JSON / missing field | Treat as missing AlpacaBridge per §68.2. |
-4. **Capability listing.** ARA calls standard Alpaca `GET /management/v1/configureddevices` to learn what devices the bridge exposes. ARA does NOT assume any specific devices are present — per-device capabilities are read from each device's standard Alpaca interface (`CanCool`, `CanSetCCDTemperature`, `CanPark`, etc.). All graceful-degrade behavior is per the ASCOM Alpaca spec, not ARA-specific.
+1. **Discovery.** Either auto-discover via Alpaca's standard UDP broadcast on port 32227 (default) or use the static address user entered in wizard Screen 2 (§37.3). A clean discovery response — even with zero devices — IS the handshake; reachability is the only gate.
+2. **Capability listing.** ARA calls standard Alpaca `GET /management/v1/configureddevices` to learn what devices the bridge exposes. ARA does NOT assume any specific devices are present — per-device capabilities are read from each device's standard Alpaca interface (`CanCool`, `CanSetCCDTemperature`, `CanPark`, etc.). All graceful-degrade behavior is per the ASCOM Alpaca spec, not ARA-specific.
 
 The handshake completes in < 200 ms on a healthy Pi-local AlpacaBridge. Cached for the duration of the session; re-runs on every reconnect.
 
 ### 68.2 Missing AlpacaBridge UX
 
-If AlpacaBridge isn't reachable at all (no `/version` response, no devices discoverable, connection refused):
+If AlpacaBridge isn't reachable at all (no discovery response, no devices discoverable, connection refused):
 
 - **Wizard Screen 2** (§37.3 — Connect to AlpacaBridge) shows the install command prominently:
   ```
@@ -11346,20 +11279,18 @@ If AlpacaBridge isn't reachable at all (no `/version` response, no devices disco
 
 ### 68.3 Upgrade path
 
-**v0.0.1:** apt-managed. ARA Core's .deb lists `alpaca-bridge` in `Recommends`, so `apt install openastroara-server` pulls it in by default. Updates flow naturally via `sudo apt upgrade`. Subject to the apt-mid-session safety policy in §34.7 — AlpacaBridge restart during a capture is gated by the same lock file mechanism (the sequence.lock check covers any service that integrates with ARA mid-flight).
+**Today:** apt-managed. ARA Core's .deb lists `alpaca-bridge` in `Recommends`, so `apt install openastroara-server` pulls it in by default. Updates flow naturally via `sudo apt upgrade`. Subject to the apt-mid-session safety policy in §34.7 — AlpacaBridge restart during a capture is gated by the same lock file mechanism (the sequence.lock check covers any service that integrates with ARA mid-flight).
 
-**v0.1.0:** WILMA-pushed updates per §33.6 — bundled AlpacaBridge binary streamable from WILMA, atomic-swap + rollback, no internet on the Pi required.
+**Future (ROADMAP):** WILMA-pushed updates per §33.6 — bundled AlpacaBridge binary streamable from WILMA, atomic-swap + rollback, no internet on the Pi required.
 
 ### 68.4 §61 search registry entries
 
-- `equipment.alpacabridge.version` — keywords: `alpaca bridge version, equipment hub version, update alpaca bridge, alpaca bridge outdated`
-- `equipment.alpacabridge.troubleshoot` — keywords: `alpaca bridge missing, equipment not found, alpaca bridge not detected, install alpaca bridge, equipment hub down`
+- `equipment.alpacabridge.troubleshoot` — keywords: `alpaca bridge missing, equipment not found, alpaca bridge not detected, install alpaca bridge, equipment hub down` (carries the §68.2 guidance: install command, systemctl diagnostic, subnet note, override pointer). The former `equipment.alpacabridge.version` entry is MOOT — the version gate was removed; there is no version to explain.
 
 ### 68.5 §14.5 integration test cases (added)
 
-- `alpacabridge_version_below_minimum_blocks_equipment` — start ARA with mocked AlpacaBridge returning `/version` 1.1.0 → assert Equipment endpoints return 503 with `code: "alpaca_bridge_outdated"`
-- `alpacabridge_version_in_warn_band_emits_banner` — mocked AlpacaBridge 1.3.0 → assert connect succeeds + `equipment.alpaca_bridge_outdated_warn` notification queued
 - `alpacabridge_missing_blocks_wizard_advance` — wizard Screen 2 with no AlpacaBridge running → assert [Next] is disabled + install instructions visible
+- (The former `alpacabridge_version_below_minimum_blocks_equipment` / `alpacabridge_version_in_warn_band_emits_banner` cases were deleted with the version gate.)
 
 ### 68.6 Cross-references
 
@@ -11367,7 +11298,7 @@ If AlpacaBridge isn't reachable at all (no `/version` response, no devices disco
 - §34.2 — .deb Recommends pulls AlpacaBridge in
 - §37.3 — wizard Screen 2 wires the user-visible side of the handshake
 - §52 — Alpaca-only commitment (architectural rationale for the dependency)
-- §33.6 + §55 — v0.1.0 WILMA-push extension
+- §33.6 + ROADMAP — WILMA-push extension
 - §34.7 — apt-mid-session safety covers AlpacaBridge restart during sequence
 
 ---
@@ -11560,7 +11491,7 @@ Distinct from §43 backup/restore (same-user disaster recovery) and from §38 NI
 
 §38 already makes sequences shareable by construction (NINA-compatible JSON with no equipment-specific calibration baked in). §70 adds the profile side: an equipment-stripped export format + import flow that walks the recipient through wizard'ing their own gear into the donated template.
 
-v0.0.1 ships file-based sharing only (email, USB stick, Discord attachments) — no central registry, no rating system, no curation. v0.1.0+ "OpenAstro Hub" is the bigger lift (see §55 roadmap).
+ARA ships file-based sharing only today (email, USB stick, Discord attachments) — no central registry, no rating system, no curation. "OpenAstro Hub" is the bigger lift (see design/ROADMAP.md).
 
 ### 70.1 What gets stripped — the share-vs-backup distinction
 
@@ -11745,7 +11676,7 @@ The check is informational, never blocking. User decides whether to import.
 
 ### 70.5 Sequence sharing — already covered, formalize the button
 
-Sequences are portable as-is per §38 (NINA-compatible JSON, no equipment-specific calibration). v0.0.1 adds the explicit share affordance:
+Sequences are portable as-is per §38 (NINA-compatible JSON, no equipment-specific calibration). ARA adds the explicit share affordance:
 
 **Sequencer screen → `[...]` menu:**
 - Save sequence
@@ -11760,9 +11691,9 @@ Sequences are portable as-is per §38 (NINA-compatible JSON, no equipment-specif
 
 File extension `.araseq.json`. Import goes through the existing §38.4 import endpoint, which already handles equipment-remap + unsupported-instruction warnings — no new flow needed beyond a [Browse for .araseq.json file] entry point in the Sequencer screen.
 
-### 70.6 v0.1.0+ — OpenAstro Hub (deferred)
+### 70.6 Future expansion — OpenAstro Hub (deferred)
 
-Per §55 roadmap, v0.1.0+ adds central infrastructure:
+Per the ROADMAP, future releases add central infrastructure:
 
 - **openastro.net/hub/profiles** — browseable catalog of community-shared profile templates with filters (rig class, FL range, sensor type, Bortle target)
 - **openastro.net/hub/sequences** — same for sequence templates
@@ -11771,7 +11702,7 @@ Per §55 roadmap, v0.1.0+ adds central infrastructure:
 - **Curated starter packs** — official "Beginner — small refractor + DSLR", "Intermediate — APO + cooled CMOS", "Advanced — RC + filter wheel + AO unit" templates published by the Open Astro maintainers
 - **Hub-side validation** — submissions go through a `validate-share-file` server that enforces schemaVersion + scope-type-coherence + no-PII checks before publishing
 
-The §70 v0.0.1 file format (`profile-share-v1`, `araseq.json`) is the on-disk wire format the Hub later wraps in catalog metadata — no breaking changes when the Hub ships.
+The §70 file format (`profile-share-v1`, `araseq.json`) is the on-disk wire format the Hub later wraps in catalog metadata — no breaking changes when the Hub ships.
 
 ### 70.7 API + endpoints
 
@@ -11812,9 +11743,9 @@ The §70 v0.0.1 file format (`profile-share-v1`, `araseq.json`) is the on-disk w
 - §37 — wizard's "use existing template" mode is the import flow's landing destination
 - §38 — sequence file format is the basis for sequence sharing
 - §43 — backup/restore (same-user disaster recovery — keep distinct from §70's peer sharing)
-- §55 — v0.1.0+ OpenAstro Hub roadmap entry
+- design/ROADMAP.md — OpenAstro Hub entry
 - §61 + §69 — search + help registries surface the share/import affordances
-- §67 — security model (no auth in v0.0.1; share files are user-mediated, no server-to-server trust assumed)
+- §67 — security model (no auth in the initial release; share files are user-mediated, no server-to-server trust assumed)
 
 ---
 
@@ -11846,7 +11777,7 @@ The `OpenAstroAra.Server.csproj` sets:
 - Reflection-based ORMs that don't have source-gen variants
 - Reflection-based validators (FluentValidation's reflection mode — must use compiled validators or hand-written)
 - `Activator.CreateInstance(Type)` patterns without `[DynamicallyAccessedMembers]` annotations
-- Dynamic assembly loading (rules out the v0.1.0 plugin SDK in its current sketched form — see §71.6)
+- Dynamic assembly loading (rules out the future plugin SDK in its current sketched form — see §71.6)
 
 ### 71.2 JSON serialization — source generators everywhere
 
@@ -11952,16 +11883,16 @@ builder.Services.AddScoped<ICaptureOrchestrator, CaptureOrchestrator>();
 
 Middleware works normally (AOT-compatible). Hosted services (background workers per §66) work normally.
 
-### 71.6 Plugin SDK (v0.1.0) — AOT constraint propagates
+### 71.6 Plugin SDK (deferred) — AOT constraint propagates
 
-§10 + §55.1 commit to a plugin SDK in v0.1.0. AOT rules out dynamic-load-of-arbitrary-DLLs-at-runtime — `Assembly.Load(string path)` doesn't work in a Native AOT executable.
+§10 + the ROADMAP commit to a plugin SDK. AOT rules out dynamic-load-of-arbitrary-DLLs-at-runtime — `Assembly.Load(string path)` doesn't work in a Native AOT executable.
 
-The v0.1.0 design pass for plugins (already deferred) must pick an AOT-compatible model:
+The plugin design pass (already deferred) must pick an AOT-compatible model:
 - **Option A:** plugins as separate processes communicating over a local UNIX socket / named pipe (process boundary; ARA Core stays pure AOT)
 - **Option B:** plugins compiled into a per-build "with-plugins" variant — community-contributed plugins go through a curation + per-build-rebuild cycle
 - **Option C:** drop dynamic plugins entirely; offer scripting hooks (Lua / Wasm) instead — Wasm runtimes are AOT-compatible and provide sandbox isolation
 
-This decision is captured here as a constraint, deferred to the v0.1.0 plugin SDK design session per §55.1.
+This decision is captured here as a constraint, deferred to the plugin SDK design session (ROADMAP).
 
 ### 71.7 Build pipeline
 
@@ -11997,7 +11928,7 @@ Operational surface for developers + curious users:
 - **§49** Swagger UI — replace Swashbuckle with Microsoft.AspNetCore.OpenApi + Scalar.AspNetCore
 - **§60** API conventions — OpenAPI generation mode (code-first via endpoint metadata; spec is a generated artifact)
 - **§66** server concurrency — RSS budget revised: ~50 MB idle (was implicit ~150 MB), ~600 MB peak (was ~1 GB) — even more headroom on Pi 4
-- **§10 / §55.1** plugin SDK — AOT constraints propagate (§71.6)
+- **§10 / ROADMAP** plugin SDK — AOT constraints propagate (§71.6)
 
 ---
 
@@ -12190,7 +12121,7 @@ ARA Core defines a small set of domain exception types that map cleanly to HTTP 
 | `AraPreconditionFailedException` | 412 | Precondition header check failed |
 | `AraServiceUnavailableException` | 503 | Equipment disconnected / AlpacaBridge unreachable / dependent service down (per §68 / §42) |
 | `AraGoneException` | 410 | Deprecated v1 endpoint past sunset (per §60.8.1) |
-| `AraRateLimitedException` | 429 | Rate limit exceeded (v0.1.0 only — v0.0.1 doesn't rate-limit per §60.6) |
+| `AraRateLimitedException` | 429 | Rate limit exceeded (future remote-access mode only — ARA doesn't rate-limit today per §60.6) |
 | **Any other `Exception`** | 500 | Unhandled / unexpected — middleware logs as critical + returns generic problem+json without leaking exception details to client |
 
 All domain exception types live in `OpenAstroAra.Server.Contracts/Exceptions/`. Each carries the `problem+json type URI` + `title` constants — the middleware just calls `ex.ToProblemDetails()` to construct the response.
@@ -12303,7 +12234,7 @@ public sealed class ImageProcessorWorker : BackgroundService
 }
 ```
 
-**Crash-vs-continue policy:** workers ALWAYS continue on per-iteration exceptions in v0.0.1 (resilience over loud failure). The exception is logged at Error level; if the same exception type recurs > 10× per minute on the same worker, a `worker.repeated_failure` WS event fires (severity: warning) so the user knows something is wrong even though the worker is still "running".
+**Crash-vs-continue policy:** workers ALWAYS continue on per-iteration exceptions in the initial release (resilience over loud failure). The exception is logged at Error level; if the same exception type recurs > 10× per minute on the same worker, a `worker.repeated_failure` WS event fires (severity: warning) so the user knows something is wrong even though the worker is still "running".
 
 systemd watchdog (per §13) is the safety net if a worker locks up entirely — at the 45 s last-tick-stale threshold, the heartbeat skips its ping, systemd kills + restarts the whole daemon. Workers' loops update a per-worker last-tick timestamp every iteration.
 
@@ -12497,7 +12428,7 @@ CONTRIBUTING.md is **purely operational** — "how do I set up + work on the cod
 
 ### 74.4 v2 community contributor extensions
 
-COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (already drafted) defines the post-v0.0.1 contributor PR workflow. CONTRIBUTING.md links to that for the PR section; Phase 15 doesn't write it (it's a v0.1.0+ scope).
+COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (already drafted) defines the post-release contributor PR workflow. CONTRIBUTING.md links to that for the PR section; Phase 15 doesn't write it (it's post-release scope).
 
 ### 74.5 §61 search registry entry
 
@@ -12517,7 +12448,7 @@ COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (
 
 ## 75. Client distribution — WILMA desktop packaging
 
-§18.G locks "desktop only in v0.0.1; mobile deferred to v0.1.0" and names the three formats (`.dmg`, `.zip`, AppImage). §18.F locks "ship unsigned." This section spells out the build pipeline, per-OS install + first-run UX, distribution channels, and update mechanism so Phase 12/15 doesn't have to improvise.
+§18.G locks "desktop only in the initial release; mobile deferred — see design/ROADMAP.md" and names the three formats (`.dmg`, `.zip`, AppImage). §18.F locks "ship unsigned." This section spells out the build pipeline, per-OS install + first-run UX, distribution channels, and update mechanism so Phase 12/15 doesn't have to improvise.
 
 Server-side distribution (.deb via apt.openastro.net) is §34 — completely separate concern, different release cadence, different audience (the Pi gets one binary; WILMA ships three per release tag).
 
@@ -12536,7 +12467,7 @@ GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.
 - `windows-2022` has all the Visual Studio C++ runtime bits Flutter Windows builds need
 - `ubuntu-22.04` for the AppImage gives broad glibc compatibility (matches FUSE 2 era; AppImages built on 24.04 break on 22.04 user machines)
 
-**No Linux .deb, no Flatpak, no Snap for v0.0.1.** AppImage covers Linux without distro fragmentation; native package formats are v0.1.0 if users ask.
+**No Linux .deb, no Flatpak, no Snap for the initial release.** AppImage covers Linux without distro fragmentation; native package formats are future if users ask.
 
 **No Apple Silicon-only or Intel-only macOS variants.** Universal binary keeps the download story one-link-per-OS.
 
@@ -12566,9 +12497,9 @@ Contents of the .dmg:
 
 **Gatekeeper warning is expected** — see §75.5.
 
-**No notarization in v0.0.1** — notarization requires an Apple Developer ID ($99/yr) per §18.F. README documents the right-click → Open or `xattr` workaround.
+**No notarization in the initial release** — notarization requires an Apple Developer ID ($99/yr) per §18.F. README documents the right-click → Open or `xattr` workaround.
 
-### 75.3 Windows — .zip (with .msix in v0.1.0)
+### 75.3 Windows — .zip (with .msix later)
 
 ```yaml
 - name: Build .zip
@@ -12584,9 +12515,9 @@ Contents of the .zip:
 - Bundled DLLs (Flutter engine, Skia, ICU data)
 - `data/` (Flutter assets, fonts, embedded HiPS placeholder, etc.)
 
-Install pattern: user unzips anywhere (typically `C:\Program Files\OpenAstro Ara\` or their Downloads folder); runs the .exe. No installer, no registry writes, no Start Menu shortcut auto-creation in v0.0.1 — fully portable.
+Install pattern: user unzips anywhere (typically `C:\Program Files\OpenAstro Ara\` or their Downloads folder); runs the .exe. No installer, no registry writes, no Start Menu shortcut auto-creation in the initial release — fully portable.
 
-**`.msix` deferred to v0.1.0** because it requires either an EV signing cert (~$400/yr) or the user enabling sideloading/developer mode. The `.zip` route works without either.
+**`.msix` deferred — see design/ROADMAP.md** because it requires either an EV signing cert (~$400/yr) or the user enabling sideloading/developer mode. The `.zip` route works without either.
 
 **SmartScreen warning is expected** — see §75.5.
 
@@ -12612,9 +12543,9 @@ Install pattern: user unzips anywhere (typically `C:\Program Files\OpenAstro Ara
 
 `openastroara.desktop` Type=Application + Categories=Science;Astronomy; + Icon=openastroara (matches openastro.org wiki conventions).
 
-**Optional Flatpak** is a separate v0.1.0 build target if community wants it — out of scope for v0.0.1 because the .deb-style sandbox declarations are their own learning curve and AppImage covers 90% of Linux desktop use.
+**Optional Flatpak** is a separate future build target if community wants it — out of scope for the initial release because the .deb-style sandbox declarations are their own learning curve and AppImage covers 90% of Linux desktop use.
 
-**No ARM64 Linux desktop AppImage in v0.0.1.** The Pi (ARM64) is server-only; ARM64 Linux desktop (Asahi-on-Mac, Pinebook) is a thin slice and can wait. If demand emerges, the same workflow runs on `ubuntu-22.04-arm64` (GitHub Actions ARM runners launched 2024-2025 timeframe).
+**No ARM64 Linux desktop AppImage in the initial release.** The Pi (ARM64) is server-only; ARM64 Linux desktop (Asahi-on-Mac, Pinebook) is a thin slice and can wait. If demand emerges, the same workflow runs on `ubuntu-22.04-arm64` (GitHub Actions ARM runners launched 2024-2025 timeframe).
 
 ### 75.5 First-run gatekeeper / SmartScreen / Linux UX
 
@@ -12651,17 +12582,17 @@ Per §54.7 the bug-report template includes a per-OS install-state field so user
 
 ### 75.6 Distribution channels
 
-v0.0.1 ships from **GitHub Releases only** — no Homebrew tap, no Chocolatey, no AUR, no Snap, no Mac App Store, no Microsoft Store, no Play Store, no App Store. Release-page URL is the single linkable distribution point: `https://github.com/open-astro/openastro-ara/releases/latest`.
+The client ships from **GitHub Releases only** today — no Homebrew tap, no Chocolatey, no AUR, no Snap, no Mac App Store, no Microsoft Store, no Play Store, no App Store. Release-page URL is the single linkable distribution point: `https://github.com/open-astro/openastro-ara/releases/latest`.
 
-**v0.1.0 distribution expansions** (per §55.1 — committed but not in v0.0.1):
+**Future distribution expansions** (ROADMAP — committed but not in the initial release):
 - Homebrew cask (`brew install --cask openastroara`) — Cask submission is straightforward once a few releases have shipped
 - Chocolatey package (`choco install openastroara`) — Community repo submission
 - AUR (`yay -S openastroara-bin`) — Trivial PKGBUILD wrapping the AppImage
 - iOS / Android via App Store / Play Store (per §18.G mobile-deferred decision)
 
-**No auto-update inside the client** in v0.0.1 (matches §18.A's drop-the-updater decision; same rationale applies to the WILMA app). On launch WILMA checks its embedded server binary's bundled version vs. the connected server (§33.2); WILMA's own version check against GitHub Releases happens via the same `/server/release-notes` modal pattern extended to the client — deferred to v0.1.0 since v0.0.1 users are early adopters who pull from Releases directly.
+**No auto-update inside the client** in the initial release (matches §18.A's drop-the-updater decision; same rationale applies to the WILMA app). On launch WILMA checks its embedded server binary's bundled version vs. the connected server (§33.2); WILMA's own version check against GitHub Releases happens via the same `/server/release-notes` modal pattern extended to the client — deferred — see design/ROADMAP.md since early users pull from Releases directly.
 
-### 75.7 Update mechanism (v0.0.1 — manual)
+### 75.7 Update mechanism (manual for now)
 
 | Step | User action | What WILMA does |
 |---|---|---|
@@ -12734,7 +12665,7 @@ jobs:
 
 **SHA-256 checksums** published alongside each artifact (the publish job computes them and appends a `## Verification` section to the release notes — same pattern as the §33.3 server update gate).
 
-**Reproducible-ish builds**: same Flutter version, same SDK, same dependency lockfiles (per §12.1 pubspec.yaml + .flutter-version pinning). Not bit-for-bit reproducible (timestamps differ); reproducibility-as-an-audit-property is v0.1.0+ if anyone asks.
+**Reproducible-ish builds**: same Flutter version, same SDK, same dependency lockfiles (per §12.1 pubspec.yaml + .flutter-version pinning). Not bit-for-bit reproducible (timestamps differ); reproducibility-as-an-audit-property is future work if anyone asks.
 
 ### 75.9 Uninstall
 
@@ -12742,13 +12673,13 @@ jobs:
 - **Windows**: delete the unzipped folder. Optional: `rmdir /s %APPDATA%\OpenAstroAra`
 - **Linux**: delete the AppImage. Optional: `rm -rf ~/.config/openastroara/`
 
-README's "Uninstall" section documents this. No in-app uninstaller in v0.0.1; portable formats don't typically have one.
+README's "Uninstall" section documents this. No in-app uninstaller in the initial release; portable formats don't typically have one.
 
 ### 75.10 §61 search registry entries
 
 Distribution + install settings aren't surfaced inside WILMA's Settings UI (they're install-time concerns, not runtime tunables), so no §61 entries are needed. The only WILMA-side update-related visibility is the §33.7 release-notes modal, which is already registered.
 
-If v0.1.0 adds an in-app updater for the client, register the related settings at that time (`updates.auto_check`, `updates.check_channel` for stable/beta, etc.).
+If a future release adds an in-app updater for the client, register the related settings at that time (`updates.auto_check`, `updates.check_channel` for stable/beta, etc.).
 
 ### 75.11 §14 test cases
 
@@ -12763,15 +12694,15 @@ If v0.1.0 adds an in-app updater for the client, register the related settings a
 - §12 — Flutter scaffold (build commands match Phase 12.1)
 - §12.1 — Flutter SDK pinning (.flutter-version drives the release matrix)
 - §17.1 — Reverse-DNS bundle identifier
-- §18.A — No in-app updater (applies to client too in v0.0.1)
+- §18.A — No in-app updater (applies to client too in the initial release)
 - §18.F — Ship unsigned (rationale)
 - §18.G — Distribution formats locked (this section elaborates)
 - §33.2 — Version check on connect (WILMA-vs-server version handshake)
-- §33.7 — Release-notes modal (extends to client-side once auto-update ships v0.1.0+)
+- §33.7 — Release-notes modal (extends to client-side once auto-update ships)
 - §34 — Server-side .deb distribution (parallel, separate concern)
 - §36 — Bundled catalogs in `getApplicationDocumentsDirectory()`
 - §54.7 — Bug-report template (install-state field)
-- §55.1 — v0.1.0 expansions (Homebrew, Chocolatey, AUR, mobile stores)
+- design/ROADMAP.md — distribution expansions (Homebrew, Chocolatey, AUR, mobile stores)
 - §75.6 — Distribution channels
 - CONTRIBUTING.md (§74) — local build commands match the release workflow's
 
