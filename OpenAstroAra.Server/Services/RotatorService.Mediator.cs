@@ -175,8 +175,13 @@ public sealed partial class RotatorService : IRotatorMediator {
             await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (TimeoutException ex) {
+            // The wall-clock bound above: the blocking move never returned — a stalled op (§42.4).
+            LogMoveFailed(ex, target);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
         } catch (Exception ex) {
             LogMoveFailed(ex, target);
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"rotator move to {target}° failed: {ex.Message}");
         }
         RefreshCacheOnce();
         // Prefer a direct device read for the returned angle so a single-flight RefreshCacheOnce that
@@ -244,6 +249,26 @@ public sealed partial class RotatorService : IRotatorMediator {
         lock (_gate) {
             return (float)((useMechanical ? _runtime.MechanicalAngleDeg : _runtime.SkyAngleDeg) ?? 0);
         }
+    }
+
+    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaRotator client, EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
+            device = _device;
+        }
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Rotator, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Observes an abandoned (cancelled/timed-out) move task so a later fault can't surface as an

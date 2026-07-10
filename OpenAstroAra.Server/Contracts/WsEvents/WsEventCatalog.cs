@@ -51,6 +51,11 @@ public static class WsEventCatalog {
     // device_name, kind, action, … } where action is sequence_paused | reconnecting | recovered
     // | gave_up | notify_only (gave_up carries the terminal action taken).
     public const string EquipmentFaultActionTaken = "equipment.fault_action_taken";
+    // §42.4 — a written switch port whose read-back disagrees with the commanded value beyond
+    // the profile tolerance past the settle window; payload { device_id, device_name, port_id,
+    // port_name, commanded, read_back, tolerance_pct }. Fires alongside the equipment.fault
+    // broadcast (kind value_mismatch) with the structured per-port detail WILMA needs.
+    public const string SwitchValueMismatch = "switch.value_mismatch";
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
@@ -195,6 +200,7 @@ public static class WsEventCatalog {
     public static readonly IReadOnlyList<string> All = new[] {
         EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
         EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault, EquipmentFaultActionTaken,
+        SwitchValueMismatch,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,

@@ -269,6 +269,42 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Notify_only_faults_are_never_deduped_against_each_other() {
+            service.OnFault(Fault(kind: EquipmentFaultKind.ValueMismatch));
+            service.OnFault(Fault(kind: EquipmentFaultKind.ValueMismatch));
+            await service.WhenIdleAsync();
+
+            Assert.That(posted, Has.Count.EqualTo(2),
+                "each op/state fault carries its own one-shot detection — dropping one loses it forever");
+        }
+
+        [Test]
+        public async Task A_notify_only_fault_still_notifies_while_the_same_device_type_is_reconnecting() {
+            var reconnectStarted = new TaskCompletionSource();
+            var releaseReconnect = new TaskCompletionSource();
+            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Switch, It.IsAny<CancellationToken>()))
+                .Returns(async (DeviceType _, CancellationToken _) => {
+                    reconnectStarted.TrySetResult();
+                    await releaseReconnect.Task;
+                    return new ReconnectOutcome(1, 1);
+                });
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Switch, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(EquipmentConnectionState.Connected);
+
+            // Power box A drops → the quiet reconnect episode holds the Switch slot...
+            service.OnFault(Fault(DeviceType.Switch));
+            await reconnectStarted.Task;
+            // ...while relay board B's written port goes out of tolerance: its ONE mismatch
+            // notification must not be folded into A's episode (review finding).
+            service.OnFault(Fault(DeviceType.Switch, EquipmentFaultKind.ValueMismatch));
+            releaseReconnect.SetResult();
+            await service.WhenIdleAsync();
+
+            Assert.That(Actions(), Does.Contain("notify_only"), "the mismatch ran as its own episode");
+            Assert.That(posted.Count, Is.GreaterThanOrEqualTo(1), "the mismatch notification survived");
+        }
+
+        [Test]
         public async Task A_throwing_sequencer_does_not_kill_the_episode() {
             sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("sequencer down"));

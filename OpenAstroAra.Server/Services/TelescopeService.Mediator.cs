@@ -314,8 +314,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (TimeoutException ex) {
+            // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
+            LogMountOpFailed(ex, op);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
+            return false;
         } catch (Exception ex) {
             LogMountOpFailed(ex, op);
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
             return false;
         }
     }
@@ -441,6 +447,26 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+    }
+
+    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaTelescope client, EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
+            device = _device;
+        }
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Telescope, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an

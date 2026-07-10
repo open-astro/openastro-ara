@@ -1226,6 +1226,8 @@ components:
         on_camera_lost:                { type: string, enum: [reconnect_then_pause, pause, notify_only], default: reconnect_then_pause }
         on_mount_lost:                 { type: string, enum: [reconnect_then_abort_park, reconnect_then_pause, pause, notify_only], default: reconnect_then_abort_park }
         on_tracking_lost:              { type: string, enum: [reenable_then_pause, pause, notify_only], default: reenable_then_pause }
+        # §42.4 — ISwitch read-back tolerance, percent of the port's min/max range.
+        switch_value_tolerance_pct:    { type: number, format: double, minimum: 0, default: 5.0 }
 
     FilenamesSettings:
       type: object
