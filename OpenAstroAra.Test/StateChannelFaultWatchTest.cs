@@ -14,6 +14,9 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
@@ -295,6 +298,41 @@ namespace OpenAstroAra.Test {
                 Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.TrackingLost));
                 Assert.That(faults[0].DeviceType, Is.EqualTo(DeviceType.Telescope));
                 Assert.That(faults[0].DeviceName, Is.EqualTo("Bench Mount"));
+            }
+        }
+
+        [Test]
+        [Category("bench")] // §42.2 op-failure enforcement — loopback-only, runs in the default job too
+        public async Task A_failed_slew_publishes_a_fault_AND_fails_the_instruction() {
+            // The scripted mount answers the state reads but not the slew write, so the
+            // mediator op's blocking call throws — before the §42.2 enforcement this read
+            // as a completed slew to the instruction.
+            await using var mount = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : null);
+            var (hub, faults) = Hub();
+
+            using var svc = new TelescopeService(faults: hub);
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
+                HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+                TimeSpan.FromSeconds(15), "mount never connected");
+
+            var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
+            Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None));
+
+            lock (faults) {
+                Assert.That(faults, Has.Count.GreaterThanOrEqualTo(1), "the failed slew published a fault");
+                Assert.That(faults[0].Kind,
+                    Is.EqualTo(EquipmentFaultKind.OpError).Or.EqualTo(EquipmentFaultKind.StallTimeout));
+                Assert.That(faults[0].DeviceType, Is.EqualTo(DeviceType.Telescope));
             }
         }
 

@@ -94,12 +94,12 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     /// <summary>
     /// Drives the wheel to <paramref name="inputFilter"/>'s position and blocks on a bounded wait
     /// until the device reports it (ASCOM reads <c>Position == -1</c> while rotating). Returns the
-    /// filter actually reached (profile/slot-resolved), or <paramref name="inputFilter"/> unchanged
-    /// when the change could not be confirmed — not-connected and out-of-range resolve to a logged
-    /// no-op (the instruction's Validate has already blocked those; a race degrades gracefully).
-    /// An unconfirmed change is safe to retry: re-issuing the same target against a wheel that did
-    /// reach it (e.g. the write outlived the hard timeout but landed) settles immediately.
-    /// Genuine sequencer cancellation propagates.
+    /// filter actually reached (profile/slot-resolved). An UNCONFIRMED change (jam / stalled write /
+    /// dropped link) throws <see cref="SequenceEntityFailedException"/> so the instruction's §42.2
+    /// retry/failure machinery engages — safe to retry, since re-issuing the same target against a
+    /// wheel that did reach it settles immediately. Not-connected and out-of-range still resolve to
+    /// a logged no-op returning <paramref name="inputFilter"/> (the instruction's Validate has
+    /// already blocked those; a race degrades gracefully). Genuine sequencer cancellation propagates.
     /// </summary>
     public async Task<FilterInfo> ChangeFilter(FilterInfo inputFilter, IProgress<ApplicationStatus>? progress = null, CancellationToken token = default) {
         ArgumentNullException.ThrowIfNull(inputFilter);
@@ -119,7 +119,13 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         }
         var reached = await RunFilterChangeAsync(client, target, token).ConfigureAwait(false);
         if (!reached) {
-            return inputFilter;
+            // §42.2: the wheel never confirmed the slot (jam / stalled write / dropped link) —
+            // fail the instruction so Attempts retries + instruction_failed engage, instead of
+            // handing back the requested filter as if the change happened. Safe to retry: the
+            // §42.4 fault was published at the failure site, and re-issuing the same target
+            // against a wheel that DID land settles immediately.
+            throw new SequenceEntityFailedException(
+                $"filter change to '{inputFilter.Name}' (position {target}) was not confirmed by the wheel");
         }
         var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
@@ -138,7 +144,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer filter-change boundary: the blocking ASCOM Position write can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-change; genuine sequencer cancellation is rethrown but any other escape (including a device/HTTP-timeout OCE) is logged as a failed change rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
+        Justification = "Sequencer filter-change boundary: the blocking ASCOM Position write can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-change; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and reported as an unconfirmed change — which ChangeFilter converts into a SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify boundary applies.")]
     private async Task<bool> RunFilterChangeAsync(AlpacaFilterWheel client, short target, CancellationToken ct) {
         try {
             // Race the blocking ASCOM write against both the sequencer token and a wall-clock bound

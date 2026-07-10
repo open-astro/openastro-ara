@@ -168,7 +168,14 @@ namespace OpenAstroAra.PlateSolving {
                     // Set an absurdly high timeout, but at least make sure that this cannot go on forever. The existing token may have been cancelled already, so we need
                     // to use a new one
                     using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-                    await filterWheelMediator.ChangeFilter(oldFilter, progress, timeoutCts.Token);
+                    try {
+                        await filterWheelMediator.ChangeFilter(oldFilter, progress, timeoutCts.Token);
+                    } catch (SequenceEntityFailedException ex) {
+                        // §42.2 — ChangeFilter now fails loudly on an unconfirmed change; the
+                        // restore is best-effort by design, and a throw here inside the finally
+                        // would mask the centering result/exception it is cleaning up after.
+                        Logger.Warning($"Restoring filter to {oldFilter} after centering failed: {ex.Message}");
+                    }
                 }
             }
         }

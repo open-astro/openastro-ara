@@ -14,6 +14,7 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -232,9 +233,12 @@ namespace OpenAstroAra.Test {
                 TimeSpan.FromSeconds(15), "the port cache never populated");
 
             // The write path dies (connection dropped on the PUT only — reads stay healthy, so
-            // this is NOT a disconnect); the mediator op must degrade AND publish one op_error.
+            // this is NOT a disconnect); the mediator op must publish one op_error AND fail the
+            // instruction (§42.2 — the throw is what engages Attempts retries + instruction_failed;
+            // before it, a dead dew-heater write read as success to the sequence).
             proxy.InjectFault(new AlpacaFaultRule { Method = "setswitchvalue", Fault = AlpacaFault.Drop() });
-            await ((ISwitchMediator)svc).SetSwitchValue(0, 1.0, progress: null!, CancellationToken.None);
+            Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                ((ISwitchMediator)svc).SetSwitchValue(0, 1.0, progress: null!, CancellationToken.None));
 
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "one fault per failed op occurrence");

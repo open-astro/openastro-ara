@@ -182,7 +182,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer switch-write boundary: the blocking ASCOM SetSwitchValue can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-write; genuine sequencer cancellation is rethrown but any other escape (including a device/HTTP-timeout OCE) is logged as a failed write rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
+        Justification = "Sequencer switch-write boundary: the blocking ASCOM SetSwitchValue can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-write; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task RunSwitchWriteAsync(AlpacaSwitch client, short portId, double value, CancellationToken ct) {
         try {
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
@@ -207,11 +207,15 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
             throw; // genuine sequencer cancellation — propagate so the run aborts
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking write never returned — a stalled op (§42.4).
+            // §42.2: the mediator's Task return signals nothing, so the throw is the only way the
+            // SetSwitchValue instruction's retry/failure machinery can engage.
             LogSwitchWriteFailed(ex, portId, value);
             PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
+            throw new SequenceEntityFailedException(ex.Message, ex);
         } catch (Exception ex) {
             LogSwitchWriteFailed(ex, portId, value);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"switch write to port {portId} failed: {ex.Message}");
+            throw new SequenceEntityFailedException($"switch write to port {portId} failed: {ex.Message}", ex);
         }
     }
 

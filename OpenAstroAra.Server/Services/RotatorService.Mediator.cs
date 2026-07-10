@@ -20,6 +20,7 @@
 
 using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -139,7 +140,7 @@ public sealed partial class RotatorService : IRotatorMediator {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer move boundary: the blocking ASCOM MoveAbsolute/MoveMechanical can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; genuine sequencer cancellation is rethrown but any other escape (including a device/HTTP timeout OCE) is logged and the last known angle returned rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
+        Justification = "Sequencer move boundary: the blocking ASCOM MoveAbsolute/MoveMechanical can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<float> MoveBlockingAsync(float target, bool useMechanical, CancellationToken ct) {
         AlpacaRotator? client;
         lock (_gate) {
@@ -177,11 +178,14 @@ public sealed partial class RotatorService : IRotatorMediator {
             throw; // genuine sequencer cancellation — propagate so the run aborts
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking move never returned — a stalled op (§42.4).
+            // §42.2: publish AND fail the instruction so retries/instruction_failed engage.
             LogMoveFailed(ex, target);
             PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
+            throw new SequenceEntityFailedException(ex.Message, ex);
         } catch (Exception ex) {
             LogMoveFailed(ex, target);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"rotator move to {target}° failed: {ex.Message}");
+            throw new SequenceEntityFailedException($"rotator move to {target}° failed: {ex.Message}", ex);
         }
         RefreshCacheOnce();
         // Prefer a direct device read for the returned angle so a single-flight RefreshCacheOnce that

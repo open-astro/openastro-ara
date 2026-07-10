@@ -20,6 +20,7 @@
 
 using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -140,7 +141,7 @@ public sealed partial class FocuserService : IFocuserMediator {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer move boundary: the blocking ASCOM Move can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; cancellation is rethrown (the sequence is aborting) but any other escape is logged and the last known position is returned rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
+        Justification = "Sequencer move boundary: the blocking ASCOM Move can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; cancellation is rethrown (the sequence is aborting), and any other escape is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<int> MoveFocuserBlockingAsync(int target, CancellationToken ct) {
         AlpacaFocuser? client;
         lock (_gate) {
@@ -179,21 +180,28 @@ public sealed partial class FocuserService : IFocuserMediator {
             if (!reachedRest) {
                 // §42.4 — the §42.2 "commanded position not reached" row: the Move dispatched
                 // fine but the focuser still reports moving after the full settle bound.
-                PublishOpFault(client, EquipmentFaultKind.StallTimeout,
-                    $"focuser still reports moving {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s after a Move to {target}");
+                // §42.2: fail the instruction too — a focuser in an unknown position must not
+                // read as a completed move.
+                var msg = $"focuser still reports moving {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s after a Move to {target}";
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
+                throw new SequenceEntityFailedException(msg);
             }
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (SequenceEntityFailedException) {
+            throw; // already classified + published above
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking Move never returned — a stalled op (§42.4).
             LogMoveFailed(ex, target);
             PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
+            throw new SequenceEntityFailedException(ex.Message, ex);
         } catch (Exception ex) {
             // Anything else, INCLUDING an OperationCanceledException the Alpaca HTTP client raises for
-            // its OWN internal timeout (ct not cancelled), is a device fault: log it and report the
-            // last known position rather than aborting the autonomous run as if cancelled.
+            // its OWN internal timeout (ct not cancelled), is a device fault — published and rethrown
+            // as a failed op rather than aborting the autonomous run as if cancelled.
             LogMoveFailed(ex, target);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"focuser Move to {target} failed: {ex.Message}");
+            throw new SequenceEntityFailedException($"focuser Move to {target} failed: {ex.Message}", ex);
         }
         RefreshCacheOnce();
         // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce

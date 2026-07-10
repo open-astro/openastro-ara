@@ -284,7 +284,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown but any other escape (including a device/HTTP-timeout OCE) is logged and reported as a failed op (false) rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
+        Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<bool> RunMountOpAsync(string op, Action<AlpacaTelescope> action, Func<AlpacaTelescope, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
         var client = ConnectedClientOrNull();
         if (client is null) {
@@ -311,18 +311,31 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 await linked.CancelAsync().ConfigureAwait(false);
             }
             await opTask.ConfigureAwait(false); // observe the op's result / surface its exception
-            return await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false);
+            if (!await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false)) {
+                // Dispatched but never reached its terminal state (settle exhaustion, or the
+                // connection dropped mid-wait — the publish gate suppresses the latter and the
+                // §42.3 probe owns it). Either way the mount is not where the instruction needs
+                // it — fail rather than report success.
+                var msg = $"mount op {op} dispatched but did not reach its terminal state within the settle bound";
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
+                throw new SequenceEntityFailedException(msg);
+            }
+            return true;
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (SequenceEntityFailedException) {
+            throw; // already classified + published above
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
+            // §42.2: publish the fault AND fail the instruction, so Attempts retries and
+            // sequence.instruction_failed engage instead of the failure being silently swallowed.
             LogMountOpFailed(ex, op);
             PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            return false;
+            throw new SequenceEntityFailedException(ex.Message, ex);
         } catch (Exception ex) {
             LogMountOpFailed(ex, op);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
-            return false;
+            throw new SequenceEntityFailedException($"{op} failed: {ex.Message}", ex);
         }
     }
 
