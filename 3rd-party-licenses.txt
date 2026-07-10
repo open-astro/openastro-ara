@@ -905,7 +905,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/web_socket_channel/license
 
 ------------------------------------------------------------------------
-Package:        webview_all 1.2.0
+Package:        webview_all 1.2.1
 Copyright:      Copyright 2021-2026 Abandoft
 License:        MIT
 License source: https://pub.dev/packages/webview_all/license
