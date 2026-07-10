@@ -169,6 +169,10 @@ class AutofocusSettings {
   int? steps;
   int? stepSize;
   bool? runAfterFilterChange;
+  // §59.4/§59.14 — the §59.13 wire string (`refractor|sct|mak|rc|newtonian|other`);
+  // kept as a string here so this bag stays import-free, converted to the settings
+  // enum in wizard_save.applyDraftToAutofocus.
+  String? telescopeType;
 }
 
 class FileSavingSettings {

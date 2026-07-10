@@ -107,6 +107,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Detect_background_sample_is_representative_under_column_aliasing() {
+            // A 400×400 frame's background subsample step is √(length/target) = √8 ≈ 2, but a *linear* memory
+            // stride would be length/target = 8 — and because 8 divides the width, a linear stride aliases onto
+            // only the columns ≡ 0 (mod 8). Make exactly those columns dark (500) and everything else the true
+            // background (1500): a column-aliased sample reads a 500 median and sets the threshold far too low,
+            // flooding the 1500 background into full-height (edge-touching) bands that swallow the star → 0
+            // detected. The 2D grid sample reads the representative 1500 median, so only the planted star clears
+            // the threshold. This test fails on the old linear-stride sampling and passes on the grid.
+            int w = 400, h = 400;
+            var frame = new ushort[w * h];
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    frame[(y * w) + x] = (ushort)((x % 8 == 0) ? 500 : 1500);
+                }
+            }
+            AddStar(frame, w, h, 201, 201, amplitude: 5000);
+
+            var result = StarDetector.Detect(frame, w, h, NormalParams());
+            Assert.That(result.DetectedStars, Is.EqualTo(1),
+                "the 2D-grid background sample should threshold correctly despite the column-aliased dark stripes");
+        }
+
+        [Test]
         public void Detect_rejects_an_edge_truncated_star() {
             int w = 100, h = 100;
             var frame = FlatField(w, h);

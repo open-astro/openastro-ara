@@ -38,6 +38,13 @@ public interface IEquipmentReconnector {
     /// caller can tell "nothing remembered" (0 attempted) from "dispatching in background" (≥1
     /// dispatched) from "every dispatch failed synchronously" (attempted &gt; 0, 0 dispatched).</summary>
     Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct);
+
+    /// <summary>The connection state of the device service for <paramref name="type"/>, so a
+    /// caller that dispatched a background <see cref="ReconnectAsync"/> can confirm the outcome.
+    /// Null when the type has no Alpaca service, or nothing is remembered/known for it. For the
+    /// multi-instance Switch type: Error if any connection is Error, Connected only when every
+    /// known switch is Connected, otherwise the first non-connected state.</summary>
+    Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct);
 }
 
 /// <summary>Outcome of a <see cref="IEquipmentReconnector.ReconnectAsync"/> call.
@@ -111,6 +118,47 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // synchronously" (attempted > 0 but dispatched == 0) so the caller isn't told
         // "reconnecting…" when every device failed on the spot.
         return new ReconnectOutcome(attempted, dispatched);
+    }
+
+    public async Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) {
+        switch (Normalize(type)) {
+            case DeviceType.Camera:
+                return (await _services.GetRequiredService<ICameraService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.Telescope:
+                return (await _services.GetRequiredService<ITelescopeService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.Focuser:
+                return (await _services.GetRequiredService<IFocuserService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.FilterWheel:
+                return (await _services.GetRequiredService<IFilterWheelService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.Rotator:
+                return (await _services.GetRequiredService<IRotatorService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.Dome:
+                return (await _services.GetRequiredService<IDomeService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.SafetyMonitor:
+                return (await _services.GetRequiredService<ISafetyMonitorService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.ObservingConditions:
+                return (await _services.GetRequiredService<IObservingConditionsService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.CoverCalibrator:
+                return (await _services.GetRequiredService<IFlatDeviceService>().GetAsync(ct).ConfigureAwait(false))?.State;
+            case DeviceType.Switch: {
+                var all = await _services.GetRequiredService<ISwitchService>().GetAllAsync(ct).ConfigureAwait(false);
+                if (all.Count == 0) {
+                    return null;
+                }
+                EquipmentConnectionState? firstNonConnected = null;
+                foreach (var sw in all) {
+                    if (sw.State == EquipmentConnectionState.Error) {
+                        return EquipmentConnectionState.Error;
+                    }
+                    if (sw.State != EquipmentConnectionState.Connected) {
+                        firstNonConnected ??= sw.State;
+                    }
+                }
+                return firstNonConnected ?? EquipmentConnectionState.Connected;
+            }
+            default:
+                return null;
+        }
     }
 
     private static bool SameGroup(DeviceType a, DeviceType b) => Normalize(a) == Normalize(b);

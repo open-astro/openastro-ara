@@ -13,8 +13,14 @@
 #endregion "copyright"
 
 using SkiaSharp;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Stretch;
+
+/// <summary>A star marker to overlay on a preview: a circle centred at (<see cref="X"/>, <see cref="Y"/>)
+/// with the given <see cref="Radius"/>, all in the pixel-buffer's coordinate space (the same space as the
+/// pixels handed to the encoder — the caller is responsible for scaling detection coordinates into it).</summary>
+public readonly record struct StarMarker(float X, float Y, float Radius);
 
 /// <summary>
 /// JPEG encoder for stretched grayscale pixels (§65). Takes the
@@ -61,6 +67,76 @@ public static class JpegEncoder {
             }
         }
         using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
+        return data.ToArray();
+    }
+
+    // §64/§59 star-marker overlay colour + stroke. Green reads clearly over the near-monochrome sky of a
+    // stretched preview; a hollow (stroke-only) circle leaves the star itself visible inside the ring.
+    private static readonly SKColor MarkerColor = new(0, 255, 0);
+    private const float MarkerStrokeWidth = 2f;
+
+    // Floor for the drawn ring radius, in OUTPUT (post-downscale) pixels. The markers arrive sized in source
+    // pixels, and a real sensor is downscaled ~6× to the preview cap — a tight star's few-pixel ring would
+    // collapse to a sub-pixel dot and vanish. This keeps every marker at least this visible in the preview.
+    private const float MarkerMinOutputRadius = 6f;
+
+    /// <summary>
+    /// Encode 8-bit grayscale pixels as a JPEG with star-marker circles drawn over them (§64 Live View /
+    /// §59 focus overlay). The grayscale is downscaled FIRST (to <paramref name="maxDim"/> when set) and only
+    /// the ≤maxDim result is expanded to an RGB surface for drawing — so a 26 MP frame never allocates a
+    /// ~100 MB full-res RGBA buffer, and the markers are drawn in output space where their radius/stroke land
+    /// at the intended visible size instead of shrinking into the downscale.
+    /// </summary>
+    /// <param name="pixels">Row-major 0–255 grayscale buffer; length must equal <paramref name="width"/> × <paramref name="height"/>.</param>
+    /// <param name="markers">Star markers in the same pixel space as <paramref name="pixels"/>; a zero/negative radius is skipped.</param>
+    /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the annotated output is downscaled to fit (aspect-preserving).</param>
+    public static byte[] EncodeGrayAnnotated(ReadOnlySpan<byte> pixels, int width, int height,
+            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0) {
+        if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
+        if (pixels.Length != width * height) {
+            throw new ArgumentException(
+                $"pixel buffer length ({pixels.Length}) doesn't match dimensions ({width}×{height} = {width * height})",
+                nameof(pixels));
+        }
+        ArgumentNullException.ThrowIfNull(markers);
+
+        var (outW, outH) = maxDim > 0 ? ScaleToFit(width, height, maxDim) : (width, height);
+        // ScaleToFit preserves aspect, so a single source→output scale applies to both axes and to radii.
+        double scale = (double)outW / width;
+
+        // Source stays single-channel (1 B/px). Draw it resized into a small Rgba8888 canvas: the RGBA
+        // surface — and the Mitchell resample — only ever touch the ≤maxDim output, not the full sensor.
+        var srcInfo = new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        using var srcGray = new SKBitmap(srcInfo);
+        var srcPtr = srcGray.GetPixels();
+        if (srcPtr == IntPtr.Zero) throw new InvalidOperationException("Skia could not allocate the Gray8 bitmap backing buffer.");
+        unsafe {
+            fixed (byte* p = pixels) {
+                System.Buffer.MemoryCopy(p, (void*)srcPtr, pixels.Length, pixels.Length);
+            }
+        }
+        using var srcImage = SKImage.FromBitmap(srcGray);
+
+        var outInfo = new SKImageInfo(outW, outH, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        using var canvasBitmap = new SKBitmap(outInfo);
+        using (var canvas = new SKCanvas(canvasBitmap)) {
+            canvas.DrawImage(srcImage, new SKRect(0, 0, width, height), new SKRect(0, 0, outW, outH),
+                new SKSamplingOptions(SKCubicResampler.Mitchell), paint: null);
+            using var paint = new SKPaint {
+                Color = MarkerColor,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = MarkerStrokeWidth,
+                IsAntialias = true,
+            };
+            foreach (var m in markers) {
+                if (m.Radius <= 0) continue;
+                float r = (float)Math.Max(MarkerMinOutputRadius, m.Radius * scale);
+                canvas.DrawCircle((float)(m.X * scale), (float)(m.Y * scale), r, paint);
+            }
+        }
+
+        using var image = SKImage.FromBitmap(canvasBitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
         return data.ToArray();
     }

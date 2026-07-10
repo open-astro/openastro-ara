@@ -14,6 +14,7 @@
 
 using System;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 
@@ -193,6 +194,42 @@ namespace OpenAstroAra.Test {
             Assert.That(status.DarkCountLoaded, Is.Null);
             Assert.That(status.DarkMinExposureSecondsLoaded, Is.Null);
             Assert.That(status.DarkMaxExposureSecondsLoaded, Is.Null);
+        }
+
+        // ── §63.8 build-progress poll ──
+
+        [Test]
+        public void Dark_build_progress_is_a_parameterless_method() {
+            var json = JObject.Parse(JsonConvert.SerializeObject(new Phd2GetDarkBuildProgress()));
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("get_dark_build_progress"));
+            Assert.That(json["params"], Is.Null, "a parameterless poll carries no params node");
+        }
+
+        [Test]
+        public void Dark_build_progress_deserializes_an_active_build() {
+            const string json = """
+                {"jsonrpc":"2.0","id":"p","result":{"active":true,"exposure_index":1,"exposure_count":5,
+                "exposure_ms":3000,"frame":7,"frame_count":20}}
+                """;
+            var p = JsonConvert.DeserializeObject<Phd2GetDarkBuildProgressResponse>(json)!.result!;
+            Assert.That(p.Active, Is.True);
+            Assert.That(p.ExposureIndex, Is.EqualTo(1));
+            Assert.That(p.ExposureCount, Is.EqualTo(5));
+            Assert.That(p.ExposureMs, Is.EqualTo(3000));
+            Assert.That(p.Frame, Is.EqualTo(7));
+            Assert.That(p.FrameCount, Is.EqualTo(20));
+        }
+
+        [Test]
+        public void Dark_build_progress_deserializes_idle_as_all_zero() {
+            const string json = """
+                {"jsonrpc":"2.0","id":"p","result":{"active":false,"exposure_index":0,"exposure_count":0,
+                "exposure_ms":0,"frame":0,"frame_count":0}}
+                """;
+            var p = JsonConvert.DeserializeObject<Phd2GetDarkBuildProgressResponse>(json)!.result!;
+            Assert.That(p.Active, Is.False);
+            Assert.That(p.FrameCount, Is.EqualTo(0));
+            Assert.That(p.ExposureCount, Is.EqualTo(0));
         }
     }
 }

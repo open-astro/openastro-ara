@@ -148,6 +148,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
             guider.PHD2ConnectionLost += OnConnectionLost;
             guider.GuideEvent += OnGuideStep;
+            // §42.2: a structured device fault (guide camera dropped) — the link stays up, so this runs
+            // the on_guider_lost policy without dropping to Error or starting §63.3 recovery.
+            guider.EquipmentFault += OnEquipmentFault;
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _guider = guider;
             generation = ++_connectGeneration;
@@ -305,6 +308,29 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    // §42.2: the daemon reported a structured device fault (the guide camera dropped). Unlike a socket
+    // drop this leaves the guider LINK up and the daemon may be self-reconnecting, so we do NOT go to
+    // Error or start §63.3 process recovery — guiding is simply degraded now, so we run the
+    // on_guider_lost policy and stay Connected. We react only to the guide CAMERA: the daemon emits only
+    // camera today, and a future non-guiding device (rotator/aux) must not pause the sequence as "guiding
+    // lost". (Pairing reconnecting=false / the daemon's silent reconnect-abandonment — guider#66 — with an
+    // ARA-side watchdog is a tracked follow-up.)
+    private void OnEquipmentFault(object? sender, EquipmentFaultEventArgs e) {
+        lock (_gate) {
+            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected
+                    && AffectsGuiding(e.DeviceType)) {
+                BeginFaultReactionLocked(GuiderFaultKind.EquipmentDisconnected);
+            }
+        }
+    }
+
+    // The daemon's device-type enum is effectively "camera" today. Treat a missing/blank type as the
+    // guide camera (fail toward alerting on the one device we know it emits) and ignore any other named
+    // device until per-device guiding impact is modelled.
+    private static bool AffectsGuiding(string? deviceType) =>
+        string.IsNullOrWhiteSpace(deviceType)
+        || deviceType.Equals("camera", StringComparison.OrdinalIgnoreCase);
+
     // Shared §63.3/§42.2 link-down path: a dead socket (PHD2ConnectionLost) and a
     // wedged-but-connected daemon (the active-poll ping streak, GuiderService.ActivePoll.cs)
     // converge here. Caller holds _gate and has verified the loss belongs to the
@@ -316,7 +342,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         BeginRecoveryLocked();
         // §42.2: guiding is gone NOW — any running sequence is shooting unguided,
         // so react per the profile's on_guider_lost policy (GuiderService.FaultReaction.cs).
-        BeginFaultReactionLocked();
+        BeginFaultReactionLocked(GuiderFaultKind.LinkDown);
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current
@@ -357,7 +383,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     internal static double? RmsArcsec(double? rmsPixels, double pixelScaleArcsecPerPx) =>
         rmsPixels is { } px && pixelScaleArcsecPerPx > 0 ? px * pixelScaleArcsecPerPx : null;
 
-    private PHD2Guider RequireConnectedGuider() {
+    // internal (not private): the §45 PolarAlignService reuses this to reach the connected guider for the
+    // PA-session lease + solver captures, with the same connected-or-throw contract the guide ops use.
+    internal PHD2Guider RequireConnectedGuider() {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_guider is null || _state != EquipmentConnectionState.Connected) {
@@ -388,7 +416,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (state == EquipmentConnectionState.Connected) {
             // A fresh successful connection starts a new fault episode: the §42.2
             // reaction may fire again on the next mid-session loss.
-            _faultReactionLatched = false;
+            _latchedFaultKind = null;
             StartPingLoopLocked();
         } else {
             StopPingLoopLocked();
@@ -399,6 +427,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (_guider is not null) {
             _guider.PHD2ConnectionLost -= OnConnectionLost;
             _guider.GuideEvent -= OnGuideStep;
+            _guider.EquipmentFault -= OnEquipmentFault;
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;

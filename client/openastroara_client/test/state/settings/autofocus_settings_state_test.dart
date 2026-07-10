@@ -96,5 +96,37 @@ void main() {
       expect(s.abortSequenceOnAfFailure, isFalse);
       expect(s.restorePositionOnFailure, isFalse);
     });
+
+    test('telescope type defaults to other and assigns directly (§59.4)', () {
+      expect(container.read(autofocusSettingsProvider).telescopeType,
+          TelescopeType.other);
+      container
+          .read(autofocusSettingsProvider.notifier)
+          .setTelescopeType(TelescopeType.sct);
+      expect(container.read(autofocusSettingsProvider).telescopeType,
+          TelescopeType.sct);
+    });
+
+    test('telescope type wire strings are exact §59.13 values', () {
+      // The daemon treats anything unrecognised as `other`, so the client must
+      // emit the exact wire strings and read unknowns defensively.
+      const wire = {
+        TelescopeType.refractor: 'refractor',
+        TelescopeType.sct: 'sct',
+        TelescopeType.mak: 'mak',
+        TelescopeType.rc: 'rc',
+        TelescopeType.newtonian: 'newtonian',
+        TelescopeType.other: 'other',
+      };
+      for (final e in wire.entries) {
+        expect(telescopeTypeToWire(e.key), e.value);
+        expect(telescopeTypeFromWire(e.value), e.key);
+      }
+      expect(telescopeTypeFromWire(null), TelescopeType.other);
+      expect(telescopeTypeFromWire('SCT'), TelescopeType.other,
+          reason: 'wire strings are case-sensitive-exact');
+      expect(telescopeTypeFromWire('dobsonian'), TelescopeType.other,
+          reason: 'a future/unknown value must degrade, not throw');
+    });
   });
 }

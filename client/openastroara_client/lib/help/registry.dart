@@ -649,6 +649,17 @@ const Map<String, Help> helpRegistry = {
         '* **FWHM (Gaussian fit)**: fits a 2D Gaussian to star profiles. More accurate at the focus point but slower; benefits from longer exposures.',
     relatedSettings: ['img.autofocus.steps', 'img.autofocus.step_size'],
   ),
+  'img.autofocus.telescope_type': Help(
+    key: 'img.autofocus.telescope_type',
+    title: 'Telescope type',
+    body: 'Out-of-focus stars look different per optical design, and Smart Focus exploits that (§59.4):\n'
+        '* **Refractor** — no central obstruction; defocus broadens the star (FWHM, peak brightness).\n'
+        '* **SCT / Maksutov / RC** — defocus makes donuts: a bright ring around the secondary-mirror shadow. The donut\'s diameter grows linearly with defocus — a very direct distance ruler.\n'
+        '* **Newtonian** — donuts too (plus spider-vane spikes).\n'
+        '* **Other / unknown** — assume nothing: the universal HFR behaviour, no per-design upgrades.\n\n'
+        'With a declared design, autofocus can also learn which *side* of focus you\'re on from a single frame (your rig\'s aberration signature, learned during calibration) — often saving an exposure per run. A wrong or missing choice never breaks focusing; it only skips these upgrades.',
+    relatedSettings: ['img.autofocus.method', 'img.autofocus.steps'],
+  ),
   'img.autofocus.steps': Help(
     key: 'img.autofocus.steps',
     title: 'Number of AF steps',

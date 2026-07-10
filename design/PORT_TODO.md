@@ -14,6 +14,28 @@ the other design docs.
 
 ---
 
+## §64/§59 Live View star annotation — follow-ups (2026-07-08, PR #775 /review self-review)
+
+Deferred out-of-scope findings from the mono-annotation wiring PR. The PR's scope was "wire the mono
+overlay"; these are genuine but larger and tracked here per §0 rule 6.
+
+- **OSC annotation.** The Bayer/OSC live path ignores `LiveViewStartRequestDto.Annotate` entirely — a
+  WILMA client that starts Live View with `annotate:true` on an OSC camera gets a normal colour preview
+  with no circles and no signal (indistinguishable from "detector found no stars"). Follow-up: either
+  echo an *effective-annotate* flag in `LiveViewStatusDto`/`LiveViewMeta` so the client can tell the
+  punt from an empty field, or reject `annotate` at start for a non-monochrome sensor; and eventually a
+  real colour-frame overlay (detect on the luminance/green plane, not the raw mosaic).
+- **Detection runs inside the `_captureInFlight` gate, unoffloaded.** `RenderLiveFrame` runs the
+  synchronous full-frame `StarDetector.Detect` on the live loop's continuation while it holds
+  `_captureInFlight = 1`; a user-initiated catalog capture arbitrates on the same gate, so with annotate
+  on, every live frame extends the window a real capture is blocked. `StarDetector`'s own doc says
+  callers must offload the CPU-bound work. Follow-up: offload detection off the capture continuation (or
+  detect on a downsized copy) so annotation doesn't lengthen the shared capture gate.
+- **Marker cap bounds the draw, not detection cost.** `LiveViewMaxMarkers` trims the returned/drawn
+  markers *after* `FindStars`+`Measure` have run the full per-blob pipeline on every blob. A dense field
+  (Milky Way, low threshold) fully measures thousands of blobs each annotated frame, then discards all
+  but 250. Comment corrected in this PR; a real early-out (cap detection, not just the draw) is follow-up.
+
 ## Flaky bench test — AlpacaFaultProxy header-forward — ✅ FIXED (2026-07-08)
 
 `PassThrough_forwards_inbound_request_headers_to_the_upstream` failed once on CI linux with
@@ -285,18 +307,25 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
   decision). The `IStarDetection`/`IStarAnnotator` interfaces in `HeadlessStubs.cs` stay as the (unused) DI seam.
 - ✅ **`RenderedImage.UpdateAnalysis(...)`** — DONE (#358). Publishes HFR/HFRStDev/DetectedStars/StarList
   onto `RawImageData.StarDetectionAnalysis` (flows into the FITS HFR/StarCount pattern keys).
-  - **Annotation still deferred:** `DetectStars(annotateImage: true)` is a documented no-op (logs a Debug line) —
-    drawing the star overlay onto the rendered buffer needs a §2105 annotator (SkiaSharp draw path). Not on the
-    v0.0.1 critical path (annotation is a Live-View/§64 nicety); wire it when Live View lands.
+  - **Annotation — draw primitive + MONO live-view wiring LANDED; OSC + repo-frame path still open.** The
+    SkiaSharp draw path is `JpegEncoder.EncodeGrayAnnotated(pixels, w, h, IReadOnlyList<StarMarker>, …)` (#774),
+    and §64 Live View now wires it end-to-end for MONO (branch `liveview-star-annotation-mono`): `Annotate` flag
+    on `LiveViewStartRequestDto` → `RenderLiveFrame` runs `StarDetector` on the raw mono pixels and draws
+    HFR-scaled green circles (coords align 1:1 since detection + the stretched preview share the width×height grid,
+    and the encoder downscales markers + image together under `LiveViewMaxDim`). **Still open:** (1) OSC/colour
+    annotation — the bayer path ignores `annotate` (detecting on a raw mosaic is wrong; needs a debayered-luminance
+    detect + a colour overlay); (2) the alternate repo-frame path — `DetectStars(annotateImage: true)` is still a
+    no-op and the `IStarAnnotator` DI seam is still unimplemented.
   - ✅ **Atomic analysis publish + thread safety:** DONE (#358 round-7/8). `IStarDetectionAnalysis.SetAll(...)`
     writes all four backing fields under a lock (full memory barrier + torn-read safety for the doubles on
     32-bit ARM) before raising any `PropertyChanged` outside it, so a §59-autofocus / Live-View observer on
     another thread always reads a consistent, visible view. `UpdateAnalysis` uses it. +atomicity test.
-  - **Background sample is column-aliased (minor, post-v0.0.1):** `StarDetector.BackgroundStats` strides the
-    subsample linearly from index 0, so it samples a few fixed columns across all rows. On strongly vignetted
-    frames (dark corners) this can bias the median/MAD and thus the detection threshold. A 2D scattered-grid
-    sample (step in both x and y) would be more representative. Not critical for v0.0.1; the threshold is robust
-    on typical flat-ish backgrounds. (#358 round-8 review.)
+  - ✅ **Background sample column-aliasing — FIXED (branch `stardetector-background-grid-sample`).**
+    `StarDetector.BackgroundStats` used to stride the subsample linearly from index 0, aliasing onto a few
+    fixed columns (whenever the stride shared a factor with the width), which biased the median/MAD → detection
+    threshold on vignetted / column-varying frames. Now samples on an even 2D grid (step √(length/target) in
+    both x and y). A discriminating test plants dark stripes on the aliased columns (fails on the old sampling,
+    passes on the grid); the existing detection tests guard against regression. (#358 round-8 review.)
 - **`BaseImageData.RenderBitmapSource` Bayered note**: renders the raw mosaic (grey CFA) until the render path
   calls Debayer for OSC display (the data path exists as of #357; the display wiring is Live-View-gated).
 - Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,
@@ -337,8 +366,17 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
   firing trigger executed nothing, silently — fixed in the client trigger catalog (`TriggerDef.runnerItems`
   seeds the runner with its action item: `RunAutofocus` for the AF family, `Dither` for DitherAfterExposures,
   matching what NINA's C# constructors serialize).
-- **Smart Focus (§59.2–59.4):** the feature-vector model (donut diameters, asymmetry, telescope-type extractor)
-  + inverse-mapping calibration table. Research-grade "better than NINA" feature — likely v0.1.0, not v0.0.1.
+- **Smart Focus (§59.2–59.4) — IN PROGRESS (v0.1.0), landing as pure-headless slices:** ✅ per-star feature
+  vector `FWHM`/`Roundness`/`PeakToBackground` (#758); ✅ `FocusInverseMap` defocus→offset magnitude table (#768);
+  ✅ donut geometry `DonutOuterDiameter`/`DonutInnerDiameter`/`RingThickness` for obstructed scopes (#771);
+  ✅ obstruction `DonutShadowDepth` (#594 branch). Remaining: the intra/extra-focal **asymmetry coefficient**
+  (resolves the §59.2 defocus sign — NOTE: no clean/honest single-frame definition exists yet, so this is
+  co-design work with the Phase-2 sign resolution it feeds, not a mechanical metric add), the §59.4
+  **telescope-type extractor selector** (field weighting per optical design — the obstructed-scope fields all
+  exist now; refractor still wants the asymmetry field), and wiring `FocusInverseMap` into `AutofocusSweepService`
+  as the Phase-2 one-frame run (server/orchestration + a NEW calibration-table profile store — a multi-slice
+  effort, see the AutofocusSweepService gap). §59.10 collimation verdict reuses the donut ring centroids (its own
+  slice).
 - **AF triggers + sequencer wiring (§59.5) — trigger family DONE (2026-07-08); two follow-ups open.**
   ✅ The four remaining NINA AF triggers re-ported headless from `840893eb8^` (time-interval / focuser-temp-Δ /
   HFR-drift / first-filter — "sequence start" is covered by the imaging-run builder's `autofocusAtStart`
@@ -632,6 +670,19 @@ response deserialization). Blocking build uses a 2-h `SendMessage` timeout (wors
 guider event stream (GuideStep/Settling/SettleDone/StarLost/Alert/… per §63.2) carries no dark-library-progress
 event, so the §63.8 "PHD2 streams build progress" premise below does **not** hold. Achievable design = a
 202-Accepted background build that fires **started + complete** (no granular % bar).
+
+**UPDATE (2026-07-08, #769/#770 — SUPERSEDES the correction above for progress reporting):** the "no granular
+progress" conclusion held only for the guider *event stream*. The openastro-guider release added a **pollable**
+`get_dark_build_progress` RPC (`{active, exposure_index, exposure_count, exposure_ms, frame, frame_count}`), so
+ARA now drives a real progress bar WITHOUT any progress event: #769 shipped the DTO + `PHD2Guider.GetDarkBuildProgressAsync`;
+#770 added the `GuiderService` poll-loop (`PollBuildProgressAsync`, own short-lived connection, drained before
+the terminal event for ordering) that calls it once a second during a build and promotes the
+`guider.{dark_library,defect_map}.*` WS stream from indeterminate to granular `exposure_index/exposure_count`
+progress. **Open follow-up (#770 review round-2 non-blocking note):** warn-once visibility when the poll produces
+zero successful reads across a whole build — a persistently-unreachable daemon currently yields an indeterminate
+bar with only a debug-level `SendMessage` log; that swallow is pre-existing but polling makes silent repeated
+failures more likely to go unnoticed. A "warn after N consecutive poll failures" pass is a candidate for a later
+guider slice.
 
 **Shipped:** e-4b-2 — service + REST surface. `GuiderService.BuildDarkLibraryAsync` (202-Accepted background
 `Task.Run`, validates synchronously → 400 on bad request / 409 when disconnected) + `GetCalibrationFilesStatusAsync`

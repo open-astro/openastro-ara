@@ -65,4 +65,8 @@ public sealed record ProfileSnapshotDto(
     // notifications fields) so existing positional constructions and older
     // profile.json files keep working; ProfileSnapshotNormalizer back-fills
     // null to the empty horizon.
-    CustomHorizonDto? CustomHorizon = null);
+    CustomHorizonDto? CustomHorizon = null,
+    // §59.2 Smart Focus calibration — daemon-owned derived data, not a user setting. Unlike every
+    // other section, null is MEANINGFUL ("not calibrated") and the normalizer deliberately passes
+    // it through instead of back-filling a default.
+    FocusCalibrationDto? FocusCalibration = null);

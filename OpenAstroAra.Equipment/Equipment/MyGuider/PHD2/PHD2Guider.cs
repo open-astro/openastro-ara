@@ -1062,9 +1062,37 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "ConfigurationChange": {
-                        if(initialized) { 
+                        if(initialized) {
                             Logger.Debug($"PHD2 - ConfigurationChange!");
                             _ = SetPixelScale();
+                        }
+                        break;
+                    }
+                case "EquipmentDisconnected": {
+                        // §42.2: the daemon lost a device (guide camera) but its own link is still up —
+                        // a guiding-degraded fault, not a link drop. Surface it as a push event so the
+                        // service can run the on_guider_lost policy while staying Connected.
+                        if (message.ToObject<PhdEventEquipmentDisconnected>() is { } disconnect) {
+                            Logger.Warning($"PHD2 - equipment disconnected: {disconnect.DeviceType} " +
+                                $"(reason: {disconnect.Reason}; reconnecting: {disconnect.Reconnecting})");
+                            RaiseEquipmentFault(disconnect.DeviceType, disconnect.Reason, disconnect.Reconnecting);
+                        }
+                        break;
+                    }
+                case "EquipmentReconnected": {
+                        // Informational only — the fault reaction is one-shot per connect episode and is
+                        // not re-armed here (a flapping device must not re-trigger skip/abort per cycle).
+                        if (message.ToObject<PhdEventEquipmentReconnected>() is { } reconnect) {
+                            Logger.Info($"PHD2 - equipment reconnected: {reconnect.DeviceType}");
+                        }
+                        break;
+                    }
+                case "SingleFrameComplete": {
+                        // §45: a fire-and-forget capture_single_frame finished. The RPC already acked 0; this
+                        // carries the outcome + saved-FITS path the PolarAlignService hands to its solver.
+                        if (message.ToObject<PhdEventSingleFrameComplete>() is { } frame) {
+                            Logger.Debug($"PHD2 - single frame complete (success: {frame.Success}; path: {frame.Path})");
+                            RaiseSingleFrameComplete(frame.Success, frame.Error, frame.Path);
                         }
                         break;
                     }

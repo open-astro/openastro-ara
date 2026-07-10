@@ -224,6 +224,120 @@ namespace OpenAstroAra.Test {
                 "the link drop never reached the §42.2 fault flow (PauseActiveRunsAsync was not called)");
         }
 
+        [Test]
+        public async Task A_structured_equipment_fault_reacts_per_policy_but_stays_connected() {
+            // §42.2 (openastro-guider #57): the daemon reports the guide camera dropped
+            // (EquipmentDisconnected). The guider LINK is still up, so — unlike a socket drop — the
+            // session runs the on_guider_lost policy (pauses the sequence) but must NOT go to Error or
+            // start §63.3 recovery.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetSafetyPolicies()).Returns(GuiderLostPolicy("pause_and_retry"));
+            var sequencer = new Mock<ISequencerService>();
+            var pauseRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => pauseRequested.TrySetResult())
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: profiles.Object, sequencerResolver: () => sequencer.Object,
+                notifications: Mock.Of<INotificationService>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+
+            Assert.That(await Task.WhenAny(pauseRequested.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false),
+                Is.SameAs(pauseRequested.Task),
+                "a structured EquipmentDisconnected did not run the §42.2 on_guider_lost policy");
+            var after = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(after?.State, Is.EqualTo(EquipmentConnectionState.Connected),
+                "a device fault is a guiding-degraded condition, not a link drop — the session must stay Connected");
+        }
+
+        [Test]
+        public async Task A_non_camera_equipment_disconnect_does_not_pause_the_sequence() {
+            // Only the guide CAMERA drives the guiding-lost policy. A future/other device_type
+            // (rotator/aux) must not pause the sequence as "guiding lost".
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetSafetyPolicies()).Returns(GuiderLostPolicy("pause_and_retry"));
+            var sequencer = new Mock<ISequencerService>();
+            var pauseCalls = 0;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => System.Threading.Interlocked.Increment(ref pauseCalls))
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: profiles.Object, sequencerResolver: () => sequencer.Object,
+                notifications: Mock.Of<INotificationService>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected(deviceType: "rotator")).ConfigureAwait(false);
+            // A camera drop afterwards SHOULD react — proving the rotator event was filtered, not that the
+            // pipeline is simply dead.
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected(deviceType: "camera")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => System.Threading.Volatile.Read(ref pauseCalls) == 1).ConfigureAwait(false),
+                Is.True, "the camera drop should have paused exactly once");
+            // Give any erroneous rotator-driven reaction a moment to have fired, then confirm it did not.
+            await Task.Delay(200).ConfigureAwait(false);
+            Assert.That(System.Threading.Volatile.Read(ref pauseCalls), Is.EqualTo(1),
+                "a non-camera device_type must not trigger the guiding-lost policy");
+        }
+
+        [Test]
+        public async Task A_link_down_after_an_equipment_fault_still_reacts() {
+            // Safety-critical: an EquipmentDisconnected stays Connected and so never clears the fault
+            // latch. A genuine link death that follows must NOT be swallowed by that latch — the more
+            // severe link-down policy has to fire, or the run keeps shooting unguided through a real drop.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var profiles = new Mock<IProfileStore>();
+            profiles.Setup(p => p.GetSafetyPolicies()).Returns(GuiderLostPolicy("pause_and_retry"));
+            var sequencer = new Mock<ISequencerService>();
+            var pauseCalls = 0;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => System.Threading.Interlocked.Increment(ref pauseCalls))
+                .ReturnsAsync(new List<Guid> { Guid.NewGuid() });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                ws: null, profileStore: profiles.Object, sequencerResolver: () => sequencer.Object,
+                notifications: Mock.Of<INotificationService>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => System.Threading.Volatile.Read(ref pauseCalls) == 1).ConfigureAwait(false),
+                Is.True, "the camera fault should have paused once");
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1).ConfigureAwait(false), Is.True,
+                "the persistent event-stream connection never settled");
+
+            // Now the whole guider link dies — this must react despite the equipment latch already set.
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected a live connection to drop");
+            Assert.That(await WaitUntilAsync(() => System.Threading.Volatile.Read(ref pauseCalls) == 2).ConfigureAwait(false),
+                Is.True, "the link-down must fire its own reaction, not be swallowed by the equipment-fault latch");
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Error).ConfigureAwait(false), Is.Not.Null,
+                "the link drop should surface as Error");
+        }
+
+        private static SafetyPoliciesDto GuiderLostPolicy(string onGuiderLost) => new(
+            OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+            MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
+            OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: onGuiderLost,
+            GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false);
+
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try {

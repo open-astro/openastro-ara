@@ -41,6 +41,8 @@ public sealed partial class DomeService : IDomeService, IDisposable {
 
     private readonly ILogger<DomeService> _logger;
     private readonly EquipmentEventPublisher? _events;
+    private readonly IEquipmentFaultSink? _faults;
+    private readonly DeviceConnectionProbe _probe = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaDome? _client;
@@ -57,9 +59,11 @@ public sealed partial class DomeService : IDomeService, IDisposable {
     private long _connectGeneration;
     private bool _disposed;
 
-    public DomeService(ILogger<DomeService>? logger = null, EquipmentEventPublisher? events = null) {
+    public DomeService(ILogger<DomeService>? logger = null, EquipmentEventPublisher? events = null,
+            IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<DomeService>.Instance;
         _events = events;
+        _faults = faults;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -253,6 +257,18 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             if (client is null) {
                 return;
             }
+            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
+            // below deliberately swallow failures (an unsupported property must stay benign), so
+            // this probe is the only disconnect-detection source: Connected throws on transport
+            // death and reads false on a driver-side disconnect; a consecutive-failure streak
+            // (not one blip) trips the device to Error + publishes the §42.2 fault.
+            if (!ProbeConnected(client)) {
+                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
+                    TripConnectionLost(client);
+                }
+                return; // the device didn't answer — skip this tick's reads
+            }
+            ObserveProbeIfLive(client, probeSucceeded: true);
             var (runtime, rawShutter) = ReadRuntime(client);
             var caps = needCaps ? ReadCaps(client) : (DomeCaps?)null;
             lock (_gate) {
@@ -340,6 +356,7 @@ public sealed partial class DomeService : IDomeService, IDisposable {
                     _runtime = IdleRuntime;                  // don't serve a prior device's runtime
                     _domeCaps = null;                        // re-read capabilities for the new device
                     _shutterStatusRaw = ShutterState.Error; // "not yet read" until the first refresh, not a false Closed
+                    _probe.Reset();                          // §42.3 — a fresh session starts a fresh streak
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -407,6 +424,49 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
+    private static bool ProbeConnected(AlpacaDome c) {
+        try { return c.Connected; } catch (Exception) { return false; }
+    }
+
+    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
+    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
+    // while a stale probe of the dead session was still in flight. The liveness check and
+    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
+    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
+    // null when the probed client is stale (the observation is discarded).
+    private ProbeVerdict? ObserveProbeIfLive(AlpacaDome client, bool probeSucceeded) {
+        lock (_gate) {
+            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
+        }
+    }
+
+    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
+    // reconnect can find it; the state publisher already maps Error to
+    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
+    // Re-checks the probed client's identity under the gate: a reconnect between the probe
+    // and this trip must never flip the NEW, healthy session to Error (review finding).
+    private void TripConnectionLost(AlpacaDome probed) {
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
+                return;
+            }
+            device = _device;
+            SetState(EquipmentConnectionState.Error);
+            _probe.Reset();
+        }
+        LogConnectionLost(device?.Name ?? "?");
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Dome, device?.UniqueId, device?.Name,
+            EquipmentFaultKind.Disconnected,
+            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
+            DateTimeOffset.UtcNow));
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome '{Device}' stopped answering — marked Error (§42.3)")]
+    private partial void LogConnectionLost(string device);
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {

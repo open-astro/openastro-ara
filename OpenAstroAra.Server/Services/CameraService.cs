@@ -60,6 +60,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     private readonly ILogger<CameraService> _logger;
     private readonly EquipmentEventPublisher? _events;
+    private readonly IEquipmentFaultSink? _faults;
+    private readonly DeviceConnectionProbe _probe = new();
+    private readonly CoolingDriftMonitor _coolingDrift = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private readonly IFrameRepository? _frames;
@@ -87,9 +90,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         string? fallbackFramesDir = null,
         IFocuserMediator? focuser = null,
         EquipmentEventPublisher? events = null,
-        ImageHistoryService? imageHistory = null) {
+        ImageHistoryService? imageHistory = null,
+        IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _events = events;
+        _faults = faults;
         _frames = frames;
         _profileStore = profileStore;
         _fallbackFramesDir = fallbackFramesDir;
@@ -264,6 +269,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
         var client = RequireConnectedClient();
+        // §42.2 — a commanded cooler change starts a fresh drift baseline BEFORE the write is
+        // dispatched (a new set-point legitimately starts far from the sensor; the old episode
+        // and accumulation must not carry into it).
+        lock (_gate) {
+            _coolingDrift.Reset();
+        }
         await Task.Run(() => {
             if (targetTemperatureC is double target) {
                 client.SetCCDTemperature = target;
@@ -513,14 +524,17 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
+    // §59 — the one detector posture the HFR trend and the live-view overlay must share. Both feed the same
+    // instrument's picture of the frame, so a sensitivity retune here must reach both; a copy-pasted literal
+    // at each call site would silently desync them. maxStars = 0 leaves the count uncapped (full-frame stats);
+    // the overlay passes its draw cap. IsAutoFocus = false: full-frame statistics, not the sweep's
+    // center-weighted probe posture.
+    private static StarDetectionParams AnalysisDetectionParams(int maxStars = 0) =>
+        new() { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = maxStars };
+
     private static (double Hfr, int Stars) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
-        // Same detector, same sensitivity as the §59 sweep metric — HFR values that feed one
-        // trend must come from one instrument. IsAutoFocus=false: full-frame statistics, not
-        // the sweep's center-weighted probe posture.
         var result = StarDetector.Detect(
-            pixels, width, height,
-            new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false },
-            CancellationToken.None);
+            pixels, width, height, AnalysisDetectionParams(), CancellationToken.None);
         return (result.AverageHFR, result.DetectedStars);
     }
 
@@ -843,9 +857,23 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             if (client is null) {
                 return;
             }
+            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
+            // below deliberately swallow failures (an unsupported property must stay benign), so
+            // this probe is the only disconnect-detection source: Connected throws on transport
+            // death and reads false on a driver-side disconnect; a consecutive-failure streak
+            // (not one blip) trips the device to Error + publishes the §42.2 fault.
+            if (!ProbeConnected(client)) {
+                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
+                    TripConnectionLost(client);
+                }
+                return; // the device didn't answer — skip this pass's reads
+            }
+            ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
             var capsCommitted = false;
+            var driftVerdict = CoolingDriftVerdict.Idle;
+            DiscoveredDeviceDto? watchedDevice = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -853,7 +881,25 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                         _capabilities = caps;
                         capsCommitted = true;
                     }
+                    // §42.2 — cooling-drift monitor, observed under the same commit lock so the
+                    // liveness check and the observation are one critical section (the #789
+                    // probe lesson). Wall-clock inside the monitor: download-skipped ticks
+                    // must still count toward the sustained window.
+                    driftVerdict = _coolingDrift.Observe(
+                        runtime.CoolerOn, runtime.CoolerSetpointC, runtime.CcdTemperature, DateTimeOffset.UtcNow);
+                    watchedDevice = _device;
                 }
+            }
+            if (driftVerdict == CoolingDriftVerdict.Drifted) {
+                var actual = runtime.CcdTemperature ?? double.NaN;
+                var setpoint = runtime.CoolerSetpointC ?? double.NaN;
+                LogCoolingDrift(watchedDevice?.Name ?? "?", actual, setpoint);
+                _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
+                    watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.CoolingDrift,
+                    $"CCD at {actual:0.0}°C vs set-point {setpoint:0.0}°C for over {CoolingDriftMonitor.DefaultDriftWindow.TotalMinutes:0} min",
+                    DateTimeOffset.UtcNow));
+            } else if (driftVerdict == CoolingDriftVerdict.Recovered) {
+                LogCoolingRecovered(watchedDevice?.Name ?? "?");
             }
             // §36/§25.5: the first caps read after a connect carries the camera's sensor geometry —
             // cache it into the profile's optics section so the Planning Frame FOV works without the
@@ -1144,6 +1190,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                     _client = client;
                     _capabilities = null;   // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
+                    _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
+                    _coolingDrift.Reset();  // §42.2 — no drift accumulation carries across sessions
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -1214,6 +1262,56 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
+    private static bool ProbeConnected(AlpacaCamera c) {
+        try { return c.Connected; } catch (Exception) { return false; }
+    }
+
+    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
+    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
+    // while a stale probe of the dead session was still in flight. The liveness check and
+    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
+    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
+    // null when the probed client is stale (the observation is discarded).
+    private ProbeVerdict? ObserveProbeIfLive(AlpacaCamera client, bool probeSucceeded) {
+        lock (_gate) {
+            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
+        }
+    }
+
+    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
+    // reconnect can find it; the state publisher already maps Error to
+    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
+    // Re-checks the probed client's identity under the gate: a reconnect between the probe
+    // and this trip must never flip the NEW, healthy session to Error (review finding).
+    private void TripConnectionLost(AlpacaCamera probed) {
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
+                return;
+            }
+            device = _device;
+            SetState(EquipmentConnectionState.Error);
+            _probe.Reset();
+            _coolingDrift.Reset();
+        }
+        LogConnectionLost(device?.Name ?? "?");
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
+            EquipmentFaultKind.Disconnected,
+            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
+            DateTimeOffset.UtcNow));
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' stopped answering — marked Error (§42.3)")]
+    private partial void LogConnectionLost(string device);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' cooler can't hold set-point: CCD {ActualC}°C vs {SetpointC}°C sustained — §42.2 fault published")]
+    private partial void LogCoolingDrift(string device, double actualC, double setpointC);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Camera '{Device}' cooler back within band — drift monitor re-armed (§42.2)")]
+    private partial void LogCoolingRecovered(string device);
 
     // Caller must hold _gate.
     private void SetState(EquipmentConnectionState state) {

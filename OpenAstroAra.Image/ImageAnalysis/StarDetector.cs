@@ -73,7 +73,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             }
 
             token.ThrowIfCancellationRequested();
-            var (median, sigma) = BackgroundStats(work);
+            var (median, sigma) = BackgroundStats(work, width, height);
             // k·σ above the background. Sensitivity carries k directly (8≈Normal, 5≈High, 3≈Highest);
             // guard a non-positive/garbage value to the Normal default so detection never floods.
             double k = parameters.Sensitivity > 0 ? parameters.Sensitivity : 8.0;
@@ -93,19 +93,30 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return Summarize(stars);
         }
 
-        // Background is a sky-wide statistic, so a strided subsample (~BackgroundSampleTarget pixels)
-        // gives the same median/MAD as the full frame at a fraction of the cost — two full-frame sorts on
-        // a 20-50 MP frame would be 1-3 s and a full clone; the sample is a few thousand entries and a sub-ms
-        // sort. MAD is the median of |x - median|; ×1.4826 makes it a consistent σ estimator for Gaussian
-        // noise while ignoring the star outliers. Frames at/under the target sample in full (stride 1).
+        // Background is a sky-wide statistic, so a subsample (~BackgroundSampleTarget pixels) gives the same
+        // median/MAD as the full frame at a fraction of the cost — two full-frame sorts on a 20-50 MP frame
+        // would be 1-3 s and a full clone; the sample is a few thousand entries and a sub-ms sort. MAD is the
+        // median of |x - median|; ×1.4826 makes it a consistent σ estimator for Gaussian noise while ignoring
+        // the star outliers. Frames at/under the target sample in full (step 1).
         private const int BackgroundSampleTarget = 20000;
 
-        private static (double median, double sigma) BackgroundStats(ReadOnlySpan<ushort> pixels) {
-            int stride = Math.Max(1, pixels.Length / BackgroundSampleTarget);
-            int n = (pixels.Length + stride - 1) / stride; // ceil(length/stride) — exact count of i=0,stride,2·stride,… < length
-            var sample = new ushort[n];
-            for (int i = 0, j = 0; i < pixels.Length; i += stride) {
-                sample[j++] = pixels[i];
+        private static (double median, double sigma) BackgroundStats(ReadOnlySpan<ushort> pixels, int width, int height) {
+            // Sample on a 2D grid (equal x/y step), NOT a linear memory stride. A linear stride i += N through
+            // row-major pixels aliases onto a fixed set of columns whenever gcd(N, width) > 1 (e.g. any
+            // power-of-two width) — it then samples only every gcd-th column, so a vignette or any column-varying
+            // structure biases the median/MAD and thus the detection threshold. An isotropic grid step of
+            // √(length/target) spreads the samples evenly over the whole field. Frames at/under the target give
+            // step 1 (√(≤1) → 0 → floored to 1) and sample in full.
+            int step = Math.Max(1, (int)Math.Sqrt((double)pixels.Length / BackgroundSampleTarget));
+            int nx = (width + step - 1) / step;   // ceil(width/step): x positions 0, step, 2·step, … < width
+            int ny = (height + step - 1) / step;  // ceil(height/step): likewise for rows
+            var sample = new ushort[nx * ny];
+            int j = 0;
+            for (int y = 0; y < height; y += step) {
+                int rowBase = y * width;
+                for (int x = 0; x < width; x += step) {
+                    sample[j++] = pixels[rowBase + x];
+                }
             }
             Array.Sort(sample);
             int median = sample[sample.Length / 2];
@@ -242,6 +253,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // A single-pixel-tight star yields HFR 0; clamp to a small floor so it's a usable focus metric.
             double hfr = Math.Max(0.5, sumFR / sumF);
 
+            var (outerDiameter, innerDiameter, shadowDepth, centroidOffsetX, centroidOffsetY, radialSkew) =
+                DonutGeometry(blob, pixels, width, cx, cy, background);
+
             return new DetectedStar {
                 Position = Math.Round(cy) * width + Math.Round(cx),
                 HFR = hfr,
@@ -256,7 +270,207 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 // ratio even on an all-dark/bias-free synthetic frame — a raw-peak fallback there would
                 // inject an outlier of a wholly different magnitude into the §59.3 median the model trains on.
                 PeakToBackground = (peak - background) / Math.Max(1.0, background),
+                DonutOuterDiameter = outerDiameter,
+                DonutInnerDiameter = innerDiameter,
+                DonutShadowDepth = shadowDepth,
+                DonutCentroidOffsetX = centroidOffsetX,
+                DonutCentroidOffsetY = centroidOffsetY,
+                RadialProfileSkew = radialSkew,
             };
+        }
+
+        // §59.3/§59.10 — donut (annulus) geometry for obstructed scopes. A defocused star on a scope with a
+        // central obstruction images as a ring: bright at some radius, dark in the middle (the obstruction
+        // shadow). Build the radial surface-brightness profile of the blob about its centroid — mean
+        // background-subtracted flux per integer-radius bin — and read the ring's half-max edges: the outer
+        // edge is the full donut diameter, the inner edge the obstruction-shadow diameter. Because the blob
+        // holds only above-threshold pixels, a donut's dark hole is absent (count-0 inner bins the scan skips),
+        // so the inner edge lands on the ring's inner rim. A refractor / in-focus star peaks at the centre, so
+        // its inner edge is bin 0 (inner diameter 0) and this degrades continuously to "outer ≈ FWHM, inner 0"
+        // — no branch on scope type. Diameters are 2·(bin radius) in pixels; a sub-pixel blob yields (0, 0, 0).
+        //
+        // §59.4 also wants the obstruction-shadow DEPTH (how dark the hole is relative to the ring), which
+        // distinguishes a well-obstructed scope / heavier defocus from a shallow one. The hole's pixels are
+        // below the detection threshold, so they're absent from the blob — its brightness is sampled directly
+        // from the frame over the inner-rim disk: ShadowDepth = clamp((ringPeak − holeMean) / ringPeak, 0, 1),
+        // 1 for a background-dark hole, →0 as the hole fills in (and exactly 0 for a filled star with no hole).
+        //
+        // §59.10 collimation: over the OUTER disk, take the brightness-DEFICIT-weighted centroid of the dark
+        // (sub-half-max) pixels — the obstruction shadow — each weight clamped to (0, peakSb] so one dead/cold
+        // pixel can't dominate, and return its offset from the ring's flux centroid (cx, cy). Scanning the full
+        // outer disk (not just the inner-rim disk) keeps the shadow locatable once it has decentered off the flux
+        // centroid — the collimation case. A concentric shadow → offset ≈ 0; a decentered secondary → the offset
+        // points toward the displacement. 0 for a star with no hole. Raw image-frame pixels; the verdict slice
+        // vector-averages many stars and maps direction to a clock position.
+        private const double DonutRingHalfMaxFraction = 0.5;
+        private const int DonutProfileMaxStackBins = 96;
+        // A real central-obstruction shadow spans many pixels; an inner rim of only a pixel or two is centre-bin
+        // noise (bin 0 averages very few pixels), so it's floored to a filled centre (inner 0).
+        private const int DonutMinInnerRadiusBins = 2;
+
+        private static (double OuterDiameter, double InnerDiameter, double ShadowDepth,
+                double CentroidOffsetX, double CentroidOffsetY, double RadialProfileSkew) DonutGeometry(
+                List<int> blob, ReadOnlySpan<ushort> pixels, int width, double cx, double cy, double background) {
+            double maxR = 0;
+            foreach (int p in blob) {
+                int x = p % width, y = p / width;
+                double dx = x - cx, dy = y - cy;
+                double r = Math.Sqrt(dx * dx + dy * dy);
+                if (r > maxR) {
+                    maxR = r;
+                }
+            }
+            int bins = (int)maxR + 1;
+            // Stack the profile for the common small blob; spill to the heap only for a large defocused donut.
+            Span<double> flux = bins <= DonutProfileMaxStackBins ? stackalloc double[bins] : new double[bins];
+            Span<int> count = bins <= DonutProfileMaxStackBins ? stackalloc int[bins] : new int[bins];
+            foreach (int p in blob) {
+                int x = p % width, y = p / width;
+                double dx = x - cx, dy = y - cy;
+                int b = (int)Math.Sqrt(dx * dx + dy * dy);
+                if (b >= bins) {
+                    b = bins - 1;
+                }
+                flux[b] += pixels[p] - background;
+                count[b]++;
+            }
+            double peakSb = 0;
+            int peakBin = 0;
+            for (int b = 0; b < bins; b++) {
+                if (count[b] == 0) {
+                    continue;
+                }
+                double sb = flux[b] / count[b];
+                if (sb > peakSb) {
+                    peakSb = sb;
+                    peakBin = b;
+                }
+            }
+            if (peakSb <= 0) {
+                return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            }
+
+            // §59.3 — the radial-profile SKEW: the third standardized moment of the blob's radial flux
+            // distribution (per-bin TOTAL flux, so outer bins weigh by their real light share). Skew reads
+            // the TAIL direction: positive = mass concentrated inward with a soft outward halo (a long
+            // right tail), negative = flux packed against a hard bright outer shell (tail pointing inward).
+            // For a rig with spherical aberration this signature flips sign across focus — the
+            // intra/extra-focal asymmetry the §59.3 side-classifier learns from the calibration sweep's
+            // labelled arms. The SIGN CONVENTION is rig-specific (depends on the SA sign), so nothing here
+            // assumes which side is which; the classifier learns it. The detection threshold truncates
+            // faint wings, but the truncation is identical for every star of a frame and consistent across
+            // a rig's frames, so the learned separation survives it.
+            double radialSkew = 0.0;
+            {
+                double w = 0, sumB = 0;
+                for (int b = 0; b < bins; b++) {
+                    double f = Math.Max(0.0, flux[b]);
+                    w += f;
+                    sumB += f * b;
+                }
+                if (w > 0) {
+                    double meanR = sumB / w;
+                    double m2 = 0, m3 = 0;
+                    for (int b = 0; b < bins; b++) {
+                        double f = Math.Max(0.0, flux[b]);
+                        double d = b - meanR;
+                        m2 += f * d * d;
+                        m3 += f * d * d * d;
+                    }
+                    m2 /= w;
+                    m3 /= w;
+                    // A sub-pixel-spread profile has no meaningful shape; the floor also guards the σ³ division.
+                    if (m2 > 1e-6) {
+                        radialSkew = m3 / Math.Pow(m2, 1.5);
+                    }
+                }
+            }
+            double half = DonutRingHalfMaxFraction * peakSb;
+            // Walk the ring OUT from the peak, contiguously: the first bin that dips below half-max (or is
+            // empty) ends it, so a lone noisy outlier bin past a gap can't stretch the outer diameter.
+            int outerBin = peakBin;
+            for (int b = peakBin + 1; b < bins; b++) {
+                if (count[b] == 0 || flux[b] / count[b] < half) {
+                    break;
+                }
+                outerBin = b;
+            }
+            // Walk the ring IN from the peak, contiguously: the first sub-half / empty bin is the inner rim
+            // (the obstruction-shadow edge). For a centre-peaked star the ring reaches bin 0, so the rim is 0.
+            int innerBin = peakBin;
+            for (int b = peakBin - 1; b >= 0; b--) {
+                if (count[b] == 0 || flux[b] / count[b] < half) {
+                    break;
+                }
+                innerBin = b;
+            }
+            // A hole only a pixel or two across is not a physical central-obstruction shadow — it's centre-bin
+            // noise (on a real frame bin 0's few-pixel mean can dip below half-max even for a filled star, and
+            // noise can nudge the peak off bin 0). Floor a sub-threshold inner rim to 0 so an in-focus /
+            // refractor star robustly reports inner diameter 0 with no branch on scope type; a genuine defocused
+            // donut's obstruction shadow spans many pixels and clears the floor.
+            if (innerBin < DonutMinInnerRadiusBins) {
+                innerBin = 0;
+            }
+
+            // Shadow depth + §59.10 centroid, in ONE pass over the outer disk (the inner-rim disk the shadow
+            // depth needs is contained in it, so a second scan would just re-read the same pixels). Only a
+            // genuine hole (innerBin > 0 after the floor) has either.
+            double shadowDepth = 0.0;
+            double offsetX = 0.0, offsetY = 0.0;
+            if (innerBin > 0) {
+                int height = pixels.Length / width;
+                double innerR = innerBin, outerR = outerBin;
+                double innerR2 = innerR * innerR, outerR2 = outerR * outerR; // hoisted out of the pixel loop
+                double holeSum = 0;               // Σ flux over the inner-rim disk → shadow depth
+                int holeCount = 0;
+                double wSum = 0, wX = 0, wY = 0;   // deficit-weighted centroid over the outer disk's dark pixels
+                int ox0 = Math.Max(0, (int)(cx - outerR)), ox1 = Math.Min(width - 1, (int)(cx + outerR));
+                int oy0 = Math.Max(0, (int)(cy - outerR)), oy1 = Math.Min(height - 1, (int)(cy + outerR));
+                for (int yy = oy0; yy <= oy1; yy++) {
+                    for (int xx = ox0; xx <= ox1; xx++) {
+                        double dx = xx - cx, dy = yy - cy;
+                        double r2 = (dx * dx) + (dy * dy);
+                        if (r2 >= outerR2) {
+                            continue;
+                        }
+                        double localFlux = pixels[(yy * width) + xx] - background;
+                        // Shadow depth: mean brightness over the inner-rim disk (sampled straight from the frame —
+                        // the hole's pixels are below the detection threshold, so absent from the blob).
+                        if (r2 < innerR2) {
+                            holeSum += localFlux;
+                            holeCount++;
+                        }
+                        // §59.10 decentering: deficit-weight the DARK (sub-half-max) pixels — the obstruction
+                        // shadow plus the gap just inside the rim. Bright ring pixels (flux ≥ half-max) are
+                        // excluded so the ring can't wash out the signal. Clamp the flux to ≥ 0 before weighting
+                        // (as the shadow-depth mean does): a dead/cold pixel's large-negative flux would otherwise
+                        // carry an outsized weight and let one outlier dominate the centroid, defeating the
+                        // uncorrelated-per-star-noise-cancels assumption the verdict relies on. Clamped, the
+                        // darkest a pixel can weigh is peakSb, same as a background-dark shadow pixel.
+                        if (localFlux < half) {
+                            double w = peakSb - Math.Max(0.0, localFlux); // ∈ (0, peakSb]
+                            wSum += w;
+                            wX += w * xx;
+                            wY += w * yy;
+                        }
+                    }
+                }
+                if (holeCount > 0) {
+                    double holeMean = Math.Max(0.0, holeSum / holeCount);
+                    shadowDepth = Math.Clamp((peakSb - holeMean) / peakSb, 0.0, 1.0);
+                }
+                if (wSum > 0) {
+                    // Offset from the ring's FLUX centroid (cx, cy) — not the geometric ring centre. For a
+                    // symmetric ring they coincide, but an intrinsically asymmetric ring (coma / tilt / heavy
+                    // elongation) pulls (cx, cy) off centre and can read a nonzero offset even on a well-collimated
+                    // star. That per-star false signal is why the §59.10 verdict vector-averages many near-centre
+                    // stars: uncorrelated ring asymmetry cancels, a real secondary decentering adds coherently.
+                    offsetX = (wX / wSum) - cx;
+                    offsetY = (wY / wSum) - cy;
+                }
+            }
+            return (2.0 * outerBin, 2.0 * innerBin, shadowDepth, offsetX, offsetY, radialSkew);
         }
 
         // For a 2D Gaussian the flux-weighted radial second moment ⟨r²⟩ = cxx + cyy equals 2σ², so

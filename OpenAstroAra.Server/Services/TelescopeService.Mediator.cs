@@ -231,7 +231,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     public bool SetTrackingEnabled(bool trackingEnabled) {
         var client = ConnectedClientOrNull();
-        return client is not null && TrySetTracking(client, trackingEnabled);
+        if (client is null) {
+            return false;
+        }
+        NoteMountCommand(w => w.NoteTrackingCommanded(trackingEnabled));
+        return TrySetTracking(client, trackingEnabled);
     }
 
     public bool SetTrackingMode(TrackingMode trackingMode) {
@@ -241,12 +245,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         var client = ConnectedClientOrNull();
-        return client is not null && TrySetTrackingMode(client, trackingMode);
+        if (client is null) {
+            return false;
+        }
+        // A mode change asserts tracking on most drivers — expected-on with grace.
+        NoteMountCommand(w => w.NoteTrackingCommanded(true));
+        return TrySetTrackingMode(client, trackingMode);
     }
 
     public void StopSlew() {
         var client = ConnectedClientOrNull();
         if (client is not null) {
+            NoteMountCommand(w => w.NoteMotionCommanded());
             TryAbortSlew(client);
         }
     }
@@ -281,6 +291,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false; // not connected: the instruction's Validate has already blocked this
         }
         try {
+            // §42.2 — note the command before dispatch so the tracking watch's grace window is
+            // armed by the time any refresh tick can observe the op's effect. Park/home end with
+            // tracking legitimately off; everything else just suppresses without re-expecting.
+            NoteMountCommand(op is "telescope.park" or "telescope.findhome"
+                ? w => w.NoteParkCommanded()
+                : w => w.NoteMotionCommanded());
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
             var opTask = Task.Run(() => action(client), CancellationToken.None);
@@ -298,8 +314,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (TimeoutException ex) {
+            // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
+            LogMountOpFailed(ex, op);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
+            return false;
         } catch (Exception ex) {
             LogMountOpFailed(ex, op);
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
             return false;
         }
     }
@@ -425,6 +447,26 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+    }
+
+    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaTelescope client, EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
+            device = _device;
+        }
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Telescope, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an

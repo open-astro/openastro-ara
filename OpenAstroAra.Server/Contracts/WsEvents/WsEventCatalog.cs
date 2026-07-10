@@ -43,6 +43,19 @@ public static class WsEventCatalog {
     public const string EquipmentDisconnected = "equipment.disconnected";
     public const string EquipmentConnectionFailed = "equipment.connection_failed";
     public const string EquipmentDiscoveryRefreshed = "equipment.discovery_refreshed";
+    // §42.2 — a DETECTED device fault (disconnect streak, stall, value mismatch, …); payload
+    // { device_type, device_id, device_name, kind, details, detected_utc }. What was done about
+    // it (retries/pause/abort+park) is the §42.3 reaction slice's separate event.
+    public const string EquipmentFault = "equipment.fault";
+    // §42.3 — what the FaultReactionService DID about a fault; payload { device_type, device_id,
+    // device_name, kind, action, … } where action is sequence_paused | reconnecting | recovered
+    // | gave_up | notify_only (gave_up carries the terminal action taken).
+    public const string EquipmentFaultActionTaken = "equipment.fault_action_taken";
+    // §42.4 — a written switch port whose read-back disagrees with the commanded value beyond
+    // the profile tolerance past the settle window; payload { device_id, device_name, port_id,
+    // port_name, commanded, read_back, tolerance_pct }. Fires alongside the equipment.fault
+    // broadcast (kind value_mismatch) with the structured per-port detail WILMA needs.
+    public const string SwitchValueMismatch = "switch.value_mismatch";
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
@@ -54,6 +67,25 @@ public static class WsEventCatalog {
     // §42.2 — the mid-sequence guider fault flow reports the executed
     // on_guider_lost policy (pause_and_retry / skip_target / abort_sequence).
     public const string GuiderFaultActionTaken = "guider.fault_action_taken";
+    // §45 polar alignment — the routine lifecycle. started/stopped land with the service skeleton;
+    // the in-loop frame_complete/solved/unsolved/paused events arrive with the capture-loop slice.
+    public const string PolarAlignStarted = "polar_align.started";
+    public const string PolarAlignStopped = "polar_align.stopped";
+
+    // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
+    // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
+    // refractors / in-focus fields produce no donut and are skipped. Payload:
+    // { severity, offset_percent, direction_degrees, stars_used }.
+    public const string AutofocusCollimationVerdict = "autofocus.collimation_verdict";
+
+    // §59.15 — the Smart Focus run lifecycle (§59.2 one-frame runner). `started` fires ONCE per AF run
+    // with the initially resolved mode ("smart" | "classic"); `shot_complete` per Smart shot with
+    // { shot_index, position, hfr, stars }; `fallback_classic` when an in-run Smart failure (§59.11
+    // ladder) hands the run to the full Classic sweep, with { reason } — that event IS the mode
+    // transition (no second `started`), so a client keys its live panel off started + fallback_classic.
+    public const string AutofocusStarted = "autofocus.started";
+    public const string AutofocusShotComplete = "autofocus.shot_complete";
+    public const string AutofocusFallbackClassic = "autofocus.fallback_classic";
 
     // Phase 7 — sequence
     public const string SequenceCreated = "sequence.created";
@@ -167,10 +199,15 @@ public static class WsEventCatalog {
     /// </summary>
     public static readonly IReadOnlyList<string> All = new[] {
         EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
-        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed,
+        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault, EquipmentFaultActionTaken,
+        SwitchValueMismatch,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
+        AutofocusCollimationVerdict,
+        AutofocusStarted,
+        AutofocusShotComplete,
+        AutofocusFallbackClassic,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
         SequenceStarted, SequencePaused, SequenceResumed, SequenceAborted,
