@@ -38,10 +38,11 @@ import 'trigger_catalog.dart';
 /// - `StartGuiding` / `Dither`: the daemon's guider mediator is still the
 ///   headless stub — both would fail validation on every run and read as
 ///   FAILED steps in the report.
-/// - `CenterAndRotate`: the rotate half isn't ported; the instruction throws
-///   when a rotator IS connected, so a plain slew is the reliable default.
-///   (The framing position angle is therefore still not acted on — the §36
-///   sequencer-fidelity TODO in `stellarium_view.dart` stands.)
+///
+/// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
+/// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now);
+/// with no PA the plain slew stays the default, so a run never requires a
+/// plate solver the user didn't opt into by framing with rotation.
 ///
 /// The body is editable afterwards in the Run tab like any hand-built
 /// sequence — this is a starting point that actually images, not a template
