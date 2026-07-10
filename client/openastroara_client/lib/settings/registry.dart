@@ -1042,6 +1042,17 @@ const List<Setting> settingsRegistry = [
     defaultValue: 'Astronomical (−18°)',
     profilePath: 'site.twilight_definition',
   ),
+  Setting(
+    id: 'safety.site.max_sequence_runtime_min',
+    label: 'Max sequence runtime',
+    description:
+        'Whole-run ceiling in minutes — a sequence still running past it is stopped gracefully (0 = no limit).',
+    keywords: ['max', 'runtime', 'sequence', 'limit', 'cap', 'duration', 'timeout', 'stop', 'safety'],
+    path: ['Settings', 'Safety', 'Site'],
+    type: SettingType.intRange(min: 0, max: 10080),
+    defaultValue: 0,
+    profilePath: 'site.max_sequence_runtime_min',
+  ),
 
   // §29.2 File naming options that don't overlap with the storage panel.
   // State lives in `filenamesSettingsProvider`. File format / compression /

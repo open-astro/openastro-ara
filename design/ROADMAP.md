@@ -159,8 +159,11 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   section DEFAULT instead of keeping the cloned value; typing un-marks. Other sections' fields
   stay keep-on-blank (their defaults are benign); extend per-field if friction emerges.
 - **§37.5 wizard safety/site extras (enforcement-first)** — per-weather granular actions,
-  WILMA-offline auto-abort timer, alarm sound/vibrate, soft-warning altitude, max-sequence-runtime
-  cap: add each field together with the engine/planner surface that consumes it.
+  WILMA-offline auto-abort timer, alarm sound/vibrate, soft-warning altitude: add each field
+  together with the engine/planner surface that consumes it. ~~Max-sequence-runtime cap~~ —
+  shipped: `SiteSettingsDto.MaxSequenceRuntimeMin` (0 = no limit) + the sequencer's runtime-cap
+  watchdog (graceful user-stop path + notification; cap re-read per tick so mid-run Settings
+  changes apply) + Settings → Safety → Site row + wizard screen 16 field.
 - **Logs + bug report streaming** — §29.9 tail full-file scan → reverse byte-scan / line index +
   continuation token if the §54 panel ever live-streams or paginates; §54 daemon-log and
   bug-report ZIP downloads buffer whole files in memory → stream to path (needed before any

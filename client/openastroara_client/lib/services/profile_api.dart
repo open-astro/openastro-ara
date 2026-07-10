@@ -1157,6 +1157,8 @@ class ProfileApi {
         twilightDefinition: _twilightFromString(
           j['twilight_definition'] as String?,
         ),
+        maxSequenceRuntimeMin:
+            (j['max_sequence_runtime_min'] as num?)?.toInt() ?? 0,
       );
 
   static Map<String, dynamic> _siteSettingsToJson(SiteSettings v) => {
@@ -1170,6 +1172,7 @@ class ProfileApi {
     'bortle_class': v.bortleClass,
     'typical_seeing_arcsec': v.typicalSeeingArcsec,
     'twilight_definition': v.twilightDefinition.name,
+    'max_sequence_runtime_min': v.maxSequenceRuntimeMin,
   };
 
   static TwilightDefinition _twilightFromString(String? s) {

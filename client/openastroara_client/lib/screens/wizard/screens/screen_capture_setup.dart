@@ -657,6 +657,7 @@ class ScreenSiteAltitude extends ConsumerStatefulWidget {
 class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
   late final SitePreferences _site = _draftOf(ref).site;
   String? _horizonError;
+  String? _runtimeError;
 
   @override
   Widget build(BuildContext context) {
@@ -707,6 +708,33 @@ class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
                 label: 'Astronomical twilight'),
           ],
           onChanged: (v) => setState(() => _site.twilight = v),
+        ),
+        WizardTextField(
+          label: 'Max sequence runtime (min)',
+          initialValue: _site.maxSequenceRuntimeMin?.toString(),
+          hint: 'default: no limit',
+          helperText: 'Safety ceiling on one run — a sequence still going past '
+              'it is stopped gracefully. 0 = no limit. Leave blank to keep the '
+              'profile default.',
+          errorText: _runtimeError,
+          keyboardType: TextInputType.number,
+          inputFormatters: WizardInput.unsignedInt,
+          onChanged: (v) {
+            final t = v.trim();
+            String? err;
+            if (t.isEmpty) {
+              _site.maxSequenceRuntimeMin = null;
+            } else {
+              final m = int.tryParse(t);
+              if (m != null && m >= 0 && m <= 10080) {
+                _site.maxSequenceRuntimeMin = m;
+              } else {
+                err = 'Enter whole minutes, 0–10080 (a week).';
+              }
+            }
+            setState(() => _runtimeError = err);
+            _reportStepValid(ref, err == null);
+          },
         ),
       ],
     );

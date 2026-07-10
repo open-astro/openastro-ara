@@ -245,10 +245,12 @@ enum UnsafeConditionAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 class SitePreferences {
   // Wizard subset that maps onto the profile's site section. Nullable (null keeps
   // base). The horizon altitude is the hard floor below which targets aren't
-  // observed. A separate soft-warning altitude + max sequence runtime aren't
-  // fields on the site section DTO — deferred (see design/PORT_TODO.md).
+  // observed. §37.5: the max-sequence-runtime cap landed with its sequencer
+  // consumer (0 = no limit); a soft-warning altitude stays deferred (see
+  // design/PORT_TODO.md).
   double? hardMinAltitudeDeg;
   TwilightOption? twilight;
+  int? maxSequenceRuntimeMin;
 }
 
 /// Mirrors the site section's `TwilightDefinition` (mapped in wizard_save) — how
