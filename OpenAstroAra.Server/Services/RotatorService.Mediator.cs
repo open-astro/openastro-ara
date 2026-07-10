@@ -174,10 +174,11 @@ public sealed partial class RotatorService : IRotatorMediator {
             }
             await moveTask.ConfigureAwait(false); // observe the move's result / surface its exception
             if (!await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false)) {
-                // §42.2 — the §42.2 "position drift / runaway" family: the move dispatched fine
-                // but the rotator still reports moving after the full settle bound. Fail the
-                // instruction — a rotator at an unknown angle must not read as a completed move.
-                var msg = $"rotator still reports moving {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s after a move to {target}°";
+                // §42.2 — the move dispatched fine but was never confirmed settled (still moving
+                // after the full bound, or the connection dropped mid-move — the publish gate
+                // suppresses the latter and the §42.3 probe owns it). Fail the instruction — a
+                // rotator at an unknown angle must not read as a completed move.
+                var msg = $"rotator move to {target}° was not confirmed settled within the {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s bound";
                 PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
                 throw new SequenceEntityFailedException(msg);
             }
@@ -206,10 +207,12 @@ public sealed partial class RotatorService : IRotatorMediator {
 
     // Polls the device's IsMoving directly (not via the single-flight cache, which can no-op against a
     // concurrent timer tick) until the rotator settles or the bound elapses, refreshing the §32.4
-    // cache each tick so GetInfo/GetAsync stay current. Returns false ONLY on settle exhaustion —
-    // the device still reports moving after the full bound (§42.2: the caller fails the instruction).
-    // A dropped/superseded connection and a driver without IsMoving both report true ("not a stall"):
-    // the §42.3 probe owns disconnects, and a blocking-Move driver settled when the call returned.
+    // cache each tick so GetInfo/GetAsync stay current. Returns false when the move could not be
+    // CONFIRMED settled — bound exhausted with the device still reporting motion, or the device
+    // dropped/was superseded mid-wait (angle unknown; the instruction must fail even though the
+    // §42.3 disconnect episode owns the fault/reaction — the publish gate suppresses a spurious
+    // stall event for that case, aligning with the mount/dome/filter settle loops). A driver
+    // without IsMoving reports true: its blocking Move settled when the call returned.
     private async Task<bool> WaitForMoveCompleteAsync(AlpacaRotator client, CancellationToken ct) {
         var unknownStreak = 0;
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
@@ -222,7 +225,7 @@ public sealed partial class RotatorService : IRotatorMediator {
                     && ReferenceEquals(_client, client);
             }
             if (!stillOurClient) {
-                return true;
+                return false;
             }
             var moving = ReadIsMoving(client);
             RefreshCacheOnce();
