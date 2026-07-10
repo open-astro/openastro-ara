@@ -18,10 +18,7 @@ final calibrationApiFactoryProvider =
 /// [CalibrationClient] bound to the active server, or null when none is saved.
 final calibrationApiProvider = Provider.autoDispose<CalibrationClient?>((ref) {
   final server =
-      ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-            data: (list) => list.isEmpty ? null : list.last,
-            orElse: () => null,
-          )));
+      ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(calibrationApiFactoryProvider)(server);
   ref.onDispose(api.close);

@@ -89,10 +89,7 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   }
 
   AraServer? _activeServer() =>
-      ref.read(savedServersProvider).maybeWhen(
-            data: (list) => list.isEmpty ? null : list.last,
-            orElse: () => null,
-          );
+      ref.read(activeServerProvider);
 
   /// Start the loop with the given exposure/gain/binning, then begin polling.
   Future<void> start({

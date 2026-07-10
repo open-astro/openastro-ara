@@ -48,10 +48,29 @@ class SavedServerService {
     // Re-confirming a known server (equality is host:port) moves it to the
     // END — "the last one used is the default on next launch" was a lie while
     // this early-returned: with two saved rigs, reconnecting to the older one
-    // left the other as `activeServerProvider`'s pick. The re-add also
-    // refreshes stored metadata (serverVersion/mdnsName can change between
-    // confirmations).
-    await saveAll([...existing.where((s) => s != server), server]);
+    // left the other as `activeServerProvider`'s pick. The re-add refreshes
+    // stored metadata (serverVersion/mdnsName can change between
+    // confirmations) but merges per-field: a bare manual re-entry (host:port
+    // only) must not blank metadata a richer earlier confirmation recorded.
+    await saveAll(
+        [...existing.where((s) => s != server), merge(server, existing)]);
+  }
+
+  /// The entry to store for a (re-)confirmed [server]: its own metadata,
+  /// falling back per-field to what a prior confirmation of the same
+  /// host:port recorded.
+  static AraServer merge(AraServer server, List<AraServer> existing) {
+    AraServer? prior;
+    for (final s in existing) {
+      if (s == server) prior = s;
+    }
+    if (prior == null) return server;
+    return AraServer(
+      hostname: server.hostname,
+      port: server.port,
+      mdnsName: server.mdnsName ?? prior.mdnsName,
+      serverVersion: server.serverVersion ?? prior.serverVersion,
+    );
   }
 
   Map<String, dynamic> _serverToJson(AraServer s) => <String, dynamic>{

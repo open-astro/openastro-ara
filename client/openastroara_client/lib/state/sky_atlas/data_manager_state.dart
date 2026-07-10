@@ -14,13 +14,10 @@ final dataManagerApiFactoryProvider =
   (ref) => DataManagerApi.new,
 );
 
-/// [DataManagerClient] bound to the active server (`savedServers.last`), or
+/// [DataManagerClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
 final dataManagerApiProvider = Provider<DataManagerClient?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(dataManagerApiFactoryProvider)(server);
   ref.onDispose(api.close);

@@ -24,10 +24,13 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
     try {
       await svc.add(server);
     } catch (_) {
-      // Mirror the service's move-to-end semantics (re-confirmed = active).
+      // Mirror the service's move-to-end + per-field metadata merge, so the
+      // active pick and stored details don't depend on the keyring working.
       final current = state.value ?? const <AraServer>[];
-      state = AsyncValue.data(
-          [...current.where((s) => s != server), server]);
+      state = AsyncValue.data([
+        ...current.where((s) => s != server),
+        SavedServerService.merge(server, current),
+      ]);
       return;
     }
     // AsyncValue.guard captures any throw from loadAll() into AsyncError

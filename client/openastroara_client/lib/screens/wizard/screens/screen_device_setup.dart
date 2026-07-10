@@ -44,10 +44,7 @@ String _describeError(Object e) =>
 
 /// The active daemon server, or null when none is connected — the wizard's
 /// "Refresh from connected device" affordances read the device through it.
-AraServer? _activeServer(WidgetRef ref) => ref.read(savedServersProvider).maybeWhen(
-      data: (list) => list.isEmpty ? null : list.last,
-      orElse: () => null,
-    );
+AraServer? _activeServer(WidgetRef ref) => ref.read(activeServerProvider);
 
 /// "Refresh from connected device" button shared by the per-device wizard
 /// screens (§37): pulls the device's real settings off AlpacaBridge into the

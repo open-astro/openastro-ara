@@ -28,14 +28,7 @@ final autofocusApiFactoryProvider = Provider<AutofocusApi Function(AraServer)>(
 
 /// Autofocus client bound to the **active** server, or `null` when none is saved.
 final autofocusApiProvider = Provider<AutofocusApi?>((ref) {
-  final server = ref.watch(
-    savedServersProvider.select(
-      (async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      ),
-    ),
-  );
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(autofocusApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -46,14 +39,7 @@ final autofocusApiProvider = Provider<AutofocusApi?>((ref) {
 final focuserApiProvider = Provider<EquipmentDeviceClient<FocuserStatus>?>((
   ref,
 ) {
-  final server = ref.watch(
-    savedServersProvider.select(
-      (async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      ),
-    ),
-  );
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(focuserApiFactoryProvider)(server);
   ref.onDispose(api.close);

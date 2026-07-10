@@ -19,18 +19,11 @@ final safetyMonitorApiFactoryProvider =
           ),
     );
 
-/// SafetyMonitor client bound to the **active** server (`savedServers.last`), or
+/// SafetyMonitor client bound to the **active** server ([activeServerProvider]), or
 /// `null` when no server is saved.
 final safetyMonitorApiProvider =
     Provider<EquipmentDeviceClient<SafetyMonitorStatus>?>((ref) {
-      final server = ref.watch(
-        savedServersProvider.select(
-          (async) => async.maybeWhen(
-            data: (list) => list.isEmpty ? null : list.last,
-            orElse: () => null,
-          ),
-        ),
-      );
+      final server = ref.watch(activeServerProvider);
       if (server == null) return null;
       // A fresh Dio-backed client is built per active-server change and torn down via
       // onDispose; fine for the low connection churn here. (Pattern the other

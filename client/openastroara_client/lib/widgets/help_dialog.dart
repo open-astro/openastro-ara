@@ -42,11 +42,11 @@ class _HelpDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final servers = ref.watch(savedServersProvider);
     final appVersion = ref.watch(_appVersionProvider);
+    // The canonical active pick, but keep the loading-vs-none display split
+    // the list's own async state carries.
     final activeServer = servers.maybeWhen(
-      // Most-recently-saved entry is the de-facto "active" server; the
-      // saved-server list is append-ordered (oldest first), so .last picks
-      // the latest handshake-confirmed server.
-      data: (list) => list.isEmpty ? '— (none saved)' : list.last.toString(),
+      data: (_) =>
+          ref.watch(activeServerProvider)?.toString() ?? '— (none saved)',
       orElse: () => '—',
     );
 
@@ -113,7 +113,7 @@ class _HelpDialog extends ConsumerWidget {
   Future<void> _copyDiagnostics(BuildContext context, WidgetRef ref) async {
     final servers = ref.read(savedServersProvider);
     final activeServer = servers.maybeWhen(
-      data: (list) => list.isEmpty ? '(none)' : list.last.toString(),
+      data: (_) => ref.read(activeServerProvider)?.toString() ?? '(none)',
       orElse: () => '(unknown)',
     );
     // Re-fetch package info inline so the diagnostics text always has the

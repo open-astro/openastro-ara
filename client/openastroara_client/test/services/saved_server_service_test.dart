@@ -50,4 +50,20 @@ void main() {
     expect(loaded.single.serverVersion, '0.0.2');
     expect(loaded.single.mdnsName, 'ara-obs');
   });
+
+  test('a bare manual re-entry keeps earlier-recorded metadata', () async {
+    // A manual add types only host:port; that re-confirmation must not blank
+    // the mDNS name / version a richer earlier confirmation stored.
+    final svc = SavedServerService();
+    await svc.add(const AraServer(
+        hostname: 'observatory',
+        port: 8080,
+        mdnsName: 'ara-obs',
+        serverVersion: '0.0.2'));
+    await svc.add(const AraServer(hostname: 'observatory', port: 8080));
+    final loaded = await svc.loadAll();
+    expect(loaded, hasLength(1));
+    expect(loaded.single.mdnsName, 'ara-obs');
+    expect(loaded.single.serverVersion, '0.0.2');
+  });
 }
