@@ -164,6 +164,34 @@ void main() {
       expect(out.downsampleFactor, 4);
     });
 
+    test('an explicitly-reset plate-solve path takes the default, not the clone',
+        () {
+      // §37 clear-field affordance: the new profile clones the active one, so
+      // blank alone keeps the OLD rig's path — a cleared field must shed it.
+      final base = const PlateSolveSettings().copyWith(
+        pathOrEndpoint: '/old-rig/astap',
+        indexDownloadPath: '/old-rig/db',
+      );
+      final d = ProfileDraft();
+      d.clearedFields.add(ClearableField.astapBinaryPath);
+      final out = applyDraftToPlateSolve(base, d);
+      expect(out.pathOrEndpoint, const PlateSolveSettings().pathOrEndpoint,
+          reason: 'the cleared path resets to the section default');
+      expect(out.indexDownloadPath, '/old-rig/db',
+          reason: 'the un-cleared sibling still keeps the cloned value');
+    });
+
+    test('a typed value (no cleared mark) lands as-is', () {
+      // The mapper gives a cleared mark priority over the draft value, so the
+      // screens' un-mark-on-type behaviour is load-bearing; this pins the
+      // mapper half of that contract — no mark + typed value → the value wins.
+      final d = ProfileDraft();
+      d.plateSolve.astapBinaryPath = '/new-rig/astap';
+      final out = applyDraftToPlateSolve(
+          const PlateSolveSettings().copyWith(pathOrEndpoint: '/old-rig/astap'), d);
+      expect(out.pathOrEndpoint, '/new-rig/astap');
+    });
+
     test('applyDraftToFilterSet builds planning filters from named draft filters', () {
       final d = ProfileDraft();
       d.filterWheel.filters.addAll([
@@ -317,6 +345,20 @@ void main() {
       expect(out.saveDirectory, '/keep/dir');
       expect(out.fileFormat, base.fileFormat);
       expect(out.compression, base.compression);
+    });
+
+    test('explicitly-reset storage fields take the defaults, not the clone', () {
+      final base = const StorageSettings().copyWith(
+        saveDirectory: '/old-rig/frames',
+        filenameTemplate: r'$$OLD$$',
+      );
+      final d = ProfileDraft();
+      d.clearedFields
+        ..add(ClearableField.saveDirectory)
+        ..add(ClearableField.filenameTemplate);
+      final out = applyDraftToStorage(base, d);
+      expect(out.saveDirectory, const StorageSettings().saveDirectory);
+      expect(out.filenameTemplate, const StorageSettings().filenameTemplate);
     });
 
     test('applyDraftToSafety maps the unsafe-conditions subset', () {
