@@ -16,6 +16,15 @@ the other design docs.
 
 ## §42.5 fault log — follow-ups (2026-07-10, from the fault-log sub-PR)
 
+- **Server-side resolve-on-reconnect for recovery-tracked fault rows** (from the #797 review
+  arc). A `gave_up` disconnect fault the user fixes by hand stays `resolved_at IS NULL` in the
+  `faults` table forever — no `recovered` action ever fires for it. The client seeds chips from
+  `unresolvedOnly=true` and defends with a 24 h `staleRedGuard` + the `equipment.connected` live
+  heal, but the LOG still reads dishonestly (an unresolved row for a long-healed fault). Fix
+  server-side, mirroring the client heal: on a device's connected transition (the
+  `EquipmentEventPublisher` choke point), stamp `resolved_at` on that device type's unresolved
+  `disconnected` rows (tracking_lost stays recovered-only — a connect doesn't prove tracking).
+  Small slice: hook the publisher → an `IFaultLogService` resolve method.
 - ✅ **Pre-existing `has_more` pagination bug in three sqlite list methods — FIXED (2026-07-10, the
   sub-PR after #795).** Found while testing the new fault log's pagination: the shared loop shape
   `while (await reader.ReadAsync(ct) && items.Count < pageSize)` consumed the LIMIT pageSize+1

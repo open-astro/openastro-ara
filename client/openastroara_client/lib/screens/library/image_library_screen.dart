@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/library/live_library.dart';
+import '../../state/faults/fault_feed_state.dart';
 import '../../state/library/library_selection.dart';
 import '../../state/library/library_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/backup/backup_stream_state.dart';
+import '../../widgets/imaging/fault_panel.dart' show FaultHistoryTile;
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
 import '../../widgets/library/load_more_button.dart';
@@ -492,6 +494,8 @@ class _SessionCard extends ConsumerWidget {
                     label: const Text('Resume Target'),
                   );
                 }),
+                _SessionFaultsBadge(
+                    sessionId: session.id, targetName: session.targetName),
               ],
             ),
             const SizedBox(height: 8),
@@ -499,6 +503,50 @@ class _SessionCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// §42.6 per-session fault badge — hidden while the session has no recorded
+/// faults; otherwise an amber count that opens the session's fault timeline.
+/// Lazily fetched per card (like the frame strip): the sessions endpoint
+/// carries no fault count, so each visible card asks the §42.5 log directly.
+class _SessionFaultsBadge extends ConsumerWidget {
+  final String sessionId;
+  final String targetName;
+  const _SessionFaultsBadge({required this.sessionId, required this.targetName});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final faults = ref.watch(sessionFaultsProvider(sessionId));
+    final rows = faults.asData?.value;
+    // Loading/error/none all render nothing — the badge is an alert, not a
+    // status field, and a fault-log hiccup must not clutter every card.
+    if (rows == null || rows.isEmpty) return const SizedBox.shrink();
+    return TextButton.icon(
+      onPressed: () => showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Faults — $targetName'),
+          content: SizedBox(
+            width: 480,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: rows.length,
+              itemBuilder: (context, i) => FaultHistoryTile(row: rows[i]),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+      icon: const Icon(Icons.warning_amber_outlined, size: 16),
+      style: TextButton.styleFrom(foregroundColor: AraColors.accentBusy),
+      label: Text('${rows.length} fault${rows.length == 1 ? '' : 's'}'),
     );
   }
 }
