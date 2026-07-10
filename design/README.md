@@ -8,7 +8,8 @@ way they are. Nothing in here ships to users (user-facing docs live in [`../docs
 
 | Doc | What it is | How it's maintained |
 |---|---|---|
-| [`PORT_PLAYBOOK.md`](PORT_PLAYBOOK.md) | **The product spec.** ~12,800 lines, addressed by `§` numbers cited throughout the code, PRs, and every other doc. Has its own Table of Contents and the **"Port completion status — v0.0.1 section checklist"** (✅/🟡/⬜/🚫 per §section) near the top. | User-authoritative. Feature PRs flip their §checklist marker; substance changes are the maintainer's call. |
+| [`PORT_PLAYBOOK.md`](PORT_PLAYBOOK.md) | **The product spec.** ~12,800 lines, addressed by `§` numbers cited throughout the code, PRs, and every other doc. Has its own Table of Contents and the **"Port completion status — section checklist"** (✅/🟡/⬜/🚫 per §section) near the top. | User-authoritative. Feature PRs flip their §checklist marker; substance changes are the maintainer's call. |
+| [`ROADMAP.md`](ROADMAP.md) | **The design path.** The single consolidated list of everything remaining — in-flight epic, release gates, dependency-ordered workstreams, the themed feature backlog, verify passes, user-parked decisions, and a complete small-follow-ups appendix. Replaced the version-bucketed roadmap (playbook §55) on 2026-07-09. | Feature PRs strike/update their items; the appendix indexes `PORT_TODO.md` rather than duplicating it. |
 | [`PORT_TODO.md`](PORT_TODO.md) | **The work queue.** Every deferred item, review follow-up, parked blocker, and `TODO(port)` marker. Split in two: **open + mixed sections on top**, a "✅ Done / obsolete — archived entries" half below. | Every PR that defers something logs it here; fully-closed sections move (verbatim) below the archive line. |
 | [`PORT_PROGRESS.md`](PORT_PROGRESS.md) | **The per-PR narrative.** A short accurate "Current" block (phase / last merged / in progress / next) on top of the full phase-by-phase history. | The port-driver skill updates "Current" + appends a Completed entry on every PR. |
 | [`PORT_DECISIONS.md`](PORT_DECISIONS.md) | **Append-only decision log** — every non-obvious call, with date, reason, and a file/line pointer to where it's encoded. | Append only. Never edit prior entries. |
@@ -26,10 +27,10 @@ each at a different altitude:
 
 1. **Right now / next PR** → [`PORT_PROGRESS.md`](PORT_PROGRESS.md) → the "Current" block.
 2. **The open work queue** (deferred items, follow-ups, parked blockers) → [`PORT_TODO.md`](PORT_TODO.md), everything **above** its "Done / obsolete" archive line.
-3. **Section-level completion** across all 77 spec sections → `PORT_PLAYBOOK.md` → **"Port completion status — v0.0.1 section checklist"** (near the top).
-4. **v0.1.0+ roadmap** (deferred features with rationale) → `PORT_PLAYBOOK.md` **§55**.
+3. **Section-level completion** across all 77 spec sections → `PORT_PLAYBOOK.md` → **"Port completion status — section checklist"** (near the top).
+4. **Everything remaining, as a design path** (workstreams, feature backlog, rationale) → [`ROADMAP.md`](ROADMAP.md).
 
-Externally-gated threads: the `v0.0.1-ara.1` release tag + RPi smoke test are **user/hardware-gated**
+Externally-gated threads: the first public release tag (`v0.0.1-ara.1`) + RPi smoke test are **user/hardware-gated**
 (see PORT_PROGRESS "Current"); guider-daemon event adoption is gated on upstream
 open-astro/openastro-guider#57 (see [`PHD2-GAP.md`](PHD2-GAP.md)).
 

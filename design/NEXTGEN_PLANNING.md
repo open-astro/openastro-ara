@@ -20,7 +20,7 @@
 > when unset — user-entered values always win, unknown sensors stay unset (the calculator's
 > documented generic default applies). Electronics-owned specs deliberately excluded per the
 > table below. The wizard electronics/filter capture steps also shipped earlier (#646/#647).
-> Originally captured 2026-06-29 and bookmarked behind the v1 cross-platform release; see
+> Originally captured 2026-06-29 and bookmarked behind the first public cross-platform release (sequenced in `design/ROADMAP.md`); see
 > `design/PORT_DECISIONS.md` (2026-06-29) for that context.
 
 This is the design record for turning Tonight's Sky (§36.8, shipped: `design/TONIGHT_SKY.md`)
@@ -128,7 +128,7 @@ nor — per Glover — that going past the floor buys no further read-noise gain
 dynamic range; that's diminishing returns, not a read-noise ceiling). The other bounds announce
 themselves (blown cores, trailed or rejected frames, no stars to solve, a full disk). So the tool computes the precise read-noise sweet
 spot and presents it *within* the obvious bounds, flagging when an obvious bound is the real
-constraint. v1 can implement the read-noise floor + the full-well/background saturation ceiling
+constraint. The first implementation can cover the read-noise floor + the full-well/background saturation ceiling
 (all derivable from the sky + camera model); star-detectability and satellite-trail bounds are
 refinements.
 

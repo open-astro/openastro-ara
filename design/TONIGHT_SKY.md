@@ -1,4 +1,4 @@
-# Tonight's Sky — equipment-aware target planner (§36.8 / §55.1)
+# Tonight's Sky — equipment-aware target planner (§36.8)
 
 Status: design locked (2026-06-29). Supersedes the placeholder `TonightSkyService`
 (20 hardcoded objects ranked by current altitude). Points/gamification are

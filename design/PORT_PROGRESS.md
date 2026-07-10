@@ -2,14 +2,14 @@
 
 Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1, "Currently working on" must point at a specific file, endpoint, or sub-PR — never "various refactoring."
 
-> **Section-level completion checklist:** see **`PORT_PLAYBOOK.md` → "Port completion status — v0.0.1 section checklist"** (near the top) for a ✅/🟡/⬜/🚫 status on all 77 playbook §sections. This file (PORT_PROGRESS) carries the per-PR narrative; the playbook checklist is the section-level rollup. Keep both current (each feature PR updates its Completed entry here + flips its §checklist marker there).
+> **Section-level completion checklist:** see **`PORT_PLAYBOOK.md` → "Port completion status — section checklist"** (near the top) for a ✅/🟡/⬜/🚫 status on all 77 playbook §sections. This file (PORT_PROGRESS) carries the per-PR narrative; the playbook checklist is the section-level rollup; **`design/ROADMAP.md`** is the full remaining-work design path. Keep all current (each feature PR updates its Completed entry here + flips its §checklist marker there + strikes its ROADMAP item when one closes).
 
 ## Current
 
-- **Phase:** **v0.1.0 feature work** (per PORT_PLAYBOOK.md §55.1). **v0.0.1 is feature-complete** — its terminus is user-gated: the `v0.0.1-ara.1` tag on master (user-driven) plus the §13/§34 RPi smoke test (physical Pi hardware).
+- **Phase:** **post-feature-complete follow-on work** (design path: `design/ROADMAP.md`). The port **is feature-complete** — the first public release's terminus is user-gated: the `v0.0.1-ara.1` tag on master (user-driven) plus the §13/§34 RPi smoke test (physical Pi hardware).
 - **Last merged:** PR **#792** (§42.4 slice 4b — StallTimeout/OpError publishes at all 6 sequencer mediator op sites gated on live-client identity (a user disconnect mid-op stays a log line), `SwitchReadbackWatch` + `SwitchValueTolerancePct` + `switch.value_mismatch` WS, FaultReactionService notify-only kinds never dedupe against reconnect episodes; §3a fallback review run (automated review failed to post round 1, posted ✅ on round 2); merged @ `91c5b6279`)
 - **Currently working on:** **§42.4 slice 4c — `sequence.instruction_failed` emission: per-leaf FAILED scan (progress ticks + awaited final snapshot), once per leaf, published before the run's terminal event, payload carries failed_instruction_index/name** (branch `instruction-failed-424c`) — closes the §42.4 slice; then 5 §42.5 fault log + REST → 6 WILMA
-- **Next (the open queue lives in `PORT_TODO.md`'s top half):** §45 polar alignment remaining phases (daemon spike → `PolarAlignService` state machine replacing the placeholder → §45.9 endpoints + WS events → the WILMA bullseye/arrows screen) once the user's openastro-guider upgrade lands; ARA-side adoption of the openastro-guider#57 events once that upstream PR merges (see `PHD2-GAP.md`); §59.2–59.4 Smart Focus (v0.1.0); libraw DSLR RAW + Live View star-annotation polish (v0.1.0).
+- **Next (the open queue lives in `PORT_TODO.md`'s top half):** §45 polar alignment remaining phases (daemon spike → `PolarAlignService` state machine replacing the placeholder → §45.9 endpoints + WS events → the WILMA bullseye/arrows screen) once the user's openastro-guider upgrade lands; ARA-side adoption of the openastro-guider#57 events once that upstream PR merges (see `PHD2-GAP.md`); §59.2–59.4 Smart Focus (ROADMAP part 3); libraw DSLR RAW + Live View star-annotation polish (ROADMAP part 5).
 
 ## Completed
 

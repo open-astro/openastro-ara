@@ -1,6 +1,6 @@
 # PHD2-GAP.md — openastro-phd2 integration gap analysis
 
-**Purpose:** Capture gaps between what ARA Core's §63 PHD2 lifecycle spec needs and what `openastro-phd2`'s current JSON-RPC surface provides. Each gap is either (a) worth adding to openastro-phd2 to improve ARA integration UX, (b) workable around in ARA v0.0.1, or (c) a documentation tightening rather than an API change.
+**Purpose:** Capture gaps between what ARA Core's §63 PHD2 lifecycle spec needs and what `openastro-phd2`'s current JSON-RPC surface provides. Each gap is either (a) worth adding to openastro-phd2 to improve ARA integration UX, (b) workable around in ARA today, or (c) a documentation tightening rather than an API change.
 
 **Source-of-truth for what exists:** `~/Documents/GitHub/openastro-phd2/doc/jsonrpc_api.md` (998 lines, 93 RPCs, 27 event types, comprehensive coverage).
 
@@ -22,8 +22,8 @@ in the calibration dialog, structured fault routing, get_version handshake) is f
 
 | Category | Count | Action |
 |---|---|---|
-| **Real gaps** (affect ARA v0.0.1 UX or implementation quality) | 3 | Recommend adding to openastro-phd2 before ARA Phase 12 integration |
-| **Nice-to-haves** (workable around in ARA v0.0.1) | 7 | Defer; reconsider during ARA v0.0.1 implementation if friction emerges |
+| **Real gaps** (affect current ARA UX or implementation quality) | 3 | Recommend adding to openastro-phd2 before ARA Phase 12 integration |
+| **Nice-to-haves** (workable around in ARA today) | 7 | Defer; reconsider during implementation if friction emerges |
 | **Documentation clarifications** | 7 | Cheap to fix in `jsonrpc_api.md`; update before ARA's Phase 12 |
 
 ---
@@ -94,11 +94,11 @@ RPC: get_version
 
 ---
 
-## Nice-to-haves (workable around in ARA v0.0.1)
+## Nice-to-haves (workable around in ARA today)
 
-These would simplify ARA's code but ARA ships fine without them. Promote individually to v0.1.0 if/when implementation reveals friction.
+These would simplify ARA's code but ARA ships fine without them. Promote individually if/when field use reveals friction (tracked in design/ROADMAP.md part 4).
 
-| Missing | ARA's workaround in v0.0.1 | What an API would help with |
+| Missing | ARA's current workaround | What an API would help with |
 |---|---|---|
 | **`apply_profile_bundle`** — atomic profile push | ARA sequences `set_connected(false)` → N setters → `set_connected(true)` itself | Single transaction RPC; less round-trip latency and no partial state on errors |
 | **`calculate_calibration_step`** — recommended cal step from focal length + pixel + dec | ARA replicates PHD2's GUI calculator math in Dart/C# | Server-side helper would be authoritative + always correct |
@@ -146,7 +146,7 @@ The 3 real gaps + the doc clarifications cluster into a single small workstream.
 - Phase 12 builds the WILMA wizard's dark-library + equipment-fault flows that consume these events; integration will inform exactly what payload shape + event semantics are most useful
 - Specifying RPC shapes ahead of integration risks shipping something subtly wrong upstream that's painful to revise once other PHD2 clients depend on it
 - The 3 nice-to-haves + 7 doc clarifications can also be batched into the same upstream PR — total ~1 small PR's worth of work
-- ARA v0.0.1 doesn't block on these gaps; the workarounds in the "Nice-to-haves" table above are fine for v0.0.1
+- ARA doesn't block on these gaps; the workarounds in the "Nice-to-haves" table above are fine for now
 
 **Triggers for filing the upstream PR:**
 - ARA Phase 12 sub-PR 12c (Imaging + Framing tab — owns the §51 Health Indicator + §42 fault recovery surface) is merged AND
@@ -154,7 +154,7 @@ The 3 real gaps + the doc clarifications cluster into a single small workstream.
 
 Once those two land, the AI files the upstream openastro-phd2 PR with the validated event/RPC shapes informed by actual integration. The user reviews + merges the upstream PR; ARA then switches its internal workarounds to use the new events/RPCs in a follow-up ARA PR.
 
-**v0.1.0 alignment:** the upstream openastro-phd2 PR ships within ARA's v0.1.0 window. ARA v0.0.1 ships with workarounds; ARA v0.1.0 switches to the new events.
+**Adoption alignment:** current ARA builds ship with the workarounds; ARA switches to the new events once upstream #57 merges (see `design/ROADMAP.md` part 4).
 
 ---
 
