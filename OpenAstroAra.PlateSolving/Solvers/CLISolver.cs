@@ -174,6 +174,18 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             Logger.Debug($"Starting process '{executableLocation}' with args '{startInfo.Arguments}'");
             process.Start();
             await process.WaitForExitAsync(ct);
+            // §42.2 row 14 — a solver crash used to be indistinguishable from a clean no-solution
+            // (success was inferred solely from the sidecar file). Surface the exit code so the
+            // generic solve-retry loop's failures are diagnosable; solver subclasses map their
+            // documented codes (ASTAP: 1 = clean no-solution, 32/33 = missing star database, ...).
+            var exitCode = process.ExitCode;
+            if (exitCode != 0) {
+                Logger.Warning($"Plate solver '{Path.GetFileName(executableLocation)}' exited with code {exitCode}{DescribeExitCode(exitCode)}");
+            }
         }
+
+        /// <summary>Solver-specific meaning of a non-zero exit code, appended to the exit-code
+        /// warning (e.g. ASTAP's documented codes). Empty when the code isn't recognized.</summary>
+        protected virtual string DescribeExitCode(int exitCode) => string.Empty;
     }
 }

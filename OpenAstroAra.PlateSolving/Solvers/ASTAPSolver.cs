@@ -43,6 +43,18 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             : base(executableLocation) {
         }
 
+        // ASTAP's documented command-line exit codes — lets the §42.2 exit-code warning
+        // distinguish a clean no-solution (1) from an environment problem (16/32/33, which no
+        // amount of per-solve retrying fixes) and from an outright crash (anything else).
+        protected override string DescribeExitCode(int exitCode) => exitCode switch {
+            1 => " (no solution found)",
+            2 => " (not enough stars detected)",
+            16 => " (error reading the image file)",
+            32 => " (no star database found — check the ASTAP star database installation)",
+            33 => " (error reading the star database)",
+            _ => " (undocumented code — possible solver crash)",
+        };
+
         protected override PlateSolveResult ReadResult(
             string outputFilePath,
             PlateSolveParameter parameter,

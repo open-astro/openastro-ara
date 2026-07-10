@@ -58,15 +58,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_persistent_mismatch_fires_once_after_the_streak() {
+        public void A_persistent_mismatch_recommands_once_then_fires() {
             var w = new SwitchReadbackWatch();
             w.Command(0, 1.0, T0);
             var t = T0 + PastSettle;
             Assert.That(w.Observe(0, 0, 0, 1, 5, t), Is.EqualTo(ReadbackVerdict.Degraded));
             Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(2)), Is.EqualTo(ReadbackVerdict.Degraded));
-            Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(4)), Is.EqualTo(ReadbackVerdict.Mismatch));
-            Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(6)), Is.EqualTo(ReadbackVerdict.Idle),
+            // §42.2 rows 15/16 — the first exhausted streak asks for ONE re-command, not a fault…
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(4)), Is.EqualTo(ReadbackVerdict.Recommand));
+            // …and the re-command gets the same fair settle window as the original write.
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(6)), Is.EqualTo(ReadbackVerdict.Settling));
+            var t2 = t + TimeSpan.FromSeconds(4) + PastSettle;
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t2), Is.EqualTo(ReadbackVerdict.Degraded));
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t2 + TimeSpan.FromSeconds(2)), Is.EqualTo(ReadbackVerdict.Degraded));
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t2 + TimeSpan.FromSeconds(4)), Is.EqualTo(ReadbackVerdict.Mismatch),
+                "still wrong after the one re-command — now it's a fault");
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t2 + TimeSpan.FromSeconds(6)), Is.EqualTo(ReadbackVerdict.Idle),
                 "latched — still wrong, already reported");
+        }
+
+        [Test]
+        public void A_successful_recommand_never_faults() {
+            var w = new SwitchReadbackWatch();
+            w.Command(0, 1.0, T0);
+            var t = T0 + PastSettle;
+            w.Observe(0, 0, 0, 1, 5, t);
+            w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(2));
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(4)), Is.EqualTo(ReadbackVerdict.Recommand));
+            // The re-issued write took: the port reads the commanded value from here on.
+            var t2 = t + TimeSpan.FromSeconds(4) + PastSettle;
+            Assert.That(w.Observe(0, 1, 0, 1, 5, t2), Is.EqualTo(ReadbackVerdict.Idle),
+                "the recovery step worked — no fault, no notification");
+            Assert.That(w.Observe(0, 1, 0, 1, 5, t2 + TimeSpan.FromSeconds(2)), Is.EqualTo(ReadbackVerdict.Idle));
         }
 
         [Test]
@@ -81,25 +104,34 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // Drives a freshly written, stubbornly-wrong port through the full episode:
+        // streak → Recommand → re-armed settle → streak → Mismatch. Returns the time of the fire.
+        private static DateTimeOffset DriveToFire(SwitchReadbackWatch w, DateTimeOffset written) {
+            var t = written + PastSettle;
+            w.Observe(0, 0, 0, 1, 5, t);
+            w.Observe(0, 0, 0, 1, 5, t);
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t), Is.EqualTo(ReadbackVerdict.Recommand));
+            var t2 = t + PastSettle;
+            w.Observe(0, 0, 0, 1, 5, t2);
+            w.Observe(0, 0, 0, 1, 5, t2);
+            Assert.That(w.Observe(0, 0, 0, 1, 5, t2), Is.EqualTo(ReadbackVerdict.Mismatch));
+            return t2;
+        }
+
         [Test]
         public void Recovery_after_a_fired_episode_clears_and_requires_a_fresh_write_to_rearm() {
             var w = new SwitchReadbackWatch();
             w.Command(0, 1.0, T0);
-            var t = T0 + PastSettle;
-            w.Observe(0, 0, 0, 1, 5, t);
-            w.Observe(0, 0, 0, 1, 5, t);
-            Assert.That(w.Observe(0, 0, 0, 1, 5, t), Is.EqualTo(ReadbackVerdict.Mismatch));
+            var t = DriveToFire(w, T0);
             Assert.That(w.Observe(0, 1, 0, 1, 5, t + TimeSpan.FromSeconds(2)), Is.EqualTo(ReadbackVerdict.Cleared));
             // The record is gone: a port oscillating at the boundary can't churn out faults.
             for (var i = 0; i < 6; i++) {
                 Assert.That(w.Observe(0, i % 2, 0, 1, 5, t + TimeSpan.FromSeconds(4 + i * 2)), Is.EqualTo(ReadbackVerdict.Idle));
             }
-            // A fresh write re-arms.
-            w.Command(0, 1.0, t + TimeSpan.FromSeconds(20));
-            var t2 = t + TimeSpan.FromSeconds(20) + PastSettle;
-            w.Observe(0, 0, 0, 1, 5, t2);
-            w.Observe(0, 0, 0, 1, 5, t2);
-            Assert.That(w.Observe(0, 0, 0, 1, 5, t2), Is.EqualTo(ReadbackVerdict.Mismatch), "fresh episode fires");
+            // A fresh write re-arms (a fresh episode gets a fresh re-command budget too).
+            var written2 = t + TimeSpan.FromSeconds(20);
+            w.Command(0, 1.0, written2);
+            DriveToFire(w, written2);
         }
 
         [Test]
@@ -126,10 +158,7 @@ namespace OpenAstroAra.Test {
         public void A_fresh_write_restarts_the_episode_even_onto_a_fired_one() {
             var w = new SwitchReadbackWatch();
             w.Command(0, 1.0, T0);
-            var t = T0 + PastSettle;
-            w.Observe(0, 0, 0, 1, 5, t);
-            w.Observe(0, 0, 0, 1, 5, t);
-            w.Observe(0, 0, 0, 1, 5, t); // fired
+            var t = DriveToFire(w, T0); // recommand exhausted + fault fired
             w.Command(0, 0.0, t + TimeSpan.FromSeconds(2)); // the daemon now WANTS off
             Assert.That(w.Observe(0, 0, 0, 1, 5, t + TimeSpan.FromSeconds(2) + PastSettle), Is.EqualTo(ReadbackVerdict.Idle),
                 "the read-back matches the NEW command — no stale mismatch");
@@ -184,9 +213,10 @@ namespace OpenAstroAra.Test {
             // Command the heater ON; the device accepts the PUT and keeps reading 0.
             await svc.SetValueAsync(0, new SwitchValueRequestDto(PortId: 0, Value: 1.0), CancellationToken.None);
 
-            // Settle window (5 s) + 3 out-of-tolerance ticks (~6 s) → the fault.
+            // Settle (5 s) + 3 bad ticks (~6 s) → the §42.2 re-command (which the stuck device
+            // also ignores) → re-armed settle (5 s) + 3 bad ticks (~6 s) → the fault.
             await WaitForAsync(() => { lock (faults) { return Task.FromResult(faults.Count > 0); } },
-                TimeSpan.FromSeconds(30), "the value-mismatch fault never published");
+                TimeSpan.FromSeconds(60), "the value-mismatch fault never published");
             await Task.Delay(TimeSpan.FromSeconds(5)); // several more mismatched ticks — no re-fire
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "exactly one fault per command episode");

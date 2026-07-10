@@ -29,9 +29,14 @@ public enum ReadbackVerdict {
     /// read (a transient driver hiccup) must not fire a fault (§42.4).</summary>
     Degraded,
 
-    /// <summary>The read-back persistently disagrees with the commanded value: the caller
-    /// publishes <see cref="Contracts.EquipmentFaultKind.ValueMismatch"/> exactly once per
-    /// command episode.</summary>
+    /// <summary>The read-back persistently disagrees — the §42.2 "Re-command" recovery step
+    /// (rows 15/16): the caller re-issues the SAME commanded value once, and the record re-arms
+    /// its settle window. Fired at most once per command episode, before <see cref="Mismatch"/>.</summary>
+    Recommand,
+
+    /// <summary>The read-back persistently disagrees with the commanded value even after the
+    /// one re-command: the caller publishes
+    /// <see cref="Contracts.EquipmentFaultKind.ValueMismatch"/> exactly once per command episode.</summary>
     Mismatch,
 
     /// <summary>Back in tolerance after a fired episode — the record is dropped; re-arming
@@ -67,6 +72,7 @@ public sealed class SwitchReadbackWatch {
         public double Commanded;
         public DateTimeOffset WrittenUtc;
         public int MismatchStreak;
+        public bool Recommanded;
         public bool EpisodeFired;
     }
 
@@ -120,6 +126,16 @@ public sealed class SwitchReadbackWatch {
         }
         record.MismatchStreak++;
         if (record.MismatchStreak >= _threshold) {
+            if (!record.Recommanded) {
+                // §42.2 rows 15/16 — "Re-command → Notify if still off": give the port one
+                // re-issue of the same value before accusing. The streak and settle window
+                // restart so the re-command gets the same fair observation as the original
+                // write; a second exhaustion fires the fault.
+                record.Recommanded = true;
+                record.WrittenUtc = nowUtc;
+                record.MismatchStreak = 0;
+                return ReadbackVerdict.Recommand;
+            }
             record.EpisodeFired = true;
             return ReadbackVerdict.Mismatch;
         }

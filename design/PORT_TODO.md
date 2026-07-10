@@ -31,19 +31,27 @@ cooling drift (notify by design), EFW-jam + focuser-stall + mount-op + switch-mi
 (notify-only), plate-solve retry loop (§28.2, `CaptureSolver`), guider rows (guider-owned).
 
 Missing, by user value:
-1. **Peripheral op failures must engage the retry/failure machinery** (mount slew, focuser move,
-   filter change, rotator move, switch write, dome op) — the silent-swallow gap. (IN PROGRESS,
-   branch `op-failures-422`.)
+1. ✅ **Peripheral op failures engage the retry/failure machinery — DONE (#800).** Every definite
+   op failure (stalled call, device error, dispatched-but-never-confirmed-settled incl. mid-wait
+   disconnects) throws `SequenceEntityFailedException` after publishing its §42.4 fault, so
+   `Attempts` retries, `sequence.instruction_failed`, and `ErrorBehavior` engage; cancellation and
+   not-connected pre-checks untouched; best-effort call sites (filter restores, fire-and-forget
+   switch wrapper) guarded.
 2. **Mount slew persistent-failure terminal** (matrix: Retry → Abort+park) — policy piece on top
    of 1; extend `FaultPolicyMatrix` or instruction ErrorBehavior. Physical-safety row.
-3. **Switch re-command-once before faulting** (matrix rows 15/16: Re-command → Notify) —
-   `SwitchReadbackWatch` detects but never re-issues. S.
+3. ✅ **Switch re-command-once before faulting — DONE (the sub-PR after #800).**
+   `SwitchReadbackWatch` yields a one-per-episode `Recommand` verdict at the first exhausted
+   streak; the refresh loop re-issues the same value best-effort (raw device write — not the
+   episode-restarting mediator path) and the watch re-arms its settle window; a second
+   exhaustion faults as before. A nudge that fixes the port never notifies.
 4. **Rotator angle-drift watch** (row 9: reported vs commanded > 0.5°) — no drift detection today,
    only move-op timeouts; needs a `SwitchReadbackWatch` analog + re-issue. M.
 5. **Pause-on-persistent-op-fault surface** (rows 1b/13: "Pause") — a `PauseOnError` instruction
    behavior wired to `PauseActiveRunsAsync`, or map op kinds to `FaultTerminalAction.PauseSequence`. M.
-6. **ASTAP crash detection** (row 14) — `CLISolver.cs` never checks `process.ExitCode`; a crash is
-   indistinguishable from a clean no-solution. S.
+6. ✅ **ASTAP crash detection — DONE (the sub-PR after #800).** `CLISolver.StartCLI` logs non-zero
+   exit codes with a solver-specific `DescribeExitCode` mapping (ASTAP's documented 1/2/16/32/33;
+   anything else flagged as a possible crash), so environment problems (missing star DB) and
+   crashes are diagnosable instead of reading as clean no-solutions.
 7. **Focuser backlash recalibration hook** (row 7 middle stage) — §59.7 territory, unbuilt.
 8. **Dew-formation advisory** (row 18: humidity+dew-point+HFR correlator) — no surface exists. L.
 9. **Camera dew heater row (row 3): N/A by design** — Alpaca ICameraV3 has no DewHeaterPower
