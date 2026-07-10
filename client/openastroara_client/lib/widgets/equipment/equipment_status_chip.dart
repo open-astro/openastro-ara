@@ -13,6 +13,7 @@ import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/safety_monitor_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/equipment/weather_state.dart';
+import '../../state/faults/faults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/ws/ws_providers.dart';
 import '../equipment_chip.dart';
@@ -62,32 +63,40 @@ class TopEquipmentChips extends StatelessWidget {
             icon: Icons.camera_alt,
             label: 'CAM',
             panelId: 'eq.camera',
+            faultTypes: const {'camera'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(cameraStatusProvider))),
         EquipmentStatusChip(
             icon: Icons.filter_alt,
             label: 'FW',
             panelId: 'eq.filterwheel',
+            faultTypes: const {'filterwheel'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(filterWheelProvider))),
         EquipmentStatusChip(
             icon: Icons.adjust,
             label: 'FOC',
             panelId: 'eq.focuser',
+            faultTypes: const {'focuser'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(focuserProvider))),
         EquipmentStatusChip(
             icon: Icons.public,
             label: 'MOUNT',
             panelId: 'eq.mount',
+            faultTypes: const {'telescope'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
         EquipmentStatusChip(
             icon: Icons.rotate_right,
             label: 'ROT',
             panelId: 'eq.rotator',
+            faultTypes: const {'rotator'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
         const GuiderChip(),
         EquipmentStatusChip(
             icon: Icons.wb_sunny,
             label: 'FLAT',
             panelId: 'eq.flat',
+            // One physical device under two wire tokens (the reconnector
+            // grouping) — the chip listens on both.
+            faultTypes: const {'covercalibrator', 'flatdevice'},
             watchLevel: (ref) =>
                 equipmentChipLevel(ref.watch(flatPanelProvider))),
         const SwitchStatusChip(icon: Icons.power, label: 'SW'),
@@ -95,16 +104,19 @@ class TopEquipmentChips extends StatelessWidget {
             icon: Icons.cloud_outlined,
             label: 'WX',
             panelId: 'eq.weather',
+            faultTypes: const {'observingconditions'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(weatherProvider))),
         EquipmentStatusChip(
             icon: Icons.shield_outlined,
             label: 'SAFE',
             panelId: 'eq.safety',
+            faultTypes: const {'safetymonitor'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(safetyMonitorProvider))),
         EquipmentStatusChip(
             icon: Icons.home_outlined,
             label: 'DOME',
             panelId: 'eq.dome',
+            faultTypes: const {'dome'},
             watchLevel: (ref) => equipmentChipLevel(ref.watch(domeProvider))),
       ],
     );
@@ -116,11 +128,17 @@ class TopEquipmentChips extends StatelessWidget {
 /// to the dot; on tap it jumps to the device's Settings panel. One widget serves
 /// every single-instance device — mirroring [GuiderChip], which is bespoke only
 /// because the guider has its own status type + PHD2 dialog.
+///
+/// [faultTypes] are the device's `DeviceType` wire tokens in the §42 fault
+/// channel; a standing fault on any of them blends into the dot worst-of, so a
+/// mid-episode red (or an advisory amber) shows even while the polled
+/// connection status still reads healthy.
 class EquipmentStatusChip extends ConsumerWidget {
   final IconData icon;
   final String label;
   final String panelId;
   final StatusLevel Function(WidgetRef ref) watchLevel;
+  final Set<String> faultTypes;
 
   const EquipmentStatusChip({
     super.key,
@@ -128,6 +146,7 @@ class EquipmentStatusChip extends ConsumerWidget {
     required this.label,
     required this.panelId,
     required this.watchLevel,
+    this.faultTypes = const <String>{},
   });
 
   @override
@@ -135,7 +154,8 @@ class EquipmentStatusChip extends ConsumerWidget {
     // Stale-guard: while the server link is down the last device status can't be
     // trusted — show the dot grey (disconnected) instead of a false green.
     final level = ref.watch(serverLinkUpProvider)
-        ? watchLevel(ref)
+        ? blendFaultLevel(watchLevel(ref),
+            ref.watch(activeFaultsProvider).worstFor(faultTypes))
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,
@@ -178,8 +198,10 @@ class SwitchStatusChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final level = ref.watch(serverLinkUpProvider)
-        ? switchChipLevel(ref.watch(switchListProvider),
-            acting: ref.watch(switchActingProvider))
+        ? blendFaultLevel(
+            switchChipLevel(ref.watch(switchListProvider),
+                acting: ref.watch(switchActingProvider)),
+            ref.watch(activeFaultsProvider).worstFor(const {'switch'}))
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,
