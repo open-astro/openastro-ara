@@ -30,15 +30,12 @@ abstract final class SequenceWsEvents {
 final sequenceApiFactoryProvider =
     Provider<SequenceClient Function(AraServer)>((ref) => SequenceApi.new);
 
-/// [SequenceClient] bound to the active server (`savedServers.last`), or `null`
+/// [SequenceClient] bound to the active server ([activeServerProvider]), or `null`
 /// when no server is saved. autoDispose so the Dio client is released (and
 /// re-created fresh) when the sequencer tab has no listeners. Closes the old
 /// Dio on a server change.
 final sequenceApiProvider = Provider.autoDispose<SequenceClient?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(sequenceApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -121,10 +118,7 @@ class SelectedSequenceIdNotifier extends Notifier<String?> {
   @override
   String? build() {
     ref.listen(
-      savedServersProvider.select((async) => async.maybeWhen(
-            data: (list) => list.isEmpty ? null : list.last,
-            orElse: () => null,
-          )),
+      activeServerProvider,
       (prev, next) {
         if (prev != next) state = null;
       },

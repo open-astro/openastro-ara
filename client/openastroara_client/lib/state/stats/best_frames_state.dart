@@ -12,13 +12,10 @@ final bestFramesApiFactoryProvider =
   (ref) => BestFramesApi.new,
 );
 
-/// [BestFramesClient] bound to the active server (`savedServers.last`), or
+/// [BestFramesClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
 final bestFramesApiProvider = Provider<BestFramesClient?>((ref) {
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(bestFramesApiFactoryProvider)(server);
   ref.onDispose(api.close);

@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/server.dart';
 import '../../services/frames_api.dart';
 import '../saved_server_state.dart';
 
@@ -38,12 +37,9 @@ final framePreviewProvider =
     FutureProvider.autoDispose.family<Uint8List, String>((ref, id) async {
   // Snapshot the server at fetch time (read, not watch): a later server-list
   // change shouldn't re-fetch and blank the currently-displayed frame.
-  final servers = ref.read(savedServersProvider).maybeWhen(
-        data: (list) => list,
-        orElse: () => const <AraServer>[],
-      );
-  if (servers.isEmpty) {
+  final server = ref.read(activeServerProvider);
+  if (server == null) {
     throw StateError('Not connected to a server.');
   }
-  return FramesApi(servers.last).preview(id);
+  return FramesApi(server).preview(id);
 });

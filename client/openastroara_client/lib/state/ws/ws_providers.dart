@@ -22,15 +22,12 @@ final wsEventStreamFactoryProvider =
           ),
     );
 
-/// The §60.9 WS event-stream for the **active** server (`savedServers.last`).
+/// The §60.9 WS event-stream for the **active** server ([activeServerProvider]).
 /// Lives as long as it's watched; `ref.onDispose` tears the socket down. Returns
 /// null when no server is saved yet. Auto-disposed when no consumer watches it.
 final wsEventStreamProvider = Provider.autoDispose<WsEventStream?>((ref) {
-  final servers = ref
-      .watch(savedServersProvider)
-      .maybeWhen(data: (list) => list, orElse: () => const <AraServer>[]);
-  if (servers.isEmpty) return null;
-  final server = servers.last;
+  final server = ref.watch(activeServerProvider);
+  if (server == null) return null;
   final stream = ref.watch(wsEventStreamFactoryProvider)(server);
   // Captured NOW: ref must not be used inside onDispose, and the session
   // notifier is a root (non-autoDispose) provider that outlives this one.

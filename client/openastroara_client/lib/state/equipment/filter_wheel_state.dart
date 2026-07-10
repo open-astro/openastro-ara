@@ -22,14 +22,7 @@ final filterWheelApiFactoryProvider =
 /// FilterWheel client bound to the **active** server, or `null` when none saved.
 final filterWheelApiProvider =
     Provider<EquipmentDeviceClient<FilterWheelStatus>?>((ref) {
-      final server = ref.watch(
-        savedServersProvider.select(
-          (async) => async.maybeWhen(
-            data: (list) => list.isEmpty ? null : list.last,
-            orElse: () => null,
-          ),
-        ),
-      );
+      final server = ref.watch(activeServerProvider);
       if (server == null) return null;
       final api = ref.watch(filterWheelApiFactoryProvider)(server);
       ref.onDispose(api.close);

@@ -23,14 +23,7 @@ final flatPanelApiFactoryProvider =
 final flatPanelApiProvider = Provider<EquipmentDeviceClient<FlatPanelStatus>?>((
   ref,
 ) {
-  final server = ref.watch(
-    savedServersProvider.select(
-      (async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      ),
-    ),
-  );
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(flatPanelApiFactoryProvider)(server);
   ref.onDispose(api.close);

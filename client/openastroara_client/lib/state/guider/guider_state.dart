@@ -11,16 +11,13 @@ final guiderApiFactoryProvider = Provider<GuiderClient Function(AraServer)>(
   (ref) => GuiderApi.new,
 );
 
-/// [GuiderClient] bound to the **active** server (`savedServers.last`), or
+/// [GuiderClient] bound to the **active** server ([activeServerProvider]), or
 /// `null` when no server is saved.
 final guiderApiProvider = Provider<GuiderClient?>((ref) {
   // Select only the active server (deduped by AraServer's value equality), so a
   // same-content re-emit of savedServers doesn't rebuild this provider and
   // force-close a Dio mid-request.
-  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      )));
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(guiderApiFactoryProvider)(server);
   // Close the old Dio when the active server changes (provider recompute) or

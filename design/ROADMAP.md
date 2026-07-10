@@ -133,9 +133,11 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 
 ## 6. Client platform + UX debt
 
-- **Canonical "active server" provider** — replace `servers.last` (insertion order) with an
-  explicit active-server provider routing all per-server API construction; latent bug once >1
-  server is saved.
+- ~~**Canonical "active server" provider**~~ — shipped: every per-server API construction routes
+  through `activeServerProvider` / `activeServerFutureProvider` (no call site touches
+  `servers.last` anymore), and the underlying bug is fixed — `SavedServerService.add` moves a
+  re-confirmed server to the end, so reconnecting an older rig makes it the active one (it used
+  to be a silent no-op). A future §55.1 explicit switcher changes one definition.
 - ~~**Tonight's Sky slice 4b**~~ — shipped: the panel's what-if dialog (tune button) sends
   `focalLengthMm`/`reducer`/`sensorW`/`sensorH`/`pixelUm` + `mosaicX`/`mosaicY` as per-request
   overrides; blank fields merge from the profile server-side, the icon tints while active,

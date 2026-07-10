@@ -28,8 +28,10 @@ class _FakeSavedServerService implements SavedServerService {
   @override
   Future<void> add(AraServer server) async {
     if (throwOnAdd) throw StateError('keyring unavailable');
-    if (_stored.contains(server)) return;
-    _stored.add(server);
+    // Mirrors the real service's move-to-end (re-confirmed = active).
+    _stored
+      ..removeWhere((s) => s == server)
+      ..add(server);
   }
 
   @override
@@ -88,6 +90,70 @@ void main() {
       expect(state.hasValue, isTrue);
       expect(state.value, hasLength(1));
       expect(state.value!.first.hostname, 'host-failing');
+    });
+
+    test('the in-memory fallback also moves a re-added server to the end',
+        () async {
+      // Persistence down + re-confirming an already-known server: the
+      // fallback must apply the same move-to-end semantics as the service,
+      // or the active pick would differ by whether the keyring works.
+      final fake = _FakeSavedServerService(
+        initial: const [
+          AraServer(hostname: 'observatory', port: 8080),
+          AraServer(hostname: 'travel-rig', port: 8080),
+        ],
+        throwOnAdd: true,
+      );
+      final container = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(fake),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(savedServersProvider.future);
+
+      await container.read(savedServersProvider.notifier).add(
+            const AraServer(hostname: 'observatory', port: 8080),
+          );
+      expect(
+        container.read(savedServersProvider).value!.map((s) => s.hostname),
+        ['travel-rig', 'observatory'],
+      );
+    });
+  });
+
+  group('activeServerProvider', () {
+    test('null while empty, the last (most-recently-confirmed) once saved',
+        () async {
+      final fake = _FakeSavedServerService();
+      final container = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(fake),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(savedServersProvider.future);
+      expect(container.read(activeServerProvider), isNull);
+
+      final notifier = container.read(savedServersProvider.notifier);
+      await notifier.add(const AraServer(hostname: 'observatory', port: 8080));
+      await notifier.add(const AraServer(hostname: 'travel-rig', port: 8080));
+      expect(container.read(activeServerProvider)!.hostname, 'travel-rig');
+
+      // Reconnecting the observatory flips the active pick back to it.
+      await notifier.add(const AraServer(hostname: 'observatory', port: 8080));
+      expect(container.read(activeServerProvider)!.hostname, 'observatory');
+    });
+
+    test('the awaitable variant resolves after the initial load', () async {
+      final fake = _FakeSavedServerService(initial: const [
+        AraServer(hostname: 'observatory', port: 8080),
+      ]);
+      final container = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(fake),
+      ]);
+      addTearDown(container.dispose);
+      // No prior read of savedServersProvider — the future variant must kick
+      // off the load itself and resolve to the saved server, not null.
+      final server =
+          await container.read(activeServerFutureProvider.future);
+      expect(server!.hostname, 'observatory');
     });
   });
 }

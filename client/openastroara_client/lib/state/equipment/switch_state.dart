@@ -14,24 +14,17 @@ final switchApiFactoryProvider = Provider<SwitchClient Function(AraServer)>(
   (ref) => SwitchApi.new,
 );
 
-/// The **active** server (`savedServers.last`, null when none saved), deduped by
+/// The **active** server ([activeServerProvider], null when none saved), deduped by
 /// AraServer value equality so a same-content re-emit of savedServers doesn't
 /// re-trigger dependents. The single change-trigger [switchApiProvider] and
 /// [SwitchActingNotifier] both key off — factored so the two selectors can't
 /// drift: the §25.3 acting reset only works because it fires on exactly the
 /// change that rebuilds the API (abandoning any in-flight action).
 final _activeSwitchServerProvider = Provider<AraServer?>(
-  (ref) => ref.watch(
-    savedServersProvider.select(
-      (async) => async.maybeWhen(
-        data: (list) => list.isEmpty ? null : list.last,
-        orElse: () => null,
-      ),
-    ),
-  ),
+  (ref) => ref.watch(activeServerProvider),
 );
 
-/// [SwitchClient] bound to the **active** server (`savedServers.last`), or `null`
+/// [SwitchClient] bound to the **active** server ([activeServerProvider]), or `null`
 /// when no server is saved.
 final switchApiProvider = Provider<SwitchClient?>((ref) {
   // The value-deduped active-server watch also keeps a same-content re-emit

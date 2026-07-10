@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/plate_solve_result.dart';
-import '../../models/server.dart';
 import '../../services/plate_solve_api.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/solve_state.dart';
@@ -52,17 +51,14 @@ class SolvePanel extends ConsumerWidget {
 
   Future<void> _solve(
       BuildContext context, WidgetRef ref, String frameId) async {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const <AraServer>[],
-        );
-    if (servers.isEmpty) {
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Not connected to a server.')),
       );
       return;
     }
-    await ref.read(solveResultProvider.notifier).solve(servers.last, frameId);
+    await ref.read(solveResultProvider.notifier).solve(server, frameId);
   }
 
   Widget _resultText(

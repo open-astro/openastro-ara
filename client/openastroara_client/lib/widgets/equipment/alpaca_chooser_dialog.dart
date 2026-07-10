@@ -59,16 +59,11 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
   }
 
   Future<List<DiscoveredDevice>> _runDiscovery({required bool forceRefresh}) {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) {
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
       return Future.error('No active server — connect to a daemon first.');
     }
-    // Most-recently-saved server is the de-facto active one, same convention
-    // as the help dialog (§54).
-    final api = EquipmentDiscoveryApi(servers.last);
+    final api = EquipmentDiscoveryApi(server);
     return api.discover(widget.type, forceRefresh: forceRefresh);
   }
 

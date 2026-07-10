@@ -102,12 +102,8 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel> {
   }
 
   ProfileApi? _api() {
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) return null;
-    return ProfileApi(servers.last);
+    final server = ref.read(activeServerProvider);
+    return server == null ? null : ProfileApi(server);
   }
 
   @override
