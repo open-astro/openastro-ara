@@ -34,6 +34,13 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class CenteringService : ICenteringExecutor {
 
+    // Rotation-convergence bound, deliberately independent of PlateSolveSettings.NumberOfAttempts:
+    // that setting is the SOLVE-retry-on-failure count (CaptureSolverParameter.Attempts, consumed
+    // inside CaptureSolver.Solve), and the centring loop's own re-slew bound is likewise a
+    // hardcoded 10 inside CenteringSolver — a user tuning solve retries down to fail fast must
+    // not also starve rotation convergence (review finding).
+    private const int MaxRotationMoves = 10;
+
     /// <inheritdoc/>
     public async Task<bool> CenterAsync(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token) {
         var result = await CenterOnTarget(target, solveProgress: null, progress, token);
@@ -95,8 +102,7 @@ public sealed partial class CenteringService : ICenteringExecutor {
             ReattemptDelay = TimeSpan.FromMinutes(settings.ReattemptDelay),
             Coordinates = telescopeMediator.GetCurrentPosition(),
         };
-        var attempts = Math.Max(1, settings.NumberOfAttempts);
-        for (var attempt = 0; attempt <= attempts; attempt++) {
+        for (var attempt = 0; attempt <= MaxRotationMoves; attempt++) {
             token.ThrowIfCancellationRequested();
             var solve = await captureSolver.Solve(sequence, parameter, solveProgress: null, progress: null, token);
             if (!solve.Success) {
@@ -111,13 +117,13 @@ public sealed partial class CenteringService : ICenteringExecutor {
                 Logger.Info($"Center-and-rotate: solved position angle {solve.PositionAngle:0.##}°, target {positionAngleDeg:0.##}° — within ±{settings.RotationTolerance:0.##}° after {attempt} move(s) (§38)");
                 return true;
             }
-            if (attempt == attempts) {
+            if (attempt == MaxRotationMoves) {
                 break; // the last solve only verifies — no un-verified trailing move
             }
             Logger.Info($"Center-and-rotate: solved position angle {solve.PositionAngle:0.##}°, target {positionAngleDeg:0.##}° — rotating by {delta:0.##}° (§38)");
             await rotator.MoveRelative((float)delta, token);
         }
-        Logger.Warning($"Center-and-rotate: rotation did not converge within {attempts} attempt(s) to ±{settings.RotationTolerance:0.##}°");
+        Logger.Warning($"Center-and-rotate: rotation did not converge within {MaxRotationMoves} move(s) to ±{settings.RotationTolerance:0.##}°");
         return false;
     }
 
