@@ -22,13 +22,11 @@
 
 ## 1. In flight — hardware-fault surfaces epic (§42)
 
-The epic currently being shipped, slice by slice:
+The epic currently being shipped, slice by slice (~~§42.4 slice 4c~~ shipped #793; ~~§42.5 fault
+log + REST~~ shipped — `faults` table + `GET /api/v1/faults`):
 
-- **§42.4 slice 4c** — `sequence.instruction_failed` emission: per-leaf FAILED scan (progress
-  ticks + awaited final snapshot), once per leaf, published before the run's terminal event;
-  payload carries `failed_instruction_index`/`name`. Branch `instruction-failed-424c`. Closes §42.4.
-- **§42.5 fault log + REST** — persisted fault history and its read API.
-- **§42 WILMA surfaces** — client-side display of the fault channel (feed, per-device chips).
+- **§42 WILMA surfaces** — client-side display of the fault channel (feed, per-device chips) +
+  the §42.6 per-session fault timeline off `GET /api/v1/faults` (populate `affected_frames` with it).
 - **§42.2 matrix, remaining rows** — camera / mount / focuser / EFW mid-sequence fault reactions
   (the guider-lost row is enforced; the others follow the same §35 bulk-pause machinery).
 - **§42.3 generalized hot-reconnect** — device comes back mid-run → re-adopt without user surgery.

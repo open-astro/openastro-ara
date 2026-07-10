@@ -14,6 +14,29 @@ the other design docs.
 
 ---
 
+## §42.5 fault log — follow-ups (2026-07-10, from the fault-log sub-PR)
+
+- **Pre-existing `has_more` pagination bug in three sqlite list methods.** Found while testing the
+  new fault log's pagination: the shared loop shape `while (await reader.ReadAsync(ct) &&
+  items.Count < pageSize)` consumes the LIMIT pageSize+1 sentinel row *before* the count check, so
+  the follow-up `hasMore = await reader.ReadAsync(ct)` always reads past the LIMIT and returns
+  false — `has_more` is false on every page and a well-behaved client stops paginating after page 1.
+  Affected: `SqliteNotificationService.ListAsync`, `SqliteDiagnosticsService.GetHistoryAsync`,
+  `SqliteFrameRepository` (frames list, ~L405). `SqliteCalibrationService.ListSessionsAsync` has the
+  correct read-all-then-trim shape (which the new `SqliteFaultLogService.ListAsync` follows, with a
+  regression test). Fix is a small reorder + tests per service — its own follow-up sub-PR.
+- **Guider faults aren't persisted to the §42.5 log.** The guider is deliberately NOT on the
+  `EquipmentFaultHub` channel (`GuiderService.FaultReaction.cs` owns its §42.2 reaction + §63.3
+  recovery), so guider link drops / star-lost episodes don't land in the `faults` table. If
+  per-session guider fault history is wanted (§42.6 session badges), have the guider flow call
+  `IFaultLogService` directly with its own action vocabulary.
+- **`affected_frames` is reserved, not populated.** The column + `FaultDto.AffectedFrames` ship
+  empty; populating them (correlate frames whose exposure overlapped the fault window, for the §42.6
+  image-library fault-icon overlay) is the §42.6 slice's work, alongside the WILMA surfaces.
+- **Fault rows are never pruned.** Append-only like `diagnostic_events` (which has the same
+  property); a long-lived daemon accumulates rows indefinitely. Fine at fault rates (rare events,
+  small rows) — add a retention sweep only if a real catalog shows it mattering.
+
 ## §64/§59 Live View star annotation — follow-ups (2026-07-08, PR #775 /review self-review)
 
 Deferred out-of-scope findings from the mono-annotation wiring PR. The PR's scope was "wire the mono

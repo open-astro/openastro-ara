@@ -113,6 +113,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(EquipmentConnectionDto))]
 [JsonSerializable(typeof(ExposureRequestDto))]
 [JsonSerializable(typeof(ExposureResponseDto))]
+[JsonSerializable(typeof(FaultDto))]
 [JsonSerializable(typeof(FilenamesSettingsDto))]
 [JsonSerializable(typeof(FilterChangeRequestDto))]
 [JsonSerializable(typeof(FilterSlotDto))]
@@ -260,6 +261,7 @@ namespace OpenAstroAra.Server;
 // Concrete CursorPage<T> instantiations — one per paginated endpoint.
 [JsonSerializable(typeof(CursorPage<CalibrationSessionDto>))]
 [JsonSerializable(typeof(CursorPage<DiagnosticEventDto>))]
+[JsonSerializable(typeof(CursorPage<FaultDto>))]
 [JsonSerializable(typeof(CursorPage<FrameListItemDto>))]
 [JsonSerializable(typeof(CursorPage<MosaicDto>))]
 [JsonSerializable(typeof(CursorPage<NotificationDto>))]

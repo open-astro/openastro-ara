@@ -75,6 +75,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // hosted-service shutdown path deliberately do NOT notify: those are the
     // daemon's own automated actions, not user attention.
     private readonly UnattendedShutdownService? _unattendedShutdown;
+    // §42.5 — mirrors CaptureSessionScope enter/exit so the fault log can stamp
+    // the active run session from watch/timer contexts the AsyncLocal never reaches.
+    private readonly ActiveRunSessionRegistry? _runSessions;
     private readonly ILogger<SequencerService> _logger;
     private readonly ConcurrentDictionary<Guid, RunState> _runs = new();
     // Completed runs stay queryable via GetRunState after they finish (WILMA
@@ -98,7 +101,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             UnattendedShutdownService? unattendedShutdown = null,
             IProfileStore? profileStore = null,
             Func<ICalibrationService?>? calibrationResolver = null,
-            INotificationService? notifications = null) {
+            INotificationService? notifications = null,
+            ActiveRunSessionRegistry? runSessions = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -109,6 +113,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _profileStore = profileStore;
         _calibrationResolver = calibrationResolver;
         _notifications = notifications;
+        _runSessions = runSessions;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -723,6 +728,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 captureSession = await TryOpenRunSessionAsync(run.Cts.Token);
                 if (captureSession is Guid sid) {
                     CaptureSessionScope.Enter(sid);
+                    _runSessions?.Enter(sid);
                     await EmitSessionAsync("session.started", sid);
                 }
 
@@ -798,6 +804,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // scope falls back to manual rather than a closed run session),
                 // then stamp the end time — on EVERY terminal path.
                 CaptureSessionScope.Exit();
+                _runSessions?.Exit(endSid);
                 await TryEndRunSessionAsync(endSid);
                 // §48.1 — a COMPLETED run with a "capture tonight" answer kicks off
                 // the end-of-session flats (generated from this very session's

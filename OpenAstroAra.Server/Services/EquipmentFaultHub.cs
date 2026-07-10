@@ -30,20 +30,24 @@ public interface IEquipmentFaultSink {
 }
 
 /// <summary>
-/// §42.2 — the one place detected equipment faults converge. On every publish it logs the fault
-/// and broadcasts the <c>equipment.fault</c> WS event (the EquipmentEventPublisher pattern:
-/// JsonObject → AOT-safe element, best-effort, never propagates); the §42.3 reaction service
-/// subscribes via <see cref="FaultPublished"/> in its own slice — until then this hub makes every
-/// detection observable on its own (log + WILMA event), so the detection slice ships standalone.
+/// §42.2 — the one place detected equipment faults converge. On every publish it logs the fault,
+/// persists it to the §42.5 fault log (fire-and-forget — the store must never slow a device
+/// path), and broadcasts the <c>equipment.fault</c> WS event (the EquipmentEventPublisher
+/// pattern: JsonObject → AOT-safe element, best-effort, never propagates); the §42.3 reaction
+/// service subscribes via <see cref="Subscribe"/> and stamps its outcome onto the same
+/// fault-log row as the episode progresses.
 /// </summary>
 public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
 
     private readonly IWsBroadcaster _broadcaster;
     private readonly ILogger<EquipmentFaultHub> _logger;
+    private readonly IFaultLogService? _faultLog;
 
-    public EquipmentFaultHub(IWsBroadcaster broadcaster, ILogger<EquipmentFaultHub>? logger = null) {
+    public EquipmentFaultHub(IWsBroadcaster broadcaster, ILogger<EquipmentFaultHub>? logger = null,
+            IFaultLogService? faultLog = null) {
         _broadcaster = broadcaster ?? throw new ArgumentNullException(nameof(broadcaster));
         _logger = logger ?? NullLogger<EquipmentFaultHub>.Instance;
+        _faultLog = faultLog;
     }
 
     // Invoked synchronously on each publish, AFTER the log line (so the reaction slice can never
@@ -70,6 +74,9 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
     public void Publish(EquipmentFaultEvent fault) {
         ArgumentNullException.ThrowIfNull(fault);
         LogFault(fault.DeviceType, fault.Kind, fault.DeviceName ?? fault.DeviceId ?? "?", fault.Details ?? "");
+        if (_faultLog is not null) {
+            _ = PersistQuietlyAsync(fault);
+        }
         try {
             var payload = new JsonObject {
                 ["device_type"] = fault.DeviceType.ToString().ToLowerInvariant(),
@@ -94,6 +101,16 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
         }
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "§42.5 persistence is best-effort off a device path: a store fault is logged and dropped, never propagated — and the task is fire-and-forget, so the catch also keeps it from dying unobserved. CA1031's log-and-recover boundary applies.")]
+    private async System.Threading.Tasks.Task PersistQuietlyAsync(EquipmentFaultEvent fault) {
+        try {
+            await _faultLog!.RecordFaultAsync(fault, System.Threading.CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogPersistFailed(ex);
+        }
+    }
+
     /// <summary>The §42.2 snake_case wire token for a fault kind.</summary>
     public static string WireToken(EquipmentFaultKind kind) => kind switch {
         EquipmentFaultKind.Disconnected => "disconnected",
@@ -112,4 +129,7 @@ public sealed partial class EquipmentFaultHub : IEquipmentFaultSink {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Equipment fault hub: a fault subscriber threw — the fault is still logged/broadcast")]
     private partial void LogSubscriberFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Equipment fault hub: failed to persist the fault to the §42.5 fault log — it is still logged/broadcast")]
+    private partial void LogPersistFailed(Exception ex);
 }

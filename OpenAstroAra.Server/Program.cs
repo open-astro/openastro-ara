@@ -209,6 +209,13 @@ public partial class Program {
         // their optional IEquipmentFaultSink ctor param — injected by constructor activation
         // exactly like EquipmentEventPublisher above (factory-lambda registrations pass it by hand,
         // the #711 lesson).
+        // §42.5 — persisted fault history. The registry mirrors the sequencer's
+        // CaptureSessionScope enter/exit so fault rows get session attribution from
+        // watch/timer contexts; the hub persists every detection and the §42.3
+        // reaction service stamps its outcome onto the same row. Constructor
+        // activation injects both optional deps.
+        builder.Services.AddSingleton<ActiveRunSessionRegistry>();
+        builder.Services.AddSingleton<IFaultLogService, SqliteFaultLogService>();
         builder.Services.AddSingleton<EquipmentFaultHub>();
         builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
@@ -577,7 +584,9 @@ public partial class Program {
                 // generator via resolver to avoid a construction cycle, notifications).
                 sp.GetService<IProfileStore>(),
                 () => sp.GetService<ICalibrationService>(),
-                sp.GetService<INotificationService>()));
+                sp.GetService<INotificationService>(),
+                // §42.5 — same lesson: the run-session registry by hand.
+                sp.GetService<ActiveRunSessionRegistry>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.
@@ -615,7 +624,9 @@ public partial class Program {
                 sp.GetService<ITelescopeService>(),
                 sp.GetService<INotificationService>(),
                 sp.GetService<IWsBroadcaster>(),
-                sp.GetService<ILogger<FaultReactionService>>()));
+                sp.GetService<ILogger<FaultReactionService>>(),
+                // §42.5 — the reaction outcome lands on the fault-log row.
+                sp.GetService<IFaultLogService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
@@ -833,6 +844,7 @@ public partial class Program {
         // Phase 8 endpoint groups (501 stubs until service implementations land).
         app.MapImageEndpoints();
         app.MapDiagnosticsEndpoints();
+        app.MapFaultsEndpoints(); // §42.5 — persisted fault history
 
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
         // functional today). /api/v1/server/info already lives directly in this file.
