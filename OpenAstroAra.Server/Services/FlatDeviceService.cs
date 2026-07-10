@@ -207,12 +207,18 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             // death and reads false on a driver-side disconnect; a consecutive-failure streak
             // (not one blip) trips the device to Error + publishes the §42.2 fault.
             if (!ProbeConnected(client)) {
-                if (_probe.Observe(false) == ProbeVerdict.Lost) {
-                    TripConnectionLost();
+                // Only a probe of the LIVE client may feed the streak or trip the fault: the
+                // blocking probe runs outside _gate, so a concurrent reconnect can have swapped
+                // the client (and reset the probe) while a stale probe of the dead session was
+                // still in flight — same staleness guard as the runtime write-back below.
+                if (IsLiveClient(client) && _probe.Observe(false) == ProbeVerdict.Lost) {
+                    TripConnectionLost(client);
                 }
                 return; // the device didn't answer — skip this tick's reads
             }
-            _probe.Observe(true);
+            if (IsLiveClient(client)) {
+                _probe.Observe(true);
+            }
             var runtime = ReadRuntime(client);
             int? max = needMax ? ReadMaxBrightness(client) : null;
             lock (_gate) {
@@ -368,13 +374,21 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         try { return c.Connected; } catch (Exception) { return false; }
     }
 
+    private bool IsLiveClient(AlpacaCoverCalibrator client) {
+        lock (_gate) {
+            return ReferenceEquals(_client, client);
+        }
+    }
+
     // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
     // reconnect can find it; the state publisher already maps Error to
     // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    private void TripConnectionLost() {
+    // Re-checks the probed client's identity under the gate: a reconnect between the probe
+    // and this trip must never flip the NEW, healthy session to Error (review finding).
+    private void TripConnectionLost(AlpacaCoverCalibrator probed) {
         DiscoveredDeviceDto? device;
         lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected) {
+            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
                 return;
             }
             device = _device;
