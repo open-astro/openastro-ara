@@ -173,9 +173,18 @@ public sealed partial class RotatorService : IRotatorMediator {
                 await linked.CancelAsync().ConfigureAwait(false); // move won the race: cancel the timer so it can't leak
             }
             await moveTask.ConfigureAwait(false); // observe the move's result / surface its exception
-            await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
+            if (!await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false)) {
+                // §42.2 — the §42.2 "position drift / runaway" family: the move dispatched fine
+                // but the rotator still reports moving after the full settle bound. Fail the
+                // instruction — a rotator at an unknown angle must not read as a completed move.
+                var msg = $"rotator still reports moving {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s after a move to {target}°";
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
+                throw new SequenceEntityFailedException(msg);
+            }
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (SequenceEntityFailedException) {
+            throw; // already classified + published above
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking move never returned — a stalled op (§42.4).
             // §42.2: publish AND fail the instruction so retries/instruction_failed engage.
@@ -197,8 +206,11 @@ public sealed partial class RotatorService : IRotatorMediator {
 
     // Polls the device's IsMoving directly (not via the single-flight cache, which can no-op against a
     // concurrent timer tick) until the rotator settles or the bound elapses, refreshing the §32.4
-    // cache each tick so GetInfo/GetAsync stay current.
-    private async Task WaitForMoveCompleteAsync(AlpacaRotator client, CancellationToken ct) {
+    // cache each tick so GetInfo/GetAsync stay current. Returns false ONLY on settle exhaustion —
+    // the device still reports moving after the full bound (§42.2: the caller fails the instruction).
+    // A dropped/superseded connection and a driver without IsMoving both report true ("not a stall"):
+    // the §42.3 probe owns disconnects, and a blocking-Move driver settled when the call returned.
+    private async Task<bool> WaitForMoveCompleteAsync(AlpacaRotator client, CancellationToken ct) {
         var unknownStreak = 0;
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
@@ -210,23 +222,24 @@ public sealed partial class RotatorService : IRotatorMediator {
                     && ReferenceEquals(_client, client);
             }
             if (!stillOurClient) {
-                return;
+                return true;
             }
             var moving = ReadIsMoving(client);
             RefreshCacheOnce();
             if (moving == false) {
-                return; // confirmed settled
+                return true; // confirmed settled
             }
             if (moving is null) {
                 // Brief null streak = transient blip (keep waiting); a persistent streak means the
                 // driver doesn't implement IsMoving (its Move blocks until done), so stop early.
                 if (++unknownStreak >= UnknownReadsBeforeSettled) {
-                    return;
+                    return true;
                 }
             } else {
                 unknownStreak = 0; // moving == true: real read; reset the transient counter
             }
         }
+        return false; // still reports moving after the full settle bound
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
