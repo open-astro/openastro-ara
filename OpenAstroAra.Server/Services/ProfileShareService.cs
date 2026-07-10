@@ -191,6 +191,10 @@ public sealed class ProfileShareService : IProfileShareService {
         CameraElectronics = new CameraElectronicsDto(),
         // Strip the donor's physical filter list — the recipient declares their own.
         FilterSet = new FilterSetDto(Filters: []),
+        // Strip the §59.2 Smart Focus calibration — daemon-derived data fitted to the donor's
+        // focuser + optical train; on the recipient's rig it would feed the one-frame runner a
+        // wrong map (the fallback ladder would catch it, but a share must not plant bad state).
+        FocusCalibration = null,
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>
@@ -234,6 +238,7 @@ public sealed class ProfileShareService : IProfileShareService {
         "Site location (latitude / longitude / elevation / timezone)",
         "PHD2 host / port / profile",
         "Notification tokens",
+        "Autofocus calibration — regenerates on your first autofocus sweep",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including

@@ -1206,6 +1206,16 @@ const List<Setting> settingsRegistry = [
     profilePath: 'autofocus.method',
   ),
   Setting(
+    id: 'img.autofocus.telescope_type',
+    label: 'Telescope type',
+    description: 'Your optical design (§59.4). Smart Focus reads different defocus features per design — donut diameters on obstructed scopes, FWHM patterns on refractors — and can resolve which side of focus you are on. "Other / unknown" keeps the universal HFR-only behaviour.',
+    keywords: ['telescope', 'scope', 'optical design', 'SCT', 'refractor', 'newtonian', 'RC', 'maksutov'],
+    path: ['Settings', 'Imaging', 'Autofocus'],
+    type: SettingType.enumValue(['Refractor', 'Schmidt-Cassegrain (SCT)', 'Maksutov-Cassegrain', 'Ritchey-Chrétien (RC)', 'Newtonian', 'Other / unknown']),
+    defaultValue: 'Other / unknown',
+    profilePath: 'autofocus.telescope_type',
+  ),
+  Setting(
     id: 'img.autofocus.steps',
     label: 'Number of steps',
     description: 'How many focuser positions to sample around the current position. More steps = more accurate fit but slower runs.',

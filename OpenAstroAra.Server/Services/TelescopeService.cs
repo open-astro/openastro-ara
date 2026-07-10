@@ -43,6 +43,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     private readonly ILogger<TelescopeService> _logger;
     private readonly EquipmentEventPublisher? _events;
+    private readonly IEquipmentFaultSink? _faults;
+    private readonly DeviceConnectionProbe _probe = new();
+    private readonly MountTrackingWatch _trackingWatch = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaTelescope? _client;
@@ -63,9 +66,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private long _connectGeneration;
     private bool _disposed;
 
-    public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null) {
+    public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
+            IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _events = events;
+        _faults = faults;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -139,6 +144,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
+        NoteMountCommand(w => w.NoteMotionCommanded());
         _ = Task.Run(() => SlewInBackground(client, ra, dec, sync), CancellationToken.None);
         return Task.FromResult(Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey));
     }
@@ -149,6 +155,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // unused by the park itself — the param is kept only for the interface contract.
         _ = request;
         var client = RequireConnectedClient();
+        NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
             // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
             // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
@@ -161,6 +168,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient();
+        NoteMountCommand(w => w.NoteMotionCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.unpark", client, c => c.Unpark()), CancellationToken.None);
         return Task.FromResult(Accepted("telescope.unpark", idempotencyKey));
     }
@@ -173,6 +181,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
         // workaround executes fine from a stationary state — verified on-device, the mount moves
         // to home with tracking off — so homing doesn't need the motors pre-engaged.
+        // Park semantics for the watch (matching the mediator's RunMountOpAsync): homing ends
+        // idle-not-parked with tracking off, so a motion note would leave the old expectation
+        // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
+        NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
         return Task.FromResult(Accepted("telescope.findhome", idempotencyKey));
     }
@@ -182,6 +194,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // Prompt synchronous write off the request thread (blocking ASCOM HTTP PUT), then reflect.
         // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
         // already cancelled, which would silently skip the write — the same hazard as the abort path.
+        NoteMountCommand(w => w.NoteTrackingCommanded(enabled));
         await Task.Run(() => client.Tracking = enabled, CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
@@ -196,6 +209,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
         // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
         // backstop that halts all axes.
+        NoteMountCommand(w => w.NoteMotionCommanded());
         await Task.Run(() => client.MoveAxis((TelescopeAxis)axis, rate), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
@@ -206,6 +220,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // CancellationToken.None (not ct) is critical: Task.Run(lambda, ct) returns a pre-cancelled
         // task WITHOUT running the lambda if ct is already cancelled, so an HTTP-timeout/disconnect
         // that cancelled the token would silently never send the abort and the slew would continue.
+        NoteMountCommand(w => w.NoteMotionCommanded());
         await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
@@ -290,11 +305,25 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             if (client is null) {
                 return;
             }
+            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
+            // below deliberately swallow failures (an unsupported property must stay benign), so
+            // this probe is the only disconnect-detection source: Connected throws on transport
+            // death and reads false on a driver-side disconnect; a consecutive-failure streak
+            // (not one blip) trips the device to Error + publishes the §42.2 fault.
+            if (!ProbeConnected(client)) {
+                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
+                    TripConnectionLost(client);
+                }
+                return; // the device didn't answer — skip this pass's reads
+            }
+            ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
             // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
+            var trackingVerdict = TrackingWatchVerdict.Idle;
+            DiscoveredDeviceDto? watchedDevice = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -305,12 +334,42 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                         _equatorialSystemRaw = equatorialSystem.Value;
                         _equatorialSystemKnown = true;
                     }
+                    // §42.2 — tracking-lost watch, observed under the same commit lock so the
+                    // liveness check and the observation are one critical section (the #789
+                    // probe lesson); command notes take this gate too.
+                    trackingVerdict = _trackingWatch.Observe(
+                        runtime.Tracking, slewing: runtime.State == "slewing", parked: runtime.Parked);
+                    watchedDevice = _device;
                 }
+            }
+            if (trackingVerdict == TrackingWatchVerdict.Lost) {
+                LogTrackingLost(watchedDevice?.Name ?? "?");
+                _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope,
+                    watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.TrackingLost,
+                    $"tracking reported off for {MountTrackingWatch.DefaultDropThreshold} consecutive status ticks with no daemon command",
+                    DateTimeOffset.UtcNow));
+            } else if (trackingVerdict == TrackingWatchVerdict.Recovered) {
+                LogTrackingRecovered(watchedDevice?.Name ?? "?");
             }
         } catch (Exception ex) {
             LogRuntimeReadFailed(ex);
         }
     }
+
+    // §42.2 — every daemon-issued mount command is noted BEFORE its device write is dispatched,
+    // so a refresh tick that commits after the command already sees the grace window (a command
+    // noted after dispatch could race a tick observing its effect and accuse the mount).
+    private void NoteMountCommand(Action<MountTrackingWatch> note) {
+        lock (_gate) {
+            note(_trackingWatch);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope '{Device}' silently dropped tracking — §42.2 fault published")]
+    private partial void LogTrackingLost(string device);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Telescope '{Device}' tracking recovered — watch re-armed (§42.2)")]
+    private partial void LogTrackingRecovered(string device);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
@@ -501,6 +560,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
                     _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
+                    _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
+                    _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -568,6 +629,50 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
+    private static bool ProbeConnected(AlpacaTelescope c) {
+        try { return c.Connected; } catch (Exception) { return false; }
+    }
+
+    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
+    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
+    // while a stale probe of the dead session was still in flight. The liveness check and
+    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
+    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
+    // null when the probed client is stale (the observation is discarded).
+    private ProbeVerdict? ObserveProbeIfLive(AlpacaTelescope client, bool probeSucceeded) {
+        lock (_gate) {
+            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
+        }
+    }
+
+    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
+    // reconnect can find it; the state publisher already maps Error to
+    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
+    // Re-checks the probed client's identity under the gate: a reconnect between the probe
+    // and this trip must never flip the NEW, healthy session to Error (review finding).
+    private void TripConnectionLost(AlpacaTelescope probed) {
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
+                return;
+            }
+            device = _device;
+            SetState(EquipmentConnectionState.Error);
+            _probe.Reset();
+            _trackingWatch.Reset();
+        }
+        LogConnectionLost(device?.Name ?? "?");
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope, device?.UniqueId, device?.Name,
+            EquipmentFaultKind.Disconnected,
+            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
+            DateTimeOffset.UtcNow));
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope '{Device}' stopped answering — marked Error (§42.3)")]
+    private partial void LogConnectionLost(string device);
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {

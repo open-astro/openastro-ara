@@ -117,7 +117,8 @@ public static class ProfileSnapshotNormalizer {
             Method: "hfr_v_curve", Steps: 7, StepSize: 50, ExposureSeconds: 5,
             Binning: 1, AfFilter: "L", RunAfterFilterChange: true,
             TriggerTempDeltaC: 2.0, TriggerHfrDriftPct: 15.0, EveryNHours: 2,
-            AbortSequenceOnAfFailure: true, RestorePositionOnFailure: true),
+            AbortSequenceOnAfFailure: true, RestorePositionOnFailure: true,
+            TelescopeType: "other"),
         PlateSolve: new(
             Engine: "astap", PathOrEndpoint: "/usr/bin/astap",
             IndexDownloadPath: "/var/lib/astap", SearchRadiusDeg: 30.0,

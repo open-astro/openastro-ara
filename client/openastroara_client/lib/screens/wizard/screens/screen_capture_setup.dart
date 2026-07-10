@@ -204,6 +204,27 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
           value: _af.stepSize,
           set: (n) => _af.stepSize = n,
         ),
+        // §59.4/§59.14 — the optical design, declared once. Smart Focus reads
+        // per-design defocus features from it (donut diameters on obstructed
+        // scopes, FWHM patterns on refractors) and can learn which SIDE of focus
+        // a frame is on. Nullable: "Keep profile default" preserves the base.
+        WizardDropdown<String?>(
+          label: 'Telescope type',
+          value: _af.telescopeType,
+          helperText: 'Out-of-focus stars look different per optical design — '
+              'declaring yours lets autofocus read defocus (and its direction) '
+              'from fewer exposures. "Other" is always safe.',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: 'refractor', label: 'Refractor'),
+            DropdownMenuEntry(value: 'sct', label: 'Schmidt-Cassegrain (SCT)'),
+            DropdownMenuEntry(value: 'mak', label: 'Maksutov-Cassegrain'),
+            DropdownMenuEntry(value: 'rc', label: 'Ritchey-Chrétien (RC)'),
+            DropdownMenuEntry(value: 'newtonian', label: 'Newtonian'),
+            DropdownMenuEntry(value: 'other', label: 'Other / unknown'),
+          ],
+          onChanged: (v) => setState(() => _af.telescopeType = v),
+        ),
         // Nullable so "Keep profile default" preserves the base (same pattern as
         // the downsample dropdown); Yes/No override.
         WizardDropdown<bool?>(

@@ -230,7 +230,26 @@ public sealed record SafetyPoliciesDto(
     // Sun altitude (deg) the sequence waits for before starting sky flats. -9 (mid nautical
     // twilight, sky bright enough to reach the target within the exposure bounds) rather than
     // the playbook prose's astronomical twilight (-18, still dark enough for imaging).
-    double SkyFlatSunAltitude = -9);
+    double SkyFlatSunAltitude = -9,
+    // §42.2/§42.3 — equipment-fault reaction policies (FaultPolicyMatrix resolves these into a
+    // plan; FaultReactionService executes it). Optional ctor defaults keep an older profile.json
+    // deserializing. Master switch for the §42.3 hot-reconnect ladder (0/5/15/30/60 s, five
+    // attempts); off = a lost device goes straight to its policy's terminal action.
+    bool HotReconnectEnabled = true,
+    // Camera lost mid-session: "reconnect_then_pause" (default) | "pause" | "notify_only".
+    string OnCameraLost = "reconnect_then_pause",
+    // Mount lost: "reconnect_then_abort_park" (default) | "reconnect_then_pause" | "pause"
+    // | "notify_only". The give-up park is best-effort — a mount that never reconnected
+    // usually can't park either, but trying costs nothing and covers driver-side drops.
+    string OnMountLost = "reconnect_then_abort_park",
+    // Tracking silently dropped (§42.4 emits the fault; the reaction handles the kind from
+    // day one): "reenable_then_pause" (default) | "pause" | "notify_only".
+    string OnTrackingLost = "reenable_then_pause",
+    // §42.4 — value-based ISwitch read-back tolerance, percent of the port's min/max range
+    // (a boolean port's range is 1, so 5% catches a commanded-ON/read-OFF flip). A written
+    // port whose read-back stays outside this band past the settle window publishes a
+    // value_mismatch fault. Optional ctor default keeps an older profile.json deserializing.
+    double SwitchValueTolerancePct = 5.0);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime
@@ -249,7 +268,12 @@ public sealed record AutofocusSettingsDto(
     double TriggerHfrDriftPct,
     int EveryNHours,
     bool AbortSequenceOnAfFailure,
-    bool RestorePositionOnFailure);
+    bool RestorePositionOnFailure,
+    // §59.4/§59.13 — the optical design (`refractor`/`sct`/`mak`/`rc`/`newtonian`/`other`), declared once
+    // in the wizard; Smart Focus picks its magnitude key + side-classifier features from it. Trailing
+    // default so a pre-§59.4 profile.json deserializes; `other` = assume nothing (pre-§59.4 behavior),
+    // and consumers parse via FocusFeatureProfile.Parse (unknown wire values also read as `other`).
+    string TelescopeType = "other");
 
 /// <summary>
 /// §37.10 plate solving settings — engine + search/timeout knobs +

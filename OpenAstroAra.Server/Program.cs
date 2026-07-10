@@ -204,6 +204,13 @@ public partial class Program {
         // service below takes this via its optional ctor param and publishes
         // from its SetState choke point.
         builder.Services.AddSingleton<EquipmentEventPublisher>();
+        // §42.2 — the one place detected equipment faults converge (log + equipment.fault WS
+        // broadcast). The §42.3 connection probes in the device services below publish into it via
+        // their optional IEquipmentFaultSink ctor param — injected by constructor activation
+        // exactly like EquipmentEventPublisher above (factory-lambda registrations pass it by hand,
+        // the #711 lesson).
+        builder.Services.AddSingleton<EquipmentFaultHub>();
+        builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
@@ -276,7 +283,13 @@ public partial class Program {
                 () => sp.GetService<ISequencerService>(),
                 sp.GetService<INotificationService>()));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
-        builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
+        // §45 — the real polar-align service (skeleton): drives the routine over the connected GuiderService
+        // (PA-session lease lifecycle now; the capture→solve→slew loop lands in follow-up slices).
+        builder.Services.AddSingleton<IPolarAlignService>(sp =>
+            new PolarAlignService(
+                sp.GetRequiredService<GuiderService>(),
+                sp.GetRequiredService<ILogger<PolarAlignService>>(),
+                sp.GetService<IWsBroadcaster>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
@@ -462,7 +475,11 @@ public partial class Program {
                 events: sp.GetRequiredService<EquipmentEventPublisher>(),
                 // §59.5 — post-capture star analysis feeds the session history the
                 // HFR-drift autofocus trigger reads.
-                imageHistory: sp.GetRequiredService<ImageHistoryService>()));
+                imageHistory: sp.GetRequiredService<ImageHistoryService>(),
+                // §42.2/§42.3 — explicit for the same reason as events above: this factory
+                // lambda bypasses constructor activation, and forgetting it would silence
+                // camera disconnect faults.
+                faults: sp.GetRequiredService<IEquipmentFaultSink>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -482,7 +499,9 @@ public partial class Program {
                 sp.GetRequiredService<IAnalysisFrameSource>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AutofocusSweepService>>(),
                 history: sp.GetRequiredService<ImageHistoryService>(),
-                filterWheel: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>()));
+                filterWheel: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
+                ws: sp.GetRequiredService<IWsBroadcaster>(),
+                notifications: sp.GetRequiredService<INotificationService>()));
         // §48.3 — the auto-exposure flat set (panel light → probe-to-ADU → saved FLAT frames).
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.SequenceItem.FlatDevice.IFlatCaptureExecutor>(sp =>
             new FlatCaptureService(
@@ -582,6 +601,24 @@ public partial class Program {
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
+
+        // §42.3 — equipment-fault reaction: subscribes to the EquipmentFaultHub and executes
+        // the FaultPolicyMatrix plan per fault (pause-first for camera/mount, hot-reconnect
+        // ladder via IEquipmentReconnector, resume on recovery, pause/abort+park on give-up).
+        // Same optional-dep + sequencer-resolver pattern as the safety-reaction engine.
+        builder.Services.AddSingleton<FaultReactionService>(sp =>
+            new FaultReactionService(
+                sp.GetService<EquipmentFaultHub>(),
+                sp.GetService<IEquipmentReconnector>(),
+                sp.GetService<IProfileStore>(),
+                () => sp.GetService<ISequencerService>(),
+                sp.GetService<ITelescopeService>(),
+                sp.GetService<INotificationService>(),
+                sp.GetService<IWsBroadcaster>(),
+                sp.GetService<ILogger<FaultReactionService>>()));
+        // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
+        // any in-flight reconnect ladder.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
 
         // §35.3 — emergency stop (abort runs → abort exposure → stop guiding →
         // park → flat light off), behind POST /api/v1/server/emergency-stop.
@@ -783,6 +820,9 @@ public partial class Program {
 
         // Phase 6 equipment endpoints (501 stubs except discovery).
         app.MapEquipmentEndpoints();
+
+        // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
+        app.MapAutofocusEndpoints();
 
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();

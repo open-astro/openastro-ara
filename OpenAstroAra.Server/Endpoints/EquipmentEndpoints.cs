@@ -206,7 +206,12 @@ public static class EquipmentEndpoints {
             var job = jobs.Enqueue("autofocus", totalSteps: totalProbes, async (tick, ct) => {
                 var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(s => {
                     if (s.MaxProgress > 0 && s.Progress > 0) {
-                        tick((int)s.Progress);
+                        // §59.2 mode-aware progress: a Smart run reports 3 shots, Classic reports
+                        // totalProbes probes — scale whatever denominator the run declares onto the
+                        // job's fixed total so a 2-shot Smart run reads ~2/3 done, not 2/9. The job
+                        // service's monotone tick guard keeps a Smart→Classic fallback sane (the
+                        // fraction never goes backwards).
+                        tick(ScaleAutofocusProgress(s.Progress, s.MaxProgress, totalProbes));
                     }
                 });
                 var ok = await autofocus.RunAutofocusAsync(progress, ct);
@@ -356,8 +361,9 @@ public static class EquipmentEndpoints {
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
 
-        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started/complete)
-        // and a status read for the wizard's "Build dark library" affordance.
+        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started, then
+        // §63.8 guider.dark_library.progress ticks during the build, then complete/failed) and a status read for
+        // the wizard's "Build dark library" affordance.
         guider.MapPost("/darklibrary/build", async ([FromBody] BuildDarkLibraryRequestDto request,
                 [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await BuildDarkLibraryAsync(request, key, svc, ct));
@@ -367,7 +373,8 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetCalibrationFilesStatusAsync(ct);
             return Results.Ok(new CalibrationFilesStatusResponseDto(Connected: dto is not null, Status: dto));
         });
-        // §63.6 defect map: build (202, long-running; WS guider.defect_map.started/complete/failed). Shares the
+        // §63.6 defect map: build (202, long-running; WS guider.defect_map.started, §63.8
+        // guider.defect_map.progress ticks, then complete/failed). Shares the
         // single calibration-build gate with the dark-library build; the status read above already covers the
         // defect-map fields, so there's no separate defect-map status endpoint.
         guider.MapPost("/defectmap/build", async ([FromBody] BuildDefectMapDarksRequestDto request,
@@ -385,7 +392,7 @@ public static class EquipmentEndpoints {
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.StartAsync(key, ct)));
+            await PolarAlignStartAsync(svc, key, ct));
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
 
@@ -413,6 +420,14 @@ public static class EquipmentEndpoints {
     //   202 Accepted   — at least one connect was dispatched; each connects in the background.
     //   502 Bad Gateway — devices were remembered but every dispatch threw synchronously (e.g. all
     //                     their Alpaca servers are down on a rig restart), so don't claim "reconnecting".
+    // §59.2 — map a run's own (progress, maxProgress) onto the job's fixed step total: identity for a
+    // Classic run whose denominator matches, a 1/3-per-shot scale for a Smart run. Clamped to [1, total]
+    // so a mid-run denominator oddity can never tick 0 or overshoot the job service's total.
+    internal static int ScaleAutofocusProgress(double progress, int maxProgress, int totalSteps) {
+        var scaled = (int)System.Math.Round(progress / maxProgress * totalSteps);
+        return System.Math.Clamp(scaled, 1, totalSteps);
+    }
+
     private static async Task<IResult> ReconnectAsync(IEquipmentReconnector reconnector, DeviceType type, CancellationToken ct) {
         var outcome = await reconnector.ReconnectAsync(type, ct);
         if (outcome.Attempted == 0) {
@@ -460,6 +475,21 @@ public static class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (CalibrationBuildInProgressException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: BuildInProgressProblemType);
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        }
+    }
+
+    // §45 polar-align start (extracted for the error-mapping tests). The DI swap to the real
+    // PolarAlignService made a not-connected Start a live path: RequireConnectedGuider throws plain
+    // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
+    // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
+    // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
+    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.StartAsync(idempotencyKey, ct));
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }

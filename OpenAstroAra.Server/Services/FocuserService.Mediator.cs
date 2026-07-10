@@ -175,14 +175,25 @@ public sealed partial class FocuserService : IFocuserMediator {
                 await linked.CancelAsync().ConfigureAwait(false); // move won the race: cancel the timer so it can't leak
             }
             await moveTask.ConfigureAwait(false); // observe Move()'s result / surface its exception
-            await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
+            var reachedRest = await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
+            if (!reachedRest) {
+                // §42.4 — the §42.2 "commanded position not reached" row: the Move dispatched
+                // fine but the focuser still reports moving after the full settle bound.
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout,
+                    $"focuser still reports moving {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s after a Move to {target}");
+            }
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (TimeoutException ex) {
+            // The wall-clock bound above: the blocking Move never returned — a stalled op (§42.4).
+            LogMoveFailed(ex, target);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
         } catch (Exception ex) {
             // Anything else, INCLUDING an OperationCanceledException the Alpaca HTTP client raises for
             // its OWN internal timeout (ct not cancelled), is a device fault: log it and report the
             // last known position rather than aborting the autonomous run as if cancelled.
             LogMoveFailed(ex, target);
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"focuser Move to {target} failed: {ex.Message}");
         }
         RefreshCacheOnce();
         // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce
@@ -200,8 +211,10 @@ public sealed partial class FocuserService : IFocuserMediator {
     // concurrent timer tick) until the focuser settles or the bound elapses, refreshing the §32.4
     // cache each tick so GetInfo/GetAsync stay current. The leading delay gives firmware that asserts
     // IsMoving asynchronously a chance to do so before the first read, so a just-issued Move is not
-    // mistaken for already-settled.
-    private async Task WaitForMoveCompleteAsync(AlpacaFocuser client, CancellationToken ct) {
+    // mistaken for already-settled. Returns false ONLY on the exhausted bound with the device still
+    // reporting motion — the §42.4 stall signal; a gone device (disconnected/superseded) returns true
+    // because that's the Disconnected fault's territory, not a stall.
+    private async Task<bool> WaitForMoveCompleteAsync(AlpacaFocuser client, CancellationToken ct) {
         var unknownStreak = 0;
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
@@ -213,12 +226,12 @@ public sealed partial class FocuserService : IFocuserMediator {
                     && ReferenceEquals(_client, client);
             }
             if (!stillOurClient) {
-                return;
+                return true;
             }
             var moving = ReadIsMoving(client);
             RefreshCacheOnce();
             if (moving == false) {
-                return; // confirmed settled
+                return true; // confirmed settled
             }
             if (moving is null) {
                 // A brief streak of nulls is a transient read blip — keep waiting. A persistent
@@ -229,12 +242,33 @@ public sealed partial class FocuserService : IFocuserMediator {
                 // streak this long mid-move and settle early; the MoveSettleMaxPolls hard bound and
                 // the post-wait direct Position read backstop that (rare) case.
                 if (++unknownStreak >= UnknownReadsBeforeSettled) {
-                    return;
+                    return true;
                 }
             } else {
                 unknownStreak = 0; // moving == true: a real read; reset the transient counter
             }
         }
+        return false; // bound exhausted with the focuser still reporting motion — a stall (§42.4)
+    }
+
+    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaFocuser client, EquipmentFaultKind kind, string details) {
+        if (_faults is null) {
+            return;
+        }
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
+            device = _device;
+        }
+        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Focuser, device?.UniqueId, device?.Name,
+            kind, details, DateTimeOffset.UtcNow));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

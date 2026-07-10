@@ -25,16 +25,31 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 // §63.6 (guider-e-4b-2 / e-4c-b-2) — surface the guider-client calibration builds (dark library + defect map)
-// over the §6 REST/WS surface. Both build_dark_library and build_defect_map_darks are BLOCKING RPCs with no
-// progress events (see PHD2Guider.DarkLibrary.cs), so this follows the §60.5 202-Accepted pattern: validate
-// synchronously, dispatch the build on a background task, and report start/finish over the §60.9 WS stream —
-// there is no granular progress bar to forward. The two builds share one in-flight gate because the daemon can
-// only run a single calibration capture at a time (one camera, "no active capture" precondition).
+// over the §6 REST/WS surface. Both build_dark_library and build_defect_map_darks are BLOCKING RPCs (they
+// answer only when the whole capture stack is done), so this follows the §60.5 202-Accepted pattern: validate
+// synchronously, dispatch the build on a background task, and report start/finish over the §60.9 WS stream.
+// §63.8: the daemon yields between frames, so a SEPARATE poll of get_dark_build_progress drives a granular
+// progress bar during the build — run concurrently here (PHD2Guider.SendMessage opens its own connection per
+// call, so the poll never contends with the in-flight build). The two builds share one in-flight gate because
+// the daemon can only run a single calibration capture at a time (one camera, "no active capture" precondition).
 public sealed partial class GuiderService {
 
     public const string DarkLibraryStartedEvent = "guider.dark_library.started";
+    public const string DarkLibraryProgressEvent = "guider.dark_library.progress";
     public const string DarkLibraryCompleteEvent = "guider.dark_library.complete";
     public const string DarkLibraryFailedEvent = "guider.dark_library.failed";
+
+    // §63.8 progress poll cadence — 1 s is plenty for a multi-minute build's progress bar and keeps the poll
+    // load trivial (one short-lived RPC connection per tick).
+    private const int BuildProgressPollIntervalMs = 1000;
+
+    // §63.8 — a SHORT receive timeout for the poll RPC. GetDarkBuildProgressAsync's SendMessage takes no
+    // CancellationToken for the in-flight receive, so cancelling the poll can't interrupt a tick already mid-send;
+    // only this timeout can. We cancel-and-drain the poll BEFORE emitting the build's complete/failed event (so a
+    // late progress tick can't land after it), which puts that drain on the completion path — a short bound keeps
+    // it to a few seconds rather than the default 60 s if a tick stalls on a daemon hiccup. A dropped progress
+    // frame is cosmetic; the next tick recovers.
+    private const int BuildProgressPollReceiveTimeoutMs = 5000;
 
     // A calibration build (dark library OR defect-map darks) is a single blocking RPC on the daemon, so two
     // concurrent builds are undefined behavior there (and would emit ambiguous paired started/complete events) —
@@ -122,6 +137,10 @@ public sealed partial class GuiderService {
         Justification = "Background build boundary: guider.BuildDarkLibraryAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a 2-hour blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
     private async Task BuildDarkLibraryInBackground(PHD2Guider guider, Phd2BuildDarkLibrary rpcRequest, CancellationToken ct) {
         var p = rpcRequest.Parameters!;
+        // §63.8: cancel the progress poll the moment the build settles (complete OR failed), independently of the
+        // build's own cancellation — a linked source so shutdown still tears both down together.
+        using var pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var pollTask = Task.CompletedTask;
         try {
             LogDarkLibraryBuildStarted(p.FrameCount, p.ClearExisting);
             await EmitCalibrationEventAsync(DarkLibraryStartedEvent, new JsonObject {
@@ -129,6 +148,7 @@ public sealed partial class GuiderService {
                 ["clear_existing"] = p.ClearExisting,
                 ["load_after"] = p.LoadAfter,
             });
+            pollTask = PollBuildProgressAsync(guider, DarkLibraryProgressEvent, pollCts.Token);
             var result = await guider.BuildDarkLibraryAsync(
                 p.FrameCount, p.MinExposureMs, p.MaxExposureMs, p.ClearExisting, p.Notes, p.LoadAfter,
                 ct).ConfigureAwait(false);
@@ -138,6 +158,8 @@ public sealed partial class GuiderService {
                     exposures.Add(ms);
                 }
             }
+            // Drain the poll BEFORE the terminal event so no late progress tick can land after complete.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DarkLibraryCompleteEvent, new JsonObject {
                 ["profile_id"] = result.ProfileId,
                 ["dark_library_path"] = result.DarkLibraryPath,
@@ -147,11 +169,15 @@ public sealed partial class GuiderService {
             });
         } catch (Exception ex) {
             LogDarkLibraryBuildFailed(ex);
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DarkLibraryFailedEvent, new JsonObject {
                 ["error"] = ex.Message,
             });
         } finally {
-            // Release the single-build gate whether the build completed or failed.
+            // Safety net — the poll is already drained on both the success and failure paths; this covers any
+            // future path that skips them. Idempotent (PollBuildProgressAsync swallows its own cancellation, so
+            // the await never throws). Then release the single-build gate whether the build completed or failed.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             lock (_gate) {
                 ReleaseCalibrationGateLocked();
             }
@@ -227,8 +253,8 @@ public sealed partial class GuiderService {
             // ToJsonString()+Parse (not JsonSerializer.SerializeToElement) is deliberate: SerializeToElement on a
             // JsonObject takes the reflection path (IL2026/IL3050), which the AOT-published Server's
             // warnings=errors gate rejects. The string round-trip is the AOT-safe way to build a JsonElement and
-            // matches SequencerService.EmitAsync. It fires only on the per-build start/complete events (no
-            // per-progress stream), so the extra allocation is negligible.
+            // matches SequencerService.EmitAsync. Beyond the start/complete events it also carries the §63.8
+            // progress ticks (once per second), so the extra allocation stays negligible.
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -236,6 +262,52 @@ public sealed partial class GuiderService {
             // visible in production rather than invisible.
             LogCalibrationWsPublishFailed(eventType, ex);
         }
+    }
+
+    // §63.8 — while a build blocks on its single RPC, poll get_dark_build_progress on its OWN short-lived
+    // connection (PHD2Guider.SendMessage dials a fresh TcpClient per call, so this never contends with the
+    // in-flight build) and forward each active tick as a progress WS event. The loop ends when the caller cancels
+    // its linked token (build finished / failed / shutdown). A single poll fault is swallowed per-iteration and
+    // polling resumes next tick — a dropped progress frame is cosmetic, and the build's own path reports real
+    // faults; the loop never disturbs the build or escapes as an unobserved task exception.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Progress polling is best-effort telemetry running alongside the build: a poll RPC can throw arbitrary socket/IO/protocol exceptions (or the guider can drop mid-build), and none of that must disturb the build or surface as an unobserved task exception. Each fault is contained to its tick so the next tick can recover; cancellation (build done) ends the loop cleanly.")]
+    private async Task PollBuildProgressAsync(PHD2Guider guider, string progressEvent, CancellationToken ct) {
+        while (!ct.IsCancellationRequested) {
+            try {
+                await Task.Delay(BuildProgressPollIntervalMs, ct).ConfigureAwait(false);
+                var progress = await guider.GetDarkBuildProgressAsync(ct, BuildProgressPollReceiveTimeoutMs).ConfigureAwait(false);
+                // Re-check cancellation right before emitting: the build may have settled (and the drain begun)
+                // while this tick was mid-RPC. Skipping a cancelled tick's emit — together with the caller
+                // draining this loop BEFORE it publishes complete/failed — guarantees no progress event lands on
+                // the WS stream after the build's terminal event.
+                if (progress.Active && !ct.IsCancellationRequested) {
+                    await EmitCalibrationEventAsync(progressEvent, new JsonObject {
+                        ["exposure_index"] = progress.ExposureIndex,
+                        ["exposure_count"] = progress.ExposureCount,
+                        ["exposure_ms"] = progress.ExposureMs,
+                        ["frame"] = progress.Frame,
+                        ["frame_count"] = progress.FrameCount,
+                    });
+                }
+            } catch (OperationCanceledException) {
+                // Linked token cancelled → the build finished (or shutdown). Normal loop termination.
+                return;
+            } catch (Exception) {
+                // Transient poll fault (e.g. a socket hiccup or a same-instant disconnect the build will report):
+                // skip this tick and keep polling. The Task.Delay at the top bounds the retry to one per second.
+            }
+        }
+    }
+
+    // Cancel the progress poll and let it fully drain. Called BEFORE the build's complete/failed event (so no late
+    // progress tick can follow the terminal event) and again in the finally as a safety net. Idempotent: a second
+    // call cancels an already-cancelled source (no-op) and awaits an already-completed task (instant). The drain is
+    // bounded by BuildProgressPollReceiveTimeoutMs — SendMessage's receive takes no token, so a tick already
+    // mid-send finishes on its own short timeout rather than being interrupted by the cancel.
+    private static async Task StopProgressPollAsync(CancellationTokenSource pollCts, Task pollTask) {
+        await pollCts.CancelAsync().ConfigureAwait(false);
+        await pollTask.ConfigureAwait(false);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Dark-library build started (frames={FrameCount}, clearExisting={ClearExisting})")]
@@ -251,6 +323,7 @@ public sealed partial class GuiderService {
     // single calibration-build gate + the calibration WS-emit helper. ──
 
     public const string DefectMapStartedEvent = "guider.defect_map.started";
+    public const string DefectMapProgressEvent = "guider.defect_map.progress";
     public const string DefectMapCompleteEvent = "guider.defect_map.complete";
     public const string DefectMapFailedEvent = "guider.defect_map.failed";
 
@@ -288,6 +361,10 @@ public sealed partial class GuiderService {
         Justification = "Background build boundary: guider.BuildDefectMapDarksAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a long blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
     private async Task BuildDefectMapDarksInBackground(PHD2Guider guider, Phd2BuildDefectMapDarks rpcRequest, CancellationToken ct) {
         var p = rpcRequest.Parameters!;
+        // §63.8: poll defect-map build progress (get_dark_build_progress covers both build types) on its own
+        // connection; the linked source cancels it the instant the build settles.
+        using var pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var pollTask = Task.CompletedTask;
         try {
             LogDefectMapBuildStarted(p.ExposureMs, p.FrameCount);
             await EmitCalibrationEventAsync(DefectMapStartedEvent, new JsonObject {
@@ -295,8 +372,11 @@ public sealed partial class GuiderService {
                 ["frame_count"] = p.FrameCount,
                 ["load_after"] = p.LoadAfter,
             });
+            pollTask = PollBuildProgressAsync(guider, DefectMapProgressEvent, pollCts.Token);
             var result = await guider.BuildDefectMapDarksAsync(
                 p.ExposureMs, p.FrameCount, p.Notes, p.LoadAfter, ct).ConfigureAwait(false);
+            // Drain the poll BEFORE the terminal event so no late progress tick can land after complete.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DefectMapCompleteEvent, new JsonObject {
                 ["profile_id"] = result.ProfileId,
                 ["defect_map_path"] = result.DefectMapPath,
@@ -306,10 +386,14 @@ public sealed partial class GuiderService {
             });
         } catch (Exception ex) {
             LogDefectMapBuildFailed(ex);
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DefectMapFailedEvent, new JsonObject {
                 ["error"] = ex.Message,
             });
         } finally {
+            // Safety net — the poll is already drained on both paths; this covers any future path that skips
+            // them (idempotent, never throws). Then release the single-build gate.
+            await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
             lock (_gate) {
                 ReleaseCalibrationGateLocked();
             }

@@ -161,6 +161,10 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianFWHM, Is.EqualTo(0));
             Assert.That(vector.MedianRoundness, Is.EqualTo(0));
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(0));
+            Assert.That(vector.MedianDonutOuterDiameter, Is.EqualTo(0));
+            Assert.That(vector.MedianDonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(vector.MedianRingThickness, Is.EqualTo(0));
+            Assert.That(vector.MedianDonutShadowDepth, Is.EqualTo(0));
         }
 
         [Test]
@@ -171,9 +175,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Extract_uses_the_median_of_an_odd_count() {
             var stars = new List<DetectedStar> {
-                Star(hfr: 2.0, fwhm: 4.0, roundness: 0.90, peak: 6.0),
-                Star(hfr: 3.0, fwhm: 5.0, roundness: 0.80, peak: 8.0),
-                Star(hfr: 9.0, fwhm: 9.0, roundness: 0.20, peak: 2.0), // hot-pixel-like outlier
+                Star(hfr: 2.0, fwhm: 4.0, roundness: 0.90, peak: 6.0, outerDiameter: 10.0, innerDiameter: 4.0, shadowDepth: 0.9), // ring 6
+                Star(hfr: 3.0, fwhm: 5.0, roundness: 0.80, peak: 8.0, outerDiameter: 14.0, innerDiameter: 6.0, shadowDepth: 0.7), // ring 8
+                Star(hfr: 9.0, fwhm: 9.0, roundness: 0.20, peak: 2.0, outerDiameter: 30.0, innerDiameter: 2.0, shadowDepth: 0.3), // ring 28, outlier
             };
             var vector = FocusFeatureExtractor.Extract(new StarDetectionResult { StarList = stars });
 
@@ -183,6 +187,14 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianFWHM, Is.EqualTo(5.0));
             Assert.That(vector.MedianRoundness, Is.EqualTo(0.80));
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(6.0));
+            Assert.That(vector.MedianDonutOuterDiameter, Is.EqualTo(14.0)); // median{10,14,30}
+            Assert.That(vector.MedianDonutInnerDiameter, Is.EqualTo(4.0));  // median{2,4,6}
+            Assert.That(vector.MedianDonutShadowDepth, Is.EqualTo(0.7));    // median{0.9,0.7,0.3}
+            // Ring thickness is the median of per-star (outer − inner) = median{6,8,28} = 8, which is NOT
+            // MedianDonutOuterDiameter − MedianDonutInnerDiameter (14 − 4 = 10): the median is non-linear.
+            Assert.That(vector.MedianRingThickness, Is.EqualTo(8.0));
+            Assert.That(vector.MedianRingThickness,
+                Is.Not.EqualTo(vector.MedianDonutOuterDiameter - vector.MedianDonutInnerDiameter));
         }
 
         [Test]
@@ -200,7 +212,303 @@ namespace OpenAstroAra.Test {
             Assert.That(vector.MedianPeakToBackground, Is.EqualTo(8.0).Within(1e-9)); // (10+6)/2
         }
 
-        private static DetectedStar Star(double hfr, double fwhm, double roundness, double peak) =>
-            new DetectedStar { HFR = hfr, FWHM = fwhm, Roundness = roundness, PeakToBackground = peak };
+        private static DetectedStar Star(double hfr, double fwhm, double roundness, double peak,
+                double outerDiameter = 0, double innerDiameter = 0, double shadowDepth = 0) =>
+            new DetectedStar {
+                HFR = hfr, FWHM = fwhm, Roundness = roundness, PeakToBackground = peak,
+                DonutOuterDiameter = outerDiameter, DonutInnerDiameter = innerDiameter,
+                DonutShadowDepth = shadowDepth,
+            };
+
+        // Stamp a uniform-brightness annulus (a defocused obstructed-scope "donut"): a filled ring between
+        // innerRadius and outerRadius, its centre left at background so the detector's blob is the ring alone.
+        private static void AddDonut(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double innerRadius, double outerRadius) {
+            int r = (int)Math.Ceiling(outerRadius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    double dist = Math.Sqrt(dx * dx + dy * dy);
+                    if (dist < innerRadius || dist > outerRadius) continue;
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + amplitude);
+                }
+            }
+        }
+
+        [Test]
+        public void Filled_star_has_a_zero_inner_diameter_and_a_positive_outer() {
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            var star = DetectOne(frame, w, h);
+            // A refractor / in-focus star peaks at the centre — no dark hole, so the inner edge is bin 0.
+            Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(star.DonutOuterDiameter, Is.GreaterThan(0));
+            Assert.That(star.RingThickness, Is.EqualTo(star.DonutOuterDiameter));
+        }
+
+        [Test]
+        public void Defocused_donut_has_a_nonzero_inner_diameter_inside_its_outer() {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 9);
+
+            var star = DetectOne(frame, w, h);
+            // The obstruction shadow gives a real inner hole; the outer edge sits beyond it.
+            Assert.That(star.DonutInnerDiameter, Is.GreaterThan(0));
+            Assert.That(star.DonutOuterDiameter, Is.GreaterThan(star.DonutInnerDiameter));
+            Assert.That(star.RingThickness, Is.GreaterThan(0));
+            // Inner diameter tracks the ~r=4 inner rim, outer the ~r=9 rim (2·bin-radius, pixel scale).
+            Assert.That(star.DonutInnerDiameter, Is.GreaterThan(4).And.LessThan(12));
+            Assert.That(star.DonutOuterDiameter, Is.GreaterThan(12).And.LessThan(22));
+        }
+
+        [Test]
+        public void A_wider_donut_has_a_larger_outer_diameter() {
+            int w = 160, h = 160;
+            var tight = FlatField(w, h);
+            AddDonut(tight, w, h, 80, 80, amplitude: 6000, innerRadius: 3, outerRadius: 6);
+            var wide = FlatField(w, h);
+            AddDonut(wide, w, h, 80, 80, amplitude: 6000, innerRadius: 5, outerRadius: 11);
+
+            Assert.That(DetectOne(wide, w, h).DonutOuterDiameter,
+                Is.GreaterThan(DetectOne(tight, w, h).DonutOuterDiameter));
+        }
+
+        // Fill a bright disk out to outerRadius about (cx,cy) but leave a dark hole of holeRadius about a hole
+        // centre that can be offset from the ring centre — a decentered central-obstruction shadow (the §59.10
+        // collimation signal). holeOffset (0,0) is a concentric (well-collimated) donut.
+        private static void AddDecenteredDonut(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double holeRadius, double outerRadius, double holeOffsetX, double holeOffsetY) {
+            int r = (int)Math.Ceiling(outerRadius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    if (Math.Sqrt(dx * dx + dy * dy) > outerRadius) continue;      // outside the ring
+                    double hx = x - (cx + holeOffsetX), hy = y - (cy + holeOffsetY);
+                    if (Math.Sqrt(hx * hx + hy * hy) < holeRadius) continue;       // inside the (shifted) hole → stays dark
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + amplitude);
+                }
+            }
+        }
+
+        [Test]
+        public void Concentric_donut_has_a_near_zero_centroid_offset() {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDecenteredDonut(frame, w, h, 70, 70, amplitude: 6000, holeRadius: 5, outerRadius: 10,
+                holeOffsetX: 0, holeOffsetY: 0);
+
+            var star = DetectOne(frame, w, h);
+            Assert.That(star.DonutInnerDiameter, Is.GreaterThan(0), "a real hole is needed for a shadow centroid to exist");
+            // A shadow concentric with the ring centroids back onto the ring centre — the decentering vector is ~0.
+            Assert.That(star.DonutCentroidOffset, Is.LessThan(1.0),
+                "a well-collimated (concentric) donut should have a near-zero shadow-centroid offset");
+        }
+
+        [Test]
+        public void Decentered_obstruction_shifts_the_shadow_centroid_toward_the_hole() {
+            int w = 140, h = 140;
+            var concentric = FlatField(w, h);
+            AddDecenteredDonut(concentric, w, h, 70, 70, amplitude: 6000, holeRadius: 5, outerRadius: 10,
+                holeOffsetX: 0, holeOffsetY: 0);
+            var tilted = FlatField(w, h);
+            AddDecenteredDonut(tilted, w, h, 70, 70, amplitude: 6000, holeRadius: 5, outerRadius: 10,
+                holeOffsetX: 2, holeOffsetY: 0);  // obstruction shadow pushed +x (mirror tilt), ~10% of the donut
+
+            var tiltedStar = DetectOne(tilted, w, h);
+            // The deficit-weighted shadow centroid pulls toward the darker (+x) side, so the vector points +x.
+            Assert.That(tiltedStar.DonutCentroidOffsetX, Is.GreaterThan(0.5),
+                "a +x-decentered hole should push the shadow centroid in +x");
+            Assert.That(Math.Abs(tiltedStar.DonutCentroidOffsetX), Is.GreaterThan(Math.Abs(tiltedStar.DonutCentroidOffsetY)),
+                "the decentering is along x, so |offsetX| should dominate |offsetY|");
+            Assert.That(tiltedStar.DonutCentroidOffset,
+                Is.GreaterThan(DetectOne(concentric, w, h).DonutCentroidOffset),
+                "a decentered obstruction should read a larger offset than a concentric one");
+        }
+
+        [Test]
+        public void Filled_star_has_a_zero_centroid_offset() {
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            var star = DetectOne(frame, w, h);
+            // No hole (inner diameter 0) → no shadow to centroid → exactly zero offset on both components.
+            Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(star.DonutCentroidOffsetX, Is.EqualTo(0.0));
+            Assert.That(star.DonutCentroidOffsetY, Is.EqualTo(0.0));
+            Assert.That(star.DonutCentroidOffset, Is.EqualTo(0.0));
+        }
+
+        // Add deterministic per-pixel Gaussian read noise (Box–Muller) to every pixel. A tiny inline LCG (not
+        // System.Random — CA5394 flags it, and this is test-only pseudo-noise, not security) keeps it fully
+        // reproducible across runs and platforms.
+        private static void AddReadNoise(ushort[] frame, double sigma, uint seed) {
+            uint state = seed;
+            double Next() {
+                state = (state * 1664525u) + 1013904223u;
+                return (state >> 8) / (double)(1 << 24); // 24-bit mantissa → [0, 1)
+            }
+            for (int i = 0; i < frame.Length; i++) {
+                double u1 = 1.0 - Next(); // (0, 1] so Log is finite
+                double u2 = 1.0 - Next();
+                double gauss = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+                double v = frame[i] + (gauss * sigma);
+                frame[i] = (ushort)Math.Clamp(v, 0, ushort.MaxValue);
+            }
+        }
+
+        [Test]
+        public void Filled_stars_report_zero_inner_diameter_under_read_noise() {
+            // The per-bin surface-brightness profile is noisy on a real sensor — especially bin 0, which averages
+            // very few pixels — so a naive "first bin ≥ half-max" inner edge could report a spurious hole for an
+            // ordinary in-focus/refractor star. The contiguous inner scan + sub-2px inner-rim floor must keep the
+            // per-star inner diameter (and hence the frame median) at 0 despite the noise.
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            (int x, int y)[] centers = { (50, 50), (150, 50), (100, 100), (50, 150), (150, 150) };
+            foreach (var (cx, cy) in centers) {
+                AddStar(frame, w, h, cx, cy, amplitude: 9000, sigmaX: 1.9, sigmaY: 1.9);
+            }
+            AddReadNoise(frame, sigma: 45, seed: 1234u);
+
+            var result = StarDetector.Detect(frame, w, h, NormalParams());
+            Assert.That(result.DetectedStars, Is.GreaterThan(0), "the stars should still detect through the noise");
+            foreach (var star in result.StarList) {
+                Assert.That(star.DonutInnerDiameter, Is.EqualTo(0),
+                    "a filled star must report inner diameter 0 even under read noise");
+            }
+            Assert.That(FocusFeatureExtractor.Extract(result).MedianDonutInnerDiameter, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Extract_on_a_donut_frame_yields_positive_median_donut_geometry() {
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            (int x, int y)[] centers = { (50, 50), (150, 50), (100, 100), (50, 150), (150, 150) };
+            foreach (var (cx, cy) in centers) {
+                AddDonut(frame, w, h, cx, cy, amplitude: 6000, innerRadius: 4, outerRadius: 9);
+            }
+
+            var vector = FocusFeatureExtractor.Extract(StarDetector.Detect(frame, w, h, NormalParams()));
+
+            Assert.That(vector.StarCount, Is.EqualTo(centers.Length));
+            Assert.That(vector.MedianDonutInnerDiameter, Is.GreaterThan(0));
+            Assert.That(vector.MedianDonutOuterDiameter, Is.GreaterThan(vector.MedianDonutInnerDiameter));
+            Assert.That(vector.MedianRingThickness, Is.GreaterThan(0));
+            Assert.That(vector.MedianDonutShadowDepth, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void Donut_with_a_dark_hole_has_high_shadow_depth() {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 9); // hole left at background
+
+            var star = DetectOne(frame, w, h);
+            // A background-dark hole is nearly as dark as it gets relative to the ring peak → depth ≈ 1.
+            Assert.That(star.DonutShadowDepth, Is.GreaterThan(0.8).And.LessThanOrEqualTo(1.0));
+        }
+
+        [Test]
+        public void Filled_star_has_zero_shadow_depth() {
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigmaX: 1.8, sigmaY: 1.8);
+
+            // No hole (inner diameter 0) → no shadow to measure → exactly 0.
+            var star = DetectOne(frame, w, h);
+            Assert.That(star.DonutInnerDiameter, Is.EqualTo(0));
+            Assert.That(star.DonutShadowDepth, Is.EqualTo(0));
+        }
+
+        // ── §59.3 — the radial-profile skew (the intra/extra-focal asymmetry measurable) ──
+
+        /// <summary>A ring whose brightness ramps linearly across its width — toward the outer edge
+        /// (<paramref name="outward"/> true, a "hard outer shell") or toward the inner edge. A 15% floor
+        /// keeps the dim edge above the detection threshold so the whole ramp survives into the blob.</summary>
+        private static void AddRampedDonut(ushort[] frame, int width, int height, int cx, int cy,
+                double amplitude, double innerRadius, double outerRadius, bool outward) {
+            int r = (int)Math.Ceiling(outerRadius);
+            for (int dy = -r; dy <= r; dy++) {
+                int y = cy + dy;
+                if (y < 0 || y >= height) continue;
+                for (int dx = -r; dx <= r; dx++) {
+                    int x = cx + dx;
+                    if (x < 0 || x >= width) continue;
+                    double dist = Math.Sqrt(dx * dx + dy * dy);
+                    if (dist < innerRadius || dist > outerRadius) continue;
+                    double t = (dist - innerRadius) / (outerRadius - innerRadius);
+                    double ramp = outward ? t : 1.0 - t;
+                    double v = amplitude * (0.15 + 0.85 * ramp);
+                    int idx = y * width + x;
+                    frame[idx] = (ushort)Math.Min(ushort.MaxValue, frame[idx] + v);
+                }
+            }
+        }
+
+        private static double SkewOfRampedDonut(bool outward) {
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddRampedDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 10, outward: outward);
+            return DetectOne(frame, w, h).RadialProfileSkew;
+        }
+
+        [Test]
+        public void Mirror_image_ramped_rings_skew_in_opposite_directions() {
+            // The discriminating physics claim: intra vs extra-focal profiles are (approximately) mirror
+            // images, so the skew must SEPARATE them with opposite signs. Skew reads the tail direction:
+            // mass packed against the outer edge → inward tail → negative; mass at the inner edge →
+            // outward tail → positive.
+            var hardOuterShell = SkewOfRampedDonut(outward: true);
+            var innerCondensed = SkewOfRampedDonut(outward: false);
+
+            Assert.That(hardOuterShell, Is.LessThan(0), "a hard bright outer shell tails inward → negative skew");
+            Assert.That(innerCondensed, Is.GreaterThan(0), "inner-condensed flux tails outward → positive skew");
+            Assert.That(innerCondensed - hardOuterShell, Is.GreaterThan(0.3),
+                "the two sides must be well separated — this gap is what the §59.3 side-classifier learns");
+        }
+
+        [Test]
+        public void A_uniform_ring_sits_between_the_two_ramped_signatures() {
+            // A symmetric (unramped) profile carries no side signal; its skew must land strictly between
+            // the two mirror-image ramps rather than being pinned to either side.
+            int w = 140, h = 140;
+            var frame = FlatField(w, h);
+            AddDonut(frame, w, h, 70, 70, amplitude: 6000, innerRadius: 4, outerRadius: 10);
+            var uniform = DetectOne(frame, w, h).RadialProfileSkew;
+
+            Assert.That(uniform, Is.GreaterThan(SkewOfRampedDonut(outward: true)));
+            Assert.That(uniform, Is.LessThan(SkewOfRampedDonut(outward: false)));
+        }
+
+        [Test]
+        public void Extract_medians_the_signed_per_star_skews() {
+            // The SIGN is the §59.3 side signal — aggregation must preserve it (a median of magnitudes
+            // would erase exactly the information the classifier needs).
+            var result = new StarDetectionResult {
+                DetectedStars = 3,
+                AverageHFR = 2.0,
+                StarList = new List<DetectedStar> {
+                    new() { HFR = 2.0, FWHM = 4.0, Roundness = 0.9, PeakToBackground = 8.0, RadialProfileSkew = -0.5 },
+                    new() { HFR = 2.0, FWHM = 4.0, Roundness = 0.9, PeakToBackground = 8.0, RadialProfileSkew = 0.2 },
+                    new() { HFR = 2.0, FWHM = 4.0, Roundness = 0.9, PeakToBackground = 8.0, RadialProfileSkew = 0.8 },
+                },
+            };
+
+            var features = FocusFeatureExtractor.Extract(result);
+
+            Assert.That(features.MedianRadialSkew, Is.EqualTo(0.2), "median of SIGNED values — the sign survives");
+        }
     }
 }
