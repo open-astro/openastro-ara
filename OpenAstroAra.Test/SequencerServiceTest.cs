@@ -107,6 +107,123 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_instruction_emits_one_instruction_failed_event_before_the_terminal() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            // ExternalScript with a nonexistent command fails its leaf (SequenceEntityFailedException
+            // -> FAILED) while the default ContinueOnError behavior lets the run finish.
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "before" });
+                c.Items.Add(new ExternalScript { Name = "Broken script", Script = "/definitely/not/a/real/command-xyz" });
+                c.Items.Add(new Annotation { Name = "after" });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state, Is.Not.Null);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "ContinueOnError: one failed instruction does not fail the run");
+            var records = ws.Records.ToList();
+            var failed = records.Where(e => e.Type == "sequence.instruction_failed").ToList();
+            Assert.That(failed, Has.Count.EqualTo(1), "exactly one event per failed leaf, no duplicates from tick + final scans");
+            Assert.That(failed[0].Payload.GetProperty("failed_instruction_index").GetInt32(), Is.EqualTo(1));
+            // The headless factory maps the unregistered ExternalScript to UnknownSequenceItem,
+            // whose Name is the original serialized type token — a realistic FAILED leaf (an
+            // imported sequence carrying an instruction this daemon doesn't know).
+            Assert.That(failed[0].Payload.GetProperty("failed_instruction_name").GetString(), Does.Contain("ExternalScript"));
+            var types = records.Select(e => e.Type).ToList();
+            Assert.That(types.IndexOf("sequence.instruction_failed"), Is.LessThan(types.IndexOf("sequence.complete")),
+                "the instruction failure is published before the run's terminal event");
+        }
+
+        [Test]
+        public async Task A_looped_instruction_that_fails_every_iteration_reports_each_failure() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            // A repeat-2 container around a failing leaf: the loop resets the leaf
+            // (FAILED -> CREATED) and re-runs it, and BOTH failures must reach the feed.
+            var svc = BuildService(id, BuildBody(c => {
+                var loop = new SequentialContainer { Name = "repeat" };
+                loop.Conditions.Add(new OpenAstroAra.Sequencer.Conditions.LoopCondition { Iterations = 2 });
+                loop.Items.Add(new ExternalScript { Name = "Broken script", Script = "/definitely/not/a/real/command-xyz" });
+                c.Items.Add(loop);
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var failed = ws.Records.Where(e => e.Type == "sequence.instruction_failed").ToList();
+            Assert.That(failed, Has.Count.EqualTo(2), "one event per failure OCCURRENCE, not per leaf per run");
+            Assert.That(failed.Select(e => e.Payload.GetProperty("failed_instruction_index").GetInt32()),
+                Is.All.EqualTo(0), "same leaf both times");
+        }
+
+        [Test]
+        public async Task A_retried_instruction_that_exhausts_its_attempts_reports_one_failure() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            // Attempts = 2: both attempts throw inside Execute(), so the per-attempt
+            // FailureEvent raises arrive with the leaf still RUNNING (not occurrences —
+            // a retry may yet succeed). Only the exhausted-attempts FAILED transition
+            // is an occurrence, and the engine raises exactly once for it.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            factory.Items.Add(new AlwaysThrowingItem());
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new AlwaysThrowingItem { Name = "Flaky hardware", Attempts = 2 });
+            }, factory), ws: ws, factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "ContinueOnError: the exhausted instruction does not fail the run");
+            var failed = ws.Records.Where(e => e.Type == "sequence.instruction_failed").ToList();
+            Assert.That(failed, Has.Count.EqualTo(1),
+                "one occurrence: N failed attempts collapse into the single FAILED transition");
+            Assert.That(failed[0].Payload.GetProperty("failed_instruction_index").GetInt32(), Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task A_failed_leaf_in_a_parallel_container_reports_exactly_once() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            // ParallelStrategy runs both leaves concurrently — the round-3 review
+            // scenario where a dual reporting channel (status scan + failure event)
+            // could double-report the failing leaf while its sibling still ticks.
+            // The single raise-per-FAILED-transition channel emits exactly once.
+            var svc = BuildService(id, BuildBody(c => {
+                var par = new ParallelContainer { Name = "parallel" };
+                par.Items.Add(new WaitForTimeSpan { Time = 1 });
+                par.Items.Add(new ExternalScript { Name = "Broken script", Script = "/definitely/not/a/real/command-xyz" });
+                c.Items.Add(par);
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var failed = ws.Records.Where(e => e.Type == "sequence.instruction_failed").ToList();
+            Assert.That(failed, Has.Count.EqualTo(1), "exactly one event for the one failed leaf");
+            Assert.That(failed[0].Payload.GetProperty("failed_instruction_index").GetInt32(), Is.EqualTo(1),
+                "the failing leaf, not its concurrently-running sibling");
+        }
+
+        [Test]
+        public async Task A_clean_run_emits_no_instruction_failed_events() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "note" });
+                c.Items.Add(new WaitForTimeSpan { Time = 0 });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            Assert.That(ws.Events, Does.Not.Contain("sequence.instruction_failed"));
+        }
+
+        [Test]
         public async Task Runs_empty_sequence_to_completion() {
             var id = Guid.NewGuid();
             var svc = BuildService(id, BuildBody());
@@ -803,10 +920,14 @@ namespace OpenAstroAra.Test {
         /// <summary>Records the event types published, to assert the WS lifecycle.</summary>
         private sealed class RecordingWsBroadcaster : IWsBroadcaster {
             private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();
+            private readonly System.Collections.Concurrent.ConcurrentQueue<(string Type, JsonElement Payload)> _records = new();
             public System.Collections.Generic.IReadOnlyCollection<string> Events => _events;
+            // Ordered (type, payload) pairs for tests that assert payload fields, not just types.
+            public System.Collections.Generic.IReadOnlyCollection<(string Type, JsonElement Payload)> Records => _records;
             public long CurrentSequence => _events.Count;
             public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
                 _events.Enqueue(eventType);
+                _records.Enqueue((eventType, payload));
                 return Task.CompletedTask;
             }
         }
@@ -830,6 +951,25 @@ namespace OpenAstroAra.Test {
             public Task<SequenceUpdateResult> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceDeleteResult> DeleteAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// A leaf whose every Execute() attempt throws — exercises the retry loop's
+        /// exhausted-attempts FAILED transition (registered into the headless factory
+        /// so the JSON body round-trips to the real type instead of UnknownSequenceItem,
+        /// whose failure path is validation, not execution).
+        /// </summary>
+        [Newtonsoft.Json.JsonObject(Newtonsoft.Json.MemberSerialization.OptIn)]
+        private sealed class AlwaysThrowingItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
+
+            public AlwaysThrowingItem() { }
+
+            private AlwaysThrowingItem(AlwaysThrowingItem cloneMe) : base(cloneMe) { }
+
+            public override Task Execute(IProgress<OpenAstroAra.Core.Model.ApplicationStatus> progress, CancellationToken token) =>
+                throw new InvalidOperationException("deliberate test failure");
+
+            public override object Clone() => new AlwaysThrowingItem(this);
         }
     }
 }

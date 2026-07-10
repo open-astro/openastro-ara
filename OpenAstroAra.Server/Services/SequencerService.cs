@@ -25,6 +25,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -624,6 +625,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // Declared ahead of the try so the catch blocks can seal+drain it before
         // their terminal emits; null until the run body constructs it.
         CoalescingAsyncPublisher? progressPublisher = null;
+        // Same hoisting for the §42.4 failure-report drain: the exception/cancellation
+        // paths below must also await in-flight failure emits before their terminal
+        // emits, or an instruction_failed could land after sequence.failed/stopped
+        // (review finding).
+        Func<Task>? drainFailureReports = null;
         // The run's §40 catalog session; null when no frame repository is wired
         // or its creation failed. Closed in the finally on every terminal path.
         Guid? captureSession = null;
@@ -640,6 +646,56 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var leaves = CollectLeaves(root);
                 run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
+
+                // §42.4 — sequence.instruction_failed: the engine raises FailureEvent with the
+                // item already FAILED exactly once per failure OCCURRENCE (the exception and
+                // validation paths, plus the retries-exhausted transition in SequenceItem.Run) —
+                // so this single subscription IS the whole reporting channel. One event source
+                // means one reporter per occurrence: no per-leaf latch to race a status scan
+                // against (the round-3 review's duplicate under ParallelStrategy), and no latch
+                // to go stale when a loop container resets and re-fails a child between progress
+                // ticks (the round-2 review's swallowed repeat). Mid-attempt raises arrive with
+                // the item still RUNNING (it may yet succeed on a retry) and are skipped; the
+                // engine raises again, FAILED, if the attempts run out. This is the
+                // instruction-level failure channel; the §42.4 equipment.fault publishes cover
+                // the mediator degrade paths that complete "successfully" at this level.
+                //
+                // Ordering: RaiseFailureEvent dispatches subscribers synchronously up to their
+                // first await (async-method prefix + Task.WhenAll's eager enumeration in
+                // InvokeAsync), so the lock section below — including registering the emit in
+                // failureEmits — completes on the failing thread inside the raise statement,
+                // before the engine can reset the leaf or let Start() return. The terminal
+                // drain therefore sees every emit the run ever started.
+                var failedGate = new object();
+                var failureEmits = new List<Task>(); // every emit ever started, guarded by failedGate
+                async Task DrainFailureReportsAsync() {
+                    // The terminal-ordering barrier: await every emit before the terminal event,
+                    // or a still-publishing instruction_failed could land after it.
+                    Task[] pending;
+                    lock (failedGate) {
+                        pending = [.. failureEmits];
+                    }
+                    await Task.WhenAll(pending);
+                }
+                drainFailureReports = DrainFailureReportsAsync;
+                Task OnLeafFailure(object _, OpenAstroAra.Sequencer.Utility.SequenceEntityFailureEventArgs args) {
+                    if (args.Entity is not ISequenceItem item || item.Status != SequenceEntityStatus.FAILED) {
+                        return Task.CompletedTask; // mid-attempt raise — not (yet) a FAILED transition
+                    }
+                    var index = leaves.IndexOf(item);
+                    if (index < 0) {
+                        return Task.CompletedTask; // triggers/conditions/containers report through their leaves
+                    }
+                    lock (failedGate) {
+                        var name = item.Name;
+                        var label = string.IsNullOrWhiteSpace(name) ? item.GetType().Name : name;
+                        LogInstructionFailed(sequenceId, index, label);
+                        var emit = EmitInstructionFailedAsync(sequenceId, run, index, label);
+                        failureEmits.Add(emit);
+                        return emit;
+                    }
+                }
+                root.FailureEvent += OnLeafFailure;
 
                 // §60.9 progress back-pressure: equipment instructions (TakeExposure et al.)
                 // report at capture rates, and the old per-tick fire-and-forget queued one
@@ -679,6 +735,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Final snapshot — fast instructions may finish without firing a
                 // progress tick, so settle the completed count after the run.
                 run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), runningIndex: null);
+                // Every instruction_failed for this run is published before its
+                // terminal event below.
+                await DrainFailureReportsAsync();
 
                 // r1 ordering: seal (late queued Progress<T> ticks become no-ops — the
                 // #648 lesson) and drain any in-flight/trailing progress publish BEFORE
@@ -718,12 +777,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (progressPublisher is not null) {
                 await progressPublisher.SealAndDrainAsync();
             }
+            if (drainFailureReports is not null) {
+                await drainFailureReports();
+            }
             run.State = SequenceRunState.Stopped;
             await EmitAsync("sequence.stopped", sequenceId, run);
         } catch (Exception ex) {
             LogRunFailed(ex, sequenceId);
             if (progressPublisher is not null) {
                 await progressPublisher.SealAndDrainAsync();
+            }
+            if (drainFailureReports is not null) {
+                await drainFailureReports();
             }
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
@@ -812,6 +877,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // WS is best-effort; a failed publish must not affect the run.
         }
     }
+
+    // §42.4 — the instruction-level failure event. Same payload as the run events plus the
+    // failed leaf's index/name, so WILMA can pin the failure to a row without diffing statuses.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort: a broadcaster/serialization fault must never affect the run — the leaf's FAILED status and the log line already carry the failure. CA1031's log-and-recover boundary applies.")]
+    private async Task EmitInstructionFailedAsync(Guid sequenceId, RunState run, int index, string name) {
+        if (_ws is null) return;
+        try {
+            var payload = new JsonObject {
+                ["sequence_id"] = sequenceId.ToString(),
+                ["run_id"] = run.RunId.ToString(),
+                ["state"] = run.State.ToString().ToLowerInvariant(),
+                ["failed_instruction_index"] = index,
+                ["failed_instruction_name"] = name,
+                ["instructions_completed"] = run.InstructionsCompleted,
+                ["instructions_total"] = run.InstructionCount,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(WsEventCatalog.SequenceInstructionFailed, doc.RootElement.Clone(), CancellationToken.None);
+        } catch (Exception) {
+            // WS is best-effort; a failed publish must not affect the run.
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: instruction {Index} ('{Name}') failed — sequence.instruction_failed published (§42.4)")]
+    private partial void LogInstructionFailed(Guid sequenceId, int index, string name);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
