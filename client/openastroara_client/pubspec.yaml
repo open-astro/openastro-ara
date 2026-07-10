@@ -43,7 +43,7 @@ dependencies:
   # WebView (Android). Replaced the CEF OSR path, which stalled under sustained GPU
   # offscreen render on macOS and broke Flutter's GL context on Linux. See
   # lib/widgets/sky_atlas/stellarium_view.dart and design/PORT_DECISIONS.md.
-  webview_all: ^1.2.0
+  webview_all: ^1.2.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
