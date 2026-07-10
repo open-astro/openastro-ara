@@ -162,11 +162,11 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking write never returned — a stalled op (§42.4).
             LogFilterChangeFailed(ex, target);
-            PublishOpFault(EquipmentFaultKind.StallTimeout, ex.Message);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
             return false;
         } catch (Exception ex) {
             LogFilterChangeFailed(ex, target);
-            PublishOpFault(EquipmentFaultKind.OpError, $"filter change to position {target} failed: {ex.Message}");
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"filter change to position {target} failed: {ex.Message}");
             return false;
         }
     }
@@ -210,19 +210,25 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         LogFilterChangeTimedOut(target); // distinct from the pre-check "skipped" log for post-mortem
         // §42.4 — the §42.2 "EFW jam" row: the write dispatched fine but the wheel still isn't at
         // the target position after the full settle bound.
-        PublishOpFault(EquipmentFaultKind.StallTimeout,
+        PublishOpFault(client, EquipmentFaultKind.StallTimeout,
             $"filter wheel still not at position {target} after {FilterChangeSettleMaxPolls * FilterChangePollInterval.TotalSeconds:0}s");
         return false;
     }
 
     // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller).
-    private void PublishOpFault(EquipmentFaultKind kind, string details) {
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaFilterWheel client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
         DiscoveredDeviceDto? device;
         lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
             device = _device;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.FilterWheel, device?.UniqueId, device?.Name,

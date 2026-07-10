@@ -317,11 +317,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
             LogMountOpFailed(ex, op);
-            PublishOpFault(EquipmentFaultKind.StallTimeout, ex.Message);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
             return false;
         } catch (Exception ex) {
             LogMountOpFailed(ex, op);
-            PublishOpFault(EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
             return false;
         }
     }
@@ -450,13 +450,19 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller).
-    private void PublishOpFault(EquipmentFaultKind kind, string details) {
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaTelescope client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
         DiscoveredDeviceDto? device;
         lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
             device = _device;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Telescope, device?.UniqueId, device?.Name,

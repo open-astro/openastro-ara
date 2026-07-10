@@ -51,7 +51,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private readonly ILogger<FaultReactionService> _logger;
 
     private readonly object _gate = new();
-    private readonly Dictionary<DeviceType, Task> _episodes = [];
+    // Keyed by normalized DeviceType for recovery-running kinds (their ladder must not stack);
+    // notify-only kinds get a unique key so they always run — see OnFault.
+    private readonly Dictionary<object, Task> _episodes = [];
     private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
 
@@ -100,15 +102,19 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     }
 
     /// <summary>Hub callback — invoked synchronously from a device refresh tick, so it only
-    /// hands off: one episode per device type at a time (detection publishes once per episode;
-    /// a device that recovers and drops again starts a fresh one).</summary>
+    /// hands off: one RECOVERY episode per device type at a time (detection publishes once per
+    /// episode; a device that recovers and drops again starts a fresh one). Notify-only kinds
+    /// (§42.4 op/state-channel faults) never hold the slot and never dedupe — a switch port
+    /// mismatch must not lose its one notification just because the same device type happens
+    /// to be mid-reconnect (review finding).</summary>
     internal void OnFault(EquipmentFaultEvent fault) {
         lock (_gate) {
             if (_disposed || _cts.IsCancellationRequested) {
                 return;
             }
-            var key = NormalizeType(fault.DeviceType);
-            if (_episodes.ContainsKey(key)) {
+            var recoverable = fault.Kind is EquipmentFaultKind.Disconnected or EquipmentFaultKind.TrackingLost;
+            var key = recoverable ? (object)NormalizeType(fault.DeviceType) : new object();
+            if (recoverable && _episodes.ContainsKey(key)) {
                 LogEpisodeAlreadyActive(fault.DeviceType, fault.Kind);
                 return;
             }
@@ -132,7 +138,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Episode boundary: a reaction episode runs on a fire-and-forget task; any escape must be logged and contained, never surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
-    private async Task RunEpisodeAsync(DeviceType key, EquipmentFaultEvent fault) {
+    private async Task RunEpisodeAsync(object key, EquipmentFaultEvent fault) {
         try {
             var plan = FaultPolicyMatrix.Resolve(fault.DeviceType, fault.Kind, ReadPolicies());
             if (plan is null) {

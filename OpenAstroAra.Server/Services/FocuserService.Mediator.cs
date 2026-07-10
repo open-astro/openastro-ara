@@ -179,7 +179,7 @@ public sealed partial class FocuserService : IFocuserMediator {
             if (!reachedRest) {
                 // §42.4 — the §42.2 "commanded position not reached" row: the Move dispatched
                 // fine but the focuser still reports moving after the full settle bound.
-                PublishOpFault(EquipmentFaultKind.StallTimeout,
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout,
                     $"focuser still reports moving {MoveSettleMaxPolls * MoveSettlePollInterval.TotalSeconds:0}s after a Move to {target}");
             }
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
@@ -187,13 +187,13 @@ public sealed partial class FocuserService : IFocuserMediator {
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking Move never returned — a stalled op (§42.4).
             LogMoveFailed(ex, target);
-            PublishOpFault(EquipmentFaultKind.StallTimeout, ex.Message);
+            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
         } catch (Exception ex) {
             // Anything else, INCLUDING an OperationCanceledException the Alpaca HTTP client raises for
             // its OWN internal timeout (ct not cancelled), is a device fault: log it and report the
             // last known position rather than aborting the autonomous run as if cancelled.
             LogMoveFailed(ex, target);
-            PublishOpFault(EquipmentFaultKind.OpError, $"focuser Move to {target} failed: {ex.Message}");
+            PublishOpFault(client, EquipmentFaultKind.OpError, $"focuser Move to {target} failed: {ex.Message}");
         }
         RefreshCacheOnce();
         // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce
@@ -252,13 +252,19 @@ public sealed partial class FocuserService : IFocuserMediator {
     }
 
     // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller).
-    private void PublishOpFault(EquipmentFaultKind kind, string details) {
+    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
+    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
+    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
+    // so the liveness check and the device snapshot share one critical section.
+    private void PublishOpFault(AlpacaFocuser client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
         DiscoveredDeviceDto? device;
         lock (_gate) {
+            if (!ReferenceEquals(_client, client)) {
+                return;
+            }
             device = _device;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Focuser, device?.UniqueId, device?.Name,

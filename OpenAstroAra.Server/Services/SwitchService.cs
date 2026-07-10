@@ -471,14 +471,17 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         }
     }
 
+    // Fallback when no profile store is wired / the read fails — matches the DTO's ctor default.
+    private const double DefaultTolerancePct = 5.0;
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort policy read on the refresh tick: a profile store fault falls back to the default tolerance rather than skipping the whole pass. CA1031's log-and-recover boundary applies.")]
     private double ReadTolerancePct() {
         try {
-            return _profileStore?.GetSafetyPolicies()?.SwitchValueTolerancePct ?? 5.0;
+            return _profileStore is null ? DefaultTolerancePct : _profileStore.GetSafetyPolicies().SwitchValueTolerancePct;
         } catch (Exception ex) {
-            LogPortReadFailed(ex);
-            return 5.0;
+            LogToleranceReadFailed(ex);
+            return DefaultTolerancePct;
         }
     }
 
@@ -507,9 +510,15 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             using var doc = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
             _ = _ws.PublishAsync(WsEventCatalog.SwitchValueMismatch, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception ex) {
-            LogPortReadFailed(ex);
+            LogMismatchPublishFailed(ex);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Switch: safety-policy read for the §42.4 read-back tolerance failed — using the default")]
+    private partial void LogToleranceReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Switch: failed to broadcast the switch.value_mismatch WS event — the equipment.fault publish already carried the detection")]
+    private partial void LogMismatchPublishFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Switch '{Device}' port {PortId} ('{PortName}') read-back disagrees with the commanded value: commanded {Commanded}, reads {ReadBack} — §42.4 fault published")]
     private partial void LogValueMismatch(string device, short portId, string portName, double commanded, double readBack);

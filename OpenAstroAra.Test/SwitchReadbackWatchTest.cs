@@ -14,6 +14,7 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
@@ -197,6 +198,49 @@ namespace OpenAstroAra.Test {
                 Assert.That(mismatches[0].Payload.GetProperty("port_id").GetInt32(), Is.EqualTo(0));
                 Assert.That(mismatches[0].Payload.GetProperty("commanded").GetDouble(), Is.EqualTo(1.0));
                 Assert.That(mismatches[0].Payload.GetProperty("read_back").GetDouble(), Is.EqualTo(0.0));
+            }
+        }
+
+        [Test]
+        [Category("bench")] // §42.4 virtual-observatory bench — loopback-only, runs in the default job too
+        public async Task A_failing_sequencer_write_publishes_an_op_error_fault() {
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/maxswitch", StringComparison.Ordinal) ? "1"
+                : path.EndsWith("/getswitchname", StringComparison.Ordinal) ? "\"Heater\""
+                : path.EndsWith("/getswitchdescription", StringComparison.Ordinal) ? "\"\""
+                : path.EndsWith("/getswitchvalue", StringComparison.Ordinal) ? "0"
+                : path.EndsWith("/minswitchvalue", StringComparison.Ordinal) ? "0"
+                : path.EndsWith("/maxswitchvalue", StringComparison.Ordinal) ? "1"
+                : path.EndsWith("/switchstep", StringComparison.Ordinal) ? "1"
+                : path.EndsWith("/canwrite", StringComparison.Ordinal) ? "true"
+                : null);
+            await using var proxy = AlpacaFaultProxy.Start(box.BaseUri);
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            var hub = new EquipmentFaultHub(ws.Object);
+            var faults = new List<EquipmentFaultEvent>();
+            hub.Subscribe(f => { lock (faults) { faults.Add(f); } });
+
+            using var svc = new SwitchService(faults: hub);
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "switch-under-test", Name: "Bench Power Box", Type: DeviceType.Switch,
+                HostName: proxy.BaseUri.Host, IpAddress: proxy.BaseUri.Host, IpPort: proxy.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(0, CancellationToken.None))?.Ports.Count > 0,
+                TimeSpan.FromSeconds(15), "the port cache never populated");
+
+            // The write path dies (connection dropped on the PUT only — reads stay healthy, so
+            // this is NOT a disconnect); the mediator op must degrade AND publish one op_error.
+            proxy.InjectFault(new AlpacaFaultRule { Method = "setswitchvalue", Fault = AlpacaFault.Drop() });
+            await ((ISwitchMediator)svc).SetSwitchValue(0, 1.0, progress: null!, CancellationToken.None);
+
+            lock (faults) {
+                Assert.That(faults, Has.Count.EqualTo(1), "one fault per failed op occurrence");
+                Assert.That(faults[0].Kind, Is.EqualTo(EquipmentFaultKind.OpError));
+                Assert.That(faults[0].DeviceName, Is.EqualTo("Bench Power Box"),
+                    "the multi-instance identity resolution found the live connection");
             }
         }
 
