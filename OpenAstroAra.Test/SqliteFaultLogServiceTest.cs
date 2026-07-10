@@ -125,6 +125,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Detection_skips_attribution_when_several_runs_are_active() {
+            var sessionA = await CreateSessionRowAsync();
+            var sessionB = await CreateSessionRowAsync();
+            registry.Enter(sessionA);
+            registry.Enter(sessionB);
+            try {
+                Assert.That(registry.Current, Is.Null,
+                    "a watch/timer fault can't tell which concurrent run it belongs to");
+                await service.RecordFaultAsync(Fault(), CancellationToken.None);
+            } finally {
+                registry.Exit(sessionA);
+                registry.Exit(sessionB);
+            }
+
+            var page = await service.ListAsync(50, null, null, null, null, null, CancellationToken.None);
+            Assert.That(page.Items[0].SessionId, Is.Null,
+                "ambiguous attribution records null, never a plausible-but-wrong session");
+        }
+
+        [Test]
         public async Task List_is_newest_first_and_paginates() {
             var t0 = new DateTimeOffset(2026, 7, 10, 3, 0, 0, TimeSpan.Zero);
             for (var i = 0; i < 3; i++) {

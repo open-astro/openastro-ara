@@ -23,7 +23,7 @@ namespace OpenAstroAra.Server.Services;
 /// concurrent runs each see their own session — but a fault detected on a watch/refresh
 /// timer flows on its own context where that ambient value is null. The sequencer
 /// enters/exits here alongside the scope, and the fault log stamps
-/// <see cref="Current"/> (the most recently started still-active run) at insert time.
+/// <see cref="Current"/> (the sole active run, else null) at insert time.
 /// </summary>
 public sealed class ActiveRunSessionRegistry {
     private readonly object _gate = new();
@@ -42,12 +42,14 @@ public sealed class ActiveRunSessionRegistry {
         }
     }
 
-    /// <summary>The most recently entered still-active run session, or null when no
-    /// sequence run is in flight.</summary>
+    /// <summary>The active run session when exactly one run is in flight; null when
+    /// none is — and also null when SEVERAL are. A watch/timer fault can't tell which
+    /// concurrent run it belongs to, and a plausible-but-wrong session_id is worse
+    /// than an unattributed one for the §42.6 consumers (review finding on #795).</summary>
     public Guid? Current {
         get {
             lock (_gate) {
-                return _active.Count > 0 ? _active[^1] : null;
+                return _active.Count == 1 ? _active[0] : null;
             }
         }
     }
