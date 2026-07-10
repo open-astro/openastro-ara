@@ -24,8 +24,30 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   // Force-close on dispose so navigating away from the panel cancels an in-flight
   // fetch instead of leaving the socket open until the receive timeout.
   ref.onDispose(api.close);
-  return api.fetch();
+  // Watching (not reading) the overrides means an Apply/Reset in the overrides
+  // dialog refetches the ranking automatically — no manual invalidate needed.
+  final overrides = ref.watch(tonightSkyOverridesProvider);
+  return api.fetch(overrides: overrides.isActive ? overrides : null);
 });
+
+/// §36.8 slice 4b — the session's Tonight's Sky what-if overrides (optical
+/// train fields + mosaic tiles). NOT auto-disposed on purpose: a user who has
+/// dialed in "what could I shoot with the 0.7× reducer?" keeps that lens while
+/// hopping between tabs; it resets with the app (overrides are a what-if, not
+/// a setting — a persistent change belongs in Settings → Optics).
+class TonightOverridesNotifier extends Notifier<TonightOverrides> {
+  @override
+  TonightOverrides build() => TonightOverrides.none;
+
+  void set(TonightOverrides value) => state = value;
+
+  void clear() => state = TonightOverrides.none;
+}
+
+final tonightSkyOverridesProvider =
+    NotifierProvider<TonightOverridesNotifier, TonightOverrides>(
+      TonightOverridesNotifier.new,
+    );
 
 /// The Tonight's Sky row the user last tapped (by [TonightSkyObject.id]), or
 /// null when nothing is selected. Tapping a row frames that object on the

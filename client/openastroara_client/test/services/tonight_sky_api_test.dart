@@ -12,6 +12,9 @@ class _StubAdapter implements HttpClientAdapter {
   _StubAdapter(this.jsonBody);
   final Object jsonBody;
 
+  /// The last request's query parameters, for asserting what fetch() sent.
+  Map<String, dynamic>? lastQuery;
+
   @override
   void close({bool force = false}) {}
 
@@ -21,6 +24,7 @@ class _StubAdapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    lastQuery = options.queryParameters;
     return ResponseBody.fromString(
       jsonEncode(jsonBody),
       200,
@@ -285,6 +289,76 @@ void main() {
     test('a non-array 200 body yields an empty list, not a throw', () async {
       final api = _apiReturning({'error': 'no site configured'});
       expect(await api.fetch(), isEmpty);
+    });
+
+    test('no overrides sends only the limit (pre-slice-4b request shape)', () async {
+      final adapter = _StubAdapter(<Object>[]);
+      final api = TonightSkyApi(const AraServer(hostname: 'x', port: 80),
+          dio: Dio()..httpClientAdapter = adapter);
+      await api.fetch(limit: 7);
+      expect(adapter.lastQuery, {'limit': 7});
+    });
+
+    test('active overrides ride as query parameters', () async {
+      final adapter = _StubAdapter(<Object>[]);
+      final api = TonightSkyApi(const AraServer(hostname: 'x', port: 80),
+          dio: Dio()..httpClientAdapter = adapter);
+      await api.fetch(
+        overrides: const TonightOverrides(
+          focalLengthMm: 530,
+          reducer: 0.7,
+          sensorW: 6248,
+          sensorH: 4176,
+          pixelUm: 3.76,
+          mosaicX: 2,
+          mosaicY: 3,
+        ),
+      );
+      expect(adapter.lastQuery, {
+        'limit': 12,
+        'focalLengthMm': 530,
+        'reducer': 0.7,
+        'sensorW': 6248,
+        'sensorH': 4176,
+        'pixelUm': 3.76,
+        'mosaicX': 2,
+        'mosaicY': 3,
+      });
+    });
+  });
+
+  group('TonightOverrides', () {
+    test('none is inactive and adds no parameters', () {
+      expect(TonightOverrides.none.isActive, isFalse);
+      expect(TonightOverrides.none.toQueryParameters(), isEmpty);
+      // 1×1 explicitly is the same as no mosaic — the server default.
+      expect(const TonightOverrides(mosaicX: 1, mosaicY: 1).isActive, isFalse);
+    });
+
+    test('any single supplied field activates the override', () {
+      expect(const TonightOverrides(focalLengthMm: 530).isActive, isTrue);
+      expect(const TonightOverrides(reducer: 0.7).isActive, isTrue);
+      expect(const TonightOverrides(sensorW: 6248).isActive, isTrue);
+      expect(const TonightOverrides(sensorH: 4176).isActive, isTrue);
+      expect(const TonightOverrides(pixelUm: 3.76).isActive, isTrue);
+      expect(const TonightOverrides(mosaicX: 2).isActive, isTrue);
+      expect(const TonightOverrides(mosaicY: 2).isActive, isTrue);
+    });
+
+    test('unsupplied fields are omitted so the server merges the profile', () {
+      expect(
+        const TonightOverrides(reducer: 0.7, mosaicX: 2).toQueryParameters(),
+        {'reducer': 0.7, 'mosaicX': 2},
+      );
+    });
+
+    test('value equality keys the provider notification', () {
+      expect(const TonightOverrides(reducer: 0.7),
+          const TonightOverrides(reducer: 0.7));
+      expect(const TonightOverrides(reducer: 0.7),
+          isNot(const TonightOverrides(reducer: 0.8)));
+      expect(const TonightOverrides(reducer: 0.7).hashCode,
+          const TonightOverrides(reducer: 0.7).hashCode);
     });
   });
 }
