@@ -36,6 +36,11 @@ namespace OpenAstroAra.Test {
         private static readonly string[] WarningThenError = { "an error", "a warning" };
         private static readonly string[] CameraMatches = { "CAMERA exposing", "Camera connected" };
         private static readonly string[] NewestThree = { "line9", "line8", "line7" };
+        private static readonly string[] NewestFiveSplit = {
+            "entry 19 — μsplit✓", "entry 18 — μsplit✓", "entry 17 — μsplit✓",
+            "entry 16 — μsplit✓", "entry 15 — μsplit✓",
+        };
+        private static readonly string[] SecondThenFirst = { "second", "first" };
         private static readonly string[] RollBoundaryOrder = { "today", "yesterday" };
         private static readonly string[] NewestFileFilled = { "today-b", "today-a" };
         private static readonly string[] TraversalNames = {
@@ -132,6 +137,39 @@ namespace OpenAstroAra.Test {
             var entries = await _svc.TailAsync(new LogTailRequestDto(null, null, "camera"), CancellationToken.None);
 
             Assert.That(entries.Select(e => e.Message), Is.EqualTo(CameraMatches));
+        }
+
+        [Test]
+        public async Task TailAsync_reverse_scan_survives_tiny_chunk_boundaries() {
+            // Shrink the reverse-scan chunk far below one line's length so every
+            // line straddles several chunk boundaries — the byte-level carry
+            // reassembly must still produce identical lines, including a
+            // multi-byte UTF-8 character sure to be split mid-sequence.
+            _svc.ReverseScanChunkSize = 7;
+            var lines = Enumerable.Range(0, 20)
+                .Select(i => Clef($"2026-06-19T10:00:{i:00}.0000000Z", $"entry {i} — μsplit✓"))
+                .ToArray();
+            WriteLog("openastroara-20260619.log", lines);
+
+            var entries = await _svc.TailAsync(new LogTailRequestDto(5, null, null), CancellationToken.None);
+
+            Assert.That(entries.Select(e => e.Message), Is.EqualTo(NewestFiveSplit));
+        }
+
+        [Test]
+        public async Task TailAsync_handles_crlf_lines_and_a_torn_final_line() {
+            // CRLF endings must not leave a trailing \r inside the JSON (the parse
+            // would fail); a torn final line (no newline, cut mid-object — the
+            // sink mid-write) is skipped, never thrown on.
+            var path = Path.Combine(_logsDir, "openastroara-20260619.log");
+            var whole = Clef("2026-06-19T10:00:00.0000000Z", "first") + "\r\n"
+                + Clef("2026-06-19T10:00:01.0000000Z", "second") + "\r\n"
+                + "{\"@t\":\"2026-06-19T10:00:02.00"; // torn mid-write
+            await File.WriteAllTextAsync(path, whole);
+
+            var entries = await _svc.TailAsync(new LogTailRequestDto(null, null, null), CancellationToken.None);
+
+            Assert.That(entries.Select(e => e.Message), Is.EqualTo(SecondThenFirst));
         }
 
         [Test]
