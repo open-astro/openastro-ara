@@ -369,8 +369,16 @@ public sealed partial class CameraService {
     internal static (byte[] Jpeg, int Width, int Height) RenderLiveFrame(
             ushort[] pixels, int width, int height, BayerPattern? bayerPattern, bool annotate = false) {
         if (bayerPattern is { } pattern) {
-            // OSC super-pixel colour path. Star-marker annotation is a mono-only feature for now (detecting on a
-            // raw Bayer mosaic is wrong, and the colour path would need its own overlay), so `annotate` is ignored.
+            if (annotate) {
+                // §64 OSC annotation — detecting on the raw Bayer mosaic would be wrong (the CFA
+                // pattern reads as per-pixel noise to the detector), so detect on the super-pixel
+                // LUMINANCE plane: raw 16-bit dynamics on the SAME half-res grid as the colour
+                // output, so markers land on their stars with no coordinate scaling.
+                var (argb, luminance, aw, ah) = Debayer.SuperPixelStretchedWithLuminance(
+                    pixels, width, height, pattern, StretchAlgorithm.AutoStf);
+                var colorMarkers = DetectStarMarkers(luminance, aw, ah);
+                return (JpegEncoder.EncodeColorAnnotated(argb, aw, ah, colorMarkers, maxDim: LiveViewMaxDim), aw, ah);
+            }
             var (rgb, ow, oh) = Debayer.SuperPixelStretched(
                 pixels, width, height, pattern, StretchAlgorithm.AutoStf);
             return (JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: LiveViewMaxDim), ow, oh);

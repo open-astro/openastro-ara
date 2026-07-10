@@ -109,9 +109,9 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
 - **libraw RAW decode + DSLR stubs** — `ExposureData.CreateRAWExposureData`,
   `BaseImageData.SaveTiff`, `BaseImageData.FromFile` (non-FITS/XISF),
   `ImageArrayExposureData.FromBitmapSource`.
-- **OSC/colour annotation** — the Bayer live path ignores `Annotate` entirely; interim: echo the
-  effective flag or reject annotate for non-mono; real fix: detect on debayered luminance/green
-  plane + colour overlay.
+- ~~**OSC/colour annotation**~~ — shipped with the real fix: detection on a super-pixel
+  CFA-weighted luminance plane (same half-res grid as the colour output, one debayer pass) +
+  `EncodeColorAnnotated` colour overlay; `Annotate` now works on both sensor types.
 - **Repo-frame annotation seam** — `DetectStars(annotateImage:true)` on the repo path is a no-op;
   implement the `IStarAnnotator` DI seam. Related: `LoadImageDataAsync` leaves
   `starDetection`/`starAnnotator` `null!` — wire a DI-registered

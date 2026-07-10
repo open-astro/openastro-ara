@@ -190,6 +190,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void RenderLiveFrame_annotate_draws_star_markers_on_an_OSC_frame() {
+            // A "white" star (all CFA cells carry the same Gaussian) on a flat mosaic: the
+            // super-pixel luminance plane sees a clean star at half-res, and the ring must be
+            // drawn on the COLOUR output. The flat white field itself renders grey (R≈G≈B), so
+            // any strongly green pixels are the marker.
+            int w = 200, h = 200;
+            var mosaic = MonoFrameWithStar(w, h, 100, 100, background: 1000, amplitude: 9000, sigma: 4.0);
+
+            var (jpeg, ow, oh) = CameraService.RenderLiveFrame(
+                mosaic, w, h, OpenAstroAra.Stretch.BayerPattern.RGGB, annotate: true);
+
+            Assert.That((ow, oh), Is.EqualTo((100, 100)), "annotation must not change the halved OSC dims");
+            Assert.That(CountGreenishPixels(jpeg), Is.GreaterThan(0),
+                "annotate on an OSC frame should draw a green ring around the star detected on the luminance plane");
+        }
+
+        [Test]
+        public void RenderLiveFrame_OSC_without_annotate_draws_no_markers() {
+            int w = 200, h = 200;
+            var mosaic = MonoFrameWithStar(w, h, 100, 100, background: 1000, amplitude: 9000, sigma: 4.0);
+
+            var (jpeg, _, _) = CameraService.RenderLiveFrame(
+                mosaic, w, h, OpenAstroAra.Stretch.BayerPattern.RGGB, annotate: false);
+
+            Assert.That(CountGreenishPixels(jpeg), Is.EqualTo(0),
+                "a white-light OSC frame renders grey — green pixels would mean a marker leaked into the unannotated path");
+        }
+
+        [Test]
+        public void SuperPixelStretchedWithLuminance_returns_the_colour_and_a_CFA_weighted_luma_on_one_grid() {
+            // One RGGB tile: R=65535, G=32768 (both greens), B=16384.
+            // Luminance = (R + 2G + B + 2) / 4 = (65535 + 65536 + 16384 + 2) / 4 = 36864 (floor).
+            var mosaic = new ushort[] { 65535, 32768, 32768, 16384 };
+            var (rgb, luma, w, h) = OpenAstroAra.Stretch.Debayer.SuperPixelStretchedWithLuminance(
+                mosaic, 2, 2, OpenAstroAra.Stretch.BayerPattern.RGGB,
+                OpenAstroAra.Stretch.StretchAlgorithm.Manual, new OpenAstroAra.Stretch.StretchParams());
+            Assert.That((w, h), Is.EqualTo((1, 1)));
+            Assert.That(luma, Is.EqualTo(new ushort[] { 36864 }));
+            Assert.That(rgb[0], Is.EqualTo(255), "the colour half matches SuperPixelStretched exactly");
+            Assert.That((int)rgb[1], Is.EqualTo(128).Within(2));
+            Assert.That((int)rgb[2], Is.EqualTo(64).Within(2));
+        }
+
+        [Test]
         public void SuperPixelStretched_maps_the_bayer_cells_to_interleaved_rgb() {
             // One RGGB tile: R=65535, G=32768 (both greens), B=16384. Manual stretch with default
             // params is a straight linear 16→8-bit map, so the interleaved output is deterministic:
