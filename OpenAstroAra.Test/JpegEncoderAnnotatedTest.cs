@@ -130,4 +130,90 @@ public class JpegEncoderAnnotatedTest {
         Assert.Throws<ArgumentNullException>(() =>
             JpegEncoder.EncodeGrayAnnotated(new byte[16], 4, 4, null!));
     }
+
+    // ─── §64 OSC — the colour twin (EncodeColorAnnotated) ───
+
+    // A flat neutral-grey RGB field: any strongly green pixel afterwards is the marker,
+    // exactly like the gray fixtures above.
+    private static byte[] FlatRgb(int w, int h, byte level) {
+        var b = new byte[w * h * 3];
+        Array.Fill(b, level);
+        return b;
+    }
+
+    [Test]
+    public void EncodeColorAnnotated_draws_a_green_marker_where_asked() {
+        int w = 100, h = 100;
+        var rgb = FlatRgb(w, h, 40);
+        var markers = new List<StarMarker> { new(30, 70, 12) };
+
+        var jpeg = JpegEncoder.EncodeColorAnnotated(rgb, w, h, markers);
+        using var decoded = SKBitmap.Decode(jpeg);
+        Assert.That(decoded, Is.Not.Null);
+        Assert.That((decoded.Width, decoded.Height), Is.EqualTo((w, h)));
+
+        int greenCount = 0;
+        long sumX = 0, sumY = 0;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (IsGreenish(decoded.GetPixel(x, y))) {
+                    greenCount++;
+                    sumX += x;
+                    sumY += y;
+                }
+            }
+        }
+        Assert.That(greenCount, Is.GreaterThan(0), "the green marker circle should be visible on the colour frame");
+        Assert.That(sumX / (double)greenCount, Is.EqualTo(30).Within(8));
+        Assert.That(sumY / (double)greenCount, Is.EqualTo(70).Within(8));
+    }
+
+    [Test]
+    public void EncodeColorAnnotated_with_no_markers_preserves_the_colour_content() {
+        // A red field must come back red (colour data untouched), with no green ring anywhere.
+        int w = 80, h = 80;
+        var rgb = new byte[w * h * 3];
+        for (int i = 0; i < rgb.Length; i += 3) {
+            rgb[i] = 180; // red-dominant field
+        }
+
+        var jpeg = JpegEncoder.EncodeColorAnnotated(rgb, w, h, new List<StarMarker>());
+        using var decoded = SKBitmap.Decode(jpeg);
+        Assert.That(decoded, Is.Not.Null);
+        var centre = decoded.GetPixel(40, 40);
+        Assert.That(centre.Red, Is.GreaterThan(centre.Green + 60), "the colour channels must survive the annotated encode");
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                Assert.That(IsGreenish(decoded.GetPixel(x, y)), Is.False,
+                    "a marker-less colour annotated encode must not introduce green pixels");
+            }
+        }
+    }
+
+    [Test]
+    public void EncodeColorAnnotated_marker_survives_a_large_downscale() {
+        int w = 4000, h = 3000;
+        var rgb = FlatRgb(w, h, 30);
+        var markers = new List<StarMarker> { new(2000, 1500, 6) }; // <1 px after the ~0.16 downscale
+
+        var jpeg = JpegEncoder.EncodeColorAnnotated(rgb, w, h, markers, maxDim: 640);
+        using var decoded = SKBitmap.Decode(jpeg);
+        Assert.That(Math.Max(decoded.Width, decoded.Height), Is.EqualTo(640), "the longest axis should be capped to maxDim");
+
+        int greenCount = 0;
+        for (int y = 0; y < decoded.Height; y++) {
+            for (int x = 0; x < decoded.Width; x++) {
+                if (IsGreenish(decoded.GetPixel(x, y))) greenCount++;
+            }
+        }
+        Assert.That(greenCount, Is.GreaterThan(0), "the ring is drawn in output space with a visible floor, so it must survive the cap");
+    }
+
+    [Test]
+    public void EncodeColorAnnotated_rejects_a_dimension_mismatch_and_null_markers() {
+        Assert.Throws<ArgumentException>(() =>
+            JpegEncoder.EncodeColorAnnotated(new byte[10], 4, 4, new List<StarMarker>()));
+        Assert.Throws<ArgumentNullException>(() =>
+            JpegEncoder.EncodeColorAnnotated(new byte[48], 4, 4, null!));
+    }
 }

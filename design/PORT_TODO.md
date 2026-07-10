@@ -121,12 +121,14 @@ Missing, by user value:
 Deferred out-of-scope findings from the mono-annotation wiring PR. The PR's scope was "wire the mono
 overlay"; these are genuine but larger and tracked here per §0 rule 6.
 
-- **OSC annotation.** The Bayer/OSC live path ignores `LiveViewStartRequestDto.Annotate` entirely — a
-  WILMA client that starts Live View with `annotate:true` on an OSC camera gets a normal colour preview
-  with no circles and no signal (indistinguishable from "detector found no stars"). Follow-up: either
-  echo an *effective-annotate* flag in `LiveViewStatusDto`/`LiveViewMeta` so the client can tell the
-  punt from an empty field, or reject `annotate` at start for a non-monochrome sensor; and eventually a
-  real colour-frame overlay (detect on the luminance/green plane, not the raw mosaic).
+- ✅ **OSC annotation — DONE with the REAL fix (the sub-PR after #807).** The Bayer/OSC live path
+  now honours `Annotate`: `Debayer.SuperPixelStretchedWithLuminance` produces a raw 16-bit
+  CFA-weighted luminance plane ((R+2G+B)/4) on the SAME half-res grid as the colour output from
+  one debayer pass, `DetectStarMarkers` runs on it (never on the raw mosaic — the CFA pattern
+  reads as per-pixel noise), and `JpegEncoder.EncodeColorAnnotated` (the colour twin of the gray
+  annotated encoder, shared draw-and-encode tail, downscale-first + output-space rings) draws
+  the overlay on the colour frame. No effective-annotate echo needed — the flag now does what it
+  says on both sensor types.
 - **Detection runs inside the `_captureInFlight` gate, unoffloaded.** `RenderLiveFrame` runs the
   synchronous full-frame `StarDetector.Detect` on the live loop's continuation while it holds
   `_captureInFlight = 1`; a user-initiated catalog capture arbitrates on the same gate, so with annotate

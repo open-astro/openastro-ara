@@ -100,6 +100,30 @@ public static class Debayer {
         ReadOnlySpan<ushort> mosaic, int width, int height, BayerPattern pattern,
         StretchAlgorithm algorithm, StretchParams? stretchParams = null) {
         var (r, g, b, ow, oh) = SuperPixel(mosaic, width, height, pattern);
+        return (StretchAndInterleave(r, g, b, algorithm, stretchParams), ow, oh);
+    }
+
+    /// <summary>
+    /// <see cref="SuperPixelStretched"/> plus a raw 16-bit LUMINANCE plane on the same half-res
+    /// grid — one debayer pass serves both the displayable colour and a detection-grade mono
+    /// plane (§64 OSC live annotation: the star detector must see real, unstretched dynamics,
+    /// and detecting on the same grid as the colour output means markers land on their stars
+    /// without any coordinate scaling). Luminance keeps the CFA's own 1:2:1 channel weighting
+    /// ((R + 2G + B) / 4, round-half-up).
+    /// </summary>
+    public static (byte[] Rgb, ushort[] Luminance, int Width, int Height) SuperPixelStretchedWithLuminance(
+        ReadOnlySpan<ushort> mosaic, int width, int height, BayerPattern pattern,
+        StretchAlgorithm algorithm, StretchParams? stretchParams = null) {
+        var (r, g, b, ow, oh) = SuperPixel(mosaic, width, height, pattern);
+        var luminance = new ushort[r.Length];
+        for (int i = 0; i < r.Length; i++) {
+            luminance[i] = (ushort)((r[i] + 2 * g[i] + b[i] + 2) / 4);
+        }
+        return (StretchAndInterleave(r, g, b, algorithm, stretchParams), luminance, ow, oh);
+    }
+
+    private static byte[] StretchAndInterleave(
+        ushort[] r, ushort[] g, ushort[] b, StretchAlgorithm algorithm, StretchParams? stretchParams) {
         var rs = Stretcher.Apply(algorithm, r, stretchParams);
         var gs = Stretcher.Apply(algorithm, g, stretchParams);
         var bs = Stretcher.Apply(algorithm, b, stretchParams);
@@ -109,7 +133,7 @@ public static class Debayer {
             rgb[d + 1] = gs[i];
             rgb[d + 2] = bs[i];
         }
-        return (rgb, ow, oh);
+        return rgb;
     }
 
     /// <summary>

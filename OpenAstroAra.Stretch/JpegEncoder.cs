@@ -118,10 +118,45 @@ public static class JpegEncoder {
         }
         using var srcImage = SKImage.FromBitmap(srcGray);
 
+        return DrawAnnotatedAndEncode(srcImage, width, height, outW, outH, scale, markers, quality);
+    }
+
+    /// <summary>
+    /// Encode interleaved 8-bit RGB pixels as a JPEG with star-marker circles drawn over them
+    /// (§64 OSC Live View annotation). Same downscale-first contract as
+    /// <see cref="EncodeGrayAnnotated"/>: the colour frame is resized to <paramref name="maxDim"/>
+    /// before drawing, and the markers are drawn in output space so their rings survive the cap.
+    /// </summary>
+    /// <param name="rgb">Row-major interleaved R,G,B bytes; length must equal width × height × 3.</param>
+    /// <param name="markers">Star markers in the same pixel space as <paramref name="rgb"/>; a zero/negative radius is skipped.</param>
+    /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the annotated output is downscaled to fit (aspect-preserving).</param>
+    public static byte[] EncodeColorAnnotated(ReadOnlySpan<byte> rgb, int width, int height,
+            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0) {
+        if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
+        if (rgb.Length != width * height * 3) {
+            throw new ArgumentException(
+                $"RGB buffer length ({rgb.Length}) doesn't match {width}×{height}×3 = {width * height * 3}",
+                nameof(rgb));
+        }
+        ArgumentNullException.ThrowIfNull(markers);
+
+        var (outW, outH) = maxDim > 0 ? ScaleToFit(width, height, maxDim) : (width, height);
+        double scale = (double)outW / width;
+
+        using var srcBitmap = RgbToBitmap(rgb, width, height);
+        using var srcImage = SKImage.FromBitmap(srcBitmap);
+        return DrawAnnotatedAndEncode(srcImage, width, height, outW, outH, scale, markers, quality);
+    }
+
+    // The shared annotate-and-encode tail: resample the source into a ≤maxDim RGBA canvas
+    // (Mitchell), draw the marker rings in OUTPUT space (radius floored so they stay visible
+    // after a large downscale), and JPEG-encode the result.
+    private static byte[] DrawAnnotatedAndEncode(SKImage srcImage, int srcW, int srcH,
+            int outW, int outH, double scale, IReadOnlyList<StarMarker> markers, int quality) {
         var outInfo = new SKImageInfo(outW, outH, SKColorType.Rgba8888, SKAlphaType.Opaque);
         using var canvasBitmap = new SKBitmap(outInfo);
         using (var canvas = new SKCanvas(canvasBitmap)) {
-            canvas.DrawImage(srcImage, new SKRect(0, 0, width, height), new SKRect(0, 0, outW, outH),
+            canvas.DrawImage(srcImage, new SKRect(0, 0, srcW, srcH), new SKRect(0, 0, outW, outH),
                 new SKSamplingOptions(SKCubicResampler.Mitchell), paint: null);
             using var paint = new SKPaint {
                 Color = MarkerColor,
