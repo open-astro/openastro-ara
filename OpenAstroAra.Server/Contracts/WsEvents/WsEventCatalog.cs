@@ -47,6 +47,10 @@ public static class WsEventCatalog {
     // { device_type, device_id, device_name, kind, details, detected_utc }. What was done about
     // it (retries/pause/abort+park) is the §42.3 reaction slice's separate event.
     public const string EquipmentFault = "equipment.fault";
+    // §42.3 — what the FaultReactionService DID about a fault; payload { device_type, device_id,
+    // device_name, kind, action, … } where action is sequence_paused | reconnecting | recovered
+    // | gave_up | notify_only (gave_up carries the terminal action taken).
+    public const string EquipmentFaultActionTaken = "equipment.fault_action_taken";
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
@@ -190,7 +194,7 @@ public static class WsEventCatalog {
     /// </summary>
     public static readonly IReadOnlyList<string> All = new[] {
         EquipmentStateChanged, EquipmentConnected, EquipmentDisconnected,
-        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault,
+        EquipmentConnectionFailed, EquipmentDiscoveryRefreshed, EquipmentFault, EquipmentFaultActionTaken,
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,

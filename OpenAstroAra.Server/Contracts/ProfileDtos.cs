@@ -230,7 +230,21 @@ public sealed record SafetyPoliciesDto(
     // Sun altitude (deg) the sequence waits for before starting sky flats. -9 (mid nautical
     // twilight, sky bright enough to reach the target within the exposure bounds) rather than
     // the playbook prose's astronomical twilight (-18, still dark enough for imaging).
-    double SkyFlatSunAltitude = -9);
+    double SkyFlatSunAltitude = -9,
+    // §42.2/§42.3 — equipment-fault reaction policies (FaultPolicyMatrix resolves these into a
+    // plan; FaultReactionService executes it). Optional ctor defaults keep an older profile.json
+    // deserializing. Master switch for the §42.3 hot-reconnect ladder (0/5/15/30/60 s, five
+    // attempts); off = a lost device goes straight to its policy's terminal action.
+    bool HotReconnectEnabled = true,
+    // Camera lost mid-session: "reconnect_then_pause" (default) | "pause" | "notify_only".
+    string OnCameraLost = "reconnect_then_pause",
+    // Mount lost: "reconnect_then_abort_park" (default) | "reconnect_then_pause" | "pause"
+    // | "notify_only". The give-up park is best-effort — a mount that never reconnected
+    // usually can't park either, but trying costs nothing and covers driver-side drops.
+    string OnMountLost = "reconnect_then_abort_park",
+    // Tracking silently dropped (§42.4 emits the fault; the reaction handles the kind from
+    // day one): "reenable_then_pause" (default) | "pause" | "notify_only".
+    string OnTrackingLost = "reenable_then_pause");
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime
