@@ -62,6 +62,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
     private readonly DeviceConnectionProbe _probe = new();
+    private readonly CoolingDriftMonitor _coolingDrift = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private readonly IFrameRepository? _frames;
@@ -268,6 +269,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
         var client = RequireConnectedClient();
+        // §42.2 — a commanded cooler change starts a fresh drift baseline BEFORE the write is
+        // dispatched (a new set-point legitimately starts far from the sensor; the old episode
+        // and accumulation must not carry into it).
+        lock (_gate) {
+            _coolingDrift.Reset();
+        }
         await Task.Run(() => {
             if (targetTemperatureC is double target) {
                 client.SetCCDTemperature = target;
@@ -865,6 +872,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
             var capsCommitted = false;
+            var driftVerdict = CoolingDriftVerdict.Idle;
+            DiscoveredDeviceDto? watchedDevice = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -872,7 +881,25 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                         _capabilities = caps;
                         capsCommitted = true;
                     }
+                    // §42.2 — cooling-drift monitor, observed under the same commit lock so the
+                    // liveness check and the observation are one critical section (the #789
+                    // probe lesson). Wall-clock inside the monitor: download-skipped ticks
+                    // must still count toward the sustained window.
+                    driftVerdict = _coolingDrift.Observe(
+                        runtime.CoolerOn, runtime.CoolerSetpointC, runtime.CcdTemperature, DateTimeOffset.UtcNow);
+                    watchedDevice = _device;
                 }
+            }
+            if (driftVerdict == CoolingDriftVerdict.Drifted) {
+                var actual = runtime.CcdTemperature ?? double.NaN;
+                var setpoint = runtime.CoolerSetpointC ?? double.NaN;
+                LogCoolingDrift(watchedDevice?.Name ?? "?", actual, setpoint);
+                _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
+                    watchedDevice?.UniqueId, watchedDevice?.Name, EquipmentFaultKind.CoolingDrift,
+                    $"CCD at {actual:0.0}°C vs set-point {setpoint:0.0}°C for over {CoolingDriftMonitor.DefaultDriftWindow.TotalMinutes:0} min",
+                    DateTimeOffset.UtcNow));
+            } else if (driftVerdict == CoolingDriftVerdict.Recovered) {
+                LogCoolingRecovered(watchedDevice?.Name ?? "?");
             }
             // §36/§25.5: the first caps read after a connect carries the camera's sensor geometry —
             // cache it into the profile's optics section so the Planning Frame FOV works without the
@@ -1164,6 +1191,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                     _capabilities = null;   // re-read for the new device
                     _runtime = IdleRuntime; // don't serve a prior device's runtime
                     _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
+                    _coolingDrift.Reset();  // §42.2 — no drift accumulation carries across sessions
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -1267,6 +1295,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             device = _device;
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
+            _coolingDrift.Reset();
         }
         LogConnectionLost(device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera, device?.UniqueId, device?.Name,
@@ -1277,6 +1306,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' stopped answering — marked Error (§42.3)")]
     private partial void LogConnectionLost(string device);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Camera '{Device}' cooler can't hold set-point: CCD {ActualC}°C vs {SetpointC}°C sustained — §42.2 fault published")]
+    private partial void LogCoolingDrift(string device, double actualC, double setpointC);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Camera '{Device}' cooler back within band — drift monitor re-armed (§42.2)")]
+    private partial void LogCoolingRecovered(string device);
 
     // Caller must hold _gate.
     private void SetState(EquipmentConnectionState state) {

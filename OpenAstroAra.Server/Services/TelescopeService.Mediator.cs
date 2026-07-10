@@ -231,7 +231,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     public bool SetTrackingEnabled(bool trackingEnabled) {
         var client = ConnectedClientOrNull();
-        return client is not null && TrySetTracking(client, trackingEnabled);
+        if (client is null) {
+            return false;
+        }
+        NoteMountCommand(w => w.NoteTrackingCommanded(trackingEnabled));
+        return TrySetTracking(client, trackingEnabled);
     }
 
     public bool SetTrackingMode(TrackingMode trackingMode) {
@@ -241,12 +245,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         var client = ConnectedClientOrNull();
-        return client is not null && TrySetTrackingMode(client, trackingMode);
+        if (client is null) {
+            return false;
+        }
+        // A mode change asserts tracking on most drivers — expected-on with grace.
+        NoteMountCommand(w => w.NoteTrackingCommanded(true));
+        return TrySetTrackingMode(client, trackingMode);
     }
 
     public void StopSlew() {
         var client = ConnectedClientOrNull();
         if (client is not null) {
+            NoteMountCommand(w => w.NoteMotionCommanded());
             TryAbortSlew(client);
         }
     }
@@ -281,6 +291,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false; // not connected: the instruction's Validate has already blocked this
         }
         try {
+            // §42.2 — note the command before dispatch so the tracking watch's grace window is
+            // armed by the time any refresh tick can observe the op's effect. Park/home end with
+            // tracking legitimately off; everything else just suppresses without re-expecting.
+            NoteMountCommand(op is "telescope.park" or "telescope.findhome"
+                ? w => w.NoteParkCommanded()
+                : w => w.NoteMotionCommanded());
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
             var opTask = Task.Run(() => action(client), CancellationToken.None);
