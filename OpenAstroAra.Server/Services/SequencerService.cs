@@ -625,6 +625,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // Declared ahead of the try so the catch blocks can seal+drain it before
         // their terminal emits; null until the run body constructs it.
         CoalescingAsyncPublisher? progressPublisher = null;
+        // Same hoisting for the §42.4 failure-report drain: the exception/cancellation
+        // paths below must also scan-and-await before their terminal emits, or an
+        // instruction_failed could land after sequence.failed/stopped (review finding).
+        Func<Task>? drainFailureReports = null;
         // The run's §40 catalog session; null when no frame repository is wired
         // or its creation failed. Closed in the finally on every terminal path.
         Guid? captureSession = null;
@@ -686,6 +690,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     }
                     await Task.WhenAll(pending);
                 }
+                drainFailureReports = DrainFailureReportsAsync;
 
                 // §60.9 progress back-pressure: equipment instructions (TakeExposure et al.)
                 // report at capture rates, and the old per-tick fire-and-forget queued one
@@ -768,12 +773,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (progressPublisher is not null) {
                 await progressPublisher.SealAndDrainAsync();
             }
+            if (drainFailureReports is not null) {
+                await drainFailureReports();
+            }
             run.State = SequenceRunState.Stopped;
             await EmitAsync("sequence.stopped", sequenceId, run);
         } catch (Exception ex) {
             LogRunFailed(ex, sequenceId);
             if (progressPublisher is not null) {
                 await progressPublisher.SealAndDrainAsync();
+            }
+            if (drainFailureReports is not null) {
+                await drainFailureReports();
             }
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
