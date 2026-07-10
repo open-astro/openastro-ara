@@ -652,7 +652,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // snapshot — a fast failure may finish without ever firing a tick. This is the
                 // instruction-level failure channel; the §42.4 equipment.fault publishes cover
                 // the mediator degrade paths that complete "successfully" at this level.
-                var reportedFailed = new HashSet<int>();
+                // Per-leaf "this FAILED status is already reported" latch. NOT a once-per-run
+                // set: loop containers reset their children (FAILED → CREATED) and re-run them,
+                // and a repeat failure is a NEW occurrence the live view must see — an observed
+                // non-FAILED status re-arms the leaf (review finding).
+                var reportedFailed = new bool[leaves.Count];
                 var failedGate = new object();
                 var failureEmits = new List<Task>(); // every emit ever started, guarded by failedGate
                 Task ReportNewFailuresAsync() {
@@ -664,11 +668,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     lock (failedGate) {
                         List<Task>? emits = null;
                         for (var i = 0; i < leaves.Count; i++) {
-                            if (leaves[i].Status == SequenceEntityStatus.FAILED && reportedFailed.Add(i)) {
-                                var name = leaves[i].Name;
-                                var label = string.IsNullOrWhiteSpace(name) ? leaves[i].GetType().Name : name;
-                                LogInstructionFailed(sequenceId, i, label);
-                                (emits ??= []).Add(EmitInstructionFailedAsync(sequenceId, run, i, label));
+                            if (leaves[i].Status == SequenceEntityStatus.FAILED) {
+                                if (!reportedFailed[i]) {
+                                    reportedFailed[i] = true;
+                                    var name = leaves[i].Name;
+                                    var label = string.IsNullOrWhiteSpace(name) ? leaves[i].GetType().Name : name;
+                                    LogInstructionFailed(sequenceId, i, label);
+                                    (emits ??= []).Add(EmitInstructionFailedAsync(sequenceId, run, i, label));
+                                }
+                            } else if (reportedFailed[i]) {
+                                reportedFailed[i] = false; // reset observed — re-armed for the next iteration
                             }
                         }
                         if (emits is null) {
@@ -691,6 +700,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     await Task.WhenAll(pending);
                 }
                 drainFailureReports = DrainFailureReportsAsync;
+                // The occurrence channel: the engine raises FailureEvent on every failure, awaited
+                // inline by the run thread. When the leaf's status is already FAILED at raise time
+                // (the exception/validation paths — including a loop container re-running a failing
+                // child, whose FAILED→CREATED reset happens between ticks where the status scan
+                // can't see it) emit directly. Mid-attempt raises with the leaf still RUNNING (the
+                // retry loop) are left to the status scan: they may yet succeed, and the leaf only
+                // turns FAILED after the raises when its attempts are exhausted.
+                Task OnLeafFailure(object _, OpenAstroAra.Sequencer.Utility.SequenceEntityFailureEventArgs args) {
+                    if (args.Entity is not ISequenceItem item || item.Status != SequenceEntityStatus.FAILED) {
+                        return Task.CompletedTask;
+                    }
+                    var index = leaves.IndexOf(item);
+                    if (index < 0) {
+                        return Task.CompletedTask; // containers report through their leaves
+                    }
+                    lock (failedGate) {
+                        reportedFailed[index] = true; // the scan must not re-report this occurrence
+                        var name = item.Name;
+                        var label = string.IsNullOrWhiteSpace(name) ? item.GetType().Name : name;
+                        LogInstructionFailed(sequenceId, index, label);
+                        var emit = EmitInstructionFailedAsync(sequenceId, run, index, label);
+                        failureEmits.Add(emit);
+                        return emit;
+                    }
+                }
+                root.FailureEvent += OnLeafFailure;
 
                 // §60.9 progress back-pressure: equipment instructions (TakeExposure et al.)
                 // report at capture rates, and the old per-tick fire-and-forget queued one

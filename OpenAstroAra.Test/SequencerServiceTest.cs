@@ -138,6 +138,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_looped_instruction_that_fails_every_iteration_reports_each_failure() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            // A repeat-2 container around a failing leaf: the loop resets the leaf
+            // (FAILED -> CREATED) and re-runs it, and BOTH failures must reach the feed.
+            var svc = BuildService(id, BuildBody(c => {
+                var loop = new SequentialContainer { Name = "repeat" };
+                loop.Conditions.Add(new OpenAstroAra.Sequencer.Conditions.LoopCondition { Iterations = 2 });
+                loop.Items.Add(new ExternalScript { Name = "Broken script", Script = "/definitely/not/a/real/command-xyz" });
+                c.Items.Add(loop);
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var failed = ws.Records.Where(e => e.Type == "sequence.instruction_failed").ToList();
+            Assert.That(failed, Has.Count.EqualTo(2), "one event per failure OCCURRENCE, not per leaf per run");
+            Assert.That(failed.Select(e => e.Payload.GetProperty("failed_instruction_index").GetInt32()),
+                Is.All.EqualTo(0), "same leaf both times");
+        }
+
+        [Test]
         public async Task A_clean_run_emits_no_instruction_failed_events() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();
