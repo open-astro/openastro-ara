@@ -107,6 +107,52 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_instruction_emits_one_instruction_failed_event_before_the_terminal() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            // ExternalScript with a nonexistent command fails its leaf (SequenceEntityFailedException
+            // -> FAILED) while the default ContinueOnError behavior lets the run finish.
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "before" });
+                c.Items.Add(new ExternalScript { Name = "Broken script", Script = "/definitely/not/a/real/command-xyz" });
+                c.Items.Add(new Annotation { Name = "after" });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state, Is.Not.Null);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed),
+                "ContinueOnError: one failed instruction does not fail the run");
+            var records = ws.Records.ToList();
+            var failed = records.Where(e => e.Type == "sequence.instruction_failed").ToList();
+            Assert.That(failed, Has.Count.EqualTo(1), "exactly one event per failed leaf, no duplicates from tick + final scans");
+            Assert.That(failed[0].Payload.GetProperty("failed_instruction_index").GetInt32(), Is.EqualTo(1));
+            // The headless factory maps the unregistered ExternalScript to UnknownSequenceItem,
+            // whose Name is the original serialized type token — a realistic FAILED leaf (an
+            // imported sequence carrying an instruction this daemon doesn't know).
+            Assert.That(failed[0].Payload.GetProperty("failed_instruction_name").GetString(), Does.Contain("ExternalScript"));
+            var types = records.Select(e => e.Type).ToList();
+            Assert.That(types.IndexOf("sequence.instruction_failed"), Is.LessThan(types.IndexOf("sequence.complete")),
+                "the instruction failure is published before the run's terminal event");
+        }
+
+        [Test]
+        public async Task A_clean_run_emits_no_instruction_failed_events() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "note" });
+                c.Items.Add(new WaitForTimeSpan { Time = 0 });
+            }), ws: ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            Assert.That(ws.Events, Does.Not.Contain("sequence.instruction_failed"));
+        }
+
+        [Test]
         public async Task Runs_empty_sequence_to_completion() {
             var id = Guid.NewGuid();
             var svc = BuildService(id, BuildBody());
@@ -803,10 +849,14 @@ namespace OpenAstroAra.Test {
         /// <summary>Records the event types published, to assert the WS lifecycle.</summary>
         private sealed class RecordingWsBroadcaster : IWsBroadcaster {
             private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();
+            private readonly System.Collections.Concurrent.ConcurrentQueue<(string Type, JsonElement Payload)> _records = new();
             public System.Collections.Generic.IReadOnlyCollection<string> Events => _events;
+            // Ordered (type, payload) pairs for tests that assert payload fields, not just types.
+            public System.Collections.Generic.IReadOnlyCollection<(string Type, JsonElement Payload)> Records => _records;
             public long CurrentSequence => _events.Count;
             public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
                 _events.Enqueue(eventType);
+                _records.Enqueue((eventType, payload));
                 return Task.CompletedTask;
             }
         }

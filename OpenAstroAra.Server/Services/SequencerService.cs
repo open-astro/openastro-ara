@@ -25,6 +25,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -641,6 +642,51 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
 
+                // §42.4 — sequence.instruction_failed: each leaf whose Status turns FAILED is
+                // reported exactly once (Progress<T> callbacks can run concurrently, so the
+                // scan-and-mark is gated). Scanned on every progress tick AND at the final
+                // snapshot — a fast failure may finish without ever firing a tick. This is the
+                // instruction-level failure channel; the §42.4 equipment.fault publishes cover
+                // the mediator degrade paths that complete "successfully" at this level.
+                var reportedFailed = new HashSet<int>();
+                var failedGate = new object();
+                var failureEmits = new List<Task>(); // every emit ever started, guarded by failedGate
+                Task ReportNewFailuresAsync() {
+                    // Mark + start + register under ONE lock acquisition: if the mark and the
+                    // emit registration were separate critical sections, the terminal drain
+                    // below could snapshot failureEmits in the gap and miss an emit that a
+                    // tick had marked but not yet registered — instruction_failed would then
+                    // land after the terminal event.
+                    lock (failedGate) {
+                        List<Task>? emits = null;
+                        for (var i = 0; i < leaves.Count; i++) {
+                            if (leaves[i].Status == SequenceEntityStatus.FAILED && reportedFailed.Add(i)) {
+                                var name = leaves[i].Name;
+                                var label = string.IsNullOrWhiteSpace(name) ? leaves[i].GetType().Name : name;
+                                LogInstructionFailed(sequenceId, i, label);
+                                (emits ??= []).Add(EmitInstructionFailedAsync(sequenceId, run, i, label));
+                            }
+                        }
+                        if (emits is null) {
+                            return Task.CompletedTask;
+                        }
+                        var all = Task.WhenAll(emits);
+                        failureEmits.Add(all);
+                        return all;
+                    }
+                }
+                // The terminal-ordering barrier: one last scan, then await every emit any tick
+                // ever started — a tick-path fire-and-forget that already MARKED a leaf could
+                // otherwise still be publishing while the terminal event goes out.
+                async Task DrainFailureReportsAsync() {
+                    await ReportNewFailuresAsync();
+                    Task[] pending;
+                    lock (failedGate) {
+                        pending = [.. failureEmits];
+                    }
+                    await Task.WhenAll(pending);
+                }
+
                 // §60.9 progress back-pressure: equipment instructions (TakeExposure et al.)
                 // report at capture rates, and the old per-tick fire-and-forget queued one
                 // publish task per tick with nothing bounding the backlog. The coalescing
@@ -653,6 +699,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     run.SetDescription(status.Status);
                     run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
                     progressPublisher.Poke();
+                    _ = ReportNewFailuresAsync(); // fire-and-forget on ticks; the emit never throws
                     WriteCheckpointIfOwner(run, sequenceId);
                 });
 
@@ -679,6 +726,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Final snapshot — fast instructions may finish without firing a
                 // progress tick, so settle the completed count after the run.
                 run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), runningIndex: null);
+                // Awaited (unlike the tick-path scans) so every instruction_failed for this
+                // run is published before its terminal event below.
+                await DrainFailureReportsAsync();
 
                 // r1 ordering: seal (late queued Progress<T> ticks become no-ops — the
                 // #648 lesson) and drain any in-flight/trailing progress publish BEFORE
@@ -812,6 +862,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // WS is best-effort; a failed publish must not affect the run.
         }
     }
+
+    // §42.4 — the instruction-level failure event. Same payload as the run events plus the
+    // failed leaf's index/name, so WILMA can pin the failure to a row without diffing statuses.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort: a broadcaster/serialization fault must never affect the run — the leaf's FAILED status and the log line already carry the failure. CA1031's log-and-recover boundary applies.")]
+    private async Task EmitInstructionFailedAsync(Guid sequenceId, RunState run, int index, string name) {
+        if (_ws is null) return;
+        try {
+            var payload = new JsonObject {
+                ["sequence_id"] = sequenceId.ToString(),
+                ["run_id"] = run.RunId.ToString(),
+                ["state"] = run.State.ToString().ToLowerInvariant(),
+                ["failed_instruction_index"] = index,
+                ["failed_instruction_name"] = name,
+                ["instructions_completed"] = run.InstructionsCompleted,
+                ["instructions_total"] = run.InstructionCount,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(WsEventCatalog.SequenceInstructionFailed, doc.RootElement.Clone(), CancellationToken.None);
+        } catch (Exception) {
+            // WS is best-effort; a failed publish must not affect the run.
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Sequence run {SequenceId}: instruction {Index} ('{Name}') failed — sequence.instruction_failed published (§42.4)")]
+    private partial void LogInstructionFailed(Guid sequenceId, int index, string name);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
