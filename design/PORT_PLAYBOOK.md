@@ -1089,7 +1089,7 @@ ARA Core targets the Raspberry Pi family on **64-bit Debian Trixie or newer**. T
 | **Pi Zero / Zero 2 W** | ✗ Unsupported | 512 MB | Wildly under budget; ARM Cortex-A53 vs A72/A76. Server refuses to start. |
 | **Pi 400** | ⚠ Works | 4 GB | Same chip as Pi 4; mechanically inconvenient (keyboard built in) for an observatory mount, but the software runs identically. |
 | **Compute Module 4** (with carrier board) | ⚠ Untested | varies | Same CPU/RAM as Pi 4; should work but no Open Astro CI runs against CM4. Community-supported. |
-| **Non-Pi ARM64 SBC** (Orange Pi 5, Rock Pi, etc.) | ⚠ Best-effort | varies | If it boots Debian Trixie arm64 + has USB3, the binary runs. Not CI-tested; vendor-specific quirks (camera busses, GPIO, thermals) are user-debugged. a future release may add tested SBCs based on community signal. |
+| **Non-Pi ARM64 SBC** (Orange Pi 5, Rock Pi, etc.) | ⚠ Best-effort | varies | If it boots Debian Trixie arm64 + has USB3, the binary runs. Not CI-tested; vendor-specific quirks (camera busses, GPIO, thermals) are user-debugged. A future release may add tested SBCs based on community signal. |
 
 **Hardware refuse logic** (server startup check, fails fast with a clear journal entry):
 1. `uname -m` → must equal `aarch64` (refuses 32-bit `armv7l`)
@@ -1536,7 +1536,7 @@ e2e-smoke:
 - Mobile builds deferred — see design/ROADMAP.md per §18.G (no iOS/Android in CI)
 - macOS + Windows E2E adds runner cost without much new coverage (UI is Flutter — identical rendering across desktop platforms)
 - Linux x64 is the native CI environment + matches the production Pi (Linux ARM64) closely enough that platform-specific UI bugs are caught in §14.2 widget tests + §14.6 manual UI screenshots
-- a future release may expand to macOS + Windows runners if Flutter platform-specific bugs emerge
+- A future release may expand to macOS + Windows runners if Flutter platform-specific bugs emerge
 
 **Runtime:** ~3-5 min per E2E test; 5 tests ≈ 15-25 min total CI time. Runs in parallel with other CI jobs to keep total wall-clock within ~30 min budget.
 
@@ -2657,7 +2657,7 @@ Server refuses to start if the DB's `__EFMigrationsHistory` contains migrations 
 - WILMA on next connect sees this via a `/healthz` (per Tier 2 health-check gap) or `/api/v1/server/state` 503 with `code: "schema_ahead_of_binary"`
 - User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred — see design/ROADMAP.md; for now this is a DEPLOY.md manual SSH instruction)
 
-ARA does **not** generate down-migrations in the initial release. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. a future release may reconsider for specific high-risk migration types.
+ARA does **not** generate down-migrations in the initial release. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. A future release may reconsider for specific high-risk migration types.
 
 **Bundled migrations structure:**
 
@@ -2771,7 +2771,7 @@ The unifying principle: **never lose the user's data silently, but never block s
 │       └── <session-id>/session_meta.json.corrupt.<unix-ts>
 ```
 
-Quarantine is **append-only, never auto-pruned** in the initial release — a damaged DB is the kind of thing a user might want to ship to support 6 months later. DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. a future release may add Settings → Storage → Quarantine browser with size + age + one-click delete.
+Quarantine is **append-only, never auto-pruned** in the initial release — a damaged DB is the kind of thing a user might want to ship to support 6 months later. DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. A future release may add Settings → Storage → Quarantine browser with size + age + one-click delete.
 
 **Cross-quarantine consistency check** runs at the end of every startup:
 - If `data.db` was just restored from backup AND there are FITS files newer than the backup's timestamp → run an unscheduled §28.8 orphan scan over just the post-backup FITS to recover them into the restored DB
@@ -3067,7 +3067,7 @@ Or if low / on SD card:
 - Sequencer pauses at that instruction; state is checkpointed
 - Queued notification: *"Capture failed — disk full at frame N. Free space or change save location, then resume."*
 - No automatic deletion or rotation in the initial release. User intervenes.
-- a future release may add rotation policies (delete oldest unflagged, archive to cloud, etc.)
+- A future release may add rotation policies (delete oldest unflagged, archive to cloud, etc.)
 
 ### 29.6 Settings → Storage panel (client)
 
@@ -3207,7 +3207,7 @@ Settings → Storage adds a "Logs" sub-panel showing:
 - [Force rotate now] (calls `POST /api/v1/server/logs/rotate` — runs `logrotate -f`; returns 200 + new disk usage)
 - [Download current log] (streams `/var/log/openastroara/ara-<today>.log`)
 
-No user-facing knobs for rotation cadence / size cap in the initial release — Linux logrotate defaults are battle-tested; per-user tuning has no real demand. a future release could expose them if observatory operators ask.
+No user-facing knobs for rotation cadence / size cap in the initial release — Linux logrotate defaults are battle-tested; per-user tuning has no real demand. A future release could expose them if observatory operators ask.
 
 **§14.5 integration test cases (added):**
 
@@ -3806,7 +3806,7 @@ Pi 4 / Pi 5 hardware **does not** support WoL on the onboard Ethernet (the Broad
 - An external smart plug / network-attached PDU (recommended; per §57.7 hardware kill switch advisory pairs well)
 - A USB Ethernet adapter that supports WoL (some Realtek-based ones do; user's responsibility to verify)
 
-ARA does NOT advertise WoL support. a future release may add a Settings → System → "remote wake" UI surface IF the project picks up an external-wake-device integration; deferred to community signal.
+ARA does NOT advertise WoL support. A future release may add a Settings → System → "remote wake" UI surface IF the project picks up an external-wake-device integration; deferred to community signal.
 
 **DHCP behavior + "use saved server" reliability:**
 
@@ -5929,7 +5929,7 @@ sudo dd if=/dev/sda of=/dev/sdb bs=4M status=progress
 sudo rsync -aAXxv --delete /media/openastroara/ /mnt/backup-drive/openastroara/
 ```
 
-ARA does not automate this — the user manages their backup drive(s). a future release may add a "backup wizard" that guides the user through this with checks (drive size, free space, integrity verify) but stays out of the user's hardware.
+ARA does not automate this — the user manages their backup drive(s). A future release may add a "backup wizard" that guides the user through this with checks (drive size, free space, integrity verify) but stays out of the user's hardware.
 
 ### 43.4 Server-generated backup ZIP
 
@@ -6140,7 +6140,7 @@ WILMA pulling FROM the Pi (Pi is the LAN-stable listener) just works. No port fo
 - **Desktop WILMA only** (Windows, macOS, Linux desktop). Mobile companion mode (§41) does NOT participate — phones don't have terabytes of storage and would burn cellular data.
 - **Same LAN recommended** but not required (can work over VPN, just slower)
 - **Single active stream target per Pi for the initial release** — only one WILMA at a time is the "backup target." If two desktops both enable backup stream, Pi designates whichever connects first as the active one and tells the other "another WILMA is already streaming."
-- a future release may add multi-target (mirror to two PCs simultaneously)
+- A future release may add multi-target (mirror to two PCs simultaneously)
 
 ### 44.4 Bandwidth throttling
 
@@ -8086,7 +8086,7 @@ The "Sharing mode used" line tells the maintainer how much redaction was applied
 
 ### 54.8 What about private bug reports?
 
-For users who absolutely don't want any info on a public GitHub issue, there is no built-in private channel. Recommended path documented in About → Help: email the maintainer directly with the zip. a future release may add a private-submission backend (with TLS, auth, rate-limiting) if user demand justifies the infrastructure.
+For users who absolutely don't want any info on a public GitHub issue, there is no built-in private channel. Recommended path documented in About → Help: email the maintainer directly with the zip. A future release may add a private-submission backend (with TLS, auth, rate-limiting) if user demand justifies the infrastructure.
 
 ### 54.9 Privacy-by-default summary
 
@@ -8144,7 +8144,7 @@ For existing NINA users coming to ARA, here's what's different and how to bring 
 | MGEN guider integration | Removed; use PHD2 (via openastro-phd2 for cross-platform) |
 | PlateSolve2 | Removed; use ASTAP (§18.I) |
 | In-app updater | Removed (§18.A); update via APT (`sudo apt upgrade openastroara-server`) or WILMA-push (§33) |
-| **NINA's session database (data.db)** | **ARA ships with a greenfield EF Core schema (per §28.14); NINA's session/frame/calibration history is NOT imported.** Profiles + sequence files ARE importable per §56.4. Keep NINA installed if you need historical session lookups. a future release may add a NINA-DB importer if user demand emerges. |
+| **NINA's session database (data.db)** | **ARA ships with a greenfield EF Core schema (per §28.14); NINA's session/frame/calibration history is NOT imported.** Profiles + sequence files ARE importable per §56.4. Keep NINA installed if you need historical session lookups. A future release may add a NINA-DB importer if user demand emerges. |
 
 ### 56.2.1 Why no NINA database import (yet)
 
@@ -9095,7 +9095,7 @@ Search for "collimation" surfaces both the check-enabled toggle and the latest r
 - **Star-test mode** — dedicated workflow for diagnosing collimation without running a sequence. User taps "Check Collimation"; server takes a single defocused image, shows annotated centroid offsets per star across the field.
 - **Refractor collimation detection** — research-grade signal extraction from out-of-focus Airy disk distortion.
 - **Collimation drift trending** — multi-session collimation tracking in §50 Stats Equipment Health.
-- **Tilt-aware focus** — focus position varies across the field. a future release measures sensor tilt and accounts for it.
+- **Tilt-aware focus** — focus position varies across the field. A future release measures sensor tilt and accounts for it.
 - **Adaptive step pattern in Classic AF** — start wide, narrow on subsequent steps once a rough minimum is found.
 - **Multi-star sampling** — track 5 specific named stars instead of bulk HFR median (better for non-uniform fields).
 
@@ -9121,7 +9121,7 @@ Every non-2xx response carries an `application/problem+json` body following RFC 
 }
 ```
 
-- `type` URLs do **not** need to resolve to a live page in the initial release (they're identifiers, not docs links). a future release may publish a real `/errors/` site.
+- `type` URLs do **not** need to resolve to a live page in the initial release (they're identifiers, not docs links). A future release may publish a real `/errors/` site.
 - ARA-specific context lives as top-level extension fields, not nested under `extensions` (per RFC 7807 §3.2 — extension members are inline).
 - 422 validation errors include an `errors` map keyed by JSON-pointer path, mirroring ASP.NET Core's default:
   ```json
@@ -9236,7 +9236,7 @@ ARA keeps it minimal today — LAN-only, single user, no auth (per §67), no rea
 | General API requests | None |
 | Backup-stream pull (§44) | Client-side token-bucket bandwidth limit; no server-side cap |
 
-a future release may add per-endpoint limits once §67.4 remote-access mode lands — at that point auth, TLS, and rate limiting all enter together for the internet-facing surface.
+A future release may add per-endpoint limits once §67.4 remote-access mode lands — at that point auth, TLS, and rate limiting all enter together for the internet-facing surface.
 
 ### 60.7 Cross-section updates
 
@@ -11199,7 +11199,7 @@ DEPLOY.md (per §34.6) documents:
 - **Home network**: trust your own LAN. Standard deployment.
 - **Star party / shared LAN**: same posture as ASIAir. Standard deployment is fine. If you want isolation, run the Pi in AP mode (§32.6) so only your devices connect, or use the Pi's Ethernet interface with a dedicated cable.
 - **Public Wi-Fi (coffee shop, airport, hotel)**: don't. Image on private networks.
-- **Remote observatory access (over internet)**: out of scope for the initial release — use a VPN. a future release may add an opt-in remote-access mode with TLS + token auth.
+- **Remote observatory access (over internet)**: out of scope for the initial release — use a VPN. A future release may add an opt-in remote-access mode with TLS + token auth.
 
 ### 67.4 Remote-access mode (deferred — see design/ROADMAP.md)
 
