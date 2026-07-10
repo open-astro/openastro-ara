@@ -89,7 +89,7 @@ Rhythm:
 
 **Data Manager placement decision (2026-05-23):** lives in 12e Planning, not 12h Settings, because the AI doing the survey-list UI naturally wires the downloader at the same time (cohesion with HiPS surveys + Aladin integration). Settings panel mounts a "Open Data Manager" link only.
 
-**Sky Atlas + Framing → Planning merge (PORT_DECISIONS §36/§25.5, 2026-06-15):** the original split put Framing under 12c (Imaging) and Sky Atlas under 12e. These merged into a single **Planning tab** — one Aladin Lite surface with Explore / Tonight's Sky view modes + a Frame overlay toggle — so there is only one Chromium/webview_cef instance and target-find → frame is one uninterrupted flow. The tab shipped post-port as focused **v0.1.0 slices** rather than the monolithic 12c/12e PRs:
+**Sky Atlas + Framing → Planning merge (PORT_DECISIONS §36/§25.5, 2026-06-15):** the original split put Framing under 12c (Imaging) and Sky Atlas under 12e. These merged into a single **Planning tab** — one Aladin Lite surface with Explore / Tonight's Sky view modes + a Frame overlay toggle — so there is only one Chromium/webview_cef instance and target-find → frame is one uninterrupted flow. The tab shipped post-port as focused follow-on slices rather than the monolithic 12c/12e PRs:
 
 - **Frame-mode FOV overlay** consuming `/api/v1/profile/optics` (pixel-scale + field rectangle).
 - **Optics Settings section + camera→optics auto-populate** (sensor geometry cached in the profile on first connect, §30.7 invalidation on swap, "Refresh from connected camera").
@@ -259,7 +259,7 @@ Phase 12 sub-PR 12h (Settings) is the natural home for the registry's initial bu
 
 ### Documentation
 
-`CONTRIBUTING.md` (created post-v0.0.1, see future-scope section below) reproduces this rule prominently. Until then, the port playbook §0.5 + §61.4 + this document are the canonical references.
+`CONTRIBUTING.md` (created post-first-release, see future-scope section below) reproduces this rule prominently. Until then, the port playbook §0.5 + §61.4 + this document are the canonical references.
 
 ## Help-registry gate (BAKED — parallel to settings-registry gate)
 
@@ -276,7 +276,7 @@ Settings registry covers *findability* of controls; help registry covers *explai
 ### Applies to
 
 - The AI during Phase 12 + Phase 12 sub-PRs of the port
-- All community contributor PRs post-v0.0.1
+- All community contributor PRs post-first-release
 - Maintainer commits (no special privilege; the rule is uniform)
 - Same rule, same enforcement, same gate
 
@@ -320,7 +320,7 @@ When we finalize, these playbook sections need edits:
 - ✅ §0 rule 9 — "Tag every phase boundary; open the PR; merge it; continue." References this doc for the full rhythm + review loop. **Policy revised 2026-05-23** (later same day, in `prep-ci` PR #2): AI merges sub-PR + final PRs under the §19.1 merge-gate; auto-continues to next sub-PR after merge. Original 2026-05-23 decision was "AI never merges, ever"; reversed when the user granted full merge authority.
 - ✅ §3 phase plan — Phase 0.5 sub-PR rhythm references the 16-sub-PR mapping (0.5a–0.5p); Phase 12 references the 8-sub-PR mapping (12a–12h); cross-cutting sub-PR rhythm paragraph added after the phase list.
 - ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). **Merge policy revised 2026-05-23** in `prep-ci` PR #2: original "AI never merges, ever" rule replaced with "AI merges under a strict merge-gate" (green CI + reviewer quiescent ≥3 min + no unresolved findings + clean self-review). User retains override. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
-- ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred-to-v0.1.0 noted in CHANGELOG sections.
+- ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred noted in CHANGELOG sections.
 
 The design phase is now fully complete. Phase 0.5 execution can begin per the rhythm above.
 
@@ -328,7 +328,7 @@ The design phase is now fully complete. Phase 0.5 execution can begin per the rh
 
 ## Future scope — extend to community contributor workflow + Claude Code skills
 
-Beyond the AI-driven port, this document needs a v2 pass covering **post-v0.0.1 community contributions** — when external users start adding features, fixing bugs, and shipping improvements. The same review-aware PR-splitting discipline should apply.
+Beyond the AI-driven port, this document needs a v2 pass covering **post-first-release community contributions** — when external users start adding features, fixing bugs, and shipping improvements. The same review-aware PR-splitting discipline should apply.
 
 Open items for that v2 pass:
 
@@ -342,12 +342,12 @@ Open items for that v2 pass:
   - For PRs adding new sections to design docs, follow the existing playbook section style
 - [ ] **Pre-commit hooks for contributors** — beyond the already-baked settings-registry gate (see "Settings-registry gate" section above — settled, applies to community too): additional lint rules enforcing no `--no-verify`, no force pushes to main/master, license-header presence on new C# files
 - [ ] ~~**`.coderabbit.yaml`**~~ — obsolete: CodeRabbit removed from the org 2026-05-29. The current reviewer (Sonnet) doesn't read a per-repo config; reviewer behavior is set per-invocation by the user.
-- [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`) — bug-report (auto-filled with §54 bug-report-submission zip), feature-request (mapped to §55 roadmap tiers), driver-quirk-report (auto-routed upstream per §52.5)
-- [ ] **Release cadence post-v0.0.1** — semver discipline, RELEASE_NOTES.md entry per release, GitHub Releases pipeline (already in §14.3 CI), how community PRs feed into next-release vs current-release branches
+- [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`) — bug-report (auto-filled with §54 bug-report-submission zip), feature-request (mapped to design/ROADMAP.md sections), driver-quirk-report (auto-routed upstream per §52.5)
+- [ ] **Release cadence post-first-release** — semver discipline, RELEASE_NOTES.md entry per release, GitHub Releases pipeline (already in §14.3 CI), how community PRs feed into next-release vs current-release branches
 - [ ] **Maintainer workflow** — who reviews, merge criteria, how long PRs sit before stale-bot pings, etc. Light-touch at first (small project); formalize as community grows.
 
 The unifying theme: **community contributors should follow the same discipline the AI follows during the port.** Same PR sizes, same review markers, same registry requirements, same hooks. That keeps `master` clean across the lifetime of the project, not just through Phase 15.
 
 This v2 pass also extends the `design/` directory — likely adds `CONTRIBUTING.md` (at repo root, not under `design/`), `MAINTAINING.md`, and Claude Code skill recipes under `design/skills/` or similar.
 
-**Status:** captured here for future session. Not in scope for the port itself — comes after v0.0.1 ships.
+**Status:** captured here for future session. Not in scope for the port itself — comes after the first release ships.
