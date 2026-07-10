@@ -14,6 +14,42 @@ the other design docs.
 
 ---
 
+## §42.2 fault-matrix enforcement audit (2026-07-10) — the remaining rows, precisely
+
+Full audit of the §42.2 matrix vs shipped enforcement (post #791/#792/#793/#795/#797–#799).
+Structural finding: `FaultPolicyMatrix` enforces terminal actions only for `Disconnected` +
+`TrackingLost`; every op/state kind (`StallTimeout`/`OpError`/`ValueMismatch`/`CoolingDrift`) is
+notify-only. And the peripheral op mediators (`Telescope/Focuser/FilterWheel/Rotator/Switch/Dome
+Service.Mediator.cs`) catch op failures, publish the §42.4 fault, and **return benign values** —
+the instructions discard them, so `SequenceItem.Attempts` retries and `sequence.instruction_failed`
+never engage for those devices (only `TakeExposure` and `CenterAndRotate` throw). A failed
+instruction never pauses a run: default `ErrorBehavior` is ContinueOnError and no Pause behavior
+exists (`AbortOnError` is a hard stop, not the matrix's graceful pause).
+
+Fully enforced rows: camera/mount disconnect (+ladder/terminals), tracking lost (reenable→pause),
+cooling drift (notify by design), EFW-jam + focuser-stall + mount-op + switch-mismatch DETECTION
+(notify-only), plate-solve retry loop (§28.2, `CaptureSolver`), guider rows (guider-owned).
+
+Missing, by user value:
+1. **Peripheral op failures must engage the retry/failure machinery** (mount slew, focuser move,
+   filter change, rotator move, switch write, dome op) — the silent-swallow gap. (IN PROGRESS,
+   branch `op-failures-422`.)
+2. **Mount slew persistent-failure terminal** (matrix: Retry → Abort+park) — policy piece on top
+   of 1; extend `FaultPolicyMatrix` or instruction ErrorBehavior. Physical-safety row.
+3. **Switch re-command-once before faulting** (matrix rows 15/16: Re-command → Notify) —
+   `SwitchReadbackWatch` detects but never re-issues. S.
+4. **Rotator angle-drift watch** (row 9: reported vs commanded > 0.5°) — no drift detection today,
+   only move-op timeouts; needs a `SwitchReadbackWatch` analog + re-issue. M.
+5. **Pause-on-persistent-op-fault surface** (rows 1b/13: "Pause") — a `PauseOnError` instruction
+   behavior wired to `PauseActiveRunsAsync`, or map op kinds to `FaultTerminalAction.PauseSequence`. M.
+6. **ASTAP crash detection** (row 14) — `CLISolver.cs` never checks `process.ExitCode`; a crash is
+   indistinguishable from a clean no-solution. S.
+7. **Focuser backlash recalibration hook** (row 7 middle stage) — §59.7 territory, unbuilt.
+8. **Dew-formation advisory** (row 18: humidity+dew-point+HFR correlator) — no surface exists. L.
+9. **Camera dew heater row (row 3): N/A by design** — Alpaca ICameraV3 has no DewHeaterPower
+   property; the only DewHeater code is legacy NINA SDK plumbing off the Alpaca path. Mark the
+   matrix row not-applicable rather than building it.
+
 ## §42.5 fault log — follow-ups (2026-07-10, from the fault-log sub-PR)
 
 - ✅ **Server-side resolve-on-reconnect for recovery-tracked fault rows — DONE (2026-07-10, the

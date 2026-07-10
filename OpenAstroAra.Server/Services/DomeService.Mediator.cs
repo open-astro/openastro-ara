@@ -21,6 +21,7 @@ using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyDome;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -139,7 +140,7 @@ public sealed partial class DomeService : IDomeMediator {
     public Task<bool> DisableFollowing(CancellationToken cancellationToken) => Task.FromResult(false);
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer dome-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown but any other escape (including a device/HTTP-timeout OCE) is logged and reported as a failed op (false) rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
+        Justification = "Sequencer dome-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<bool> RunDomeOpAsync(string op, Action<AlpacaDome> action, Func<AlpacaDome, bool> isDone, CancellationToken ct) {
         AlpacaDome? client;
         lock (_gate) {
@@ -166,18 +167,28 @@ public sealed partial class DomeService : IDomeMediator {
                 await linked.CancelAsync().ConfigureAwait(false);
             }
             await opTask.ConfigureAwait(false); // observe the op's result / surface its exception
-            return await WaitForDomeConditionAsync(client, isDone, ct).ConfigureAwait(false);
+            if (!await WaitForDomeConditionAsync(client, isDone, ct).ConfigureAwait(false)) {
+                // Dispatched but never reached its terminal state (settle exhaustion, or the
+                // connection dropped mid-wait — the publish gate suppresses the latter and the
+                // §42.3 probe owns it). §42.2: fail the instruction rather than report success.
+                var msg = $"dome op {op} dispatched but did not reach its terminal state within the settle bound";
+                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
+                throw new SequenceEntityFailedException(msg);
+            }
+            return true;
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
+        } catch (SequenceEntityFailedException) {
+            throw; // already classified + published above
         } catch (TimeoutException ex) {
             // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
             LogDomeOpFailed(ex, op);
             PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            return false;
+            throw new SequenceEntityFailedException(ex.Message, ex);
         } catch (Exception ex) {
             LogDomeOpFailed(ex, op);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
-            return false;
+            throw new SequenceEntityFailedException($"{op} failed: {ex.Message}", ex);
         }
     }
 
