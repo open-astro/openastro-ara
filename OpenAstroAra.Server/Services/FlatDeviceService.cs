@@ -207,18 +207,12 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             // death and reads false on a driver-side disconnect; a consecutive-failure streak
             // (not one blip) trips the device to Error + publishes the §42.2 fault.
             if (!ProbeConnected(client)) {
-                // Only a probe of the LIVE client may feed the streak or trip the fault: the
-                // blocking probe runs outside _gate, so a concurrent reconnect can have swapped
-                // the client (and reset the probe) while a stale probe of the dead session was
-                // still in flight — same staleness guard as the runtime write-back below.
-                if (IsLiveClient(client) && _probe.Observe(false) == ProbeVerdict.Lost) {
+                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
                     TripConnectionLost(client);
                 }
                 return; // the device didn't answer — skip this tick's reads
             }
-            if (IsLiveClient(client)) {
-                _probe.Observe(true);
-            }
+            ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client);
             int? max = needMax ? ReadMaxBrightness(client) : null;
             lock (_gate) {
@@ -374,9 +368,15 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         try { return c.Connected; } catch (Exception) { return false; }
     }
 
-    private bool IsLiveClient(AlpacaCoverCalibrator client) {
+    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
+    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
+    // while a stale probe of the dead session was still in flight. The liveness check and
+    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
+    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
+    // null when the probed client is stale (the observation is discarded).
+    private ProbeVerdict? ObserveProbeIfLive(AlpacaCoverCalibrator client, bool probeSucceeded) {
         lock (_gate) {
-            return ReferenceEquals(_client, client);
+            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
         }
     }
 
@@ -393,8 +393,8 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             }
             device = _device;
             SetState(EquipmentConnectionState.Error);
+            _probe.Reset();
         }
-        _probe.Reset();
         LogConnectionLost(device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.FlatDevice, device?.UniqueId, device?.Name,
             EquipmentFaultKind.Disconnected,

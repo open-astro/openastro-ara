@@ -236,12 +236,12 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 // death and reads false on a driver-side disconnect; a consecutive-failure streak
                 // (not one blip) trips the device to Error + publishes the §42.2 fault.
                 if (!ProbeConnected(client)) {
-                    if (conn.Probe.Observe(false) == ProbeVerdict.Lost) {
+                    if (ObserveProbeIfLive(conn, client, probeSucceeded: false) == ProbeVerdict.Lost) {
                         TripConnectionLost(conn);
                     }
                     continue; // this device didn't answer — skip its reads, not the whole tick
                 }
-                conn.Probe.Observe(true);
+                ObserveProbeIfLive(conn, client, probeSucceeded: true);
                 // Isolate each device: a read failure (ASCOM timeout / network hiccup) on one switch
                 // must not drop the rest of this tick's devices from the refresh.
                 try {
@@ -420,6 +420,26 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     // §42.3 — declare the device lost: Connected → Error (keeps the connection entry remembered so
     // a reconnect can find it; the state publisher already maps Error to
     // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
+    // Only a probe of the LIVE connection + client may feed its streak: the blocking probe runs
+    // outside _gate, so a concurrent disconnect/replace can have superseded the entry while the
+    // stale probe was still in flight. The liveness check and the Observe are ONE operation under
+    // _gate — a separate check-then-observe leaves a gap for ConnectInBackground's Reset to land
+    // between them (review finding; the connect path's fresh-SwitchConnection-per-reconnect
+    // invariant makes that benign today, but the probe path now defends it itself). Returns null
+    // when the probed pair is stale (the observation is discarded).
+    private ProbeVerdict? ObserveProbeIfLive(SwitchConnection conn, AlpacaSwitch client, bool probeSucceeded) {
+        lock (_gate) {
+            if (_disposed
+                || conn.State != EquipmentConnectionState.Connected
+                || !_connections.TryGetValue(conn.DeviceNumber, out var current)
+                || !ReferenceEquals(current, conn)
+                || !ReferenceEquals(conn.Client, client)) {
+                return null;
+            }
+            return conn.Probe.Observe(probeSucceeded);
+        }
+    }
+
     private void TripConnectionLost(SwitchConnection conn) {
         lock (_gate) {
             // Only trip the connection we probed if it is still the live entry for its device
@@ -430,8 +450,8 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 return;
             }
             SetState(conn, EquipmentConnectionState.Error);
+            conn.Probe.Reset();
         }
-        conn.Probe.Reset();
         LogConnectionLost(conn.Device.Name);
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name,
             EquipmentFaultKind.Disconnected,

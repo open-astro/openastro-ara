@@ -38,8 +38,9 @@ public enum ProbeVerdict {
 /// declare the device lost. Deliberately NOT wall-clock-based: ticks pause while a service is
 /// not Connected, so a tick count can't mis-fire across a reconnect.
 ///
-/// Not thread-safe by design — each service owns one instance and only touches it from its
-/// refresh path (already single-flighted by the <c>_refreshing</c> gate).
+/// Not internally synchronized — each owning service mutates it (Observe from the refresh
+/// tick, Reset from connect/trip) only under its own connection gate, which serializes the
+/// refresh-path observations against a concurrent reconnect's Reset.
 /// </summary>
 public sealed class DeviceConnectionProbe {
 
