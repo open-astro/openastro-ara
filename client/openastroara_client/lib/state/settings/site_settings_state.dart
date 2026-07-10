@@ -27,6 +27,10 @@ class SiteSettings {
   final double typicalSeeingArcsec;
   final TwilightDefinition twilightDefinition;
 
+  // §37.5 — whole-run ceiling in minutes; 0 = no limit (the default). The
+  // daemon's runtime-cap watchdog stops a run gracefully past this.
+  final int maxSequenceRuntimeMin;
+
   const SiteSettings({
     this.siteName = 'Backyard',
     this.latitudeDeg = 0,
@@ -38,6 +42,7 @@ class SiteSettings {
     this.bortleClass = 6,
     this.typicalSeeingArcsec = 2.5,
     this.twilightDefinition = TwilightDefinition.astronomical,
+    this.maxSequenceRuntimeMin = 0,
   });
 
   SiteSettings copyWith({
@@ -51,6 +56,7 @@ class SiteSettings {
     int? bortleClass,
     double? typicalSeeingArcsec,
     TwilightDefinition? twilightDefinition,
+    int? maxSequenceRuntimeMin,
   }) =>
       SiteSettings(
         siteName: siteName ?? this.siteName,
@@ -65,6 +71,8 @@ class SiteSettings {
         typicalSeeingArcsec:
             typicalSeeingArcsec ?? this.typicalSeeingArcsec,
         twilightDefinition: twilightDefinition ?? this.twilightDefinition,
+        maxSequenceRuntimeMin:
+            maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
       );
 }
 
@@ -121,6 +129,12 @@ class SiteSettingsNotifier extends Notifier<SiteSettings> {
 
   void setTwilightDefinition(TwilightDefinition d) =>
       state = state.copyWith(twilightDefinition: d);
+
+  void setMaxSequenceRuntimeMin(int v) {
+    // 0 = no limit; a week (10080 min) is a generous ceiling for one run.
+    if (v < 0 || v > 10080) return;
+    state = state.copyWith(maxSequenceRuntimeMin: v);
+  }
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getSiteSettings();

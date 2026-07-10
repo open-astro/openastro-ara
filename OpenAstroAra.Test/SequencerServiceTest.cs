@@ -414,6 +414,58 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Max_runtime_cap_stops_a_run_gracefully_with_a_notification() {
+            // §37.5 — the runtime-cap watchdog: a run past the profile's ceiling is
+            // stopped via the user-stop path (terminal state Stopped, not Failed)
+            // and posts one Warning notification. The test seams shrink the
+            // minutes-scale cap to milliseconds.
+            var id = Guid.NewGuid();
+            var profile = new Mock<IProfileStore>();
+            profile.Setup(p => p.GetSiteSettings()).Returns(new SiteSettingsDto(
+                SiteName: "s", LatitudeDeg: 0, LongitudeDeg: 0, ElevationM: 0, TimeZone: "UTC",
+                UseCustomHorizon: false, DefaultHorizonAltitudeDeg: 0, BortleClass: 4,
+                TypicalSeeingArcsec: 2, TwilightDefinition: "astronomical",
+                MaxSequenceRuntimeMin: 1));
+            var notifications = new Mock<INotificationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })),
+                profileStore: profile.Object, notifications: notifications.Object);
+            svc.RuntimeCapPollInterval = TimeSpan.FromMilliseconds(50);
+            svc.RuntimeCapOverrideForTests = TimeSpan.FromMilliseconds(100);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped),
+                "a capped run stops gracefully — never Failed");
+            notifications.Verify(n => n.CreateAsync(
+                It.Is<NotificationDto>(d => d.Title.Contains("max runtime")),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task No_cap_means_the_watchdog_never_touches_the_run() {
+            // Cap 0 (the default) = no limit: the watchdog ticks but never stops
+            // anything, and a short run completes normally.
+            var id = Guid.NewGuid();
+            var profile = new Mock<IProfileStore>();
+            profile.Setup(p => p.GetSiteSettings()).Returns(new SiteSettingsDto(
+                SiteName: "s", LatitudeDeg: 0, LongitudeDeg: 0, ElevationM: 0, TimeZone: "UTC",
+                UseCustomHorizon: false, DefaultHorizonAltitudeDeg: 0, BortleClass: 4,
+                TypicalSeeingArcsec: 2, TwilightDefinition: "astronomical"));
+            var notifications = new Mock<INotificationService>();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "quick" })),
+                profileStore: profile.Object, notifications: notifications.Object);
+            svc.RuntimeCapPollInterval = TimeSpan.FromMilliseconds(20);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            notifications.Verify(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+
+        [Test]
         public async Task Host_shutdown_stops_live_runs() {
             // On daemon shutdown (IHostedService.StopAsync), in-flight runs must be
             // cancelled rather than abandoned mid-execution.

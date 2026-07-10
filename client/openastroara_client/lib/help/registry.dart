@@ -598,6 +598,15 @@ const Map<String, Help> helpRegistry = {
         '* **Nautical (−12°)**: Sun 12° below — horizon visible to the eye, bright stars + globulars OK for testing or wide-field.\n'
         '* **Astronomical (−18°)**: Sun 18° below — sky is fully dark, deep-sky imaging window. Recommended default.',
   ),
+  'safety.site.max_sequence_runtime_min': Help(
+    key: 'safety.site.max_sequence_runtime_min',
+    title: 'Max sequence runtime',
+    body: 'A safety ceiling on how long one sequence run may execute, in minutes. '
+        'A run still going past the ceiling is stopped gracefully — same as pressing Stop — '
+        'and a notification explains why.\n\n'
+        '**0 (the default) means no limit.** Useful as unattended-rig insurance: a stuck loop '
+        'or an over-ambitious plan can\'t keep the mount tracking into the morning.',
+  ),
 
   // §29.2 Filenames — both fields are non-obvious so both get help.
   'session.filenames.date_separator': Help(

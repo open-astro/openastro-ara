@@ -735,8 +735,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Real execution. Sequencer.Start runs MainContainer.Run with
                 // Initialize/Teardown and swallows OperationCanceledException, so
                 // cancellation surfaces via run.Cts below rather than as a throw.
+                // §37.5 — the max-sequence-runtime watchdog runs alongside the
+                // engine and requests a graceful STOP (the user-stop path, so
+                // the terminal emit is sequence.stopped) once the run exceeds
+                // the profile's cap. Linked to run.Cts so any terminal path
+                // also ends the watchdog; drained in the finally so its stop
+                // request can't land on a later run of the same id.
                 var sequencer = new OpenAstroAra.Sequencer.Sequencer(root);
-                await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
+                using var capCts = CancellationTokenSource.CreateLinkedTokenSource(run.Cts.Token);
+                var capTask = WatchRuntimeCapAsync(sequenceId, run, capCts.Token);
+                try {
+                    await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
+                } finally {
+                    await capCts.CancelAsync();
+                    await capTask;
+                }
 
                 // Final snapshot — fast instructions may finish without firing a
                 // progress tick, so settle the completed count after the run.
@@ -916,6 +929,84 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§40 run-session catalog operation failed — the run continues; frames fall back to the manual session")]
     private partial void LogRunSessionFailed(Exception ex);
+
+    // §37.5 runtime-cap watchdog seams — the poll interval (a minute resolves a
+    // minutes-denominated cap finely enough) and a test-only cap override so a
+    // bench can trip the watchdog in milliseconds without a fake clock.
+    internal TimeSpan RuntimeCapPollInterval { get; set; } = TimeSpan.FromSeconds(60);
+    internal TimeSpan? RuntimeCapOverrideForTests { get; set; }
+
+    // §37.5 — stop a run that has exceeded the profile's max-sequence-runtime
+    // cap. Reads the cap EVERY tick (a mid-run Settings change applies without a
+    // restart; 0/negative = no limit) and requests the same graceful stop the
+    // user's Stop button takes, so the run's terminal event is sequence.stopped
+    // and every drain/session invariant of that path holds unchanged.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A profile-store read fault must never stop or destabilize a healthy run — the watchdog skips the tick and retries; the cap simply doesn't bind while the profile is unreadable. Log-and-recover boundary.")]
+    private async Task WatchRuntimeCapAsync(Guid sequenceId, RunState run, CancellationToken ct) {
+        try {
+            while (!ct.IsCancellationRequested) {
+                await Task.Delay(RuntimeCapPollInterval, ct).ConfigureAwait(false);
+                TimeSpan? cap;
+                try {
+                    var capMin = _profileStore?.GetSiteSettings().MaxSequenceRuntimeMin ?? 0;
+                    cap = RuntimeCapOverrideForTests ?? (capMin > 0 ? TimeSpan.FromMinutes(capMin) : null);
+                } catch (Exception ex) {
+                    LogRuntimeCapReadFailed(ex, sequenceId);
+                    continue;
+                }
+                if (cap is not { } limit) {
+                    continue;
+                }
+                var elapsed = DateTimeOffset.UtcNow - run.StartedUtc;
+                if (elapsed < limit) {
+                    continue;
+                }
+                LogRuntimeCapReached(sequenceId, Math.Round(elapsed.TotalMinutes), Math.Round(limit.TotalMinutes));
+                await NotifyRuntimeCapQuietlyAsync(limit).ConfigureAwait(false);
+                await RequestCancelAsync(sequenceId, SequenceRunState.Stopped).ConfigureAwait(false);
+                return;
+            }
+        } catch (OperationCanceledException) {
+            // The run ended (or the daemon is shutting down) — normal watchdog exit.
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never mask or delay the cap-stop itself. Log-and-recover boundary.")]
+    private async Task NotifyRuntimeCapQuietlyAsync(TimeSpan limit) {
+        if (_notifications is null) {
+            return;
+        }
+        try {
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Sequence,
+                Title: "Sequence stopped — max runtime reached",
+                Message: $"The run passed the profile's {Math.Round(limit.TotalMinutes)}-minute ceiling and was "
+                    + "stopped gracefully. Raise or clear Settings → Safety → Site → Max sequence runtime "
+                    + "if this run should have kept going.",
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRuntimeCapNotifyFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§37.5 run {SequenceId} exceeded the max-sequence-runtime cap ({ElapsedMin} min elapsed > {CapMin} min) — stopping gracefully")]
+    private partial void LogRuntimeCapReached(Guid sequenceId, double elapsedMin, double capMin);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§37.5 runtime-cap watchdog could not read the site settings for run {SequenceId} — tick skipped, run unaffected")]
+    private partial void LogRuntimeCapReadFailed(Exception ex, Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§37.5 failed to post the runtime-cap notification — the stop itself proceeded")]
+    private partial void LogRuntimeCapNotifyFailed(Exception ex);
 
     private sealed class RunState : IDisposable {
         // State is written from Abort/Stop (request threads), the background

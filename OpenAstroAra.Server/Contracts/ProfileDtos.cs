@@ -101,7 +101,12 @@ public sealed record SiteSettingsDto(
     double DefaultHorizonAltitudeDeg,
     int BortleClass,
     double TypicalSeeingArcsec,
-    string TwilightDefinition);
+    string TwilightDefinition,
+    // §37.5 screen 16 — whole-run ceiling in minutes (0 = no limit, the playbook
+    // default; the ctor default keeps an older profile.json deserializing). The
+    // sequencer's runtime-cap watchdog stops a run gracefully once it has been
+    // running this long — enforcement-first: the field ships with that consumer.
+    int MaxSequenceRuntimeMin = 0);
 
 /// <summary>§36 custom terrain horizon — one skyline vertex: the sky altitude at an
 /// azimuth (compass degrees, 0 = north, clockwise). The profile stores the user's

@@ -197,6 +197,19 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
             if (v != null) n.setTwilightDefinition(v);
           },
         ),
+        // "0 = no limit" lives in the row's help entry — the label must fit the
+        // panel's fixed label column.
+        EditableNumberRow(
+          label: 'Max sequence runtime (min)',
+          helpKey: 'safety.site.max_sequence_runtime_min',
+          currentValue: s.maxSequenceRuntimeMin.toString(),
+          getCanonical: () =>
+              ref.read(siteSettingsProvider).maxSequenceRuntimeMin.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setMaxSequenceRuntimeMin(v);
+          },
+        ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(
