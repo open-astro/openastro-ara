@@ -288,7 +288,8 @@ public partial class Program {
                 // the sequencer resolver breaks the construction cycle.
                 sp.GetService<IProfileStore>(),
                 () => sp.GetService<ISequencerService>(),
-                sp.GetService<INotificationService>()));
+                sp.GetService<INotificationService>(),
+                sp.GetService<IFaultLogService>()));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the real polar-align service (skeleton): drives the routine over the connected GuiderService
         // (PA-session lease lifecycle now; the capture→solve→slew loop lands in follow-up slices).
