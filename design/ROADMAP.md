@@ -26,8 +26,9 @@ The epic currently being shipped, slice by slice (~~§42.4 slice 4c~~ shipped #7
 log + REST~~ shipped #795; ~~§42 WILMA surfaces~~ shipped #797/#798 — live fault chips w/ history
 seeding, Imaging-tab fault feed, §42.6 per-session timeline + library badges):
 
-- **§42.6 `affected_frames` population** — correlate frames whose exposure overlapped a fault
-  window (server-side; the column + DTO + client tiles are ready for it).
+- ~~**§42.6 `affected_frames` population**~~ — shipped: filled at resolve time (recovered action
+  + reconnect hook), session-scoped exposure-window overlap against `[detected_at, resolved_at]`.
+  **The §42 epic is complete.**
 - ~~**§42.2 matrix, remaining rows**~~ — shipped #800/#801/#802/#803: op-failure enforcement,
   switch re-command + solver exit codes, rotator drift watch, persistent-op-fault escalation
   (mount abort+park, camera pause). Every buildable audit item done (see PORT_TODO's audit list).

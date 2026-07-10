@@ -80,6 +80,141 @@ namespace OpenAstroAra.Test {
             return id;
         }
 
+        private async Task<Guid> InsertFrameAsync(Guid sessionId, DateTimeOffset capturedUtc, double exposureSec) {
+            var id = Guid.NewGuid();
+            await using var conn = db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO frames
+                    (id, session_id, target_name, frame_type, exposure_seconds, captured_utc,
+                     file_path, file_size_bytes, width, height, bit_depth)
+                VALUES
+                    ($id, $session, 'M42', 'light', $exp, $captured, $path, 1, 100, 100, 16);
+                """;
+            cmd.Parameters.AddWithValue("$id", id.ToString());
+            cmd.Parameters.AddWithValue("$session", sessionId.ToString());
+            cmd.Parameters.AddWithValue("$exp", exposureSec);
+            cmd.Parameters.AddWithValue("$captured", capturedUtc.ToString("O"));
+            cmd.Parameters.AddWithValue("$path", $"/tmp/{id}.fits");
+            await cmd.ExecuteNonQueryAsync();
+            return id;
+        }
+
+        // §42.6 — the default Fault() detects at 04:00Z; a 10-minute outage window against a
+        // spread of exposures probing every overlap edge.
+        private static readonly DateTimeOffset Detected = new(2026, 7, 10, 4, 0, 0, TimeSpan.Zero);
+        private static readonly DateTimeOffset Resolved = Detected + TimeSpan.FromMinutes(10);
+
+        private async Task<(Guid Spanning, Guid Inside, Guid Straddling, Guid Before, Guid After)> InsertOverlapSpreadAsync(Guid sessionId) => (
+            Spanning: await InsertFrameAsync(sessionId, Detected - TimeSpan.FromSeconds(60), 120),   // in flight when the fault hit
+            Inside: await InsertFrameAsync(sessionId, Detected + TimeSpan.FromMinutes(5), 60),       // wholly inside the window
+            Straddling: await InsertFrameAsync(sessionId, Resolved - TimeSpan.FromSeconds(30), 300), // started before the resolve
+            Before: await InsertFrameAsync(sessionId, Detected - TimeSpan.FromMinutes(3), 60),       // ended before the fault
+            After: await InsertFrameAsync(sessionId, Resolved + TimeSpan.FromMinutes(1), 60));       // started after the resolve
+
+        [Test]
+        public async Task A_recovered_resolution_correlates_the_frames_whose_exposure_overlapped_the_window() {
+            var sessionId = await CreateSessionRowAsync();
+            var frames = await InsertOverlapSpreadAsync(sessionId);
+            var fault = Fault(DeviceType.Telescope, detectedUtc: Detected);
+            registry.Enter(sessionId);
+            try {
+                await service.RecordFaultAsync(fault, CancellationToken.None);
+            } finally {
+                registry.Exit(sessionId);
+            }
+
+            await service.RecordActionAsync(fault, "recovered", Resolved, CancellationToken.None);
+
+            var row = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items[0];
+            Assert.That(row.AffectedFrames,
+                Is.EquivalentTo(new[] { frames.Spanning, frames.Inside, frames.Straddling }),
+                "exactly the frames whose exposure window overlapped [detected, resolved]");
+        }
+
+        [Test]
+        public async Task An_action_created_row_with_a_resolution_correlates_too() {
+            // The reaction's action can land before detection (insert path) — a resolution
+            // stamped there must correlate exactly like the update path.
+            var sessionId = await CreateSessionRowAsync();
+            var frames = await InsertOverlapSpreadAsync(sessionId);
+            registry.Enter(sessionId);
+            try {
+                await service.RecordActionAsync(Fault(detectedUtc: Detected), "recovered", Resolved, CancellationToken.None);
+            } finally {
+                registry.Exit(sessionId);
+            }
+
+            var row = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items[0];
+            Assert.That(row.AffectedFrames,
+                Is.EquivalentTo(new[] { frames.Spanning, frames.Inside, frames.Straddling }));
+        }
+
+        [Test]
+        public async Task A_reconnect_resolution_correlates_frames_too() {
+            var sessionId = await CreateSessionRowAsync();
+            var frames = await InsertOverlapSpreadAsync(sessionId);
+            registry.Enter(sessionId);
+            try {
+                await service.RecordFaultAsync(Fault(DeviceType.Focuser, detectedUtc: Detected), CancellationToken.None);
+            } finally {
+                registry.Exit(sessionId);
+            }
+
+            await service.ResolveOnReconnectAsync(DeviceType.Focuser, Resolved, CancellationToken.None);
+
+            var row = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items[0];
+            Assert.That(row.AffectedFrames,
+                Is.EquivalentTo(new[] { frames.Spanning, frames.Inside, frames.Straddling }),
+                "the §42.5 reconnect hook is a resolution like any other");
+        }
+
+        [Test]
+        public async Task Correlation_is_scoped_to_the_faults_session() {
+            var faultSession = await CreateSessionRowAsync();
+            var otherSession = await CreateSessionRowAsync();
+            await InsertFrameAsync(otherSession, Detected + TimeSpan.FromMinutes(1), 60); // would overlap, wrong session
+            var inSession = await InsertFrameAsync(faultSession, Detected + TimeSpan.FromMinutes(1), 60);
+            var fault = Fault(detectedUtc: Detected);
+            registry.Enter(faultSession);
+            try {
+                await service.RecordFaultAsync(fault, CancellationToken.None);
+            } finally {
+                registry.Exit(faultSession);
+            }
+
+            await service.RecordActionAsync(fault, "recovered", Resolved, CancellationToken.None);
+
+            var row = (await service.ListAsync(50, null, null, null, null, null, CancellationToken.None)).Items[0];
+            Assert.That(row.AffectedFrames, Is.EquivalentTo(new[] { inSession }),
+                "another run's frames are not this fault's business");
+        }
+
+        [Test]
+        public async Task A_fault_outside_a_run_and_a_non_resolving_action_never_correlate() {
+            var sessionId = await CreateSessionRowAsync();
+            await InsertOverlapSpreadAsync(sessionId);
+
+            // No session on the fault row: nothing to correlate against.
+            var outsideRun = Fault(detectedUtc: Detected);
+            await service.RecordFaultAsync(outsideRun, CancellationToken.None);
+            await service.RecordActionAsync(outsideRun, "recovered", Resolved, CancellationToken.None);
+
+            // Session attributed, but the action carries no resolution.
+            var mid = Fault(DeviceType.Switch, kind: EquipmentFaultKind.ValueMismatch, detectedUtc: Detected);
+            registry.Enter(sessionId);
+            try {
+                await service.RecordFaultAsync(mid, CancellationToken.None);
+            } finally {
+                registry.Exit(sessionId);
+            }
+            await service.RecordActionAsync(mid, "notify_only", resolvedUtc: null, CancellationToken.None);
+
+            var page = await service.ListAsync(50, null, null, null, null, null, CancellationToken.None);
+            Assert.That(page.Items.Select(i => i.AffectedFrames.Count), Is.All.Zero,
+                "no session → no frame set; no resolution → the window never closed");
+        }
+
         [Test]
         public async Task Detection_round_trips_through_the_read_api() {
             var fault = Fault();
@@ -97,7 +232,7 @@ namespace OpenAstroAra.Test {
             Assert.That(row.SessionId, Is.Null, "no run was active");
             Assert.That(row.ActionTaken, Is.Null, "no reaction has landed yet");
             Assert.That(row.ResolvedUtc, Is.Null);
-            Assert.That(row.AffectedFrames, Is.Empty, "frame correlation is the §42.6 slice");
+            Assert.That(row.AffectedFrames, Is.Empty, "affected_frames fills at resolve time (§42.6), not detection");
 
             // Field-wise compare — FaultDto record equality is reference-based on the
             // AffectedFrames list member, so two reads are never Equals-equal.

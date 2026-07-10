@@ -18,8 +18,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,8 +34,15 @@ namespace OpenAstroAra.Server.Services;
 /// (equipment_type + fault_type + detected_at + equipment_id) and a single in-proc
 /// write gate serializes them — whichever lands first creates the row, the other
 /// completes it. <c>session_id</c> is stamped from
-/// <see cref="ActiveRunSessionRegistry"/> at detection time (null outside a run);
-/// <c>affected_frames</c> stays empty until the §42.6 frame-correlation slice.
+/// <see cref="ActiveRunSessionRegistry"/> at detection time (null outside a run).
+/// §42.6 — <c>affected_frames</c> is filled the moment a row's <c>resolved_at</c> is stamped
+/// (a <c>recovered</c> action or the reconnect hook): the session's frames whose exposure
+/// window <c>[captured_utc, captured_utc + exposure_seconds]</c> overlapped the fault window
+/// <c>[detected_at, resolved_at]</c>. Resolve time is the earliest moment the correlation is
+/// complete — a frame in flight when the fault hit registers only after its download, well
+/// before any resolution, while correlating at detection would always be too early. Rows that
+/// never resolve keep an empty list: an outage that never ended "affects" the whole rest of
+/// the night, and listing every remaining frame would be noise, not signal.
 /// </summary>
 public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposable {
 
@@ -101,6 +110,11 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
                 update.Parameters.AddWithValue("$action", action);
                 update.Parameters.AddWithValue("$resolved", (object?)resolvedUtc?.ToString("O") ?? DBNull.Value);
                 if (await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0) {
+                    if (resolvedUtc is DateTimeOffset stamped) {
+                        // COALESCE kept an earlier resolved_at if one existed, in which case
+                        // this select-by-stamp finds nothing and the correlation is a no-op.
+                        await CorrelateAffectedFramesQuietlyAsync(conn, stamped.ToString("O"), ct).ConfigureAwait(false);
+                    }
                     return;
                 }
             }
@@ -125,6 +139,9 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             insert.Parameters.AddWithValue("$action", action);
             insert.Parameters.AddWithValue("$resolved", (object?)resolvedUtc?.ToString("O") ?? DBNull.Value);
             await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (resolvedUtc is DateTimeOffset stampedOnInsert) {
+                await CorrelateAffectedFramesQuietlyAsync(conn, stampedOnInsert.ToString("O"), ct).ConfigureAwait(false);
+            }
         } finally {
             _writeGate.Release();
         }
@@ -148,11 +165,83 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
             var resolved = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             if (resolved > 0) {
                 LogResolvedOnReconnect(deviceType, resolved);
+                await CorrelateAffectedFramesQuietlyAsync(conn, resolvedUtc.ToString("O"), ct).ConfigureAwait(false);
             }
             return resolved;
         } finally {
             _writeGate.Release();
         }
+    }
+
+    // §42.6 — fill affected_frames for every row whose resolved_at was JUST stamped with this
+    // exact timestamp: the session's frames whose exposure window overlapped the fault window.
+    // Best-effort by design — a correlation failure must never fail the resolve that triggered it.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort enrichment after the resolve has already committed: any read/parse/update fault here is logged and the fault row simply keeps an empty affected_frames. CA1031's log-and-recover boundary applies.")]
+    private async Task CorrelateAffectedFramesQuietlyAsync(SqliteConnection conn, string resolvedIso, CancellationToken ct) {
+        try {
+            var rows = new List<(string Id, string SessionId, DateTimeOffset Detected, DateTimeOffset Resolved)>();
+            await using (var select = conn.CreateCommand()) {
+                // Rows outside a run (session_id NULL) are skipped: §42.6 is the per-session
+                // timeline, and without a session there is no frame set to correlate against.
+                select.CommandText = """
+                    SELECT id, session_id, detected_at, resolved_at FROM faults
+                    WHERE resolved_at = $resolved AND session_id IS NOT NULL;
+                    """;
+                select.Parameters.AddWithValue("$resolved", resolvedIso);
+                await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+                    rows.Add((reader.GetString(0), reader.GetString(1),
+                        DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
+                        DateTimeOffset.Parse(reader.GetString(3), CultureInfo.InvariantCulture)));
+                }
+            }
+            foreach (var (id, sessionId, detected, resolved) in rows) {
+                var frames = await FindOverlappingFramesAsync(conn, sessionId, detected, resolved, ct).ConfigureAwait(false);
+                if (frames.Count == 0) {
+                    continue; // NULL means "none" to the reader — no update needed
+                }
+                await using var update = conn.CreateCommand();
+                update.CommandText = "UPDATE faults SET affected_frames = $frames WHERE id = $id;";
+                var array = new JsonArray();
+                foreach (var frameId in frames) {
+                    array.Add((JsonNode)frameId);
+                }
+                update.Parameters.AddWithValue("$frames", array.ToJsonString());
+                update.Parameters.AddWithValue("$id", id);
+                await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                LogFramesCorrelated(frames.Count, id);
+            }
+        } catch (Exception ex) {
+            LogCorrelationFailed(ex);
+        }
+    }
+
+    // A frame is affected when its exposure window [captured_utc, captured_utc + exposure_seconds]
+    // overlapped [detected, resolved]. ISO-8601 "O" UTC strings compare lexicographically in
+    // chronological order, so the upper bound prunes in SQL; the lower bound depends on each
+    // frame's exposure length, so it's applied in C# after parsing (a session's frame count is
+    // one night of subs — small).
+    private static async Task<List<string>> FindOverlappingFramesAsync(SqliteConnection conn,
+            string sessionId, DateTimeOffset detected, DateTimeOffset resolved, CancellationToken ct) {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT id, captured_utc, exposure_seconds FROM frames
+            WHERE session_id = $session AND captured_utc <= $windowEnd
+            ORDER BY captured_utc;
+            """;
+        cmd.Parameters.AddWithValue("$session", sessionId);
+        cmd.Parameters.AddWithValue("$windowEnd", resolved.ToString("O"));
+        var ids = new List<string>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+            var captured = DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture);
+            var exposureSec = reader.GetDouble(2);
+            if (captured + TimeSpan.FromSeconds(exposureSec) >= detected) {
+                ids.Add(reader.GetString(0));
+            }
+        }
+        return ids;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
@@ -281,4 +370,10 @@ public sealed partial class SqliteFaultLogService : IFaultLogService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Fault log: {DeviceType} reconnected — {Count} unresolved disconnect fault(s) marked resolved (§42.5)")]
     private partial void LogResolvedOnReconnect(DeviceType deviceType, int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Fault log: {Count} frame(s) correlated onto fault {FaultId} (§42.6)")]
+    private partial void LogFramesCorrelated(int count, string faultId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Fault log: §42.6 affected-frames correlation failed; the fault row keeps an empty list")]
+    private partial void LogCorrelationFailed(Exception ex);
 }

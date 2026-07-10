@@ -103,9 +103,15 @@ Missing, by user value:
   recovery), so guider link drops / star-lost episodes don't land in the `faults` table. If
   per-session guider fault history is wanted (§42.6 session badges), have the guider flow call
   `IFaultLogService` directly with its own action vocabulary.
-- **`affected_frames` is reserved, not populated.** The column + `FaultDto.AffectedFrames` ship
-  empty; populating them (correlate frames whose exposure overlapped the fault window, for the §42.6
-  image-library fault-icon overlay) is the §42.6 slice's work, alongside the WILMA surfaces.
+- ✅ **`affected_frames` populated — DONE (the sub-PR after #804, closing the §42 epic).** Filled
+  the moment `resolved_at` is stamped (both the `recovered` action paths and
+  `ResolveOnReconnectAsync`): the fault's session's frames whose exposure window
+  `[captured_utc, captured_utc + exposure_seconds]` overlapped `[detected_at, resolved_at]`
+  (upper bound pruned in SQL via lexicographic ISO-8601 compare; lower bound applied in C# since
+  it needs each frame's exposure length). Resolve time is the earliest complete moment — in-flight
+  frames register after download, well before resolution. Best-effort (a correlation failure never
+  fails the resolve). Deliberately empty for: rows outside a run (no session → no frame set) and
+  never-resolved rows (an outage that never ended "affects" the whole rest of the night — noise).
 - **Fault rows are never pruned.** Append-only like `diagnostic_events` (which has the same
   property); a long-lived daemon accumulates rows indefinitely. Fine at fault rates (rare events,
   small rows) — add a retention sweep only if a real catalog shows it mattering.
