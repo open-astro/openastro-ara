@@ -65,6 +65,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     internal Func<TimeSpan, TimeSpan> DelayShaper { get; set; } = static d => d;
     internal TimeSpan ConnectConfirmTimeout { get; set; } = TimeSpan.FromSeconds(12);
     internal TimeSpan ConnectPollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
+    // §42.3 linger phase — slow-cadence post-give-up re-adoption (~an hour at the defaults).
+    internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
+    internal int LingerMaxAttempts { get; set; } = 30;
 
     public FaultReactionService(
             EquipmentFaultHub? hub = null,
@@ -211,7 +214,16 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 }
             }
 
-            await ExecuteTerminalAsync(fault, plan, label, pausedRuns).ConfigureAwait(false);
+            var stillPaused = await ExecuteTerminalAsync(fault, plan, label, pausedRuns).ConfigureAwait(false);
+
+            // §42.3 — the ladder is ~2 min end-to-end, but real outages (a USB hub off for ten
+            // minutes, an AlpacaBridge host rebooting) outlive it. After the terminal action a
+            // DISCONNECT episode lingers at a slow cadence and re-adopts the device if it comes
+            // back — no user surgery. The episode keeps holding its device-type slot so a
+            // re-fire can't stack a second ladder on top of the linger.
+            if (fault.Kind == EquipmentFaultKind.Disconnected) {
+                await LingerForReadoptionAsync(fault, label, stillPaused).ConfigureAwait(false);
+            }
         } catch (OperationCanceledException) {
             // daemon shutting down — the episode just stops
         } catch (Exception ex) {
@@ -263,13 +275,16 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         LogEscalated(fault.DeviceType, terminal);
     }
 
-    private async Task ExecuteTerminalAsync(EquipmentFaultEvent fault, FaultPlan plan, string label,
+    // Returns the runs left paused by the terminal action (empty for abort/none), so the §42.3
+    // linger phase can resume exactly those on a late re-adoption.
+    private async Task<IReadOnlyList<Guid>> ExecuteTerminalAsync(EquipmentFaultEvent fault, FaultPlan plan, string label,
             IReadOnlyList<Guid> pausedRuns) {
         var terminal = plan.TerminalAction switch {
             FaultTerminalAction.PauseSequence => "pause_sequence",
             FaultTerminalAction.AbortAndPark => "abort_and_park",
             _ => "none",
         };
+        IReadOnlyList<Guid> stillPaused = [];
         var pausedNow = 0;
         var aborted = 0;
         var parked = false;
@@ -277,7 +292,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             case FaultTerminalAction.PauseSequence:
                 // Usually already paused up-front; this covers plans that skipped the
                 // pause (policy "pause" with no retries) or a run started mid-episode.
-                pausedNow = pausedRuns.Count > 0 ? pausedRuns.Count : (await PauseActiveRunsAsync().ConfigureAwait(false)).Count;
+                stillPaused = pausedRuns.Count > 0 ? pausedRuns : await PauseActiveRunsAsync().ConfigureAwait(false);
+                pausedNow = stillPaused.Count;
                 break;
             case FaultTerminalAction.AbortAndPark:
                 aborted = await AbortActiveRunsAsync().ConfigureAwait(false);
@@ -313,6 +329,70 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             + $"{(plan.RetrySchedule.Count > 0 ? $" after {plan.RetrySchedule.Count} attempts" : "")}{outcome}.")
             .ConfigureAwait(false);
         LogGaveUp(fault.DeviceType, plan.RetrySchedule.Count, terminal);
+        return stillPaused;
+    }
+
+    // §42.3 — the post-give-up linger: poll the device type's state at LingerInterval for up to
+    // LingerMaxAttempts (~an hour at the defaults). While the service reports Error the remembered
+    // device is re-dispatched through the same TryReconnectAsync the ladder uses; the moment the
+    // type reads Connected — whether the linger's own dispatch landed or the user re-seated a
+    // cable and the daemon auto-connected — the device is re-adopted: runs the terminal pause left
+    // paused are resumed, and the recovery is published + notified. A Disconnected state stops the
+    // linger silently: that is the shape of a DELIBERATE user disconnect (the services only park
+    // in Error on a lost device), and the daemon must not fight the user for the device.
+    private async Task LingerForReadoptionAsync(EquipmentFaultEvent fault, string label,
+            IReadOnlyList<Guid> pausedRuns) {
+        for (var attempt = 1; attempt <= LingerMaxAttempts; attempt++) {
+            await DelayAsync(LingerInterval).ConfigureAwait(false);
+            if (_cts.IsCancellationRequested) {
+                return;
+            }
+            var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
+            switch (state) {
+                case EquipmentConnectionState.Connected:
+                    break; // re-adopted (by us or by the user) — fall through to the celebration
+                case EquipmentConnectionState.Connecting:
+                    continue; // someone's connect is in flight — just wait for the verdict
+                case EquipmentConnectionState.Error:
+                    if (!await TryReconnectAsync(fault.DeviceType).ConfigureAwait(false)) {
+                        continue;
+                    }
+                    break; // the linger's own dispatch landed
+                default:
+                    // Disconnected (a deliberate user disconnect) or null (nothing remembered /
+                    // no service) — the device is no longer ours to chase.
+                    LogLingerStopped(fault.DeviceType, state);
+                    return;
+            }
+            var resumed = pausedRuns.Count > 0 ? await ResumeRunsAsync(pausedRuns).ConfigureAwait(false) : 0;
+            var n = attempt;
+            await PublishActionAsync(fault, "readopted", extra: p => {
+                p["linger_attempts"] = n;
+                p["resumed_runs"] = resumed;
+            }).ConfigureAwait(false);
+            await NotifyQuietlyAsync(NotificationSeverity.Info, $"{fault.DeviceType} re-adopted",
+                $"'{label}' came back after the recovery ladder had given up and was reconnected"
+                + $"{(resumed > 0 ? $"; {resumed} paused sequence run(s) resumed" : "")}.").ConfigureAwait(false);
+            LogReadopted(fault.DeviceType, attempt);
+            return;
+        }
+        LogLingerExhausted(fault.DeviceType, LingerMaxAttempts);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort linger poll: a state read fault counts as 'still gone' and the linger moves on; it must never abort the episode. CA1031's log-and-recover boundary applies.")]
+    private async Task<EquipmentConnectionState?> GetConnectionStateQuietlyAsync(DeviceType type) {
+        if (_reconnector is null) {
+            return null;
+        }
+        try {
+            return await _reconnector.GetConnectionStateAsync(type, _cts.Token).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            LogAttemptFailed("linger_state_poll", type, ex);
+            return EquipmentConnectionState.Error;
+        }
     }
 
     // ─── recovery attempts ───
@@ -546,6 +626,15 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: persistent op faults on {DeviceType} — escalated to '{Terminal}' (§42.2)")]
     private partial void LogEscalated(DeviceType deviceType, string terminal);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault reaction: {DeviceType} re-adopted on linger attempt {Attempt} (§42.3)")]
+    private partial void LogReadopted(DeviceType deviceType, int attempt);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault reaction: linger for {DeviceType} stopped — state {State} means the device is no longer ours to chase (§42.3)")]
+    private partial void LogLingerStopped(DeviceType deviceType, EquipmentConnectionState? state);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Fault reaction: linger for {DeviceType} exhausted after {Attempts} attempts — a manual reconnect will still be resolved by the §42.5 reconnect hook")]
+    private partial void LogLingerExhausted(DeviceType deviceType, int attempts);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: {Stage} attempt for {DeviceType} failed; the ladder moves on")]
     private partial void LogAttemptFailed(string stage, DeviceType deviceType, Exception ex);
