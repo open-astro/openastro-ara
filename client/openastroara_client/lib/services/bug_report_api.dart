@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 
@@ -6,21 +6,20 @@ import '../models/bug_report_preparation.dart';
 import '../models/server.dart';
 import 'content_disposition.dart';
 
-/// Result of a bug-report download: the ZIP bytes + the server-supplied file
-/// name (from `Content-Disposition`), used as the default Save-As name.
-typedef BugReportDownload = ({Uint8List bytes, String fileName});
-
 /// Abstraction over the §54 bug-report endpoints so the Support UI can be
 /// driven by a fake in widget tests.
 abstract interface class BugReportClient {
   /// `POST /api/v1/bugreport/prepare` — stage a diagnostic ZIP and describe it.
   Future<BugReportPreparation> prepare();
 
-  /// `GET /api/v1/bugreport/download?preparationId=…&acknowledge=pii` — the ZIP.
-  /// The `acknowledge=pii` parameter is required by the server (the bundle
-  /// carries logs + the full profile + the filesystem path), so this is only
-  /// called after the user confirms the PII disclosure.
-  Future<BugReportDownload> download(String preparationId);
+  /// `GET /api/v1/bugreport/download?preparationId=…&acknowledge=pii` — stream
+  /// the ZIP straight to [savePath], chunk by chunk, never buffering it whole
+  /// in memory. The `acknowledge=pii` parameter is required by the server (the
+  /// bundle carries logs + the full profile + the filesystem path), so this is
+  /// only called after the user confirms the PII disclosure. Returns the
+  /// server's `Content-Disposition` file name (informational — the file is at
+  /// [savePath]).
+  Future<String> downloadTo(String savePath, String preparationId);
 
   void close();
 }
@@ -52,27 +51,31 @@ class BugReportApi implements BugReportClient {
   }
 
   @override
-  Future<BugReportDownload> download(String preparationId) async {
-    final res = await _dio.get<List<int>>(
+  Future<String> downloadTo(String savePath, String preparationId) async {
+    // dio.download streams the body to the path — the multi-log ZIP never sits
+    // whole in client memory.
+    final res = await _dio.download(
       '/api/v1/bugreport/download',
+      savePath,
       queryParameters: <String, dynamic>{
         'preparationId': preparationId,
         // Required server-side PII gate (403 without it).
         'acknowledge': 'pii',
       },
-      options: Options(responseType: ResponseType.bytes),
     );
-    final bytes = Uint8List.fromList(res.data ?? const <int>[]);
-    // The bundle always carries system-info.json server-side, so a 0-byte body is
-    // a malformed response — fail rather than save an empty ZIP under a "Saved"
-    // toast (mirrors prepare()'s null-data guard).
-    if (bytes.isEmpty) {
+    // The bundle always carries system-info.json server-side, so a 0-byte body
+    // is a malformed response — remove the empty file rather than leaving it
+    // under a "Saved" toast (mirrors prepare()'s null-data guard).
+    final file = File(savePath);
+    if (!await file.exists() || await file.length() == 0) {
+      if (await file.exists()) {
+        await file.delete();
+      }
       throw StateError('Bug-report download returned an empty body.');
     }
-    final name =
-        fileNameFromContentDisposition(res.headers.value('content-disposition')) ??
-            'openastroara-bug-report.zip';
-    return (bytes: bytes, fileName: name);
+    return fileNameFromContentDisposition(
+            res.headers.value('content-disposition')) ??
+        'openastroara-bug-report.zip';
   }
 
   @override

@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,11 +25,14 @@ class _FakeBugReportClient implements BugReportClient {
     );
   }
 
+  String? lastSavePath;
+
   @override
-  Future<BugReportDownload> download(String preparationId) async {
+  Future<String> downloadTo(String savePath, String preparationId) async {
     downloadCalls++;
     lastDownloadId = preparationId;
-    return (bytes: Uint8List.fromList(const [0x50, 0x4b, 0x03, 0x04]), fileName: 'bugreport-x.zip');
+    lastSavePath = savePath;
+    return 'bugreport-x.zip';
   }
 
   @override
@@ -45,7 +46,15 @@ Widget _host(_FakeBugReportClient api) => ProviderScope(
           return api;
         }),
       ],
-      child: const MaterialApp(home: Scaffold(body: BugReportCard())),
+      child: MaterialApp(
+        home: Scaffold(
+          // A canned Save-As path stands in for the OS dialog (no platform
+          // channel under widget tests); the streaming download receives it.
+          body: BugReportCard(
+            savePathPicker: (_, name) async => '/tmp/$name',
+          ),
+        ),
+      ),
     );
 
 void main() {
@@ -92,6 +101,8 @@ void main() {
 
     expect(api.downloadCalls, 1);
     expect(api.lastDownloadId, 'abc-123');
+    expect(api.lastSavePath, '/tmp/openastroara-bug-report.zip',
+        reason: 'the picked path is chosen BEFORE the download and streamed to');
   });
 
   testWidgets('a prepare failure shows an error and never opens the dialog',

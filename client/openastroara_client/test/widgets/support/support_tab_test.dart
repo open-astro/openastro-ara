@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,10 +29,13 @@ class _FakeLogsClient implements LogsClient {
     return entries;
   }
 
+  String? lastSavePath;
+
   @override
-  Future<LogDownload> downloadLog({String? logFileName}) async {
+  Future<String> downloadLogTo(String savePath, {String? logFileName}) async {
     downloadCalls++;
-    return (bytes: Uint8List(0), fileName: 'openastroara-20260620.log');
+    lastSavePath = savePath;
+    return 'openastroara-20260620.log';
   }
 
   @override
@@ -57,7 +58,12 @@ Widget _host(_FakeLogsClient api) => ProviderScope(
           return api;
         }),
       ],
-      child: const MaterialApp(home: Scaffold(body: SupportTab())),
+      child: MaterialApp(
+        home: Scaffold(
+          // Canned Save-As path — no platform channel under widget tests.
+          body: SupportTab(savePathPicker: (_, name) async => '/tmp/$name'),
+        ),
+      ),
     );
 
 void main() {

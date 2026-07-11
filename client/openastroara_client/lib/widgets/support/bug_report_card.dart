@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../util/stream_save_location.dart';
 
 import '../../models/bug_report_preparation.dart';
 import '../../state/support/bug_report_state.dart';
@@ -11,7 +12,14 @@ import '../../state/support/bug_report_state.dart';
 /// before the server will serve it via `?acknowledge=pii`), then downloads the
 /// ZIP to a chosen path.
 class BugReportCard extends ConsumerStatefulWidget {
-  const BugReportCard({super.key});
+  /// Test seam for the OS save-location dialog (no platform channel under
+  /// widget tests). Returns the destination path, or null on cancel.
+  /// Production leaves it null → [pickStreamSavePath] (directory picker +
+  /// collision-safe file name, so the download can stream to the path).
+  final Future<String?> Function(String dialogTitle, String suggestedName)?
+      savePathPicker;
+
+  const BugReportCard({super.key, this.savePathPicker});
 
   @override
   ConsumerState<BugReportCard> createState() => _BugReportCardState();
@@ -32,19 +40,17 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       final proceed = await _showDisclosure(prep);
       if (!mounted || proceed != true) return;
 
-      final dl = await api.download(prep.preparationId);
+      // Path first, then STREAM the ZIP to it — the bundle is written chunk by
+      // chunk instead of being buffered whole in memory (§54 follow-up).
+      final pick = widget.savePathPicker ?? pickStreamSavePath;
+      final savePath = await pick(
+          'Choose where to save the bug report', 'openastroara-bug-report.zip');
+      if (!mounted || savePath == null) return;
+      final name = await api.downloadTo(savePath, prep.preparationId);
       if (!mounted) return;
-      final saved = await FilePicker.saveFile(
-        dialogTitle: 'Save bug report',
-        fileName: dl.fileName,
-        bytes: dl.bytes,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved $name')),
       );
-      if (!mounted) return;
-      if (saved != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved ${dl.fileName}')),
-        );
-      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
