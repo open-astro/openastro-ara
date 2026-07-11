@@ -692,12 +692,15 @@ Remaining: the
 focuser-hardware blocker). Of the §58 profile block only `refocus_after_flip`/`guider_recal` mode enums
 remain un-modelled (they land with the refocus/recal orchestration they configure); `first_flip_confirmed` shipped with §58.8.
 
-### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
-`SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
-per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at current scale over the
-embedded SQLite file (in-process, sub-ms each → tens of ms for a page), but a catalog with hundreds of nights
-would benefit from batching the per-filter + coverage queries via `IN ($ids)` / a single GROUP BY pass and
-assembling the DTOs in code. Same N-query shape in `SqliteDarkLibraryService`'s coverage loops (one COUNT per requested combination — fine at real dark-matrix sizes, from the #672 review). Defer until catalog sizes warrant it. The cursor is also a plain integer OFFSET (same pattern as the §28 frame repo), so a session inserted between page fetches can repeat/skip a row; the eventual keyset-pagination migration over captured_utc covers both.
+### ✅ §39 calibration — ListSessions O(N) queries + OFFSET cursor — DONE (2026-07-10)
+`ListSessionsAsync` now assembles a page in **6 queries total** (page ids + batched `IN ($ids)`
+header/filters/flats-coverage/darks-coverage/profile passes; the coverage EXCEPTs became NOT EXISTS with
+SQLite's null-safe `IS`, same semantics incl. the uncooled COALESCE bucketing) and the cursor is **keyset**
+over the raw stored `(MIN(captured_utc), session_id)` pair — byte-identical string comparison, deterministic
+session_id tiebreaker (the old ORDER BY had none), stable when sessions land mid-pagination. A legacy integer
+cursor from a pre-upgrade response still pages via the OFFSET path; new responses always mint keyset cursors.
+`BuildSessionDtoAsync` stays for the single-session GET. Remaining (deliberately): `SqliteDarkLibraryService`'s
+one-COUNT-per-combination coverage loop — fine at real dark-matrix sizes (from the #672 review).
 
 ## §63.5 guider-e-2 — follow-ups (2026-06-11, from the #372 push review)
 The §63.5 on-connect push (`PHD2Guider.GuiderEngineConfig.cs`, #372) shipped the core map-and-push; two

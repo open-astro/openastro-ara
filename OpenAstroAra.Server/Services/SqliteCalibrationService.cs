@@ -64,52 +64,222 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         _profile = profile;
     }
 
+    // Keyset cursor prefix. captured_utc is stored as ISO-8601 "O" (fixed-width, UTC), so string
+    // comparison IS chronological comparison — the keyset predicate runs directly on the stored text.
+    private const string KeysetCursorPrefix = "k2:";
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "CommandText is a ternary over two compile-time constant literals (keyset vs legacy-offset page query); the cursor's parsed pieces only ever reach bound $ parameters, never the text.")]
     public async Task<CursorPage<CalibrationSessionDto>> ListSessionsAsync(int limit, string? cursor, CancellationToken ct) {
-        var offset = 0;
-        if (!string.IsNullOrEmpty(cursor) && int.TryParse(cursor, out var parsed) && parsed >= 0) {
-            offset = parsed;
-        }
         var pageSize = Math.Clamp(limit, 1, 200);
+
+        // The cursor is opaque wire-contract-wise, so its format can evolve server-side: new cursors are
+        // keyset ("k2:{startedUtc}|{sessionId}" of the page's last row — O(log n) per page and stable when
+        // sessions land mid-pagination), while a bare integer from a response minted before this change
+        // still pages via the legacy OFFSET path so an in-flight pagination doesn't break.
+        string? afterStarted = null, afterSid = null;
+        var offset = 0;
+        if (!string.IsNullOrEmpty(cursor)) {
+            if (cursor.StartsWith(KeysetCursorPrefix, StringComparison.Ordinal)
+                    && cursor.IndexOf('|', StringComparison.Ordinal) is var sep && sep > KeysetCursorPrefix.Length) {
+                afterStarted = cursor[KeysetCursorPrefix.Length..sep];
+                afterSid = cursor[(sep + 1)..];
+            } else if (int.TryParse(cursor, out var parsed) && parsed >= 0) {
+                offset = parsed;
+            }
+        }
 
         await using var conn = _db.OpenConnection();
 
-        // Page over the sessions that have LIGHT frames, newest first. Fetch one extra row to know if there's
-        // a next page without a second COUNT query.
-        var ids = new List<Guid>();
+        // Page over the sessions that have LIGHT frames, newest first (session_id is the deterministic
+        // tiebreaker — equal timestamps must not reorder between pages). Fetch one extra row to know if
+        // there's a next page without a second COUNT query. Started is kept as the RAW stored string:
+        // the next cursor must compare byte-identically against captured_utc, so it never round-trips
+        // through DateTimeOffset (which would rewrite the "+00:00" suffix and break tie comparisons).
+        var rows = new List<(Guid Id, string Sid, string Started)>();
         await using (var cmd = conn.CreateCommand()) {
-            cmd.CommandText = """
-                SELECT session_id
-                FROM frames
-                WHERE frame_type = 'light'
-                GROUP BY session_id
-                ORDER BY MIN(captured_utc) DESC
-                LIMIT $limit OFFSET $offset;
-                """;
+            cmd.CommandText = afterStarted is not null
+                ? """
+                  SELECT session_id, MIN(captured_utc) AS started
+                  FROM frames
+                  WHERE frame_type = 'light'
+                  GROUP BY session_id
+                  HAVING started < $cStarted OR (started = $cStarted AND session_id < $cSid)
+                  ORDER BY started DESC, session_id DESC
+                  LIMIT $limit;
+                  """
+                : """
+                  SELECT session_id, MIN(captured_utc) AS started
+                  FROM frames
+                  WHERE frame_type = 'light'
+                  GROUP BY session_id
+                  ORDER BY started DESC, session_id DESC
+                  LIMIT $limit OFFSET $offset;
+                  """;
             cmd.Parameters.AddWithValue("$limit", pageSize + 1);
-            cmd.Parameters.AddWithValue("$offset", offset);
+            if (afterStarted is not null) {
+                cmd.Parameters.AddWithValue("$cStarted", afterStarted);
+                cmd.Parameters.AddWithValue("$cSid", afterSid!);
+            } else {
+                cmd.Parameters.AddWithValue("$offset", offset);
+            }
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) {
-                if (Guid.TryParse(reader.GetString(0), out var id)) {
-                    ids.Add(id);
+                var sid = reader.GetString(0);
+                if (Guid.TryParse(sid, out var id)) {
+                    rows.Add((id, sid, reader.GetString(1)));
                 }
             }
         }
 
-        var hasMore = ids.Count > pageSize;
+        var hasMore = rows.Count > pageSize;
         if (hasMore) {
-            ids.RemoveAt(ids.Count - 1);
+            rows.RemoveAt(rows.Count - 1);
         }
 
+        var items = await BuildSessionDtosAsync(conn, rows, ct);
+
+        // The keyset anchor is the last row that stays ON the page — its raw (started, session_id) pair.
+        var nextCursor = hasMore && rows.Count > 0
+            ? KeysetCursorPrefix + rows[^1].Started + "|" + rows[^1].Sid
+            : null;
+        return new CursorPage<CalibrationSessionDto>(items, nextCursor, hasMore && nextCursor is not null);
+    }
+
+    // Batched page assembly (§39 perf): the per-session BuildSessionDtoAsync runs 5 queries per id —
+    // 5N+1 per page. This runs the same 5 aggregations ONCE each over the whole page's id set
+    // (session_id IN (...)), so a page costs 6 queries total regardless of size.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The composed fragment is a parameter-placeholder list ($s0,$s1,…) generated locally; every value is bound as a parameter. No user input reaches the command text.")]
+    private static async Task<List<CalibrationSessionDto>> BuildSessionDtosAsync(
+            SqliteConnection conn, List<(Guid Id, string Sid, string Started)> ids, CancellationToken ct) {
         var items = new List<CalibrationSessionDto>(ids.Count);
-        foreach (var id in ids) {
-            var dto = await BuildSessionDtoAsync(conn, id, ct);
-            if (dto != null) {
-                items.Add(dto);
+        if (ids.Count == 0) {
+            return items;
+        }
+        var placeholders = string.Join(",", Enumerable.Range(0, ids.Count).Select(i => "$s" + i.ToString(CultureInfo.InvariantCulture)));
+        void BindIds(SqliteCommand cmd) {
+            for (var i = 0; i < ids.Count; i++) {
+                cmd.Parameters.AddWithValue("$s" + i.ToString(CultureInfo.InvariantCulture), ids[i].Sid);
             }
         }
 
-        var nextCursor = hasMore ? (offset + pageSize).ToString(CultureInfo.InvariantCulture) : null;
-        return new CursorPage<CalibrationSessionDto>(items, nextCursor, hasMore);
+        // 1) Session headers from their LIGHT frames.
+        var headers = new Dictionary<string, (int Count, DateTimeOffset Start, DateTimeOffset End, string Target)>(StringComparer.Ordinal);
+        await using (var cmd = conn.CreateCommand()) {
+            cmd.CommandText = $"""
+                SELECT session_id, COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name)
+                FROM frames
+                WHERE frame_type = 'light' AND session_id IN ({placeholders})
+                GROUP BY session_id;
+                """;
+            BindIds(cmd);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) {
+                headers[reader.GetString(0)] = (
+                    reader.GetInt32(1),
+                    ParseUtc(reader.GetString(2)),
+                    ParseUtc(reader.GetString(3)),
+                    await reader.IsDBNullAsync(4, ct) ? "(unknown)" : reader.GetString(4));
+            }
+        }
+
+        // 2) Per-filter summaries.
+        var filtersBySession = new Dictionary<string, List<CalibrationFilterSummaryDto>>(StringComparer.Ordinal);
+        await using (var cmd = conn.CreateCommand()) {
+            cmd.CommandText = $"""
+                SELECT session_id, filter_name, COUNT(*), AVG(exposure_seconds)
+                FROM frames
+                WHERE frame_type = 'light' AND session_id IN ({placeholders})
+                GROUP BY session_id, filter_name
+                ORDER BY session_id, filter_name;
+                """;
+            BindIds(cmd);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) {
+                var sid = reader.GetString(0);
+                if (!filtersBySession.TryGetValue(sid, out var list)) {
+                    filtersBySession[sid] = list = [];
+                }
+                list.Add(new CalibrationFilterSummaryDto(
+                    FilterName: await reader.IsDBNullAsync(1, ct) ? NoFilter : reader.GetString(1),
+                    LightFrameCount: reader.GetInt32(2),
+                    MeanExposureSeconds: await reader.IsDBNullAsync(3, ct) ? 0 : reader.GetDouble(3),
+                    RecommendedFlatFrames: DefaultFlatFrames));
+            }
+        }
+
+        // 3+4) Coverage — the sessions with at least one UNCOVERED requirement. Same semantics as the
+        // per-session EXCEPT queries (coverage is GLOBAL: flats/darks are a shared library), expressed as
+        // NOT EXISTS with SQLite's null-safe IS so a no-filter light still matches a no-filter flat.
+        var flatsUncovered = await UncoveredSessionsAsync(conn, $"""
+            SELECT DISTINCT l.session_id
+            FROM frames l
+            WHERE l.frame_type = 'light' AND l.session_id IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM frames f
+                  WHERE f.frame_type = 'flat' AND f.filter_name IS l.filter_name)
+            """, BindIds, ct);
+        // Darks match by (exposure, gain, temperature bucketed to the nearest whole degree; NULL buckets
+        // with 0 for uncooled cameras across sentinel generations — see BuildSessionDtoAsync's remarks).
+        var darksUncovered = await UncoveredSessionsAsync(conn, $"""
+            SELECT DISTINCT l.session_id
+            FROM frames l
+            WHERE l.frame_type = 'light' AND l.session_id IN ({placeholders})
+              AND NOT EXISTS (
+                  SELECT 1 FROM frames d
+                  WHERE d.frame_type = 'dark'
+                    AND d.exposure_seconds IS l.exposure_seconds
+                    AND d.gain IS l.gain
+                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS ROUND(COALESCE(l.temperature_c, 0), 0))
+            """, BindIds, ct);
+
+        // 5) Owning profile ids.
+        var profiles = new Dictionary<string, string>(StringComparer.Ordinal);
+        await using (var cmd = conn.CreateCommand()) {
+            cmd.CommandText = $"SELECT id, profile_id FROM sessions WHERE id IN ({placeholders});";
+            BindIds(cmd);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct)) {
+                if (!await reader.IsDBNullAsync(1, ct) && reader.GetString(1) is { Length: > 0 } pid) {
+                    profiles[reader.GetString(0)] = pid;
+                }
+            }
+        }
+
+        // Assemble in page order. A missing header means the session's lights vanished between the page
+        // query and here (raced deletion) — skip it, matching the old per-session null contract.
+        foreach (var (id, sid, _) in ids) {
+            if (!headers.TryGetValue(sid, out var h)) {
+                continue;
+            }
+            items.Add(new CalibrationSessionDto(
+                Id: id,
+                TargetName: h.Target,
+                SessionStartUtc: h.Start,
+                SessionEndUtc: h.End,
+                LightFrameCount: h.Count,
+                FiltersUsed: filtersBySession.GetValueOrDefault(sid) ?? [],
+                MatchingFlatsAvailable: !flatsUncovered.Contains(sid),
+                MatchingDarksAvailable: !darksUncovered.Contains(sid),
+                ProfileId: profiles.GetValueOrDefault(sid)));
+        }
+        return items;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The 'sql' argument is a locally-composed literal whose only interpolation is the generated parameter-placeholder list; all values are bound parameters.")]
+    private static async Task<HashSet<string>> UncoveredSessionsAsync(
+            SqliteConnection conn, string sql, Action<SqliteCommand> bind, CancellationToken ct) {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql + ";";
+        bind(cmd);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            result.Add(reader.GetString(0));
+        }
+        return result;
     }
 
     public async Task<CalibrationSessionDto?> GetSessionAsync(Guid id, CancellationToken ct) {
