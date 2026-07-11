@@ -67,6 +67,10 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     private string _source = "none";
     private string _trust = "none";
     private DateTimeOffset? _syncedAtUtc;
+    // Freshness is measured on the MONOTONIC clock (#832 r1): comparing _syncedAtUtc (corrected,
+    // pushed time) against the raw system clock breaks exactly when the clock-set fails — a Pi
+    // booting near epoch would read as "fresh forever", one ahead by an hour as instantly stale.
+    private long? _syncedAtTickMs;
     private TimeSyncLocationDto? _location;
     // Non-zero only when a push couldn't set the OS clock: pushed-time minus system-time at push,
     // re-reported on GET so a consumer that cares can correct. Zeroed by a successful set.
@@ -78,6 +82,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     // daemon shouldn't make unprompted, and false only makes the client push time it already has
     // (a harmless extra sync), never skip one.
     internal Func<DateTimeOffset> Now { get; set; } = () => DateTimeOffset.UtcNow;
+    internal Func<long> TickMs { get; set; } = () => Environment.TickCount64;
     internal Func<bool> GpsDeviceProbe { get; set; } = ProbeGpsDevices;
     internal Func<bool> InternetProbe { get; set; } = () => false;
 
@@ -92,19 +97,23 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     public Task<TimeSyncStateDto> GetStateAsync(CancellationToken ct) {
         string source, trust;
         DateTimeOffset? syncedAt;
+        long? syncedAtTick;
         TimeSyncLocationDto? location;
         double offset;
         lock (_gate) {
             source = _source;
             trust = _trust;
             syncedAt = _syncedAtUtc;
+            syncedAtTick = _syncedAtTickMs;
             location = _location;
             offset = _trackedOffsetSeconds;
         }
         var now = Now();
         // §31.1: the waterfall proceeds only on a fresh (< 1 h), at-least-medium-trust sync.
-        var synced = syncedAt is { } at
-            && now - at < Freshness
+        // Elapsed time comes from the monotonic clock, never from subtracting the (possibly
+        // uncorrected) system clock from the (corrected) pushed instant.
+        var synced = syncedAtTick is { } tick
+            && TimeSpan.FromMilliseconds(TickMs() - tick) < Freshness
             && trust is "high" or "medium";
         return Task.FromResult(new TimeSyncStateDto(
             Synced: synced,
@@ -118,8 +127,22 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             SyncedAtUtc: syncedAt));
     }
 
+    // A pushed time outside this window is a malformed request, not a plausible clock: a request
+    // body missing time_utc deserializes to year 1, and clock_settime would faithfully apply it
+    // to the real Pi under CAP_SYS_TIME (#832 r1). GPS-era lower bound, generous upper.
+    private static readonly DateTimeOffset MinPlausibleTime = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset MaxPlausibleTime = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     public Task<TimeSyncPushResultDto> PushAsync(TimeSyncPushRequestDto request, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.TimeUtc < MinPlausibleTime || request.TimeUtc > MaxPlausibleTime) {
+            throw new TimeSyncInvalidRequestException(
+                $"time_utc '{request.TimeUtc:O}' is outside the plausible window ({MinPlausibleTime:yyyy}–{MaxPlausibleTime:yyyy}) — refusing to set the system clock to it.");
+        }
+        if (request.Location is { } l && (l.Lat is < -90 or > 90 || l.Lng is < -180 or > 180)) {
+            throw new TimeSyncInvalidRequestException(
+                $"location ({l.Lat}, {l.Lng}) is outside valid latitude/longitude ranges.");
+        }
         // §31.2 — the wire source maps to a state source + a trust CEILING the request can't
         // exceed (a client claiming "high" for a manual entry stays low).
         var (stateSource, maxTrust) = request.Source?.Trim().ToLowerInvariant() switch {
@@ -134,10 +157,9 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         var before = Now();
         var beforeOffset = (request.TimeUtc - before).TotalSeconds;
         var clockSet = TrySetClock(request.TimeUtc);
-        var after = Now();
         // A successful set leaves ~0 residual (the set itself takes microseconds); a failed one
         // leaves the whole pushed offset outstanding, tracked for GET.
-        var afterOffset = clockSet ? (request.TimeUtc - after).TotalSeconds + (after - before).TotalSeconds : beforeOffset;
+        var afterOffset = clockSet ? 0.0 : beforeOffset;
 
         var locationUpdated = request.Location is not null && TryApplyLocation(request.Location);
 
@@ -145,15 +167,16 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             _source = stateSource;
             _trust = trust;
             _syncedAtUtc = request.TimeUtc;
+            _syncedAtTickMs = TickMs();
             if (request.Location is not null) {
                 _location = request.Location;
             }
-            _trackedOffsetSeconds = clockSet ? 0.0 : beforeOffset;
+            _trackedOffsetSeconds = afterOffset;
         }
         LogSyncApplied(stateSource, trust, beforeOffset, clockSet);
         return Task.FromResult(new TimeSyncPushResultDto(
             Before: new TimeSyncBeforeAfterDto(before, beforeOffset),
-            After: new TimeSyncBeforeAfterDto(clockSet ? request.TimeUtc : after, clockSet ? 0.0 : afterOffset),
+            After: new TimeSyncBeforeAfterDto(clockSet ? request.TimeUtc : Now(), afterOffset),
             LocationUpdated: locationUpdated,
             ClockSet: clockSet));
     }
@@ -235,9 +258,18 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     partial void LogLocationWriteFailed(Exception ex);
 }
 
-/// <summary>Thrown by <see cref="TimeSyncService.PushAsync"/> for a source outside the §31.3
-/// wire set. The endpoint maps it to <c>422 Unprocessable Entity</c>.</summary>
-public sealed class TimeSyncInvalidSourceException : Exception {
+/// <summary>Thrown by <see cref="TimeSyncService.PushAsync"/> for a malformed push — an
+/// implausible time (a missing <c>time_utc</c> deserializes to year 1 and would be applied to
+/// the real clock under CAP_SYS_TIME), an out-of-range location, or an unknown source (the
+/// derived type). The endpoint maps it to <c>422 Unprocessable Entity</c>.</summary>
+public class TimeSyncInvalidRequestException : Exception {
+    public TimeSyncInvalidRequestException() { }
+    public TimeSyncInvalidRequestException(string message) : base(message) { }
+    public TimeSyncInvalidRequestException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>A source outside the §31.3 wire set (<c>client|gps-mobile|manual</c>).</summary>
+public sealed class TimeSyncInvalidSourceException : TimeSyncInvalidRequestException {
     public TimeSyncInvalidSourceException() { }
     public TimeSyncInvalidSourceException(string message) : base(message) { }
     public TimeSyncInvalidSourceException(string message, Exception innerException) : base(message, innerException) { }

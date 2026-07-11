@@ -56,7 +56,7 @@ public static class ServerStateEndpoints {
                 async (TimeSyncPushRequestDto request, ITimeSyncService svc, CancellationToken ct) => {
                     try {
                         return Results.Ok(await svc.PushAsync(request, ct));
-                    } catch (TimeSyncInvalidSourceException ex) {
+                    } catch (TimeSyncInvalidRequestException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
                     }
                 })

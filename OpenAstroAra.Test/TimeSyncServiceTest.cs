@@ -50,6 +50,7 @@ namespace OpenAstroAra.Test {
                 GpsDeviceProbe = () => false,
             };
             svc.Now = () => now ?? T0;
+            svc.TickMs = () => 0;
             return svc;
         }
 
@@ -131,17 +132,59 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_sync_goes_stale_after_an_hour() {
+        public async Task A_sync_goes_stale_after_an_hour_of_monotonic_time() {
             var svc = NewService();
             await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
 
-            svc.Now = () => T0.AddMinutes(59);
+            svc.TickMs = () => 59L * 60 * 1000;
             Assert.That((await svc.GetStateAsync(CancellationToken.None)).Synced, Is.True);
 
-            svc.Now = () => T0.AddMinutes(61);
+            svc.TickMs = () => 61L * 60 * 1000;
             var state = await svc.GetStateAsync(CancellationToken.None);
             Assert.That(state.Synced, Is.False, "> 1 h old → the waterfall re-runs");
             Assert.That(state.Source, Is.EqualTo("client"), "the stale source is still reported for detail");
+        }
+
+        [Test]
+        public async Task Freshness_survives_a_wildly_wrong_system_clock_when_the_set_fails() {
+            // #832 r1 — the degrade path this feature exists for: an RTC-less Pi boots near epoch,
+            // the clock-set fails (no CAP_SYS_TIME), and freshness must still be measured by
+            // ELAPSED time, not by subtracting the bogus system clock from the corrected instant.
+            var systemNow = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero); // 26 years behind
+            var svc = NewService(new FakeClockSetter { Succeeds = false }, now: systemNow);
+            await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
+
+            svc.TickMs = () => 30L * 60 * 1000; // 30 real minutes later
+            Assert.That((await svc.GetStateAsync(CancellationToken.None)).Synced, Is.True,
+                "30 real minutes after the push the sync is still fresh, whatever the raw clock says");
+
+            svc.TickMs = () => 2L * 60 * 60 * 1000; // 2 real hours later
+            Assert.That((await svc.GetStateAsync(CancellationToken.None)).Synced, Is.False,
+                "2 real hours later it is stale — a clock 26 years behind must not read as fresh forever");
+        }
+
+        [Test]
+        public void An_implausible_time_is_refused_before_touching_the_clock() {
+            var setter = new FakeClockSetter();
+            var svc = NewService(setter);
+            // A request body missing time_utc deserializes to default(DateTimeOffset) — year 1.
+            Assert.That(async () => await svc.PushAsync(new TimeSyncPushRequestDto("client", default), CancellationToken.None),
+                Throws.InstanceOf<TimeSyncInvalidRequestException>());
+            Assert.That(async () => await svc.PushAsync(
+                    new TimeSyncPushRequestDto("client", new DateTimeOffset(2150, 1, 1, 0, 0, 0, TimeSpan.Zero)), CancellationToken.None),
+                Throws.InstanceOf<TimeSyncInvalidRequestException>());
+            Assert.That(setter.LastSet, Is.Null, "the clock setter is never reached with an implausible time");
+        }
+
+        [Test]
+        public void An_out_of_range_location_is_refused() {
+            var svc = NewService();
+            Assert.That(async () => await svc.PushAsync(
+                    new TimeSyncPushRequestDto("client", T0, new TimeSyncLocationDto(91, 0, 0)), CancellationToken.None),
+                Throws.InstanceOf<TimeSyncInvalidRequestException>());
+            Assert.That(async () => await svc.PushAsync(
+                    new TimeSyncPushRequestDto("client", T0, new TimeSyncLocationDto(0, -181, 0)), CancellationToken.None),
+                Throws.InstanceOf<TimeSyncInvalidRequestException>());
         }
 
         [Test]
