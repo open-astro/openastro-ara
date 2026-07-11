@@ -69,4 +69,8 @@ public sealed record ProfileSnapshotDto(
     // §59.2 Smart Focus calibration — daemon-owned derived data, not a user setting. Unlike every
     // other section, null is MEANINGFUL ("not calibrated") and the normalizer deliberately passes
     // it through instead of back-filling a default.
-    FocusCalibrationDto? FocusCalibration = null);
+    FocusCalibrationDto? FocusCalibration = null,
+    // §30.7.4 calibration-state block (guider slice, e-4b-2) — daemon-owned validity records the
+    // dark-library / defect-map builds stamp on completion. Optional so older profile.json keeps
+    // deserializing; the normalizer back-fills null to the everything-invalid default.
+    CalibrationStateDto? CalibrationState = null);

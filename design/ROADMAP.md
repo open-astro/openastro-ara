@@ -111,8 +111,12 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   endpoint to know the source profile) and `rename_profile` (the twin's name embeds the stable
   profile id, so an ARA rename re-maps on next connect via create — a rename RPC would preserve
   calibration across renames; both are enhancement-grade, not orphan-grade).
-- **e-4b-2 leftover** — record `calibration_state.guider.dark_library` on build completion
-  (waits on a server-side calibration-state store existing).
+- ~~**e-4b-2 leftover**~~ — shipped: the §30.7.4 `calibration_state` profile section now exists
+  (guider slice: `dark_library` + `defect_map`, each `{valid, last_built_at}`) and a completed
+  dark-library or defect-map build stamps its entry best-effort after the complete WS event;
+  read-only `GET /api/v1/profile/calibration-state`; carried across profile select, cleared for
+  never-built profiles, stripped from share export. Other subsystems (mount model, PA) can join
+  the block when their calibrations land server-side.
 - ~~**Poll-failure visibility**~~ (#770 round-2) — shipped: `PollBuildProgressAsync` logs ONE
   Warning per build after 5 consecutive failed polls, plus a drain-time Warning when a whole
   build produced zero successful reads (covers builds shorter than the streak threshold); the

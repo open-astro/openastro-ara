@@ -84,7 +84,19 @@ public static class ProfileSnapshotNormalizer {
             FilterSet = filterSet,
             FilterWheelLabels = wheelLabels,
             CustomHorizon = customHorizon,
+            // e-4b-2 — back-fill missing entries too (an older file could carry a partial
+            // block); never-calibrated is the safe default for any hole.
+            CalibrationState = NormalizeCalibrationState(snap.CalibrationState),
         };
+    }
+
+    private static CalibrationStateDto NormalizeCalibrationState(CalibrationStateDto? state) {
+        if (state is null) {
+            return CalibrationStateDto.Empty;
+        }
+        return new CalibrationStateDto(
+            DarkLibrary: (GuiderCalibrationEntryDto?)state.DarkLibrary ?? new GuiderCalibrationEntryDto(),
+            DefectMap: (GuiderCalibrationEntryDto?)state.DefectMap ?? new GuiderCalibrationEntryDto());
     }
 
     private static ProfileSnapshotDto BuildDefaults() => new(

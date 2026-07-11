@@ -173,6 +173,10 @@ public sealed partial class GuiderService {
                 ["exposure_count"] = result.ExposureCount,
                 ["exposures_ms"] = exposures,
             });
+            // §63.6 step 6 / §30.7.4 (e-4b-2): stamp calibration_state.guider.dark_library in the active
+            // profile so "when did I last build darks?" survives restarts. AFTER the complete event —
+            // the profile write must never delay or fail the client-visible completion signal.
+            RecordCalibrationBuilt(darkLibrary: true);
         } catch (Exception ex) {
             LogDarkLibraryBuildFailed(ex);
             await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
@@ -420,6 +424,8 @@ public sealed partial class GuiderService {
                 ["exposure_ms"] = result.ExposureMs,
                 ["frame_count"] = result.FrameCount,
             });
+            // §30.7.4 (e-4b-2): same stamp as the dark-library path, defect_map entry.
+            RecordCalibrationBuilt(darkLibrary: false);
         } catch (Exception ex) {
             LogDefectMapBuildFailed(ex);
             await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
@@ -435,6 +441,34 @@ public sealed partial class GuiderService {
             }
         }
     }
+
+    /// <summary>§30.7.4 (e-4b-2): best-effort write of the guider calibration-state entry after a build
+    /// completes. Read-modify-write is safe without extra locking: both build paths run under the shared
+    /// single-build gate, so there is never a concurrent writer of this section.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort boundary: a profile-store write failure (disk full, IO error mid-persist) must not fail the already-completed build or become an unobserved task exception — the build itself succeeded. Log-and-recover.")]
+    private void RecordCalibrationBuilt(bool darkLibrary) {
+        if (_profileStore is null) {
+            return;
+        }
+        var subsystem = darkLibrary ? "dark_library" : "defect_map";
+        try {
+            var entry = new GuiderCalibrationEntryDto(Valid: true, LastBuiltAt: DateTimeOffset.UtcNow);
+            var state = _profileStore.GetCalibrationState();
+            _profileStore.PutCalibrationState(darkLibrary
+                ? state with { DarkLibrary = entry }
+                : state with { DefectMap = entry });
+            LogCalibrationStateRecorded(subsystem);
+        } catch (Exception ex) {
+            LogCalibrationStateWriteFailed(subsystem, ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Recorded calibration_state.guider.{Subsystem} = valid in the active profile")]
+    partial void LogCalibrationStateRecorded(string subsystem);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to record calibration_state.guider.{Subsystem} after a successful build — the profile will keep reporting it as never built")]
+    partial void LogCalibrationStateWriteFailed(string subsystem, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Defect-map build started (exposureMs={ExposureMs}, frames={FrameCount})")]
     partial void LogDefectMapBuildStarted(int exposureMs, int frameCount);
