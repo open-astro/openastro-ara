@@ -101,6 +101,12 @@ public interface IDataManagerService {
 
 /// <summary>Backup (§43).</summary>
 public interface IBackupService {
+    /// <summary>§43-2 async create: cheap validation runs synchronously (nothing-to-archive 422,
+    /// disk-space pre-flight 507, create-already-running 409 — all thrown, which the endpoint maps),
+    /// then packaging + hashing run on a background worker; the <c>202</c> returns immediately. Poll
+    /// <see cref="GetCreateStatusAsync"/> (or watch the <c>backup.create.*</c> WS events) for the
+    /// terminal outcome. A retried POST carrying the SAME non-empty Idempotency-Key while that create
+    /// is still running re-accepts with the same operation id instead of starting a second one.</summary>
     Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct);
 
     /// <summary>§43-2: restore the selected config areas from a local snapshot (the request's source URL must be a
@@ -112,6 +118,12 @@ public interface IBackupService {
     Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct);
     Task<System.Text.Json.JsonElement> GetCloneStatusAsync(CancellationToken ct);
+
+    /// <summary>§43-2 async create: the create worker's poll-able state machine, mirroring
+    /// <see cref="GetCloneStatusAsync"/> — <c>idle</c> until the first create, then <c>running</c> →
+    /// terminal <c>done</c>/<c>failed</c>; <c>snapshot_id</c> is set on <c>done</c> so the client can
+    /// refresh its list and pick out the new snapshot.</summary>
+    Task<System.Text.Json.JsonElement> GetCreateStatusAsync(CancellationToken ct);
 
     /// <summary>Open a snapshot's on-disk <c>.zip</c> for download, returning the read stream + its filename, or
     /// <c>null</c> if no such snapshot exists (or it vanished between resolve and open). Backs

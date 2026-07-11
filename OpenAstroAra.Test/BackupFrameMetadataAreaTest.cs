@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
         }
 
         private async Task<Uri> CreateSnapshotAsync() {
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
             var snap = (await _svc.ListSnapshotsAsync(CancellationToken.None))[0];
             return snap.DownloadUrl;
         }
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Test {
         public async Task Create_includes_the_catalog_snapshot_and_counts_its_rows() {
             SeedCatalog("f1", "f2", "f3");
 
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
 
             var zip = Directory.GetFiles(Path.Combine(_profileDir, "backups"), "backup-*.zip").Single();
             using (var archive = await ZipFile.OpenReadAsync(zip, CancellationToken.None)) {
@@ -131,7 +131,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Create_without_a_catalog_stays_config_only_and_says_so() {
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
 
             var manifestJson = await File.ReadAllTextAsync(
                 Directory.GetFiles(Path.Combine(_profileDir, "backups"), "backup-*.meta.json").Single());

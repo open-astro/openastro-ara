@@ -78,6 +78,25 @@ class _FakeBackupClient implements BackupClient {
     return s;
   }
 
+  // Same sequence contract for the §43-2 create worker. Defaults to an immediate
+  // 'done' so tests not exercising the poll see the pre-worker behaviour.
+  List<CloneStatus> createStatusSequence = const [CloneStatus(state: 'done')];
+  int _createStatusIdx = 0;
+  int createStatusCalls = 0;
+
+  @override
+  Future<CloneStatus> createStatus() async {
+    createStatusCalls++;
+    if (createStatusSequence.isEmpty) {
+      return const CloneStatus(state: 'done');
+    }
+    final s = createStatusSequence[_createStatusIdx];
+    if (_createStatusIdx < createStatusSequence.length - 1) {
+      _createStatusIdx++;
+    }
+    return s;
+  }
+
   @override
   String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
 
@@ -137,6 +156,60 @@ void main() {
         c.read(backupSnapshotsProvider.notifier).createBackup(),
         throwsA(isA<StateError>()),
       );
+    });
+
+    test('createBackup polls create-status past running to done, then refreshes', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..createStatusSequence = const [
+          CloneStatus(state: 'running'),
+          CloneStatus(state: 'running'),
+          CloneStatus(state: 'done'),
+        ];
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      final id = await c
+          .read(backupSnapshotsProvider.notifier)
+          .createBackup(interval: Duration.zero);
+      expect(id, 'op-create');
+      expect(api.createStatusCalls, 3, reason: 'polled through both running ticks to the terminal');
+      final list = c.read(backupSnapshotsProvider).value;
+      expect(list!.length, 2, reason: 'the refresh runs only after the worker finished');
+    });
+
+    test('createBackup surfaces a worker-side failure as a StateError with the daemon message', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..createStatusSequence = const [
+          CloneStatus(state: 'running'),
+          CloneStatus(state: 'failed', message: 'disk exploded mid-zip'),
+        ];
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      await expectLater(
+        c.read(backupSnapshotsProvider.notifier).createBackup(interval: Duration.zero),
+        throwsA(isA<StateError>().having((e) => e.message, 'message', contains('disk exploded'))),
+      );
+      // A failed create must not refresh — the list still shows the pre-create single snapshot.
+      expect(c.read(backupSnapshotsProvider).value!.length, 1);
+    });
+
+    test('createBackup stops polling when cancelled and skips the refresh', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..createStatusSequence = const [CloneStatus(state: 'running')];
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      var polls = 0;
+      final id = await c.read(backupSnapshotsProvider.notifier).createBackup(
+            interval: Duration.zero,
+            isCancelled: () => ++polls > 2,
+          );
+      expect(id, 'op-create', reason: 'the accepted id is still returned');
+      expect(c.read(backupSnapshotsProvider).value!.length, 1, reason: 'no refresh after a cancelled poll');
     });
 
     test('restore forwards the source url + area flags and returns the op id', () async {

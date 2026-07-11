@@ -434,7 +434,9 @@ public partial class Program {
                 restorer: null,
                 remoteFetcher: sp.GetRequiredService<IBackupSourceFetcher>(),
                 // §43-2b retention — read live per create (a settings change applies without a restart).
-                profiles: sp.GetService<IProfileStore>()));
+                profiles: sp.GetService<IProfileStore>(),
+                // §43-2 async create — backup.create.* progress events.
+                ws: sp.GetService<IWsBroadcaster>()));
 
         // §36/§25.5 Tonight's Sky — ranks the OpenNGC catalog by altitude (with visibility window,
         // transit, and integration hours) for the active profile's site; falls back to a starter list

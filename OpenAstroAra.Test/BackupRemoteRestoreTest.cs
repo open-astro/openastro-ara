@@ -229,7 +229,7 @@ namespace OpenAstroAra.Test {
             var fetcher = new FakeFetcher();
             var restorer = new RecordingRestorer();
             using var svc = NewService(fetcher, restorer);
-            await svc.CreateZipAsync(null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(svc);
             var snapshot = (await svc.ListSnapshotsAsync(CancellationToken.None)).Single();
             var absolute = new Uri(new Uri("http://some-host:5555"), snapshot.DownloadUrl);
 

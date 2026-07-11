@@ -62,7 +62,7 @@ namespace OpenAstroAra.Test {
 
         private static async Task CreateN(BackupService svc, int n) {
             for (var i = 0; i < n; i++) {
-                await svc.CreateZipAsync(null, CancellationToken.None);
+                await BackupTestOps.CreateAndAwaitAsync(svc);
                 // CreatedUtc granularity is well below a millisecond, but the on-disk name embeds a
                 // whole-second timestamp — ordering comes from the manifest, so no sleep is needed.
             }

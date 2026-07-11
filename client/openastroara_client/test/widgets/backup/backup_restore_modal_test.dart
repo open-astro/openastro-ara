@@ -57,6 +57,11 @@ class _FakeBackupClient implements BackupClient {
   @override
   Future<CloneStatus> cloneStatus() async => cloneStatusResult;
 
+  // §43-2: the create worker's terminal state — default 'done' keeps the pre-worker flow.
+  CloneStatus createStatusResult = const CloneStatus(state: 'done');
+  @override
+  Future<CloneStatus> createStatus() async => createStatusResult;
+
   @override
   String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
   @override
@@ -92,6 +97,8 @@ Widget _host(
         home: BackupRestoreModal(
           restorePollInterval: pollInterval,
           restorePollTimeout: pollTimeout,
+          createPollInterval: pollInterval,
+          createPollTimeout: pollTimeout,
         ),
       ),
     );
@@ -140,6 +147,21 @@ void main() {
     await tester.tap(find.text('Create backup'));
     await tester.pumpAndSettle();
     expect(api.creates, 1);
+    expect(find.text('Backup created.'), findsOneWidget);
+  });
+
+  testWidgets('A worker-side create failure surfaces the daemon message in the snackbar', (tester) async {
+    // §43-2: the POST 202s fine, but the daemon-side packaging fails — the modal's
+    // create-status poll must turn that into the failure snack, not "created".
+    final api = _FakeBackupClient(const [])
+      ..createStatusResult = const CloneStatus(state: 'failed', message: 'disk exploded mid-zip');
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Create backup'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('disk exploded'), findsOneWidget);
+    expect(find.text('Backup created.'), findsNothing);
   });
 
   testWidgets('Download launches the snapshot URL', (tester) async {
