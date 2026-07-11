@@ -247,6 +247,51 @@ namespace OpenAstroAra.Test {
             Assert.That(aborted.Payload, Does.Contain("halted_ra_hours"));
         }
 
+        [Test]
+        [Category("bench")] // loopback-only, runs in the default job too
+        public async Task A_watchdog_stop_publishes_slew_aborted_with_the_watchdog_reason() {
+            // §57 follow-up (PORT_TODO 2026-07-11): the flip watchdog's StopSlew used to bypass
+            // the watch entirely, so a watchdog-killed flip slew read as a normal slew_complete.
+            var slewingValue = "false";
+            await using var mount = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/slewing", StringComparison.Ordinal) ? Volatile.Read(ref slewingValue)
+                : path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "5.5"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "20.0"
+                : null);
+            var ws = new PayloadRecordingBroadcaster();
+
+            using var svc = new TelescopeService(ws: ws);
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
+                HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+                TimeSpan.FromSeconds(15), "mount never connected");
+
+            Volatile.Write(ref slewingValue, "true");
+            await WaitForAsync(() => Task.FromResult(Array.Exists(ws.Snapshot(),
+                    e => e.Type == "telescope.slew_started")),
+                TimeSpan.FromSeconds(15), "slew_started never published");
+
+            // The flip watchdog's internal abort (fire-and-forget mediator path).
+            ((OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator)svc).StopSlew();
+            Volatile.Write(ref slewingValue, "false");
+            await WaitForAsync(() => Task.FromResult(Array.Exists(ws.Snapshot(),
+                    e => e.Type == "telescope.slew_aborted")),
+                TimeSpan.FromSeconds(10), "slew_aborted never published for the watchdog stop");
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            var events = ws.Snapshot();
+            Assert.That(Array.Exists(events, e => e.Type == "telescope.slew_complete"), Is.False,
+                "a watchdog-aborted episode must not also read as completed");
+            var aborted = Array.Find(events, e => e.Type == "telescope.slew_aborted");
+            Assert.That(aborted.Payload, Does.Contain("\"reason\":\"watchdog\""));
+        }
+
         private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string failure) {
             var deadline = DateTime.UtcNow + timeout;
             while (DateTime.UtcNow < deadline) {

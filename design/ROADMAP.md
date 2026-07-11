@@ -337,11 +337,13 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   surfaces on `slew_started` over every tab with the commanded target, one tap POSTs the abort,
   and `slew_aborted` opens the post-stop modal (halted position + Resume / Skip-this-target /
   End-session against the run the daemon's `sequence.paused` names; link-drop clears a stale
-  overlay). Remaining: §57.4 Verify-Position (capture + solve — follow-up); §57.5 latency
-  logging to the faults table; §57.6 safety-speed slews — NOT portably implementable over
-  Alpaca (ITelescope exposes axis rates for MoveAxis only; goto rate is not a standard
-  control), recorded as N/A-by-transport unless a per-driver surface appears; flip-watchdog
-  abort reason (PORT_TODO).
+  overlay). §57.5 latency logging SHIPPED (structured per-abort log line — reason + server-side
+  issue latency; kept in the log, not the faults table, so a panic press never reads as
+  equipment trouble in the fault feed). Flip-watchdog abort reason SHIPPED (StopSlew routes
+  through the shared abort core → `slew_aborted` with `reason: "watchdog"`, complete
+  suppressed). Remaining: §57.4 Verify-Position (capture + solve — follow-up); §57.6
+  safety-speed slews — NOT portably implementable over Alpaca (ITelescope exposes axis rates
+  for MoveAxis only; goto rate is not a standard control), recorded as N/A-by-transport.
 - **§68** AlpacaBridge — contract verified 2026-07-11 (the playbook §68 prose was reconciled
   2026-07-09 to drop the removed minimum-version gate). Audit result: §68.1 handshake ✔ (no
   version gate; discovery-as-handshake; standard configureddevices path), §68.2 wizard Screen 2

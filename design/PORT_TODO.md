@@ -1525,11 +1525,14 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
 
 ## §57 Stop Mount — follow-ups (2026-07-11, from the #836 review arc)
 
-- **Flip-watchdog abort reads as a normal slew_complete.** `MeridianFlipExecutor`'s watchdog
-  `StopSlew()` path (stalled/timed-out flip slew) calls `AbortSlew` via the mediator without
-  touching `SlewEventWatch`, so a watchdog-aborted flip slew publishes `telescope.slew_complete`
-  rather than `slew_aborted`. Deliberate for slice 1 — `slew_aborted` is scoped to the §57.4
-  user panic stop — but it's another real "the slew didn't actually complete" case; when
-  touched next, route internal aborts through the same noting path with `reason: "watchdog"`.
-- **§57.5 latency logging** — tap→AbortSlew issued latency per Stop Mount incident into the
-  `faults` table; deferred until the WILMA button exists to measure.
+- ✅ **Flip-watchdog abort reads as a normal slew_complete — FIXED (2026-07-11).** `StopSlew()`
+  now routes through the shared `AbortSlewCoreAsync` (fire-and-forget, non-throwing for the
+  flip-recovery path), so a watchdog-killed flip slew publishes `telescope.slew_aborted` with
+  `reason: "watchdog"` and its complete is suppressed — same lifecycle guarantees as the panic
+  button (E2E test pins it).
+- ✅ **§57.5 latency logging — DONE, adapted (2026-07-11).** Each abort logs a structured
+  `LogAbortIssued` line (reason, server-side request→device-call-returned latency in ms,
+  episode-open flag). Kept in the LOG rather than the `faults` table the playbook prose named:
+  an abort is a measurement, not a fault, and a fault-feed row per panic press would read as
+  equipment trouble in the §42.6 UI. The tap→request network leg is client-side and not
+  measurable server-side.

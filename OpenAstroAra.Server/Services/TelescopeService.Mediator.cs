@@ -276,10 +276,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     public void StopSlew() {
         var client = ConnectedClientOrNull();
-        if (client is not null) {
-            NoteMountCommand(w => w.NoteMotionCommanded());
-            TryAbortSlew(client);
+        if (client is null) {
+            return;
         }
+        // Fire-and-forget on purpose (the flip watchdog must never block or throw into the
+        // flip-recovery path), but routed through the shared §57 abort core so an internal
+        // abort gets the same lifecycle events as the panic button — tagged reason=watchdog,
+        // so a watchdog-killed flip slew no longer reads as a normal slew_complete (the
+        // #836 r4 follow-up from PORT_TODO).
+        _ = Task.Run(
+            () => AbortSlewCoreAsync(client, reason: "watchdog", rethrow: false),
+            CancellationToken.None);
     }
 
     public async Task WaitForSlew(CancellationToken token) {
@@ -455,17 +462,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         TrackingMode.King => DriveRate.King,
         _ => DriveRate.Sidereal,
     };
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "§57 panic-stop boundary: AbortSlew can throw driver/HTTP exceptions; StopSlew is fire-and-forget for the sequencer, so the failure is logged rather than thrown into the sequence. CA1031's log-and-recover boundary applies.")]
-    private void TryAbortSlew(AlpacaTelescope client) {
-        try {
-            client.AbortSlew();
-            RefreshCacheOnce();
-        } catch (Exception ex) {
-            LogStopSlewFailed(ex);
-        }
-    }
 
     private AlpacaTelescope? ConnectedClientOrNull() {
         lock (_gate) {
