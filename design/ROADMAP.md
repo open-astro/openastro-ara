@@ -332,11 +332,16 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   (`SlewEventWatch` — every slew source covered: REST, sequencer, flip, recovery, park/home;
   the 2 s poll doubles as the §57.2 sub-slew grace), `telescope.slew_aborted` fires immediately
   from the abort path (suppressing that episode's complete), and the abort endpoint now pauses
-  active runs (§57.4 step 2, gate-arm semantics). Remaining: the WILMA Stop Mount overlay +
-  post-stop modal (§57.2/57.3/57.4 — next client slice); §57.5 latency logging to the faults
-  table (deferred until the button exists to measure); §57.6 safety-speed slews — NOT portably
-  implementable over Alpaca (ITelescope exposes axis rates for MoveAxis only; goto rate is not
-  a standard control), recorded as N/A-by-transport unless a per-driver surface appears.
+  active runs (§57.4 step 2, gate-arm semantics). WILMA slice SHIPPED: `StopMountListener`
+  wraps the shell — the red panic overlay (min 200×80, Space shortcut, no confirmation gate)
+  surfaces on `slew_started` over every tab with the commanded target, one tap POSTs the abort,
+  and `slew_aborted` opens the post-stop modal (halted position + Resume / Skip-this-target /
+  End-session against the run the daemon's `sequence.paused` names; link-drop clears a stale
+  overlay). Remaining: §57.4 Verify-Position (capture + solve — follow-up); §57.5 latency
+  logging to the faults table; §57.6 safety-speed slews — NOT portably implementable over
+  Alpaca (ITelescope exposes axis rates for MoveAxis only; goto rate is not a standard
+  control), recorded as N/A-by-transport unless a per-driver surface appears; flip-watchdog
+  abort reason (PORT_TODO).
 - **§68** AlpacaBridge — full bridge contract verification. (The playbook §68 prose was
   reconciled 2026-07-09 to drop the removed minimum-version gate.)
 - **§14** integration tests gated on sims/hardware — run the gated suites when rigs are available.

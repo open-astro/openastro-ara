@@ -12,6 +12,7 @@ import '../widgets/connection_policy_listener.dart';
 import '../widgets/time_sync_on_connect.dart';
 import '../widgets/emergency_stop_button.dart';
 import '../widgets/safety_alarm_listener.dart';
+import '../widgets/stop_mount_overlay.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/ws_connection_indicator.dart';
@@ -111,7 +112,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             // §35.5 — the audible safety alarm's modal (safety.unsafe /
             // safety.emergency_stop) must fire no matter which tab is showing.
             child: SafetyAlarmListener(
-              child: SafeArea(
+              // §57 — the Stop Mount panic overlay surfaces over every tab
+              // while the daemon reports an autonomous slew in progress.
+              child: StopMountListener(
+                child: SafeArea(
                 child: CallbackShortcuts(
                   // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
                   // is reachable regardless of host platform.
@@ -185,6 +189,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
