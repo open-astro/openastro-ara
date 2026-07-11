@@ -89,6 +89,14 @@ class _AppShellState extends ConsumerState<AppShell> {
       _tabs[kRunTabIndex].label == 'Run',
       'kRunTabIndex must point at the Run tab — update it if _tabs is reordered.',
     );
+    assert(
+      _tabs[kPlanningTabIndex].label == 'Planning',
+      'kPlanningTabIndex must point at the Planning tab — update it if _tabs is reordered.',
+    );
+    assert(
+      _tabs[kLiveTabIndex].label == 'Live',
+      'kLiveTabIndex must point at the Live tab — update it if _tabs is reordered.',
+    );
     return Scaffold(
       // §27 — daemon-initiated connection-policy modals (takeover request /
       // session transferred) listen here, at the always-alive shell level.

@@ -86,4 +86,29 @@ void main() {
       ]));
     });
   });
+
+  group('§61.10 navigation entries', () {
+    test('"go to run" surfaces the Run tab navigation hit first', () {
+      final index = buildSearchIndex();
+      final results = searchSettings(index, 'go to run');
+      expect(results, isNotEmpty);
+      expect(results.first.label, 'Go to Run');
+      expect(results.first.tabIndex, 1);
+    });
+
+    test('each main tab is reachable by an intent word', () {
+      final index = buildSearchIndex();
+      expect(searchSettings(index, 'planning').any((e) => e.tabIndex == 0), isTrue);
+      expect(searchSettings(index, 'sequencer').any((e) => e.tabIndex == 1), isTrue);
+      expect(searchSettings(index, 'live view').any((e) => e.tabIndex == 2), isTrue);
+      expect(searchSettings(index, 'preferences').any((e) => e.tabIndex == 3), isTrue);
+    });
+
+    test('navigation hits carry a stable synthetic id', () {
+      final index = buildSearchIndex();
+      final nav = index.where((e) => e.tabIndex != null).toList();
+      expect(nav, hasLength(4));
+      expect(nav.map((e) => e.id), everyElement(startsWith('nav.')));
+    });
+  });
 }

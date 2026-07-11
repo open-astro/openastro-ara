@@ -15,6 +15,10 @@ class SettingsSearchEntry {
   /// §68.4 — set for an informational help hit: activating it opens the §69
   /// help sheet instead of navigating to a settings panel.
   final String? helpKey;
+
+  /// §61.10 — set for a "Go to `<tab>`" navigation hit: activating it switches
+  /// the main tab instead of opening a settings panel.
+  final int? tabIndex;
   final String label;
   final String groupLabel;
   final List<String> keywords;
@@ -25,6 +29,7 @@ class SettingsSearchEntry {
     this.panelId,
     this.settingId,
     this.helpKey,
+    this.tabIndex,
     required this.label,
     required this.groupLabel,
     required this.keywords,
@@ -32,7 +37,8 @@ class SettingsSearchEntry {
     this.relatedSettings = const <String>[],
   });
 
-  String get id => settingId ?? panelId ?? helpKey ?? '';
+  String get id =>
+      settingId ?? panelId ?? helpKey ?? (tabIndex != null ? 'nav.$tabIndex' : '');
 }
 
 /// Per-panel keyword corpus. Each entry lists user-intent words the panel
@@ -256,8 +262,41 @@ const Map<String, List<String>> _panelKeywords = {
   ],
 };
 
+/// §61.10 — the main tabs as palette navigation targets. Indices come from
+/// the settings_nav constants, which app_shell runtime-asserts against the
+/// actual tab labels — a rail reorder fails loudly instead of misnavigating.
+/// Keywords cover what people expect each tab to be called, not just its label.
+const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
+  SettingsSearchEntry(
+    tabIndex: kPlanningTabIndex,
+    label: 'Go to Planning',
+    groupLabel: 'Navigate',
+    keywords: ['planning', 'tonight', 'sky atlas', 'targets', 'framing', 'planetarium', 'what to shoot'],
+  ),
+  SettingsSearchEntry(
+    tabIndex: kRunTabIndex,
+    label: 'Go to Run',
+    groupLabel: 'Navigate',
+    keywords: ['run', 'sequencer', 'sequence', 'session', 'start', 'progress'],
+  ),
+  SettingsSearchEntry(
+    tabIndex: kLiveTabIndex,
+    label: 'Go to Live',
+    groupLabel: 'Navigate',
+    keywords: ['live', 'imaging', 'camera', 'live view', 'capture', 'exposure', 'preview'],
+  ),
+  SettingsSearchEntry(
+    tabIndex: kOptionsTabIndex,
+    label: 'Go to Options',
+    groupLabel: 'Navigate',
+    keywords: ['options', 'settings', 'preferences', 'configuration'],
+  ),
+];
+
 List<SettingsSearchEntry> buildSearchIndex() {
   final entries = <SettingsSearchEntry>[];
+  // 0. §61.10 — tab navigation ("go to run", "planning", …).
+  entries.addAll(_navEntries);
   // 1. Index panels.
   for (final group in settingsTree) {
     for (final panel in group.panels) {
