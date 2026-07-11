@@ -12,11 +12,11 @@ import 'help_icon.dart';
 /// §61 ⌘K command palette. Opens as a centered dialog, indexes
 /// `settingsTree` via `buildSearchIndex()`, and on enter/click jumps to
 /// the matching settings panel (selects the Options tab + sets
-/// `selectedSettingsPanelProvider`).
+/// `selectedSettingsPanelProvider`). §61.10 slice 1 adds tab NAVIGATION
+/// hits ("Go to Run", …) that switch the main tab instead.
 ///
-/// Future phases extend the indexed corpus beyond settings — sequence
-/// templates (§38), sky-atlas targets (§36), commands like "Park now",
-/// "Open Image Library", etc.
+/// Future §61.10 phases extend the corpus further — sequence templates
+/// (§38), sky-atlas targets (§36), equipment ops like "Park now", etc.
 Future<void> showCommandPalette(BuildContext context) {
   return showDialog(
     context: context,
@@ -82,6 +82,12 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       final rootContext = Navigator.of(context, rootNavigator: true).context;
       Navigator.of(context).pop();
       if (help != null) showHelpSheet(rootContext, help);
+      return;
+    }
+    // §61.10 — a navigation hit just switches the main tab.
+    if (entry.tabIndex != null) {
+      ref.read(selectedTabIndexProvider.notifier).select(entry.tabIndex!);
+      Navigator.of(context).pop();
       return;
     }
     if (entry.panelId != null) {
@@ -193,7 +199,7 @@ class _SearchField extends StatelessWidget {
         decoration: const InputDecoration(
           prefixIcon: Icon(Icons.search),
           hintText:
-              'Search settings — try "dither", "park", "cooler", "filenames"…',
+              'Search settings or navigate — try "dither", "park", "go to run"…',
           border: InputBorder.none,
           isDense: true,
         ),
@@ -248,7 +254,15 @@ class _ResultRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
-            const Icon(Icons.tune, size: 16, color: AraColors.textSecondary),
+            Icon(
+              entry.tabIndex != null
+                  ? Icons.arrow_forward
+                  : entry.helpKey != null
+                      ? Icons.help_outline
+                      : Icons.tune,
+              size: 16,
+              color: AraColors.textSecondary,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
