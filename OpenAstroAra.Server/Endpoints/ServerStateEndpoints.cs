@@ -44,6 +44,28 @@ public static class ServerStateEndpoints {
               .Produces<ServerStateDto>(StatusCodes.Status200OK)
               .WithName("GetServerState");
 
+        // §31.3 — the time-sync waterfall's two wire surfaces.
+        server.MapGet("/time-sync",
+                async (ITimeSyncService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetStateAsync(ct)))
+              .Produces<TimeSyncStateDto>(StatusCodes.Status200OK)
+              .WithName("GetTimeSync")
+              .WithSummary("The server's §31 time-sync state (synced = fresh + at-least-medium trust).");
+
+        server.MapPost("/time-sync",
+                async (TimeSyncPushRequestDto request, ITimeSyncService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Ok(await svc.PushAsync(request, ct));
+                    } catch (TimeSyncInvalidRequestException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    }
+                })
+              .Accepts<TimeSyncPushRequestDto>("application/json")
+              .Produces<TimeSyncPushResultDto>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+              .WithName("PushTimeSync")
+              .WithSummary("Push a client/mobile-GPS/manual time (+ optional location) per the §31.1 waterfall.");
+
         server.MapGet("/versions",
                 async (IServerStateService svc, CancellationToken ct) =>
                     Results.Ok(await svc.GetVersionsAsync(ct)))
