@@ -52,8 +52,8 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
     private readonly ILogger<UsbGpsTimeSyncWorker> _logger;
 
     // Probe cadence: every 2 min while no fresh sync exists (a dongle can be plugged mid-session),
-    // hourly once synced (keeps the high-trust GPS sync fresh across the §31.1 1-hour staleness
-    // window with margin). Internal test seams, like the TimeSyncService ones.
+    // every 50 min once synced (re-syncs INSIDE the §31.1 1-hour staleness window, with margin).
+    // Internal test seams, like the TimeSyncService ones.
     internal TimeSpan UnsyncedProbeInterval { get; set; } = TimeSpan.FromMinutes(2);
     internal TimeSpan SyncedProbeInterval { get; set; } = TimeSpan.FromMinutes(50);
     // How long to listen per device before giving up: a live GPS emits RMC once per second, so
@@ -103,13 +103,22 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
             try {
                 using var window = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 window.CancelAfter(PerDeviceListenWindow);
+                // Altitude only rides GGA sentences (RMC has none), so remember the most recent
+                // GGA altitude and pair it with the RMC fix that supplies the instant (#834 r1).
+                double? lastGgaAltitude = null;
                 await foreach (var line in _source.ReadLinesAsync(device, window.Token).ConfigureAwait(false)) {
                     var fix = NmeaSentenceParser.Parse(line);
-                    if (fix?.TimeUtc is not { } timeUtc) {
+                    if (fix is null) {
+                        continue;
+                    }
+                    if (fix.AltitudeM is { } alt) {
+                        lastGgaAltitude = alt;
+                    }
+                    if (fix.TimeUtc is not { } timeUtc) {
                         continue; // not an RMC with an active fix — keep listening
                     }
                     var location = fix.LatitudeDeg is { } lat && fix.LongitudeDeg is { } lng
-                        ? new Contracts.TimeSyncLocationDto(lat, lng, fix.AltitudeM ?? 0)
+                        ? new Contracts.TimeSyncLocationDto(lat, lng, fix.AltitudeM ?? lastGgaAltitude)
                         : null;
                     var result = await _timeSync.ApplyGpsSyncAsync(timeUtc, location, ct).ConfigureAwait(false);
                     LogGpsSyncApplied(device, result.ClockSet);
@@ -160,8 +169,10 @@ internal sealed class SerialPortNmeaSource : ISerialNmeaSource {
         while (!ct.IsCancellationRequested) {
             string line;
             try {
-                // ReadLine blocks up to ReadTimeout; run it off the async path so cancellation
-                // (the caller's listen window) isn't held hostage by a silent port.
+                // ReadLine blocks up to ReadTimeout (2 s); running it off the async path keeps the
+                // caller's await responsive, but an in-flight blocking read only observes
+                // cancellation at the next ReadTimeout boundary — so the listen window resolves
+                // within ~2 s of its deadline, not instantly. Fine at a 10 s window.
                 line = await Task.Run(port.ReadLine, ct).ConfigureAwait(false);
             } catch (TimeoutException) {
                 continue; // no data this interval — the caller's window decides when to stop

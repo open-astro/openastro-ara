@@ -78,7 +78,7 @@ namespace OpenAstroAra.Test {
             var timeSync = new TimeSyncService(NullLogger<TimeSyncService>.Instance, setter) {
                 GpsDeviceProbe = () => true,
             };
-            var worker = new UsbGpsTimeSyncWorker(timeSync, NullLogger<UsbGpsTimeSyncWorker>.Instance, source) {
+            using var worker = new UsbGpsTimeSyncWorker(timeSync, NullLogger<UsbGpsTimeSyncWorker>.Instance, source) {
                 PerDeviceListenWindow = TimeSpan.FromMilliseconds(500),
             };
             return (worker, timeSync, setter);
@@ -87,7 +87,14 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_valid_rmc_fix_applies_a_gps_internal_high_sync_with_position() {
             var source = new FakeSerialSource();
-            source.LinesByDevice["/dev/ttyUSB0"] = ["$GPGSV,noise*00", "garbage", ValidRmc];
+            // A GGA before the RMC — the real per-second interleave — supplies the altitude the
+            // RMC lacks (#834 r1: the fix's instant comes from RMC, its altitude from GGA).
+            source.LinesByDevice["/dev/ttyUSB0"] = [
+                "$GPGSV,noise*00",
+                "garbage",
+                WithChecksum("$GPGGA,061529.00,3016.20,N,09744.40,W,1,08,1.0,165.0,M,0.0,M,,"),
+                ValidRmc,
+            ];
             var (worker, timeSync, setter) = NewWorker(source);
 
             var applied = await worker.ProbeOnceAsync(CancellationToken.None);
@@ -101,6 +108,31 @@ namespace OpenAstroAra.Test {
             Assert.That(state.Location, Is.Not.Null);
             Assert.That(state.Location!.Lat, Is.EqualTo(30.27).Within(1e-6));
             Assert.That(state.Location.Lng, Is.EqualTo(-97.74).Within(1e-6));
+            Assert.That(state.Location.Alt, Is.EqualTo(165.0), "the GGA altitude pairs with the RMC fix");
+        }
+
+        [Test]
+        public async Task An_rmc_only_fix_leaves_the_profile_elevation_untouched() {
+            // #834 r1 — RMC carries no altitude; a GPS sync without a GGA in the window must NOT
+            // zero the site elevation the twilight/airmass math depends on.
+            var store = new InMemoryProfileStore();
+            store.PutSiteSettings(store.GetSiteSettings() with { ElevationM = 1234.0 });
+            var setter = new FakeClockSetter();
+            var timeSync = new TimeSyncService(NullLogger<TimeSyncService>.Instance, setter, store) {
+                GpsDeviceProbe = () => true,
+            };
+            var source = new FakeSerialSource();
+            source.LinesByDevice["/dev/ttyUSB0"] = [ValidRmc];
+            using var worker = new UsbGpsTimeSyncWorker(timeSync, NullLogger<UsbGpsTimeSyncWorker>.Instance, source) {
+                PerDeviceListenWindow = TimeSpan.FromMilliseconds(500),
+            };
+
+            var applied = await worker.ProbeOnceAsync(CancellationToken.None);
+
+            Assert.That(applied, Is.True);
+            var site = store.GetSiteSettings();
+            Assert.That(site.LatitudeDeg, Is.EqualTo(30.27).Within(1e-6), "the position still lands");
+            Assert.That(site.ElevationM, Is.EqualTo(1234.0), "unknown altitude preserves the existing elevation");
         }
 
         [Test]

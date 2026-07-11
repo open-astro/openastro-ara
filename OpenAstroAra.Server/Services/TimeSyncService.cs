@@ -235,7 +235,9 @@ public sealed partial class TimeSyncService : ITimeSyncService {
             _profiles.PutSiteSettings(site with {
                 LatitudeDeg = loc.Lat,
                 LongitudeDeg = loc.Lng,
-                ElevationM = loc.Alt,
+                // Null altitude = unknown (an RMC-only GPS fix) — keep whatever the profile has
+                // rather than silently zeroing the elevation every twilight calc depends on.
+                ElevationM = loc.Alt ?? site.ElevationM,
             });
             return true;
         } catch (Exception ex) {
