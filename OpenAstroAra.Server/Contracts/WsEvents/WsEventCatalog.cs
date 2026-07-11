@@ -59,8 +59,16 @@ public static class WsEventCatalog {
     public const string CameraExposureStarted = "camera.exposure_started";
     public const string CameraExposureComplete = "camera.exposure_complete";
     public const string CameraExposureFailed = "camera.exposure_failed";
+    // §57.8 — slew lifecycle, published from observed IsSlewing transitions in the telescope
+    // status poll (every slew source: REST, sequencer, flip, recovery, park/home). started
+    // payload { target_ra_hours?, target_dec_degrees?, ra_hours?, dec_degrees? } (targets only
+    // for coordinate slews); complete payload { final_ra_hours?, final_dec_degrees?,
+    // duration_seconds }; aborted payload { halted_ra_hours?, halted_dec_degrees?, reason }
+    // published immediately from the §57.4 panic-stop path (which suppresses that episode's
+    // complete event).
     public const string TelescopeSlewStarted = "telescope.slew_started";
     public const string TelescopeSlewComplete = "telescope.slew_complete";
+    public const string TelescopeSlewAborted = "telescope.slew_aborted";
     public const string TelescopeParkChanged = "telescope.park_changed";
     public const string GuiderState = "guider.state";
     public const string GuiderDitherComplete = "guider.dither_complete";

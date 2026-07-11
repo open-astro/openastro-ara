@@ -152,8 +152,14 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
         telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
-        telescope.MapPost("/abort", async (ITelescopeService svc, CancellationToken ct) => {
-            await svc.AbortSlewAsync(ct); return Results.Accepted();
+        telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
+            await svc.AbortSlewAsync(ct);
+            // §57.4 step 2 — a panic-stopped mount pauses any active run at the next instruction
+            // boundary (gate-arm semantics; the state flip + sequence.paused event fire when the
+            // engine actually suspends). No-op with nothing running; an already-paused run is
+            // left to its existing owner.
+            await sequencer.PauseActiveRunsAsync(CancellationToken.None);
+            return Results.Accepted();
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
         telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) => {

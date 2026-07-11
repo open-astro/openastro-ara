@@ -325,7 +325,18 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   (UTC + optional lat/lng/alt → low-trust `manual` push). Remaining: step 3 mobile GPS — needs
   the `geolocator` dependency decision (new pub dep + license-gate pin + mobile platform
   permissions; CI builds desktop targets only, so this is a user call).
-- **§57** Stop Mount — full slew-safety policy verification.
+- **§57** Stop Mount — verification (2026-07-11) found the panic-stop PRIMITIVE existed
+  (`POST /api/v1/telescope/abort` → `AbortSlew()`) but the §57 contract around it was never
+  built. Server slice SHIPPED: `telescope.slew_started`/`slew_complete` now actually publish
+  (they were catalog-only) from observed IsSlewing transitions in the status poll
+  (`SlewEventWatch` — every slew source covered: REST, sequencer, flip, recovery, park/home;
+  the 2 s poll doubles as the §57.2 sub-slew grace), `telescope.slew_aborted` fires immediately
+  from the abort path (suppressing that episode's complete), and the abort endpoint now pauses
+  active runs (§57.4 step 2, gate-arm semantics). Remaining: the WILMA Stop Mount overlay +
+  post-stop modal (§57.2/57.3/57.4 — next client slice); §57.5 latency logging to the faults
+  table (deferred until the button exists to measure); §57.6 safety-speed slews — NOT portably
+  implementable over Alpaca (ITelescope exposes axis rates for MoveAxis only; goto rate is not
+  a standard control), recorded as N/A-by-transport unless a per-driver surface appears.
 - **§68** AlpacaBridge — full bridge contract verification. (The playbook §68 prose was
   reconciled 2026-07-09 to drop the removed minimum-version gate.)
 - **§14** integration tests gated on sims/hardware — run the gated suites when rigs are available.

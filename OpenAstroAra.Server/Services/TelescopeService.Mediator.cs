@@ -200,6 +200,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem));
         var targetRa = target.RA;
         var targetDec = target.Dec;
+        lock (_gate) {
+            SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
+        }
         return RunMountOpAsync("telescope.slew",
             c => {
                 TryEnableTracking(c);

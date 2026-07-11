@@ -18,6 +18,7 @@ using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -44,8 +45,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private readonly ILogger<TelescopeService> _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
+    private readonly IWsBroadcaster? _ws;
     private readonly DeviceConnectionProbe _probe = new();
     private readonly MountTrackingWatch _trackingWatch = new();
+    // §57.8 — slew lifecycle events from observed IsSlewing transitions (internal for tests).
+    internal SlewEventWatch SlewWatch { get; } = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaTelescope? _client;
@@ -67,10 +71,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private bool _disposed;
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null) {
+            IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null) {
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _events = events;
         _faults = faults;
+        _ws = ws;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -145,6 +150,13 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
         NoteMountCommand(w => w.NoteMotionCommanded());
+        if (!sync) {
+            // §57.8 — the upcoming slew_started event carries the commanded target (a sync moves
+            // nothing, so it never opens a slew episode).
+            lock (_gate) {
+                SlewWatch.NoteSlewTarget(ra, dec);
+            }
+        }
         _ = Task.Run(() => SlewInBackground(client, ra, dec, sync), CancellationToken.None);
         return Task.FromResult(Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey));
     }
@@ -222,6 +234,18 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // that cancelled the token would silently never send the abort and the slew would continue.
         NoteMountCommand(w => w.NoteMotionCommanded());
         await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
+        // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), carrying the last
+        // known position; the watch suppresses the episode's would-be slew_complete.
+        TelescopeStateDto halted;
+        lock (_gate) {
+            SlewWatch.NoteAborted();
+            halted = _runtime;
+        }
+        PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
+            ["halted_ra_hours"] = halted.RightAscensionHours,
+            ["halted_dec_degrees"] = halted.DeclinationDegrees,
+            ["reason"] = "user_request",
+        });
         RefreshCacheOnce();
     }
 
@@ -323,6 +347,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             // the device counts as success and stops the retries).
             var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
             var trackingVerdict = TrackingWatchVerdict.Idle;
+            var slewVerdict = new SlewEventWatch.Verdict(SlewEventWatch.Kind.None);
             DiscoveredDeviceDto? watchedDevice = null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
@@ -339,8 +364,24 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     // probe lesson); command notes take this gate too.
                     trackingVerdict = _trackingWatch.Observe(
                         runtime.Tracking, slewing: runtime.State == "slewing", parked: runtime.Parked);
+                    // §57.8 — slew lifecycle from the same observed snapshot.
+                    slewVerdict = SlewWatch.Observe(runtime.State == "slewing");
                     watchedDevice = _device;
                 }
+            }
+            if (slewVerdict.Kind == SlewEventWatch.Kind.Started) {
+                PublishSlewEvent(WsEventCatalog.TelescopeSlewStarted, new System.Text.Json.Nodes.JsonObject {
+                    ["target_ra_hours"] = slewVerdict.TargetRaHours,
+                    ["target_dec_degrees"] = slewVerdict.TargetDecDegrees,
+                    ["ra_hours"] = runtime.RightAscensionHours,
+                    ["dec_degrees"] = runtime.DeclinationDegrees,
+                });
+            } else if (slewVerdict.Kind == SlewEventWatch.Kind.Completed) {
+                PublishSlewEvent(WsEventCatalog.TelescopeSlewComplete, new System.Text.Json.Nodes.JsonObject {
+                    ["final_ra_hours"] = runtime.RightAscensionHours,
+                    ["final_dec_degrees"] = runtime.DeclinationDegrees,
+                    ["duration_seconds"] = slewVerdict.DurationSeconds,
+                });
             }
             if (trackingVerdict == TrackingWatchVerdict.Lost) {
                 LogTrackingLost(watchedDevice?.Name ?? "?");
@@ -355,6 +396,24 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             LogRuntimeReadFailed(ex);
         }
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Event publication is best-effort UX freshness: serialization or channel faults must be logged and dropped, never propagated into a status-poll or abort path. CA1031's log-and-recover boundary applies.")]
+    private void PublishSlewEvent(string eventType, System.Text.Json.Nodes.JsonObject payload) {
+        if (_ws is null) {
+            return;
+        }
+        try {
+            // ToJsonString()+Parse is the AOT-safe JsonElement construction (EquipmentFaultHub pattern).
+            using var doc = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
+            _ = _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
+        } catch (Exception ex) {
+            LogSlewEventPublishFailed(ex, eventType);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope: failed to broadcast the {EventType} WS event")]
+    private partial void LogSlewEventPublishFailed(Exception ex, string eventType);
 
     // §42.2 — every daemon-issued mount command is noted BEFORE its device write is dispatched,
     // so a refresh tick that commits after the command already sees the grace window (a command
@@ -562,6 +621,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _probe.Reset();             // §42.3 — a fresh session starts a fresh streak
                     _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
+                    SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -663,6 +723,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             SetState(EquipmentConnectionState.Error);
             _probe.Reset();
             _trackingWatch.Reset();
+            SlewWatch.Reset();
         }
         LogConnectionLost(device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(DeviceType.Telescope, device?.UniqueId, device?.Name,
