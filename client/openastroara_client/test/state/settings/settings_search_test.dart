@@ -111,4 +111,23 @@ void main() {
       expect(nav.map((e) => e.id), everyElement(startsWith('nav.')));
     });
   });
+
+  group('§61.10 action entries', () {
+    test('every action id is unique and prefixed action.', () {
+      final index = buildSearchIndex();
+      final actions = index.where((e) => e.actionId != null).toList();
+      expect(actions, hasLength(5));
+      expect(actions.map((e) => e.id).toSet().length, actions.length);
+      expect(actions.map((e) => e.id), everyElement(startsWith('action.')));
+    });
+
+    test('actions are reachable by intent words', () {
+      final index = buildSearchIndex();
+      expect(searchSettings(index, 'image library').any((e) => e.actionId == 'action.library'), isTrue);
+      expect(searchSettings(index, 'dark library').any((e) => e.actionId == 'action.calibration'), isTrue);
+      expect(searchSettings(index, 'best frames').any((e) => e.actionId == 'action.stats'), isTrue);
+      expect(searchSettings(index, 'backup').any((e) => e.actionId == 'action.backup'), isTrue);
+      expect(searchSettings(index, 'wizard').any((e) => e.actionId == 'action.wizard'), isTrue);
+    });
+  });
 }

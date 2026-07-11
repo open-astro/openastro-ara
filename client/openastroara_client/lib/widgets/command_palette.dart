@@ -3,10 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../help/registry.dart';
+import '../screens/calibration/calibration_screen.dart';
+import '../screens/library/image_library_screen.dart';
+import '../screens/stats/stats_dashboard_screen.dart';
+import '../screens/wizard/wizard_shell.dart';
 import '../state/app_shell_state.dart';
 import '../state/settings/settings_nav.dart';
 import '../state/settings/settings_search.dart';
 import '../theme/ara_colors.dart';
+import 'backup/backup_restore_modal.dart';
 import 'help_icon.dart';
 
 /// §61 ⌘K command palette. Opens as a centered dialog, indexes
@@ -84,6 +89,14 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       if (help != null) showHelpSheet(rootContext, help);
       return;
     }
+    // §61.10 slice 2 — an action hit runs its launcher on the ROOT navigator
+    // (this widget's context dies with the pop, same as the help-sheet flow).
+    if (entry.actionId != null) {
+      final rootContext = Navigator.of(context, rootNavigator: true).context;
+      Navigator.of(context).pop();
+      _runAction(rootContext, entry.actionId!);
+      return;
+    }
     // §61.10 — a navigation hit just switches the main tab.
     if (entry.tabIndex != null) {
       ref.read(selectedTabIndexProvider.notifier).select(entry.tabIndex!);
@@ -99,6 +112,41 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     // Switch to the Options tab so the panel is visible.
     ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     Navigator.of(context).pop();
+  }
+
+  // The id → launcher switch for the palette's action hits. Mirrors the
+  // top-bar buttons in app_shell.dart — same routes, same dialog.
+  static void _runAction(BuildContext rootContext, String actionId) {
+    switch (actionId) {
+      case 'action.library':
+        Navigator.of(rootContext).push(
+          MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+        );
+      case 'action.calibration':
+        Navigator.of(rootContext).push(
+          MaterialPageRoute<void>(builder: (_) => const CalibrationScreen()),
+        );
+      case 'action.stats':
+        Navigator.of(rootContext).push(
+          MaterialPageRoute<void>(builder: (_) => const StatsDashboardScreen()),
+        );
+      case 'action.backup':
+        showDialog<void>(
+          context: rootContext,
+          builder: (_) => const BackupRestoreModal(),
+        );
+      case 'action.wizard':
+        Navigator.of(rootContext).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const WizardShell(),
+            fullscreenDialog: true,
+          ),
+        );
+      default:
+        // An index entry naming an unknown action is a programming error, but
+        // must not crash the palette in release — it just does nothing.
+        assert(false, 'unknown palette action: $actionId');
+    }
   }
 
   @override
@@ -254,11 +302,13 @@ class _ResultRow extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              entry.tabIndex != null
-                  ? Icons.arrow_forward
-                  : entry.helpKey != null
-                      ? Icons.help_outline
-                      : Icons.tune,
+              entry.actionId != null
+                  ? Icons.bolt
+                  : entry.tabIndex != null
+                      ? Icons.arrow_forward
+                      : entry.helpKey != null
+                          ? Icons.help_outline
+                          : Icons.tune,
               size: 16,
               color: AraColors.textSecondary,
             ),
