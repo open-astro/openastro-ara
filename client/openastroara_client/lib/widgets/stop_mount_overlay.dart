@@ -38,10 +38,12 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
   double? _targetDec;
   bool _stopRequested = false;
 
-  /// The run the daemon paused for this stop (§57.4 step 2) — stamped by the
-  /// `sequence.paused` event that follows the abort (gate-arm: it can arrive
-  /// seconds after the modal opens; the modal reads this at press time).
-  String? _pausedRunId;
+  /// The run(s) the daemon paused for this stop (§57.4 step 2) — stamped by
+  /// the `sequence.paused` events that follow the abort (gate-arm: they can
+  /// arrive seconds after the modal opens; the modal reads these at press
+  /// time). A list because `PauseActiveRunsAsync` pauses EVERY active run
+  /// (#837 r3) — the modal's actions apply to all of them.
+  final List<String> _pausedRunIds = [];
   bool _awaitingPause = false;
 
   @override
@@ -101,7 +103,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
           // from being resumed/skipped by mistake. The daemon always publishes
           // slew_aborted before the follow-up sequence.paused (the pause is
           // requested after the abort and lands at an instruction boundary).
-          _pausedRunId = null;
+          _pausedRunIds.clear();
           _awaitingPause = true;
           _showStoppedModal(
             haltedRa: _numOrNull(event.payload['halted_ra_hours']),
@@ -109,7 +111,10 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
           );
         case SequenceWsEvents.paused:
           if (_awaitingPause && event.payload['sequence_id'] is String) {
-            _pausedRunId = event.payload['sequence_id'] as String;
+            final id = event.payload['sequence_id'] as String;
+            if (!_pausedRunIds.contains(id)) {
+              _pausedRunIds.add(id);
+            }
           }
       }
     });
@@ -204,18 +209,26 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
   Future<void> _stopMount() async {
     if (_stopRequested || !_slewing) return;
     setState(() => _stopRequested = true);
-    final ok = await ref.read(mountProvider.notifier).abortSlew();
+    // abortSlew bypasses the per-device re-entrancy guard (#837 r3, the
+    // moveAxis pattern) so a panic tap can never be silently dropped while
+    // another mount command is in flight; false = no server, throw = the
+    // request failed in transit.
+    var ok = false;
+    Object? failure;
+    try {
+      ok = await ref.read(mountProvider.notifier).abortSlew();
+    } catch (e) {
+      failure = e;
+    }
     if (!mounted) return;
     if (!ok) {
       setState(() => _stopRequested = false);
-      // false covers both "no server/API" and the notifier's re-entrancy
-      // guard dropping the call while another mount command is in flight
-      // (#837 r2) — say so instead of blaming the connection.
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Stop Mount was not issued — another mount command is still in '
-            'flight, or there is no server connection. Tap again.',
+            failure == null
+                ? 'Stop Mount was not issued — no server connection.'
+                : 'Stop Mount failed to reach the server ($failure) — tap again.',
           ),
         ),
       );
@@ -239,9 +252,9 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
 
   Future<void> _runSequenceAction(_StopModalAction action) async {
     final api = ref.read(sequenceApiProvider);
-    final id = _pausedRunId;
+    final ids = List<String>.of(_pausedRunIds);
     final messenger = ScaffoldMessenger.of(context);
-    if (api == null || id == null) {
+    if (api == null || ids.isEmpty) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
@@ -253,16 +266,20 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
       return;
     }
     try {
-      switch (action) {
-        case _StopModalAction.resume:
-          await api.resume(id);
-        case _StopModalAction.skipTarget:
-          // §57.4 "Skip this target": skip what the run is executing now,
-          // then let it continue with the rest of the plan.
-          await api.skipCurrent(id);
-          await api.resume(id);
-        case _StopModalAction.endSession:
-          await api.stop(id);
+      // Every run the stop paused gets the same answer (#837 r3) — the
+      // daemon pauses ALL active runs on a panic stop.
+      for (final id in ids) {
+        switch (action) {
+          case _StopModalAction.resume:
+            await api.resume(id);
+          case _StopModalAction.skipTarget:
+            // §57.4 "Skip this target": skip what the run is executing now,
+            // then let it continue with the rest of the plan.
+            await api.skipCurrent(id);
+            await api.resume(id);
+          case _StopModalAction.endSession:
+            await api.stop(id);
+        }
       }
     } catch (e) {
       if (!mounted) return;

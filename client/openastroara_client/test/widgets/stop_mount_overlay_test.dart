@@ -32,6 +32,10 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   bool failCommands = false;
   MountStatus? status;
 
+  /// When set, the NEXT command awaits this before returning (then the gate
+  /// auto-clears) — lets a test hold e.g. a park in flight.
+  Future<void>? commandGate;
+
   @override
   Future<MountStatus?> getStatus() async => status;
   @override
@@ -41,6 +45,9 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   @override
   Future<void> command(String subpath, [Map<String, dynamic>? body]) async {
     if (failCommands) throw Exception('unreachable');
+    final gate = commandGate;
+    commandGate = null;
+    if (gate != null) await gate;
     commands.add(subpath);
   }
 
@@ -227,6 +234,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(seqApi.lifecycle, ['skip:run-7', 'resume:run-7']);
+  });
+
+  testWidgets('a stop that paused TWO runs acts on both', (tester) async {
+    // #837 r3 — PauseActiveRunsAsync pauses every active run; the modal's
+    // answer applies to all of them, not just the last-seen id.
+    await pump(tester);
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted));
+    await fire(
+      tester,
+      _event(SequenceWsEvents.paused, {'sequence_id': 'run-a'}),
+    );
+    await fire(
+      tester,
+      _event(SequenceWsEvents.paused, {'sequence_id': 'run-b'}),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('stop_modal_end')));
+    await tester.pumpAndSettle();
+
+    expect(seqApi.lifecycle, ['stop:run-a', 'stop:run-b']);
+  });
+
+  testWidgets('the panic tap dispatches even while another command is acting', (
+    tester,
+  ) async {
+    // #837 r3 — abortSlew bypasses the per-device re-entrancy guard (the
+    // moveAxis pattern): a mid-flight park must not swallow the STOP.
+    await pump(tester);
+    await fire(tester, _event(SlewWsEvents.started));
+
+    // Hold a park in flight so performAction's _acting guard is latched.
+    final parkGate = Completer<void>();
+    mountApi.commandGate = parkGate.future;
+    final park = container.read(mountProvider.notifier).park();
+    mountApi.commandGate = null; // only the park is gated
+
+    await tester.tap(find.byKey(const ValueKey('stop_mount_button')));
+    await tester.pump();
+
+    expect(mountApi.commands, contains('abort'),
+        reason: 'the STOP must never wait behind (or be dropped by) the guard');
+
+    parkGate.complete();
+    await park;
+    await tester.pumpAndSettle();
   });
 
   testWidgets('with no paused run the modal actions explain instead of throwing', (

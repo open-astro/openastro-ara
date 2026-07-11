@@ -81,8 +81,18 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
     return true;
   }
 
-  /// Abort an in-progress slew (panic stop) — also halts a manual axis move.
-  Future<bool> abortSlew() => performAction((api) => api.command('abort'));
+  /// Abort an in-progress slew (§57 panic stop) — also halts a manual axis
+  /// move. Bypasses the [performAction] re-entrancy guard exactly like
+  /// [moveAxis] (#837 r3): a STOP must never be silently dropped because
+  /// another mount command (or its post-202 refresh) is still in flight.
+  /// Returns true if dispatched (false only when no active server); a
+  /// transport failure THROWS so the caller can surface it honestly.
+  Future<bool> abortSlew() async {
+    final api = readClient();
+    if (api == null) return false;
+    await api.command('abort');
+    return true;
+  }
 }
 
 final mountProvider = AsyncNotifierProvider<MountNotifier, MountStatus?>(
