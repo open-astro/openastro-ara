@@ -598,6 +598,17 @@ const Map<String, Help> helpRegistry = {
         '* **Nautical (−12°)**: Sun 12° below — horizon visible to the eye, bright stars + globulars OK for testing or wide-field.\n'
         '* **Astronomical (−18°)**: Sun 18° below — sky is fully dark, deep-sky imaging window. Recommended default.',
   ),
+  'safety.site.soft_warning_altitude_deg': Help(
+    key: 'safety.site.soft_warning_altitude_deg',
+    title: 'Soft warning altitude',
+    body: 'An advisory mark, distinct from the hard horizon floor. Targets below the '
+        'hard floor are never scheduled; targets that never CLIMB above this soft '
+        'mark tonight are still listed in Tonight\'s Sky, but tagged — at low '
+        'elevation you look through more atmosphere, so seeing and extinction '
+        'soften detail and colour.\n\n'
+        '**Default 30°; 0 disables the advisory.** It never hides or down-ranks a '
+        'target (advise, don\'t dictate).',
+  ),
   'safety.site.max_sequence_runtime_min': Help(
     key: 'safety.site.max_sequence_runtime_min',
     title: 'Max sequence runtime',

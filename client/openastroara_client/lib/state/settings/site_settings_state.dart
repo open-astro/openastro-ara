@@ -31,6 +31,10 @@ class SiteSettings {
   // daemon's runtime-cap watchdog stops a run gracefully past this.
   final int maxSequenceRuntimeMin;
 
+  // §37.5 — the ADVISORY altitude (0 disables). Distinct from the hard
+  // horizon floor: Tonight's Sky tags targets that never clear this mark.
+  final double softWarningAltitudeDeg;
+
   const SiteSettings({
     this.siteName = 'Backyard',
     this.latitudeDeg = 0,
@@ -43,6 +47,7 @@ class SiteSettings {
     this.typicalSeeingArcsec = 2.5,
     this.twilightDefinition = TwilightDefinition.astronomical,
     this.maxSequenceRuntimeMin = 0,
+    this.softWarningAltitudeDeg = 30,
   });
 
   SiteSettings copyWith({
@@ -57,6 +62,7 @@ class SiteSettings {
     double? typicalSeeingArcsec,
     TwilightDefinition? twilightDefinition,
     int? maxSequenceRuntimeMin,
+    double? softWarningAltitudeDeg,
   }) =>
       SiteSettings(
         siteName: siteName ?? this.siteName,
@@ -73,6 +79,8 @@ class SiteSettings {
         twilightDefinition: twilightDefinition ?? this.twilightDefinition,
         maxSequenceRuntimeMin:
             maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
+        softWarningAltitudeDeg:
+            softWarningAltitudeDeg ?? this.softWarningAltitudeDeg,
       );
 }
 
@@ -134,6 +142,12 @@ class SiteSettingsNotifier extends Notifier<SiteSettings> {
     // 0 = no limit; a week (10080 min) is a generous ceiling for one run.
     if (v < 0 || v > 10080) return;
     state = state.copyWith(maxSequenceRuntimeMin: v);
+  }
+
+  void setSoftWarningAltitudeDeg(double v) {
+    // 0 disables the advisory.
+    if (v < 0 || v > 90) return;
+    state = state.copyWith(softWarningAltitudeDeg: v);
   }
 
   Future<void> hydrateFromServer(ProfileApi api) async {

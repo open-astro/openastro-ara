@@ -159,11 +159,13 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   section DEFAULT instead of keeping the cloned value; typing un-marks. Other sections' fields
   stay keep-on-blank (their defaults are benign); extend per-field if friction emerges.
 - **§37.5 wizard safety/site extras (enforcement-first)** — per-weather granular actions,
-  WILMA-offline auto-abort timer, alarm sound/vibrate, soft-warning altitude: add each field
-  together with the engine/planner surface that consumes it. ~~Max-sequence-runtime cap~~ —
-  shipped: `SiteSettingsDto.MaxSequenceRuntimeMin` (0 = no limit) + the sequencer's runtime-cap
-  watchdog (graceful user-stop path + notification; cap re-read per tick so mid-run Settings
-  changes apply) + Settings → Safety → Site row + wizard screen 16 field.
+  WILMA-offline auto-abort timer, alarm sound/vibrate: add each field together with the
+  engine/planner surface that consumes it. ~~Max-sequence-runtime cap~~ — shipped:
+  `SiteSettingsDto.MaxSequenceRuntimeMin` (0 = no limit) + the sequencer's runtime-cap watchdog
+  (graceful user-stop path + notification; cap re-read per tick) + Settings row + wizard field.
+  ~~Soft-warning altitude~~ — shipped: `SiteSettingsDto.SoftWarningAltitudeDeg` (default 30°,
+  0 disables) + Tonight's Sky zero-point advisory tag on targets that never clear it (the
+  filter/moon advisory pattern — never a score input) + Settings row + wizard field.
 - ~~**Logs + bug report streaming**~~ — both halves shipped: §29.9 tail reads backwards with
   early-exit (`LogService.TailAsync`, byte-level carry across chunk boundaries, UTF-8-safe);
   §54 daemon-log + bug-report downloads now stream to a user-picked path via `dio.download`
