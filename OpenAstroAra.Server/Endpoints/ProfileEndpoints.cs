@@ -135,6 +135,14 @@ public static class ProfileEndpoints {
             .WithName("PutCustomHorizon")
             .WithSummary("Replace the active profile's custom terrain horizon (points are sorted by azimuth; azimuth 0-360, altitude -10..90, max 361 points).");
 
+        // §30.7.4 (e-4b-2) — read-only: the calibration builds stamp this server-side (daemon-owned
+        // derived data, like focus-calibration), so there is deliberately no PUT.
+        profile.MapGet("/calibration-state", (IProfileStore store) =>
+                Results.Ok(store.GetCalibrationState()))
+            .Produces<CalibrationStateDto>(StatusCodes.Status200OK)
+            .WithName("GetCalibrationState")
+            .WithSummary("Get the active profile's calibration-state block (guider dark library / defect map validity + last-built timestamps).");
+
         profile.MapGet("/filenames", (IProfileStore store) =>
                 Results.Ok(store.GetFilenamesSettings()))
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)

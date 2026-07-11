@@ -128,6 +128,26 @@ public sealed record CustomHorizonPointDto(double AzimuthDeg, double AltitudeDeg
 /// §70 profile share like the site coordinates.</summary>
 public sealed record CustomHorizonDto(IReadOnlyList<CustomHorizonPointDto> Points);
 
+/// <summary>§30.7.4 — one calibration-validity record: whether the artifact is currently
+/// trusted and when it was last (re)built. Daemon-owned derived state, not a user setting;
+/// <c>Valid=false</c> with a null timestamp is "never built".</summary>
+public sealed record GuiderCalibrationEntryDto(
+    bool Valid = false,
+    DateTimeOffset? LastBuiltAt = null);
+
+/// <summary>§30.7.4 calibration-state block, guider slice (e-4b-2): the §63.6 dark-library and
+/// defect-map builds stamp their entry on completion, so "when did I last build darks for this
+/// rig?" is answerable from the profile instead of the guider daemon's filesystem. Future §30.7
+/// subsystems (smart_focus, backlash, phd2_cal, …) extend this record; the §63.7
+/// equipment-change invalidation flips <c>Valid</c> back to false.</summary>
+public sealed record CalibrationStateDto(
+    GuiderCalibrationEntryDto DarkLibrary,
+    GuiderCalibrationEntryDto DefectMap) {
+
+    /// <summary>The never-calibrated default (both entries invalid, no timestamps).</summary>
+    public static CalibrationStateDto Empty { get; } = new(new GuiderCalibrationEntryDto(), new GuiderCalibrationEntryDto());
+}
+
 /// <summary>
 /// §29.2 filenames settings — date-token separator + dark/bias
 /// compression toggle. (The main filename template + format live in

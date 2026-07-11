@@ -218,6 +218,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(SessionRestretchRequestDto))]
 [JsonSerializable(typeof(CustomHorizonDto))]
 [JsonSerializable(typeof(CustomHorizonPointDto))]
+[JsonSerializable(typeof(CalibrationStateDto))]
+[JsonSerializable(typeof(GuiderCalibrationEntryDto))]
 [JsonSerializable(typeof(IReadOnlyList<CustomHorizonPointDto>))]
 [JsonSerializable(typeof(FocusCalibrationDto))]
 [JsonSerializable(typeof(FocusCalibrationSampleDto))]

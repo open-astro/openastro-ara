@@ -117,7 +117,10 @@ public sealed partial class GuiderService {
         // _shutdownCts.Token inside the deferred lambda would race a concurrent Dispose
         // and throw ObjectDisposedException in the background task, leaking the gate.
         var darkToken = _shutdownCts.Token;
-        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest, darkToken));
+        // Capture the active profile NOW too: the build's calibration-state stamp belongs to the
+        // profile the build was started under, not whichever profile is active minutes later (#823 r1).
+        var profileAtStart = _activeProfileIdResolver?.Invoke();
+        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest, profileAtStart, darkToken));
         return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
@@ -141,7 +144,7 @@ public sealed partial class GuiderService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background build boundary: guider.BuildDarkLibraryAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a 2-hour blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
-    private async Task BuildDarkLibraryInBackground(PHD2Guider guider, Phd2BuildDarkLibrary rpcRequest, CancellationToken ct) {
+    private async Task BuildDarkLibraryInBackground(PHD2Guider guider, Phd2BuildDarkLibrary rpcRequest, Guid? profileAtStart, CancellationToken ct) {
         var p = rpcRequest.Parameters!;
         // §63.8: cancel the progress poll the moment the build settles (complete OR failed), independently of the
         // build's own cancellation — a linked source so shutdown still tears both down together.
@@ -173,6 +176,10 @@ public sealed partial class GuiderService {
                 ["exposure_count"] = result.ExposureCount,
                 ["exposures_ms"] = exposures,
             });
+            // §63.6 step 6 / §30.7.4 (e-4b-2): stamp calibration_state.guider.dark_library in the active
+            // profile so "when did I last build darks?" survives restarts. AFTER the complete event —
+            // the profile write must never delay or fail the client-visible completion signal.
+            RecordCalibrationBuilt(darkLibrary: true, profileAtStart);
         } catch (Exception ex) {
             LogDarkLibraryBuildFailed(ex);
             await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
@@ -389,13 +396,15 @@ public sealed partial class GuiderService {
         // Capture the token NOW (see BuildDarkLibraryAsync) so the deferred lambda can't
         // race Dispose and throw ObjectDisposedException reading _shutdownCts.Token.
         var defectToken = _shutdownCts.Token;
-        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest, defectToken));
+        // Same as the dark-library path: the stamp belongs to the profile the build started under.
+        var profileAtStart = _activeProfileIdResolver?.Invoke();
+        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest, profileAtStart, defectToken));
         return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background build boundary: guider.BuildDefectMapDarksAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a long blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
-    private async Task BuildDefectMapDarksInBackground(PHD2Guider guider, Phd2BuildDefectMapDarks rpcRequest, CancellationToken ct) {
+    private async Task BuildDefectMapDarksInBackground(PHD2Guider guider, Phd2BuildDefectMapDarks rpcRequest, Guid? profileAtStart, CancellationToken ct) {
         var p = rpcRequest.Parameters!;
         // §63.8: poll defect-map build progress (get_dark_build_progress covers both build types) on its own
         // connection; the linked source cancels it the instant the build settles.
@@ -420,6 +429,8 @@ public sealed partial class GuiderService {
                 ["exposure_ms"] = result.ExposureMs,
                 ["frame_count"] = result.FrameCount,
             });
+            // §30.7.4 (e-4b-2): same stamp as the dark-library path, defect_map entry.
+            RecordCalibrationBuilt(darkLibrary: false, profileAtStart);
         } catch (Exception ex) {
             LogDefectMapBuildFailed(ex);
             await StopProgressPollAsync(pollCts, pollTask).ConfigureAwait(false);
@@ -435,6 +446,48 @@ public sealed partial class GuiderService {
             }
         }
     }
+
+    /// <summary>§30.7.4 (e-4b-2): best-effort write of the guider calibration-state entry after a build
+    /// completes. Read-modify-write is safe from concurrent stamps without extra locking (both build paths
+    /// run under the shared single-build gate), but a PROFILE SWITCH mid-build swaps the live store's
+    /// contents entirely (POST /profiles/{id}/select never touches the guider — the ProfileLifecycle
+    /// gotcha), so the stamp would land on a profile the build never ran for. Hence
+    /// <paramref name="profileAtStart"/>: skip when the active profile changed between build start and
+    /// completion (#823 r1). A switch landing in the instants between this check and the Put remains
+    /// theoretically possible but is a sub-millisecond window against a minutes-long build; closing it
+    /// fully would need a cross-service lock spanning the repository and the store.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort boundary: a profile-store write failure (disk full, IO error mid-persist) must not fail the already-completed build or become an unobserved task exception — the build itself succeeded. Log-and-recover.")]
+    private void RecordCalibrationBuilt(bool darkLibrary, Guid? profileAtStart) {
+        if (_profileStore is null) {
+            return;
+        }
+        var subsystem = darkLibrary ? "dark_library" : "defect_map";
+        try {
+            var profileNow = _activeProfileIdResolver?.Invoke();
+            if (profileNow != profileAtStart) {
+                LogCalibrationStateStampSkippedProfileSwitched(subsystem, profileAtStart, profileNow);
+                return;
+            }
+            var entry = new GuiderCalibrationEntryDto(Valid: true, LastBuiltAt: DateTimeOffset.UtcNow);
+            var state = _profileStore.GetCalibrationState();
+            _profileStore.PutCalibrationState(darkLibrary
+                ? state with { DarkLibrary = entry }
+                : state with { DefectMap = entry });
+            LogCalibrationStateRecorded(subsystem);
+        } catch (Exception ex) {
+            LogCalibrationStateWriteFailed(subsystem, ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Recorded calibration_state.guider.{Subsystem} = valid in the active profile")]
+    partial void LogCalibrationStateRecorded(string subsystem);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping the calibration_state.guider.{Subsystem} stamp — the active profile changed mid-build (was {ProfileAtStart}, now {ProfileNow}); the build ran for the old profile's rig")]
+    partial void LogCalibrationStateStampSkippedProfileSwitched(string subsystem, Guid? profileAtStart, Guid? profileNow);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to record calibration_state.guider.{Subsystem} after a successful build — the profile will keep reporting it as never built")]
+    partial void LogCalibrationStateWriteFailed(string subsystem, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Defect-map build started (exposureMs={ExposureMs}, frames={FrameCount})")]
     partial void LogDefectMapBuildStarted(int exposureMs, int frameCount);

@@ -82,7 +82,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
             IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null,
             IProfileStore? profileStore = null, Func<ISequencerService?>? sequencerResolver = null,
-            INotificationService? notifications = null, IFaultLogService? faultLog = null) {
+            INotificationService? notifications = null, IFaultLogService? faultLog = null,
+            Func<Guid?>? activeProfileIdResolver = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -92,7 +93,13 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _sequencerResolver = sequencerResolver;
         _notifications = notifications;
         _faultLog = faultLog;
+        _activeProfileIdResolver = activeProfileIdResolver;
     }
+
+    // §30.7.4 — resolves the multi-profile repository's ActiveId so the calibration-state stamp can
+    // detect a profile switch during a long build (POST /profiles/{id}/select swaps the live store
+    // without touching the guider). Null in benches/tests without a repository → stamp unconditionally.
+    private readonly Func<Guid?>? _activeProfileIdResolver;
 
     public Task<GuiderDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {

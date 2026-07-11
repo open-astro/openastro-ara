@@ -415,6 +415,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // §30.7.4 calibration state (e-4b-2) — everything-invalid until a build stamps it.
+    private CalibrationStateDto _calibrationState = CalibrationStateDto.Empty;
+
+    public CalibrationStateDto GetCalibrationState() {
+        lock (_lock) { return _calibrationState; }
+    }
+
+    public void PutCalibrationState(CalibrationStateDto value) {
+        lock (_lock) { _calibrationState = value; }
+        RaiseChanged();
+    }
+
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
     // always render linear via the frame-type auto-override.
     private StretchDefaultsDto _stretchDefaults = new(

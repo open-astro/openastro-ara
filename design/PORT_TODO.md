@@ -811,9 +811,10 @@ the per-tick swallow and build isolation are unchanged. Bench:
 events `guider.dark_library.started` / `…complete` / `…failed` via `IWsBroadcaster` (best-effort; NO granular
 progress — see scope correction). +6 tests (service validation/connection contract + endpoint status mapping).
 
-**e-4b-2 leftover (deferred):** record `calibration_state.guider.dark_library` on completion — there is no
-server-side calibration-state store yet (the §39 calibration view derives from the frame catalog, not a guider
-artifact record), so this waits until such a store exists or the client reads it live from the status endpoint.
+✅ **e-4b-2 leftover — DONE (2026-07-10):** the §30.7.4 `calibration_state` profile section now exists (guider
+slice: `dark_library` + `defect_map`, each `{valid, last_built_at}`); both build-complete paths stamp it
+best-effort after the complete WS event; read-only `GET /api/v1/profile/calibration-state`; carried across
+profile select, cleared for never-built profiles, stripped from share export.
 
 **e-4b-3 (client UI) — partially unblocked (WS transport landed 2026-06-12).** The cover-the-scope build modal +
 building/done indicator wants the §60.9 WS stream to observe `guider.dark_library.started/complete/failed`.
