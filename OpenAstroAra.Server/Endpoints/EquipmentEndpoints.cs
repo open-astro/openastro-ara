@@ -152,8 +152,13 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
         telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
-        telescope.MapPost("/abort", async (ITelescopeService svc, CancellationToken ct) => {
-            await svc.AbortSlewAsync(ct); return Results.Accepted();
+        telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
+            // §57.4 steps 1+2 — device abort, then an UNCONDITIONAL sequence pause (even when the
+            // abort throws); the ordering contract lives in MountStopHandler where tests pin it.
+            await MountStopHandler.ExecuteAsync(
+                () => svc.AbortSlewAsync(ct),
+                () => sequencer.PauseActiveRunsAsync(CancellationToken.None));
+            return Results.Accepted();
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
         telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) => {

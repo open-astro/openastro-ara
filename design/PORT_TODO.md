@@ -1521,3 +1521,14 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   there — unlike macOS). Surfaced 2026-06-14 by the #450 review.
 
 - **OBSOLETE (2026-07-02) — §36.1 GPL v3 §6 Aladin Lite sign-off: no longer applicable.** The premise died with the #611 planetarium pivot: Aladin Lite is no longer bundled (nor fetched) — the `AladinView` widget was deleted, `assets/aladin/` was never in `pubspec.yaml` after the pivot, and the leftover unshipped `assets/aladin/{aladin.js,ALADIN_LICENSE.md}` files were removed from the repo in the Aladin-scrub PR (2026-07-02), which also replaced the stale NOTICE.md Aladin bullet with the Stellarium Web Engine (AGPL-3.0) disclosure. No GPL §6 obligation exists for software we do not convey. The bundled planetarium engine's own source-disclosure duty (AGPL §13) is already satisfied — see `client/.../assets/stellarium/README.md` + the `open-astro/stellarium-web-engine` fork (tag `ara-v1`). Original entry (historical): As of #571 the Aladin Lite v3 engine (GPL v3, minified) ships *inside* the WILMA client binary rather than being fetched from the CDS CDN at runtime, which changes the obligation from "linking" (the GPL FAQ separate-process exception NOTICE.md cites) to "distribution": GPL v3 §6 requires the complete corresponding source accompany or be offered alongside any binary conveyed to a third party. A formal §6 **written offer** + the unambiguous corresponding-source pointer (the upstream `v3.6.1` tag) is now in `client/.../assets/aladin/ALADIN_LICENSE.md`, which satisfies the substance for a network-available upstream. **Before the first public/installer release that conveys the binary**, have whoever signs off the existing LGPL/FreeImage compliance confirm the §6 form is adequate for the shipping channel (e.g. that the installer carries or links the offer, and the corresponding-source location is durable). No obligation crystallises at merge — this PR does not ship an installer to third parties; the duty attaches when the packaged binary is conveyed. Flagged by the #571 review.
+
+## §57 Stop Mount — follow-ups (2026-07-11, from the #836 review arc)
+
+- **Flip-watchdog abort reads as a normal slew_complete.** `MeridianFlipExecutor`'s watchdog
+  `StopSlew()` path (stalled/timed-out flip slew) calls `AbortSlew` via the mediator without
+  touching `SlewEventWatch`, so a watchdog-aborted flip slew publishes `telescope.slew_complete`
+  rather than `slew_aborted`. Deliberate for slice 1 — `slew_aborted` is scoped to the §57.4
+  user panic stop — but it's another real "the slew didn't actually complete" case; when
+  touched next, route internal aborts through the same noting path with `reason: "watchdog"`.
+- **§57.5 latency logging** — tap→AbortSlew issued latency per Stop Mount incident into the
+  `faults` table; deferred until the WILMA button exists to measure.
