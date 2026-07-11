@@ -22,6 +22,7 @@ class _FakeTimeSyncClient implements TimeSyncClient {
   _FakeTimeSyncClient(this.state);
   TimeSyncState state;
   int clientPushes = 0;
+  bool manualLocationApplies = true;
   ({DateTime timeUtc, double? lat, double? lng, double? alt})? lastManual;
 
   @override
@@ -40,7 +41,10 @@ class _FakeTimeSyncClient implements TimeSyncClient {
     double? alt,
   }) async {
     lastManual = (timeUtc: timeUtc, lat: lat, lng: lng, alt: alt);
-    return const TimeSyncPushResult(locationUpdated: true, clockSet: true);
+    return TimeSyncPushResult(
+      locationUpdated: manualLocationApplies,
+      clockSet: true,
+    );
   }
 
   @override
@@ -82,13 +86,14 @@ void main() {
     tester,
   ) async {
     final api = _FakeTimeSyncClient(
-      const TimeSyncState(
+      TimeSyncState(
         synced: true,
         source: 'gps-internal',
         trust: 'high',
         systemTimeOffsetSeconds: -0.4,
-        location: TimeSyncLocation(lat: 30.27, lng: -97.74, alt: 165.0),
+        location: const TimeSyncLocation(lat: 30.27, lng: -97.74, alt: 165.0),
         internalGpsAvailable: true,
+        syncedAtUtc: DateTime.utc(2026, 7, 11, 7, 15, 30),
       ),
     );
     await _pump(tester, api);
@@ -97,6 +102,7 @@ void main() {
     expect(find.text('-0.4 s'), findsOneWidget);
     expect(find.text('30.2700°, -97.7400°, 165 m'), findsOneWidget);
     expect(find.text('detected'), findsOneWidget);
+    expect(find.text('2026-07-11T07:15:30'), findsOneWidget);
     expect(find.textContaining('Plug a USB GPS'), findsNothing);
   });
 
@@ -149,6 +155,33 @@ void main() {
       find.byKey(const ValueKey('time_sync_manual_apply')),
       findsNothing,
       reason: 'a successful apply closes the dialog',
+    );
+  });
+
+  testWidgets('a position the server did not apply is called out', (
+    tester,
+  ) async {
+    final api = _FakeTimeSyncClient(const TimeSyncState(synced: false))
+      ..manualLocationApplies = false;
+    await _pump(tester, api);
+
+    await tester.tap(find.byKey(const ValueKey('time_sync_manual_open')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('time_sync_manual_lat')),
+      '30.27',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('time_sync_manual_lng')),
+      '-97.74',
+    );
+    await tester.tap(find.byKey(const ValueKey('time_sync_manual_apply')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('The position was NOT applied'),
+      findsOneWidget,
+      reason: 'a silently dropped position must not look like success',
     );
   });
 

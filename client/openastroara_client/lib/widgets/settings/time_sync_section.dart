@@ -108,6 +108,11 @@ class TimeSyncSection extends ConsumerWidget {
         label: 'USB GPS on server',
         value: s.internalGpsAvailable ? 'detected' : 'not detected',
       ),
+      if (s.syncedAtUtc != null)
+        SettingsRow(
+          label: 'Last sync (UTC)',
+          value: s.syncedAtUtc!.toIso8601String().substring(0, 19),
+        ),
       if (!s.synced)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -235,18 +240,20 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
         lng: lng,
         alt: latGiven ? alt : null,
       );
+      // The barrier is tappable, so the dialog can be dismissed mid-push;
+      // popping via the pre-await NavigatorState would then close whatever
+      // route is behind it (r1).
+      if (!mounted) return;
       widget.onApplied();
       navigator.pop();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            result.clockSet
-                ? 'Server clock set (manual, low trust).'
-                : 'Time recorded, but the server could not set its system '
-                      'clock — the offset is being tracked instead.',
-          ),
-        ),
-      );
+      final clockMsg = result.clockSet
+          ? 'Server clock set (manual, low trust).'
+          : 'Time recorded, but the server could not set its system '
+                'clock — the offset is being tracked instead.';
+      final locationMsg = latGiven && !result.locationUpdated
+          ? ' The position was NOT applied — check the site settings.'
+          : '';
+      messenger.showSnackBar(SnackBar(content: Text('$clockMsg$locationMsg')));
     } catch (e) {
       if (!mounted) return;
       setState(() {
