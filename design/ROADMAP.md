@@ -412,8 +412,11 @@ named section — this appendix indexes, it does not duplicate.
   primary + blind; drop the option from profile/wizard or log the substitution.
 - Plate-solve slices (low priority): REST centering trigger (`POST /platesolve/center`, needs the
   202-Accepted long-running-op pattern + progress surface); #756 frame-solve header-reuse micro-opt.
-- §39 `ListSessionsAsync` O(N) queries per page + integer-OFFSET cursor — batch + keyset
-  pagination when catalog sizes warrant (same shape in `SqliteDarkLibraryService`).
+- ~~§39 `ListSessionsAsync` O(N) queries per page + integer-OFFSET cursor~~ — shipped: pages now
+  assemble in 6 queries total (batched `IN ($ids)` header/filters/coverage/profile passes) and the
+  cursor is keyset over (started, session_id) — stable when sessions land mid-pagination; a legacy
+  integer cursor still pages via the old OFFSET path. `SqliteDarkLibraryService`'s per-combination
+  COUNT loop remains (fine at real dark-matrix sizes, per the #672 review).
 - Playbook prose sweep: ~a dozen bare `DEPLOY.md`/`RUNNING.md` mentions missing the `docs/`
   prefix (#730) — next deliberate playbook pass.
 

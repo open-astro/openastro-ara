@@ -27,6 +27,7 @@ using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -108,6 +109,125 @@ namespace OpenAstroAra.Test {
             // The two pages together cover all three sessions with no overlap.
             var ids = page1.Items.Concat(page2.Items).Select(s => s.Id).ToHashSet();
             Assert.That(ids, Is.EquivalentTo(new[] { Session, s2, s3 }));
+        }
+
+        [Test]
+        public async Task ListSessions_keyset_cursor_is_stable_when_a_newer_session_lands_mid_pagination() {
+            // The pre-keyset integer-OFFSET cursor shifted the window when a new session arrived between
+            // pages (duplicating the page boundary). The keyset cursor anchors on the last row's
+            // (started, session_id), so a newer arrival can't disturb page 2.
+            var s2 = Guid.Parse("44444444-4444-4444-4444-444444444442");
+            var s3 = Guid.Parse("44444444-4444-4444-4444-444444444443");
+            await InsertSessionAsync(s2);
+            await InsertSessionAsync(s3);
+            var t0 = new DateTimeOffset(2026, 7, 10, 1, 0, 0, TimeSpan.Zero);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", capturedUtc: t0);
+            await InsertFrameAsync(s2, "light", "Ha", 300, 100, "M81", capturedUtc: t0.AddHours(1));
+            await InsertFrameAsync(s3, "light", "Ha", 300, 100, "M101", capturedUtc: t0.AddHours(2));
+
+            var page1 = await _svc.ListSessionsAsync(2, null, CancellationToken.None);
+            Assert.That(page1.Items.Select(i => i.Id), Is.EqualTo(new[] { s3, s2 }), "newest first");
+
+            // A brand-new session lands AFTER page 1 was served.
+            var s4 = Guid.Parse("44444444-4444-4444-4444-444444444444");
+            await InsertSessionAsync(s4);
+            await InsertFrameAsync(s4, "light", "Ha", 300, 100, "NGC7000", capturedUtc: t0.AddHours(3));
+
+            var page2 = await _svc.ListSessionsAsync(2, page1.NextCursor, CancellationToken.None);
+            Assert.That(page2.Items.Select(i => i.Id), Is.EqualTo(new[] { Session }),
+                "page 2 continues from the anchor — no duplicate of page 1, no skip, no bleed-in of the newcomer");
+            Assert.That(page2.HasMore, Is.False);
+        }
+
+        [Test]
+        public async Task ListSessions_does_not_duplicate_or_skip_sessions_with_identical_start_times() {
+            // Equal MIN(captured_utc) across sessions — the session_id tiebreaker must keep the page
+            // boundary deterministic (the pre-keyset ORDER BY had no tiebreaker at all).
+            var t = new DateTimeOffset(2026, 7, 10, 2, 0, 0, TimeSpan.Zero);
+            var ids = new List<Guid> { Session };
+            for (var i = 2; i <= 5; i++) {
+                var sid = Guid.Parse($"55555555-5555-5555-5555-55555555555{i}");
+                ids.Add(sid);
+                await InsertSessionAsync(sid);
+            }
+            foreach (var sid in ids) {
+                await InsertFrameAsync(sid, "light", "Ha", 300, 100, "M42", capturedUtc: t);
+            }
+
+            var seen = new List<Guid>();
+            string? cursor = null;
+            do {
+                var page = await _svc.ListSessionsAsync(2, cursor, CancellationToken.None);
+                seen.AddRange(page.Items.Select(i => i.Id));
+                cursor = page.NextCursor;
+            } while (cursor is not null);
+
+            Assert.That(seen, Is.Unique, "no session appears on two pages despite the timestamp tie");
+            Assert.That(seen, Is.EquivalentTo(ids), "every session appears exactly once");
+        }
+
+        [Test]
+        public async Task ListSessions_still_accepts_a_legacy_integer_cursor() {
+            // A client mid-pagination across the keyset upgrade still holds an integer cursor from the old
+            // response shape — it must keep paging (via the legacy OFFSET path), not 500 or restart.
+            var s2 = Guid.Parse("66666666-6666-6666-6666-666666666662");
+            await InsertSessionAsync(s2);
+            var t0 = new DateTimeOffset(2026, 7, 10, 3, 0, 0, TimeSpan.Zero);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", capturedUtc: t0);
+            await InsertFrameAsync(s2, "light", "Ha", 300, 100, "M81", capturedUtc: t0.AddHours(1));
+
+            var legacy = await _svc.ListSessionsAsync(1, "1", CancellationToken.None);
+            Assert.That(legacy.Items.Select(i => i.Id), Is.EqualTo(new[] { Session }),
+                "offset 1 skips the newest session, exactly the old semantics");
+            // And the NEW cursor it hands out is keyset-format, migrating the client forward.
+            var page1 = await _svc.ListSessionsAsync(1, null, CancellationToken.None);
+            Assert.That(page1.NextCursor, Does.StartWith("k2:"));
+        }
+
+        [Test]
+        public async Task ListSessions_attributes_fields_per_session_across_a_batched_page() {
+            // #825 r1 — the batched page assembly is new SQL, so pin the FIELD attribution with two
+            // sessions of deliberately different shape on ONE page: coverage, filters, target, and
+            // profile id must each land on their own session, never leak from a page neighbor.
+            var covered = Guid.Parse("77777777-7777-7777-7777-777777777771");
+            var uncovered = Guid.Parse("77777777-7777-7777-7777-777777777772");
+            await InsertSessionAsync(covered, profileId: "profile-covered");
+            await InsertSessionAsync(uncovered); // NULL profile id
+            var t0 = new DateTimeOffset(2026, 7, 10, 4, 0, 0, TimeSpan.Zero);
+            // 'covered': two Ha lights at 300s/g100 with a matching flat + dark in the shared library.
+            await InsertFrameAsync(covered, "light", "Ha", 300, 100, "M42", capturedUtc: t0);
+            await InsertFrameAsync(covered, "light", "Ha", 300, 100, "M42", capturedUtc: t0.AddMinutes(5));
+            await InsertFrameAsync(covered, "flat", "Ha", 1, 100, "FLAT", capturedUtc: t0.AddMinutes(6));
+            await InsertFrameAsync(covered, "dark", null, 300, 100, "DARK", capturedUtc: t0.AddMinutes(7));
+            // 'uncovered': one OIII light at 600s/g200 — no OIII flat, no 600s/g200 dark anywhere.
+            await InsertFrameAsync(uncovered, "light", "OIII", 600, 200, "M101", capturedUtc: t0.AddHours(1));
+
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            // The fixture's SetUp session has no lights, so exactly these two are listed, newest first.
+            Assert.That(page.Items.Select(i => i.Id), Is.EqualTo(new[] { uncovered, covered }));
+
+            var u = page.Items[0];
+            Assert.That(u.TargetName, Is.EqualTo("M101"));
+            Assert.That(u.LightFrameCount, Is.EqualTo(1));
+            Assert.That(u.FiltersUsed.Single().FilterName, Is.EqualTo("OIII"));
+            Assert.That(u.FiltersUsed.Single().MeanExposureSeconds, Is.EqualTo(600));
+            Assert.That(u.MatchingFlatsAvailable, Is.False, "the neighbor's Ha flat must not cover an OIII light");
+            Assert.That(u.MatchingDarksAvailable, Is.False, "the neighbor's 300s/g100 dark must not cover a 600s/g200 light");
+            Assert.That(u.ProfileId, Is.Null);
+
+            var c = page.Items[1];
+            Assert.That(c.TargetName, Is.EqualTo("M42"));
+            Assert.That(c.LightFrameCount, Is.EqualTo(2));
+            Assert.That(c.FiltersUsed.Single().FilterName, Is.EqualTo("Ha"));
+            Assert.That(c.FiltersUsed.Single().LightFrameCount, Is.EqualTo(2));
+            Assert.That(c.MatchingFlatsAvailable, Is.True);
+            Assert.That(c.MatchingDarksAvailable, Is.True);
+            Assert.That(c.ProfileId, Is.EqualTo("profile-covered"));
+
+            // The batched page must agree field-for-field with the singular GetSessionAsync path.
+            var single = await _svc.GetSessionAsync(uncovered, CancellationToken.None);
+            Assert.That(single, Is.EqualTo(u) | Is.EqualTo(u with { FiltersUsed = single!.FiltersUsed }),
+                "batched and singular assembly agree (FiltersUsed compared by content above)");
         }
 
         [Test]
@@ -456,20 +576,21 @@ namespace OpenAstroAra.Test {
 
         // ── helpers ────────────────────────────────────────────────────────────
 
-        private async Task InsertSessionAsync(Guid id) {
+        private async Task InsertSessionAsync(Guid id, string? profileId = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO sessions (id, profile_id, sequence_json, started_at, ended_at,
                     recovery_needed, last_completed_instruction_id, current_target_id, frame_count)
-                VALUES ($id, NULL, NULL, $t, $t, 0, NULL, NULL, 0);
+                VALUES ($id, $pid, NULL, $t, $t, 0, NULL, NULL, 0);
                 """;
+            cmd.Parameters.AddWithValue("$pid", (object?)profileId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$id", id.ToString());
             cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null) {
+        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0, int? offset = null, int? focuserPosition = null, DateTimeOffset? capturedUtc = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
@@ -489,7 +610,7 @@ namespace OpenAstroAra.Test {
             cmd.Parameters.AddWithValue("$exp", exposureSeconds);
             cmd.Parameters.AddWithValue("$gain", gain);
             cmd.Parameters.AddWithValue("$temp", temperatureC);
-            cmd.Parameters.AddWithValue("$utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$utc", (capturedUtc ?? DateTimeOffset.UtcNow).ToString("O", CultureInfo.InvariantCulture));
             cmd.Parameters.AddWithValue("$path", $"/tmp/{Guid.NewGuid():N}.fits");
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
