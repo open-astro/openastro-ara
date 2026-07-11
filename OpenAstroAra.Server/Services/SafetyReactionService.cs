@@ -45,6 +45,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private readonly IObservingConditionsService? _weather;
     private readonly IProfileStore? _profiles;
     private readonly Func<ISequencerService?>? _sequencerResolver;
+    private readonly Func<ICenteringService?>? _centeringResolver;
     private readonly IGuiderService? _guider;
     private readonly ITelescopeService? _telescope;
     private readonly INotificationService? _notifications;
@@ -83,6 +84,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     internal Func<int, TimeSpan> ResumeDelayFromMinutes { get; set; } = m => TimeSpan.FromMinutes(Math.Max(0, m));
     /// <summary>Bound on the wait for the mount to report unparked before runs resume.</summary>
     internal TimeSpan UnparkTimeout { get; set; } = TimeSpan.FromSeconds(90);
+    /// <summary>Bound on the pre-release re-center (capture→solve→slew iterates for minutes on a
+    /// slow rig); expiry degrades to the resume-with-verify-pointing warning, never a stuck release.</summary>
+    internal TimeSpan RecenterTimeout { get; set; } = TimeSpan.FromMinutes(10);
     /// <summary>Cadence of the unpark read-back poll inside <see cref="UnparkTimeout"/>.</summary>
     internal TimeSpan UnparkPollInterval { get; set; } = TimeSpan.FromSeconds(2);
 
@@ -95,7 +99,8 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             ITelescopeService? telescope = null,
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
-            ILogger<SafetyReactionService>? logger = null) {
+            ILogger<SafetyReactionService>? logger = null,
+            Func<ICenteringService?>? centeringResolver = null) {
         _safetyMonitor = safetyMonitor;
         _weather = weather;
         _profiles = profiles;
@@ -105,6 +110,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<SafetyReactionService>.Instance;
+        _centeringResolver = centeringResolver;
     }
 
     // ─── pure decision helpers (unit-tested sim-free) ───
@@ -467,6 +473,24 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                 return;
             }
 
+            // §35 refinement (PORT_TODO auto-resume pointing): best-effort re-center on the
+            // paused run's target BEFORE the release, so the first post-resume frames aren't
+            // pointed wherever the park left the mount. A relapse to unsafe mid-recenter
+            // cancels via cts and takes the same restore-and-repark path as the proceed check.
+            var recenter = await TryRecenterQuietlyAsync(ids, cts.Token).ConfigureAwait(false);
+            if (recenter == RecenterOutcome.CancelledByRelapse) {
+                lock (_lock) {
+                    foreach (var id in ids) {
+                        if (!_pausedRunIds.Contains(id)) {
+                            _pausedRunIds.Add(id);
+                        }
+                    }
+                }
+                await ParkQuietlyAsync().ConfigureAwait(false);
+                LogResumeCancelled();
+                return;
+            }
+
             var resumed = await ResumeRunsAsync(ids).ConfigureAwait(false);
             LogAutoResumed(resumed, unparked);
 
@@ -474,11 +498,20 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
                 ["action"] = "auto_resume",
                 ["runs_resumed"] = resumed,
                 ["unparked"] = unparked,
+                ["recentered"] = recenter == RecenterOutcome.Recentered,
             }).ConfigureAwait(false);
             if (resumed > 0) {
+                var pointing = recenter switch {
+                    RecenterOutcome.Recentered =>
+                        "The target was re-centered by plate solve before the resume, so pointing is confirmed.",
+                    RecenterOutcome.Failed =>
+                        "An automatic re-center was attempted but did not converge — verify the pointing before trusting new frames.",
+                    _ =>
+                        "Verify the pointing: unless your sequence re-centers the target, frames after an unsafe pause may need the target re-slewed.",
+                };
                 await NotifyQuietlyAsync(NotificationSeverity.Warning, "Safe again — sequence resumed",
                     "Conditions stayed safe through the configured delay, so the mount was unparked and the paused sequence resumed. "
-                    + "Verify the pointing: unless your sequence re-centers the target, frames after an unsafe pause may need the target re-slewed."
+                    + pointing
                     + (unparked ? string.Empty : " NOTE: the mount did not confirm it unparked in time — check it before trusting new frames.")).ConfigureAwait(false);
             } else {
                 // The run ended in the tiny window between the liveness filter and
@@ -498,6 +531,64 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             cts.Dispose();
         }
     }
+
+    internal enum RecenterOutcome { NotAttempted, Recentered, Failed, CancelledByRelapse }
+
+    /// <summary>§35 auto-resume pointing — best-effort re-center on the first paused run whose
+    /// live plan carries a coordinate target. NotAttempted when there is no centering service,
+    /// no sequencer, or no coordinate-bearing target (plans without a DSO container). Bounded
+    /// by <see cref="RecenterTimeout"/> (expiry = Failed, resume proceeds with an honest
+    /// warning); a relapse to unsafe cancels via <paramref name="ct"/> and reports
+    /// CancelledByRelapse so the caller restores the pause + re-parks.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort refinement: a coordinate read or centering fault (no solver configured, camera busy, driver error) degrades to the existing resume-with-verify-pointing warning; logged, never rethrown, never blocks the release.")]
+    private async Task<RecenterOutcome> TryRecenterQuietlyAsync(IReadOnlyList<Guid> ids, CancellationToken ct) {
+        var centering = _centeringResolver?.Invoke();
+        var sequencer = _sequencerResolver?.Invoke();
+        if (centering is null || sequencer is null) {
+            return RecenterOutcome.NotAttempted;
+        }
+        OpenAstroAra.Astrometry.Coordinates? target = null;
+        foreach (var id in ids) {
+            ct.ThrowIfCancellationRequested();
+            try {
+                target = await sequencer.GetActiveTargetCoordinatesAsync(id, ct).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                LogRungFailed("recenter-target-read", ex);
+            }
+            if (target is not null) {
+                break;
+            }
+        }
+        if (target is null) {
+            return RecenterOutcome.NotAttempted;
+        }
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(RecenterTimeout);
+        try {
+            LogRecenterStarted();
+            var result = await centering.CenterOnTarget(target, solveProgress: null, progress: null, bounded.Token)
+                .ConfigureAwait(false);
+            return result?.Success == true ? RecenterOutcome.Recentered : RecenterOutcome.Failed;
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            return RecenterOutcome.CancelledByRelapse;
+        } catch (OperationCanceledException) {
+            // Our own RecenterTimeout — the release must not be held hostage by a slow rig.
+            LogRecenterTimedOut();
+            return RecenterOutcome.Failed;
+        } catch (Exception ex) {
+            LogRungFailed("recenter", ex);
+            return RecenterOutcome.Failed;
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-resume: re-centering the paused run's target before release (§35 pointing refinement)")]
+    private partial void LogRecenterStarted();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Auto-resume: the pre-release re-center timed out — resuming with a verify-pointing warning")]
+    private partial void LogRecenterTimedOut();
 
     // ─── equipment rungs (each best-effort; a fault never blocks the rest) ───
 

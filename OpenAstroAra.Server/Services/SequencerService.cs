@@ -424,6 +424,40 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return Task.FromResult(skipped);
     }
 
+    public Task<OpenAstroAra.Astrometry.Coordinates?> GetActiveTargetCoordinatesAsync(Guid id, CancellationToken ct) {
+        ct.ThrowIfCancellationRequested();
+        if (!_runs.TryGetValue(id, out var run) || run.Root is not ISequenceContainer root) {
+            return Task.FromResult<OpenAstroAra.Astrometry.Coordinates?>(null);
+        }
+        var dso = FindActiveDeepSkyTarget(root);
+        return Task.FromResult(dso?.Target?.InputCoordinates?.Coordinates);
+    }
+
+    /// <summary>Prefer the RUNNING target container (the one a pause interrupted) over the
+    /// plan's first, so a multi-target plan re-centers the right target. Reads the live plan
+    /// tree the engine also mutates — Items membership is fixed after load (only statuses
+    /// change), so the walk is safe alongside a paused run.</summary>
+    internal static IDeepSkyObjectContainer? FindActiveDeepSkyTarget(ISequenceContainer root) {
+        IDeepSkyObjectContainer? first = null;
+        IDeepSkyObjectContainer? running = null;
+        Walk(root);
+        return running ?? first;
+
+        void Walk(ISequenceContainer container) {
+            foreach (var item in container.Items) {
+                if (item is IDeepSkyObjectContainer dso) {
+                    first ??= dso;
+                    if (running is null && dso.Status == SequenceEntityStatus.RUNNING) {
+                        running = dso;
+                    }
+                }
+                if (item is ISequenceContainer child) {
+                    Walk(child);
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
     /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via

@@ -16,6 +16,44 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class DeepSkyObjectContainerTest {
 
+        // ─── §35 auto-resume pointing — the active-target walk ───
+
+        [Test]
+        public void FindActiveDeepSkyTarget_prefers_the_running_target_over_the_first() {
+            var root = new OpenAstroAra.Sequencer.Container.SequentialContainer();
+            var first = new DeepSkyObjectContainer(new HeadlessProfileService());
+            var running = new DeepSkyObjectContainer(new HeadlessProfileService());
+            running.Status = OpenAstroAra.Core.Enums.SequenceEntityStatus.RUNNING;
+            var middle = new OpenAstroAra.Sequencer.Container.SequentialContainer();
+            middle.Items.Add(running); // nested one level down — the walk must recurse
+            root.Items.Add(first);
+            root.Items.Add(middle);
+
+            var found = OpenAstroAra.Server.Services.SequencerService.FindActiveDeepSkyTarget(root);
+
+            Assert.That(found, Is.SameAs(running),
+                "a multi-target plan re-centers the target the pause interrupted, not the plan's first");
+        }
+
+        [Test]
+        public void FindActiveDeepSkyTarget_falls_back_to_the_first_when_none_is_running() {
+            var root = new OpenAstroAra.Sequencer.Container.SequentialContainer();
+            var first = new DeepSkyObjectContainer(new HeadlessProfileService());
+            root.Items.Add(first);
+            root.Items.Add(new DeepSkyObjectContainer(new HeadlessProfileService()));
+
+            Assert.That(OpenAstroAra.Server.Services.SequencerService.FindActiveDeepSkyTarget(root),
+                Is.SameAs(first));
+        }
+
+        [Test]
+        public void FindActiveDeepSkyTarget_returns_null_for_a_targetless_plan() {
+            var root = new OpenAstroAra.Sequencer.Container.SequentialContainer();
+            root.Items.Add(new OpenAstroAra.Sequencer.Container.SequentialContainer());
+
+            Assert.That(OpenAstroAra.Server.Services.SequencerService.FindActiveDeepSkyTarget(root), Is.Null);
+        }
+
         [Test]
         public void Clone_does_not_share_mutable_ExposureInfo_entries() {
             var dso = new DeepSkyObjectContainer(new HeadlessProfileService());

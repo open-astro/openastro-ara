@@ -272,10 +272,15 @@ the `PausedAwaitingUser` guard). Deliberately scoped OUT (each a clean follow-up
   audioplayers at forced-max volume, delay + tone as device-local knobs in Settings →
   Notifications. Vibration skipped by design — WILMA is desktop-only today; revisit if a
   mobile build lands.
-- **Auto-resume pointing** — the resume releases the paused run where it stood; a future
-  refinement could re-slew/re-center to the checkpointed target before releasing (needs per-run
-  target coordinates surfaced to the engine). Until then the resume notification tells the user
-  to verify pointing.
+- ✅ **Auto-resume pointing — DONE (2026-07-11).** `ISequencerService.GetActiveTargetCoordinatesAsync`
+  surfaces the paused run's live target (walks the plan tree for the RUNNING `IDeepSkyObjectContainer`,
+  falling back to the plan's first — so a multi-target plan re-centers the one the pause interrupted),
+  and the auto-resume countdown re-centers on it via `ICenteringService` BEFORE releasing the run:
+  best-effort (no solver / no coordinate target / a fault degrades to the old verify-pointing
+  warning), bounded by a 10-min `RecenterTimeout` (never a stuck release), and a relapse to unsafe
+  mid-recenter cancels + restores the pause + re-parks — the same guarantees as the unpark-window
+  relapse. The resume notification now reports pointing honestly: confirmed / attempted-but-failed /
+  not-attempted.
 - ✅ **§37.5 wizard safety extras — DONE for the enforced subset (2026-07-07).** Wizard screen 15
   grew the §35.1 weather-threshold fields (master toggle + wind/humidity/dew-delta, nullable =
   keep base) now that their enforcement landed. Per-trigger ACTIONS stay deferred by design

@@ -627,7 +627,10 @@ public partial class Program {
                 sp.GetService<ITelescopeService>(),
                 sp.GetService<INotificationService>(),
                 sp.GetService<IWsBroadcaster>(),
-                sp.GetService<ILogger<SafetyReactionService>>()));
+                sp.GetService<ILogger<SafetyReactionService>>(),
+                // §35 auto-resume pointing — resolver (not a direct dep) for the same
+                // construction-cycle reason as the sequencer.
+                () => sp.GetService<ICenteringService>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
