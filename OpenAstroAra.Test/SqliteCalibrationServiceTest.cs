@@ -185,6 +185,52 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ListSessions_attributes_fields_per_session_across_a_batched_page() {
+            // #825 r1 — the batched page assembly is new SQL, so pin the FIELD attribution with two
+            // sessions of deliberately different shape on ONE page: coverage, filters, target, and
+            // profile id must each land on their own session, never leak from a page neighbor.
+            var covered = Guid.Parse("77777777-7777-7777-7777-777777777771");
+            var uncovered = Guid.Parse("77777777-7777-7777-7777-777777777772");
+            await InsertSessionAsync(covered, profileId: "profile-covered");
+            await InsertSessionAsync(uncovered); // NULL profile id
+            var t0 = new DateTimeOffset(2026, 7, 10, 4, 0, 0, TimeSpan.Zero);
+            // 'covered': two Ha lights at 300s/g100 with a matching flat + dark in the shared library.
+            await InsertFrameAsync(covered, "light", "Ha", 300, 100, "M42", capturedUtc: t0);
+            await InsertFrameAsync(covered, "light", "Ha", 300, 100, "M42", capturedUtc: t0.AddMinutes(5));
+            await InsertFrameAsync(covered, "flat", "Ha", 1, 100, "FLAT", capturedUtc: t0.AddMinutes(6));
+            await InsertFrameAsync(covered, "dark", null, 300, 100, "DARK", capturedUtc: t0.AddMinutes(7));
+            // 'uncovered': one OIII light at 600s/g200 — no OIII flat, no 600s/g200 dark anywhere.
+            await InsertFrameAsync(uncovered, "light", "OIII", 600, 200, "M101", capturedUtc: t0.AddHours(1));
+
+            var page = await _svc.ListSessionsAsync(10, null, CancellationToken.None);
+            // The fixture's SetUp session has no lights, so exactly these two are listed, newest first.
+            Assert.That(page.Items.Select(i => i.Id), Is.EqualTo(new[] { uncovered, covered }));
+
+            var u = page.Items[0];
+            Assert.That(u.TargetName, Is.EqualTo("M101"));
+            Assert.That(u.LightFrameCount, Is.EqualTo(1));
+            Assert.That(u.FiltersUsed.Single().FilterName, Is.EqualTo("OIII"));
+            Assert.That(u.FiltersUsed.Single().MeanExposureSeconds, Is.EqualTo(600));
+            Assert.That(u.MatchingFlatsAvailable, Is.False, "the neighbor's Ha flat must not cover an OIII light");
+            Assert.That(u.MatchingDarksAvailable, Is.False, "the neighbor's 300s/g100 dark must not cover a 600s/g200 light");
+            Assert.That(u.ProfileId, Is.Null);
+
+            var c = page.Items[1];
+            Assert.That(c.TargetName, Is.EqualTo("M42"));
+            Assert.That(c.LightFrameCount, Is.EqualTo(2));
+            Assert.That(c.FiltersUsed.Single().FilterName, Is.EqualTo("Ha"));
+            Assert.That(c.FiltersUsed.Single().LightFrameCount, Is.EqualTo(2));
+            Assert.That(c.MatchingFlatsAvailable, Is.True);
+            Assert.That(c.MatchingDarksAvailable, Is.True);
+            Assert.That(c.ProfileId, Is.EqualTo("profile-covered"));
+
+            // The batched page must agree field-for-field with the singular GetSessionAsync path.
+            var single = await _svc.GetSessionAsync(uncovered, CancellationToken.None);
+            Assert.That(single, Is.EqualTo(u) | Is.EqualTo(u with { FiltersUsed = single!.FiltersUsed }),
+                "batched and singular assembly agree (FiltersUsed compared by content above)");
+        }
+
+        [Test]
         public async Task GenerateMatchingFlats_uses_the_default_target_adu_when_not_overridden() {
             await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
             var plan = await _svc.GenerateMatchingFlatsAsync(
@@ -530,14 +576,15 @@ namespace OpenAstroAra.Test {
 
         // ── helpers ────────────────────────────────────────────────────────────
 
-        private async Task InsertSessionAsync(Guid id) {
+        private async Task InsertSessionAsync(Guid id, string? profileId = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO sessions (id, profile_id, sequence_json, started_at, ended_at,
                     recovery_needed, last_completed_instruction_id, current_target_id, frame_count)
-                VALUES ($id, NULL, NULL, $t, $t, 0, NULL, NULL, 0);
+                VALUES ($id, $pid, NULL, $t, $t, 0, NULL, NULL, 0);
                 """;
+            cmd.Parameters.AddWithValue("$pid", (object?)profileId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$id", id.ToString());
             cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);

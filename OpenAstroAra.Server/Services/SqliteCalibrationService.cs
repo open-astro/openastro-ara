@@ -211,12 +211,15 @@ public sealed class SqliteCalibrationService : ICalibrationService {
 
         // 3+4) Coverage — the sessions with at least one UNCOVERED requirement. Same semantics as the
         // per-session EXCEPT queries (coverage is GLOBAL: flats/darks are a shared library), expressed as
-        // NOT EXISTS with SQLite's null-safe IS so a no-filter light still matches a no-filter flat.
+        // NOT EXISTS with SQLite's null-safe IS so a no-filter light still matches a no-filter flat. The
+        // inner DISTINCT mirrors the EXCEPT's dedup: the NOT EXISTS probe runs once per requirement combo,
+        // not once per raw frame row (a 500-frame single-filter session probes once, not 500 times).
         var flatsUncovered = await UncoveredSessionsAsync(conn, $"""
             SELECT DISTINCT l.session_id
-            FROM frames l
-            WHERE l.frame_type = 'light' AND l.session_id IN ({placeholders})
-              AND NOT EXISTS (
+            FROM (SELECT DISTINCT session_id, filter_name
+                  FROM frames
+                  WHERE frame_type = 'light' AND session_id IN ({placeholders})) l
+            WHERE NOT EXISTS (
                   SELECT 1 FROM frames f
                   WHERE f.frame_type = 'flat' AND f.filter_name IS l.filter_name)
             """, BindIds, ct);
@@ -224,14 +227,16 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         // with 0 for uncooled cameras across sentinel generations — see BuildSessionDtoAsync's remarks).
         var darksUncovered = await UncoveredSessionsAsync(conn, $"""
             SELECT DISTINCT l.session_id
-            FROM frames l
-            WHERE l.frame_type = 'light' AND l.session_id IN ({placeholders})
-              AND NOT EXISTS (
+            FROM (SELECT DISTINCT session_id, exposure_seconds, gain,
+                         ROUND(COALESCE(temperature_c, 0), 0) AS temp_bucket
+                  FROM frames
+                  WHERE frame_type = 'light' AND session_id IN ({placeholders})) l
+            WHERE NOT EXISTS (
                   SELECT 1 FROM frames d
                   WHERE d.frame_type = 'dark'
                     AND d.exposure_seconds IS l.exposure_seconds
                     AND d.gain IS l.gain
-                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS ROUND(COALESCE(l.temperature_c, 0), 0))
+                    AND ROUND(COALESCE(d.temperature_c, 0), 0) IS l.temp_bucket)
             """, BindIds, ct);
 
         // 5) Owning profile ids.
