@@ -309,7 +309,13 @@ the playbook is lost. One line per subsection; the playbook text is the referenc
 
 Deliberate confirmation passes, not new features (the checklist's "= verify" entries):
 
-- **§31** time + location sync — full waterfall verification.
+- **§31** time + location sync — the "verification" found the waterfall was never built (only
+  the site-settings round-trip existed). Server slice 1 SHIPPED: `TimeSyncService` state machine
+  (fresh-&-trusted gate, §31.2 trust clamping, honest offset tracking when the CAP_SYS_TIME
+  clock-set is unavailable, location write-through to the profile site settings) + GET/POST
+  `/api/v1/server/time-sync` + the pure NMEA RMC/GGA parser. Remaining: USB-GPS self-sync hosted
+  wiring (serial read → parser → self-push) and the WILMA waterfall UI (steps 1/3/4/5 + manual
+  entry modal).
 - **§57** Stop Mount — full slew-safety policy verification.
 - **§68** AlpacaBridge — full bridge contract verification. (The playbook §68 prose was
   reconciled 2026-07-09 to drop the removed minimum-version gate.)

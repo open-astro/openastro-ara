@@ -219,6 +219,12 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CustomHorizonDto))]
 [JsonSerializable(typeof(CustomHorizonPointDto))]
 [JsonSerializable(typeof(CalibrationStateDto))]
+// §31 time-sync wire (GET state / POST push / push result).
+[JsonSerializable(typeof(TimeSyncStateDto))]
+[JsonSerializable(typeof(TimeSyncPushRequestDto))]
+[JsonSerializable(typeof(TimeSyncPushResultDto))]
+[JsonSerializable(typeof(TimeSyncBeforeAfterDto))]
+[JsonSerializable(typeof(TimeSyncLocationDto))]
 [JsonSerializable(typeof(GuiderCalibrationEntryDto))]
 [JsonSerializable(typeof(IReadOnlyList<CustomHorizonPointDto>))]
 [JsonSerializable(typeof(FocusCalibrationDto))]
