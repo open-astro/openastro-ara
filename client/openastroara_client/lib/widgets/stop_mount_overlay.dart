@@ -45,6 +45,40 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
   bool _awaitingPause = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Cold start during a server-initiated slew (flip/recovery/park) — the
+    // started transition predates this session, so seed from the live status.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_reconcileFromStatus()),
+    );
+  }
+
+  /// One-shot best-effort read of the mount's live state, arm-only: the
+  /// slew's END always happens while we're connected, so slew_complete /
+  /// slew_aborted (or a link drop) clears the overlay as usual. Reads the
+  /// device API directly — a transient failure just means the next
+  /// reconnect/event re-arms.
+  Future<void> _reconcileFromStatus() async {
+    final api = ref.read(mountApiProvider);
+    if (api == null) return;
+    try {
+      final status = await api.getStatus();
+      if (!mounted || status == null) return;
+      if (status.runtimeState == 'slewing' && !_slewing) {
+        setState(() {
+          _slewing = true;
+          _stopRequested = false;
+          _targetRa = null; // the commanded target predates this session
+          _targetDec = null;
+        });
+      }
+    } catch (_) {
+      // Best-effort reconciliation only — the event stream remains truth.
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     ref.listen(wsEventsProvider, (previous, next) {
       final event = next.asData?.value;
@@ -80,10 +114,17 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
       }
     });
     // A dropped link means the slew state is unknown — don't strand a stale
-    // panic button over the reconnect flow.
+    // panic button over the reconnect flow. A link coming back UP reconciles
+    // against the live mount status (#837 r2): the event stream only carries
+    // TRANSITIONS, so a slew already in progress at (re)connect — link drop
+    // mid-slew, cold app start during a flip/recovery — never fires a fresh
+    // slew_started and the panic button would stay hidden over a moving mount.
     ref.listen(serverLinkUpProvider, (previous, next) {
       if (!next && _slewing) {
         setState(() => _slewing = false);
+      }
+      if (next && previous == false) {
+        unawaited(_reconcileFromStatus());
       }
     });
 
@@ -167,11 +208,14 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     if (!mounted) return;
     if (!ok) {
       setState(() => _stopRequested = false);
+      // false covers both "no server/API" and the notifier's re-entrancy
+      // guard dropping the call while another mount command is in flight
+      // (#837 r2) — say so instead of blaming the connection.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Stop Mount failed to reach the server — check the connection '
-            '(the sequence is still paused if the request landed).',
+            'Stop Mount was not issued — another mount command is still in '
+            'flight, or there is no server connection. Tap again.',
           ),
         ),
       );

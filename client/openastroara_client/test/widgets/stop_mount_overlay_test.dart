@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
+import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/ws_event.dart';
@@ -29,9 +30,10 @@ class _FakeSavedServerService implements SavedServerService {
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   final List<String> commands = [];
   bool failCommands = false;
+  MountStatus? status;
 
   @override
-  Future<MountStatus?> getStatus() async => null;
+  Future<MountStatus?> getStatus() async => status;
   @override
   Future<void> connect(DiscoveredDevice device) async {}
   @override
@@ -254,6 +256,45 @@ void main() {
       findsNothing,
       reason: 'the slew state is unknown when the link drops — no stale panic button',
     );
+  });
+
+  testWidgets('a slew already in progress at reconnect re-arms the button', (
+    tester,
+  ) async {
+    // #837 r2 — the event stream only carries transitions: a link drop
+    // mid-slew clears the overlay and no fresh slew_started ever fires, so
+    // the polled mount status must re-arm the panic button.
+    await pump(tester);
+    expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
+
+    mountApi.status = MountStatus(
+      deviceId: 'm1',
+      name: 'Bench Mount',
+      connectionState: EquipmentConnectionState.connected,
+      capabilities: null,
+      runtimeState: 'slewing',
+      rightAscensionHours: 5.5,
+      declinationDegrees: 20.0,
+      tracking: true,
+      parked: false,
+      atHome: false,
+    );
+    // Reconnect: link down (clears any state), back up → the widget does a
+    // one-shot status read and re-arms from runtimeState == 'slewing'.
+    container.read(_linkUp.notifier).set(false);
+    await tester.pumpAndSettle();
+    container.read(_linkUp.notifier).set(true);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('stop_mount_button')),
+      findsOneWidget,
+      reason: 'the polled status says slewing — the panic button must exist',
+    );
+
+    // The slew's END happens after reconnect, so the event stream clears it.
+    await fire(tester, _event(SlewWsEvents.complete));
+    expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
   });
 
   testWidgets('a REMOTE abort still binds the paused run for the modal', (
