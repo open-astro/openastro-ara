@@ -315,8 +315,15 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   reconciled 2026-07-09 to drop the removed minimum-version gate.)
 - **§14** integration tests gated on sims/hardware — run the gated suites when rigs are available.
 - **§53** accessibility — WCAG audit, ongoing.
-- **FITS keyword-convention audit** — `GAIN`/`OFFSET` aren't in the core FITS dictionary; revisit
-  only as a deliberate full header-convention audit.
+- ~~**FITS keyword-convention audit**~~ — audited 2026-07-11, verdict: KEEP the inherited
+  keyword set as-is. `GAIN`/`OFFSET` (and `IMAGETYP`/`EXPTIME`/`SET-TEMP`/`CCD-TEMP`/`FOCUSPOS`/
+  `EGAIN`, all NINA-verbatim in `FITSHeader.cs`) aren't core-FITS-dictionary keywords, but they
+  ARE the de-facto astro-imaging convention the whole toolchain reads (NINA/SGP/MaxIm lineage;
+  ASTAP, PixInsight, Siril). Write/read symmetry verified: every key the §28 catalog scanner
+  parses (`CaptureScanService` — OBJECT, IMAGETYP, FILTER, GAIN, OFFSET, CCD-TEMP, FOCUSPOS,
+  DATE-OBS, EXPOSURE→EXPTIME fallback) is written under the same name by the FITS writer.
+  Renaming toward core-dictionary purity would break re-scans of every existing frame on disk
+  and third-party interop for zero benefit — closed, no code change.
 - **§38 daemon schema check** — verify the daemon accepts a promoted plain-array `Items` wrapper
   (untested cross-boundary assumption).
 
