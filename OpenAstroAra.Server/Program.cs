@@ -430,11 +430,18 @@ public partial class Program {
         // §31 time-sync — the waterfall state machine; the clock setter needs CAP_SYS_TIME on the
         // binary (DEPLOY.md setcap step) and degrades to offset tracking without it. Location
         // pushes land in the profile site settings every lat/long consumer already reads.
-        builder.Services.AddSingleton<ITimeSyncService>(sp =>
+        builder.Services.AddSingleton<TimeSyncService>(sp =>
             new TimeSyncService(
                 sp.GetRequiredService<ILogger<TimeSyncService>>(),
                 clockSetter: null,
                 profiles: sp.GetService<IProfileStore>()));
+        builder.Services.AddSingleton<ITimeSyncService>(sp => sp.GetRequiredService<TimeSyncService>());
+        // §31.1 step 2 — the USB-GPS self-sync worker (probe /dev/ttyUSB*/ttyACM*, parse NMEA,
+        // apply gps-internal/high syncs without WILMA involvement).
+        builder.Services.AddHostedService(sp =>
+            new UsbGpsTimeSyncWorker(
+                sp.GetRequiredService<TimeSyncService>(),
+                sp.GetRequiredService<ILogger<UsbGpsTimeSyncWorker>>()));
         builder.Services.AddSingleton<IBackupService>(sp =>
             new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>(),
                 // Explicit: this factory lambda bypasses constructor activation, so optional params are passed

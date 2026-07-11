@@ -153,32 +153,49 @@ public sealed partial class TimeSyncService : ITimeSyncService {
                 $"Unknown time-sync source '{request.Source}' — expected client, gps-mobile or manual."),
         };
         var trust = ClampTrust(request.Trust, maxTrust);
+        return Task.FromResult(ApplyCore(stateSource, trust, request.TimeUtc, request.Location));
+    }
 
+    /// <summary>§31.1 step 2 — apply a USB-GPS self-sync (source <c>gps-internal</c>, trust
+    /// <c>high</c> per §31.2). Called by the GPS worker, never from the wire; the same plausibility
+    /// window applies (a receiver with a wrong almanac must not set the clock to nonsense).</summary>
+    public Task<TimeSyncPushResultDto> ApplyGpsSyncAsync(DateTimeOffset timeUtc, TimeSyncLocationDto? location, CancellationToken ct) {
+        if (timeUtc < MinPlausibleTime || timeUtc > MaxPlausibleTime) {
+            throw new TimeSyncInvalidRequestException(
+                $"GPS time '{timeUtc:O}' is outside the plausible window — refusing to set the system clock to it.");
+        }
+        if (location is { } l && (l.Lat is < -90 or > 90 || l.Lng is < -180 or > 180)) {
+            location = null; // a bad position must not poison the profile; the time sync still applies
+        }
+        return Task.FromResult(ApplyCore("gps-internal", "high", timeUtc, location));
+    }
+
+    private TimeSyncPushResultDto ApplyCore(string stateSource, string trust, DateTimeOffset timeUtc, TimeSyncLocationDto? location) {
         var before = Now();
-        var beforeOffset = (request.TimeUtc - before).TotalSeconds;
-        var clockSet = TrySetClock(request.TimeUtc);
+        var beforeOffset = (timeUtc - before).TotalSeconds;
+        var clockSet = TrySetClock(timeUtc);
         // A successful set leaves ~0 residual (the set itself takes microseconds); a failed one
         // leaves the whole pushed offset outstanding, tracked for GET.
         var afterOffset = clockSet ? 0.0 : beforeOffset;
 
-        var locationUpdated = request.Location is not null && TryApplyLocation(request.Location);
+        var locationUpdated = location is not null && TryApplyLocation(location);
 
         lock (_gate) {
             _source = stateSource;
             _trust = trust;
-            _syncedAtUtc = request.TimeUtc;
+            _syncedAtUtc = timeUtc;
             _syncedAtTickMs = TickMs();
-            if (request.Location is not null) {
-                _location = request.Location;
+            if (location is not null) {
+                _location = location;
             }
             _trackedOffsetSeconds = afterOffset;
         }
         LogSyncApplied(stateSource, trust, beforeOffset, clockSet);
-        return Task.FromResult(new TimeSyncPushResultDto(
+        return new TimeSyncPushResultDto(
             Before: new TimeSyncBeforeAfterDto(before, beforeOffset),
-            After: new TimeSyncBeforeAfterDto(clockSet ? request.TimeUtc : Now(), afterOffset),
+            After: new TimeSyncBeforeAfterDto(clockSet ? timeUtc : Now(), afterOffset),
             LocationUpdated: locationUpdated,
-            ClockSet: clockSet));
+            ClockSet: clockSet);
     }
 
     private static string ClampTrust(string? requested, string max) {
