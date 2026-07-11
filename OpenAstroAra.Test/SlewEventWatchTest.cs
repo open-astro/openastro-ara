@@ -92,6 +92,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_rapid_double_abort_publishes_the_aborted_event_once() {
+            // #836 r3 — the second Stop press on the same episode is a no-op for events (the
+            // device call still re-fires; it's idempotent on the mount side).
+            var w = new SlewEventWatch();
+            w.Observe(true);
+            Assert.That(w.NoteAborted(), Is.True, "first press publishes");
+            Assert.That(w.NoteAborted(), Is.False, "second press on the same episode does not");
+            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.None));
+        }
+
+        [Test]
         public void A_failed_dispatch_clears_its_target_so_a_later_park_slew_reports_none() {
             // #836 r2 — the command's dispatch failed (no episode ever opened); its coordinates
             // must not masquerade as the target of the next, unrelated slew.

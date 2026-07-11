@@ -62,7 +62,9 @@ internal sealed class SlewEventWatch {
     /// slewing state; an abort racing a just-commanded, not-yet-observed slew publishes no
     /// lifecycle events at all (consistently: that episode never opened).</summary>
     public bool NoteAborted() {
-        if (!_slewing) {
+        if (!_slewing || _abortNoted) {
+            // No open episode, or the episode is already marked aborted (a rapid double Stop
+            // press must not publish slew_aborted twice for the same episode — #836 r3).
             return false;
         }
         _abortNoted = true;
