@@ -71,7 +71,7 @@ namespace OpenAstroAra.Test {
         public void An_abort_suppresses_the_episodes_completed_verdict() {
             var w = new SlewEventWatch();
             w.Observe(true);
-            w.NoteAborted();
+            Assert.That(w.NoteAborted(), Is.True, "an open episode accepts the abort");
             Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.None),
                 "the abort path already published slew_aborted — no complete on top");
             w.Observe(true);
@@ -80,21 +80,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_abort_landing_before_the_start_was_observed_still_suppresses() {
+        public void An_idle_abort_is_refused_and_cannot_poison_a_later_park_style_slew() {
+            // #836 r1 — a defensive Stop press with nothing slewing must not latch a flag that
+            // would swallow the NEXT slew's complete; park/home/flip slews never call
+            // NoteSlewTarget, so nothing else would ever clear it.
             var w = new SlewEventWatch();
-            w.NoteAborted(); // abort raced in between poll ticks
-            Assert.That(w.Observe(true).Kind, Is.EqualTo(SlewEventWatch.Kind.Started),
-                "the slew was real — started still publishes");
-            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.None));
-        }
-
-        [Test]
-        public void A_new_commanded_slew_clears_a_stale_abort() {
-            var w = new SlewEventWatch();
-            w.NoteAborted();               // an abort with no episode
-            w.NoteSlewTarget(1.0, 2.0);    // a fresh commanded slew supersedes it
-            w.Observe(true);
-            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.Completed));
+            Assert.That(w.NoteAborted(), Is.False, "no episode → nothing to abort, nothing published");
+            Assert.That(w.Observe(true).Kind, Is.EqualTo(SlewEventWatch.Kind.Started));
+            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.Completed),
+                "the park-style episode closes with a complete — no stale suppression");
         }
 
         [Test]

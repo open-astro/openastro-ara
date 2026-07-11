@@ -50,14 +50,24 @@ internal sealed class SlewEventWatch {
     public void NoteSlewTarget(double raHours, double decDegrees) {
         _pendingTargetRa = raHours;
         _pendingTargetDec = decDegrees;
-        // A fresh commanded slew supersedes any stale abort verdict from a previous episode.
+        // Defensive hygiene: a fresh commanded slew supersedes any abort verdict.
         _abortNoted = false;
     }
 
-    public void NoteAborted() =>
-        // Unconditional: an abort landing between ticks (slew never observed as started) must
-        // still suppress the Started/Completed pair should the mount briefly read as slewing.
+    /// <summary>Latch the §57.4 abort onto the OPEN episode only — returns false (and latches
+    /// nothing) when no slew is in progress, so a defensive Stop press on an idle/parked mount
+    /// can never poison a later, unrelated episode's Completed verdict (#836 r1). The caller
+    /// publishes <c>slew_aborted</c> only on true. The watch and the cached runtime commit from
+    /// the same poll snapshot under the same lock, so "watch says slewing" IS the service's
+    /// slewing state; an abort racing a just-commanded, not-yet-observed slew publishes no
+    /// lifecycle events at all (consistently: that episode never opened).</summary>
+    public bool NoteAborted() {
+        if (!_slewing) {
+            return false;
+        }
         _abortNoted = true;
+        return true;
+    }
 
     public Verdict Observe(bool slewing) {
         if (slewing && !_slewing) {

@@ -235,17 +235,22 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         NoteMountCommand(w => w.NoteMotionCommanded());
         await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
         // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), carrying the last
-        // known position; the watch suppresses the episode's would-be slew_complete.
+        // known position; the watch suppresses that episode's would-be slew_complete. An abort
+        // with no slew in progress publishes nothing (#836 r1): there is no episode to close,
+        // and a latched flag would swallow a later park/home slew's complete.
         TelescopeStateDto halted;
+        bool episodeOpen;
         lock (_gate) {
-            SlewWatch.NoteAborted();
+            episodeOpen = SlewWatch.NoteAborted();
             halted = _runtime;
         }
-        PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
-            ["halted_ra_hours"] = halted.RightAscensionHours,
-            ["halted_dec_degrees"] = halted.DeclinationDegrees,
-            ["reason"] = "user_request",
-        });
+        if (episodeOpen) {
+            PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
+                ["halted_ra_hours"] = halted.RightAscensionHours,
+                ["halted_dec_degrees"] = halted.DeclinationDegrees,
+                ["reason"] = "user_request",
+            });
+        }
         RefreshCacheOnce();
     }
 
