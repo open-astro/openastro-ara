@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/discovered_device.dart';
-import '../../services/equipment_discovery_api.dart';
+import '../../screens/wizard/screens/screen_equipment_discovery.dart'
+    show equipmentDiscoveryApiFactoryProvider;
 import '../../state/equipment/alpaca_selection_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/equipment_connection_state.dart';
@@ -63,7 +64,8 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
     if (server == null) {
       return Future.error('No active server — connect to a daemon first.');
     }
-    final api = EquipmentDiscoveryApi(server);
+    // Built through the shared factory seam so tests can fake discovery.
+    final api = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
     return api.discover(widget.type, forceRefresh: forceRefresh);
   }
 
@@ -161,30 +163,60 @@ class _DeviceTile extends StatelessWidget {
   }
 }
 
+/// §68.2 — an empty discovery post-setup most commonly means AlpacaBridge
+/// itself is missing/stopped (no Alpaca responder on the daemon's subnet),
+/// so the empty state carries the same guidance the wizard's blocked panel
+/// shows: the install command and the systemd diagnostic.
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.search_off, size: 48, color: AraColors.textDisabled),
-          const SizedBox(height: 12),
-          Text(
-            'No devices found',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Make sure your Alpaca driver is running + reachable on the daemon\'s subnet.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
-          ),
-        ],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search_off, size: 48, color: AraColors.textDisabled),
+            const SizedBox(height: 12),
+            Text('No devices found', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'No Alpaca responder answered on the daemon\'s subnet — most '
+              'often AlpacaBridge (ARA\'s equipment hub) is not installed or '
+              'its service is stopped. On the daemon host, check:',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AraColors.bgPrimary,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'sudo apt install alpaca-bridge\n'
+                'systemctl status alpaca-bridge',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontFamily: 'monospace'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'A driver on another host must be reachable from the daemon\'s '
+              'subnet (UDP 32227).',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

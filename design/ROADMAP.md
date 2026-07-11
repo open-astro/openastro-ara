@@ -342,8 +342,19 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   Alpaca (ITelescope exposes axis rates for MoveAxis only; goto rate is not a standard
   control), recorded as N/A-by-transport unless a per-driver surface appears; flip-watchdog
   abort reason (PORT_TODO).
-- **§68** AlpacaBridge — full bridge contract verification. (The playbook §68 prose was
-  reconciled 2026-07-09 to drop the removed minimum-version gate.)
+- **§68** AlpacaBridge — contract verified 2026-07-11 (the playbook §68 prose was reconciled
+  2026-07-09 to drop the removed minimum-version gate). Audit result: §68.1 handshake ✔ (no
+  version gate; discovery-as-handshake; standard configureddevices path), §68.2 wizard Screen 2
+  ✔ (blocked-advance + install command + Retry + skip-requires-override, 4 widget tests),
+  §68.4 registry ✔ (`equipment.alpacabridge.troubleshoot`), §68.5 test ✔. ONE gap found +
+  fixed: the post-setup missing-bridge surface — the Alpaca chooser's empty state was a bare
+  "No devices found" shrug; it now carries the §68.2 guidance (install command + `systemctl
+  status alpaca-bridge` + subnet note). The literal "critical notification on the Equipment
+  screen" reading would need a daemon-side bridge-liveness probe (a new server feature) —
+  deferred: the §42 per-device disconnect faults already cover a bridge dying mid-session
+  (every connected device faults at once), so the remaining uncovered case is only
+  "bridge missing while nothing was connected", which the chooser guidance now handles at
+  the exact moment the user goes looking. §68.3 upgrade path is §34/release territory.
 - **§14** integration tests gated on sims/hardware — run the gated suites when rigs are available.
 - **§53** accessibility — WCAG audit, ongoing.
 - ~~**FITS keyword-convention audit**~~ — audited 2026-07-11, verdict: KEEP the inherited
