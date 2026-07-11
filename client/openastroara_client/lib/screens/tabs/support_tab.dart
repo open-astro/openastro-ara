@@ -1,6 +1,7 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../util/stream_save_location.dart';
 
 import '../../models/log_entry.dart';
 import '../../state/support/logs_state.dart';
@@ -11,7 +12,14 @@ import '../../widgets/support/bug_report_card.dart';
 /// substring filter and a "Download daemon log" action. (The §54 bug-report
 /// bundle action lands in a following slice.)
 class SupportTab extends ConsumerStatefulWidget {
-  const SupportTab({super.key});
+  /// Test seam for the OS save-location dialog (no platform channel under
+  /// widget tests). Returns the destination path, or null on cancel.
+  /// Production leaves it null → [pickStreamSavePath] (directory picker +
+  /// collision-safe file name, so the download can stream to the path).
+  final Future<String?> Function(String dialogTitle, String suggestedName)?
+      savePathPicker;
+
+  const SupportTab({super.key, this.savePathPicker});
 
   @override
   ConsumerState<SupportTab> createState() => _SupportTabState();
@@ -77,20 +85,17 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     if (api == null) return;
     setState(() => _downloading = true);
     try {
-      final dl = await api.downloadLog();
-      // Don't pop the OS save dialog if the tab was torn down mid-download.
+      // Path first, then STREAM the download to it — the log is written chunk
+      // by chunk instead of being buffered whole in memory (§29.9 follow-up).
+      final pick = widget.savePathPicker ?? pickStreamSavePath;
+      final savePath =
+          await pick('Choose where to save the daemon log', 'openastroara-daemon.log');
+      if (!mounted || savePath == null) return;
+      final name = await api.downloadLogTo(savePath);
       if (!mounted) return;
-      final saved = await FilePicker.saveFile(
-        dialogTitle: 'Save daemon log',
-        fileName: dl.fileName,
-        bytes: dl.bytes,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved $name')),
       );
-      if (!mounted) return;
-      if (saved != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved ${dl.fileName}')),
-        );
-      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

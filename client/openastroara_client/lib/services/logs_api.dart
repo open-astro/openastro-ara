@@ -1,14 +1,10 @@
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 
 import '../models/log_entry.dart';
 import '../models/server.dart';
 import 'content_disposition.dart';
-
-/// Result of a daemon-log download: the raw bytes plus the server-supplied
-/// file name (from `Content-Disposition`), used as the default Save-As name.
-typedef LogDownload = ({Uint8List bytes, String fileName});
 
 /// Abstraction over the §29.9 daemon-log endpoints, so the Support tab can be
 /// driven by a fake in widget tests (provider override).
@@ -21,9 +17,12 @@ abstract interface class LogsClient {
     String? containsSubstring,
   });
 
-  /// `GET /api/v1/server/logs/download` — the whole newest log file (or the
-  /// named one), with its server file name for the Save dialog.
-  Future<LogDownload> downloadLog({String? logFileName});
+  /// `GET /api/v1/server/logs/download` — stream the whole newest log file (or
+  /// the named one) straight to [savePath], chunk by chunk, never buffering it
+  /// whole in memory (the §29.9 sink rolls at 50 MB/file). Returns the
+  /// server's `Content-Disposition` file name (informational — the file is at
+  /// [savePath]).
+  Future<String> downloadLogTo(String savePath, {String? logFileName});
 
   void close();
 }
@@ -67,23 +66,29 @@ class LogsApi implements LogsClient {
   }
 
   @override
-  Future<LogDownload> downloadLog({String? logFileName}) async {
-    // The whole file is buffered into a single Uint8List. The §29.9 sink rolls at
-    // 50 MB/file, so that's the hard upper bound — fine for a desktop client;
-    // streaming straight to the chosen path is tracked as a follow-up in PORT_TODO.
-    final res = await _dio.get<List<int>>(
+  Future<String> downloadLogTo(String savePath, {String? logFileName}) async {
+    // dio.download streams the response body to the path (ResponseType.stream
+    // under the hood) — memory stays flat no matter how large the log grew.
+    final res = await _dio.download(
       '/api/v1/server/logs/download',
+      savePath,
       queryParameters: <String, dynamic>{
         if (logFileName != null && logFileName.isNotEmpty)
           'logFileName': logFileName,
       },
-      options: Options(responseType: ResponseType.bytes),
     );
-    final bytes = Uint8List.fromList(res.data ?? const <int>[]);
-    final name =
-        fileNameFromContentDisposition(res.headers.value('content-disposition')) ??
-            'openastroara-daemon.log';
-    return (bytes: bytes, fileName: name);
+    // A 0-byte body means no log exists / a malformed response — remove the
+    // empty file rather than leaving it under a "Saved" toast.
+    final file = File(savePath);
+    if (!await file.exists() || await file.length() == 0) {
+      if (await file.exists()) {
+        await file.delete();
+      }
+      throw StateError('Log download returned an empty body.');
+    }
+    return fileNameFromContentDisposition(
+            res.headers.value('content-disposition')) ??
+        'openastroara-daemon.log';
   }
 
   @override

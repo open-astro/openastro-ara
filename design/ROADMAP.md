@@ -164,12 +164,13 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   shipped: `SiteSettingsDto.MaxSequenceRuntimeMin` (0 = no limit) + the sequencer's runtime-cap
   watchdog (graceful user-stop path + notification; cap re-read per tick so mid-run Settings
   changes apply) + Settings → Safety → Site row + wizard screen 16 field.
-- **Logs + bug report streaming** — ~~§29.9 tail full-file scan → reverse byte-scan~~ (shipped:
-  `LogService.TailAsync` reads chunks backwards from a length snapshot, splits on the newline
-  byte with byte-level carry across chunk boundaries — UTF-8-safe — and early-exits once the
-  window fills); a line index + continuation token stays deferred until the §54 panel
-  live-streams or paginates. Still open: §54 daemon-log and bug-report ZIP downloads buffer
-  whole files in memory → stream to path (needed before any mobile target ships).
+- ~~**Logs + bug report streaming**~~ — both halves shipped: §29.9 tail reads backwards with
+  early-exit (`LogService.TailAsync`, byte-level carry across chunk boundaries, UTF-8-safe);
+  §54 daemon-log + bug-report downloads now stream to a user-picked path via `dio.download`
+  (destination-first flow: `pickStreamSavePath` directory picker + collision-safe name —
+  file_picker v12's `saveFile` requires the bytes up front, so path-only selection uses
+  `getDirectoryPath`). A line index + continuation token stays deferred until the §54 panel
+  live-streams or paginates.
 - **Merged Planning-tab prose reconciliation** — the §36/§25.5 merged-tab plan (decided
   2026-06-15) is largely superseded by the #611 native planetarium; reconcile the prose across
   §36/§47/§25.5/§61 + COMMIT-PR-RULES and close or re-scope the PORT_TODO entry.
