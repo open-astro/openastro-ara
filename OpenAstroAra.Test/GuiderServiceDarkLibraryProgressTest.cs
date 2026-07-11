@@ -258,6 +258,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_profile_switch_mid_build_skips_the_calibration_state_stamp() {
+            // #823 r1 — POST /profiles/{id}/select swaps the live store WITHOUT touching the guider, so a
+            // build finishing after a switch must not stamp "valid" onto a profile it never ran for.
+            using var buildGate = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_dark_build_progress", _ => new JsonObject { ["active"] = false });
+            fake.OnRpc("build_dark_library", _ => {
+                buildGate.Wait(TimeSpan.FromSeconds(20));
+                return new JsonObject {
+                    ["profile_id"] = 3, ["dark_library_path"] = "/darks/ara.fits",
+                    ["frame_count"] = 5, ["exposure_count"] = 4,
+                    ["exposures_ms"] = new JsonArray(1000, 2000, 3000, 5000),
+                };
+            });
+
+            var store = new InMemoryProfileStore();
+            // Plain closure variable: the write below happens-before the background task's post-gate read
+            // (ManualResetEventSlim.Set/Wait is the barrier), so no Volatile dance is needed.
+            var activeProfile = Guid.NewGuid();
+            var events = new ConcurrentQueue<string>();
+            using var svc = await ConnectGuiderAsync(fake, events, profileStore: store,
+                activeProfileIdResolver: () => activeProfile).ConfigureAwait(false);
+            try {
+                _ = await svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 5), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+                // The switch: a different profile becomes active while the build is still blocked.
+                activeProfile = Guid.NewGuid();
+            } finally {
+                buildGate.Set();
+            }
+
+            var sawComplete = await WaitForEventAsync(events, GuiderService.DarkLibraryCompleteEvent).ConfigureAwait(false);
+            Assert.That(sawComplete, Is.True, "the build itself should still complete and emit its event");
+            // Give the post-complete stamp path a moment to run, then assert it declined to write.
+            var stamped = await WaitUntilAsync(() => store.GetCalibrationState().DarkLibrary.Valid, TimeSpan.FromSeconds(2))
+                .ConfigureAwait(false);
+            Assert.That(stamped, Is.False, "the stamp must be skipped when the active profile changed mid-build");
+        }
+
+        [Test]
         public async Task A_failed_build_does_not_stamp_calibration_state() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
@@ -329,13 +370,15 @@ namespace OpenAstroAra.Test {
         // event type into <paramref name="events"/>. Pass a logger to additionally capture log output; pass a
         // profile store to exercise the §30.7.4 calibration-state stamp.
         private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake, ConcurrentQueue<string> events,
-                Microsoft.Extensions.Logging.ILogger<GuiderService>? logger = null, IProfileStore? profileStore = null) {
+                Microsoft.Extensions.Logging.ILogger<GuiderService>? logger = null, IProfileStore? profileStore = null,
+                Func<Guid?>? activeProfileIdResolver = null) {
             var ws = new Mock<IWsBroadcaster>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Callback((string type, JsonElement _, CancellationToken _) => events.Enqueue(type))
                 .Returns(Task.CompletedTask);
             var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
-                logger ?? NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object, profileStore);
+                logger ?? NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object, profileStore,
+                activeProfileIdResolver: activeProfileIdResolver);
             await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
                 .ConfigureAwait(false);
             var connected = await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false);

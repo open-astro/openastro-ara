@@ -289,7 +289,10 @@ public partial class Program {
                 sp.GetService<IProfileStore>(),
                 () => sp.GetService<ISequencerService>(),
                 sp.GetService<INotificationService>(),
-                sp.GetService<IFaultLogService>()));
+                sp.GetService<IFaultLogService>(),
+                // §30.7.4 — lets the calibration-state stamp detect a profile switch mid-build
+                // (profile select swaps the live store without touching the guider).
+                () => sp.GetService<IProfileRepository>()?.ActiveId));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the real polar-align service (skeleton): drives the routine over the connected GuiderService
         // (PA-session lease lifecycle now; the capture→solve→slew loop lands in follow-up slices).
