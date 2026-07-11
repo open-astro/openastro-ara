@@ -88,10 +88,16 @@ namespace OpenAstroAra.Test {
             try {
                 var first = await _svc.CreateZipAsync(idempotencyKey: "key-1", CancellationToken.None);
 
-                // Same running key → idempotent re-accept with the SAME operation id (a client retry of a POST
-                // whose response it never saw).
+                // Same running key → idempotent re-accept with the SAME operation id and the ORIGINAL accept
+                // time (a client retry of a POST whose response it never saw). The retry path is O(1): it
+                // resolves before the disk pre-flight, so even a disk that filled up after the create started
+                // can't refuse the re-accept — prove it by making the probe report almost nothing free.
+                _svc.FreeBytesProbe = _ => 1;
                 var retry = await _svc.CreateZipAsync(idempotencyKey: "key-1", CancellationToken.None);
                 Assert.That(retry.OperationId, Is.EqualTo(first.OperationId));
+                Assert.That(retry.AcceptedUtc, Is.EqualTo(first.AcceptedUtc),
+                    "AcceptedUtc means when the operation was accepted — not when it was retried");
+                _svc.FreeBytesProbe = _ => null;
 
                 // A different key — and no key at all — are genuine second creates: refused.
                 Assert.That(async () => await _svc.CreateZipAsync(idempotencyKey: "key-2", CancellationToken.None),

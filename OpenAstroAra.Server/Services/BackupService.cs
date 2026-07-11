@@ -100,6 +100,9 @@ namespace OpenAstroAra.Server.Services {
         private CreateState _create = IdleCreate;
         private string? _createInFlightKey;
         private Guid _createInFlightId;
+        // The RUNNING create's original accept time — the idempotent re-accept echoes this, not the
+        // retry's clock (#824 r1 minor: AcceptedUtc means "when this operation was accepted").
+        private DateTimeOffset _createInFlightAcceptedUtc;
 
         // §43-2 async create — WS events (best-effort, like the guider calibration builds'): started when the
         // worker claims the slot, complete/failed as the terminal. Payloads carry the operation/snapshot id.
@@ -195,29 +198,30 @@ namespace OpenAstroAra.Server.Services {
                     "Nothing to back up: neither profile.json nor a sequences/ tree is present.");
             }
 
+            // Resolve a create-already-running BEFORE the pre-flight's file stats (#824 r1): the idempotent
+            // retry of a timed-out POST — the exact case the key exists for — must be O(1), and re-accepting
+            // the RUNNING op must not be refused by a disk that filled up after it started. Peek here,
+            // authoritative re-check under the claim below (the restore flow's peek→claim shape).
+            if (ResolveRunningCreate(idempotencyKey) is { } running) {
+                return Task.FromResult(running);
+            }
+
             PreflightDiskSpace();
 
             var id = Guid.NewGuid();
             var createdUtc = DateTimeOffset.UtcNow;
             lock (_createLock) {
                 if (_create.State == RunningState) {
-                    // A retry of the RUNNING create with the same non-empty key re-accepts with the same id
-                    // (§60.5 at-least-once — the caller's first POST likely timed out client-side). Any other
-                    // concurrent create is refused: both would contend for the same gate + prune pass, and the
-                    // second adds nothing a poll of the first doesn't give.
-                    if (!string.IsNullOrEmpty(idempotencyKey)
-                            && string.Equals(idempotencyKey, _createInFlightKey, StringComparison.Ordinal)) {
-                        return Task.FromResult(new OperationAcceptedDto(
-                            OperationId: _createInFlightId,
-                            OperationType: "backup.create-zip",
-                            AcceptedUtc: createdUtc,
-                            IdempotencyKey: idempotencyKey));
+                    // Raced another create between the peek and this claim — same resolution as the peek.
+                    if (ResolveRunningCreateLocked(idempotencyKey) is { } racedRunning) {
+                        return Task.FromResult(racedRunning);
                     }
                     throw new BackupCreateInProgressException("A backup create is already in progress.");
                 }
                 _create = new CreateState(RunningState, "Packaging…", null);
                 _createInFlightKey = idempotencyKey;
                 _createInFlightId = id;
+                _createInFlightAcceptedUtc = createdUtc;
             }
 
             // Fire-and-forget on the thread pool; the worker owns the gate + the terminal create-status. The
@@ -230,6 +234,32 @@ namespace OpenAstroAra.Server.Services {
                 AcceptedUtc: createdUtc,
                 IdempotencyKey: idempotencyKey));
         }
+
+        // When a create is RUNNING: a retry carrying the same non-empty key re-accepts with the ORIGINAL
+        // operation id + accept time (§60.5 at-least-once — the caller's first POST likely timed out
+        // client-side); any other concurrent create is refused (409 at the endpoint). Null = no create
+        // running, proceed. Throws BackupCreateInProgressException for the refusal case.
+        private OperationAcceptedDto? ResolveRunningCreate(string? idempotencyKey) {
+            lock (_createLock) {
+                if (_create.State != RunningState) {
+                    return null;
+                }
+                if (ResolveRunningCreateLocked(idempotencyKey) is { } running) {
+                    return running;
+                }
+                throw new BackupCreateInProgressException("A backup create is already in progress.");
+            }
+        }
+
+        private OperationAcceptedDto? ResolveRunningCreateLocked(string? idempotencyKey) =>
+            !string.IsNullOrEmpty(idempotencyKey)
+                && string.Equals(idempotencyKey, _createInFlightKey, StringComparison.Ordinal)
+                ? new OperationAcceptedDto(
+                    OperationId: _createInFlightId,
+                    OperationType: "backup.create-zip",
+                    AcceptedUtc: _createInFlightAcceptedUtc,
+                    IdempotencyKey: idempotencyKey)
+                : null;
 
         // Create worker: serialize against restore + any other create on the shared _gate, package, and drive
         // the create-status terminal. Same last-resort-finally contract as RunRestoreAsync — create-status can
@@ -276,11 +306,15 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // §43-2 disk-space pre-flight: refuse the create up front (507) when the volume clearly can't hold the
-        // archive — the raw area sum is an upper bound on the zip's content (stored compressed), plus slack for
-        // the temp/manifest overlap. Best-effort: an unavailable probe or an unreadable area size skips the
-        // gate rather than blocking a backup (packaging still fails cleanly mid-zip if space truly runs out).
+        // archive. Deliberately O(1) — two file stats, NO directory walk (#824 r1: a per-file scan of
+        // sequences/ would re-introduce blocking request-thread IO, the very thing the worker rework
+        // removes): the catalog db is the only area that outgrows config-sized, so profile.json + db + the
+        // 16 MiB slack (which comfortably covers a KB-scale sequences/ tree and the temp/manifest overlap)
+        // is the whole estimate. The raw sum is an upper bound on the zip's content (stored compressed).
+        // Best-effort: an unavailable probe or an unreadable size skips the gate rather than blocking a
+        // backup (packaging still fails cleanly mid-zip if space truly runs out).
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "Best-effort pre-flight boundary: a probe/size-scan fault (permissions, exotic mount) must degrade to 'no pre-flight' — packaging itself remains the authoritative failure point. Log-and-recover.")]
+            Justification = "Best-effort pre-flight boundary: a probe/stat fault (permissions, exotic mount) must degrade to 'no pre-flight' — packaging itself remains the authoritative failure point. Log-and-recover.")]
         private void PreflightDiskSpace() {
             try {
                 var free = FreeBytesProbe(_profileDir);
@@ -295,12 +329,6 @@ namespace OpenAstroAra.Server.Services {
                 var dbPath = Path.Combine(_profileDir, DatabaseFileName);
                 if (File.Exists(dbPath)) {
                     needed += new FileInfo(dbPath).Length;
-                }
-                var sequencesDir = Path.Combine(_profileDir, SequencesDirName);
-                if (Directory.Exists(sequencesDir)) {
-                    foreach (var f in Directory.EnumerateFiles(sequencesDir, "*", SearchOption.AllDirectories)) {
-                        needed += new FileInfo(f).Length;
-                    }
                 }
                 if (free.Value < needed) {
                     throw new BackupInsufficientStorageException(
