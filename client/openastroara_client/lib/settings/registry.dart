@@ -1046,7 +1046,7 @@ const List<Setting> settingsRegistry = [
     id: 'safety.site.soft_warning_altitude_deg',
     label: 'Soft warning altitude',
     description:
-        "Advisory altitude — Tonight's Sky tags targets that never clear it (low-elevation seeing softens detail). 0 disables. Distinct from the hard horizon floor.",
+        'Advisory altitude — Tonight\'s Sky tags targets that never clear it (low-elevation seeing softens detail). 0 disables. Distinct from the hard horizon floor.',
     keywords: ['soft', 'warning', 'altitude', 'low', 'elevation', 'advisory', 'horizon', 'seeing'],
     path: ['Settings', 'Safety', 'Site'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
