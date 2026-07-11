@@ -51,6 +51,12 @@ public sealed record FaultPlan(
 /// §42.2 — the pure policy table mapping (device type, fault kind, profile policies) to a
 /// <see cref="FaultPlan"/>. All decisions live here so they are testable without a daemon:
 /// the <see cref="FaultReactionService"/> only executes plans.
+///
+/// Matrix row 3 (camera dew heater) is NOT APPLICABLE by design: Alpaca ICameraV3 exposes no
+/// DewHeaterPower property, so there is nothing to observe or enforce over the transport this
+/// daemon speaks — the only DewHeater plumbing in the codebase is legacy NINA SDK surface off
+/// the Alpaca path. Dew mitigation on Alpaca rigs rides a Switch port, which the switch
+/// read-back watch (commanded-vs-read value mismatch) already covers.
 /// </summary>
 public static class FaultPolicyMatrix {
 

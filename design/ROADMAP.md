@@ -366,8 +366,12 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   DATE-OBS, EXPOSURE→EXPTIME fallback) is written under the same name by the FITS writer.
   Renaming toward core-dictionary purity would break re-scans of every existing frame on disk
   and third-party interop for zero benefit — closed, no code change.
-- **§38 daemon schema check** — verify the daemon accepts a promoted plain-array `Items` wrapper
-  (untested cross-boundary assumption).
+- ~~**§38 daemon schema check**~~ — verified 2026-07-11: the daemon's canonical
+  ObservableCollection wrapper `$type` tokens are byte-identical to the constants WILMA's
+  editor writes when promoting a plain-array `Items`/`Conditions` (nina_dom
+  itemsWrapperType/conditionsWrapperType), and the client-authored wrapper form deserializes
+  through `SequenceJsonConverter` — pinned by two tests in `SequenceJsonRoundTripTest` so a
+  future divergence fails CI instead of 422ing a Save.
 
 ## 9. Parked pending Joey's decision
 
