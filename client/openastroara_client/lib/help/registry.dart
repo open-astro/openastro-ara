@@ -721,9 +721,8 @@ const Map<String, Help> helpRegistry = {
   'img.platesolve.engine': Help(
     key: 'img.platesolve.engine',
     title: 'Plate-solving engine',
-    body: '* **ASTAP** (recommended): fast, accurate, local. Comes bundled with the §13 Debian package (`/usr/bin/astap`) plus a star index. Best default for unattended observatories.\n'
-        '* **astrometry.net**: gold-standard accuracy. Can run online (nova.astrometry.net) or locally with downloaded index files. Slower than ASTAP but handles trickier fields.\n'
-        '* **PlateSolve 2**: legacy Windows binary. Included for compatibility with NINA-imported sequences; not recommended for new setups.',
+    body: '* **ASTAP** — the only supported engine: fast, accurate, local, bundled with the §13 Debian package (`/usr/bin/astap`) plus a star index.\n'
+        '* A profile still carrying **astrometry.net** or **PlateSolve 2** (e.g. imported from NINA) solves with ASTAP — the daemon ships local solvers only and logs the substitution once per run. Switch the setting to ASTAP to clear the notice.',
     relatedSettings: ['img.platesolve.path_or_endpoint', 'img.platesolve.search_radius_deg'],
   ),
   'img.platesolve.search_radius_deg': Help(

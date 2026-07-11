@@ -1353,10 +1353,10 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.platesolve.engine',
     label: 'Solver engine',
-    description: 'Plate-solving algorithm. ASTAP is fast + bundled; astrometry.net is the gold-standard online or via local index; PlateSolve 2 is the legacy Windows option.',
+    description: 'Plate-solving engine. ASTAP is the only supported engine (fast, local, bundled with the Debian package); a profile still carrying astrometry.net or PlateSolve 2 (e.g. from a NINA import) solves with ASTAP.',
     keywords: ['engine', 'astap', 'astrometry.net', 'platesolve2', 'solver'],
     path: ['Settings', 'Imaging', 'Plate Solving'],
-    type: SettingType.enumValue(['ASTAP', 'astrometry.net', 'PlateSolve 2']),
+    type: SettingType.enumValue(['ASTAP']),
     defaultValue: 'ASTAP',
     profilePath: 'platesolve.engine',
   ),
