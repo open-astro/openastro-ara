@@ -78,10 +78,19 @@ class _FakeSeqClient implements SequenceClient {
 WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
     WsEvent(type: type, ts: DateTime.utc(2026, 7, 11), seq: 1, payload: payload);
 
+class _LinkUpNotifier extends Notifier<bool> {
+  @override
+  bool build() => true;
+  void set(bool value) => state = value;
+}
+
+final _linkUp = NotifierProvider<_LinkUpNotifier, bool>(_LinkUpNotifier.new);
+
 void main() {
   late StreamController<WsEvent> ws;
   late _FakeMountApi mountApi;
   late _FakeSeqClient seqApi;
+  late ProviderContainer container;
 
   Future<void> pump(WidgetTester tester) async {
     ws = StreamController<WsEvent>.broadcast();
@@ -94,7 +103,7 @@ void main() {
           savedServerServiceProvider
               .overrideWithValue(_FakeSavedServerService()),
           wsEventsProvider.overrideWith((ref) => ws.stream),
-          serverLinkUpProvider.overrideWithValue(true),
+          serverLinkUpProvider.overrideWith((ref) => ref.watch(_linkUp)),
           mountApiFactoryProvider.overrideWithValue((_) => mountApi),
           sequenceApiFactoryProvider.overrideWithValue((_) => seqApi),
         ],
@@ -107,9 +116,10 @@ void main() {
     );
     // Resolve the saved-servers chain so the device/sequence APIs bind —
     // nothing in this minimal tree watches it before the first action.
-    final container = ProviderScope.containerOf(
+    container = ProviderScope.containerOf(
       tester.element(find.byType(StopMountListener)),
     );
+    container.read(_linkUp.notifier).set(true);
     await container.read(savedServersProvider.future);
     await tester.pumpAndSettle();
   }
@@ -236,11 +246,58 @@ void main() {
     await fire(tester, _event(SlewWsEvents.started));
     expect(find.byKey(const ValueKey('stop_mount_button')), findsOneWidget);
 
-    // Rebuild with the link down.
-    // serverLinkUpProvider is overridden per-pump; simulate by firing nothing
-    // and toggling via a fresh pump is heavy — instead assert the complete
-    // event path (the reconnect resync) also clears it.
-    await fire(tester, _event(SlewWsEvents.complete));
-    expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
+    container.read(_linkUp.notifier).set(false);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('stop_mount_button')),
+      findsNothing,
+      reason: 'the slew state is unknown when the link drops — no stale panic button',
+    );
+  });
+
+  testWidgets('a REMOTE abort still binds the paused run for the modal', (
+    tester,
+  ) async {
+    // #837 r1 — the abort may come from another client or the server itself:
+    // no local button press, so the paused-run capture must arm on the
+    // aborted event, not in the tap handler.
+    await pump(tester);
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted)); // no tap
+    await fire(
+      tester,
+      _event(SequenceWsEvents.paused, {'sequence_id': 'run-9'}),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('stop_modal_resume')));
+    await tester.pumpAndSettle();
+
+    expect(seqApi.lifecycle, ['resume:run-9']);
+  });
+
+  testWidgets('a second stop cycle never acts on the previous cycle\'s run', (
+    tester,
+  ) async {
+    // #837 r1 — the previous cycle's paused id must not leak: cycle 2's pause
+    // hasn't landed yet, so the action explains rather than resuming run-7.
+    await pump(tester);
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted));
+    await fire(
+      tester,
+      _event(SequenceWsEvents.paused, {'sequence_id': 'run-7'}),
+    );
+    await tester.tap(find.byKey(const ValueKey('stop_modal_close')));
+    await tester.pumpAndSettle();
+
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted)); // cycle 2, pause not landed
+    await tester.tap(find.byKey(const ValueKey('stop_modal_resume')));
+    await tester.pumpAndSettle();
+
+    expect(seqApi.lifecycle, isEmpty,
+        reason: 'acting on stale run-7 would resume the wrong run');
+    expect(find.textContaining('No paused run to act on'), findsOneWidget);
   });
 }

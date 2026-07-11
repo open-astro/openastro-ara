@@ -61,6 +61,14 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
           setState(() => _slewing = false);
         case SlewWsEvents.aborted:
           setState(() => _slewing = false);
+          // Arm the paused-run capture HERE, not in _stopMount (#837 r1): the
+          // abort may not be ours — another connected client, or the server
+          // itself. Clearing the previous cycle's id also stops a stale run
+          // from being resumed/skipped by mistake. The daemon always publishes
+          // slew_aborted before the follow-up sequence.paused (the pause is
+          // requested after the abort and lands at an instruction boundary).
+          _pausedRunId = null;
+          _awaitingPause = true;
           _showStoppedModal(
             haltedRa: _numOrNull(event.payload['halted_ra_hours']),
             haltedDec: _numOrNull(event.payload['halted_dec_degrees']),
@@ -94,10 +102,17 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
         children: [
           widget.child,
           Positioned(
-            top: 64,
+            top: 0,
             left: 0,
             right: 0,
-            child: Center(child: _slewBanner(context)),
+            // The listener wraps the shell's SafeArea, so honor the top inset
+            // here: at least 64 px down, more when a notch/status bar demands
+            // it (#837 r1).
+            child: SafeArea(
+              bottom: false,
+              minimum: const EdgeInsets.only(top: 64),
+              child: Center(child: _slewBanner(context)),
+            ),
           ),
         ],
       ),
@@ -147,11 +162,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
 
   Future<void> _stopMount() async {
     if (_stopRequested || !_slewing) return;
-    setState(() {
-      _stopRequested = true;
-      _pausedRunId = null;
-      _awaitingPause = true;
-    });
+    setState(() => _stopRequested = true);
     final ok = await ref.read(mountProvider.notifier).abortSlew();
     if (!mounted) return;
     if (!ok) {
