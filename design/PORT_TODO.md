@@ -590,6 +590,11 @@ Wiring started:
   runner's failure allow-list so a mis-configured rig records a Failed job (path-sanitized message)
   instead of stranding it in "running". 9 tests in `CenteringEndpointTest` run the real body through a
   live `InMemoryBatchJobService`.
+- **Deferred (from #842 review, non-blocking):** a second `POST /platesolve/center` with *different*
+  coordinates silently joins the in-flight job for the *original* target (inherited from the job
+  service's per-type single-flight; the 202 returns the running job's `BatchJobDto` with no signal the
+  new target was ignored). If an API consumer ever needs it: compare the requested target against the
+  running job's and answer 409 on mismatch instead of joining.
 - **Next slice (deferred, low priority):** the #756 header-reuse micro-opt — the frame-solve endpoint
   opens the FITS twice (`LoadImageDataAsync` pixels + `TryReadTargetCoordinatesAsync` headers); fold the
   OBJCTRA/OBJCTDEC read into the first open (populate `ImageMetaData.Target.Coordinates`) if that path
