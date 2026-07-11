@@ -60,6 +60,41 @@ void main() {
     expect(state.source, 'none');
   });
 
+  test('getState parses the full status fields the settings section renders', () async {
+    final adapter = _StubAdapter(const {
+      'synced': true,
+      'source': 'gps-internal',
+      'trust': 'high',
+      'system_time_offset_seconds': -1.5,
+      'location': {'lat': 30.27, 'lng': -97.74, 'alt': 165.0},
+      'internet_available_on_pi': false,
+      'internal_gps_available': true,
+      'synced_at_utc': '2026-07-11T07:00:00Z',
+    });
+    final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+    final state = await api.getState();
+    expect(state.systemTimeOffsetSeconds, -1.5);
+    expect(state.location!.lat, 30.27);
+    expect(state.location!.lng, -97.74);
+    expect(state.location!.alt, 165.0);
+    expect(state.internalGpsAvailable, isTrue);
+    expect(state.internetAvailableOnPi, isFalse);
+    expect(state.syncedAtUtc, DateTime.utc(2026, 7, 11, 7));
+  });
+
+  test('getState tolerates a null-altitude location (RMC-only GPS fix)', () async {
+    final adapter = _StubAdapter(const {
+      'synced': true,
+      'location': {'lat': 30.0, 'lng': -97.0},
+    });
+    final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+    final state = await api.getState();
+    expect(state.location, isNotNull);
+    expect(state.location!.alt, isNull, reason: 'unknown altitude stays null, never 0');
+  });
+
   test('pushClientTime sends a medium-trust client sync with an ISO instant', () async {
     final adapter = _StubAdapter(const {'location_updated': false});
     final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
@@ -73,5 +108,49 @@ void main() {
     expect(body['source'], 'client');
     expect(body['trust'], 'medium');
     expect(body['time_utc'], '2026-07-11T07:00:00.000Z');
+  });
+
+  test('pushManual sends a manual sync with location and parses the result', () async {
+    final adapter = _StubAdapter(const {
+      'location_updated': true,
+      'clock_set': true,
+    });
+    final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+
+    final result = await api.pushManual(
+      timeUtc: DateTime.utc(2026, 7, 11, 4, 30),
+      lat: 30.27,
+      lng: -97.74,
+      alt: 165.0,
+    );
+
+    final body = adapter.lastBody as Map<String, dynamic>;
+    expect(body['source'], 'manual');
+    expect(body.containsKey('trust'), isFalse,
+        reason: 'the server clamps manual to low regardless — nothing to claim');
+    expect(body['time_utc'], '2026-07-11T04:30:00.000Z');
+    final loc = body['location'] as Map<String, dynamic>;
+    expect(loc['lat'], 30.27);
+    expect(loc['lng'], -97.74);
+    expect(loc['alt'], 165.0);
+    expect(result.locationUpdated, isTrue);
+    expect(result.clockSet, isTrue);
+  });
+
+  test('pushManual without a position omits location entirely', () async {
+    final adapter = _StubAdapter(const {
+      'location_updated': false,
+      'clock_set': false,
+    });
+    final api = TimeSyncApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter);
+
+    final result = await api.pushManual(timeUtc: DateTime.utc(2026, 7, 11));
+
+    final body = adapter.lastBody as Map<String, dynamic>;
+    expect(body.containsKey('location'), isFalse);
+    expect(result.clockSet, isFalse,
+        reason: 'clock_set false surfaces the offset-tracking message');
   });
 }

@@ -19,6 +19,16 @@ final timeSyncApiProvider = Provider<TimeSyncClient?>((ref) {
   return api;
 });
 
+/// The daemon's current §31 sync state for the settings status UI, or null
+/// when no server is active. Refresh with `ref.invalidate`.
+final timeSyncStatusProvider = FutureProvider.autoDispose<TimeSyncState?>((
+  ref,
+) async {
+  final api = ref.watch(timeSyncApiProvider);
+  if (api == null) return null;
+  return api.getState();
+});
+
 /// The §31.1 on-connect push: ask the daemon whether it holds a fresh,
 /// trustworthy sync and, when it doesn't, push this device's clock (waterfall
 /// step 1 — an NTP-synced laptop/phone clock at medium trust covers ~95% of

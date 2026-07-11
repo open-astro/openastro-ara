@@ -37,6 +37,14 @@ class _FakeTimeSyncClient implements TimeSyncClient {
   }
 
   @override
+  Future<TimeSyncPushResult> pushManual({
+    required DateTime timeUtc,
+    double? lat,
+    double? lng,
+    double? alt,
+  }) async => const TimeSyncPushResult(locationUpdated: false, clockSet: true);
+
+  @override
   void close() {}
 }
 

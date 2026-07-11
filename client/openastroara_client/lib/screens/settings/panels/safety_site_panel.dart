@@ -7,6 +7,7 @@ import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../widgets/settings/time_sync_section.dart';
 
 /// §37.12 Site preferences — editable. Phase 12h.6e added the daemon
 /// round-trip — values hydrate from the active server on mount and
@@ -138,6 +139,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
           parse: n.setTimeZone,
           hint: 'IANA name (e.g. America/Los_Angeles)',
         ),
+        const SettingsSectionHeader('Time sync'),
+        const TimeSyncSection(),
         const SettingsSectionHeader('Horizon'),
         SettingsSwitchRow(
           label: 'Use custom horizon polygon (§36.8)',

@@ -319,8 +319,12 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   `UsbGpsTimeSyncWorker` probes /dev/ttyUSB*/ttyACM* (System.IO.Ports at 9600-8N1, bounded
   listen window per device, 2-min cadence while unsynced / ~hourly once synced) and applies
   `gps-internal`/`high` syncs with position — no WILMA involvement, exactly §31.4; a live-dongle
-  field test remains hardware-gated. Remaining: the explicit waterfall UI (steps 3/4/5 — mobile
-  GPS, plug-a-GPS prompt, manual entry modal).
+  field test remains hardware-gated. Waterfall UI steps 4+5 SHIPPED: Settings → Safety → Site
+  grows a Time sync section (sync state/trust/offset/position/USB-GPS-detected, Retry +
+  push-device-time actions, plug-a-GPS guidance while unsynced) and the manual-entry modal
+  (UTC + optional lat/lng/alt → low-trust `manual` push). Remaining: step 3 mobile GPS — needs
+  the `geolocator` dependency decision (new pub dep + license-gate pin + mobile platform
+  permissions; CI builds desktop targets only, so this is a user call).
 - **§57** Stop Mount — full slew-safety policy verification.
 - **§68** AlpacaBridge — full bridge contract verification. (The playbook §68 prose was
   reconciled 2026-07-09 to drop the removed minimum-version gate.)
