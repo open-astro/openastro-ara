@@ -239,11 +239,9 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // for the aborted event. Noting first makes the abort win by design, not by timing. An
         // abort with no open episode publishes nothing (#836 r1): there is nothing to close, and
         // a latched flag would swallow a later park/home slew's complete.
-        TelescopeStateDto halted;
         bool episodeOpen;
         lock (_gate) {
             episodeOpen = SlewWatch.NoteAborted();
-            halted = _runtime;
         }
         try {
             await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
@@ -255,12 +253,21 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             }
             throw;
         }
-        // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), carrying the last
-        // known position; the watch suppresses that episode's would-be slew_complete.
+        // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), with the position
+        // read FRESH after the physical stop (#836 r4 — the cached runtime is up to a poll tick
+        // stale, which is several degrees of travel mid-slew; "where did the mount stop" is the
+        // event's whole point). A failed read falls back to the cache rather than delaying the
+        // panic event.
         if (episodeOpen) {
+            var (freshRa, freshDec) = await Task.Run(() => ReadPositionBestEffort(client), CancellationToken.None)
+                .ConfigureAwait(false);
+            TelescopeStateDto cached;
+            lock (_gate) {
+                cached = _runtime;
+            }
             PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
-                ["halted_ra_hours"] = halted.RightAscensionHours,
-                ["halted_dec_degrees"] = halted.DeclinationDegrees,
+                ["halted_ra_hours"] = freshRa ?? cached.RightAscensionHours,
+                ["halted_dec_degrees"] = freshDec ?? cached.DeclinationDegrees,
                 ["reason"] = "user_request",
             });
         }
@@ -429,10 +436,27 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try {
             // ToJsonString()+Parse is the AOT-safe JsonElement construction (EquipmentFaultHub pattern).
             using var doc = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
-            _ = _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
+            var task = _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
+            // Observe async faults too (the EquipmentEventPublisher pattern) — a bare discard
+            // would silently drop a failure inside the publish path.
+            _ = task.ContinueWith(
+                t => LogSlewEventPublishFailed(t.Exception!.GetBaseException(), eventType),
+                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         } catch (Exception ex) {
             LogSlewEventPublishFailed(ex, eventType);
         }
+    }
+
+    // Fresh post-abort position for the slew_aborted payload — per-field best-effort, same
+    // shape as ReadRuntime's field reads (an unsupported/transient property must stay benign).
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a transiently-failing telescope property throws; the field falls back to null (the caller then uses the cached runtime) rather than failing the panic-stop event. CA1031's log-and-recover boundary applies.")]
+    private static (double? Ra, double? Dec) ReadPositionBestEffort(AlpacaTelescope c) {
+        double? ra;
+        try { ra = c.RightAscension; } catch (Exception) { ra = null; }
+        double? dec;
+        try { dec = c.Declination; } catch (Exception) { dec = null; }
+        return (ra, dec);
     }
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope: failed to broadcast the {EventType} WS event")]

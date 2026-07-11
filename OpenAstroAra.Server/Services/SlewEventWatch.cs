@@ -50,8 +50,10 @@ internal sealed class SlewEventWatch {
     public void NoteSlewTarget(double raHours, double decDegrees) {
         _pendingTargetRa = raHours;
         _pendingTargetDec = decDegrees;
-        // Defensive hygiene: a fresh commanded slew supersedes any abort verdict.
-        _abortNoted = false;
+        // Deliberately does NOT touch _abortNoted (#836 r4): the flag can only be set on an OPEN
+        // episode, and that aborted episode's Completed must stay suppressed even when a new slew
+        // is commanded while the abort's device call is still in flight — clearing here let the
+        // same episode publish both slew_aborted and slew_complete.
     }
 
     /// <summary>Latch the §57.4 abort onto the OPEN episode only — returns false (and latches

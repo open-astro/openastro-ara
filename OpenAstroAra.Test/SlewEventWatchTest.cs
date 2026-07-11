@@ -92,6 +92,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_retarget_racing_an_in_flight_abort_does_not_unsuppress_the_episode() {
+            // #836 r4 — a new slew commanded while the abort's device call is still in flight
+            // (WILMA re-targeting right after Stop) must not clear the abort: the aborted
+            // episode already published slew_aborted, so its Completed stays suppressed.
+            var w = new SlewEventWatch();
+            w.Observe(true);
+            Assert.That(w.NoteAborted(), Is.True);
+            w.NoteSlewTarget(1.0, 2.0); // the racing re-target
+            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.None),
+                "the episode must not read as both aborted and completed");
+            var next = w.Observe(true);
+            Assert.That(next.TargetRaHours, Is.EqualTo(1.0), "the re-target rides ITS OWN episode");
+        }
+
+        [Test]
         public void A_rapid_double_abort_publishes_the_aborted_event_once() {
             // #836 r3 — the second Stop press on the same episode is a no-op for events (the
             // device call still re-fires; it's idempotent on the mount side).
