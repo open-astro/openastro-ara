@@ -130,6 +130,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_selected_twin_guard_blocks_only_an_exact_name_match() {
+            // The selected twin tracks the last guider CONNECT; an ARA profile switch alone
+            // doesn't re-map it, so a deletable (non-active) ARA profile's twin can still be
+            // the daemon's selected profile — the hook must refuse that delete client-side
+            // (round-2 review finding). The guard is Ordinal on the exact twin name; a
+            // daemon with no selected profile never blocks.
+            var id = Guid.NewGuid();
+            var twin = PHD2Guider.AraGuiderProfileName("Switched Rig", id);
+            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, twin), Is.True,
+                "the connect-time twin still selected on the daemon blocks the delete");
+            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, null), Is.False,
+                "no selected profile → nothing to protect");
+            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, "ara-some-other-rig-12345678"), Is.False,
+                "a different selected twin doesn't block");
+            Assert.That(GuiderService.IsTwinSelectedOnDaemon(twin, twin.ToUpperInvariant()), Is.False,
+                "PHD2 profile names are exact identifiers — the comparison is Ordinal");
+        }
+
+        [Test]
         public async Task Profile_delete_hook_is_a_quiet_noop_when_no_guider_is_connected() {
             using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());

@@ -217,8 +217,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// <c>delete_dark_files=true</c> per the lifecycle table). Returns true when the daemon accepted the
         /// delete, false on an RPC error response (e.g. the profile doesn't exist — already-gone is the
         /// caller's success case to decide). Throws only on transport faults; the caller owns best-effort.
-        /// The daemon rejects deleting its SELECTED profile — callers pass profiles mapped from a
-        /// just-deleted (necessarily non-active) ARA profile, so that can't trip in the lifecycle path.
+        /// The daemon rejects deleting its SELECTED profile — callers must check
+        /// <see cref="SelectedProfile"/> first (the lifecycle hook does; the selected twin tracks the last
+        /// connect, not ARA's active-profile flag, so an ARA-side guard alone doesn't rule it out).
         /// </summary>
         public async Task<bool> DeleteGuiderProfileAsync(string name, CancellationToken ct) {
             ArgumentException.ThrowIfNullOrEmpty(name);

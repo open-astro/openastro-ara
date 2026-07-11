@@ -37,8 +37,15 @@ public sealed partial class GuiderService {
     /// id-suffixed name the connect path creates) and asks the daemon to delete it, dark
     /// files included. NEVER throws — the ARA profile is already gone, and a guider that
     /// is disconnected, unreachable, or never had the twin (the profile never connected a
-    /// guider) is an expected non-event, logged and reported as <c>false</c>. ARA refuses
-    /// deleting the ACTIVE profile, so the twin can never be the daemon's selected profile.
+    /// guider) is an expected non-event, logged and reported as <c>false</c>.
+    /// <para>The daemon rejects deleting its SELECTED profile, and ARA's active-profile
+    /// guard is NOT enough to rule that out: the selected twin tracks the last guider
+    /// CONNECT, while `POST /profiles/{id}/select` switches the active ARA profile without
+    /// touching the guider — so a profile switched away from since the last connect can be
+    /// deletable in ARA while its twin is still selected on the daemon. That case is
+    /// detected here and skipped with its own log line (delete the twin later by
+    /// reconnecting the guider — the connect re-maps to the NEW active profile's twin,
+    /// deselecting this one).</para>
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort lifecycle cleanup: the ARA delete already succeeded, so any RPC/socket/protocol fault here must degrade to a logged skip — never a thrown error that could confuse the (fire-and-forget) caller or surface as an unobserved task exception.")]
@@ -53,6 +60,12 @@ public sealed partial class GuiderService {
             LogGuiderProfileDeleteSkipped(name);
             return false;
         }
+        if (IsTwinSelectedOnDaemon(name, guider.SelectedProfile?.Name)) {
+            // The daemon would reject this delete outright (see remarks) — skip with a
+            // distinct, diagnosable message instead of burning an RPC on a known refusal.
+            LogGuiderProfileDeleteRefusedSelected(name);
+            return false;
+        }
         try {
             return await guider.DeleteGuiderProfileAsync(name, ct).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -61,9 +74,18 @@ public sealed partial class GuiderService {
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "§63.4 guider profile '{ProfileName}' not cleaned up — no guider connected (the twin, if any, remains on the daemon)")]
+    /// <summary>The selected-twin guard, pure for tests: PHD2 profile names are exact
+    /// identifiers, so the comparison is Ordinal; a daemon with no selected profile
+    /// (null) never blocks a delete.</summary>
+    internal static bool IsTwinSelectedOnDaemon(string twinName, string? daemonSelectedName) =>
+        string.Equals(daemonSelectedName, twinName, StringComparison.Ordinal);
+
+    [LoggerMessage(EventId = 6360, Level = LogLevel.Information, Message = "§63.4 guider profile '{ProfileName}' not cleaned up — no guider connected (the twin, if any, remains on the daemon)")]
     private partial void LogGuiderProfileDeleteSkipped(string profileName);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "§63.4 guider profile '{ProfileName}' cleanup failed — the ARA profile delete already succeeded; the twin remains on the daemon")]
+    [LoggerMessage(EventId = 6361, Level = LogLevel.Warning, Message = "§63.4 guider profile '{ProfileName}' not cleaned up — it is still the guider daemon's SELECTED profile (the guider connected under this ARA profile and no reconnect has re-mapped it since). Reconnect the guider to re-map, then the twin can be removed")]
+    private partial void LogGuiderProfileDeleteRefusedSelected(string profileName);
+
+    [LoggerMessage(EventId = 6362, Level = LogLevel.Warning, Message = "§63.4 guider profile '{ProfileName}' cleanup failed — the ARA profile delete already succeeded; the twin remains on the daemon")]
     private partial void LogGuiderProfileDeleteFailed(Exception ex, string profileName);
 }

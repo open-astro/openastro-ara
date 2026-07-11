@@ -64,8 +64,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     /// <c>delete_profile {name, delete_dark_files}</c> — remove a PHD2 profile by name (result <c>0</c>).
     /// The §63.4 delete hook fires this when its ARA profile is deleted, with
     /// <c>delete_dark_files=true</c> per the playbook table so the orphaned rig's dark library and defect
-    /// map go with it. The daemon rejects deleting the SELECTED profile — ARA's own delete endpoint
-    /// refuses deleting the active ARA profile, so the mapped PHD2 profile is never the selected one.
+    /// map go with it. The daemon rejects deleting its SELECTED profile — and because the selected twin
+    /// tracks the last guider CONNECT (an ARA profile switch alone doesn't re-map it), the caller checks
+    /// <c>SelectedProfile</c> and skips that case rather than sending a doomed RPC.
     /// </summary>
     public class Phd2DeleteProfile : Phd2Method<Phd2DeleteProfileParameter> {
         public override string Method => "delete_profile";
