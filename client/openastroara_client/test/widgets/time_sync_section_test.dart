@@ -207,6 +207,34 @@ void main() {
     );
   });
 
+  testWidgets('the manual modal refuses an unparseable altitude', (
+    tester,
+  ) async {
+    final api = _FakeTimeSyncClient(const TimeSyncState(synced: false));
+    await _pump(tester, api);
+
+    await tester.tap(find.byKey(const ValueKey('time_sync_manual_open')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('time_sync_manual_lat')),
+      '30.27',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('time_sync_manual_lng')),
+      '-97.74',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('time_sync_manual_alt')),
+      'about 165',
+    );
+    await tester.tap(find.byKey(const ValueKey('time_sync_manual_apply')));
+    await tester.pumpAndSettle();
+
+    expect(api.lastManual, isNull,
+        reason: 'a garbled altitude must not be silently dropped');
+    expect(find.textContaining('Altitude must be a number'), findsOneWidget);
+  });
+
   testWidgets('the manual modal refuses an unparseable time', (tester) async {
     final api = _FakeTimeSyncClient(const TimeSyncState(synced: false));
     await _pump(tester, api);

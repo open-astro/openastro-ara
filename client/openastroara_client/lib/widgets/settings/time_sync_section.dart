@@ -139,10 +139,14 @@ class TimeSyncSection extends ConsumerWidget {
     }
     try {
       await api.pushClientTime(DateTime.now().toUtc());
+      // The section can be navigated away from mid-push; a disposed ref
+      // must not be invalidated (r2 — same class of bug as the modal's r1).
+      if (!context.mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Device clock pushed to the server.')),
       );
     } catch (e) {
+      if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('Time push failed: $e')));
     }
     ref.invalidate(timeSyncStatusProvider);
@@ -225,6 +229,12 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
     }
     if (latGiven && (lat == null || lng == null)) {
       setState(() => _error = 'Latitude/longitude must be decimal degrees.');
+      return;
+    }
+    if (_alt.text.trim().isNotEmpty && alt == null) {
+      setState(
+        () => _error = 'Altitude must be a number in meters (or empty).',
+      );
       return;
     }
     setState(() {
