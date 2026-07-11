@@ -654,16 +654,21 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
             DropdownMenuEntry(value: true, label: 'On (recommended)'),
             DropdownMenuEntry(value: false, label: 'Off'),
           ],
-          onChanged: (v) => setState(() {
-            _sp.unattendedShutdownEnabled = v;
-            // The wait is meaningless with the shutdown off — clear it so a
-            // stale value can't reach Save (mirrors the Ignore/auto-resume
-            // clearing above).
-            if (v == false) {
-              _sp.unattendedShutdownWaitMin = null;
-              _unattendedError = null;
-            }
-          }),
+          onChanged: (v) {
+            setState(() {
+              _sp.unattendedShutdownEnabled = v;
+              // The wait is meaningless with the shutdown off — clear it so a
+              // stale value can't reach Save (mirrors the Ignore/auto-resume
+              // clearing above).
+              if (v == false) {
+                _sp.unattendedShutdownWaitMin = null;
+                _unattendedError = null;
+              }
+            });
+            // Clearing the error above can flip overall validity — push it,
+            // or Next/Save stays stuck disabled until another field reports.
+            _reportStepValid(ref, _allValid);
+          },
         ),
         if (_sp.unattendedShutdownEnabled != false)
           WizardTextField(
