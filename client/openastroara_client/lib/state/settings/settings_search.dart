@@ -224,6 +224,10 @@ const Map<String, List<String>> _panelKeywords = {
     'bortle',
     'seeing',
     'twilight',
+    'time sync',
+    'gps',
+    'utc',
+    'clock',
   ],
   'sky.data': [
     'hips',
