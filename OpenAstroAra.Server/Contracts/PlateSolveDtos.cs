@@ -26,6 +26,15 @@ public record PlateSolveRequestDto(
     double? ApproxDecDegrees = null); // approximate declination hint, degrees (J2000)
 
 /// <summary>
+/// §18.I — the target for <c>POST /platesolve/center</c>: slew there and center by iterative plate
+/// solves. Both fields are required (J2000); <c>ra_hours</c> must be in [0, 24) and
+/// <c>dec_degrees</c> in [-90, 90].
+/// </summary>
+public record CenterRequestDto(
+    double RaHours,       // target right ascension, hours (J2000)
+    double DecDegrees);   // target declination, degrees (J2000)
+
+/// <summary>
 /// §18.I — the astrometric solution for a frame. <see cref="Success"/> false means the solver ran but did not
 /// find a solution (e.g. too few stars, wrong field); every other field is then null (no solution to report).
 /// </summary>

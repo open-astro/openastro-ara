@@ -580,12 +580,20 @@ Wiring started:
   the centering loop always fell back to offset compensation. Now a real `SyncToCoordinates` (epoch-transformed
   to the mount's native frame, `CanSync`/parked/disconnected-guarded, refreshes the §32.4 cache); degrades to
   false (→ offset compensation) on `CanSync=false` or any driver fault. Instantaneous, so no settle-poll.
-- **Next slices (both deferred, low priority):** (1) a **REST centering trigger** (`POST /api/v1/platesolve/center`
-  over the existing `ICenteringService`) — needs the async 202-Accepted long-running-operation pattern + a
-  progress/status surface, since capture→solve→slew iterates for minutes (NOT a thin sync endpoint); (2) the
-  #756 header-reuse micro-opt — the frame-solve endpoint opens the FITS twice (`LoadImageDataAsync` pixels +
-  `TryReadTargetCoordinatesAsync` headers); fold the OBJCTRA/OBJCTDEC read into the first open (populate
-  `ImageMetaData.Target.Coordinates`) if that path gets hot. Then the §58.4 flip recenter consumes the loop.
+- ✅ **REST centering trigger — DONE (2026-07-11).** `POST /api/v1/platesolve/center` (`CenterRequestDto`,
+  range-validated RA/Dec, 400 on nonsense incl. NaN) enqueues the §28 loop as a §65.5 background job
+  (the autofocus-sweep pattern): 202 + `BatchJobDto`, poll `GET /api/v1/jobs/{id}`, cancel via DELETE;
+  job total = the profile's `NumberOfAttempts` (clamped ≥1) with one tick per completed solve attempt.
+  Single-flight is layered — one "center" job per type (a second POST joins the running job) +
+  `CenteringService`'s internal gate serializes against the §58.4 flip / §35 safety recenters. The work
+  body maps foreign exceptions (`PlateSolverConfigurationException`, equipment faults) onto the job
+  runner's failure allow-list so a mis-configured rig records a Failed job (path-sanitized message)
+  instead of stranding it in "running". 9 tests in `CenteringEndpointTest` run the real body through a
+  live `InMemoryBatchJobService`.
+- **Next slice (deferred, low priority):** the #756 header-reuse micro-opt — the frame-solve endpoint
+  opens the FITS twice (`LoadImageDataAsync` pixels + `TryReadTargetCoordinatesAsync` headers); fold the
+  OBJCTRA/OBJCTDEC read into the first open (populate `ImageMetaData.Target.Coordinates`) if that path
+  gets hot. Then the §58.4 flip recenter consumes the loop.
 
 **ASTAP backend (org fork `github.com/open-astro/ASTAP`, see [[reference-astap-fork]]) — integration is CLI, no API:**
 `ASTAPSolver` (a `CLISolver`) shells out to the `astap_cli` binary at the profile's `ASTAPLocation` with

@@ -173,6 +173,10 @@ namespace OpenAstroAra.Server;
 // NEXTGEN §1 Tonight's Sky filter advice.
 [JsonSerializable(typeof(FilterApproach))]
 [JsonSerializable(typeof(Phd2SettingsDto))]
+// §18.I plate-solve wire types (request/result were serving off the reflection fallback resolver).
+[JsonSerializable(typeof(CenterRequestDto))]
+[JsonSerializable(typeof(PlateSolveRequestDto))]
+[JsonSerializable(typeof(PlateSolveResultDto))]
 [JsonSerializable(typeof(PlateSolveSettingsDto))]
 [JsonSerializable(typeof(PolarAlignFrameDto))]
 [JsonSerializable(typeof(PolarAlignStateDto))]
