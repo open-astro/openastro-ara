@@ -92,6 +92,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_failed_dispatch_clears_its_target_so_a_later_park_slew_reports_none() {
+            // #836 r2 — the command's dispatch failed (no episode ever opened); its coordinates
+            // must not masquerade as the target of the next, unrelated slew.
+            var w = new SlewEventWatch();
+            w.NoteSlewTarget(5.5, 20.0);
+            w.ClearPendingTarget(); // the dispatch-failure path
+            var v = w.Observe(true);
+            Assert.That(v.Kind, Is.EqualTo(SlewEventWatch.Kind.Started));
+            Assert.That(v.TargetRaHours, Is.Null);
+            Assert.That(v.TargetDecDegrees, Is.Null);
+        }
+
+        [Test]
+        public void A_failed_abort_device_call_unwinds_the_note_so_the_slew_still_completes() {
+            // #836 r2 — NoteAborted now lands BEFORE the device call (so the abort beats a racing
+            // poll tick); if that call then throws, the slew is still running and its eventual
+            // complete must not be suppressed.
+            var w = new SlewEventWatch();
+            w.Observe(true);
+            Assert.That(w.NoteAborted(), Is.True);
+            w.ClearAbortNote(); // the device-call-failed path
+            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.Completed));
+        }
+
+        [Test]
         public void Reset_clears_the_episode_and_the_pending_target() {
             var w = new SlewEventWatch();
             w.NoteSlewTarget(5.5, 20.0);

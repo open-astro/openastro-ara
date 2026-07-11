@@ -69,6 +69,17 @@ internal sealed class SlewEventWatch {
         return true;
     }
 
+    /// <summary>Undo a <see cref="NoteAborted"/> whose device call then FAILED (#836 r2): the
+    /// slew is still running, so its eventual Completed must not be suppressed.</summary>
+    public void ClearAbortNote() => _abortNoted = false;
+
+    /// <summary>A commanded slew whose dispatch failed never opens an episode — drop its noted
+    /// target so it can't ride an unrelated later episode's Started event (#836 r2).</summary>
+    public void ClearPendingTarget() {
+        _pendingTargetRa = null;
+        _pendingTargetDec = null;
+    }
+
     public Verdict Observe(bool slewing) {
         if (slewing && !_slewing) {
             _slewing = true;

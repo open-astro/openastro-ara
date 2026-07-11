@@ -203,16 +203,38 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         lock (_gate) {
             SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
         }
-        return RunMountOpAsync("telescope.slew",
-            c => {
-                TryEnableTracking(c);
-                // Async goto: returns immediately, Slewing goes true; the settle-wait below confirms
-                // arrival. Same call the REST SlewInBackground path uses.
-                c.SlewToCoordinatesAsync(targetRa, targetDec);
-            },
-            c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
-            token,
-            SlewSettleMaxPolls);
+        return SlewCoreAsync();
+
+        async Task<bool> SlewCoreAsync() {
+            try {
+                var ok = await RunMountOpAsync("telescope.slew",
+                    c => {
+                        TryEnableTracking(c);
+                        // Async goto: returns immediately, Slewing goes true; the settle-wait below
+                        // confirms arrival. Same call the REST SlewInBackground path uses.
+                        c.SlewToCoordinatesAsync(targetRa, targetDec);
+                    },
+                    c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
+                    token,
+                    SlewSettleMaxPolls).ConfigureAwait(false);
+                if (!ok) {
+                    ClearPendingSlewTarget();
+                }
+                return ok;
+            } catch {
+                // A failed/faulted dispatch opens no episode — its noted target must not ride an
+                // unrelated later episode's slew_started (#836 r2). If the slew DID start before
+                // failing, the episode already consumed the target and this is a no-op.
+                ClearPendingSlewTarget();
+                throw;
+            }
+        }
+    }
+
+    private void ClearPendingSlewTarget() {
+        lock (_gate) {
+            SlewWatch.ClearPendingTarget();
+        }
     }
 
     public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>

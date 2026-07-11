@@ -233,17 +233,30 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // task WITHOUT running the lambda if ct is already cancelled, so an HTTP-timeout/disconnect
         // that cancelled the token would silently never send the abort and the slew would continue.
         NoteMountCommand(w => w.NoteMotionCommanded());
-        await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
-        // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), carrying the last
-        // known position; the watch suppresses that episode's would-be slew_complete. An abort
-        // with no slew in progress publishes nothing (#836 r1): there is no episode to close,
-        // and a latched flag would swallow a later park/home slew's complete.
+        // The abort is noted on the watch BEFORE the device call (#836 r2): the mount's IsSlewing
+        // can read false the instant the physical abort lands, and a poll tick racing into that
+        // gap would otherwise close the episode as a normal slew_complete and leave no episode
+        // for the aborted event. Noting first makes the abort win by design, not by timing. An
+        // abort with no open episode publishes nothing (#836 r1): there is nothing to close, and
+        // a latched flag would swallow a later park/home slew's complete.
         TelescopeStateDto halted;
         bool episodeOpen;
         lock (_gate) {
             episodeOpen = SlewWatch.NoteAborted();
             halted = _runtime;
         }
+        try {
+            await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
+        } catch {
+            // The device call failed — the slew is still running; its eventual complete must
+            // not be suppressed by the pre-noted abort.
+            lock (_gate) {
+                SlewWatch.ClearAbortNote();
+            }
+            throw;
+        }
+        // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), carrying the last
+        // known position; the watch suppresses that episode's would-be slew_complete.
         if (episodeOpen) {
             PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
                 ["halted_ra_hours"] = halted.RightAscensionHours,
@@ -278,6 +291,11 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             RefreshCacheOnce();
         } catch (Exception ex) {
             LogSlewFailed(ex, raHours, decDeg);
+            // The dispatch failed — no episode will open for this command, so its noted target
+            // must not ride an unrelated later episode's slew_started (#836 r2).
+            lock (_gate) {
+                SlewWatch.ClearPendingTarget();
+            }
         }
     }
 
