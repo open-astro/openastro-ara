@@ -51,6 +51,19 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
     private readonly ISerialNmeaSource _source;
     private readonly ILogger<UsbGpsTimeSyncWorker> _logger;
 
+    // Serial hygiene (#834 r3): /dev/ttyUSB*//dev/ttyACM* is also where Arduino-style mount and
+    // accessory controllers enumerate, and merely opening such a port can pulse DTR and reset the
+    // board. A live GPS emits NMEA ('$…') about once a second even with no satellite fix, so a
+    // device that survives a whole listen window without a single '$' line is evidence-denylisted
+    // as not-a-GPS and never reopened — until its path vanishes (unplug), which clears the verdict
+    // because a replug may be different hardware on the same path. Open failures are NOT
+    // denylisted: a transient holder (ModemManager probing a fresh dongle, an equipment driver
+    // mid-session) says nothing about what the device is.
+    private readonly HashSet<string> _notGpsDevices = new(StringComparer.Ordinal);
+    // The device that last produced a fix gets probed first, so a synced re-probe touches no
+    // other port at all on the happy path.
+    private string? _lastFixDevice;
+
     // Probe cadence: every 2 min while no fresh sync exists (a dongle can be plugged mid-session),
     // every 50 min once synced (re-syncs INSIDE the §31.1 1-hour staleness window, with margin).
     // Internal test seams, like the TimeSyncService ones.
@@ -98,8 +111,13 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
             LogEnumerationFailed(ex);
             return false;
         }
-        foreach (var device in devices) {
+        _notGpsDevices.RemoveWhere(d => !devices.Contains(d));
+        if (_lastFixDevice is not null && !devices.Contains(_lastFixDevice)) {
+            _lastFixDevice = null;
+        }
+        foreach (var device in OrderCandidates(devices)) {
             ct.ThrowIfCancellationRequested();
+            var sawNmea = false;
             try {
                 using var window = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 window.CancelAfter(PerDeviceListenWindow);
@@ -111,6 +129,9 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
                 // null altitude safely preserves the profile's existing elevation.
                 double? lastGgaAltitude = null;
                 await foreach (var line in _source.ReadLinesAsync(device, window.Token).ConfigureAwait(false)) {
+                    if (!sawNmea && line.StartsWith('$')) {
+                        sawNmea = true;
+                    }
                     var fix = NmeaSentenceParser.Parse(line);
                     if (fix is null) {
                         continue;
@@ -126,11 +147,17 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
                         : null;
                     var result = await _timeSync.ApplyGpsSyncAsync(timeUtc, location, ct).ConfigureAwait(false);
                     LogGpsSyncApplied(device, result.ClockSet);
+                    _lastFixDevice = device;
                     return true;
                 }
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
-                // The per-device listen window elapsed with no fix — silent port or no satellites
-                // yet. Move on; the next probe pass retries.
+                // The per-device listen window elapsed with no fix. NMEA chatter without a fix
+                // (no satellites yet) keeps the device a candidate; a window with zero NMEA is
+                // the not-a-GPS verdict (see _notGpsDevices) — stop pulsing its DTR every pass.
+                if (!sawNmea) {
+                    _notGpsDevices.Add(device);
+                    LogDeviceMarkedNotGps(device);
+                }
             } catch (Exception ex) when (ex is not OperationCanceledException) {
                 // Host-shutdown cancellation (the outer token) falls through both catches and
                 // propagates as a clean cancellation instead of logging as a device fault (#834 r2).
@@ -140,8 +167,22 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
         return false;
     }
 
+    private IEnumerable<string> OrderCandidates(IReadOnlyList<string> devices) {
+        if (_lastFixDevice is not null && devices.Contains(_lastFixDevice)) {
+            yield return _lastFixDevice;
+        }
+        foreach (var device in devices) {
+            if (device != _lastFixDevice && !_notGpsDevices.Contains(device)) {
+                yield return device;
+            }
+        }
+    }
+
     [LoggerMessage(Level = LogLevel.Information, Message = "USB GPS sync applied from {Device} (clockSet={ClockSet})")]
     partial void LogGpsSyncApplied(string device, bool clockSet);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "USB serial device {Device} emitted no NMEA in a full listen window — treating as not a GPS until replugged")]
+    partial void LogDeviceMarkedNotGps(string device);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "USB GPS device {Device} could not be read — skipping this probe")]
     partial void LogDeviceReadFailed(string device, Exception ex);

@@ -72,6 +72,8 @@ namespace OpenAstroAra.Test {
         private static readonly string ValidRmc =
             WithChecksum("$GPRMC,061530.00,A,3016.20,N,09744.40,W,0.0,0.0,110726,,,A");
         private static readonly string[] BothUsbDevices = ["/dev/ttyUSB0", "/dev/ttyUSB1"];
+        private static readonly string[] OnlyUsb0Once = ["/dev/ttyUSB0"];
+        private static readonly string[] Usb0ThenUsb1Twice = ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB1"];
 
         private static (UsbGpsTimeSyncWorker Worker, TimeSyncService TimeSync, FakeClockSetter Setter) NewWorker(FakeSerialSource source) {
             var setter = new FakeClockSetter();
@@ -169,6 +171,56 @@ namespace OpenAstroAra.Test {
             var applied = await worker.ProbeOnceAsync(CancellationToken.None);
             Assert.That(applied, Is.False);
             Assert.That(setter.LastSet, Is.Null);
+        }
+
+        [Test]
+        public async Task A_device_emitting_no_nmea_is_denylisted_and_never_reopened() {
+            // #834 r3 — an Arduino-style mount controller enumerates on the same /dev/tty* paths
+            // and can be RESET by the DTR pulse of a bare open. Zero '$' lines across a full
+            // listen window is the not-a-GPS verdict: the port must not be touched again.
+            var source = new FakeSerialSource();
+            source.LinesByDevice["/dev/ttyUSB0"] = ["OAT LX200-style silence", "not nmea"];
+            var (worker, _, setter) = NewWorker(source);
+
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.False);
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.False);
+
+            Assert.That(setter.LastSet, Is.Null);
+            Assert.That(source.DevicesRead, Is.EqualTo(OnlyUsb0Once),
+                "the second pass must not reopen a device already judged not-a-GPS");
+        }
+
+        [Test]
+        public async Task A_denylisted_path_is_probed_fresh_after_it_vanishes_and_reappears() {
+            // Unplug frees the path; a replug may be different hardware (the GPS this time), so
+            // the vanished path's not-a-GPS verdict must not survive.
+            var source = new FakeSerialSource();
+            source.LinesByDevice["/dev/ttyUSB0"] = ["not nmea"];
+            var (worker, timeSync, _) = NewWorker(source);
+
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.False, "pass 1 denylists");
+            source.LinesByDevice.Remove("/dev/ttyUSB0");
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.False, "pass 2: path gone, verdict pruned");
+            source.LinesByDevice["/dev/ttyUSB0"] = [ValidRmc];
+
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.True, "pass 3: replugged device probes fresh");
+            Assert.That((await timeSync.GetStateAsync(CancellationToken.None)).Source, Is.EqualTo("gps-internal"));
+        }
+
+        [Test]
+        public async Task The_device_that_gave_a_fix_is_probed_first_on_the_next_pass() {
+            // Post-sync re-probes should touch only the known GPS on the happy path, not walk
+            // every serial port again.
+            var source = new FakeSerialSource();
+            source.LinesByDevice["/dev/ttyUSB0"] = ["$GPGSV,nmea,but,never,a,fix*00"];
+            source.LinesByDevice["/dev/ttyUSB1"] = [ValidRmc];
+            var (worker, _, _) = NewWorker(source);
+
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.True);
+            Assert.That(await worker.ProbeOnceAsync(CancellationToken.None), Is.True);
+
+            Assert.That(source.DevicesRead, Is.EqualTo(Usb0ThenUsb1Twice),
+                "pass 2 goes straight to the device that produced the last fix");
         }
 
         [Test]
