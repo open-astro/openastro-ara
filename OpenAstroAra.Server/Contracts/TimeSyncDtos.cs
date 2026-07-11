@@ -16,8 +16,10 @@ using System;
 
 namespace OpenAstroAra.Server.Contracts;
 
-/// <summary>§31.3 — a lat/long/altitude triple on the time-sync wire (degrees / degrees / meters).</summary>
-public sealed record TimeSyncLocationDto(double Lat, double Lng, double Alt);
+/// <summary>§31.3 — a lat/long/altitude triple on the time-sync wire (degrees / degrees /
+/// meters). <c>Alt</c> is nullable: null means "unknown — keep the profile's existing
+/// elevation" (#834 r1: an RMC-only GPS fix carries no altitude and must not zero it).</summary>
+public sealed record TimeSyncLocationDto(double Lat, double Lng, double? Alt = null);
 
 /// <summary>
 /// §31.3 — <c>GET /api/v1/server/time-sync</c>: the server's sync state. <c>Synced</c> is the
