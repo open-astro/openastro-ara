@@ -232,7 +232,20 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // CancellationToken.None (not ct) is critical: Task.Run(lambda, ct) returns a pre-cancelled
         // task WITHOUT running the lambda if ct is already cancelled, so an HTTP-timeout/disconnect
         // that cancelled the token would silently never send the abort and the slew would continue.
+        await AbortSlewCoreAsync(client, reason: "user_request", rethrow: true).ConfigureAwait(false);
+    }
+
+    /// <summary>The shared §57 abort flow — the user panic stop (<c>user_request</c>, throwing)
+    /// and the flip watchdog's internal abort (<c>watchdog</c>, fire-and-forget) both run it, so
+    /// every abort source gets the same watch-noting races and lifecycle guarantees.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
+    private async Task AbortSlewCoreAsync(AlpacaTelescope client, string reason, bool rethrow) {
         NoteMountCommand(w => w.NoteMotionCommanded());
+        // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount
+        // incident so the panic budget is tunable from the logs. The tap→request network leg is
+        // client-side and unmeasurable here.
+        var issueTimer = System.Diagnostics.Stopwatch.StartNew();
         // The abort is noted on the watch BEFORE the device call (#836 r2): the mount's IsSlewing
         // can read false the instant the physical abort lands, and a poll tick racing into that
         // gap would otherwise close the episode as a normal slew_complete and leave no episode
@@ -245,7 +258,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         }
         try {
             await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
-        } catch {
+        } catch (Exception ex) {
             bool noteStillLatched;
             lock (_gate) {
                 noteStillLatched = SlewWatch.ClearAbortNote();
@@ -254,19 +267,25 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 // #836 r6 — the poll consumed the abort note while the FAILING device call was
                 // in flight: the mount genuinely stopped (its complete was suppressed), so the
                 // aborted event must still close the lifecycle for clients before we rethrow.
-                await PublishAbortedAsync(client).ConfigureAwait(false);
+                await PublishAbortedAsync(client, reason).ConfigureAwait(false);
             }
             // Otherwise the note was unwound — the slew is still running and its eventual
             // complete must not be suppressed by the pre-noted abort (#836 r2).
-            throw;
+            if (rethrow) {
+                throw;
+            }
+            LogStopSlewFailed(ex);
+            return;
         }
+        issueTimer.Stop();
+        LogAbortIssued(reason, issueTimer.ElapsedMilliseconds, episodeOpen);
         // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), with the position
         // read FRESH after the physical stop (#836 r4 — the cached runtime is up to a poll tick
         // stale, which is several degrees of travel mid-slew; "where did the mount stop" is the
         // event's whole point). A failed read falls back to the cache rather than delaying the
         // panic event.
         if (episodeOpen) {
-            await PublishAbortedAsync(client).ConfigureAwait(false);
+            await PublishAbortedAsync(client, reason).ConfigureAwait(false);
         }
         RefreshCacheOnce();
     }
@@ -444,7 +463,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         }
     }
 
-    private async Task PublishAbortedAsync(AlpacaTelescope client) {
+    private async Task PublishAbortedAsync(AlpacaTelescope client, string reason) {
         var (freshRa, freshDec) = await Task.Run(() => ReadPositionBestEffort(client), CancellationToken.None)
             .ConfigureAwait(false);
         TelescopeStateDto cached;
@@ -454,9 +473,17 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
             ["halted_ra_hours"] = freshRa ?? cached.RightAscensionHours,
             ["halted_dec_degrees"] = freshDec ?? cached.DeclinationDegrees,
-            ["reason"] = "user_request",
+            ["reason"] = reason,
         });
     }
+
+    // §57.5 — one structured line per Stop Mount incident (reason, server-side issue latency,
+    // whether an episode was open). Kept in the log rather than the faults table: an abort is a
+    // measurement, not a fault, and a fault-feed row per panic press would read as equipment
+    // trouble in the §42.6 UI.
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information,
+        Message = "Slew abort issued (reason={Reason}) in {IssueMs} ms; episodeOpen={EpisodeOpen}")]
+    private partial void LogAbortIssued(string reason, long issueMs, bool episodeOpen);
 
     // Fresh post-abort position for the slew_aborted payload — per-field best-effort, same
     // shape as ReadRuntime's field reads (an unsupported/transient property must stay benign).
