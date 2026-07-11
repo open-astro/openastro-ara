@@ -548,13 +548,20 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         if (centering is null || sequencer is null) {
             return RecenterOutcome.NotAttempted;
         }
+        // Only the first paused run with a coordinate target is centered; with a single
+        // mount the other paused runs inherit whatever pointing results — their targets
+        // are not separately verified.
         OpenAstroAra.Astrometry.Coordinates? target = null;
         foreach (var id in ids) {
-            ct.ThrowIfCancellationRequested();
             try {
+                ct.ThrowIfCancellationRequested();
                 target = await sequencer.GetActiveTargetCoordinatesAsync(id, ct).ConfigureAwait(false);
-            } catch (OperationCanceledException) {
-                throw;
+            } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                // A relapse during the coordinate lookup must take the same
+                // restore-and-repark path as one during the centering itself —
+                // letting it escape would land in ResumeCountdownAsync's outer
+                // catch, dropping the run from tracking with the mount unparked.
+                return RecenterOutcome.CancelledByRelapse;
             } catch (Exception ex) {
                 LogRungFailed("recenter-target-read", ex);
             }

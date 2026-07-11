@@ -447,12 +447,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             foreach (var item in container.Items) {
                 if (item is IDeepSkyObjectContainer dso) {
                     first ??= dso;
-                    if (running is null && dso.Status == SequenceEntityStatus.RUNNING) {
+                    if (dso.Status == SequenceEntityStatus.RUNNING) {
                         running = dso;
+                        return;
                     }
                 }
                 if (item is ISequenceContainer child) {
                     Walk(child);
+                    if (running is not null) {
+                        return;
+                    }
                 }
             }
         }

@@ -660,6 +660,60 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Relapse_during_the_target_lookup_cancels_the_recenter_and_restores_the_pause() {
+            // Review finding on #841: an OperationCanceledException thrown while the
+            // recenter is still READING the target's coordinates (before CenterOnTarget)
+            // must translate to CancelledByRelapse — not escape to ResumeCountdownAsync's
+            // outer catch, which would drop the run from tracking with the mount unparked.
+            var runId = Guid.NewGuid();
+            var pauseCalls = 0;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ++pauseCalls == 1 ? new List<Guid> { runId } : new List<Guid>());
+            var lookupStarted = 0;
+            var firstLookup = true;
+            sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .Returns(async (Guid _, CancellationToken token) => {
+                    Interlocked.Increment(ref lookupStarted);
+                    if (firstLookup) {
+                        firstLookup = false;
+                        await Task.Delay(Timeout.Infinite, token); // held open until the relapse cancels it
+                    }
+                    return (OpenAstroAra.Astrometry.Coordinates?)null;
+                });
+            IReadOnlyCollection<Guid>? resumedIds = null;
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback<IReadOnlyCollection<Guid>, CancellationToken>((ids, _) => resumedIds = ids)
+                .ReturnsAsync(1);
+            var centering = new Mock<OpenAstroAra.Server.Services.ICenteringService>();
+            RebuildServiceWithCentering(centering);
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => Volatile.Read(ref lookupStarted) >= 1);
+
+            // Relapse lands mid-lookup: the resume must abort without releasing anything.
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            await Task.Delay(150);
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+            centering.Verify(c => c.CenterOnTarget(
+                    It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                    It.IsAny<IProgress<OpenAstroAra.PlateSolving.PlateSolveProgress>?>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
+
+            // Durable safe window afterwards: the restored id resumes for real —
+            // proof the cancellation restored it to the paused set instead of dropping it.
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => resumedIds is not null);
+            Assert.That(resumedIds, Is.EquivalentTo(new[] { runId }));
+        }
+
+        [Test]
         public async Task No_target_coordinates_means_no_recenter_attempt() {
             var runId = Guid.NewGuid();
             var resumed = false;
