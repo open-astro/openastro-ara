@@ -138,8 +138,20 @@ namespace OpenAstroAra.Test {
             var w = new SlewEventWatch();
             w.Observe(true);
             Assert.That(w.NoteAborted(), Is.True);
-            w.ClearAbortNote(); // the device-call-failed path
+            Assert.That(w.ClearAbortNote(), Is.True, "the note was still latched — the slew runs on");
             Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.Completed));
+        }
+
+        [Test]
+        public void A_consumed_abort_note_reads_as_not_latched_so_the_caller_still_publishes_aborted() {
+            // #836 r6 — the poll observed the stop (episode closed suppressed) while the failing
+            // device call was in flight: ClearAbortNote returning false tells the abort path the
+            // mount genuinely stopped and the aborted event must still close the lifecycle.
+            var w = new SlewEventWatch();
+            w.Observe(true);
+            Assert.That(w.NoteAborted(), Is.True);
+            Assert.That(w.Observe(false).Kind, Is.EqualTo(SlewEventWatch.Kind.None), "consumed: suppressed complete");
+            Assert.That(w.ClearAbortNote(), Is.False, "already consumed by the closed episode");
         }
 
         [Test]

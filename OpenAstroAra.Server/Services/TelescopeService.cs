@@ -246,11 +246,18 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try {
             await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
         } catch {
-            // The device call failed — the slew is still running; its eventual complete must
-            // not be suppressed by the pre-noted abort.
+            bool noteStillLatched;
             lock (_gate) {
-                SlewWatch.ClearAbortNote();
+                noteStillLatched = SlewWatch.ClearAbortNote();
             }
+            if (episodeOpen && !noteStillLatched) {
+                // #836 r6 — the poll consumed the abort note while the FAILING device call was
+                // in flight: the mount genuinely stopped (its complete was suppressed), so the
+                // aborted event must still close the lifecycle for clients before we rethrow.
+                await PublishAbortedAsync(client).ConfigureAwait(false);
+            }
+            // Otherwise the note was unwound — the slew is still running and its eventual
+            // complete must not be suppressed by the pre-noted abort (#836 r2).
             throw;
         }
         // §57.4 step 3 — the aborted event fires NOW (not a poll-tick later), with the position
@@ -259,17 +266,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // event's whole point). A failed read falls back to the cache rather than delaying the
         // panic event.
         if (episodeOpen) {
-            var (freshRa, freshDec) = await Task.Run(() => ReadPositionBestEffort(client), CancellationToken.None)
-                .ConfigureAwait(false);
-            TelescopeStateDto cached;
-            lock (_gate) {
-                cached = _runtime;
-            }
-            PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
-                ["halted_ra_hours"] = freshRa ?? cached.RightAscensionHours,
-                ["halted_dec_degrees"] = freshDec ?? cached.DeclinationDegrees,
-                ["reason"] = "user_request",
-            });
+            await PublishAbortedAsync(client).ConfigureAwait(false);
         }
         RefreshCacheOnce();
     }
@@ -445,6 +442,20 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         } catch (Exception ex) {
             LogSlewEventPublishFailed(ex, eventType);
         }
+    }
+
+    private async Task PublishAbortedAsync(AlpacaTelescope client) {
+        var (freshRa, freshDec) = await Task.Run(() => ReadPositionBestEffort(client), CancellationToken.None)
+            .ConfigureAwait(false);
+        TelescopeStateDto cached;
+        lock (_gate) {
+            cached = _runtime;
+        }
+        PublishSlewEvent(WsEventCatalog.TelescopeSlewAborted, new System.Text.Json.Nodes.JsonObject {
+            ["halted_ra_hours"] = freshRa ?? cached.RightAscensionHours,
+            ["halted_dec_degrees"] = freshDec ?? cached.DeclinationDegrees,
+            ["reason"] = "user_request",
+        });
     }
 
     // Fresh post-abort position for the slew_aborted payload — per-field best-effort, same

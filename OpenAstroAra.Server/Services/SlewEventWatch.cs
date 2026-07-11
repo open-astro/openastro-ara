@@ -23,6 +23,12 @@ namespace OpenAstroAra.Server.Services;
 /// recovery, park/home) gets the events for free. Observed under the service's commit lock.
 /// The 2 s poll cadence doubles as the §57.2 grace debounce — a sub-slew gap shorter than a
 /// tick is never observed, so chained slews read as one episode.
+///
+/// Single-slot by design (#836 r6): overlapping commanded slews inside one poll tick merge
+/// into one episode, and a second command's noted target can be consumed-or-cleared by the
+/// first command's bookkeeping — the started payload may then carry null coordinates. That
+/// cost is telemetry-only (the events still open/close correctly) and accepted over a
+/// per-command token queue.
 /// </summary>
 internal sealed class SlewEventWatch {
 
@@ -81,9 +87,17 @@ internal sealed class SlewEventWatch {
         return true;
     }
 
-    /// <summary>Undo a <see cref="NoteAborted"/> whose device call then FAILED (#836 r2): the
-    /// slew is still running, so its eventual Completed must not be suppressed.</summary>
-    public void ClearAbortNote() => _abortNoted = false;
+    /// <summary>Undo a <see cref="NoteAborted"/> whose device call then FAILED (#836 r2): when
+    /// the note is still latched (returns true) the slew is still running and its eventual
+    /// Completed must not be suppressed. Returns FALSE when the note was already consumed — the
+    /// poll observed the stop and closed the episode suppressed while the failing device call
+    /// was in flight (#836 r6): the mount genuinely stopped, and the caller must still publish
+    /// the aborted event to close the lifecycle for clients.</summary>
+    public bool ClearAbortNote() {
+        var wasLatched = _abortNoted;
+        _abortNoted = false;
+        return wasLatched;
+    }
 
     /// <summary>A commanded slew whose dispatch failed never opens an episode — drop its noted
     /// target so it can't ride an unrelated later episode's Started event (#836 r2).</summary>
