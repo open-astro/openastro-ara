@@ -39,8 +39,77 @@ public static class PlateSolveEndpoints {
             .WithName("SolveFrame")
             .WithSummary("Plate-solve a catalogued frame and return its astrometric solution.");
 
+        // §18.I — trigger the §28 slew-and-center loop as a §65.5 background job (minutes of
+        // capture → solve → sync → re-slew iterations — far too long for a request). Returns
+        // 202 + the job; poll GET /api/v1/jobs/{id} (a non-converged, mis-configured, or
+        // equipment-faulted run surfaces as a Failed job with the reason in error_message) and
+        // cancel via DELETE /api/v1/jobs/{id}. Single-flight is layered: the job service runs
+        // one "center" job at a time (a second POST joins the running job), and
+        // CenteringService's internal gate additionally serializes against the §58.4 flip
+        // recenter and the §35 safety recenter.
+        solve.MapPost("/center", CenterAsync)
+            .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("CenterOnCoordinates")
+            .WithSummary("Slew the mount to coordinates and center by iterative plate solves, as a background job.");
+
         return app;
     }
+
+    // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
+    public static IResult CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
+            OpenAstroAra.Profile.Interfaces.IProfileService profileService) {
+        // Doubles reject NaN too: NaN fails every range comparison, so `is not` catches it.
+        if (request is null
+                || request.RaHours is not (>= 0 and < 24)
+                || request.DecDegrees is not (>= -90 and <= 90)) {
+            return Results.Problem("Centering needs ra_hours in [0, 24) and dec_degrees in [-90, 90].",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        var target = new OpenAstroAra.Astrometry.Coordinates(request.RaHours, request.DecDegrees,
+            OpenAstroAra.Astrometry.Epoch.J2000, OpenAstroAra.Astrometry.Coordinates.RAType.Hours);
+        // Job total = the profile's solve-attempt budget, read at enqueue time (the autofocus
+        // pattern). Clamped to ≥1 (no active profile / zero attempts still yields a sane 0→1
+        // progress bar); the job service's monotone/clamped tick keeps done in range if the
+        // live loop runs a different attempt count.
+        var attempts = Math.Max(1, profileService.ActiveProfile?.PlateSolveSettings?.NumberOfAttempts ?? 1);
+        var job = jobs.Enqueue("center", totalSteps: attempts, CenterWork(centering, target, attempts));
+        return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
+    }
+
+    /// <summary>The job body <see cref="CenterAsync"/> enqueues: one tick per completed solve
+    /// attempt, then converge-or-fail. Public so tests run the real body against a mocked
+    /// centering service instead of a copy kept in lockstep.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The job runner only records failures from a narrow exception allow-list; anything else (solver configuration, equipment/mediator faults) would fault the worker task and strand the job in 'running', so foreign exceptions are re-thrown as InvalidOperationException with the original preserved as the inner exception.")]
+    public static Func<Action<int>, CancellationToken, Task> CenterWork(ICenteringService centering,
+            OpenAstroAra.Astrometry.Coordinates target, int attempts) =>
+        async (tick, ct) => {
+            var solved = 0;
+            var solveProgress = new Progress<OpenAstroAra.PlateSolving.PlateSolveProgress>(p => {
+                if (p.PlateSolveResult is not null) {
+                    tick(Math.Min(Interlocked.Increment(ref solved), attempts));
+                }
+            });
+            OpenAstroAra.PlateSolving.PlateSolveResult result;
+            try {
+                result = await centering.CenterOnTarget(target, solveProgress, progress: null, ct);
+            } catch (OperationCanceledException) {
+                throw; // a cancelled job must record "cancelled", not "failed"
+            } catch (System.IO.FileNotFoundException ex) {
+                // Same sanitization as SolveFrameAsync: the framework message embeds the full
+                // server-side path — replace it rather than leak it into error_message.
+                throw new InvalidOperationException(
+                    "Plate-solver executable not found — check the solver path (e.g. ASTAPLocation) in the profile.", ex);
+            } catch (Exception ex) when (ex is not InvalidOperationException) {
+                throw new InvalidOperationException(ex.Message, ex);
+            }
+            if (result?.Success != true) {
+                throw new InvalidOperationException(
+                    "Centering did not converge within the profile's attempt budget — the mount may still be off target; see the daemon log.");
+            }
+            tick(attempts); // settle at total; the job service's tick guard makes this final
+        };
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services. The body is
     // optional (a bare POST blind-solves); a nullable complex parameter makes Minimal API tolerate an empty body.
