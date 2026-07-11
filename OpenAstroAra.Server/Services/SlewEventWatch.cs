@@ -34,12 +34,19 @@ internal sealed class SlewEventWatch {
         double? TargetDecDegrees = null,
         double DurationSeconds = 0);
 
+    // A noted target that no episode consumed within this window is stale — a fast slew that
+    // settled entirely between poll ticks never opens an episode, and its coordinates must not
+    // ride a later, unrelated one (#836 r5). The mediator path also clears exactly when its op
+    // returns; the TTL is the backstop for the fire-and-forget REST path.
+    internal static readonly TimeSpan PendingTargetTtl = TimeSpan.FromSeconds(15);
+
     private bool _slewing;
     private long _startedAtTickMs;
     // Noted at slew-command time so the Started event can carry the intent; a park/home slew has
     // no coordinate target and publishes nulls.
     private double? _pendingTargetRa;
     private double? _pendingTargetDec;
+    private long _pendingNotedAtTickMs;
     // A §57.4 abort suppresses the episode's Completed verdict — the abort path publishes its own
     // telescope.slew_aborted at abort time (immediately, not a poll-tick later).
     private bool _abortNoted;
@@ -50,6 +57,7 @@ internal sealed class SlewEventWatch {
     public void NoteSlewTarget(double raHours, double decDegrees) {
         _pendingTargetRa = raHours;
         _pendingTargetDec = decDegrees;
+        _pendingNotedAtTickMs = TickMs();
         // Deliberately does NOT touch _abortNoted (#836 r4): the flag can only be set on an OPEN
         // episode, and that aborted episode's Completed must stay suppressed even when a new slew
         // is commanded while the abort's device call is still in flight — clearing here let the
@@ -85,6 +93,10 @@ internal sealed class SlewEventWatch {
     }
 
     public Verdict Observe(bool slewing) {
+        if (_pendingTargetRa is not null
+            && TickMs() - _pendingNotedAtTickMs > (long)PendingTargetTtl.TotalMilliseconds) {
+            ClearPendingTarget();
+        }
         if (slewing && !_slewing) {
             _slewing = true;
             _startedAtTickMs = TickMs();

@@ -143,6 +143,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void An_unconsumed_target_expires_instead_of_riding_a_much_later_episode() {
+            // #836 r5 — a fast REST slew that settles entirely between poll ticks never opens an
+            // episode; its target must age out rather than label a later park/home slew.
+            var now = 100_000L;
+            var w = new SlewEventWatch { TickMs = () => now };
+            w.NoteSlewTarget(5.5, 20.0);
+            now += (long)SlewEventWatch.PendingTargetTtl.TotalMilliseconds + 1;
+            var v = w.Observe(true);
+            Assert.That(v.Kind, Is.EqualTo(SlewEventWatch.Kind.Started));
+            Assert.That(v.TargetRaHours, Is.Null, "the stale target aged out");
+        }
+
+        [Test]
+        public void A_target_observed_within_the_ttl_still_rides_its_episode() {
+            var now = 100_000L;
+            var w = new SlewEventWatch { TickMs = () => now };
+            w.NoteSlewTarget(5.5, 20.0);
+            now += 2_000; // one normal poll tick later
+            var v = w.Observe(true);
+            Assert.That(v.TargetRaHours, Is.EqualTo(5.5));
+        }
+
+        [Test]
         public void Reset_clears_the_episode_and_the_pending_target() {
             var w = new SlewEventWatch();
             w.NoteSlewTarget(5.5, 20.0);

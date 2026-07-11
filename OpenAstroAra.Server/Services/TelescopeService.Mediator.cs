@@ -207,7 +207,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
         async Task<bool> SlewCoreAsync() {
             try {
-                var ok = await RunMountOpAsync("telescope.slew",
+                return await RunMountOpAsync("telescope.slew",
                     c => {
                         TryEnableTracking(c);
                         // Async goto: returns immediately, Slewing goes true; the settle-wait below
@@ -217,16 +217,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                     c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
                     token,
                     SlewSettleMaxPolls).ConfigureAwait(false);
-                if (!ok) {
-                    ClearPendingSlewTarget();
-                }
-                return ok;
-            } catch {
-                // A failed/faulted dispatch opens no episode — its noted target must not ride an
-                // unrelated later episode's slew_started (#836 r2). If the slew DID start before
-                // failing, the episode already consumed the target and this is a no-op.
+            } finally {
+                // Consume-or-clear (#836 r2/r5): when the op returns — success, failure, or throw —
+                // this command's episode is over. Either the poll consumed the target (clear is a
+                // no-op) or a fast slew settled between ticks and never opened an episode; in both
+                // cases the target must not ride an unrelated later episode's slew_started.
                 ClearPendingSlewTarget();
-                throw;
             }
         }
     }

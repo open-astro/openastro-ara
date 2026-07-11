@@ -153,17 +153,11 @@ public static class EquipmentEndpoints {
         telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
         telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
-            try {
-                await svc.AbortSlewAsync(ct);
-            } finally {
-                // §57.4 step 2, UNCONDITIONAL (#836 r3): the user hit the panic button — even
-                // when the device abort itself throws (driver error, disconnect), the run must
-                // not keep firing exposures at a mount that may still be moving. Gate-arm
-                // semantics (pause at the next instruction boundary; sequence.paused fires when
-                // the engine suspends); no-op with nothing running; an already-paused run is
-                // left to its existing owner.
-                await sequencer.PauseActiveRunsAsync(CancellationToken.None);
-            }
+            // §57.4 steps 1+2 — device abort, then an UNCONDITIONAL sequence pause (even when the
+            // abort throws); the ordering contract lives in MountStopHandler where tests pin it.
+            await MountStopHandler.ExecuteAsync(
+                () => svc.AbortSlewAsync(ct),
+                () => sequencer.PauseActiveRunsAsync(CancellationToken.None));
             return Results.Accepted();
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
