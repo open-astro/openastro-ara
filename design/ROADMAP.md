@@ -408,8 +408,11 @@ named section — this appendix indexes, it does not duplicate.
   (needs per-run target coords surfaced to the engine); today the notification says verify pointing.
 - Flats probe bounds per filter (#754 round-2) — generated flat leaves keep default [0.01,10] s
   probe bounds; a narrowband panel needing >10 s fails honestly; add per-filter bounds if field use shows the need.
-- Blind-solver fallthrough (#363) — AstrometryNet-configured profile silently gets ASTAP as both
-  primary + blind; drop the option from profile/wizard or log the substitution.
+- ~~Blind-solver fallthrough (#363)~~ — closed from both ends: the factory already logged the
+  AstrometryNet→ASTAP substitution once per run (shipped earlier); now the client stops OFFERING
+  the unsupported engines — the Settings dropdown lists ASTAP only, a stored legacy value (NINA
+  import) still renders honestly labeled "(not supported — ASTAP is used)", and the settings/help
+  registry text says plainly that ASTAP is the only supported engine.
 - Plate-solve slices (low priority): REST centering trigger (`POST /platesolve/center`, needs the
   202-Accepted long-running-op pattern + progress surface); #756 frame-solve header-reuse micro-opt.
 - ~~§39 `ListSessionsAsync` O(N) queries per page + integer-OFFSET cursor~~ — shipped: pages now

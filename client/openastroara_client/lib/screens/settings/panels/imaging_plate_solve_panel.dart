@@ -89,10 +89,16 @@ class _ImagingPlateSolvePanelState
           label: 'Engine',
           helpKey: 'img.platesolve.engine',
           value: s.engine,
-          items: const {
+          // #363 — the daemon ships ASTAP only (§18.I): a profile configured for another engine
+          // silently solved with ASTAP anyway, so stop OFFERING the others. A stored legacy value
+          // (e.g. a NINA import) still renders — honestly labeled — so the dropdown isn't blank
+          // and the user can switch it to ASTAP; it just can't be re-selected once left.
+          items: {
             PlateSolveEngine.astap: 'ASTAP',
-            PlateSolveEngine.astrometryNet: 'astrometry.net',
-            PlateSolveEngine.platesolve2: 'PlateSolve 2',
+            if (s.engine == PlateSolveEngine.astrometryNet)
+              PlateSolveEngine.astrometryNet: 'astrometry.net (not supported — ASTAP is used)',
+            if (s.engine == PlateSolveEngine.platesolve2)
+              PlateSolveEngine.platesolve2: 'PlateSolve 2 (not supported — ASTAP is used)',
           },
           onChanged: (v) {
             if (v != null) n.setEngine(v);
