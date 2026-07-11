@@ -211,5 +211,29 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - profile refresh after select/create failed: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// §63.4 delete hook — remove the named PHD2 profile (and its dark library / defect map,
+        /// <c>delete_dark_files=true</c> per the lifecycle table). Returns true when the daemon accepted the
+        /// delete, false on an RPC error response (e.g. the profile doesn't exist — already-gone is the
+        /// caller's success case to decide). Throws only on transport faults; the caller owns best-effort.
+        /// The daemon rejects deleting its SELECTED profile — callers must check
+        /// <see cref="SelectedProfile"/> first (the lifecycle hook does; the selected twin tracks the last
+        /// connect, not ARA's active-profile flag, so an ARA-side guard alone doesn't rule it out).
+        /// </summary>
+        public async Task<bool> DeleteGuiderProfileAsync(string name, CancellationToken ct) {
+            ArgumentException.ThrowIfNullOrEmpty(name);
+            ct.ThrowIfCancellationRequested();
+            var msg = new Phd2DeleteProfile {
+                Parameters = new Phd2DeleteProfileParameter { Name = name, DeleteDarkFiles = true },
+            };
+            var resp = await SendMessage(msg);
+            if (resp?.error != null) {
+                Logger.Warning($"PHD2 §63.4 - delete_profile for '{name}' not applied: {resp.error}");
+                return false;
+            }
+            Logger.Info($"PHD2 §63.4 - deleted guider profile '{name}' (dark files included).");
+            return true;
+        }
     }
 }

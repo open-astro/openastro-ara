@@ -64,10 +64,22 @@ public static class ProfilesEndpoints {
             .WithName("RenameProfile")
             .WithSummary("Rename a profile.");
 
-        profiles.MapDelete("/{id:guid}", (Guid id, IProfileRepository repo) =>
+        profiles.MapDelete("/{id:guid}", (Guid id, IProfileRepository repo, IGuiderService guider) => {
+                // Snapshot the name BEFORE the delete — the §63.4 twin's PHD2 name derives
+                // from it, and the record is gone once Delete succeeds. Read-only, so the
+                // repository's atomic decide-under-lock (below) still owns TOCTOU.
+                var name = repo.GetProfile(id)?.Meta.Name;
                 // The repository decides atomically under its lock, so a concurrent select
                 // can't slip between an existence pre-check and the delete (TOCTOU).
-                repo.Delete(id) switch {
+                var result = repo.Delete(id);
+                if (result == ProfileDeleteResult.Deleted) {
+                    // §63.4 lifecycle hook — drop the profile's PHD2 twin (dark files
+                    // included) so orphaned guider profiles don't accumulate. Fire-and-
+                    // forget: the service never throws (best-effort by contract), and the
+                    // DELETE response must not wait on a guider RPC.
+                    _ = guider.TryDeleteAraGuiderProfileAsync(name, id, CancellationToken.None);
+                }
+                return result switch {
                     ProfileDeleteResult.Deleted => Results.NoContent(),
                     ProfileDeleteResult.NotFound => Results.NotFound(),
                     ProfileDeleteResult.RefusedActive => Results.Problem(
@@ -77,7 +89,8 @@ public static class ProfilesEndpoints {
                         detail: "Cannot delete the last remaining profile.",
                         statusCode: StatusCodes.Status409Conflict),
                     _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError),
-                })
+                };
+            })
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)

@@ -103,8 +103,14 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   `PlaceholderPolarAlignService` (preflight/lease → 2-frame seed with Alpaca RA slews → live
   adjust loop → verify + hand-back restore) → §45.9 endpoints + WS events → the WILMA
   bullseye/arrows screen.
-- **§63.4 profile lifecycle beyond connect-time** — `delete_profile` / `clone_profile` /
-  `rename_profile` mapped onto ARA profile lifecycle hooks (which don't exist headless yet).
+- **§63.4 profile lifecycle beyond connect-time** — ~~`delete_profile`~~ shipped:
+  `DELETE /profiles/{id}` fires a best-effort `delete_profile(name, delete_dark_files=true)` for
+  the twin via `GuiderService.TryDeleteAraGuiderProfileAsync` (no guider connected → logged
+  skip; the ARA delete never waits on or fails from the RPC). Remaining: `clone_profile` (ARA's
+  duplicate-current create could clone the twin to carry calibration over — needs the create
+  endpoint to know the source profile) and `rename_profile` (the twin's name embeds the stable
+  profile id, so an ARA rename re-maps on next connect via create — a rename RPC would preserve
+  calibration across renames; both are enhancement-grade, not orphan-grade).
 - **e-4b-2 leftover** — record `calibration_state.guider.dark_library` on build completion
   (waits on a server-side calibration-state store existing).
 - ~~**Poll-failure visibility**~~ (#770 round-2) — shipped: `PollBuildProgressAsync` logs ONE
