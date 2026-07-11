@@ -208,6 +208,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_gps_sync_with_an_out_of_range_position_drops_the_location_but_applies_the_time() {
+            // Unlike a wire push (422), the internal GPS path must never fail on a garbled
+            // position — the time is still trustworthy even when the coordinates aren't.
+            var store = new InMemoryProfileStore();
+            var before = store.GetSiteSettings();
+            var svc = NewService(profiles: store);
+
+            var result = await svc.ApplyGpsSyncAsync(T0, new TimeSyncLocationDto(91, 0, 0), CancellationToken.None);
+
+            Assert.That(result.LocationUpdated, Is.False);
+            Assert.That(store.GetSiteSettings(), Is.EqualTo(before), "a bad position must not poison the profile");
+            var state = await svc.GetStateAsync(CancellationToken.None);
+            Assert.That(state.Synced, Is.True, "the time sync still applies");
+            Assert.That(state.Source, Is.EqualTo("gps-internal"));
+            Assert.That(state.Location, Is.Null);
+        }
+
+        [Test]
         public async Task A_push_without_location_reports_location_not_updated() {
             var store = new InMemoryProfileStore();
             var before = store.GetSiteSettings();

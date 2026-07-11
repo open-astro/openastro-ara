@@ -105,6 +105,10 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
                 window.CancelAfter(PerDeviceListenWindow);
                 // Altitude only rides GGA sentences (RMC has none), so remember the most recent
                 // GGA altitude and pair it with the RMC fix that supplies the instant (#834 r1).
+                // Sentence order within a reporting cycle is chipset-dependent (not standardized):
+                // when RMC arrives before the cycle's GGA, the sync deliberately applies without
+                // altitude rather than waiting — the RMC instant goes stale while we wait, and a
+                // null altitude safely preserves the profile's existing elevation.
                 double? lastGgaAltitude = null;
                 await foreach (var line in _source.ReadLinesAsync(device, window.Token).ConfigureAwait(false)) {
                     var fix = NmeaSentenceParser.Parse(line);
@@ -127,7 +131,9 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
                 // The per-device listen window elapsed with no fix — silent port or no satellites
                 // yet. Move on; the next probe pass retries.
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                // Host-shutdown cancellation (the outer token) falls through both catches and
+                // propagates as a clean cancellation instead of logging as a device fault (#834 r2).
                 LogDeviceReadFailed(device, ex);
             }
         }

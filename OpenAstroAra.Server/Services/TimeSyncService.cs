@@ -178,9 +178,12 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         // leaves the whole pushed offset outstanding, tracked for GET.
         var afterOffset = clockSet ? 0.0 : beforeOffset;
 
-        var locationUpdated = location is not null && TryApplyLocation(location);
-
+        bool locationUpdated;
         lock (_gate) {
+            // The site-settings read-modify-write rides inside the same gate as the state update:
+            // there are two independent sync writers now (a wire push and the USB-GPS worker), and
+            // an unserialized RMW would let one clobber fields the other just wrote (#834 r2).
+            locationUpdated = location is not null && TryApplyLocation(location);
             _source = stateSource;
             _trust = trust;
             _syncedAtUtc = timeUtc;
