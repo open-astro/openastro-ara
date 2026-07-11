@@ -372,8 +372,14 @@ named section — this appendix indexes, it does not duplicate.
 
 **Backup / stats** (PORT_TODO "§43 backup — §43-2 deferrals"):
 - Restore sha-256 gate bypassable by deleting the manifest — require the manifest when remote restore lands.
-- No disk-space pre-flight on backup create — pre-flight or 507 mapping.
-- Async zip packaging + `backup.*` progress WS — move create onto a worker like restore (202 contract already in place); interim 120 s client read timeout.
+- ~~No disk-space pre-flight on backup create~~ — shipped with the async create: a free-space
+  probe vs. the raw area sum refuses up front with 507 (best-effort; an unavailable probe skips).
+- ~~Async zip packaging + `backup.*` progress WS~~ — shipped: create packages on a background
+  worker (202 returns immediately, same wire shape), poll-able `GET /backup/create-status`
+  (idle→running→done/failed, done carries the snapshot id) + best-effort `backup.create.*` WS
+  events; running-create idempotent re-accept by key, second create 409, create still queues
+  behind a running restore on the shared gate; the client polls to the terminal (spinner now
+  tracks the real work) and the interim 120 s read timeout is gone.
 - Stats index residuals — `SUM(CASE …)` scans; `(focuser_position, captured_utc)` covering index if the catalog grows.
 - §50.4 focuser position narrowed `(int)GetInt64` — widen to `long` end-to-end if ever needed.
 - Best Frames: validate `frame_id` rather than degrading to `''` — tighten with per-frame drill-down.

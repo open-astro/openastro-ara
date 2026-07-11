@@ -13,9 +13,16 @@ abstract interface class BackupClient {
   Future<List<BackupSnapshot>> listSnapshots();
 
   /// Create a backup of the profile config areas. Returns the accepted
-  /// operation id. Throws when there's nothing to back up (the daemon answers
-  /// 422) or on a transport error.
+  /// operation id — since §43-2 the packaging runs on a daemon-side worker, so
+  /// poll [createStatus] for the terminal outcome. Throws when there's nothing
+  /// to back up (422), another create is running (409), the disk is too full
+  /// (507), or on a transport error.
   Future<String> createBackup();
+
+  /// The create worker's live state (§43-2) — poll after [createBackup] until
+  /// it reaches a terminal state (`done`/`failed`). Same state machine shape as
+  /// [cloneStatus]. Throws on a transport error or a non-object body.
+  Future<CloneStatus> createStatus();
 
   /// Restore the selected areas from a snapshot's [downloadUrl]. Returns the
   /// accepted operation id. Throws on an unknown snapshot (404), an unsupported
@@ -40,11 +47,9 @@ abstract interface class BackupClient {
   void close();
 }
 
-/// Dio wrapper over `/api/v1/backup/*`. Create is 202-Accepted and completes
-/// within the request — since §43-2b(c) the payload can be catalog-sized, not
-/// just config-sized, so the call carries its own read timeout. Restore is also
-/// 202 but runs on a background worker (§43-2b) — poll [cloneStatus] for its
-/// `running`→`done`/`failed` outcome.
+/// Dio wrapper over `/api/v1/backup/*`. Create and restore are both
+/// 202-Accepted with the work on a daemon-side background worker — poll
+/// [createStatus] / [cloneStatus] for the `running`→`done`/`failed` outcome.
 class BackupApi implements BackupClient {
   final Dio _dio;
   final String _baseUrl;
@@ -90,15 +95,21 @@ class BackupApi implements BackupClient {
 
   @override
   Future<String> createBackup() async {
-    final res = await _dio.post<dynamic>(
-      '/api/v1/backup/create-zip',
-      // §43-2b(c): create runs the whole job in-request — SQLite BackupDatabase
-      // page-copy of the frames catalog + zip + SHA-256 of the archive. On Pi
-      // hardware with a long-lived catalog that outgrows the 30s default, so
-      // give it double the restore headroom (restore 202s quickly; create can't).
-      options: Options(receiveTimeout: const Duration(seconds: 120)),
-    );
+    // §43-2: the 202 returns as soon as the daemon claims the create slot — the catalog-sized
+    // packaging happens on its worker, so the default read timeout is plenty (the old 120s
+    // in-request override is gone with the in-request packaging).
+    final res = await _dio.post<dynamic>('/api/v1/backup/create-zip');
     return _operationId(res.data, 'create-zip');
+  }
+
+  @override
+  Future<CloneStatus> createStatus() async {
+    final res = await _dio.get<dynamic>('/api/v1/backup/create-status');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException('backup/create-status returned a non-object body (${data.runtimeType})');
+    }
+    return CloneStatus.fromJson(data);
   }
 
   @override

@@ -361,14 +361,28 @@ public static class SystemEndpoints {
         backup.MapPost("/create-zip",
                 async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) => {
                     try {
+                        // §43-2 async create: packaging runs on a background worker; poll create-status (or
+                        // watch backup.create.*) for the terminal outcome. Cheap validation still throws here.
                         return Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct));
                     } catch (BackupNothingToArchiveException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    } catch (BackupCreateInProgressException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+                    } catch (BackupInsufficientStorageException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status507InsufficientStorage);
                     }
                 })
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .ProducesProblem(StatusCodes.Status409Conflict)
               .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+              .ProducesProblem(StatusCodes.Status507InsufficientStorage)
               .WithName("CreateBackupZip");
+
+        backup.MapGet("/create-status",
+                async (IBackupService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetCreateStatusAsync(ct)))
+              .Produces<System.Text.Json.JsonElement>(StatusCodes.Status200OK)
+              .WithName("GetBackupCreateStatus");
 
         backup.MapPost("/restore-zip",
                 async ([FromBody] RestoreRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) => {

@@ -81,7 +81,7 @@ namespace OpenAstroAra.Test {
             WriteProfile();
             WriteSequence(Path.Combine("library", "m31.json"), "{\"target\":\"M31\"}");
 
-            var op = await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            var op = await BackupTestOps.CreateAndAwaitAsync(_svc);
 
             Assert.That(op.OperationType, Is.EqualTo("backup.create-zip"));
             var zips = Directory.GetFiles(_backupsDir, "backup-*.zip");
@@ -112,7 +112,7 @@ namespace OpenAstroAra.Test {
                     Assert.Ignore("symlink creation not permitted on this platform/runner");
                 }
 
-                await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+                await BackupTestOps.CreateAndAwaitAsync(_svc);
                 var entries = ZipEntryNames(Directory.GetFiles(_backupsDir, "backup-*.zip").Single());
                 Assert.That(entries, Does.Contain("sequences/real.json"), "real files are still backed up");
                 Assert.That(entries, Has.None.Contains("linked"), "the symlink itself isn't archived");
@@ -131,7 +131,7 @@ namespace OpenAstroAra.Test {
             WriteProfile();
             WriteSequence("active.json", "{}");
 
-            var op = await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            var op = await BackupTestOps.CreateAndAwaitAsync(_svc);
             var snapshots = await _svc.ListSnapshotsAsync(CancellationToken.None);
 
             Assert.That(snapshots, Has.Count.EqualTo(1));
@@ -160,7 +160,7 @@ namespace OpenAstroAra.Test {
                     Assert.Ignore("symlink creation not permitted on this platform/runner");
                 }
 
-                await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+                await BackupTestOps.CreateAndAwaitAsync(_svc);
                 var snap = (await _svc.ListSnapshotsAsync(CancellationToken.None)).Single();
                 var entries = ZipEntryNames(Directory.GetFiles(_backupsDir, "backup-*.zip").Single());
 
@@ -179,7 +179,7 @@ namespace OpenAstroAra.Test {
             WriteProfile();
             // No sequences/ dir.
 
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
             var snap = (await _svc.ListSnapshotsAsync(CancellationToken.None)).Single();
 
             Assert.That(snap.IncludedAreas, Is.EquivalentTo(ProfileOnly),
@@ -189,7 +189,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Open_returns_a_readable_stream_for_a_known_id_and_null_otherwise() {
             WriteProfile();
-            var op = await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            var op = await BackupTestOps.CreateAndAwaitAsync(_svc);
 
             var snapshot = await _svc.OpenSnapshotAsync(op.OperationId, CancellationToken.None);
             Assert.That(snapshot, Is.Not.Null);
@@ -206,7 +206,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task List_skips_a_manifest_whose_archive_is_gone() {
             WriteProfile();
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
 
             // Delete the archive but leave the manifest — a half-deleted backup shouldn't list a phantom snapshot.
             File.Delete(Directory.GetFiles(_backupsDir, "backup-*.zip").Single());
@@ -218,7 +218,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task List_skips_a_corrupt_manifest_and_returns_the_rest() {
             WriteProfile();
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
             await File.WriteAllTextAsync(Path.Combine(_backupsDir, "garbage.meta.json"), "not json {{{");
 
             var snapshots = await _svc.ListSnapshotsAsync(CancellationToken.None);
@@ -229,11 +229,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task List_orders_snapshots_newest_first() {
             WriteProfile();
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
             // Guarantee distinct CreatedUtc stamps so the ordering assert is meaningful, not trivially true on a tie —
             // DateTimeOffset.UtcNow resolution can be ~15ms on Windows; 100ms is unambiguous even on a loaded runner.
             await Task.Delay(100);
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
 
             var snapshots = await _svc.ListSnapshotsAsync(CancellationToken.None);
 
@@ -259,19 +259,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Create_with_a_pathologically_deep_tree_throws_instead_of_overflowing() {
+        public async Task Create_with_a_pathologically_deep_tree_fails_instead_of_overflowing() {
             WriteProfile();
             // Build a sequences/ tree deeper than the 64-level cap. Without the depth guard the recursive walk would
-            // risk a StackOverflowException (uncatchable, crashes the process); with it, an ordinary catchable throw.
+            // risk a StackOverflowException (uncatchable, crashes the process); with it, an ordinary catchable throw —
+            // which since the §43-2 async create surfaces as the worker's FAILED terminal, not a synchronous exception.
             var deep = Path.Combine(_profileDir, "sequences");
             for (var i = 0; i < 80; i++) {
                 deep = Path.Combine(deep, "d");
             }
             Directory.CreateDirectory(deep);
-            File.WriteAllText(Path.Combine(deep, "leaf.json"), "{}");
+            await File.WriteAllTextAsync(Path.Combine(deep, "leaf.json"), "{}");
 
-            Assert.That(async () => await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None),
-                Throws.InstanceOf<InvalidDataException>());
+            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            var (state, message) = await BackupTestOps.AwaitCreateTerminalAsync(_svc);
+            Assert.That(state, Is.EqualTo("failed"));
+            Assert.That(message, Does.Contain("nesting limit"));
 
             Assert.That(Directory.Exists(_backupsDir) ? Directory.GetFiles(_backupsDir) : Array.Empty<string>(),
                 Is.Empty, "the staged temp is reclaimed; no partial snapshot is left");
@@ -381,7 +384,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task SweepOrphans_after_a_real_create_leaves_the_snapshot() {
             WriteProfile();
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
             var before = Directory.GetFiles(_backupsDir).Length;
 
             var removed = BackupService.SweepOrphans(_profileDir);

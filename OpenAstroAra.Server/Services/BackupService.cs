@@ -89,6 +89,36 @@ namespace OpenAstroAra.Server.Services {
         private readonly object _cloneLock = new();
         private CloneState _clone = IdleClone;
 
+        // §43-2 async create — the create worker's own state machine, deliberately SEPARATE from the clone
+        // one (a create can legally queue behind a running restore on the shared _gate; folding both into one
+        // status would make "running" ambiguous). SnapshotId is set on the done terminal so a poller can pick
+        // out the new snapshot; InFlightKey backs the running-create idempotent re-accept.
+        private sealed record CreateState(string State, string? Message, Guid? SnapshotId);
+        private static readonly CreateState IdleCreate = new(IdleState, null, null);
+        private static readonly CreateState CreateFailedFallback = new(FailedState, "Backup create failed.", null);
+        private readonly object _createLock = new();
+        private CreateState _create = IdleCreate;
+        private string? _createInFlightKey;
+        private Guid _createInFlightId;
+
+        // §43-2 async create — WS events (best-effort, like the guider calibration builds'): started when the
+        // worker claims the slot, complete/failed as the terminal. Payloads carry the operation/snapshot id.
+        public const string CreateStartedEvent = "backup.create.started";
+        public const string CreateCompleteEvent = "backup.create.complete";
+        public const string CreateFailedEvent = "backup.create.failed";
+
+        // Disk-space pre-flight headroom: the archive stores the areas compressed (raw sum is an upper bound)
+        // but the temp zip + manifest + hashing scratch coexist briefly; refuse only when clearly short.
+        private const long CreatePreflightSlackBytes = 16L * 1024 * 1024;
+
+        // Test seam: free bytes on the volume holding the backups dir. Null return = probe unavailable →
+        // pre-flight skipped (never block a backup on a probe fault).
+        internal Func<string, long?> FreeBytesProbe { get; set; } = ProbeFreeBytes;
+
+        // Test seam: invoked by the create worker just before packaging — lets a bench hold the worker open
+        // (assert 202-before-completion / concurrent-409) or throw (assert the failed terminal).
+        internal Action? CreatePackagingTestHook { get; set; }
+
         private readonly string _profileDir;
         private readonly string _backupsDir;
         private readonly ILogger<BackupService> _logger;
@@ -120,9 +150,13 @@ namespace OpenAstroAra.Server.Services {
         // §43-2b retention — read live per create so a settings change applies to the next backup
         // without a restart. Null (tests / minimal wiring) → the DTO default applies.
         private readonly IProfileStore? _profiles;
+        // §43-2 async create — sink for the backup.create.* events. Optional so the service composes
+        // in tests without a hub; a null sink just means no events (the poll-able status still works).
+        private readonly IWsBroadcaster? _ws;
 
         public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null,
-                IBackupSourceFetcher? remoteFetcher = null, IProfileStore? profiles = null) {
+                IBackupSourceFetcher? remoteFetcher = null, IProfileStore? profiles = null,
+                IWsBroadcaster? ws = null) {
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
             ArgumentNullException.ThrowIfNull(logger);
             _profileDir = profileDir;
@@ -131,6 +165,7 @@ namespace OpenAstroAra.Server.Services {
             _restorer = restorer ?? new DefaultBackupRestorer();
             _remoteFetcher = remoteFetcher;
             _profiles = profiles;
+            _ws = ws;
         }
 
         // Registered as a DI singleton, so the container disposes this on host shutdown.
@@ -141,34 +176,177 @@ namespace OpenAstroAra.Server.Services {
             _gate.Dispose();
         }
 
-        public async Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) {
-            // idempotencyKey is echoed back but NOT enforced in §43-1: a retried POST with the same key produces a new
-            // archive each time. De-dup (key → already-created snapshot id) lands with the §43-2 worker rework; tracked
-            // in PORT_TODO. Harmless for now beyond extra archives (no retention pruning yet — also §43-2). When a key
-            // is actually supplied, log it so an operator retrying a timed-out POST has a signal that dedup is off.
-            if (!string.IsNullOrEmpty(idempotencyKey)) {
-                LogDeduplicationNotImplemented();
+        public Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) {
+            // §43-2 async create (the §43-2b(c) trigger fired: frames_metadata made the payload catalog-sized, so
+            // packaging + whole-archive hashing no longer belong inside the request). Shape mirrors RestoreZipAsync:
+            // validate cheaply + SYNCHRONOUSLY so 422/507/409 surface as HTTP errors before the 202, then run the
+            // slow packaging on a fire-and-forget worker reporting via create-status + backup.create.* WS events.
+
+            // A request cancelled before dispatch must not launch a worker (the pre-worker contract: a
+            // cancelled create leaves nothing behind). After the 202 the worker runs to completion regardless —
+            // it's bounded by the shutdown token, not the request's.
+            ct.ThrowIfCancellationRequested();
+
+            // Nothing-to-archive stays a synchronous 422 (pre-worker contract): the existence probes are cheap,
+            // and the worker re-checks authoritatively during packaging (a delete in between lands as 'failed').
+            if (!File.Exists(Path.Combine(_profileDir, ProfileFileName))
+                    && !Directory.Exists(Path.Combine(_profileDir, SequencesDirName))) {
+                throw new BackupNothingToArchiveException(
+                    "Nothing to back up: neither profile.json nor a sequences/ tree is present.");
             }
+
+            PreflightDiskSpace();
+
             var id = Guid.NewGuid();
             var createdUtc = DateTimeOffset.UtcNow;
-
-            // All file IO is synchronous (ZipArchive has no async write path); run it off the request thread so a
-            // larger sequences/ tree doesn't tie up the connection's thread-pool slot while it packages. ct is
-            // threaded in so a cancellation between checkpoints aborts the work and reclaims its artifacts, rather
-            // than only making the await throw while the zip finishes writing in the background.
-            await _gate.WaitAsync(ct).ConfigureAwait(false);
-            try {
-                await Task.Run(() => CreateBackupCore(id, createdUtc, ct), ct).ConfigureAwait(false);
-            } finally {
-                _gate.Release();
+            lock (_createLock) {
+                if (_create.State == RunningState) {
+                    // A retry of the RUNNING create with the same non-empty key re-accepts with the same id
+                    // (§60.5 at-least-once — the caller's first POST likely timed out client-side). Any other
+                    // concurrent create is refused: both would contend for the same gate + prune pass, and the
+                    // second adds nothing a poll of the first doesn't give.
+                    if (!string.IsNullOrEmpty(idempotencyKey)
+                            && string.Equals(idempotencyKey, _createInFlightKey, StringComparison.Ordinal)) {
+                        return Task.FromResult(new OperationAcceptedDto(
+                            OperationId: _createInFlightId,
+                            OperationType: "backup.create-zip",
+                            AcceptedUtc: createdUtc,
+                            IdempotencyKey: idempotencyKey));
+                    }
+                    throw new BackupCreateInProgressException("A backup create is already in progress.");
+                }
+                _create = new CreateState(RunningState, "Packaging…", null);
+                _createInFlightKey = idempotencyKey;
+                _createInFlightId = id;
             }
 
-            LogCreated(id, _backupsDir);
-            return new OperationAcceptedDto(
+            // Fire-and-forget on the thread pool; the worker owns the gate + the terminal create-status. The
+            // request token can't be used — it's cancelled once the 202 response completes (same as restore).
+            _ = Task.Run(() => RunCreateAsync(id, createdUtc), CancellationToken.None);
+            LogCreateStarted(id);
+            return Task.FromResult(new OperationAcceptedDto(
                 OperationId: id,
                 OperationType: "backup.create-zip",
                 AcceptedUtc: createdUtc,
-                IdempotencyKey: idempotencyKey);
+                IdempotencyKey: idempotencyKey));
+        }
+
+        // Create worker: serialize against restore + any other create on the shared _gate, package, and drive
+        // the create-status terminal. Same last-resort-finally contract as RunRestoreAsync — create-status can
+        // never strand at "running" (which would 409 every future create until a daemon restart).
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Top-level fire-and-forget worker (same contract as RunRestoreAsync): every packaging/IO " +
+                "failure must land in the 'failed' create-status + WS event rather than escape as an unobserved task exception.")]
+        private async Task RunCreateAsync(Guid id, DateTimeOffset createdUtc) {
+            var terminal = CreateFailedFallback;
+            try {
+                await EmitBackupEventAsync(CreateStartedEvent, new JsonObject {
+                    ["operation_id"] = id.ToString("N", CultureInfo.InvariantCulture),
+                }).ConfigureAwait(false);
+                await _gate.WaitAsync(_shutdown.Token).ConfigureAwait(false);
+                try {
+                    CreatePackagingTestHook?.Invoke();
+                    CreateBackupCore(id, createdUtc, _shutdown.Token);
+                } finally {
+                    // Same Dispose race note as RunRestoreAsync: swallow a disposed gate on host shutdown so it
+                    // can't overwrite a successful terminal with 'failed'.
+                    try {
+                        _gate.Release();
+                    } catch (ObjectDisposedException) {
+                    }
+                }
+                LogCreated(id, _backupsDir);
+                terminal = new CreateState(DoneState, "Backup created.", id);
+            } catch (Exception ex) {
+                LogCreateFailed(id, ex);
+                terminal = new CreateState(FailedState, ex.Message, null);
+            } finally {
+                lock (_createLock) {
+                    _create = terminal;
+                    _createInFlightKey = null;
+                }
+                await EmitBackupEventAsync(
+                    terminal.State == DoneState ? CreateCompleteEvent : CreateFailedEvent,
+                    new JsonObject {
+                        ["operation_id"] = id.ToString("N", CultureInfo.InvariantCulture),
+                        ["snapshot_id"] = terminal.SnapshotId?.ToString("N", CultureInfo.InvariantCulture),
+                        ["message"] = terminal.Message,
+                    }).ConfigureAwait(false);
+            }
+        }
+
+        // §43-2 disk-space pre-flight: refuse the create up front (507) when the volume clearly can't hold the
+        // archive — the raw area sum is an upper bound on the zip's content (stored compressed), plus slack for
+        // the temp/manifest overlap. Best-effort: an unavailable probe or an unreadable area size skips the
+        // gate rather than blocking a backup (packaging still fails cleanly mid-zip if space truly runs out).
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort pre-flight boundary: a probe/size-scan fault (permissions, exotic mount) must degrade to 'no pre-flight' — packaging itself remains the authoritative failure point. Log-and-recover.")]
+        private void PreflightDiskSpace() {
+            try {
+                var free = FreeBytesProbe(_profileDir);
+                if (free is null) {
+                    return;
+                }
+                long needed = CreatePreflightSlackBytes;
+                var profilePath = Path.Combine(_profileDir, ProfileFileName);
+                if (File.Exists(profilePath)) {
+                    needed += new FileInfo(profilePath).Length;
+                }
+                var dbPath = Path.Combine(_profileDir, DatabaseFileName);
+                if (File.Exists(dbPath)) {
+                    needed += new FileInfo(dbPath).Length;
+                }
+                var sequencesDir = Path.Combine(_profileDir, SequencesDirName);
+                if (Directory.Exists(sequencesDir)) {
+                    foreach (var f in Directory.EnumerateFiles(sequencesDir, "*", SearchOption.AllDirectories)) {
+                        needed += new FileInfo(f).Length;
+                    }
+                }
+                if (free.Value < needed) {
+                    throw new BackupInsufficientStorageException(
+                        $"Not enough free disk space for a backup: ~{needed / (1024 * 1024)} MiB needed, "
+                        + $"{free.Value / (1024 * 1024)} MiB free.");
+                }
+            } catch (BackupInsufficientStorageException) {
+                throw;
+            } catch (Exception ex) {
+                LogPreflightSkipped(ex);
+            }
+        }
+
+        private static long? ProbeFreeBytes(string dir) {
+            var root = Path.GetPathRoot(Path.GetFullPath(dir));
+            return string.IsNullOrEmpty(root) ? null : new DriveInfo(root).AvailableFreeSpace;
+        }
+
+        public Task<JsonElement> GetCreateStatusAsync(CancellationToken ct) {
+            CreateState s;
+            lock (_createLock) {
+                s = _create;
+            }
+            var obj = new JsonObject {
+                ["state"] = s.State,
+                ["message"] = s.Message,
+                ["snapshot_id"] = s.SnapshotId?.ToString("N", CultureInfo.InvariantCulture),
+            };
+            using var doc = JsonDocument.Parse(obj.ToJsonString());
+            return Task.FromResult(doc.RootElement.Clone());
+        }
+
+        // Best-effort WS publish (the guider calibration builds' pattern): a failed publish must never fail
+        // the backup work it narrates, but is logged so a silently-dropped event stays visible.
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "WS publish is best-effort: a failed publish from a custom IWsBroadcaster must not abort the worker or surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
+        private async Task EmitBackupEventAsync(string eventType, JsonObject payload) {
+            if (_ws is null) {
+                return;
+            }
+            try {
+                using var doc = JsonDocument.Parse(payload.ToJsonString());
+                await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogWsPublishFailed(eventType, ex);
+            }
         }
 
         private void CreateBackupCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
@@ -944,12 +1122,20 @@ namespace OpenAstroAra.Server.Services {
         partial void LogSnapshotVanished(string archivePath, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Warning,
-            Message = "Backup create-zip received an Idempotency-Key but dedup is not implemented (§43-2) — a retry will create another archive")]
-        partial void LogDeduplicationNotImplemented();
-
-        [LoggerMessage(Level = LogLevel.Warning,
             Message = "Backup could not snapshot the frames catalog — this backup is config-only (its manifest omits frames_metadata)")]
         partial void LogDbSnapshotFailed(Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Backup create {OperationId} started on the background worker")]
+        partial void LogCreateStarted(Guid operationId);
+
+        [LoggerMessage(Level = LogLevel.Error, Message = "Backup create {OperationId} failed")]
+        partial void LogCreateFailed(Guid operationId, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Backup disk-space pre-flight could not run — proceeding without it")]
+        partial void LogPreflightSkipped(Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Backup WS event {EventType} failed to publish")]
+        partial void LogWsPublishFailed(string eventType, Exception ex);
     }
 
     /// <summary>Thrown by <see cref="BackupService.CreateZipAsync"/> when there is nothing to back up — neither a
@@ -959,6 +1145,23 @@ namespace OpenAstroAra.Server.Services {
         public BackupNothingToArchiveException() { }
         public BackupNothingToArchiveException(string message) : base(message) { }
         public BackupNothingToArchiveException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.CreateZipAsync"/> when a create is already running with a
+    /// different (or no) Idempotency-Key — one create at a time; the same running key re-accepts instead. The
+    /// create endpoint maps it to <c>409 Conflict</c>.</summary>
+    public sealed class BackupCreateInProgressException : Exception {
+        public BackupCreateInProgressException() { }
+        public BackupCreateInProgressException(string message) : base(message) { }
+        public BackupCreateInProgressException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.CreateZipAsync"/>'s disk-space pre-flight when the backups
+    /// volume clearly can't hold the archive. The create endpoint maps it to <c>507 Insufficient Storage</c>.</summary>
+    public sealed class BackupInsufficientStorageException : Exception {
+        public BackupInsufficientStorageException() { }
+        public BackupInsufficientStorageException(string message) : base(message) { }
+        public BackupInsufficientStorageException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the requested snapshot doesn't exist on

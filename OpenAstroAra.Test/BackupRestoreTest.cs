@@ -62,7 +62,7 @@ namespace OpenAstroAra.Test {
         }
 
         private async Task<Uri> CreateSnapshotAsync() {
-            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(_svc);
             var snap = (await _svc.ListSnapshotsAsync(CancellationToken.None)).Single();
             return snap.DownloadUrl;
         }

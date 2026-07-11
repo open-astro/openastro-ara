@@ -43,12 +43,41 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
     return api.listSnapshots();
   }
 
-  /// Create a backup, then refresh so the new snapshot appears. Returns the
-  /// operation id, or null when no server is bound. Throws on failure.
-  Future<String?> createBackup() async {
+  /// Create a backup: POST (fast 202 — §43-2 packaging runs on a daemon worker),
+  /// poll create-status to its terminal, then refresh so the new snapshot
+  /// appears. Returns the operation id, or null when no server is bound.
+  /// Throws on failure — a synchronous refusal (422/409/507) as the transport
+  /// error, a worker-side failure as [StateError] carrying the daemon's message,
+  /// a stuck worker as [TimeoutException]. If [isCancelled] starts returning
+  /// true the poll stops (the daemon finishes the backup on its own) and the id
+  /// is returned without a refresh. [interval] is injectable for tests.
+  Future<String?> createBackup({
+    Duration interval = const Duration(milliseconds: 500),
+    Duration timeout = const Duration(minutes: 5),
+    bool Function()? isCancelled,
+  }) async {
     final api = ref.read(backupApiProvider);
     if (api == null) return null;
     final id = await api.createBackup();
+    // No stale-terminal race: the daemon sets `running` synchronously on the POST
+    // (the slot is claimed before the 202), same as restore's clone-status.
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      if (isCancelled?.call() ?? false) {
+        return id;
+      }
+      final status = await api.createStatus();
+      if (status.isTerminal) {
+        if (status.isFailed) {
+          throw StateError(status.message ?? 'Backup failed on the server.');
+        }
+        break;
+      }
+      if (!DateTime.now().isBefore(deadline)) {
+        throw TimeoutException('Backup did not finish within ${timeout.inSeconds}s.');
+      }
+      await Future<void>.delayed(interval);
+    }
     await refresh();
     return id;
   }

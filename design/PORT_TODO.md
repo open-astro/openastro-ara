@@ -1025,18 +1025,21 @@ Deferred to **§43-2**:
   gate (logged at Warning via `LogManifestSkipped`, so it's visible; the restore proceeds unvalidated). Anyone able to
   delete the sidecar bypasses integrity validation. Fine for a local single-user daemon; when §44 cloud/remote restore
   lands, require the manifest (or carry the checksum out-of-band). Surfaced 2026-06-14 by the §43-2a review.
-- **No disk-space pre-flight on create (low priority).** `CreateZipAsync` packaging on a full disk fails mid-zip with
-  an `IOException`; the catch reclaims the temp and the caller gets a generic 500. A pre-flight free-space check or
-  mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low
-  priority — §43-1 payloads are config-sized (KB), so disk-full during packaging is unlikely. Surfaced 2026-06-13 by
-  the §43-1 round-7 review.
-- **Async packaging + progress WS — trigger condition fired (2026-07-08).** `CreateZipAsync` completes the zip within
-  the request rather than on a background worker emitting `backup.*` progress events, and §43-2b(c)'s frames_metadata
-  area made the payload catalog-sized (SQLite `BackupDatabase` page-copy + zip + whole-archive SHA-256, all
-  in-request). Interim mitigation: the client's `createBackup()` carries a 120s per-call read timeout (2× restore's
-  headroom, since restore 202s to a worker while create can't). Durable fix: move create onto a worker like restore —
-  the 202/operation-id contract is already in place so the wire shape won't change. Surfaced by the §43-2b(c) round-3
-  review.
+- ✅ **No disk-space pre-flight on create — DONE (2026-07-10, with the async create).** A best-effort free-space
+probe (raw area sum + 16 MiB slack vs. the backups volume) refuses the create synchronously with **507
+Insufficient Storage**; an unavailable probe or unreadable area size skips the gate (packaging stays the
+authoritative failure point).
+- ✅ **Async packaging + progress WS — DONE (2026-07-10).** `CreateZipAsync` now validates cheaply + synchronously
+(422 nothing-to-archive, 507 pre-flight, 409 create-in-progress — a retry with the SAME running Idempotency-Key
+re-accepts with the same operation id) and packages on a fire-and-forget worker (same wire shape: 202 +
+operation id). New poll-able `GET /api/v1/backup/create-status` (idle→running→done/failed; done carries
+snapshot_id) mirrors clone-status, plus best-effort `backup.create.started/complete/failed` WS events
+(optional IWsBroadcaster, the guider-calibration emit pattern). Create still queues behind a running restore
+on the shared `_gate` (accepted, not 409 — only same-op concurrency is refused). WILMA's `createBackup()`
+drops the interim 120 s read timeout and polls create-status to the terminal (spinner tracks the real
+packaging; worker-side failures surface the daemon's message). Full-terminal dedup (key → already-created
+snapshot id after completion) remains deliberately unimplemented — a completed create's retry makes a fresh
+archive, which retention prunes.
 - ✅ **Area selectors beyond profiles+sequences — RESOLVED (2026-07-08) by §43-2b(c) above.** The
   frames-catalog area ships end-to-end (create snapshot + manifest count + opt-in restore); logs are
   reserved-by-design (not a §43.4 zip area). Remaining from the §43.4 list: calibration metadata sidecar

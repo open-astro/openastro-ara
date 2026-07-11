@@ -17,12 +17,19 @@ class BackupRestoreModal extends ConsumerStatefulWidget {
     super.key,
     this.restorePollInterval = const Duration(milliseconds: 500),
     this.restorePollTimeout = const Duration(minutes: 5),
+    this.createPollInterval = const Duration(milliseconds: 500),
+    this.createPollTimeout = const Duration(minutes: 5),
   });
 
   /// §43-2b restore-progress poll cadence + deadline. Overridable so tests don't
   /// wall-clock wait (production uses the defaults).
   final Duration restorePollInterval;
   final Duration restorePollTimeout;
+
+  /// §43-2 create-progress poll cadence + deadline (create packages on a daemon
+  /// worker now). Overridable for tests, like the restore pair.
+  final Duration createPollInterval;
+  final Duration createPollTimeout;
 
   @override
   ConsumerState<BackupRestoreModal> createState() => _BackupRestoreModalState();
@@ -45,7 +52,13 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
   Future<void> _createBackup() async {
     setState(() => _creating = true);
     try {
-      await ref.read(backupSnapshotsProvider.notifier).createBackup();
+      // §43-2: the notifier POSTs (fast 202) then polls create-status to the worker's
+      // terminal — the spinner now genuinely tracks the daemon-side packaging.
+      await ref.read(backupSnapshotsProvider.notifier).createBackup(
+            interval: widget.createPollInterval,
+            timeout: widget.createPollTimeout,
+            isCancelled: () => !mounted,
+          );
       if (mounted) {
         _snack('Backup created.');
       }

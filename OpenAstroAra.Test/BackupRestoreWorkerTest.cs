@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
         private async Task<(BackupService svc, Uri url)> NewServiceWithSnapshotAsync(IBackupRestorer restorer) {
             await File.WriteAllTextAsync(Path.Combine(_profileDir, "profile.json"), "{\"v\":1}");
             var svc = new BackupService(_profileDir, NullLogger<BackupService>.Instance, restorer);
-            await svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            await BackupTestOps.CreateAndAwaitAsync(svc);
             var url = (await svc.ListSnapshotsAsync(CancellationToken.None)).Single().DownloadUrl;
             return (svc, url);
         }
