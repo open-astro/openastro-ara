@@ -373,6 +373,20 @@ void main() {
       expect(out.resumeDelayMin, 3);
     });
 
+    test('applyDraftToSafety maps the §58.12 unattended-shutdown pair', () {
+      final d = ProfileDraft();
+      d.safety
+        ..unattendedShutdownEnabled = false
+        ..unattendedShutdownWaitMin = 25;
+      final out = applyDraftToSafety(const SafetyPolicies(), d);
+      expect(out.unattendedShutdownEnabled, isFalse);
+      expect(out.unattendedShutdownWaitMinutes, 25);
+      // Untouched draft keeps the base (the section defaults: on / 10 min).
+      final kept = applyDraftToSafety(const SafetyPolicies(), ProfileDraft());
+      expect(kept.unattendedShutdownEnabled, isTrue);
+      expect(kept.unattendedShutdownWaitMinutes, 10);
+    });
+
     test('applyDraftToSafety maps the §35.1 weather thresholds', () {
       final d = ProfileDraft();
       d.safety
