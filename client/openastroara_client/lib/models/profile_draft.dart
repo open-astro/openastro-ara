@@ -234,6 +234,11 @@ class SafetyPolicies {
   int? maxWindKmh;
   int? maxHumidityPct;
   double? minDewDeltaC;
+  // §58.12 — the "when something's wrong and I'm not here" countdown
+  // (playbook screen 15's WILMA-offline auto-abort): whether the unattended
+  // graceful shutdown runs, and how many minutes of unattended silence arm it.
+  bool? unattendedShutdownEnabled;
+  int? unattendedShutdownWaitMin;
 }
 
 /// Mirrors the safety section's `UnsafeAction` (mapped in wizard_save) — what to

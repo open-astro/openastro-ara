@@ -158,9 +158,13 @@ The highest-leverage internal dependency: building/validating the live AF sweep 
   suffix on the field marks it in `ProfileDraft.clearedFields`, and the Save mappers write the
   section DEFAULT instead of keeping the cloned value; typing un-marks. Other sections' fields
   stay keep-on-blank (their defaults are benign); extend per-field if friction emerges.
-- **§37.5 wizard safety/site extras (enforcement-first)** — per-weather granular actions,
-  WILMA-offline auto-abort timer, alarm sound/vibrate: add each field together with the
-  engine/planner surface that consumes it. ~~Max-sequence-runtime cap~~ — shipped:
+- **§37.5 wizard safety/site extras (enforcement-first)** — per-weather granular actions and
+  alarm sound/vibrate remain (per-weather actions were deliberately deferred by PORT_DECISIONS
+  2026-07-07; alarm knobs are device-local, not profile fields). ~~WILMA-offline auto-abort
+  timer~~ — the consumer already existed (`UnattendedShutdownService`, §58.12: the
+  unattended-failure countdown → park/warm/disconnect ladder, fields
+  `unattended_shutdown_{enabled,wait_minutes}` in Settings → Safety); the wizard's screen 15
+  now carries the pair, closing the wizard-coverage gap. ~~Max-sequence-runtime cap~~ — shipped:
   `SiteSettingsDto.MaxSequenceRuntimeMin` (0 = no limit) + the sequencer's runtime-cap watchdog
   (graceful user-stop path + notification; cap re-read per tick) + Settings row + wizard field.
   ~~Soft-warning altitude~~ — shipped: `SiteSettingsDto.SoftWarningAltitudeDeg` (default 30°,

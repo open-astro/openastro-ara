@@ -277,6 +277,8 @@ SafetyPolicies applyDraftToSafety(SafetyPolicies base, ProfileDraft d) {
     maxWindKmh: s.maxWindKmh,
     maxHumidityPct: s.maxHumidityPct,
     minDewDeltaC: s.minDewDeltaC,
+    unattendedShutdownEnabled: s.unattendedShutdownEnabled,
+    unattendedShutdownWaitMinutes: s.unattendedShutdownWaitMin,
   );
 }
 

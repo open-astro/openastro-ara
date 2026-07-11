@@ -443,7 +443,9 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
       _delayError == null &&
       _windError == null &&
       _humidityError == null &&
-      _dewError == null;
+      _dewError == null &&
+      _unattendedError == null;
+  String? _unattendedError;
   String? _delayError;
 
   @override
@@ -637,6 +639,65 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
             },
           ),
         ],
+        // §58.12 — "when something's wrong and I'm not here": the unattended
+        // graceful-shutdown countdown (the playbook screen-15 WILMA-offline
+        // auto-abort). The daemon consumer (UnattendedShutdownService) parks,
+        // warms, and disconnects the rig when an urgent failure sits
+        // unattended this long.
+        WizardDropdown<bool?>(
+          label: 'Unattended failure shutdown',
+          value: _sp.unattendedShutdownEnabled,
+          helperText: 'If a failure suspends the run and nobody responds, put '
+              'the rig to bed (park, warm the cooler, disconnect).',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: true, label: 'On (recommended)'),
+            DropdownMenuEntry(value: false, label: 'Off'),
+          ],
+          onChanged: (v) {
+            setState(() {
+              _sp.unattendedShutdownEnabled = v;
+              // The wait is meaningless with the shutdown off — clear it so a
+              // stale value can't reach Save (mirrors the Ignore/auto-resume
+              // clearing above).
+              if (v == false) {
+                _sp.unattendedShutdownWaitMin = null;
+                _unattendedError = null;
+              }
+            });
+            // Clearing the error above can flip overall validity — push it,
+            // or Next/Save stays stuck disabled until another field reports.
+            _reportStepValid(ref, _allValid);
+          },
+        ),
+        if (_sp.unattendedShutdownEnabled != false)
+          WizardTextField(
+            label: 'Shut down after (min unattended)',
+            initialValue: _sp.unattendedShutdownWaitMin?.toString(),
+            hint: 'default 10',
+            helperText: 'Any sign of you (dismissing the alert, any command) '
+                'cancels the countdown. Leave blank to keep the profile '
+                'default.',
+            errorText: _unattendedError,
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            inputFormatters: WizardInput.unsignedInt,
+            onChanged: (v) {
+              final t = v.trim();
+              String? err;
+              if (t.isEmpty) {
+                _sp.unattendedShutdownWaitMin = null;
+              } else {
+                final n = int.tryParse(t);
+                if (n != null && n >= 1 && n <= 720) {
+                  _sp.unattendedShutdownWaitMin = n;
+                } else {
+                  err = 'Enter whole minutes, 1–720.';
+                }
+              }
+              setState(() => _unattendedError = err);
+              _reportStepValid(ref, _allValid);
+            },
+          ),
       ],
     );
   }
