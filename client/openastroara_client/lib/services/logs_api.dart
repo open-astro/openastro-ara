@@ -31,16 +31,19 @@ abstract interface class LogsClient {
 class LogsApi implements LogsClient {
   final Dio _dio;
 
-  LogsApi(AraServer server)
-      : _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          // Small request bodies, but bound the send so a frozen daemon can't
-          // block the write indefinitely.
-          sendTimeout: const Duration(seconds: 10),
-          // A whole-file download can be a few MB; give it room.
-          receiveTimeout: const Duration(seconds: 30),
-        ));
+  /// [dio] is injectable so tests can supply a stub adapter; production passes
+  /// nothing and a server-bound Dio is built.
+  LogsApi(AraServer server, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              // Small request bodies, but bound the send so a frozen daemon can't
+              // block the write indefinitely.
+              sendTimeout: const Duration(seconds: 10),
+              // A whole-file download can be a few MB; give it room.
+              receiveTimeout: const Duration(seconds: 30),
+            ));
 
   @override
   Future<List<LogEntry>> tail({
@@ -48,7 +51,7 @@ class LogsApi implements LogsClient {
     String? minLevel,
     String? containsSubstring,
   }) async {
-    final res = await _dio.post<List<dynamic>>(
+    final res = await _dio.post<dynamic>(
       '/api/v1/server/logs/tail',
       data: <String, dynamic>{
         // The daemon defaults to 200 when absent; send it explicitly so the cap
@@ -59,9 +62,16 @@ class LogsApi implements LogsClient {
           'contains_substring': containsSubstring,
       },
     );
-    final rows = res.data ?? const <dynamic>[];
-    return rows
-        .map((e) => LogEntry.fromJson(e as Map<String, dynamic>))
+    final data = res.data;
+    if (data is! List) {
+      // A 2xx with a non-array body means the wire contract changed (or an error
+      // envelope slipped through). Throw rather than return [] so the Support tab
+      // surfaces an error state instead of a silently-empty log list.
+      throw FormatException('logs/tail returned a non-array body (${data.runtimeType})');
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(LogEntry.fromJson)
         .toList(growable: false);
   }
 

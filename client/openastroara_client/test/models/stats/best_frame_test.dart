@@ -55,5 +55,19 @@ void main() {
       expect(BestFrame.listFromJson(const {}), isEmpty);
       expect(BestFrame.listFromJson(const {'frames': 'nope'}), isEmpty);
     });
+
+    test('drops rows without a usable frame_id (it keys the row)', () {
+      final list = BestFrame.listFromJson(const {
+        'frames': [
+          {'frame_id': 'good', 'composite_score': 0.9},
+          {'composite_score': 0.8}, // missing id — unusable for drill-down
+          {'frame_id': 42, 'composite_score': 0.7}, // wrong-typed id
+          {'frame_id': '', 'composite_score': 0.6}, // empty id
+          'not-an-object',
+        ],
+      });
+      expect(list, hasLength(1));
+      expect(list.single.frameId, 'good');
+    });
   });
 }

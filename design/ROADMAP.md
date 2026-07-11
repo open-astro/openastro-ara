@@ -382,7 +382,9 @@ named section — this appendix indexes, it does not duplicate.
   tracks the real work) and the interim 120 s read timeout is gone.
 - Stats index residuals — `SUM(CASE …)` scans; `(focuser_position, captured_utc)` covering index if the catalog grows.
 - §50.4 focuser position narrowed `(int)GetInt64` — widen to `long` end-to-end if ever needed.
-- Best Frames: validate `frame_id` rather than degrading to `''` — tighten with per-frame drill-down.
+- ~~Best Frames: validate `frame_id`~~ — shipped: `listFromJson` drops rows without a usable
+  `frame_id` (missing/wrong-typed/empty) with a logged count, instead of degrading to `''`;
+  the per-frame drill-down still lands separately.
 
 **API / product scope** (PORT_TODO "§43" tail — cross-cutting, user-authoritative):
 - Daemon-wide API auth unaddressed — trusted-LAN model (`ListenAnyIP :5555`, no auth middleware);
@@ -390,7 +392,9 @@ named section — this appendix indexes, it does not duplicate.
   `BackupSourceUrl` outbound-GET (SSRF/reachability-oracle) surface accepted within that model.
 
 **Client polish** (PORT_TODO, various):
-- §54 `LogsApi.tail` silently yields empty on a non-array body — branch on response shape if it bites.
+- ~~§54 `LogsApi.tail` silently yields empty on a non-array body~~ — shipped: a 2xx non-array
+  body now throws (error state in the Support tab, matching listSnapshots) and non-object rows
+  are dropped rather than crashing mid-parse; `LogsApi` gained an injectable Dio for tests.
 - §64 Live View reports pre-encode frame dims (encoder may downscale) — report post-encode dims if a consumer needs truth.
 - §36 catalog serve endpoint re-parses `catalog.csv` per request — memoize per package if load lands.
 - §70 import `DroppedFields` can drift from export strip logic — derive both from one source when §70 is next touched.
