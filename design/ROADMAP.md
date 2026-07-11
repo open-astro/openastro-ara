@@ -313,9 +313,11 @@ Deliberate confirmation passes, not new features (the checklist's "= verify" ent
   the site-settings round-trip existed). Server slice 1 SHIPPED: `TimeSyncService` state machine
   (fresh-&-trusted gate, §31.2 trust clamping, honest offset tracking when the CAP_SYS_TIME
   clock-set is unavailable, location write-through to the profile site settings) + GET/POST
-  `/api/v1/server/time-sync` + the pure NMEA RMC/GGA parser. Remaining: USB-GPS self-sync hosted
-  wiring (serial read → parser → self-push) and the WILMA waterfall UI (steps 1/3/4/5 + manual
-  entry modal).
+  `/api/v1/server/time-sync` + the pure NMEA RMC/GGA parser. Client slice SHIPPED: WILMA pushes
+  its device clock on every transition into connected (waterfall step 1 — the ~95% path; no-ops
+  when the daemon reports a fresh, trustworthy sync). Remaining: USB-GPS self-sync hosted wiring
+  (serial read → parser → self-push) and the explicit waterfall UI (steps 3/4/5 — mobile GPS,
+  plug-a-GPS prompt, manual entry modal).
 - **§57** Stop Mount — full slew-safety policy verification.
 - **§68** AlpacaBridge — full bridge contract verification. (The playbook §68 prose was
   reconciled 2026-07-09 to drop the removed minimum-version gate.)
