@@ -164,6 +164,12 @@ public interface IGuiderService {
 
     /// <summary>§63.6 — enable/disable bad-pixel (defect-map) correction; returns the updated calibration status.</summary>
     Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct);
+
+    /// <summary>§63.4 delete hook — best-effort removal of the PHD2 profile mapped to a just-deleted ARA
+    /// profile (its <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin, dark files included). Never throws: returns
+    /// true when the daemon accepted the delete, false when no guider is connected, the profile wasn't
+    /// there, or the RPC failed (all logged) — a failed cleanup must never fail the ARA profile delete.</summary>
+    Task<bool> TryDeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, CancellationToken ct);
 }
 
 public interface IPolarAlignService {

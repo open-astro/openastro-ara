@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
@@ -94,6 +95,47 @@ namespace OpenAstroAra.Test {
 
             var asked = await WaitUntilAsync(() => System.Linq.Enumerable.Contains(fake.ReceivedMethods, "get_version")).ConfigureAwait(false);
             Assert.That(asked, Is.True, "the §63.9 connect handshake must call get_version for fork identification");
+        }
+
+        [Test]
+        public async Task Deleting_an_ara_profile_deletes_its_guider_twin_with_dark_files() {
+            // §63.4 delete hook — the service maps the deleted ARA profile to its
+            // ara-<slug>-<id8> twin and fires delete_profile with delete_dark_files=true.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            string? deletedName = null;
+            bool? darkFiles = null;
+            // The factory receives the WHOLE JSON-RPC request; params sit under "params".
+            fake.OnRpc("delete_profile", req => {
+                var p = req["params"]?.AsObject();
+                deletedName = p?["name"]?.GetValue<string>();
+                darkFiles = p?["delete_dark_files"]?.GetValue<bool>();
+                return JsonValue.Create(0);
+            });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.Not.Null, "the guider never reached Connected against the fake");
+
+            var profileId = Guid.NewGuid();
+            var ok = await svc.TryDeleteAraGuiderProfileAsync("Old Rig C8", profileId, CancellationToken.None)
+                .ConfigureAwait(false);
+
+            Assert.That(ok, Is.True, "the fake accepted the delete, so the hook reports success");
+            Assert.That(deletedName, Is.EqualTo(PHD2Guider.AraGuiderProfileName("Old Rig C8", profileId)),
+                "the twin's id-suffixed name — the same one the connect path creates");
+            Assert.That(darkFiles, Is.True, "§63.4: the twin's dark library goes with it");
+        }
+
+        [Test]
+        public async Task Profile_delete_hook_is_a_quiet_noop_when_no_guider_is_connected() {
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            var ok = await svc.TryDeleteAraGuiderProfileAsync("Ghost rig", Guid.NewGuid(), CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(ok, Is.False, "disconnected → false, never a throw (best-effort contract)");
         }
 
         [Test]
