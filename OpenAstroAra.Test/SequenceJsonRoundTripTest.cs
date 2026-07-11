@@ -207,5 +207,59 @@ namespace OpenAstroAra.Test {
             Assert.That(container.Items, Has.Count.EqualTo(1));
             Assert.That(container.Items[0].GetType().Name, Is.EqualTo("Annotation"));
         }
+
+        // §38 daemon schema check (ROADMAP §8 / PORT_TODO "§38 editor Save"): WILMA's
+        // editor promotes a plain-array Items/Conditions into the canonical
+        // ObservableCollection wrapper on Save (nina_dom.withChildren/withConditions,
+        // putIfAbsent($type) with these exact constants). Verify the daemon accepts
+        // precisely the wrapper WILMA writes — a body that originally stored a bare
+        // array must not 422 after the client's promotion.
+
+        private const string ClientItemsWrapperType =
+            "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel";
+        private const string ClientConditionsWrapperType =
+            "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel";
+
+        [Test]
+        public void The_client_promoted_Items_wrapper_matches_and_deserializes() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+
+            var original = new SequentialContainer { Name = "promoted" };
+            original.Items.Add(new Annotation { Name = "kept" });
+            var json = converter.Serialize(original);
+
+            var root = Newtonsoft.Json.Linq.JObject.Parse(json);
+            // The strongest check: the daemon's own canonical wrapper token IS the
+            // constant WILMA writes when promoting — divergence here is exactly the
+            // cross-boundary break the PORT_TODO entry feared.
+            Assert.That((string?)root["Items"]?["$type"], Is.EqualTo(ClientItemsWrapperType),
+                "the client's itemsWrapperType constant has drifted from the daemon's canonical form");
+
+            // Belt-and-braces: splice the client constant in verbatim and deserialize.
+            root["Items"]!["$type"] = ClientItemsWrapperType;
+            var roundTripped = converter.Deserialize(root.ToString());
+            Assert.That(roundTripped.Items, Has.Count.EqualTo(1));
+            Assert.That(roundTripped.Items[0].GetType().Name, Is.EqualTo("Annotation"));
+        }
+
+        [Test]
+        public void The_client_promoted_Conditions_wrapper_matches_and_deserializes() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+
+            var original = new SequentialContainer { Name = "promoted" };
+            original.Conditions.Add(new LoopCondition { Iterations = 3 });
+            var json = converter.Serialize(original);
+
+            var root = Newtonsoft.Json.Linq.JObject.Parse(json);
+            Assert.That((string?)root["Conditions"]?["$type"], Is.EqualTo(ClientConditionsWrapperType),
+                "the client's conditionsWrapperType constant has drifted from the daemon's canonical form");
+
+            root["Conditions"]!["$type"] = ClientConditionsWrapperType;
+            var roundTripped = (SequentialContainer)converter.Deserialize(root.ToString());
+            Assert.That(roundTripped.Conditions, Has.Count.EqualTo(1));
+            Assert.That(((LoopCondition)roundTripped.Conditions[0]).Iterations, Is.EqualTo(3));
+        }
     }
 }
