@@ -197,6 +197,17 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
             if (v != null) n.setTwilightDefinition(v);
           },
         ),
+        EditableNumberRow(
+          label: 'Soft warning altitude (°)',
+          helpKey: 'safety.site.soft_warning_altitude_deg',
+          currentValue: s.softWarningAltitudeDeg.toString(),
+          getCanonical: () =>
+              ref.read(siteSettingsProvider).softWarningAltitudeDeg.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSoftWarningAltitudeDeg(v);
+          },
+        ),
         // "0 = no limit" lives in the row's help entry — the label must fit the
         // panel's fixed label column.
         EditableNumberRow(

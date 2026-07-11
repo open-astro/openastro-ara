@@ -658,6 +658,7 @@ class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
   late final SitePreferences _site = _draftOf(ref).site;
   String? _horizonError;
   String? _runtimeError;
+  String? _softAltError;
 
   @override
   Widget build(BuildContext context) {
@@ -708,6 +709,33 @@ class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
                 label: 'Astronomical twilight'),
           ],
           onChanged: (v) => setState(() => _site.twilight = v),
+        ),
+        WizardTextField(
+          label: 'Soft warning altitude (°)',
+          initialValue: _site.softWarningAltitudeDeg?.toString(),
+          hint: 'default 30',
+          helperText: 'Targets that never climb above this are still listed, '
+              'but tagged — low elevation softens detail. 0 disables. Leave '
+              'blank to keep the profile default.',
+          errorText: _softAltError,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          onChanged: (v) {
+            final t = v.trim();
+            String? err;
+            if (t.isEmpty) {
+              _site.softWarningAltitudeDeg = null;
+            } else {
+              final d = double.tryParse(t);
+              if (d != null && d >= 0 && d <= 90) {
+                _site.softWarningAltitudeDeg = d;
+              } else {
+                err = 'Enter a value between 0 and 90°.';
+              }
+            }
+            setState(() => _softAltError = err);
+            _reportStepValid(ref, err == null);
+          },
         ),
         WizardTextField(
           label: 'Max sequence runtime (min)',

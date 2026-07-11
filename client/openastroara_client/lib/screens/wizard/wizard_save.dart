@@ -41,6 +41,7 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
     // Screen 16 — horizon floor + twilight + runtime cap (null keeps the base).
     defaultHorizonAltitudeDeg: d.site.hardMinAltitudeDeg,
     maxSequenceRuntimeMin: d.site.maxSequenceRuntimeMin,
+    softWarningAltitudeDeg: d.site.softWarningAltitudeDeg,
     twilightDefinition: switch (d.site.twilight) {
       TwilightOption.civil => TwilightDefinition.civil,
       TwilightOption.nautical => TwilightDefinition.nautical,

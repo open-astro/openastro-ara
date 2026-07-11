@@ -1043,6 +1043,17 @@ const List<Setting> settingsRegistry = [
     profilePath: 'site.twilight_definition',
   ),
   Setting(
+    id: 'safety.site.soft_warning_altitude_deg',
+    label: 'Soft warning altitude',
+    description:
+        "Advisory altitude — Tonight's Sky tags targets that never clear it (low-elevation seeing softens detail). 0 disables. Distinct from the hard horizon floor.",
+    keywords: ['soft', 'warning', 'altitude', 'low', 'elevation', 'advisory', 'horizon', 'seeing'],
+    path: ['Settings', 'Safety', 'Site'],
+    type: SettingType.doubleRange(min: 0, max: 90, step: 1),
+    defaultValue: 30.0,
+    profilePath: 'site.soft_warning_altitude_deg',
+  ),
+  Setting(
     id: 'safety.site.max_sequence_runtime_min',
     label: 'Max sequence runtime',
     description:

@@ -1159,6 +1159,8 @@ class ProfileApi {
         ),
         maxSequenceRuntimeMin:
             (j['max_sequence_runtime_min'] as num?)?.toInt() ?? 0,
+        softWarningAltitudeDeg:
+            (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
       );
 
   static Map<String, dynamic> _siteSettingsToJson(SiteSettings v) => {
@@ -1173,6 +1175,7 @@ class ProfileApi {
     'typical_seeing_arcsec': v.typicalSeeingArcsec,
     'twilight_definition': v.twilightDefinition.name,
     'max_sequence_runtime_min': v.maxSequenceRuntimeMin,
+    'soft_warning_altitude_deg': v.softWarningAltitudeDeg,
   };
 
   static TwilightDefinition _twilightFromString(String? s) {

@@ -106,7 +106,13 @@ public sealed record SiteSettingsDto(
     // default; the ctor default keeps an older profile.json deserializing). The
     // sequencer's runtime-cap watchdog stops a run gracefully once it has been
     // running this long — enforcement-first: the field ships with that consumer.
-    int MaxSequenceRuntimeMin = 0);
+    int MaxSequenceRuntimeMin = 0,
+    // §37.5 screen 16 — the ADVISORY altitude (playbook default 30°; 0 disables).
+    // Distinct from DefaultHorizonAltitudeDeg (the hard floor): targets below the
+    // hard floor are excluded, targets that never CLEAR this soft mark are still
+    // listed but Tonight's Sky tags them so soft, low-elevation detail is an
+    // informed choice, not a surprise. Advisory-only — never a score input.
+    double SoftWarningAltitudeDeg = 30);
 
 /// <summary>§36 custom terrain horizon — one skyline vertex: the sky altitude at an
 /// azimuth (compass degrees, 0 = north, clockwise). The profile stores the user's

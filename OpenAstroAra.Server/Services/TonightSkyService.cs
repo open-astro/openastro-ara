@@ -432,6 +432,16 @@ public sealed class TonightSkyService : ITonightSkyService {
                     : "moonless window (+0)",
             };
 
+            // §37.5 soft-warning altitude — an object that never clears the profile's
+            // soft mark tonight stays LISTED (the hard horizon already gated inclusion)
+            // but carries the advisory: low-elevation seeing/extinction softens detail.
+            // Same zero-point pattern as the filter/moon advisories — never a score input.
+            if (site.SoftWarningAltitudeDeg > 0 && peakAltDeg < site.SoftWarningAltitudeDeg) {
+                reasons = new List<string>(reasons) {
+                    $"stays below your {site.SoftWarningAltitudeDeg:0}° soft-altitude mark (+0)",
+                };
+            }
+
             scored.Add((score, new TonightSkyObjectDto(
                 o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
                 Math.Round(altNow, 1), Math.Round(peakAltDeg, 1),

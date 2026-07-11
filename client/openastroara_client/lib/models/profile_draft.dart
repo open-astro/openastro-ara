@@ -251,6 +251,7 @@ class SitePreferences {
   double? hardMinAltitudeDeg;
   TwilightOption? twilight;
   int? maxSequenceRuntimeMin;
+  double? softWarningAltitudeDeg;
 }
 
 /// Mirrors the site section's `TwilightDefinition` (mapped in wizard_save) — how

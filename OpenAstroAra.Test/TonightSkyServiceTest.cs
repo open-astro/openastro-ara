@@ -32,10 +32,13 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class TonightSkyServiceTest {
 
-        private static SiteSettingsDto Site(double lat, double lon, double horizon = 0) =>
+        // soft defaults to 0 (advisory OFF) so the many pre-§37.5 assertions on exact
+        // reason counts/sums stay meaningful; the soft-altitude tests opt in explicitly.
+        private static SiteSettingsDto Site(double lat, double lon, double horizon = 0, double soft = 0) =>
             new(SiteName: "Test", LatitudeDeg: lat, LongitudeDeg: lon, ElevationM: 0, TimeZone: "UTC",
                 UseCustomHorizon: false, DefaultHorizonAltitudeDeg: horizon, BortleClass: 4,
-                TypicalSeeingArcsec: 2.5, TwilightDefinition: "astronomical");
+                TypicalSeeingArcsec: 2.5, TwilightDefinition: "astronomical",
+                SoftWarningAltitudeDeg: soft);
 
         [Test]
         public void Hour_angle_zero_gives_the_transit_altitude() {
@@ -439,6 +442,37 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(1));
             Assert.That(o.ScoreReasons!.Single(r => r.StartsWith("moon", StringComparison.Ordinal)),
                 Does.EndWith("(+0)"));
+        }
+
+        [Test]
+        public void A_target_that_never_clears_the_soft_altitude_gets_the_advisory_tag() {
+            // δ = −20 at φ = 40 peaks at 90 − |40 − (−20)| = 30° — below an 80° soft mark,
+            // above the hard horizon, so it lists WITH the zero-point advisory.
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var site = Site(lat: 40, lon: 0, horizon: 0, soft: 80);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, site.LongitudeDeg);
+            var o = TonightSkyService.Rank(new[] { Obj("LOW", ra, -20) }, site, at, limit: 10).Single();
+
+            Assert.That(o.ScoreReasons!.Count(r => r.Contains("soft-altitude", StringComparison.Ordinal)),
+                Is.EqualTo(1), "exactly one soft-altitude advisory");
+            Assert.That(o.ScoreReasons!.Single(r => r.Contains("soft-altitude", StringComparison.Ordinal)),
+                Does.EndWith("(+0)"), "advisory-only — never a score input");
+        }
+
+        [Test]
+        public void The_soft_altitude_advisory_is_absent_when_cleared_or_disabled() {
+            var at = new DateTimeOffset(2026, 12, 21, 0, 0, 0, TimeSpan.Zero);
+            var ra = TonightSkyService.LocalSiderealTimeDeg(at, 0);
+
+            // Peaks at 90° (δ = φ) with soft = 30 → clears the mark, no tag.
+            var clears = TonightSkyService.Rank(
+                new[] { Obj("HIGH", ra, 40) }, Site(lat: 40, lon: 0, soft: 30), at, limit: 10).Single();
+            Assert.That(clears.ScoreReasons!, Has.None.Contains("soft-altitude"));
+
+            // Soft = 0 disables the advisory even for a low peak.
+            var disabled = TonightSkyService.Rank(
+                new[] { Obj("LOW", ra, -20) }, Site(lat: 40, lon: 0, soft: 0), at, limit: 10).Single();
+            Assert.That(disabled.ScoreReasons!, Has.None.Contains("soft-altitude"));
         }
 
         private static double ParsePoints(string reason) {
