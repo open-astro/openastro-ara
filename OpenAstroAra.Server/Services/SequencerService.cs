@@ -435,8 +435,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     /// <summary>Prefer the RUNNING target container (the one a pause interrupted) over the
     /// plan's first, so a multi-target plan re-centers the right target. Reads the live plan
-    /// tree the engine also mutates — Items membership is fixed after load (only statuses
-    /// change), so the walk is safe alongside a paused run.</summary>
+    /// tree via <see cref="ISequenceContainer.GetItemsSnapshot"/> — sibling parallel branches
+    /// only observe a pause at their next gate check, so parts of the tree can still be
+    /// mutating while this walk runs.</summary>
     internal static IDeepSkyObjectContainer? FindActiveDeepSkyTarget(ISequenceContainer root) {
         IDeepSkyObjectContainer? first = null;
         IDeepSkyObjectContainer? running = null;
@@ -444,7 +445,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return running ?? first;
 
         void Walk(ISequenceContainer container) {
-            foreach (var item in container.Items) {
+            foreach (var item in container.GetItemsSnapshot()) {
                 if (item is IDeepSkyObjectContainer dso) {
                     first ??= dso;
                     if (dso.Status == SequenceEntityStatus.RUNNING) {
