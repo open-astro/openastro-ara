@@ -565,5 +565,185 @@ namespace OpenAstroAra.Test {
             Assert.That(publishedEvents, Does.Contain("safety.safe"),
                 "a cleared breach flows through the same safe-transition machinery");
         }
+
+        // ─── §35 auto-resume pointing (PORT_TODO refinement) ───
+
+        private static readonly string[] CenterThenResume = ["center", "resume"];
+
+        private void RebuildServiceWithCentering(Mock<OpenAstroAra.Server.Services.ICenteringService> centering) {
+            service.Dispose();
+            service = new SafetyReactionService(
+                monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
+                guider.Object, telescope.Object, notifications.Object, ws.Object,
+                logger: null, centeringResolver: () => centering.Object) {
+                ResumeDelayFromMinutes = _ => TimeSpan.FromMilliseconds(30),
+                UnparkPollInterval = TimeSpan.FromMilliseconds(5),
+                UnparkTimeout = TimeSpan.FromMilliseconds(500),
+            };
+        }
+
+        [Test]
+        public async Task Auto_resume_recenters_the_paused_target_before_release() {
+            var runId = Guid.NewGuid();
+            var calls = new List<string>();
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { runId });
+            sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(runId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OpenAstroAra.Astrometry.Coordinates(
+                    OpenAstroAra.Astrometry.Angle.ByHours(5.5),
+                    OpenAstroAra.Astrometry.Angle.ByDegree(20.0),
+                    OpenAstroAra.Astrometry.Epoch.JNOW));
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("resume"); } })
+                .ReturnsAsync(1);
+            var centering = new Mock<OpenAstroAra.Server.Services.ICenteringService>();
+            centering.Setup(c => c.CenterOnTarget(
+                    It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                    It.IsAny<IProgress<OpenAstroAra.PlateSolving.PlateSolveProgress>?>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("center"); } })
+                .ReturnsAsync(new OpenAstroAra.PlateSolving.PlateSolveResult()); // Success = true
+            RebuildServiceWithCentering(centering);
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+
+            await WaitUntilAsync(() => { lock (calls) { return calls.Contains("resume"); } });
+            lock (calls) {
+                Assert.That(calls, Is.EqualTo(CenterThenResume),
+                    "the re-center runs BEFORE the release, never after");
+            }
+            await WaitUntilAsync(() => {
+                lock (postedNotifications) {
+                    return postedNotifications.Exists(n => n.Message?.Contains("re-centered", StringComparison.Ordinal) == true);
+                }
+            });
+        }
+
+        [Test]
+        public async Task A_failed_recenter_still_resumes_with_an_honest_warning() {
+            var runId = Guid.NewGuid();
+            var resumed = false;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { runId });
+            sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(runId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OpenAstroAra.Astrometry.Coordinates(
+                    OpenAstroAra.Astrometry.Angle.ByHours(5.5),
+                    OpenAstroAra.Astrometry.Angle.ByDegree(20.0),
+                    OpenAstroAra.Astrometry.Epoch.JNOW));
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback(() => resumed = true)
+                .ReturnsAsync(1);
+            var centering = new Mock<OpenAstroAra.Server.Services.ICenteringService>();
+            centering.Setup(c => c.CenterOnTarget(
+                    It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                    It.IsAny<IProgress<OpenAstroAra.PlateSolving.PlateSolveProgress>?>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OpenAstroAra.PlateSolving.PlateSolveResult { Success = false });
+            RebuildServiceWithCentering(centering);
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+
+            await WaitUntilAsync(() => resumed);
+            await WaitUntilAsync(() => {
+                lock (postedNotifications) {
+                    return postedNotifications.Exists(n => n.Message?.Contains("did not converge", StringComparison.Ordinal) == true);
+                }
+            });
+        }
+
+        [Test]
+        public async Task Relapse_during_the_target_lookup_cancels_the_recenter_and_restores_the_pause() {
+            // Review finding on #841: an OperationCanceledException thrown while the
+            // recenter is still READING the target's coordinates (before CenterOnTarget)
+            // must translate to CancelledByRelapse — not escape to ResumeCountdownAsync's
+            // outer catch, which would drop the run from tracking with the mount unparked.
+            var runId = Guid.NewGuid();
+            var pauseCalls = 0;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ++pauseCalls == 1 ? new List<Guid> { runId } : new List<Guid>());
+            var lookupStarted = 0;
+            var firstLookup = true;
+            sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .Returns(async (Guid _, CancellationToken token) => {
+                    Interlocked.Increment(ref lookupStarted);
+                    if (firstLookup) {
+                        firstLookup = false;
+                        await Task.Delay(Timeout.Infinite, token); // held open until the relapse cancels it
+                    }
+                    return (OpenAstroAra.Astrometry.Coordinates?)null;
+                });
+            IReadOnlyCollection<Guid>? resumedIds = null;
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback<IReadOnlyCollection<Guid>, CancellationToken>((ids, _) => resumedIds = ids)
+                .ReturnsAsync(1);
+            var centering = new Mock<OpenAstroAra.Server.Services.ICenteringService>();
+            RebuildServiceWithCentering(centering);
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => Volatile.Read(ref lookupStarted) >= 1);
+
+            // Relapse lands mid-lookup: the resume must abort without releasing anything.
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            await Task.Delay(150);
+            sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+            centering.Verify(c => c.CenterOnTarget(
+                    It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                    It.IsAny<IProgress<OpenAstroAra.PlateSolving.PlateSolveProgress>?>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
+
+            // Durable safe window afterwards: the restored id resumes for real —
+            // proof the cancellation restored it to the paused set instead of dropping it.
+            SetMonitor(safe: true);
+            await service.TickAsync();
+            await WaitUntilAsync(() => resumedIds is not null);
+            Assert.That(resumedIds, Is.EquivalentTo(new[] { runId }));
+        }
+
+        [Test]
+        public async Task No_target_coordinates_means_no_recenter_attempt() {
+            var runId = Guid.NewGuid();
+            var resumed = false;
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<Guid> { runId });
+            sequencer.Setup(s => s.GetActiveTargetCoordinatesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((OpenAstroAra.Astrometry.Coordinates?)null);
+            sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .Callback(() => resumed = true)
+                .ReturnsAsync(1);
+            var centering = new Mock<OpenAstroAra.Server.Services.ICenteringService>();
+            RebuildServiceWithCentering(centering);
+
+            SetMonitor(safe: false);
+            await service.TickAsync();
+            SetMonitor(safe: true);
+            await service.TickAsync();
+
+            await WaitUntilAsync(() => resumed);
+            centering.Verify(c => c.CenterOnTarget(
+                    It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                    It.IsAny<IProgress<OpenAstroAra.PlateSolving.PlateSolveProgress>?>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never, "a plan with no coordinate target must not drive the mount");
+            await WaitUntilAsync(() => {
+                lock (postedNotifications) {
+                    return postedNotifications.Exists(n => n.Message?.Contains("Verify the pointing", StringComparison.Ordinal) == true);
+                }
+            });
+        }
     }
 }

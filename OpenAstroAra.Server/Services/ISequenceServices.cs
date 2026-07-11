@@ -106,6 +106,15 @@ public interface ISequencerService {
     /// (no §58.12 user-activity signal). Returns the count of runs a skip was issued on.
     /// </summary>
     Task<int> SkipActiveRunsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// §35 — the run's live deep-sky target coordinates, or null when the run/plan carries none
+    /// (a plan with no coordinate-bearing target container, or an unknown run). Prefers the
+    /// RUNNING target container over the plan's first, so a multi-target plan reports the one a
+    /// pause interrupted. Best-effort read of the live plan tree; the safety engine's
+    /// auto-resume re-centering consumes this.
+    /// </summary>
+    Task<OpenAstroAra.Astrometry.Coordinates?> GetActiveTargetCoordinatesAsync(Guid id, CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>

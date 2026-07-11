@@ -175,6 +175,10 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return Task.FromResult(skipped);
     }
 
+    // Placeholder runs carry no plan tree, so there is never a target to re-center on.
+    public Task<OpenAstroAra.Astrometry.Coordinates?> GetActiveTargetCoordinatesAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult<OpenAstroAra.Astrometry.Coordinates?>(null);
+
     public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
         var resumed = 0;
         foreach (var id in ids) {
