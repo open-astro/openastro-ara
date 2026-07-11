@@ -266,7 +266,7 @@ The former version-bucketed roadmap, regrouped. Source §s preserved; nothing dr
 | **WCAG 2.1 AA formal certification** | former §55.2 | From AA-leaning baseline (§53) to formal third-party-audited compliance — only if observatory/outreach use justifies it. |
 | **Light-mode theme variant** | former §55.2 | Daytime planning + outreach demo contexts. |
 | **Web UI option** | former §55.2 | Web frontend reusing the OpenAPI client + API surface. |
-| **General command palette** | §61.10 | Expand the ⌘K settings search into a full command palette — explicitly committed expansion. Slice 1 SHIPPED: tab navigation hits ("Go to Planning/Run/Live/Options" with intent keywords). Remaining: actions (park, open Library/Backup), sequence templates, sky-atlas targets, equipment ops. |
+| **General command palette** | §61.10 | Expand the ⌘K settings search into a full command palette — explicitly committed expansion. Slices 1+2 SHIPPED: tab navigation hits + 5 action commands (Open Image Library / Calibration / Stats, Back up & restore, Run profile wizard — the top-bar launchers as searchable commands). Remaining: equipment ops (park etc.), sequence templates, sky-atlas targets. |
 | **Client distribution channels** | §75.3, §75.7 | Homebrew cask, Chocolatey, AUR PKGBUILD, Windows `.msix`, optional Flatpak; in-app updater (+ its settings registrations) when auto-update ships. Mobile stores are the §41 row above. |
 | **NINA database importer** | §56.2.2 | Import NINA's `data.db` session/frame/calibration history (profiles + sequences already import per §56.4); only if user demand emerges. |
 | **Mount Safety v2** | §57.9 | The deferred slew-safety expansion pass beyond lean §57, once the panic-button baseline proves out in the field. |

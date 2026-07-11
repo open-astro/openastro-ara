@@ -19,6 +19,11 @@ class SettingsSearchEntry {
   /// §61.10 — set for a "Go to `<tab>`" navigation hit: activating it switches
   /// the main tab instead of opening a settings panel.
   final int? tabIndex;
+
+  /// §61.10 slice 2 — set for an ACTION hit: activating it runs the palette's
+  /// handler for this id (open a full-screen route / dialog). Ids live in the
+  /// palette's action switch (command_palette.dart).
+  final String? actionId;
   final String label;
   final String groupLabel;
   final List<String> keywords;
@@ -30,6 +35,7 @@ class SettingsSearchEntry {
     this.settingId,
     this.helpKey,
     this.tabIndex,
+    this.actionId,
     required this.label,
     required this.groupLabel,
     required this.keywords,
@@ -38,7 +44,11 @@ class SettingsSearchEntry {
   });
 
   String get id =>
-      settingId ?? panelId ?? helpKey ?? (tabIndex != null ? 'nav.$tabIndex' : '');
+      settingId ??
+      panelId ??
+      helpKey ??
+      actionId ??
+      (tabIndex != null ? 'nav.$tabIndex' : '');
 }
 
 /// Per-panel keyword corpus. Each entry lists user-intent words the panel
@@ -293,10 +303,46 @@ const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
   ),
 ];
 
+/// §61.10 slice 2 — palette actions: the top-bar screen/dialog launchers as
+/// searchable commands. The palette owns the id → handler mapping.
+const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
+  SettingsSearchEntry(
+    actionId: 'action.library',
+    label: 'Open Image Library',
+    groupLabel: 'Actions',
+    keywords: ['image library', 'library', 'photos', 'frames', 'gallery', 'fits', 'catalog'],
+  ),
+  SettingsSearchEntry(
+    actionId: 'action.calibration',
+    label: 'Open Calibration',
+    groupLabel: 'Actions',
+    keywords: ['calibration', 'darks', 'flats', 'matching flats', 'dark library', 'defect map'],
+  ),
+  SettingsSearchEntry(
+    actionId: 'action.stats',
+    label: 'Open Stats',
+    groupLabel: 'Actions',
+    keywords: ['stats', 'statistics', 'dashboard', 'insights', 'best frames', 'achievements', 'streak'],
+  ),
+  SettingsSearchEntry(
+    actionId: 'action.backup',
+    label: 'Back up & restore…',
+    groupLabel: 'Actions',
+    keywords: ['backup', 'restore', 'snapshot', 'export profile', 'save settings'],
+  ),
+  SettingsSearchEntry(
+    actionId: 'action.wizard',
+    label: 'Run profile wizard',
+    groupLabel: 'Actions',
+    keywords: ['wizard', 'setup', 'walkthrough', 'new profile', 'first run', 'onboarding'],
+  ),
+];
+
 List<SettingsSearchEntry> buildSearchIndex() {
   final entries = <SettingsSearchEntry>[];
-  // 0. §61.10 — tab navigation ("go to run", "planning", …).
+  // 0. §61.10 — tab navigation ("go to run", "planning", …) + actions.
   entries.addAll(_navEntries);
+  entries.addAll(_actionEntries);
   // 1. Index panels.
   for (final group in settingsTree) {
     for (final panel in group.panels) {
