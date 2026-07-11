@@ -96,9 +96,8 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     if (entry.settingId != null) {
       ref.read(highlightedSettingProvider.notifier).highlight(entry.settingId!);
     }
-    // Switch to the Options tab so the panel is visible (index 3 since the
-    // Sky Atlas + Framing merge into Planning dropped a tab — §36/§25.5).
-    ref.read(selectedTabIndexProvider.notifier).select(3);
+    // Switch to the Options tab so the panel is visible.
+    ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     Navigator.of(context).pop();
   }
 

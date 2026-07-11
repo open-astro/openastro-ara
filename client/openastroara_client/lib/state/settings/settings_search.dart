@@ -262,30 +262,31 @@ const Map<String, List<String>> _panelKeywords = {
   ],
 };
 
-/// §61.10 — the main tabs as palette navigation targets. Indices must match
-/// AppShell._tabs (Planning / Run / Live / Options). Keywords cover what
-/// people expect each tab to be called, not just its label.
+/// §61.10 — the main tabs as palette navigation targets. Indices come from
+/// the settings_nav constants, which app_shell runtime-asserts against the
+/// actual tab labels — a rail reorder fails loudly instead of misnavigating.
+/// Keywords cover what people expect each tab to be called, not just its label.
 const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
   SettingsSearchEntry(
-    tabIndex: 0,
+    tabIndex: kPlanningTabIndex,
     label: 'Go to Planning',
     groupLabel: 'Navigate',
     keywords: ['planning', 'tonight', 'sky atlas', 'targets', 'framing', 'planetarium', 'what to shoot'],
   ),
   SettingsSearchEntry(
-    tabIndex: 1,
+    tabIndex: kRunTabIndex,
     label: 'Go to Run',
     groupLabel: 'Navigate',
     keywords: ['run', 'sequencer', 'sequence', 'session', 'start', 'progress'],
   ),
   SettingsSearchEntry(
-    tabIndex: 2,
+    tabIndex: kLiveTabIndex,
     label: 'Go to Live',
     groupLabel: 'Navigate',
     keywords: ['live', 'imaging', 'camera', 'live view', 'capture', 'exposure', 'preview'],
   ),
   SettingsSearchEntry(
-    tabIndex: 3,
+    tabIndex: kOptionsTabIndex,
     label: 'Go to Options',
     groupLabel: 'Navigate',
     keywords: ['options', 'settings', 'preferences', 'configuration'],

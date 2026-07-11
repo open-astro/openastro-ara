@@ -17,6 +17,12 @@ const int kOptionsTabIndex = 3;
 /// [kOptionsTabIndex] so a rail reorder can't silently strand these jumps.
 const int kRunTabIndex = 1;
 
+/// The app-shell tab indices of the **Planning** and **Live** tabs — added
+/// with the §61.10 palette navigation entries and guarded by the same
+/// app_shell asserts, so every tab constant fails loudly on a rail reorder.
+const int kPlanningTabIndex = 0;
+const int kLiveTabIndex = 2;
+
 /// Jump straight to the settings panel [panelId] (a [settingsTree] id):
 /// selects it and brings the Options tab forward — the same navigation the
 /// ⌘K command palette and the top-bar equipment chips use.
