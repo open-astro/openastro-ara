@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §37.10 Plate Solving settings. Phase 12h.6i wires the daemon round-
@@ -64,7 +66,8 @@ class PlateSolveSettings {
       );
 }
 
-class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings> {
+class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings>
+    with SettingsSyncMixin<PlateSolveSettings> {
   @override
   PlateSolveSettings build() => const PlateSolveSettings();
 
@@ -119,15 +122,11 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings> {
     state = state.copyWith(convergenceToleranceArcsec: v);
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getPlateSolveSettings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getPlateSolveSettings());
 
-  Future<PlateSolveSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putPlateSolveSettings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<PlateSolveSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putPlateSolveSettings(sent));
 }
 
 final plateSolveSettingsProvider =

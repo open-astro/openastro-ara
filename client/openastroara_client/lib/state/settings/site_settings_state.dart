@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §37.12 Site preferences — location + horizon + observing conditions.
@@ -84,7 +86,8 @@ class SiteSettings {
       );
 }
 
-class SiteSettingsNotifier extends Notifier<SiteSettings> {
+class SiteSettingsNotifier extends Notifier<SiteSettings>
+    with SettingsSyncMixin<SiteSettings> {
   @override
   SiteSettings build() => const SiteSettings();
 
@@ -150,15 +153,11 @@ class SiteSettingsNotifier extends Notifier<SiteSettings> {
     state = state.copyWith(softWarningAltitudeDeg: v);
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getSiteSettings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getSiteSettings());
 
-  Future<SiteSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putSiteSettings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<SiteSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putSiteSettings(sent));
 }
 
 final siteSettingsProvider =

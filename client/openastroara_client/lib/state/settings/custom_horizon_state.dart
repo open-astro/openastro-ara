@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/profile_api.dart';
+import 'settings_sync_mixin.dart';
 
 /// §36 custom terrain horizon — one skyline vertex: the sky altitude at a
 /// compass azimuth (0° = north, clockwise). Mirrors the daemon's
@@ -26,7 +27,8 @@ class CustomHorizonPoint {
 /// Empty = none entered — the daemon then falls back to the flat default
 /// altitude even with "use custom horizon" on (and Tonight's Sky /the chart
 /// overlay say so via CustomHorizonIgnored).
-class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
+class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>>
+    with SettingsSyncMixin<List<CustomHorizonPoint>> {
   @override
   List<CustomHorizonPoint> build() => const [];
 
@@ -64,15 +66,13 @@ class CustomHorizonNotifier extends Notifier<List<CustomHorizonPoint>> {
     state = next;
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = _sorted(await api.getCustomHorizon());
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() async => _sorted(await api.getCustomHorizon()));
 
   /// PUT the staged skyline; the daemon canonicalizes and echoes it back,
   /// which becomes the new state (so client and daemon agree byte-for-byte).
-  Future<void> persistToServer(ProfileApi api) async {
-    state = _sorted(await api.putCustomHorizon(state));
-  }
+  Future<void> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) async => _sorted(await api.putCustomHorizon(sent)));
 
   // The daemon's CustomHorizonValidator bounds, mirrored client-side.
   static bool _validAzimuth(double v) => !v.isNaN && v >= 0 && v <= 360;

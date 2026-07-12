@@ -99,7 +99,13 @@ namespace OpenAstroAra.Astrometry {
 
             var raRad = 0d;
             var decRad = 0d;
-            SOFA.TopocentricToCelestial("A", Azimuth.Radians, zenithDistance, jdUTC, 0d, deltaUT, Longitude.Radians, Latitude.Radians, Elevation, 0d, 0d, pressurehPa, tempCelcius, relativeHumidity, wavelength, ref raRad, ref decRad);
+            var sofaStatus = SOFA.TopocentricToCelestial("A", Azimuth.Radians, zenithDistance, jdUTC, 0d, deltaUT, Longitude.Radians, Latitude.Radians, Elevation, 0d, 0d, pressurehPa, tempCelcius, relativeHumidity, wavelength, ref raRad, ref decRad);
+            if (sofaStatus < 0) {
+                // Unacceptable date/inputs: poison rather than return a zeroed coordinate.
+                Logger.Error($"SOFA iauAtoc13 failed with status {sofaStatus}");
+                raRad = double.NaN;
+                decRad = double.NaN;
+            }
             var ra = Angle.ByRadians(raRad);
             var dec = Angle.ByRadians(decRad);
 

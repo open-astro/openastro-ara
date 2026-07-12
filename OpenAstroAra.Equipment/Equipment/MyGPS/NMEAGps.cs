@@ -57,7 +57,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
 
         private void OnFixTimedEvent(object? source, System.Timers.ElapsedEventArgs e) {
             Disconnect();
-            throw new GnssNoFixException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblGnssGgaMissingError"], sentenceWait));
+            // Runs on a ThreadPool thread from Timer.Elapsed — a throw here is swallowed and would
+            // leave GetLocation awaiting gotGPSFix.Task forever. Fault the TCS instead so the awaiter
+            // observes the no-fix timeout.
+            gotGPSFix?.TrySetException(new GnssNoFixException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblGnssGgaMissingError"], sentenceWait)));
         }
 
         private bool connected;

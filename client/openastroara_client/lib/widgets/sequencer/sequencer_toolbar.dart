@@ -266,6 +266,7 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   // Capture before the await — usable even if the widget unmounts.
   final messenger = ScaffoldMessenger.of(context);
   final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  final editorNotifier = ref.read(sequenceEditorProvider.notifier);
 
   // The exact body sent over the wire — rebaseline against THIS, not live state
   // re-read after the await, so an edit landing mid-flight stays dirty.
@@ -273,7 +274,7 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   busy.setBusy(true);
   try {
     await api.updateSequence(editor.id, body: sentBody);
-    ref.read(sequenceEditorProvider.notifier).markSaved(sentBody);
+    editorNotifier.markSaved(sentBody);
     messenger.showSnackBar(const SnackBar(content: Text('Sequence saved.')));
   } on DioException catch (e) {
     final code = e.response?.statusCode;

@@ -107,6 +107,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
                   'elev': (site?.elevationM ?? 0).toString(),
                   'api': api,
                   'prefs': jsonEncode(savedPrefs),
+                  // Per-run secret the page must echo as X-Ara-Token on the
+                  // loopback control channels (/araevent, /aracmd); see
+                  // StellariumServer._isAuthorized.
+                  'token': server.token,
                 }.entries
                 .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
                 .join('&');

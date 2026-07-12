@@ -75,7 +75,9 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
       return _loadFirstPage(api);
     });
     // Drop a stale write: a newer refresh was issued while this one was in flight.
-    if (gen == _refreshGen) state = next;
+    // Also guard against disposal during the await (autoDispose + tab switch):
+    // writing `state` after the notifier is gone throws StateError.
+    if (ref.mounted && gen == _refreshGen) state = next;
   }
 
   /// Load the first page and return its items. Logs when the daemon reports more

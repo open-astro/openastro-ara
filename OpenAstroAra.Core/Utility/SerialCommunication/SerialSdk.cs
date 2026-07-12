@@ -76,13 +76,11 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
                 ArgumentNullException.ThrowIfNull(command);
                 ssSerial.Wait();
                 TResult response;
-                if (_cache.HasValidResponse(command.GetType(), typeof(TResult))) {
-                    response = (TResult)_cache.Get(command.GetType(), typeof(TResult))!;
-                    ssSerial.Release();
-                    return response;
-                }
-
                 try {
+                    if (_cache.HasValidResponse(command.GetType(), typeof(TResult))) {
+                        return (TResult)_cache.Get(command.GetType(), typeof(TResult))!;
+                    }
+
                     WriteAndLog(command);
 
                     if (!command.HasResponse) {

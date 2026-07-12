@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -52,6 +53,13 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                 }
 
                 var stream = client.GetStream();
+                // ReadAsync returns 0 at EOF (peer closed the socket); without treating that as a
+                // terminal condition the WaitFor loop would busy-spin forever. Also impose a default
+                // read deadline so a silent peer that never sends the expected reply can't hang the
+                // call indefinitely when no cancellation token was supplied.
+                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                readCts.CancelAfter(TimeSpan.FromSeconds(30));
+                var readToken = readCts.Token;
                 try {
 
                     var buffer = new byte[2048];
@@ -62,7 +70,10 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                         bool waitDone = false;
 
                         while (!waitDone) {
-                            length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token);
+                            length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), readToken);
+                            if (length == 0) {
+                                throw new IOException($"TcpRaw: connection to {Address}:{Port} closed before '{WaitFor}' was received");
+                            }
                             response = Encoding.ASCII.GetString(buffer, 0, length);
                             Logger.Trace($"TcpRaw: Received message: {ToLiteral(response)}");
 
@@ -76,7 +87,10 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                     await stream.WriteAsync(data.AsMemory(0, data.Length), token);
 
                     // Read response
-                    length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token);
+                    length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), readToken);
+                    if (length == 0) {
+                        throw new IOException($"TcpRaw: connection to {Address}:{Port} closed before a response was received");
+                    }
                     response = Encoding.ASCII.GetString(buffer, 0, length);
 
 

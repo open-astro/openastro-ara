@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -19,6 +19,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
     internal sealed class UInt16Converter : IDataConverter {
 
         public ushort[] Convert(byte[] rawData) {
+            if (rawData.Length % sizeof(ushort) != 0) {
+                throw new System.IO.InvalidDataException($"XISF: UInt16 sample buffer length {rawData.Length} is not a multiple of {sizeof(ushort)}");
+            }
             ushort[] data = new ushort[rawData.Length / sizeof(ushort)];
             Buffer.BlockCopy(rawData, 0, data, 0, rawData.Length);
             return data;

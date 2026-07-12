@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §29 Storage settings — save directory + file format + compression +
@@ -56,7 +58,8 @@ class StorageSettings {
       );
 }
 
-class StorageSettingsNotifier extends Notifier<StorageSettings> {
+class StorageSettingsNotifier extends Notifier<StorageSettings>
+    with SettingsSyncMixin<StorageSettings> {
   @override
   StorageSettings build() => const StorageSettings();
 
@@ -102,15 +105,11 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
   /// Whether the current pair satisfies critical &lt; warn (checked before persisting).
   bool get thresholdsValid => state.minFreeDiskCriticalGb < state.minFreeDiskWarnGb;
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getStorageSettings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getStorageSettings());
 
-  Future<StorageSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putStorageSettings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<StorageSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putStorageSettings(sent));
 }
 
 final storageSettingsProvider =

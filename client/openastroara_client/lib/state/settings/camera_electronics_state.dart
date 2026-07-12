@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// NEXTGEN §3/§4 camera electronics — the exposure-planning inputs behind the
@@ -66,7 +68,8 @@ class CameraElectronics {
       );
 }
 
-class CameraElectronicsNotifier extends Notifier<CameraElectronics> {
+class CameraElectronicsNotifier extends Notifier<CameraElectronics>
+    with SettingsSyncMixin<CameraElectronics> {
   @override
   CameraElectronics build() => const CameraElectronics();
 
@@ -102,16 +105,12 @@ class CameraElectronicsNotifier extends Notifier<CameraElectronics> {
   }
 
   /// Replace local state with what the daemon currently holds.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getCameraElectronics();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getCameraElectronics());
 
   /// Send the current local state to the daemon; returns its echo.
-  Future<CameraElectronics> persistToServer(ProfileApi api) async {
-    final echoed = await api.putCameraElectronics(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<CameraElectronics> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putCameraElectronics(sent));
 }
 
 final cameraElectronicsProvider =

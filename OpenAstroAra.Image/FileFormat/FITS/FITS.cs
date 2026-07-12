@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -114,11 +114,25 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                     Logger.Warning("Reading debayered FITS images not supported. Reading the first 2 axes to get a monochrome image");
                 }
 
-                var width = (int)CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS1");
-                var height = (int)CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS2");
+                var naxis1 = CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS1");
+                var naxis2 = CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS2");
+
+                // Guard against malformed/hostile NAXIS values before any long->int cast or allocation.
+                // The pixel count is kept in long and validated against a sane ceiling to avoid integer overflow.
+                const long MaxPixelCount = 2_000_000_000L; // < int.MaxValue, keeps the (int) casts below safe
+                if (naxis1 <= 0 || naxis2 <= 0 || naxis1 > int.MaxValue || naxis2 > int.MaxValue) {
+                    throw new InvalidDataException($"FITS image has invalid dimensions NAXIS1={naxis1}, NAXIS2={naxis2}");
+                }
+                long pixelCount = naxis1 * naxis2;
+                if (pixelCount > MaxPixelCount) {
+                    throw new InvalidDataException($"FITS image pixel count {pixelCount} exceeds the maximum supported size");
+                }
+
+                var width = (int)naxis1;
+                var height = (int)naxis2;
                 var bitPix = (CfitsioNative.BITPIX)(int)CfitsioNative.fits_read_key_long(fitsPtr, "BITPIX");
 
-                var pixels = CfitsioNative.read_ushort_pixels(fitsPtr, bitPix, 2, width * height);
+                var pixels = CfitsioNative.read_ushort_pixels(fitsPtr, bitPix, 2, (int)pixelCount);
 
                 //Translate CFITSio into N.I.N.A. FITSHeader
                 FITSHeader header = new FITSHeader(width, height);

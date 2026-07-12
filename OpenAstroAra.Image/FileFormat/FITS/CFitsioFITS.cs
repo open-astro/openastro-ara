@@ -26,7 +26,19 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             }
         }
 
+        // Rejects a pixel buffer whose length does not match the declared geometry, preventing the
+        // native fits_write_img call from reading past the end of the managed array.
+        private static void ValidateImageGeometry(int width, int height, long dataLength) {
+            if (width <= 0 || height <= 0) {
+                throw new ArgumentException($"Invalid FITS image dimensions {width}x{height}");
+            }
+            if (dataLength != (long)width * height) {
+                throw new ArgumentException($"FITS pixel buffer length {dataLength} does not match geometry {width}x{height}");
+            }
+        }
+
         public CFitsioFITS(string filePath, ushort[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
+            ValidateImageGeometry(width, height, data.Length);
             _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.USHORT_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
             _ = CfitsioNative.fits_write_img(filePtr, CfitsioNative.DATATYPE.TUSHORT, 1, width * height, data, out status);
@@ -34,6 +46,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public CFitsioFITS(string filePath, uint[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
+            ValidateImageGeometry(width, height, data.Length);
             _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.ULONG_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
             _ = CfitsioNative.fits_write_img_uint(filePtr, CfitsioNative.DATATYPE.TUINT, 1, width * height, data, out status);
@@ -41,6 +54,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public CFitsioFITS(string filePath, int[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
+            ValidateImageGeometry(width, height, data.Length);
             _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.LONG_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
             _ = CfitsioNative.fits_write_img_int(filePtr, CfitsioNative.DATATYPE.TINT, 1, width * height, data, out status);
@@ -48,6 +62,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public CFitsioFITS(string filePath, float[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
+            ValidateImageGeometry(width, height, data.Length);
             _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.FLOAT_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
             _ = CfitsioNative.fits_write_img_float(filePtr, CfitsioNative.DATATYPE.TDOUBLE, 1, width * height, data, out status);
@@ -55,6 +70,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public CFitsioFITS(string filePath, double[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
+            ValidateImageGeometry(width, height, data.Length);
             _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.DOUBLE_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
             _ = CfitsioNative.fits_write_img_double(filePtr, CfitsioNative.DATATYPE.TDOUBLE, 1, width * height, data, out status);

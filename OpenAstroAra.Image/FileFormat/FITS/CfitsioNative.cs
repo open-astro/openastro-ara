@@ -149,10 +149,6 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         [DllImport(DLLNAME, EntryPoint = "ffgidm", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         internal static extern int fits_get_img_dim(IntPtr fptr, out int naxis, out int status);
 
-        // int CFITS_API ffgisz(fitsfile *fptr, int nlen, long *naxes, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffgisz", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-        internal static extern int fits_get_img_size(IntPtr fptr, out int nlen, out int[] naxes, out int status);
-
         // int CFITS_API ffpcks(fitsfile *fptr, int *status);
         [DllImport(DLLNAME, EntryPoint = "ffpcks", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         internal static extern int fits_write_chksum(IntPtr fptr, out int status);
@@ -290,17 +286,43 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         private static ushort[] ToUshortArray(double[] src) {
+            // Floating-point FITS pixels are physical values, not normalized to 0..1. BZERO/BSCALE
+            // are not available in this low-level reader, so scale by the observed data min/max
+            // (a linear stretch) instead of assuming a fixed 0..1 range.
             ushort[] pixels = new ushort[src.Length];
+            if (src.Length == 0) { return pixels; }
+            double min = double.PositiveInfinity, max = double.NegativeInfinity;
+            foreach (var v in src) {
+                if (double.IsNaN(v)) { continue; }
+                if (v < min) { min = v; }
+                if (v > max) { max = v; }
+            }
+            double range = max - min;
+            if (range <= 0 || double.IsInfinity(range)) { return pixels; }
             for (int i = 0; i < src.Length; i++) {
-                pixels[i] = (ushort)(src[i] * ushort.MaxValue);
+                double norm = (src[i] - min) / range;
+                if (double.IsNaN(norm)) { norm = 0; }
+                pixels[i] = (ushort)(norm * ushort.MaxValue);
             }
             return pixels;
         }
 
         private static ushort[] ToUshortArray(float[] src) {
+            // See ToUshortArray(double[]): scale by observed min/max rather than assuming 0..1.
             ushort[] pixels = new ushort[src.Length];
+            if (src.Length == 0) { return pixels; }
+            float min = float.PositiveInfinity, max = float.NegativeInfinity;
+            foreach (var v in src) {
+                if (float.IsNaN(v)) { continue; }
+                if (v < min) { min = v; }
+                if (v > max) { max = v; }
+            }
+            float range = max - min;
+            if (range <= 0 || float.IsInfinity(range)) { return pixels; }
             for (int i = 0; i < src.Length; i++) {
-                pixels[i] = (ushort)(src[i] * ushort.MaxValue);
+                float norm = (src[i] - min) / range;
+                if (float.IsNaN(norm)) { norm = 0; }
+                pixels[i] = (ushort)(norm * ushort.MaxValue);
             }
             return pixels;
         }

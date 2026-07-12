@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §36/§25.5 imaging-train optics + sensor geometry — the inputs the Planning
@@ -101,7 +103,8 @@ class OpticsSettings {
       );
 }
 
-class OpticsSettingsNotifier extends Notifier<OpticsSettings> {
+class OpticsSettingsNotifier extends Notifier<OpticsSettings>
+    with SettingsSyncMixin<OpticsSettings> {
   @override
   OpticsSettings build() => const OpticsSettings();
 
@@ -143,17 +146,13 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings> {
 
   /// Replace local state with what the daemon currently holds. Called when the
   /// Planning/Settings surface mounts. Errors bubble up for snackbar UI.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getOptics();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getOptics());
 
   /// Send the current local state to the daemon; returns its echo so the caller
   /// can confirm (and update state if the daemon normalized any field).
-  Future<OpticsSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putOptics(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<OpticsSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putOptics(sent));
 }
 
 final opticsSettingsProvider =

@@ -55,7 +55,7 @@ namespace OpenAstroAra.Sequencer.Container {
         }
 
         private bool isExpanded = true;
-        private static object lockObj = new object();
+        private readonly object lockObj = new object();
 
         [JsonProperty]
         public IExecutionStrategy Strategy { get; }

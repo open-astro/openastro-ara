@@ -118,12 +118,15 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
                     var zeroPoint2 = double.NaN;
                     var events = 0;
 
-                    if (discriminant == 1) {
-                        zeroPoint1 = (-b + Math.Sqrt(discriminant)) / (2 * a);
+                    // A quadratic has one (degenerate) real root when the discriminant is zero and
+                    // two real roots when it is positive. An epsilon guards the degenerate case.
+                    const double discriminantEpsilon = 1e-9;
+                    if (Math.Abs(discriminant) < discriminantEpsilon) {
+                        zeroPoint1 = -b / (2 * a);
                         if (zeroPoint1 >= 0 && zeroPoint1 <= 2) {
                             events++;
                         }
-                    } else if (discriminant > 1) {
+                    } else if (discriminant > 0) {
                         zeroPoint1 = (-b + Math.Sqrt(discriminant)) / (2 * a);
                         zeroPoint2 = (-b - Math.Sqrt(discriminant)) / (2 * a);
 

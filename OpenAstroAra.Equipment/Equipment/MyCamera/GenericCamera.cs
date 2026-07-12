@@ -186,6 +186,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
                     }
                 } catch (Exception ex) {
                     Logger.Error(ex);
+                    // Initialize() (or a post-Connect property read) faulted after the SDK opened the
+                    // device — don't leave the SDK connected to a half-initialized camera.
+                    try {
+                        if (Connected) { sdk.Disconnect(); }
+                    } catch (Exception disconnectEx) {
+                        Logger.Error(disconnectEx);
+                    }
                 }
                 return false;
             });
@@ -240,7 +247,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         }
 
         public void AbortExposure() {
-            sdk.StopExposure();
             try {
                 sdk.StopExposure();
             } catch (Exception) { }
@@ -252,7 +258,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
                 try {
                     downloadCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(60, profileService.ActiveProfile.CameraSettings.Timeout)));
                     data = await sdk.GetExposure(exposureTaskTime, exposureTaskWidth, exposureTaskHeight, downloadCts.Token);
-                } catch { }
+                } catch (OperationCanceledException) when (token.IsCancellationRequested) {
+                    // Caller cancelled the download — propagate so the sequence sees the cancellation.
+                    throw;
+                } catch (Exception ex) {
+                    // SDK fault or internal download-timeout: log and fall through (data stays null → null result).
+                    Logger.Error(ex);
+                }
             }
             if (data == null) { return null; }
 

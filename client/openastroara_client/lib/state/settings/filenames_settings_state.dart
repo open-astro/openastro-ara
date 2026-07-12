@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §29.2 File-saving naming options that don't already live in
@@ -35,7 +37,8 @@ class FilenamesSettings {
       );
 }
 
-class FilenamesSettingsNotifier extends Notifier<FilenamesSettings> {
+class FilenamesSettingsNotifier extends Notifier<FilenamesSettings>
+    with SettingsSyncMixin<FilenamesSettings> {
   @override
   FilenamesSettings build() => const FilenamesSettings();
 
@@ -44,15 +47,11 @@ class FilenamesSettingsNotifier extends Notifier<FilenamesSettings> {
   void setCompressDarksAndBias(bool v) =>
       state = state.copyWith(compressDarksAndBias: v);
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getFilenamesSettings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getFilenamesSettings());
 
-  Future<FilenamesSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putFilenamesSettings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<FilenamesSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putFilenamesSettings(sent));
 }
 
 final filenamesSettingsProvider =

@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 import '../imaging/exposure_state.dart' show FrameKind;
 
@@ -54,7 +56,8 @@ class ImagingDefaults {
       );
 }
 
-class ImagingDefaultsNotifier extends Notifier<ImagingDefaults> {
+class ImagingDefaultsNotifier extends Notifier<ImagingDefaults>
+    with SettingsSyncMixin<ImagingDefaults> {
   @override
   ImagingDefaults build() => const ImagingDefaults();
 
@@ -101,18 +104,14 @@ class ImagingDefaultsNotifier extends Notifier<ImagingDefaults> {
   /// Replace local state with what the daemon currently holds. Called on
   /// Settings panel mount so the user sees the persisted values, not the
   /// in-process defaults. Errors bubble up to the caller for snackbar UI.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getImagingDefaults();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getImagingDefaults());
 
   /// Send the current local state to the daemon. Returns the daemon's echo
   /// so the panel can confirm what was persisted (and update state if the
   /// daemon normalized any field).
-  Future<ImagingDefaults> persistToServer(ProfileApi api) async {
-    final echoed = await api.putImagingDefaults(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<ImagingDefaults> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putImagingDefaults(sent));
 }
 
 final imagingDefaultsProvider =

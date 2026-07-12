@@ -58,8 +58,17 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 throw new InvalidOperationException("Reading debayered FITS images not supported.");
             }
 
-            Width = (int)CfitsioNative.fits_read_key_long(filePtr, "NAXIS1");
-            Height = (int)CfitsioNative.fits_read_key_long(filePtr, "NAXIS2");
+            var naxis1 = CfitsioNative.fits_read_key_long(filePtr, "NAXIS1");
+            var naxis2 = CfitsioNative.fits_read_key_long(filePtr, "NAXIS2");
+
+            // Guard against malformed/hostile NAXIS values before any long->int cast or allocation.
+            const long MaxPixelCount = 2_000_000_000L; // < int.MaxValue, keeps the (int) casts below safe
+            if (naxis1 <= 0 || naxis2 <= 0 || naxis1 > int.MaxValue || naxis2 > int.MaxValue || naxis1 * naxis2 > MaxPixelCount) {
+                throw new InvalidDataException($"FITS image has invalid dimensions NAXIS1={naxis1}, NAXIS2={naxis2}");
+            }
+
+            Width = (int)naxis1;
+            Height = (int)naxis2;
             BitPix = (CfitsioNative.BITPIX)(int)CfitsioNative.fits_read_key_long(filePtr, "BITPIX");
         }
 

@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// NEXTGEN §1/§4 planning filter kind. Wire values are the daemon's all-
@@ -79,7 +81,8 @@ class FilterSetSettings {
   const FilterSetSettings({this.filters = const []});
 }
 
-class FilterSetNotifier extends Notifier<FilterSetSettings> {
+class FilterSetNotifier extends Notifier<FilterSetSettings>
+    with SettingsSyncMixin<FilterSetSettings> {
   @override
   FilterSetSettings build() => const FilterSetSettings();
 
@@ -166,16 +169,12 @@ class FilterSetNotifier extends Notifier<FilterSetSettings> {
   }
 
   /// Replace local state with what the daemon currently holds.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getFilterSet();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getFilterSet());
 
   /// Send the current local state to the daemon; returns its echo.
-  Future<FilterSetSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putFilterSet(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<FilterSetSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putFilterSet(sent));
 }
 
 final filterSetProvider =

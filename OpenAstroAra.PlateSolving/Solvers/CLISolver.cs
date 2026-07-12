@@ -68,7 +68,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancelToken)) {
                     cts.CancelAfter(TimeSpan.FromMinutes(10));
-                    await StartCLI(imagePath, outputPath, parameter, imageProperties, progress, cancelToken);
+                    // Pass the linked token so the 10-minute timeout actually cancels the solve.
+                    await StartCLI(imagePath, outputPath, parameter, imageProperties, progress, cts.Token);
                 }
 
                 //Extract solution coordinates
@@ -173,7 +174,19 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             };
             Logger.Debug($"Starting process '{executableLocation}' with args '{startInfo.Arguments}'");
             process.Start();
-            await process.WaitForExitAsync(ct);
+            try {
+                await process.WaitForExitAsync(ct);
+            } catch (OperationCanceledException) {
+                // Timeout or caller cancellation: kill the solver (and its children) before propagating.
+                try {
+                    if (!process.HasExited) {
+                        process.Kill(entireProcessTree: true);
+                    }
+                } catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException) {
+                    Logger.Error(ex);
+                }
+                throw;
+            }
             // §42.2 row 14 — a solver crash used to be indistinguishable from a clean no-solution
             // (success was inferred solely from the sidecar file). Surface the exit code so the
             // generic solve-retry loop's failures are diagnosable; solver subclasses map their

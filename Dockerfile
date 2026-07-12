@@ -26,10 +26,7 @@ COPY publish/arm64/ ./
 
 # Default Kestrel port per OpenAstroAra.Server/Program.cs ResolvePort:
 # env OPENASTROARA_PORT > appsettings OpenAstroAra:Port > 5555 default.
-# (Playbook §11.2 example writes EXPOSE 5400 but the daemon listens on
-# 5555 by default — keeping 5555 here so the image's documented port
-# matches the daemon's actual listen port without requiring an env-var
-# override. Track playbook reconciliation as a separate doc PR.)
+# 5555 matches the daemon's actual listen port and the Playbook §11.2 example.
 EXPOSE 5555
 
 # Non-root per §13 deployment hardening. Chiseled images don't ship an

@@ -120,7 +120,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             if (!string.IsNullOrWhiteSpace(Comment)) {
                 header += " / ";
             }
-            var encodedComment = (Comment ?? string.Empty).PadRight(80 - header.Length);
+            var encodedComment = (Comment ?? string.Empty).PadRight(Math.Max(0, 80 - header.Length));
             header += encodedComment;
             return header;
         }

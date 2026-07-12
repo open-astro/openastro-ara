@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §63 PHD2 / guider settings. Phase 12h.6k wires the daemon round-trip
@@ -90,7 +92,8 @@ class Phd2Settings {
       );
 }
 
-class Phd2SettingsNotifier extends Notifier<Phd2Settings> {
+class Phd2SettingsNotifier extends Notifier<Phd2Settings>
+    with SettingsSyncMixin<Phd2Settings> {
   @override
   Phd2Settings build() => const Phd2Settings();
 
@@ -179,15 +182,11 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings> {
     state = state.copyWith(decGuideMode: m);
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getPhd2Settings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getPhd2Settings());
 
-  Future<Phd2Settings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putPhd2Settings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<Phd2Settings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putPhd2Settings(sent));
 }
 
 final phd2SettingsProvider =

@@ -967,14 +967,18 @@ Both must succeed.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-bookworm-slim-arm64v8
 WORKDIR /app
 COPY publish/arm64/ ./
-EXPOSE 5400
+EXPOSE 5555
 USER 1000
 ENTRYPOINT ["./OpenAstroAra.Server"]
 ```
 
+The daemon listens on **5555** by default (`OpenAstroAra.Server/Program.cs`
+`ResolvePort`: `OPENASTROARA_PORT` env > `OpenAstro:Port` appsettings > 5555),
+so both `EXPOSE` and the published port use 5555.
+
 ```bash
 docker build -t openastroara-server:arm64 .
-docker run --rm -p 5400:5555 openastroara-server:arm64
+docker run --rm -p 5555:5555 openastroara-server:arm64
 curl http://localhost:5555/api/v1/server/info     # expect 200
 ```
 
