@@ -239,7 +239,13 @@ namespace OpenAstroAra.Astrometry {
 
             var deltaUT = AstroUtil.DeltaUT(now);
             double aob = 0d, zob = 0d, hob = 0d, dob = 0d, rob = 0d, eo = 0d;
-            SOFA.CelestialToTopocentric(transform.raAngle.Radians, transform.decAngle.Radians, 0d, 0d, 0d, 0d, jdUTC, 0d, deltaUT, longitude.Radians, latitude.Radians, elevation, 0d, 0d, pressurehPa, tempCelcius, relativeHumidity, wavelength, ref aob, ref zob, ref hob, ref dob, ref rob, ref eo);
+            var sofaStatus = SOFA.CelestialToTopocentric(transform.raAngle.Radians, transform.decAngle.Radians, 0d, 0d, 0d, 0d, jdUTC, 0d, deltaUT, longitude.Radians, latitude.Radians, elevation, 0d, 0d, pressurehPa, tempCelcius, relativeHumidity, wavelength, ref aob, ref zob, ref hob, ref dob, ref rob, ref eo);
+            if (sofaStatus < 0) {
+                // Unacceptable date/inputs: poison rather than return a zeroed coordinate.
+                Logger.Error($"SOFA iauAtco13 failed with status {sofaStatus}");
+                aob = double.NaN;
+                zob = double.NaN;
+            }
 
             var az = Angle.ByRadians(aob);
             var alt = Angle.ByDegree(90) - Angle.ByRadians(zob);

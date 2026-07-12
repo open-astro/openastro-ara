@@ -31,6 +31,8 @@ namespace OpenAstroAra.Astrometry {
 
         public static SiderealShiftTrackingRate Create(Coordinates start, Coordinates end, TimeSpan between) {
             var raDiff = end.RADegrees - start.RADegrees;
+            // Wrap into (-180, 180] so a move across the 0h/24h RA boundary tracks the short arc.
+            raDiff -= 360.0d * Math.Ceiling((raDiff - 180.0d) / 360.0d);
             var decDiff = end.Dec - start.Dec;
             var hoursDiff = between.TotalSeconds / 3600.0d;
             return new SiderealShiftTrackingRate(true, raDiff / hoursDiff, decDiff / hoursDiff);

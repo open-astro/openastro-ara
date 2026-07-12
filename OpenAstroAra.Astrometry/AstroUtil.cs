@@ -582,7 +582,13 @@ namespace OpenAstroAra.Astrometry {
             var skyPosition = new SkyPosition();
 
             var jdTt = jd + SecondsToDays(deltaT);
-            _ = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
+            var moonStatus = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
+            if (moonStatus != 0) {
+                Logger.Error($"NOVAS place failed for the Moon. Result={moonStatus}");
+                skyPosition.RA = double.NaN;
+                skyPosition.Dec = double.NaN;
+                skyPosition.Dis = double.NaN;
+            }
 
             return skyPosition;
         }
@@ -613,7 +619,13 @@ namespace OpenAstroAra.Astrometry {
             var skyPosition = new SkyPosition();
 
             var jdTt = jd + SecondsToDays(deltaT);
-            _ = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
+            var sunStatus = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
+            if (sunStatus != 0) {
+                Logger.Error($"NOVAS place failed for the Sun. Result={sunStatus}");
+                skyPosition.RA = double.NaN;
+                skyPosition.Dec = double.NaN;
+                skyPosition.Dis = double.NaN;
+            }
 
             return skyPosition;
         }

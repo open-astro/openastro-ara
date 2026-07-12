@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §51 diagnostics mode. Phase 12h.6j wires the daemon round-trip via
@@ -10,21 +12,18 @@ import '../../services/profile_api.dart';
 
 enum DiagnosticsMode { notifyOnly, pauseOnCritical, abortOnCritical }
 
-class DiagnosticsModeNotifier extends Notifier<DiagnosticsMode> {
+class DiagnosticsModeNotifier extends Notifier<DiagnosticsMode>
+    with SettingsSyncMixin<DiagnosticsMode> {
   @override
   DiagnosticsMode build() => DiagnosticsMode.notifyOnly;
 
   void setMode(DiagnosticsMode m) => state = m;
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getDiagnosticsMode();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getDiagnosticsMode());
 
-  Future<DiagnosticsMode> persistToServer(ProfileApi api) async {
-    final echoed = await api.putDiagnosticsMode(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<DiagnosticsMode> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putDiagnosticsMode(sent));
 }
 
 final diagnosticsModeProvider =

@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §54 Notifications settings — channel toggles + trigger toggles + per-
@@ -80,7 +82,8 @@ class NotificationsSettings {
       );
 }
 
-class NotificationsSettingsNotifier extends Notifier<NotificationsSettings> {
+class NotificationsSettingsNotifier extends Notifier<NotificationsSettings>
+    with SettingsSyncMixin<NotificationsSettings> {
   @override
   NotificationsSettings build() => const NotificationsSettings();
 
@@ -108,15 +111,11 @@ class NotificationsSettingsNotifier extends Notifier<NotificationsSettings> {
       state = state.copyWith(onPlateSolveFailed: v);
   void setOnDiskSpaceLow(bool v) => state = state.copyWith(onDiskSpaceLow: v);
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getNotificationsSettings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getNotificationsSettings());
 
-  Future<NotificationsSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putNotificationsSettings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<NotificationsSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putNotificationsSettings(sent));
 }
 
 final notificationsSettingsProvider =

@@ -82,6 +82,7 @@ class ImagingTab extends ConsumerWidget {
       // A start() failure flips active back to false — keep the toggle honest
       // (it can't sit stuck "on") AND surface why, since FrameViewer only shows
       // the live error while active.
+      if (!context.mounted) return;
       final lvState = ref.read(liveViewFrameProvider);
       // Only an actual error means start failed — a null-error inactive state
       // here means the user toggled OFF while start() was in flight (stop() set

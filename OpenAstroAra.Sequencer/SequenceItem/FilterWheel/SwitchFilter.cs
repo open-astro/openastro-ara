@@ -126,7 +126,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
         }
 
         public override void AfterParentChanged() {
+            if (Parent == null) {
+                // Detached from the tree — drop the strong ProfileChanged handler so this instance can
+                // be collected instead of leaking on the profile service.
+                profileService.ProfileChanged -= ProfileService_ProfileChanged;
+            }
             Validate();
+        }
+
+        public override void Teardown() {
+            profileService.ProfileChanged -= ProfileService_ProfileChanged;
+            base.Teardown();
         }
 
         public override string ToString() {

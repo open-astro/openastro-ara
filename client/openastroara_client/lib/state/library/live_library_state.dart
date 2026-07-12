@@ -36,6 +36,10 @@ class LiveLibrarySessionsNotifier
   String? _nextCursor;
   bool _hasMore = false;
   bool _loadingMore = false;
+  // Set when the last loadMore() attempt threw, so the Load-more affordance can
+  // show a retry/error state instead of silently doing nothing. Cleared at the
+  // start of the next attempt.
+  bool _loadMoreFailed = false;
 
   // §60.9 live refresh: frame.complete events (a capture run filling the
   // catalog) refresh the list after 2 s of quiet — debounced so a fast bias
@@ -63,6 +67,9 @@ class LiveLibrarySessionsNotifier
 
   /// Whether a further page exists for the Load-more affordance.
   bool get hasMore => _hasMore;
+
+  /// True when the most recent [loadMore] failed; the UI surfaces a retry.
+  bool get loadMoreFailed => _loadMoreFailed;
 
 
   @override
@@ -97,7 +104,9 @@ class LiveLibrarySessionsNotifier
       }
       return page.items;
     });
-    if (gen == _refreshGen) state = next;
+    // Guard the stale-write drop with ref.mounted too: an autoDispose teardown
+    // during the await makes writing `state` throw StateError.
+    if (ref.mounted && gen == _refreshGen) state = next;
   }
 
   /// Append the next page. No-op when everything is already loaded or a
@@ -109,6 +118,8 @@ class LiveLibrarySessionsNotifier
     // slower response clobber the newer cursor.
     if (!_hasMore || cursor == null || _loadingMore) return;
     _loadingMore = true;
+    // Clear any prior failure: this fresh attempt owns the retry state.
+    _loadMoreFailed = false;
     // Mint a generation (r5): borrowing the ambient one let an append issued
     // DURING an in-flight refresh share its generation — the slower append
     // would then clobber the fresh refresh with a stale list + cursor chain.
@@ -123,15 +134,18 @@ class LiveLibrarySessionsNotifier
     }
     try {
       final page = await api.listSessions(cursor: cursor);
-      if (gen != _refreshGen) return; // a refresh/server-switch won the race
+      // Also drop the write if disposed mid-await (autoDispose teardown).
+      if (!ref.mounted || gen != _refreshGen) return; // refresh/switch won the race
       _nextCursor = page.nextCursor;
       // A has_more without a cursor would render a dead button — treat as end.
       _hasMore = page.hasMore && page.nextCursor != null;
       state = AsyncData([...current, ...page.items]);
     } catch (_) {
       // Catch-all like refresh()'s AsyncValue.guard (r4): even a TypeError
-      // from a malformed page must leave the loaded pages + retry button
-      // intact rather than escaping as an unhandled rejection.
+      // from a malformed page must leave the loaded pages intact rather than
+      // escaping as an unhandled rejection. Record the failure (only for the
+      // still-current, still-mounted attempt) so the UI can offer a retry.
+      if (ref.mounted && gen == _refreshGen) _loadMoreFailed = true;
     } finally {
       _loadingMore = false;
     }

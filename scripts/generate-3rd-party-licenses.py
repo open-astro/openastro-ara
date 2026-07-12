@@ -266,6 +266,30 @@ BUNDLED PLATFORMS (not reported by either package graph):
     depends on the distro's libcfitsio10 package, which supplies the shared
     library. ISC-style HEASARC license — see NOTICE.md.
 
+VENDORED NATIVE / IN-REPO SOURCE (not reported by either package graph — these
+components live as source in the tree rather than as resolved packages; the
+authoritative disclosure is NOTICE.md "Bundled / vendored source", mirrored
+here so this file's --check gate flags any drift):
+
+  * IAU SOFA — Standards Of Fundamental Astronomy, release 2020-07-21
+    (SOFA/SOFA/src/*.c). Copyright (C) 2020 IAU SOFA Board. The six-clause
+    SOFA Software License is reproduced verbatim in every source file. The
+    vendored copies are INTACT AND UNCHANGED (no modifications). Per the SOFA
+    license acknowledgement: ARA uses routines/computations provided by SOFA
+    under license; ARA does NOT itself constitute software provided by and/or
+    endorsed by SOFA; and no ARA routine uses the "iau"/"sofa" name prefix.
+    http://www.iausofa.org
+  * NOVAS C3.1 — Naval Observatory Vector Astrometry Software, C Edition
+    v3.1 (NOVAS31/NOVAS31/). U.S. Naval Observatory, Astronomical Applications
+    Dept. Work of the U.S. Government — PUBLIC DOMAIN ("Approved for Public
+    Release"). Cited as a courtesy to the USNO.
+    http://www.usno.navy.mil/USNO/astronomical-applications
+  * Accord.Imaging — part of the Accord.NET Framework, LGPL-2.1
+    (Accord.Imaging/). Vendored in source form with all upstream LGPL headers
+    intact; the only change from upstream is a whole-solution `dotnet format`
+    reformat (commit 7c66a58f0) — style only, no functional changes.
+    https://spdx.org/licenses/LGPL-2.1.html
+
 Engines and companions installed as SEPARATE packages (openastro-guider,
 alpacabridge, ASTAP) carry their own licenses and are not part of this
 distribution. Client-embedded engines with their own disclosure files keep

@@ -21,13 +21,20 @@ class AutofocusJob {
 
   bool get isTerminal => state == 'complete' || state == 'failed' || state == 'cancelled';
 
-  static AutofocusJob fromJson(Map<String, dynamic> json) => AutofocusJob(
-        jobId: json['job_id'] as String,
+  static AutofocusJob fromJson(Map<String, dynamic> json) {
+    final jobId = json['job_id'];
+    if (jobId is! String) {
+      throw FormatException(
+          'autofocus job missing string "job_id" (${jobId.runtimeType})');
+    }
+    return AutofocusJob(
+        jobId: jobId,
         state: json['state'] as String? ?? 'unknown',
         errorMessage: json['error_message'] as String?,
         done: (json['done'] as num?)?.toInt() ?? 0,
         total: (json['total'] as num?)?.toInt() ?? 0,
       );
+  }
 }
 
 /// §59 — the manual autofocus trigger: `POST /api/v1/equipment/focuser/autofocus`

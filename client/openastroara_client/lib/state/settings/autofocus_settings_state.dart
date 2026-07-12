@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §37.11 Autofocus settings. Phase 12h.6h wires the daemon round-trip
@@ -98,7 +100,8 @@ class AutofocusSettings {
       );
 }
 
-class AutofocusSettingsNotifier extends Notifier<AutofocusSettings> {
+class AutofocusSettingsNotifier extends Notifier<AutofocusSettings>
+    with SettingsSyncMixin<AutofocusSettings> {
   @override
   AutofocusSettings build() => const AutofocusSettings();
 
@@ -157,15 +160,11 @@ class AutofocusSettingsNotifier extends Notifier<AutofocusSettings> {
   void setTelescopeType(TelescopeType v) =>
       state = state.copyWith(telescopeType: v);
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getAutofocusSettings();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getAutofocusSettings());
 
-  Future<AutofocusSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putAutofocusSettings(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<AutofocusSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putAutofocusSettings(sent));
 }
 
 final autofocusSettingsProvider =

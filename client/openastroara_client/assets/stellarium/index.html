@@ -279,6 +279,19 @@ var API = (function () {
   } catch (e) { return ''; }
 })();
 
+// Per-run secret the loopback server (StellariumServer) baked into our page URL.
+// It's required as the X-Ara-Token header on the /araevent + /aracmd control
+// channels, so a DNS-rebinding or other same-machine page that can reach the
+// loopback port but can't read our URL can't forge a mount-slewing event.
+var ARA_TOKEN = qp('token', '');
+// Headers for the loopback control channels: always carry the token; callers
+// merge in Content-Type when POSTing a body.
+function araHeaders(extra) {
+  var h = { 'X-Ara-Token': ARA_TOKEN };
+  if (extra) { for (var k in extra) h[k] = extra[k]; }
+  return h;
+}
+
 var stel = null;
 // Planning clock: null = live "now"; else a fixed unix-ms instant.
 var pinnedMs = null;
@@ -789,7 +802,7 @@ function postDisplayPrefs() {
   // listening, connection refused — as a rejected promise, not a synchronous throw.
   // Best-effort: a dropped prefs post just means it saves on the next toggle.
   fetch('/araevent', { method: 'POST', keepalive: true,
-    headers: { 'Content-Type': 'application/json' },
+    headers: araHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ type: 'displayPref', layers: layers }) }).catch(function () {});
 }
 
@@ -1364,7 +1377,7 @@ function addFrameToSequence() {
   var btn = document.getElementById('f-add');
   btn.disabled = true; btn.textContent = 'Creating…';
   fetch('/araevent', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       type: 'addToSequence', raDeg: frameRaDeg, decDeg: frameDecDeg,
       rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || 'Target',
@@ -1381,7 +1394,7 @@ function addFrameToSequence() {
 // Poll the loopback server for Flutter-originated commands (search, Tonight,
 // goto) and dispatch them. ~3/sec is plenty and stays cheap on loopback.
 function pollCmd() {
-  fetch('/aracmd', { cache: 'no-store' })
+  fetch('/aracmd', { cache: 'no-store', headers: araHeaders() })
     .then(function (r) { return r.json(); })
     .then(function (c) {
       if (!c || !c.type) return;

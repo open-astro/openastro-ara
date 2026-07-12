@@ -94,7 +94,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         }
 
         public override void AfterParentChanged() {
+            if (Parent == null) {
+                // Detached from the tree — drop the strong LocationChanged handler so this instance
+                // (and its captured Coordinates) can be collected instead of leaking on the profile.
+                profileService.LocationChanged -= ProfileService_LocationChanged;
+            }
             Validate();
+        }
+
+        public override void Teardown() {
+            profileService.LocationChanged -= ProfileService_LocationChanged;
+            base.Teardown();
         }
 
         public bool Validate() {

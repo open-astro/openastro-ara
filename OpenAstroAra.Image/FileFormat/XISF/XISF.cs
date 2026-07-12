@@ -74,6 +74,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     fs.ReadExactly(headerLengthInfo, 0, headerLengthInfo.Length);
                     uint headerLength = BitConverter.ToUInt32(headerLengthInfo, 0);
 
+                    // Guard against a malformed/hostile header length before allocating for it.
+                    if (headerLength == 0 || headerLength > fs.Length) {
+                        Logger.Error($"XISF: header length {headerLength} is invalid for a file of {fs.Length} bytes");
+                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                    }
+
                     // Skip the next 4 bytes as they are reserved space
                     fs.Seek(4, SeekOrigin.Current);
 
@@ -102,17 +108,29 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      */
                     int width = 0;
                     int height = 0;
+                    int channels = 1;
 
                     try {
                         string[] geometry = RequiredAttribute(imageElement, "geometry").Split(':');
                         width = int.Parse(geometry[0], CultureInfo.InvariantCulture);
                         height = int.Parse(geometry[1], CultureInfo.InvariantCulture);
+                        // Per the XISF spec the last geometry token is the channel count.
+                        if (geometry.Length > 2) {
+                            channels = int.Parse(geometry[^1], CultureInfo.InvariantCulture);
+                        }
                     } catch (Exception ex) {
                         Logger.Error($"XISF: Could not find image geometry: {ex}");
                         throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
                     }
 
-                    Logger.Debug($"XISF: File geometry: width={width}, height={height}");
+                    if (width <= 0 || height <= 0 || channels <= 0) {
+                        Logger.Error($"XISF: invalid geometry width={width}, height={height}, channels={channels}");
+                        throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+                    }
+
+                    long expectedSamples = (long)width * height * channels;
+
+                    Logger.Debug($"XISF: File geometry: width={width}, height={height}, channels={channels}");
 
                     /*
                      * Retrieve the pixel data type
@@ -127,6 +145,10 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         Logger.Error($"XISF: Could not find image data type: {ex}");
                         throw new InvalidDataException("Could not find XISF image data type");
                     }
+
+                    // Expected number of raw sample bytes for this image. Used to bound decompression
+                    // allocations so a malformed/hostile "uncompressed size" cannot trigger a decompression bomb.
+                    long expectedBytes = expectedSamples * SampleFormatByteSize(sampleFormat);
 
                     /*
                      * Determine if the data block is compressed and if a checksum is provided for it
@@ -151,6 +173,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     }
 
                     if (compressionInfo.CompressionType != XISFCompressionType.NONE) {
+                        // Reject an uncompressed size that is non-positive or exceeds the raw image byte count.
+                        if (compressionInfo.UncompressedSize <= 0 || compressionInfo.UncompressedSize > expectedBytes) {
+                            Logger.Error($"XISF: declared uncompressed size {compressionInfo.UncompressedSize} is invalid (expected {expectedBytes} bytes)");
+                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                        }
                         Logger.Debug(string.Format(CultureInfo.InvariantCulture, "XISF: CompressionType: {0}, UncompressedSize: {1}, IsShuffled: {2}, ItemSize: {3}",
                             compressionInfo.CompressionType,
                             compressionInfo.UncompressedSize,
@@ -199,6 +226,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         int start = int.Parse(location[1], CultureInfo.InvariantCulture);
                         int size = int.Parse(location[2], CultureInfo.InvariantCulture);
 
+                        // Validate the data block lies within the file before allocating for it.
+                        if (start < 0 || size < 0 || (long)start + size > fs.Length) {
+                            Logger.Error($"XISF: data block (start={start}, size={size}) lies outside the {fs.Length}-byte file");
+                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
+                        }
+
                         Logger.Debug($"XISF: Data block type: attachment, Data block start: {start}, Data block size: {size}");
 
                         // Read the data block in, starting at the specified offset
@@ -226,6 +259,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         var converter = GetConverter(sampleFormat);
                         var img = converter.Convert(raw);
 
+                        if (img.LongLength != expectedSamples) {
+                            Logger.Error($"XISF: decoded sample count {img.LongLength} does not match geometry {expectedSamples}");
+                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+                        }
+
                         imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
                     } else {
                         string base64Img = (imageElement.Element("Data")
@@ -235,12 +273,29 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         var converter = GetConverter(sampleFormat);
                         var img = converter.Convert(encodedImg);
 
+                        if (img.LongLength != expectedSamples) {
+                            Logger.Error($"XISF: decoded sample count {img.LongLength} does not match geometry {expectedSamples}");
+                            throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
+                        }
+
                         imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
                     }
 
                     return imageData;
                 }
             }, ct);
+        }
+
+        private static int SampleFormatByteSize(string sampleFormat) {
+            switch (sampleFormat) {
+                case "UInt8": return 1;
+                case "UInt16": return 2;
+                case "UInt32": return 4;
+                case "UInt64": return 8;
+                case "Float32": return 4;
+                case "Float64": return 8;
+                default: throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
+            }
         }
 
         private static IDataConverter GetConverter(string sampleFormat) {
@@ -426,13 +481,26 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                             int size = LZ4Codec.Decode(raw, 0, raw.Length, outArray, 0, compressionInfo.UncompressedSize);
 
                             if (size != compressionInfo.UncompressedSize) {
-                                Logger.Error($"XISF: Indicated uncompressed size does not equal actual size: Indicated: {compressionInfo.UncompressedSize}, Actual: {size}");
+                                throw new InvalidDataException($"XISF: Indicated uncompressed size does not equal actual size: Indicated: {compressionInfo.UncompressedSize}, Actual: {size}");
                             }
 
                             break;
 
                         case XISFCompressionType.ZLIB:
-                            outArray = ZlibStream.UncompressBuffer(raw);
+                            // Inflate through a length-capped stream into the pre-sized (and pre-validated)
+                            // output buffer so a malicious stream cannot expand beyond UncompressedSize.
+                            using (var input = new MemoryStream(raw))
+                            using (var zlib = new ZlibStream(input, CompressionMode.Decompress)) {
+                                int total = 0;
+                                int read;
+                                while (total < outArray.Length &&
+                                       (read = zlib.Read(outArray, total, outArray.Length - total)) > 0) {
+                                    total += read;
+                                }
+                                if (total != outArray.Length) {
+                                    throw new InvalidDataException($"XISF: zlib decompressed size {total} does not match expected {outArray.Length}");
+                                }
+                            }
                             break;
                     }
                 }

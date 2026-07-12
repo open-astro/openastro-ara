@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 
 /// §35 Safety policies. Phase 12h.6g wires the daemon round-trip via
@@ -229,7 +231,8 @@ class SafetyPolicies {
       );
 }
 
-class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
+class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
+    with SettingsSyncMixin<SafetyPolicies> {
   @override
   SafetyPolicies build() => const SafetyPolicies();
 
@@ -380,15 +383,11 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
     state = state.copyWith(firstFlipConfirmed: echoed.firstFlipConfirmed);
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getSafetyPolicies();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getSafetyPolicies());
 
-  Future<SafetyPolicies> persistToServer(ProfileApi api) async {
-    final echoed = await api.putSafetyPolicies(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<SafetyPolicies> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putSafetyPolicies(sent));
 }
 
 final safetyPoliciesProvider =

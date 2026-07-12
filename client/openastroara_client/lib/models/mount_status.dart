@@ -36,7 +36,13 @@ class MountCapabilities {
         canFindHome: json['can_find_home'] as bool? ?? false,
         canMoveAxis: json['can_move_axis'] as bool? ?? false,
         axisRatesDegPerSec: (json['move_axis_rates_deg_per_sec'] as List<dynamic>?)
-                ?.map((e) => (e as num).toDouble())
+                ?.map((e) {
+                  if (e is! num) {
+                    throw FormatException(
+                        'mount "move_axis_rates_deg_per_sec" element is not a num (${e.runtimeType})');
+                  }
+                  return e.toDouble();
+                })
                 .toList() ??
             const [],
       );

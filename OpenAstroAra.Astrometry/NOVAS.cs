@@ -72,8 +72,8 @@ namespace OpenAstroAra.Astrometry {
             return SOFA.J2000 + TimeSpan.FromDays(jdtt - SOFA.J2000JulianDate);
         }
 
-        public static double CalDate(double jtd, ref short year, ref short month, ref short day, ref double hour) {
-            return NOVAS_CalDate(jtd, ref year, ref month, ref day, ref hour);
+        public static void CalDate(double jtd, ref short year, ref short month, ref short day, ref double hour) {
+            NOVAS_CalDate(jtd, ref year, ref month, ref day, ref hour);
         }
 
         /// <summary>
@@ -178,7 +178,7 @@ namespace OpenAstroAra.Astrometry {
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "cal_date", CallingConvention = CallingConvention.Cdecl)]
-        private static extern double NOVAS_CalDate(double tjd, ref short year, ref short month, ref short day, ref double hour);
+        private static extern void NOVAS_CalDate(double tjd, ref short year, ref short month, ref short day, ref double hour);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "julian_date", CallingConvention = CallingConvention.Cdecl)]
@@ -237,14 +237,14 @@ namespace OpenAstroAra.Astrometry {
             ObjectType type,
             short number,
             [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_OBJ_NAME)] string name,
-            CatalogueEntry star_data,
+            in CatalogueEntry star_data,
             [Out] out CelestialObject cel_obj);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "app_planet", CallingConvention = CallingConvention.Cdecl)]
         private static extern short NOVAS_app_planet(
             double jd_tt,
-            CelestialObject ss_body,
+            in CelestialObject ss_body,
             Accuracy accuracy,
             [Out] out double ra,
             [Out] out double dec,
@@ -253,7 +253,7 @@ namespace OpenAstroAra.Astrometry {
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "geo_posvel", CallingConvention = CallingConvention.Cdecl)]
         private static extern short NOVAS_geo_posvel(
-            double jdtt, double deltaT, NOVAS.Accuracy accuracy, NOVAS.Observer observer,
+            double jdtt, double deltaT, NOVAS.Accuracy accuracy, in NOVAS.Observer observer,
             [In, Out][MarshalAs(UnmanagedType.LPArray, SizeConst = 3)] double[] pos,
             [In, Out][MarshalAs(UnmanagedType.LPArray, SizeConst = 3)] double[] vel);
 

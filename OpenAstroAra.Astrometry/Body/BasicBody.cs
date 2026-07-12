@@ -42,6 +42,8 @@ namespace OpenAstroAra.Astrometry.Body {
             return Task.Run(() => {
                 var jd = AstroUtil.GetJulianDate(Date);
                 var deltaT = AstroUtil.DeltaT(Date);
+                // NOVAS place expects TT (Terrestrial Time); GetJulianDate returns a UTC-based JD.
+                var jdTt = jd + AstroUtil.SecondsToDays(deltaT);
 
                 var location = new NOVAS.OnSurface() {
                     Latitude = Latitude,
@@ -63,7 +65,13 @@ namespace OpenAstroAra.Astrometry.Body {
 
                 var objPosition = new SkyPosition();
 
-                NOVAS.Place(jd, obj, observer, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref objPosition);
+                var status = NOVAS.Place(jdTt, obj, observer, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref objPosition);
+                if (status != 0) {
+                    // Poison the outputs with NaN rather than reporting a bogus zeroed position.
+                    this.Distance = double.NaN;
+                    this.Altitude = double.NaN;
+                    return;
+                }
                 this.Distance = AstroUtil.AUToKilometer(objPosition.Dis);
 
                 var siderealTime = AstroUtil.GetLocalSiderealTime(Date, Longitude);

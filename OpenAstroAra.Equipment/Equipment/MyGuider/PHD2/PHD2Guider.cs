@@ -60,6 +60,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         public void Dispose() {
+            // Cancel the background listener and unhook subscribers before releasing the CTS, so a
+            // disposed guider doesn't leave the event-stream task running against a dead instance.
+            Disconnect();
             _clientCTS?.Dispose();
             GC.SuppressFinalize(this);
         }
@@ -262,9 +265,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
 
             } catch (OperationCanceledException) {
+                // Post-connect init was cancelled. The event-stream socket is up (connected == true);
+                // `initialized` stays false to record that init did not complete. We deliberately do
+                // NOT flip connected to false here: callers/consumers treat `connected` as the socket
+                // liveness signal and `initialized` as the readiness signal (see field docs), and a
+                // guider that answers the socket but not every optional init RPC is still connected.
             } catch (Exception ex) {
                 Logger.Error(ex);
                 Notifier.ShowError(ex.Message);
+                // Init RPC threw after the socket came up — log/notify but leave `connected` as-is
+                // (socket liveness); `initialized` remains false to signal the half-ready state.
             }
 
             return connected;
@@ -353,12 +363,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 };
 
+                // Arm Settling BEFORE sending the dither RPC: PHD2 can emit the "Settling"/"SettleDone"
+                // events before SendMessage returns, and if we only set Settling=true afterwards a fast
+                // SettleDone would be missed and WaitForSettling would never see a settle in progress.
+                Settling = true;
                 var ditherMsgResponse = await SendMessage(ditherMsg);
                 if (ditherMsgResponse.error != null) {
                     /* Dither failed */
+                    Settling = false;
                     return false;
                 }
-                Settling = true;
                 await WaitForSettling(progress, ct);
             }
             return true;
@@ -391,17 +405,24 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         public async Task<bool> Pause(bool pause, CancellationToken ct) {
             if (Connected) {
-                var msg = new Phd2Pause() { Parameters = new bool[] { true } };
+                // Send the actual requested state — previously this always sent true, so a resume
+                // (pause == false) request never un-paused the guider.
+                var msg = new Phd2Pause() { Parameters = new bool[] { pause } };
                 await SendMessage(msg);
 
                 if (pause) {
                     var elapsed = new TimeSpan();
-                    while (!(AppState.State == PhdAppState.PAUSED)) {
+                    while (!(AppState?.State == PhdAppState.PAUSED)) {
                         elapsed += await CoreUtil.Delay(500, ct);
+                        if (elapsed.TotalSeconds > 60) {
+                            //Failsafe when phd is not sending paused message
+                            Logger.Warning("Phd2 - Guider did not report PAUSED within 60s. Skipping.");
+                            break;
+                        }
                     }
                 } else {
                     var elapsed = new TimeSpan();
-                    while ((AppState.State == PhdAppState.PAUSED)) {
+                    while ((AppState?.State == PhdAppState.PAUSED)) {
                         elapsed += await CoreUtil.Delay(500, ct);
                         if (elapsed.TotalSeconds > 60) {
                             //Failsafe when phd is not sending resume message
@@ -545,11 +566,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             CancellationToken ct,
             int receiveTimeout = 0) {
             return Task.Run(async () => {
+                // Honor receiveTimeout as an overall deadline so a guider that never reaches targetState
+                // (e.g. StopCapture's wait for STOPPED) can't hang the abort path forever. A linked CTS
+                // trips on either the caller's cancellation or the deadline.
+                using var deadlineCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                if (receiveTimeout > 0) {
+                    deadlineCts.CancelAfter(receiveTimeout);
+                }
+                var token = deadlineCts.Token;
                 try {
-                    var state = await GetAppState();
+                    var state = await GetAppState(receiveTimeout);
                     while (state != targetState) {
-                        await Task.Delay(1000, ct);
-                        state = await GetAppState();
+                        await Task.Delay(1000, token);
+                        state = await GetAppState(receiveTimeout);
                     }
                     return true;
                 } catch (OperationCanceledException) {
@@ -1184,6 +1213,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         private async Task RunListener() {
             var jls = new JsonLoadSettings() { LineInfoHandling = LineInfoHandling.Ignore, CommentHandling = CommentHandling.Ignore };
             _clientCTS?.Dispose();
+            // Independent session-scoped source: the listener must outlive the connect *operation* and
+            // is torn down only by Disconnect()/Dispose(). (Linking it to the caller's connect token
+            // would kill the live session the moment a connect-timeout token fired.)
             _clientCTS = new CancellationTokenSource();
 
             try {
@@ -1242,7 +1274,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             } catch (Exception ex) {
                 Logger.Error(ex);
                 Notifier.ShowError(String.Format(CultureInfo.InvariantCulture, Loc.Instance["LblPHDErrorMsg"], ex.Message));
-                throw;
+                // No rethrow: this runs on a discarded fire-and-forget Task, so a rethrow becomes an
+                // unobserved exception. The finally below fires PHD2ConnectionLost for §63.3 recovery.
             } finally {
                 Settling = false;
                 AppState = new PhdEventAppState() { State = "" };

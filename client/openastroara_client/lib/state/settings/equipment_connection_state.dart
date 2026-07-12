@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_sync_mixin.dart';
+
 import '../../services/profile_api.dart';
 import '../saved_server_state.dart';
 
@@ -66,7 +68,8 @@ class EquipmentConnectionSettings {
 }
 
 class EquipmentConnectionNotifier
-    extends Notifier<EquipmentConnectionSettings> {
+    extends Notifier<EquipmentConnectionSettings>
+    with SettingsSyncMixin<EquipmentConnectionSettings> {
   @override
   EquipmentConnectionSettings build() {
     // Schedule one-shot hydration after the current build pass. Calling
@@ -83,16 +86,12 @@ class EquipmentConnectionNotifier
   }
 
   /// Manual hydrate — exposed for tests that want to inject a mocked api.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    state = await api.getEquipmentConnection();
-  }
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getEquipmentConnection());
 
   /// Manual persist — exposed for tests + future error-stream wiring.
-  Future<EquipmentConnectionSettings> persistToServer(ProfileApi api) async {
-    final echoed = await api.putEquipmentConnection(state);
-    state = echoed;
-    return echoed;
-  }
+  Future<EquipmentConnectionSettings> persistToServer(ProfileApi api) =>
+      persistGuarded((sent) => api.putEquipmentConnection(sent));
 
   ProfileApi? _activeApi() {
     final server = ref.read(activeServerProvider);
@@ -103,7 +102,7 @@ class EquipmentConnectionNotifier
     final api = _activeApi();
     if (api == null) return;
     try {
-      state = await api.getEquipmentConnection();
+      await hydrateGuarded(() => api.getEquipmentConnection());
     } catch (_) {
       // Silent — defaults remain.
     }
@@ -113,7 +112,9 @@ class EquipmentConnectionNotifier
     final api = _activeApi();
     if (api == null) return;
     try {
-      await api.putEquipmentConnection(state);
+      // Serialized + fenced through the mixin so rapid toggles can't let an
+      // out-of-order PUT echo revert a newer optimistic local update.
+      await persistGuarded((sent) => api.putEquipmentConnection(sent));
     } catch (_) {
       // Silent — local optimistic update stays.
     }

@@ -53,12 +53,12 @@ final siteLocationProvider =
     receiveTimeout: const Duration(seconds: 5),
   ));
   ref.onDispose(() => dio.close(force: true));
-  try {
-    final res = await dio.get<dynamic>('/api/v1/profile/site');
-    final raw = res.data;
-    return raw is Map<String, dynamic> ? SiteLocation.fromJson(raw) : null;
-  } on DioException catch (e) {
-    debugPrint('siteLocationProvider: $e');
-    return null;
-  }
+  // A transport/network failure (DioException) must NOT collapse to null: null is
+  // reserved for "server present but no site configured" (non-map / 404-shaped
+  // body), which the consumer legitimately treats as "unknown location". A fetch
+  // failure instead RETHROWS so the provider goes to AsyncError, and the consumer
+  // surfaces it as "unavailable" rather than silently defaulting to lat/lon 0,0.
+  final res = await dio.get<dynamic>('/api/v1/profile/site');
+  final raw = res.data;
+  return raw is Map<String, dynamic> ? SiteLocation.fromJson(raw) : null;
 });

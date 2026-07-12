@@ -258,6 +258,7 @@ class _LibraryHeaderBar extends ConsumerWidget {
                         ...filterNames,
                       ]);
                       if (choice == null) return;
+                      if (!context.mounted) return;
                       ref.read(libraryFilterProvider.notifier).setFilterName(
                           choice == 'All filters' ? null : choice);
                     },
@@ -275,6 +276,7 @@ class _LibraryHeaderBar extends ConsumerWidget {
                         for (var i = 1; i <= 5; i++) '$i+ stars',
                       ]);
                       if (choice == null) return;
+                      if (!context.mounted) return;
                       ref.read(libraryFilterProvider.notifier).setMinRating(
                           choice == 'Any rating'
                               ? 0
@@ -292,6 +294,7 @@ class _LibraryHeaderBar extends ConsumerWidget {
                         builder: (_) => _SearchDialog(initial: filter.query),
                       );
                       if (query == null) return;
+                      if (!context.mounted) return;
                       ref.read(libraryFilterProvider.notifier).setQuery(query);
                     },
                   ),

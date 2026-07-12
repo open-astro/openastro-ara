@@ -189,7 +189,23 @@ public static partial class WebSocketEndpoints {
             // §60.9 resume protocol — give the client a short window to send a
             // JSON resume request as its first frame. Anything else (timeout,
             // non-JSON, missing resume_token) → treat as fresh subscription.
-            var (highWaterMark, pendingReceive) = await HandleResumePhaseAsync(socket, conn, channel, broadcaster, logger, ct);
+            long highWaterMark = 0;
+            Task<WebSocketReceiveResult>? pendingReceive = null;
+            try {
+                (highWaterMark, pendingReceive) = await HandleResumePhaseAsync(socket, conn, channel, broadcaster, logger, ct);
+            } catch (Exception ex) when (ex is WebSocketException or IOException or ObjectDisposedException or OperationCanceledException) {
+                // The client vanished mid-resume (the resume-response or a replay
+                // frame send faulted). Do NOT let that exception short-circuit
+                // straight to teardown: the subscriber channel was already
+                // registered eagerly (channel.ReadAllAsync above), and its removal
+                // is armed only by the drain loop's iterator finally. Fall through
+                // to the drain loop as a fresh subscription; the receive loop will
+                // observe the dead socket, cancel ct, and the iterator cleanup
+                // removes the subscriber — otherwise the registration leaks forever.
+                LogResumeReceiveFailed(logger, ex);
+                highWaterMark = 0;
+                pendingReceive = null;
+            }
 
             // §51 reconnect-replay gap — send the open-diagnostics set as a
             // per-connection diagnostics.snapshot frame so a client that missed

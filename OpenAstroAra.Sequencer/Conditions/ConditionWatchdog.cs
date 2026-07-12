@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
                     watchdogCTS = new CancellationTokenSource();
                     var token = watchdogCTS.Token;
                     watchdogTask = Task.Run(async () => {
-                        while (true) {
+                        while (!token.IsCancellationRequested) {
                             try {
                                 await WatchDogOperation();
                             } catch (OperationCanceledException) {
@@ -58,7 +58,11 @@ namespace OpenAstroAra.Sequencer.Conditions {
                             } catch (Exception ex) {
                                 Logger.Error(ex);
                             }
-                            await Task.Delay(Delay, token);
+                            try {
+                                await Task.Delay(Delay, token);
+                            } catch (OperationCanceledException) {
+                                break;
+                            }
                         }
                     });
                 }
@@ -72,6 +76,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
                     watchdogCTS?.Cancel();
                 } catch (ObjectDisposedException) { }
 
+                watchdogCTS?.Dispose();
                 watchdogCTS = null;
                 watchdogTask = null;
             }

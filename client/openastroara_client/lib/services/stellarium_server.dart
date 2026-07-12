@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -19,12 +20,29 @@ import 'package:flutter/services.dart' show rootBundle;
 /// One server is started per app run (lazily, on first [start]) and bound to an
 /// ephemeral loopback port. Call [dispose] to stop it.
 class StellariumServer {
-  StellariumServer._(this._server, this.baseUrl);
+  StellariumServer._(this._server, this.baseUrl, this.token);
 
   final HttpServer _server;
 
   /// `http://127.0.0.1:<port>` — load `'$baseUrl/index.html'` in the webview.
   final String baseUrl;
+
+  /// Per-run secret baked into the served page URL (`?token=…`) and required as
+  /// the `X-Ara-Token` header on the [POST /araevent] / [GET /aracmd] control
+  /// channels. See [_isAuthorized]: only the page we served — which reads the
+  /// token from its own `location.search` — knows it, so a DNS-rebinding page
+  /// (which can hit our loopback origin but can't read our page's URL or bypass
+  /// same-origin to see it) can't forge these mount-slewing requests.
+  final String token;
+
+  static const String _tokenHeader = 'x-ara-token';
+
+  /// A 256-bit URL-safe random token, minted once per server run.
+  static String _mintToken() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(32, (_) => rng.nextInt(256));
+    return base64Url.encode(bytes).replaceAll('=', '');
+  }
 
   static const String _assetRoot = 'assets/stellarium';
 
@@ -79,7 +97,8 @@ class StellariumServer {
     // Port 0 → the OS picks a free ephemeral port; loopback-only so nothing off
     // this machine can reach the engine/data.
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final instance = StellariumServer._(server, 'http://127.0.0.1:${server.port}');
+    final instance = StellariumServer._(
+        server, 'http://127.0.0.1:${server.port}', _mintToken());
     unawaited(instance._serve());
     return instance;
   }
@@ -102,6 +121,28 @@ class StellariumServer {
         request.headers.port == _server.port;
   }
 
+  /// Gate for the two control channels (`/araevent`, `/aracmd`). On top of the
+  /// [_isLoopbackHost] DNS-rebind guard, require the per-run [token] in the
+  /// `X-Ara-Token` header. A direct-loopback POST from another local process or
+  /// a rebinding page still carries our loopback `Host`, so the Host check alone
+  /// lets it through; only the page WE served knows the token (it reads it from
+  /// its own `location.search`), so this closes the forged-mount-slew hole.
+  /// Compared length-independently to avoid a trivial timing side-channel.
+  bool _isAuthorized(HttpRequest request) {
+    if (!_isLoopbackHost(request)) return false;
+    final provided = request.headers.value(_tokenHeader);
+    return provided != null && _constantTimeEquals(provided, token);
+  }
+
+  static bool _constantTimeEquals(String a, String b) {
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+    }
+    return diff == 0;
+  }
+
   Future<void> _handle(HttpRequest request) async {
     final response = request.response;
     try {
@@ -111,11 +152,10 @@ class StellariumServer {
       // Flutter → page command channel: the page long-polls this; we hand back the
       // oldest queued command (a JSON object) and drop it, or `{}` when idle.
       if (path == '/aracmd') {
-        // Same DNS-rebinding guard as /araevent: a rebinding page could otherwise
-        // poll this queue, draining goto commands the real page never sees and
-        // reading any queued target. Lower stakes than the POST path (read-only,
-        // no mount slew) but it's the same one-liner.
-        if (!_isLoopbackHost(request)) {
+        // Same guard as /araevent (Host + per-run token): a rebinding or
+        // other local page could otherwise poll this queue, draining goto
+        // commands the real page never sees and reading any queued target.
+        if (!_isAuthorized(request)) {
           response.statusCode = HttpStatus.forbidden;
           await response.close();
           return;
@@ -138,11 +178,12 @@ class StellariumServer {
       // decode it and surface it on [events]. Always answer 200 so the page's
       // fetch resolves; a malformed body is just dropped.
       if (path == '/araevent') {
-        // DNS-rebinding guard: this channel can carry mount-slewing events
-        // (addToSequence), so only accept POSTs whose Host header is our own
-        // loopback origin. A rebinding attack reaches us with the attacker's
-        // hostname in Host; our own page always sends 127.0.0.1:<port>.
-        if (!_isLoopbackHost(request)) {
+        // This channel can carry mount-slewing events (addToSequence), so
+        // require both our loopback Host AND the per-run token header. The Host
+        // check defeats DNS-rebinding; the token defeats a forged same-origin
+        // POST from any other local page/process that can reach the loopback
+        // port but can't read the token we baked into the served page URL.
+        if (!_isAuthorized(request)) {
           response.statusCode = HttpStatus.forbidden;
           await response.close();
           return;

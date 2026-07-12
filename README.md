@@ -21,6 +21,8 @@ openastro-ara/                       (this repo)
 ├── OpenAstroAra.Server/             ← ASP.NET Core daemon on .NET 10 (Phase 4+)
 ├── OpenAstroAra.Core / Astrometry / Profile / Image / Equipment / Sequencer / PlateSolving / Test
 │                                    ← inherited from NINA, ported during Phase 0.5
+├── OpenAstroAra.Fits / Stretch      ← FITS I/O + stretch/preview (with *.Tests projects)
+│                                    ← plus OpenAstroAra.TestHarness (virtual-observatory bench)
 ├── client/openastroara_client/      ← WILMA: Flutter desktop + mobile client (Phase 11+)
 └── design/                          ← port playbook + tracking docs (not shipped)
 ```

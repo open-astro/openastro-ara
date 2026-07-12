@@ -400,6 +400,7 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
     );
     api?.close();
     if (picked == null) return; // dismissed without choosing
+    if (!mounted) return;
     setState(() {
       slot.set(_draft, picked.device?.uniqueId);
       if (picked.device != null) {

@@ -75,13 +75,15 @@ namespace OpenAstroAra.Image.ImageData {
             this.Width = flipped2DArray.GetLength(0);
             this.Height = flipped2DArray.GetLength(1);
 
+            // Must be set before the branch below, which reads Create32BitData to decide the pixel path.
+            Create32BitData = create32BitData;
+
             if (this.Create32BitData && flipped2DArray.GetType() == typeof(int[,])) {
                 this.flatArray = FlipAndProcessAsInt((int[,])flipped2DArray, flipped2DArray.GetLength(0), flipped2DArray.GetLength(1), (int)(flipped2DArray.GetLength(0) * flipped2DArray.GetLength(1)));
             } else {
                 this.flatArray = FlipAndConvert2d(flipped2DArray);
             }
             this.IsBayered = isBayered;
-            Create32BitData = create32BitData;
         }
 
         public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
@@ -193,7 +195,9 @@ namespace OpenAstroAra.Image.ImageData {
                 fixed (int* ptr = arr) {
                     int idx = 0, row = 0;
                     for (int i = 0; i < length; i++) {
-                        value = (ushort)ptr[i];
+                        // Clamp into the ushort range instead of truncating a 32-bit value.
+                        int sample = ptr[i];
+                        value = sample < 0 ? (ushort)0 : (sample > ushort.MaxValue ? ushort.MaxValue : (ushort)sample);
 
                         idx = ((i % height) * width) + row;
                         if ((i % (height)) == (height - 1)) row++;

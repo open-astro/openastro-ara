@@ -69,7 +69,19 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
 
                 Logger.Info($"Running - '{executableLocation}' with args '{args}'");
                 process.Start();
-                await process.WaitForExitAsync(ct);
+                try {
+                    await process.WaitForExitAsync(ct);
+                } finally {
+                    // On cancellation WaitForExitAsync throws while the child keeps running — kill the
+                    // whole process tree so we don't orphan the external command (and its children).
+                    if (!process.HasExited) {
+                        try {
+                            process.Kill(entireProcessTree: true);
+                        } catch (Exception killEx) when (killEx is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException) {
+                            Logger.Error($"Failed to kill orphaned command {sequenceCompleteCommand}:", killEx);
+                        }
+                    }
+                }
 
                 process.OutputDataReceived -= outputDataReceivedCallback;
                 process.ErrorDataReceived -= errorDataReceivedCallback;

@@ -249,6 +249,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         public static byte[] Shuffle(byte[] unshuffled, int itemSize) {
+            if (itemSize <= 0 || unshuffled.Length % itemSize != 0) {
+                throw new InvalidDataException($"XISF: invalid shuffle item size {itemSize} for buffer of {unshuffled.Length} bytes");
+            }
             int size = unshuffled.Length;
             byte[] shuffled = new byte[size];
             int numberOfItems = size / itemSize;
@@ -267,6 +270,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         public static byte[] Unshuffle(byte[] shuffled, int itemSize) {
+            if (itemSize <= 0 || shuffled.Length % itemSize != 0) {
+                throw new InvalidDataException($"XISF: invalid shuffle item size {itemSize} for buffer of {shuffled.Length} bytes");
+            }
             int size = shuffled.Length;
             byte[] unshuffled = new byte[size];
             int numberOfItems = size / itemSize;

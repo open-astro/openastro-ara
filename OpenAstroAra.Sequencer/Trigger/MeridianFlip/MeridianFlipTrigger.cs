@@ -189,7 +189,13 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                     gate.RequestPause(PauseKind.AwaitingUser);
                     return;
                 }
-                // No gate wired (standalone container) — fall back to halting the run.
+                // No gate wired (standalone container) — a bare throw here is swallowed by
+                // SequenceTrigger.Run() (→ FAILED + failure event) AND by RunTriggers' catch filter,
+                // so the run would continue past the meridian un-flipped. Actively interrupt the root
+                // instead: this cancels the run's token so no further instruction executes — the same
+                // fire-and-forget Interrupt() pattern SequenceItem uses for AbortOnError.
+                Logger.Error("Meridian Flip - No pause gate wired; interrupting the sequence to prevent imaging past the meridian.");
+                _ = root?.Interrupt();
                 throw new InvalidOperationException("Meridian flip failed: the executor reported failure.");
             }
             // Record the successful flip so the dedup guard skips a redundant re-flip for the same target.
