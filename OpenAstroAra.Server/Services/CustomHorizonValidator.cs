@@ -22,7 +22,7 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>§36 custom terrain horizon — validation + canonical form for the PUT
 /// endpoint, and the azimuth→altitude interpolation every consumer shares
-/// (HorizonService's overlay, TonightSkyService's visibility windows).</summary>
+/// (HorizonService's overlay, the client-side Tonight's Sky ranker).</summary>
 public static class CustomHorizonValidator {
 
     /// <summary>One vertex per azimuth degree closing the loop — anything more is

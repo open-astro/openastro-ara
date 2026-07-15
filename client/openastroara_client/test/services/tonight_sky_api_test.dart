@@ -1,44 +1,9 @@
-import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 
 /// Stubs Dio's transport with a canned 200 body so `fetch()` can be exercised
 /// without a live server.
-class _StubAdapter implements HttpClientAdapter {
-  _StubAdapter(this.jsonBody);
-  final Object jsonBody;
-
-  /// The last request's query parameters, for asserting what fetch() sent.
-  Map<String, dynamic>? lastQuery;
-
-  @override
-  void close({bool force = false}) {}
-
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
-    lastQuery = options.queryParameters;
-    return ResponseBody.fromString(
-      jsonEncode(jsonBody),
-      200,
-      headers: {
-        Headers.contentTypeHeader: [Headers.jsonContentType],
-      },
-    );
-  }
-}
-
-TonightSkyApi _apiReturning(Object body) {
-  final dio = Dio()..httpClientAdapter = _StubAdapter(body);
-  return TonightSkyApi(const AraServer(hostname: 'x', port: 80), dio: dio);
-}
 
 void main() {
   group('TonightSkyObject.fromJson', () {
@@ -261,104 +226,6 @@ void main() {
       expect(TonightSkyObject.fromJson(body()..['altitude_deg'] = 'high'), isNull);
       expect(TonightSkyObject.fromJson(body()..remove('altitude_deg')), isNull);
       expect(TonightSkyObject.fromJson(body()..['max_altitude_deg'] = 'high'), isNull);
-    });
-  });
-
-  group('TonightSkyApi.fetch', () {
-    Map<String, dynamic> row(String id) => {
-          'id': id,
-          'name': id,
-          'type': 'galaxy',
-          'magnitude': 5.0,
-          'ra_deg': 1.0,
-          'dec_deg': 2.0,
-          'altitude_deg': 50.0,
-          'max_altitude_deg': 80.0,
-        };
-
-    test('parses a JSON array, dropping malformed rows', () async {
-      final api = _apiReturning([
-        row('M31'),
-        row('M42')..remove('ra_deg'), // malformed → skipped
-        row('M81'),
-      ]);
-      final out = await api.fetch();
-      expect(out.map((o) => o.id), ['M31', 'M81']);
-    });
-
-    test('a non-array 200 body yields an empty list, not a throw', () async {
-      final api = _apiReturning({'error': 'no site configured'});
-      expect(await api.fetch(), isEmpty);
-    });
-
-    test('no overrides sends only the limit (pre-slice-4b request shape)', () async {
-      final adapter = _StubAdapter(<Object>[]);
-      final api = TonightSkyApi(const AraServer(hostname: 'x', port: 80),
-          dio: Dio()..httpClientAdapter = adapter);
-      await api.fetch(limit: 7);
-      expect(adapter.lastQuery, {'limit': 7});
-    });
-
-    test('active overrides ride as query parameters', () async {
-      final adapter = _StubAdapter(<Object>[]);
-      final api = TonightSkyApi(const AraServer(hostname: 'x', port: 80),
-          dio: Dio()..httpClientAdapter = adapter);
-      await api.fetch(
-        overrides: const TonightOverrides(
-          focalLengthMm: 530,
-          reducer: 0.7,
-          sensorW: 6248,
-          sensorH: 4176,
-          pixelUm: 3.76,
-          mosaicX: 2,
-          mosaicY: 3,
-        ),
-      );
-      expect(adapter.lastQuery, {
-        'limit': 12,
-        'focalLengthMm': 530,
-        'reducer': 0.7,
-        'sensorW': 6248,
-        'sensorH': 4176,
-        'pixelUm': 3.76,
-        'mosaicX': 2,
-        'mosaicY': 3,
-      });
-    });
-  });
-
-  group('TonightOverrides', () {
-    test('none is inactive and adds no parameters', () {
-      expect(TonightOverrides.none.isActive, isFalse);
-      expect(TonightOverrides.none.toQueryParameters(), isEmpty);
-      // 1×1 explicitly is the same as no mosaic — the server default.
-      expect(const TonightOverrides(mosaicX: 1, mosaicY: 1).isActive, isFalse);
-    });
-
-    test('any single supplied field activates the override', () {
-      expect(const TonightOverrides(focalLengthMm: 530).isActive, isTrue);
-      expect(const TonightOverrides(reducer: 0.7).isActive, isTrue);
-      expect(const TonightOverrides(sensorW: 6248).isActive, isTrue);
-      expect(const TonightOverrides(sensorH: 4176).isActive, isTrue);
-      expect(const TonightOverrides(pixelUm: 3.76).isActive, isTrue);
-      expect(const TonightOverrides(mosaicX: 2).isActive, isTrue);
-      expect(const TonightOverrides(mosaicY: 2).isActive, isTrue);
-    });
-
-    test('unsupplied fields are omitted so the server merges the profile', () {
-      expect(
-        const TonightOverrides(reducer: 0.7, mosaicX: 2).toQueryParameters(),
-        {'reducer': 0.7, 'mosaicX': 2},
-      );
-    });
-
-    test('value equality keys the provider notification', () {
-      expect(const TonightOverrides(reducer: 0.7),
-          const TonightOverrides(reducer: 0.7));
-      expect(const TonightOverrides(reducer: 0.7),
-          isNot(const TonightOverrides(reducer: 0.8)));
-      expect(const TonightOverrides(reducer: 0.7).hashCode,
-          const TonightOverrides(reducer: 0.7).hashCode);
     });
   });
 }

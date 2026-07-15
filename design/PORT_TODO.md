@@ -1602,12 +1602,15 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
 - ✅ **PR B — OpenNGC catalog client-side**: daemon hosts `GET /data-manager/dso-catalog`
   (full DsoEntryDto, mag ≤ 12); client mirrors to app-support and the local ranker scores
   real framing + surface brightness from it.
-- **PR C — remove server planning compute (NEXT)**: flip the connected Tonight's Sky path
-  to the local ranker, then delete TonightSkyService/Overrides, OptimalSubCalculator/
-  Overrides, FilterAdvice, StarCountModel/StarDetectability(+Floor), the two /planning/*
-  endpoints and their tests; update API_CONTRACT.md + TONIGHT_SKY.md. SensorQeLibrary
-  STAYS (camera-connect Tier-1 QE fill is an equipment event on the daemon). Custom-
-  horizon points still need an offline cache before full parity.
+- ✅ **PR C — server planning compute removed (2026-07-15)**: Tonight's Sky ranks
+  client-side always (what-if overrides + mosaic included); TonightSkyService/Overrides,
+  OptimalSubCalculator/Overrides, FilterAdvice, StarCountModel/StarDetectability(+Floor),
+  both /planning/* endpoints (horizon stays — execution-shared) and their tests deleted.
+  Execution-shared astronomy statics extracted to SiteAstrometry (HorizonService,
+  MeridianFlipExecutor, PolarAlignGeometry, UnattendedSeverity). SensorQeLibrary stays
+  (camera-connect QE fill). REMAINING follow-up: custom-horizon points into the offline
+  profile cache + the local ranker (the server-side skyline ranking test retired with the
+  service; behavior parity pends that cache).
 
 ## Flaky server test (2026-07-15)
 
