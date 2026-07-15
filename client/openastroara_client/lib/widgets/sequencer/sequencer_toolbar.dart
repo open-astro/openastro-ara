@@ -64,8 +64,10 @@ class SequencerToolbar extends ConsumerWidget {
     // concurrent lifecycle calls.
     final busy = ref.watch(sequenceCommandBusyProvider);
     // §2 offline drafts live client-side: they save locally with no daemon,
-    // and never expose daemon lifecycle actions (run/validate/export/delete)
-    // even while connected — push the draft to the server first.
+    // and never expose actions that send the draft's id to the daemon
+    // (run/pause/skip/abort/delete/export) even while connected — push the
+    // draft to the server first. Validate is the exception: it sends only the
+    // BODY (no id), so pre-push validation of a draft works while connected.
     final isDraft = isDraftSequenceId(selectedId);
     final hasSelection = connected && selectedId != null && !busy && !isDraft;
     // Save is enabled only when the open sequence has unsaved edits. A draft
@@ -145,9 +147,12 @@ class SequencerToolbar extends ConsumerWidget {
                   icon: Icons.ios_share,
                   label: 'Export',
                   // Export the selected sequence to a NINA-compatible .json.
-                  // Enabled whenever a sequence is selected (independent of run
-                  // state — exporting is read-only).
-                  onPressed: (connected && selectedId != null)
+                  // Enabled whenever a DAEMON sequence is selected (independent
+                  // of run state — exporting is read-only). Excludes drafts:
+                  // exportSequence fetches by id from the daemon, which never
+                  // saw a draft: id (review #845). Local draft export is a
+                  // tracked follow-up.
+                  onPressed: (connected && selectedId != null && !isDraft)
                       ? () => exportSequence(context, ref,
                           id: selectedId, name: selectedName ?? selectedId)
                       : null,
