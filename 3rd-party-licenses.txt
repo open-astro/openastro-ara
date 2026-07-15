@@ -104,23 +104,23 @@ License source: http://accord-framework.net/license.txt (Accord.NET framework li
 Project:        http://accord-framework.net/
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Alpaca.Components 2.1.0
+Package:        ASCOM.Alpaca.Components 3.1.0
 Authors:        Daniel Van Noord and Peter Simpson
-Copyright:      Copyright ASCOM Initiative 2022
+Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Alpaca.Device 2.1.0
+Package:        ASCOM.Alpaca.Device 3.1.0
 Authors:        Daniel Van Noord and Peter Simpson
-Copyright:      Copyright ASCOM Initiative 2022
+Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Common.Components 2.1.0
+Package:        ASCOM.Common.Components 3.1.0
 Authors:        Daniel Van Noord and Peter Simpson
-Copyright:      ASCOM Initiative (c) 2022
+Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://ascom-standards.org/
@@ -134,9 +134,9 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://ascom-standards.org/
 
 ------------------------------------------------------------------------
-Package:        ASCOM.Tools 2.1.0
+Package:        ASCOM.Tools 3.1.0
 Authors:        Daniel Van Noord and Peter Simpson
-Copyright:      ASCOM Initiative (c) 2022
+Copyright:      Copyright (c) ASCOM Initiative 2019-2026
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 
@@ -171,7 +171,7 @@ License source: https://github.com/net-commons/common-logging (README: Apache So
 Project:        http://net-commons.github.io/common-logging/
 
 ------------------------------------------------------------------------
-Package:        CommunityToolkit.Mvvm 8.4.0
+Package:        CommunityToolkit.Mvvm 8.4.2
 Authors:        Microsoft
 Copyright:      (c) .NET Foundation and Contributors. All rights reserved.
 License:        MIT
@@ -179,7 +179,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/CommunityToolkit/dotnet
 
 ------------------------------------------------------------------------
-Package:        Fastenshtein 1.0.10
+Package:        Fastenshtein 1.0.12
 Authors:        DanHartley
 Copyright:      Copyright © 2017
 License:        MIT
@@ -227,7 +227,7 @@ License source: https://github.com/richardschneider/net-mdns (README: MIT)
 Project:        https://github.com/richardschneider/net-mdns
 
 ------------------------------------------------------------------------
-Package:        Microsoft.AspNetCore.OpenApi 10.0.0
+Package:        Microsoft.AspNetCore.OpenApi 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -235,7 +235,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://asp.net/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.Data.Sqlite 10.0.0
+Package:        Microsoft.Data.Sqlite 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -243,7 +243,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/dotnet/standard/data/sqlite/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.Data.Sqlite.Core 10.0.0
+Package:        Microsoft.Data.Sqlite.Core 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -251,7 +251,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/dotnet/standard/data/sqlite/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.EntityFrameworkCore 10.0.0
+Package:        Microsoft.EntityFrameworkCore 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -259,7 +259,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/ef/core/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.EntityFrameworkCore.Abstractions 10.0.0
+Package:        Microsoft.EntityFrameworkCore.Abstractions 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -267,7 +267,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/ef/core/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.EntityFrameworkCore.Analyzers 10.0.0
+Package:        Microsoft.EntityFrameworkCore.Analyzers 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -275,7 +275,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/ef/core/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.EntityFrameworkCore.Relational 10.0.0
+Package:        Microsoft.EntityFrameworkCore.Relational 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -283,7 +283,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/ef/core/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.EntityFrameworkCore.Sqlite 10.0.0
+Package:        Microsoft.EntityFrameworkCore.Sqlite 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -291,7 +291,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/ef/core/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.EntityFrameworkCore.Sqlite.Core 10.0.0
+Package:        Microsoft.EntityFrameworkCore.Sqlite.Core 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -299,7 +299,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://docs.microsoft.com/ef/core/
 
 ------------------------------------------------------------------------
-Package:        Microsoft.Extensions.DependencyModel 10.0.0
+Package:        Microsoft.Extensions.DependencyModel 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -323,7 +323,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/Microsoft/OpenAPI.NET
 
 ------------------------------------------------------------------------
-Package:        Microsoft.Win32.SystemEvents 8.0.0
+Package:        Microsoft.Win32.SystemEvents 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -331,8 +331,9 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Namotion.Reflection 3.4.2
+Package:        Namotion.Reflection 3.5.0
 Authors:        Namotion.Reflection
+Copyright:      Copyright © Rico Suter, 2025
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/RicoSuter/Namotion.Reflection
@@ -346,7 +347,7 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Newtonsoft.Json 13.0.3
+Package:        Newtonsoft.Json 13.0.4
 Authors:        James Newton-King
 Copyright:      Copyright © James Newton-King 2008
 License:        MIT
@@ -417,17 +418,17 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/StephenCleary/Disposables
 
 ------------------------------------------------------------------------
-Package:        NJsonSchema 11.3.2
+Package:        NJsonSchema 11.6.1
 Authors:        Rico Suter
-Copyright:      Copyright © Rico Suter, 2022
+Copyright:      Copyright © Rico Suter, 2025
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        http://njsonschema.org/
 
 ------------------------------------------------------------------------
-Package:        NJsonSchema.Annotations 11.3.2
+Package:        NJsonSchema.Annotations 11.6.1
 Authors:        Rico Suter
-Copyright:      Copyright © Rico Suter, 2022
+Copyright:      Copyright © Rico Suter, 2025
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        http://njsonschema.org/
@@ -441,7 +442,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://oxyplot.github.io/
 
 ------------------------------------------------------------------------
-Package:        runtime.android-arm.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.android-arm.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -449,7 +450,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.android-arm64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.android-arm64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -457,7 +458,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.android-x64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.android-x64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -465,7 +466,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.android-x86.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.android-x86.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -473,7 +474,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-arm.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-arm.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -481,7 +482,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-arm64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-arm64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -489,7 +490,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-bionic-arm64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-bionic-arm64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -497,7 +498,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-bionic-x64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-bionic-x64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -505,7 +506,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-musl-arm.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-musl-arm.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -513,7 +514,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-musl-arm64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-musl-arm64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -521,7 +522,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-musl-x64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-musl-x64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -529,7 +530,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.linux-x64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.linux-x64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -537,7 +538,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.maccatalyst-arm64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.maccatalyst-arm64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -545,7 +546,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.maccatalyst-x64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.maccatalyst-x64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -561,7 +562,7 @@ License source: https://github.com/dotnet/corefx/blob/master/LICENSE.TXT (corefx
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -569,7 +570,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.osx-arm64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.osx-arm64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -577,7 +578,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        runtime.osx-x64.runtime.native.System.IO.Ports 10.0.0
+Package:        runtime.osx-x64.runtime.native.System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -609,14 +610,14 @@ License source: http://go.microsoft.com/fwlink/?LinkId=329770 (redistributable E
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.9.0
+Package:        Scalar.AspNetCore 2.16.12
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://scalar.com/
 
 ------------------------------------------------------------------------
-Package:        Serilog 4.2.0
+Package:        Serilog 4.3.0
 Authors:        Serilog Contributors
 Copyright:      Copyright © Serilog Contributors
 License:        Apache-2.0
@@ -624,21 +625,21 @@ License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://serilog.net/
 
 ------------------------------------------------------------------------
-Package:        Serilog.AspNetCore 9.0.0
+Package:        Serilog.AspNetCore 10.0.0
 Authors:        Microsoft,Serilog Contributors
 License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://github.com/serilog/serilog-aspnetcore
 
 ------------------------------------------------------------------------
-Package:        Serilog.Extensions.Hosting 9.0.0
+Package:        Serilog.Extensions.Hosting 10.0.0
 Authors:        Microsoft,Serilog Contributors
 License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://github.com/serilog/serilog-extensions-hosting
 
 ------------------------------------------------------------------------
-Package:        Serilog.Extensions.Logging 9.0.0
+Package:        Serilog.Extensions.Logging 10.0.0
 Authors:        Microsoft,Serilog Contributors
 License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
@@ -652,14 +653,14 @@ License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://github.com/serilog/serilog-formatting-compact
 
 ------------------------------------------------------------------------
-Package:        Serilog.Settings.Configuration 9.0.0
+Package:        Serilog.Settings.Configuration 10.0.0
 Authors:        Serilog Contributors
 License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
 Project:        https://github.com/serilog/serilog-settings-configuration
 
 ------------------------------------------------------------------------
-Package:        Serilog.Sinks.Console 6.0.0
+Package:        Serilog.Sinks.Console 6.1.1
 Authors:        Serilog Contributors
 License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
@@ -696,7 +697,7 @@ License source: https://github.com/ssg/SimpleBase (README: Apache-2.0)
 Project:        https://github.com/ssg/SimpleBase
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp 3.116.1
+Package:        SkiaSharp 4.150.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -704,7 +705,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Linux 3.116.1
+Package:        SkiaSharp.NativeAssets.Linux 4.150.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -712,7 +713,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.macOS 3.116.1
+Package:        SkiaSharp.NativeAssets.macOS 4.150.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -720,7 +721,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://go.microsoft.com/fwlink/?linkid=868515
 
 ------------------------------------------------------------------------
-Package:        SkiaSharp.NativeAssets.Win32 3.116.1
+Package:        SkiaSharp.NativeAssets.Win32 4.150.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -742,11 +743,12 @@ License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
 
 ------------------------------------------------------------------------
-Package:        SQLitePCLRaw.lib.e_sqlite3 3.50.3
+Package:        SQLitePCLRaw.lib.e_sqlite3 3.53.3
 Authors:        Eric Sink
-Copyright:      Copyright 2014-2025 SourceGear, LLC
+Copyright:      Copyright 2014-2026 SourceGear, LLC
 License:        Apache-2.0
 License source: https://github.com/ericsink/SQLitePCL.raw (SQLitePCLRaw is Apache-2.0; the bundled SQLite engine is public domain). This version is pinned over the bundle's transitive pick for CVE-2025-6965 — see design/PORT_TODO.md.
+Project:        https://sqlite.org/
 
 ------------------------------------------------------------------------
 Package:        SQLitePCLRaw.provider.e_sqlite3 2.1.11
@@ -756,7 +758,7 @@ License:        Apache-2.0
 License source: https://licenses.nuget.org/Apache-2.0
 
 ------------------------------------------------------------------------
-Package:        System.ComponentModel.Composition 10.0.0
+Package:        System.ComponentModel.Composition 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -764,7 +766,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        System.Configuration.ConfigurationManager 10.0.0
+Package:        System.Configuration.ConfigurationManager 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -772,7 +774,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        System.Data.SqlClient 4.9.0
+Package:        System.Data.SqlClient 4.9.1
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -780,7 +782,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/dotnet/maintenance-packages
 
 ------------------------------------------------------------------------
-Package:        System.Drawing.Common 8.0.7
+Package:        System.Drawing.Common 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -788,7 +790,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/dotnet/winforms
 
 ------------------------------------------------------------------------
-Package:        System.IO.Ports 10.0.0
+Package:        System.IO.Ports 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -804,7 +806,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/dotnet/reactive
 
 ------------------------------------------------------------------------
-Package:        System.Runtime.Caching 10.0.0
+Package:        System.Runtime.Caching 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -812,7 +814,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        System.Security.Cryptography.ProtectedData 10.0.0
+Package:        System.Security.Cryptography.ProtectedData 10.0.10
 Authors:        Microsoft
 Copyright:      © Microsoft Corporation. All rights reserved.
 License:        MIT
@@ -827,9 +829,9 @@ License:        MIT
 License source: https://licenses.nuget.org/MIT
 
 ------------------------------------------------------------------------
-Package:        Zeroconf 3.6.11
+Package:        Zeroconf 3.7.16
 Authors:        Claire Novotny
-Copyright:      © Claire Novotny 2016-2022
+Copyright:      © Claire Novotny 2016-2024
 License:        MIT
 License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/novotnyllc/Zeroconf

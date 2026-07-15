@@ -128,7 +128,7 @@ namespace OpenAstroAra.Test {
 
             // A second install that fails (tar-slip) must not damage the install already on disk.
             using var poisoned = MakeTarGz(("../escaped.txt", Bytes("pwned")));
-            Assert.That(
+            await Assert.ThatAsync(
                 async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, maxBytes: null, remoteLastModified: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>());
 
@@ -257,7 +257,7 @@ namespace OpenAstroAra.Test {
             }
 
             using var tooBig = new MemoryStream(new byte[8 * 1024]);
-            Assert.That(
+            await Assert.ThatAsync(
                 async () => await SkyDataInstaller.InstallFromFileAsync(tooBig, target, "catalog.csv", gunzip: false,
                     maxBytes: 6 * 1024, remoteLastModified: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "a file past the byte cap is rejected");
@@ -328,7 +328,7 @@ namespace OpenAstroAra.Test {
             }
 
             using var tampered = new MemoryStream(Bytes("tampered"));
-            Assert.That(
+            await Assert.ThatAsync(
                 async () => await SkyDataInstaller.InstallFromFileAsync(tampered, target, "catalog.csv", gunzip: false,
                     maxBytes: null, remoteLastModified: null, CancellationToken.None,
                     expectedSha256: new string('0', 64)),
