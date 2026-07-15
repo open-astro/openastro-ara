@@ -1592,3 +1592,26 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   Gulf-of-Guinea ranking. Follow-ups: bundle an OpenNGC subset (with sizes/surface
   brightness, enabling real framing/SB terms offline), cache the custom-horizon points,
   and port filter advice/optimal-sub for offline parity.
+
+## Client-side planning migration (PORT_DECISIONS 2026-07-15) — status
+
+- ✅ **PR A — planning math ported to Dart** (optimal-sub window incl. Tier-0 merge
+  semantics, filter advice, HYG star-count + detectability models; Optimal Sub advisor
+  computes client-side with live Settings recompute; offline Tonight's Sky carries the
+  full advisory stack). Parity tests pin the C# constants.
+- ✅ **PR B — OpenNGC catalog client-side**: daemon hosts `GET /data-manager/dso-catalog`
+  (full DsoEntryDto, mag ≤ 12); client mirrors to app-support and the local ranker scores
+  real framing + surface brightness from it.
+- **PR C — remove server planning compute (NEXT)**: flip the connected Tonight's Sky path
+  to the local ranker, then delete TonightSkyService/Overrides, OptimalSubCalculator/
+  Overrides, FilterAdvice, StarCountModel/StarDetectability(+Floor), the two /planning/*
+  endpoints and their tests; update API_CONTRACT.md + TONIGHT_SKY.md. SensorQeLibrary
+  STAYS (camera-connect Tier-1 QE fill is an equipment event on the daemon). Custom-
+  horizon points still need an offline cache before full parity.
+
+## Flaky server test (2026-07-15)
+
+- `HttpStatus_returns_the_raw_status_code` failed once on CI (ubuntu, Analyzer gate) with
+  `HttpListener`: "Please call the Start() method before calling this method" — a listener
+  start race on the runner, unrelated to the PR under test (#846, no C# touched). Passed
+  on rerun. If it recurs, serialize the listener startup or retry-bind in the test.
