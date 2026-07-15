@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
@@ -34,16 +36,24 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
     if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
       return const <TonightSkyObject>[];
     }
-    return computeTonightSkyLocal(
-      site: site,
-      optics: ref.watch(opticsSettingsProvider),
-      filterSet: ref.watch(filterSetProvider),
-      electronics: ref.watch(cameraElectronicsProvider),
-      // The mirrored openngc-dso catalog when this machine has one; the
-      // ranker falls back to the 20-object starter list otherwise.
-      catalog: await ref.watch(dsoCatalogProvider.future),
-      atUtc: DateTime.now().toUtc(),
-    );
+    final optics = ref.watch(opticsSettingsProvider);
+    final filterSet = ref.watch(filterSetProvider);
+    final electronics = ref.watch(cameraElectronicsProvider);
+    // The mirrored openngc-dso catalog when this machine has one; the
+    // ranker falls back to the 20-object starter list otherwise.
+    final catalog = await ref.watch(dsoCatalogProvider.future);
+    final at = DateTime.now().toUtc();
+    // Rank OFF the UI isolate (review #847): the mirrored catalog is
+    // thousands of rows × a 289-sample window scan each — synchronous on the
+    // UI thread that's visible jank every panel open / settings change.
+    return Isolate.run(() => computeTonightSkyLocal(
+          site: site,
+          optics: optics,
+          filterSet: filterSet,
+          electronics: electronics,
+          catalog: catalog,
+          atUtc: at,
+        ));
   }
   final api = TonightSkyApi(server);
   // Force-close on dispose so navigating away from the panel cancels an in-flight

@@ -133,8 +133,11 @@ class DsoCatalogService {
           jsonEncode([for (final d in list) d.toJson()]),
           flush: true);
       return list;
-    } on DioException {
-      return null; // 404 (not installed) or unreachable — mirror unchanged
+    } catch (_) {
+      // DioException (404 / unreachable) AND local-IO failures (support dir,
+      // disk full): this class is best-effort by contract — the caller fires
+      // it unawaited, so nothing may escape (review #847). Mirror unchanged.
+      return null;
     } finally {
       if (dio == null) client.close();
     }
