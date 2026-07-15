@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
@@ -88,5 +89,44 @@ void main() {
       expect(o.integrationHours, greaterThan(0));
       expect(o.integrationHours, lessThanOrEqualTo(24));
     }
+  });
+
+  test('mosaic tiles enlarge the framing FOV: overflow becomes good', () {
+    // NGC 7000 (~120' major axis) on a 1000 mm train with a small sensor:
+    // single-frame min dimension ≈ 4176·(206.265·3.76/1000)/60 ≈ 54' →
+    // ratio ≈ 2.2 → overflows. A 3×3 mosaic triples it → ratio ≈ 0.74 → good.
+    const longFl = OpticsSettings(
+      focalLengthMm: 1000,
+      reducerFactor: 1.0,
+      sensorWidthPx: 6248,
+      sensorHeightPx: 4176,
+      pixelSizeUm: 3.76,
+      apertureMm: 100,
+    );
+    final ngc7000 = PlanningDso(
+        id: 'NGC7000',
+        name: 'North America Nebula',
+        type: 'HII',
+        magnitude: 4.0,
+        raDeg: 314.75,
+        decDeg: 44.33,
+        sizeMajArcmin: 120,
+        sizeMinArcmin: 100);
+    final autumnNight = DateTime.utc(2026, 10, 15, 3);
+
+    final single = computeTonightSkyLocal(
+        site: site, optics: longFl, atUtc: autumnNight, catalog: [ngc7000]);
+    expect(single.single.framing, TonightFraming.tooBig);
+
+    final mosaic = computeTonightSkyLocal(
+        site: site,
+        optics: longFl,
+        atUtc: autumnNight,
+        catalog: [ngc7000],
+        mosaicTilesX: 3,
+        mosaicTilesY: 3);
+    expect(mosaic.single.framing, TonightFraming.good);
+    // Framing is the dominant score term — the mosaic plan must outrank.
+    expect(mosaic.single.score!, greaterThan(single.single.score!));
   });
 }
