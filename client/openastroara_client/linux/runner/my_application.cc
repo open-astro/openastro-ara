@@ -20,6 +20,29 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// openastroara/window — launchpad (compact, centered) vs workstation
+// (maximized with a layout floor). Mirrors the macOS MainFlutterWindow
+// channel; the Dart router drives it as the §30 launch flow hands off to the
+// §25 shell and back.
+static void window_mode_method_cb(FlMethodChannel* channel,
+                                  FlMethodCall* method_call,
+                                  gpointer user_data) {
+  GtkWindow* window = GTK_WINDOW(user_data);
+  const gchar* method = fl_method_call_get_name(method_call);
+  if (g_strcmp0(method, "workstation") == 0) {
+    gtk_widget_set_size_request(GTK_WIDGET(window), 1100, 700);
+    gtk_window_maximize(window);
+    fl_method_call_respond_success(method_call, nullptr, nullptr);
+  } else if (g_strcmp0(method, "launchpad") == 0) {
+    gtk_window_unmaximize(window);
+    gtk_widget_set_size_request(GTK_WIDGET(window), 760, 560);
+    gtk_window_resize(window, 960, 680);
+    fl_method_call_respond_success(method_call, nullptr, nullptr);
+  } else {
+    fl_method_call_respond_not_implemented(method_call, nullptr);
+  }
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -53,12 +76,11 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "openastroara");
   }
 
-  // WILMA is a desktop workstation UI (playbook §25): a small window
-  // overflows the shell's layout, so open maximized and keep resizes above
-  // what the shell can lay out.
-  gtk_window_set_default_size(window, 1280, 720);
-  gtk_widget_set_size_request(GTK_WIDGET(window), 1100, 700);
-  gtk_window_maximize(window);
+  // Launchpad-first sizing: open compact (server connect + profile box); the
+  // Dart router flips to the maximized "workstation" mode when the §25 shell
+  // mounts, via the openastroara/window channel registered below.
+  gtk_window_set_default_size(window, 960, 680);
+  gtk_widget_set_size_request(GTK_WIDGET(window), 760, 560);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -95,6 +117,15 @@ static void my_application_activate(GApplication* application) {
   planetarium_overlay_register(
       overlay, view,
       fl_engine_get_binary_messenger(fl_view_get_engine(view)));
+
+  // Wire the launchpad/workstation window-mode channel. The channel ref is
+  // deliberately leaked for the window's lifetime (same as the app runs).
+  FlMethodChannel* window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "openastroara/window", FL_METHOD_CODEC(fl_standard_method_codec_new()));
+  fl_method_channel_set_method_call_handler(
+      window_channel, window_mode_method_cb, g_object_ref(window),
+      g_object_unref);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

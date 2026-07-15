@@ -27,6 +27,30 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // openastroara/window — the Dart router flips between the compact launchpad
+  // and the maximized §25 workstation shell. Mirrors macOS/Linux runners.
+  window_mode_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "openastroara/window",
+          &flutter::StandardMethodCodec::GetInstance());
+  window_mode_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        HWND hwnd = GetHandle();
+        if (call.method_name() == "workstation") {
+          ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+          result->Success();
+        } else if (call.method_name() == "launchpad") {
+          ShowWindow(hwnd, SW_RESTORE);
+          SetWindowPos(hwnd, nullptr, 0, 0, 960, 680,
+                       SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+          result->Success();
+        } else {
+          result->NotImplemented();
+        }
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });

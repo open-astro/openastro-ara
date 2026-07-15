@@ -7,6 +7,7 @@ import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
+import 'services/window_mode.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/saved_server_state.dart';
@@ -57,6 +58,14 @@ class _RootRouter extends ConsumerWidget {
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);
+    // The launchpad (server connect + profile box) runs in a compact window;
+    // entering the shell maximizes it. Post-frame + idempotent, so this is a
+    // no-op until the routed-to surface actually changes.
+    final inShell = gatePassed &&
+        (offline || (saved.asData?.value.isNotEmpty ?? false));
+    final windowMode = ref.read(windowModeProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) => windowMode
+        .set(inShell ? WindowMode.workstation : WindowMode.launchpad));
     return saved.when(
       data: (servers) => offline
           // Offline still gets a profile step: pick which CACHED profile to
