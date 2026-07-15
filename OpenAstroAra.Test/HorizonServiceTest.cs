@@ -46,7 +46,7 @@ namespace OpenAstroAra.Test {
             var dto = HorizonService.Compute(Site(lat, lon, horizon), At);
 
             foreach (var p in dto.Points) {
-                var altBack = TonightSkyService.AltitudeFromHourAngleDeg(
+                var altBack = SiteAstrometry.AltitudeFromHourAngleDeg(
                     p.DecDeg, lat, dto.LocalSiderealTimeDeg - p.RaDeg);
                 Assert.That(altBack, Is.EqualTo(horizon).Within(1e-6),
                     $"az {p.AzimuthDeg}° projected off the horizon");
@@ -87,7 +87,7 @@ namespace OpenAstroAra.Test {
             var dto = HorizonService.Compute(Site(lat, lon, horizon), At);
             Assert.That(dto.Cardinals.Select(c => c.Label), Is.EquivalentTo(CardinalLabels));
             foreach (var c in dto.Cardinals) {
-                var altBack = TonightSkyService.AltitudeFromHourAngleDeg(
+                var altBack = SiteAstrometry.AltitudeFromHourAngleDeg(
                     c.DecDeg, lat, dto.LocalSiderealTimeDeg - c.RaDeg);
                 Assert.That(altBack, Is.EqualTo(horizon).Within(1e-6), $"cardinal {c.Label} off the horizon");
             }

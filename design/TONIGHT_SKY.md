@@ -1,8 +1,15 @@
 # Tonight's Sky — equipment-aware target planner (§36.8)
 
-Status: design locked (2026-06-29). Supersedes the placeholder `TonightSkyService`
-(20 hardcoded objects ranked by current altitude). Points/gamification are
-**explicitly out of scope** (back-burnered by the user).
+Status: design locked (2026-06-29); **implementation moved to the CLIENT
+(2026-07-15, PORT_DECISIONS "planning compute belongs in the client")** — the
+ranking below now lives in `client/.../lib/util/tonight_sky_local.dart` (with
+`optimal_sub.dart` / `filter_advice.dart` / `star_model.dart`), fed by the
+daemon's `/data-manager/dso-catalog` DATA endpoint and the offline profile
+cache. `TonightSkyService` and the `/planning/tonight` + `/planning/optimal-sub`
+endpoints were removed from the daemon; its execution-shared astronomy statics
+live on as `SiteAstrometry`. This document remains the algorithm's design
+reference — section references to C# types describe the Dart port's provenance.
+Points/gamification are **explicitly out of scope** (back-burnered by the user).
 
 ## Intent
 

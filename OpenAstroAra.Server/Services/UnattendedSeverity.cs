@@ -54,9 +54,9 @@ public static class UnattendedSeverity {
     /// the sun below −18° altitude (astronomical darkness). Pure — the same sun/LST/altitude
     /// math the Tonight's Sky window scan uses.</summary>
     internal static bool IsUnattended(SiteSettingsDto site, DateTimeOffset atUtc) {
-        var (sunRa, sunDec) = TonightSkyService.SunEquatorialDeg(atUtc);
-        var lst = TonightSkyService.LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
-        var sunAlt = TonightSkyService.AltitudeFromHourAngleDeg(sunDec, site.LatitudeDeg, lst - sunRa);
+        var (sunRa, sunDec) = SiteAstrometry.SunEquatorialDeg(atUtc);
+        var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
+        var sunAlt = SiteAstrometry.AltitudeFromHourAngleDeg(sunDec, site.LatitudeDeg, lst - sunRa);
         return sunAlt < AstronomicalTwilightAltDeg;
     }
 }
