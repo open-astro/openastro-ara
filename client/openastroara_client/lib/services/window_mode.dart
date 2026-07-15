@@ -26,10 +26,12 @@ class WindowModeService {
       // No native handler at all (headless test, a future mobile target) —
       // permanent for the process; stop calling rather than retry-spamming.
       _unsupported = true;
-    } catch (_) {
+    } on PlatformException {
       // A TRANSIENT native failure: roll the tracked mode back so the next
       // request for this mode re-applies instead of silently no-oping against
-      // a window that never actually changed (review #846).
+      // a window that never actually changed. Deliberately narrow — a Dart
+      // programming error must surface, not masquerade as "transient"
+      // (review #846 r2).
       _current = previous;
     }
   }

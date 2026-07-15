@@ -35,6 +35,12 @@ class FlutterWindow : public Win32Window {
   // sizing, driven by the Dart router. Mirrors the macOS/Linux runners.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       window_mode_channel_;
+
+  // Per-mode minimum window size (logical px), enforced via WM_GETMINMAXINFO
+  // so a manual un-maximize + drag can't shrink the shell below its layout
+  // floor — the parity gap with macOS minSize / Linux size_request that the
+  // #846 review flagged. Starts at the launchpad floor.
+  POINT min_size_ = {760, 560};
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

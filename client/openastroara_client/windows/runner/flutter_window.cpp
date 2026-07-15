@@ -1,5 +1,7 @@
 #include "flutter_window.h"
 
+#include <flutter_windows.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -39,9 +41,11 @@ bool FlutterWindow::OnCreate() {
                  result) {
         HWND hwnd = GetHandle();
         if (call.method_name() == "workstation") {
+          min_size_ = {1100, 700};
           ShowWindow(hwnd, SW_SHOWMAXIMIZED);
           result->Success();
         } else if (call.method_name() == "launchpad") {
+          min_size_ = {760, 560};
           ShowWindow(hwnd, SW_RESTORE);
           SetWindowPos(hwnd, nullptr, 0, 0, 960, 680,
                        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -89,6 +93,16 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+    case WM_GETMINMAXINFO: {
+      // Enforce the current mode's layout floor (DPI-scaled) so a manual
+      // un-maximize + drag can't shrink the shell into overflow.
+      MINMAXINFO* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      UINT dpi = FlutterDesktopGetDpiForHWND(hwnd);
+      double scale = dpi / 96.0;
+      info->ptMinTrackSize.x = static_cast<LONG>(min_size_.x * scale);
+      info->ptMinTrackSize.y = static_cast<LONG>(min_size_.y * scale);
+      return 0;
+    }
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
