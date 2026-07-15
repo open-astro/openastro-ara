@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
+import 'screens/launch_profile_screen.dart';
 import 'state/backup/backup_stream_state.dart';
+import 'state/launch_gate_state.dart';
 import 'state/saved_server_state.dart';
 import 'theme/ara_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
@@ -36,8 +38,9 @@ class OpenAstroAraApp extends StatelessWidget {
   }
 }
 
-/// Decides between FirstRunScreen (no saved servers yet) and AppShell
-/// (at least one server saved). Per playbook §30.
+/// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
+/// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
+/// once the user clicks [Image] and the launch gate passes.
 class _RootRouter extends ConsumerWidget {
   const _RootRouter();
 
@@ -49,9 +52,13 @@ class _RootRouter extends ConsumerWidget {
     // counters must not rebuild the whole app).
     ref.listen(backupStreamProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
+    final gatePassed = ref.watch(profileGatePassedProvider);
     return saved.when(
-      data: (servers) =>
-          servers.isEmpty ? const FirstRunScreen() : const AppShell(),
+      data: (servers) => servers.isEmpty
+          ? const FirstRunScreen()
+          : gatePassed
+              ? const AppShell()
+              : const LaunchProfileScreen(),
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
