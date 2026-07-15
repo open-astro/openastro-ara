@@ -348,4 +348,3 @@ class _BottomStatusBar extends StatelessWidget {
     );
   }
 }
-

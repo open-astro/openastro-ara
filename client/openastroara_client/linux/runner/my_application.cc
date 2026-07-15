@@ -37,6 +37,21 @@ static void window_mode_method_cb(FlMethodChannel* channel,
     gtk_window_unmaximize(window);
     gtk_widget_set_size_request(GTK_WIDGET(window), 760, 560);
     gtk_window_resize(window, 960, 680);
+    // Re-center on the current monitor's workarea — set_position(CENTER) only
+    // affects the initial mapping, and unmaximize restores the pre-maximize
+    // spot (review #846 r3; matches macOS center()).
+    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
+    if (gdk_window != nullptr) {
+      GdkDisplay* display = gdk_window_get_display(gdk_window);
+      GdkMonitor* monitor =
+          gdk_display_get_monitor_at_window(display, gdk_window);
+      if (monitor != nullptr) {
+        GdkRectangle wa;
+        gdk_monitor_get_workarea(monitor, &wa);
+        gtk_window_move(window, wa.x + (wa.width - 960) / 2,
+                        wa.y + (wa.height - 680) / 2);
+      }
+    }
     fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else {
     fl_method_call_respond_not_implemented(method_call, nullptr);

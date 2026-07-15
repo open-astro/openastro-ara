@@ -47,8 +47,19 @@ bool FlutterWindow::OnCreate() {
         } else if (call.method_name() == "launchpad") {
           min_size_ = {760, 560};
           ShowWindow(hwnd, SW_RESTORE);
-          SetWindowPos(hwnd, nullptr, 0, 0, 960, 680,
-                       SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+          // DPI-scaled size, re-CENTERED on the work area — SW_RESTORE lands
+          // wherever the window last was, which after a maximized session is
+          // not necessarily centered (review #846 r3; matches macOS center()).
+          UINT dpi = FlutterDesktopGetDpiForHWND(hwnd);
+          double scale = dpi / 96.0;
+          int w = static_cast<int>(960 * scale);
+          int h = static_cast<int>(680 * scale);
+          RECT wa;
+          SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+          int x = wa.left + ((wa.right - wa.left) - w) / 2;
+          int y = wa.top + ((wa.bottom - wa.top) - h) / 2;
+          SetWindowPos(hwnd, nullptr, x, y, w, h,
+                       SWP_NOZORDER | SWP_NOACTIVATE);
           result->Success();
         } else {
           result->NotImplemented();
