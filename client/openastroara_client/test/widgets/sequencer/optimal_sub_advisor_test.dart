@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,8 +5,12 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart'
     show takeExposureType;
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
-import 'package:openastroara/services/optimal_sub_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/util/optimal_sub_local.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/widgets/sequencer/optimal_sub_advisor.dart';
 
@@ -36,40 +38,6 @@ SequenceDetail smartExposureDetail() => SequenceDetail(
         },
       },
     );
-
-/// Canned-response fake; records the filter and target it was asked about.
-class _FakeApi implements OptimalSubApi {
-  _FakeApi(this.result, {this.unavailable, this.notFound = false});
-  final OptimalSubResult? result;
-  final String? unavailable;
-  final bool notFound;
-  String? askedFilter;
-  double? askedRaDeg;
-  double? askedDecDeg;
-
-  @override
-  Future<OptimalSubResult?> get(
-      {String? filter, double? bandwidthNm, double? raDeg, double? decDeg}) async {
-    askedFilter = filter;
-    askedRaDeg = raDeg;
-    askedDecDeg = decDeg;
-    if (unavailable != null) throw OptimalSubUnavailable(unavailable!);
-    if (notFound) return null;
-    return result;
-  }
-
-  @override
-  void close() {}
-}
-
-const _viable = OptimalSubResult(
-  skyFluxEPerSecPerPx: 0.07,
-  floorSec: 300,
-  ceilingSec: 24000,
-  viable: true,
-  limitingBound: 'readnoisefloor',
-  recommendedSec: 300,
-);
 
 void main() {
   group('filterNameForExposure', () {
@@ -231,13 +199,25 @@ void main() {
     });
   });
 
-  group('OptimalSubAdvisor', () {
+
+  group('OptimalSubAdvisor (local compute)', () {
     late ProviderContainer container;
 
-    Future<void> pumpAdvisor(WidgetTester tester, _FakeApi api,
-        {String? filterName, ({double raDeg, double decDeg})? targetPosition}) async {
+    Future<void> pumpAdvisor(
+      WidgetTester tester, {
+      String? filterName,
+      ({double raDeg, double decDeg})? targetPosition,
+      OpticsSettings optics = _rigOptics,
+      CameraElectronics electronics = _rigElectronics,
+      FilterSetSettings filterSet = _rigFilters,
+      SiteSettings site = _rigSite,
+    }) async {
       container = ProviderContainer(overrides: [
-        optimalSubApiProvider.overrideWith((ref) => api),
+        opticsSettingsProvider.overrideWith(() => _SeededOptics(optics)),
+        cameraElectronicsProvider
+            .overrideWith(() => _SeededElectronics(electronics)),
+        filterSetProvider.overrideWith(() => _SeededFilters(filterSet)),
+        siteSettingsProvider.overrideWith(() => _SeededSite(site)),
       ]);
       addTearDown(container.dispose);
       container.read(sequenceEditorProvider.notifier).load(smartExposureDetail());
@@ -246,199 +226,158 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: OptimalSubAdvisor(
-                path: const [1], filterName: filterName, targetPosition: targetPosition),
+                path: const [1],
+                filterName: filterName,
+                targetPosition: targetPosition),
           ),
         ),
       ));
-      await tester.pump(); // resolve the fetch future
+      await tester.pump(); // settle the compute future
     }
 
-    testWidgets('renders the figure, window, filter and attribution',
+    testWidgets('renders the figure, filter and attribution from local math',
         (tester) async {
-      final api = _FakeApi(_viable);
-      await pumpAdvisor(tester, api, filterName: 'Ha 7nm');
-
-      expect(api.askedFilter, 'Ha 7nm');
-      expect(find.textContaining('Optimal Sub: 5.0 min'), findsOneWidget);
+      await pumpAdvisor(tester, filterName: 'Ha 7nm');
+      expect(find.textContaining('Optimal Sub:'), findsOneWidget);
       expect(find.textContaining('usable window'), findsOneWidget);
       expect(find.textContaining('For filter "Ha 7nm"'), findsOneWidget);
       expect(find.textContaining('Dr. Robin Glover'), findsOneWidget,
           reason: 'the attribution is a condition of the permission');
     });
 
-    testWidgets('Apply writes ONLY ExposureTime into the raw body',
+    testWidgets('Apply writes ONLY ExposureTime, matching the local resolver',
         (tester) async {
-      await pumpAdvisor(tester, _FakeApi(_viable), filterName: 'Ha 7nm');
+      await pumpAdvisor(tester, filterName: 'Ha 7nm');
       final before = container.read(sequenceEditorProvider)!.body;
 
       await tester.tap(find.text('Apply'));
       await tester.pump();
 
+      // The expected figure comes from the SAME resolver the advisor uses.
+      final expected = (resolveOptimalSubLocal(
+        optics: _rigOptics,
+        electronics: _rigElectronics,
+        site: _rigSite,
+        filterSet: _rigFilters,
+        filterName: 'Ha 7nm',
+      ) as LocalOptimalSubSuccess)
+          .result
+          .recommendedSec
+          .roundToDouble();
+
       final after = container.read(sequenceEditorProvider)!.body;
       final exposure = nodeAt(after, [1])!;
-      expect(exposure['ExposureTime'], 300.0, reason: 'a plain double — NINA-valid');
+      expect(exposure['ExposureTime'], expected,
+          reason: 'a plain double — NINA-valid');
       expect(exposure['Gain'], 100, reason: 'sibling fields untouched');
       expect(exposure[r'$type'], takeExposureType, reason: 'no \$type churn');
-      final beforeSwitch = nodeAt(before, [0]);
-      final afterSwitch = nodeAt(after, [0]);
-      expect(afterSwitch, beforeSwitch, reason: 'other nodes untouched');
+      expect(nodeAt(after, [0]), nodeAt(before, [0]),
+          reason: 'other nodes untouched');
     });
 
     testWidgets('a collapsed window renders the saturation-limited warning',
         (tester) async {
-      const collapsed = OptimalSubResult(
-        skyFluxEPerSecPerPx: 50,
-        floorSec: 100,
-        ceilingSec: 40,
-        viable: false,
-        limitingBound: 'saturationceiling',
-        recommendedSec: 40,
-      );
-      await pumpAdvisor(tester, _FakeApi(collapsed));
-      expect(find.textContaining('Saturation-limited: 40 s max'), findsOneWidget);
+      // Huge read noise over a tiny well: floor >> ceiling.
+      await pumpAdvisor(tester,
+          electronics: const CameraElectronics(
+              readNoiseE: 100, fullWellE: 500, quantumEfficiencyPeak: 0.8));
+      expect(find.textContaining('Saturation-limited'), findsOneWidget);
+      expect(find.text('Apply'), findsOneWidget); // still applicable
     });
 
-    testWidgets('assumed defaults render the set-them-up hint', (tester) async {
-      const assumed = OptimalSubResult(
-        skyFluxEPerSecPerPx: 1.5,
-        floorSec: 70,
-        ceilingSec: 26000,
-        viable: true,
-        limitingBound: 'readnoisefloor',
-        recommendedSec: 70,
-        assumedDefaults: ['read_noise_e', 'filter_bandwidth_nm'],
-      );
-      await pumpAdvisor(tester, _FakeApi(assumed));
-      expect(find.textContaining('generic defaults for read noise, filter bandwidth'),
-          findsOneWidget);
-    });
-
-    testWidgets('a target position flows to the API and the star line renders',
+    testWidgets('unset electronics render the generic-defaults hint',
         (tester) async {
-      const withStars = OptimalSubResult(
-        skyFluxEPerSecPerPx: 0.07,
-        floorSec: 300,
-        ceilingSec: 24000,
-        viable: true,
-        limitingBound: 'readnoisefloor',
-        recommendedSec: 300,
-        starFloorSec: 12,
-        starsDetectedPerSub: 210,
-        starsRegistrationPerSub: 85,
-        starReason:
-            '~85 registration-quality stars/sub at 300 s — read noise remains the binding floor',
-      );
-      final api = _FakeApi(withStars);
-      await pumpAdvisor(tester, api,
-          filterName: 'Ha 7nm', targetPosition: (raDeg: 83.822, decDeg: -5.391));
-
-      expect(api.askedRaDeg, closeTo(83.822, 1e-9), reason: 'degrees, straight through');
-      expect(api.askedDecDeg, closeTo(-5.391, 1e-9));
-      expect(find.textContaining('~85 registration-quality stars/sub'), findsOneWidget,
-          reason: "the daemon's ready-made star line renders verbatim");
+      await pumpAdvisor(tester, electronics: const CameraElectronics());
+      expect(find.textContaining('generic defaults for'), findsOneWidget);
+      expect(find.textContaining('read noise'), findsOneWidget);
     });
 
-    testWidgets('a star-limited window says so in the headline', (tester) async {
-      const starLimited = OptimalSubResult(
-        skyFluxEPerSecPerPx: 9.5,
-        floorSec: 11,
-        ceilingSec: 4000,
-        viable: true,
-        limitingBound: 'starfloor',
-        recommendedSec: 53,
-        starFloorSec: 53,
-        starsRegistrationPerSub: 20,
-        starReason: 'star floor 53 s: the 11 s read-noise floor is star-starved — '
-            'stars, not read noise, set the floor',
-      );
-      await pumpAdvisor(tester, _FakeApi(starLimited),
-          targetPosition: (raDeg: 192.9, decDeg: 27.1));
-      expect(find.textContaining('star-limited'), findsOneWidget);
-      expect(find.textContaining('stars, not read noise'), findsOneWidget);
+    testWidgets('a target position renders the local star line',
+        (tester) async {
+      await pumpAdvisor(tester,
+          filterName: 'Ha 7nm',
+          targetPosition: (raDeg: 83.822, decDeg: -5.391));
+      expect(find.textContaining('stars/sub'), findsOneWidget);
     });
 
-    testWidgets('no target → no star parameters sent, no star line', (tester) async {
-      final api = _FakeApi(_viable);
-      await pumpAdvisor(tester, api, filterName: 'Ha 7nm');
-      expect(api.askedRaDeg, isNull);
-      expect(api.askedDecDeg, isNull);
+    testWidgets('no target → no star line', (tester) async {
+      await pumpAdvisor(tester, filterName: 'Ha 7nm');
       expect(find.textContaining('stars/sub'), findsNothing);
     });
 
-    testWidgets('a 400 from the daemon shows its detail quietly', (tester) async {
-      await pumpAdvisor(
-          tester, _FakeApi(null, unavailable: 'Set up your optics first.'));
-      expect(find.text('Set up your optics first.'), findsOneWidget);
-      expect(find.text('Apply'), findsNothing);
-    });
-
-    testWidgets('a 404 (older daemon) renders nothing at all', (tester) async {
-      await pumpAdvisor(tester, _FakeApi(null, notFound: true));
-      expect(find.textContaining('Optimal Sub'), findsNothing);
-      expect(find.textContaining('Glover'), findsNothing);
-      expect(find.text('Apply'), findsNothing);
-    });
-
-    testWidgets('a stale slow response cannot overwrite a newer one',
+    testWidgets('an unknown filter shows the actionable detail quietly',
         (tester) async {
-      // First request (filter A) resolves SLOWLY; the filter then changes and
-      // the second request (filter B) resolves fast. When A's response finally
-      // lands it must be dropped — the advisor keeps B's figure.
-      final slowA = Completer<OptimalSubResult?>();
-      final api = _CompleterFakeApi({
-        'A': slowA.future,
-        'B': Future.value(_viable), // 300 s → "5.0 min"
-      });
-      container = ProviderContainer(overrides: [
-        optimalSubApiProvider.overrideWith((ref) => api),
-      ]);
-      addTearDown(container.dispose);
-      container.read(sequenceEditorProvider.notifier).load(smartExposureDetail());
+      await pumpAdvisor(tester, filterName: 'H-alpha');
+      expect(find.textContaining("Unknown filter 'H-alpha'"), findsOneWidget);
+      expect(find.text('Open filter set'), findsOneWidget);
+      expect(find.text('Apply'), findsNothing);
+    });
 
-      Widget host(String filter) => UncontrolledProviderScope(
-            container: container,
-            child: MaterialApp(
-              home: Scaffold(
-                body: OptimalSubAdvisor(path: const [1], filterName: filter),
-              ),
-            ),
-          );
-
-      await tester.pumpWidget(host('A'));
-      await tester.pump();
-      await tester.pumpWidget(host('B')); // filter change → second fetch
-      await tester.pump();
-      expect(find.textContaining('Optimal Sub: 5.0 min'), findsOneWidget,
-          reason: "B's fast response renders");
-
-      // Now the stale A response arrives — with a very different figure.
-      slowA.complete(const OptimalSubResult(
-        skyFluxEPerSecPerPx: 10,
-        floorSec: 2,
-        ceilingSec: 4000,
-        viable: true,
-        limitingBound: 'readnoisefloor',
-        recommendedSec: 2,
-      ));
-      await tester.pump();
-      expect(find.textContaining('Optimal Sub: 5.0 min'), findsOneWidget,
-          reason: "the newer result survives; A's stale 2 s must not overwrite it");
-      expect(find.textContaining('Optimal Sub: 2 s'), findsNothing);
+    testWidgets('an incomplete imaging train points at optics', (tester) async {
+      await pumpAdvisor(tester,
+          optics: const OpticsSettings(
+              focalLengthMm: 0,
+              reducerFactor: 1,
+              sensorWidthPx: 0,
+              sensorHeightPx: 0,
+              pixelSizeUm: 0,
+              apertureMm: 0));
+      expect(find.textContaining('imaging train is incomplete'), findsOneWidget);
+      expect(find.text('Open optics'), findsOneWidget);
+      expect(find.text('Apply'), findsNothing);
     });
   });
 }
 
-/// Per-filter canned futures, so a test can hold one response open (a
-/// [Completer]) while another resolves — the stale-response race harness.
-class _CompleterFakeApi implements OptimalSubApi {
-  _CompleterFakeApi(this.byFilter);
-  final Map<String, Future<OptimalSubResult?>> byFilter;
+// ── Seeded-notifier doubles + the reference rig ──────────────────────────────
 
-  @override
-  Future<OptimalSubResult?> get(
-          {String? filter, double? bandwidthNm, double? raDeg, double? decDeg}) =>
-      byFilter[filter] ?? Future.value(null);
+const _rigOptics = OpticsSettings(
+    focalLengthMm: 250,
+    reducerFactor: 1.0,
+    sensorWidthPx: 6248,
+    sensorHeightPx: 4176,
+    pixelSizeUm: 3.76,
+    apertureMm: 51);
+const _rigElectronics = CameraElectronics(
+    sensorName: 'IMX571',
+    readNoiseE: 1.5,
+    fullWellE: 51000,
+    quantumEfficiencyPeak: 0.8);
+const _rigFilters = FilterSetSettings(filters: [
+  PlanningFilter(name: 'Ha 7nm', kind: FilterKind.ha, bandwidthNm: 7),
+  PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0),
+]);
+const _rigSite = SiteSettings(
+    siteName: 'test',
+    latitudeDeg: 34,
+    longitudeDeg: -84,
+    bortleClass: 6,
+    typicalSeeingArcsec: 2.5);
 
+class _SeededOptics extends OpticsSettingsNotifier {
+  _SeededOptics(this._v);
+  final OpticsSettings _v;
   @override
-  void close() {}
+  OpticsSettings build() => _v;
+}
+
+class _SeededElectronics extends CameraElectronicsNotifier {
+  _SeededElectronics(this._v);
+  final CameraElectronics _v;
+  @override
+  CameraElectronics build() => _v;
+}
+
+class _SeededFilters extends FilterSetNotifier {
+  _SeededFilters(this._v);
+  final FilterSetSettings _v;
+  @override
+  FilterSetSettings build() => _v;
+}
+
+class _SeededSite extends SiteSettingsNotifier {
+  _SeededSite(this._v);
+  final SiteSettings _v;
+  @override
+  SiteSettings build() => _v;
 }
