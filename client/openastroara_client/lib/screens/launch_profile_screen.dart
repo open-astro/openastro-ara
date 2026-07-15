@@ -8,6 +8,7 @@ import '../state/launch_gate_state.dart';
 import '../state/profile_management_state.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/plan_offline_button.dart';
 import '../widgets/profile/profile_import_flow.dart';
 import 'wizard/wizard_shell.dart';
 
@@ -79,12 +80,8 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                       const SizedBox(height: 8),
                       // §2 — the daemon being down must not block planning:
                       // enter the shell offline; drafts push once it's back.
-                      TextButton.icon(
-                        onPressed: () =>
-                            ref.read(offlineModeProvider.notifier).enter(),
-                        icon: const Icon(Icons.cloud_off_outlined, size: 18),
-                        label: const Text('Plan offline'),
-                      ),
+                      // Self-gated on a cached profile existing.
+                      const PlanOfflineButton(),
                     ],
                     data: (list) => _profileControls(list),
                   ),

@@ -7,6 +7,7 @@ import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
+import 'widgets/plan_offline_button.dart';
 import 'services/window_mode.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
@@ -87,12 +88,8 @@ class _RootRouter extends ConsumerWidget {
                 children: [
                   const Text('Failed to load saved servers. Please try again.'),
                   const SizedBox(height: 12),
-                  TextButton.icon(
-                    onPressed: () =>
-                        ref.read(offlineModeProvider.notifier).enter(),
-                    icon: const Icon(Icons.cloud_off_outlined, size: 18),
-                    label: const Text('Plan offline'),
-                  ),
+                  // Self-gated on a cached profile existing.
+                  const PlanOfflineButton(),
                 ],
               ),
             ),
