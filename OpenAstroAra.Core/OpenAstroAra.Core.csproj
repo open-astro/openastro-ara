@@ -51,7 +51,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): Microsoft.Data.Sqlite 10.0.x pulls the
          transitive native lib SQLitePCLRaw.lib.e_sqlite3 2.1.11, which bundles
-         SQLite < 3.50.2. Pin the patched lib (3.50.3 bundles SQLite 3.50.3); the
+         SQLite < 3.50.2. Pin the patched lib (3.53.3 bundles SQLite ≥ 3.50.2 (the CVE floor)); the
          native SQLite C API is backward-compatible with the 2.1.11 managed
          provider, so this swaps in fixed SQLite without changing the managed
          layer. Propagates to transitive consumers via highest-version resolution.

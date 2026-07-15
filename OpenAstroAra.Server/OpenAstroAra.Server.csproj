@@ -71,7 +71,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): pin the patched native SQLite lib
-         (3.50.3 = SQLite ≥ 3.50.2) over the transitive 2.1.11 that
+         (3.53.3 = SQLite ≥ 3.50.2) over the transitive 2.1.11 that
          Microsoft.EntityFrameworkCore.Sqlite / Microsoft.Data.Sqlite 10.0.x pull.
          See OpenAstroAra.Core.csproj for the rationale. Remove when MS ships a
          build on the patched lib. -->
