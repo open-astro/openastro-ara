@@ -1,13 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../util/tonight_sky_local.dart';
 import '../saved_server_state.dart';
+import '../settings/optics_settings_state.dart';
+import '../settings/site_settings_state.dart';
 
-/// §36/§25.5 — the active server's Tonight's Sky ranking (curated objects above
-/// the site horizon now, highest first). Empty when no server is connected.
-/// Auto-disposed so the list refetches (re-ranks for the current time) each time
-/// the Tonight's Sky view is opened; `ref.invalidate(tonightSkyProvider)` forces
-/// a manual refresh.
+/// §36/§25.5 — Tonight's Sky ranking (curated objects above the site horizon
+/// now, highest first). Connected: the daemon's full ranking (OpenNGC catalog,
+/// filter advice, custom horizon). No server (§2 offline planning): a local
+/// ranking over the daemon's starter catalog against the CACHED site + optics
+/// (seeded by the offline launch flow) — planning during the day with the rig
+/// off still shows what's worth shooting tonight. Auto-disposed so the list
+/// re-ranks for the current time each time the view is opened;
+/// `ref.invalidate(tonightSkyProvider)` forces a manual refresh.
 final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   ref,
 ) async {
@@ -17,7 +23,20 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   // who does have one saved. Awaiting keeps Tonight's Sky in `loading` until
   // the list is known.
   final server = await ref.watch(activeServerFutureProvider.future);
-  if (server == null) return const <TonightSkyObject>[];
+  if (server == null) {
+    final site = ref.watch(siteSettingsProvider);
+    // An unset site (the constructor's 0,0) would silently rank for a spot in
+    // the Gulf of Guinea — return empty instead; the panel's empty state
+    // explains how to get a site offline (cached profile / connect once).
+    if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
+      return const <TonightSkyObject>[];
+    }
+    return computeTonightSkyLocal(
+      site: site,
+      optics: ref.watch(opticsSettingsProvider),
+      atUtc: DateTime.now().toUtc(),
+    );
+  }
   final api = TonightSkyApi(server);
   // Force-close on dispose so navigating away from the panel cancels an in-flight
   // fetch instead of leaving the socket open until the receive timeout.

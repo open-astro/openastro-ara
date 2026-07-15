@@ -261,3 +261,22 @@ path — by dependency and theme, not by version bucket.
   user authority + the RPi smoke test).
 - Encoded in: `design/ROADMAP.md`, `design/README.md` ("Where what's left lives" now points at
   ROADMAP), playbook checklist + §55.
+
+## 2026-07-15 — Planning compute belongs in the client; the Pi keeps execution only
+
+Maintainer call (during the offline-planning arc): the daemon runs on an RPi and should be
+the hardware orchestrator — sequence execution, guiding, plate-solve-and-recenter during a
+run, safety, capture/storage: everything needed while the laptop is closed. **Planning
+compute** (target ranking, optimal-sub math, FOV/framing, filter advice) should live in the
+client, which runs on far stronger hardware and per §2 must work with no Pi at all.
+
+Implications:
+- New planning features default to CLIENT-side implementations; a server endpoint for them
+  needs a justification (e.g. it feeds the execution engine directly).
+- Existing server-side planning endpoints (`/planning/tonight`, `/planning/optimal-sub`)
+  stay for compatibility, but the client-side ports (starting with the offline Tonight's Sky
+  ranker, 2026-07-15) are the direction of travel — the client version becomes primary as it
+  reaches parity (bundled OpenNGC subset, filter advice, optimal-sub in Dart), after which
+  the server endpoints are thin conveniences, not the source of the math.
+- This is about architecture/offline-first, not Pi load — the rankings are milliseconds of
+  trig; the Pi's real loads (plate solving, image handling) are execution-time and stay.

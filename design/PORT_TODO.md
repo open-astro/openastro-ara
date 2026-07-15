@@ -1585,3 +1585,10 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   `profileGatePassedProvider` is one-way per session, so an empty→non-empty saved-servers
   transition (or switching daemons in-session) skips the profile box for the new server.
   Low severity; re-arm via a `ref.listen` on that transition if it bites.
+- ✅ **Offline Tonight's Sky — DONE (2026-07-15, maintainer-reported).** With no server,
+  `tonightSkyProvider` now ranks locally: a Dart port of TonightSkyService's Meeus math +
+  0–100 score over the daemon's own 20-object starter catalog, against the offline-cached
+  site + optics. An unset site (0,0) returns empty with guidance rather than a
+  Gulf-of-Guinea ranking. Follow-ups: bundle an OpenNGC subset (with sizes/surface
+  brightness, enabling real framing/SB terms offline), cache the custom-horizon points,
+  and port filter advice/optimal-sub for offline parity.

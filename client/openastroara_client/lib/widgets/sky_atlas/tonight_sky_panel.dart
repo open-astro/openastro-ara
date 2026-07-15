@@ -119,13 +119,19 @@ class TonightSkyPanel extends ConsumerWidget {
                 ),
                 data: (objects) {
                   if (objects.isEmpty) {
-                    // Distinguish "no server" (the provider returns [] immediately) from
-                    // "connected, but nothing's up / no site set" — the advice differs.
+                    // Distinguish "no server" (offline ranking found no usable
+                    // cached site) from "connected, but nothing's up / no site
+                    // set" — the advice differs. Offline WITH a cached site
+                    // still ranks locally, so an empty offline list means the
+                    // site never made it into this device's cache.
                     return _Message(
                       message: hasServer
                           ? 'Nothing well-placed tonight. Set your site location in '
                                 'Settings → Safety → Site, then refresh.'
-                          : 'Connect to a server to see Tonight\'s Sky.',
+                          : 'Tonight\'s Sky needs your site location. Pick a '
+                                'cached profile from the launchpad, or connect '
+                                'to your server once so it can be cached for '
+                                'offline planning.',
                     );
                   }
                   return ListView.separated(
