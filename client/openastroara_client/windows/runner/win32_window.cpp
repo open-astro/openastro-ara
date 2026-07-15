@@ -150,7 +150,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // WILMA is a desktop workstation UI (playbook §25): a small window
+  // overflows the shell's layout, so open maximized.
+  return ShowWindow(window_handle_, SW_SHOWMAXIMIZED);
 }
 
 // static
