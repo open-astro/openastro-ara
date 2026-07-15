@@ -350,9 +350,10 @@ void main() {
     TextButton loadButton(WidgetTester tester) => tester.widget<TextButton>(
         find.ancestor(of: find.text('Load'), matching: find.byType(TextButton)));
 
-    testWidgets('disabled with no server', (tester) async {
+    testWidgets('enabled with no server — offline drafts are still loadable (§2)',
+        (tester) async {
       await pumpToolbar(tester, connected: false);
-      expect(loadButton(tester).onPressed, isNull);
+      expect(loadButton(tester).onPressed, isNotNull);
     });
 
     testWidgets('enabled once connected', (tester) async {

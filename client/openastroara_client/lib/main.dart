@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
+import 'screens/offline_launch_screen.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/saved_server_state.dart';
@@ -40,7 +41,9 @@ class OpenAstroAraApp extends StatelessWidget {
 
 /// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
 /// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
-/// once the user clicks [Image] and the launch gate passes.
+/// once the user clicks [Image] and the launch gate passes. "Plan offline"
+/// (§2 — WILMA is a planning workstation, not a thin client) bypasses both
+/// gates and enters the shell with no server for the session.
 class _RootRouter extends ConsumerWidget {
   const _RootRouter();
 
@@ -53,12 +56,17 @@ class _RootRouter extends ConsumerWidget {
     ref.listen(backupStreamProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
+    final offline = ref.watch(offlineModeProvider);
     return saved.when(
-      data: (servers) => servers.isEmpty
-          ? const FirstRunScreen()
-          : gatePassed
-              ? const AppShell()
-              : const LaunchProfileScreen(),
+      data: (servers) => offline
+          // Offline still gets a profile step: pick which CACHED profile to
+          // plan with (seeding the settings notifiers) before the shell.
+          ? (gatePassed ? const AppShell() : const OfflineLaunchScreen())
+          : servers.isEmpty
+              ? const FirstRunScreen()
+              : gatePassed
+                  ? const AppShell()
+                  : const LaunchProfileScreen(),
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
@@ -67,11 +75,25 @@ class _RootRouter extends ConsumerWidget {
         // exception text can't leak into the user-facing surface.
         developer.log('Failed to load saved servers',
             name: 'openastroara.saved_servers', error: e, stackTrace: st);
-        return const Scaffold(
+        // A storage-read failure must not dead-end the app — offline planning
+        // stays reachable from here too (§2: offline is never blocked).
+        return Scaffold(
           body: Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('Failed to load saved servers. Please try again.'),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Failed to load saved servers. Please try again.'),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () =>
+                        ref.read(offlineModeProvider.notifier).enter(),
+                    icon: const Icon(Icons.cloud_off_outlined, size: 18),
+                    label: const Text('Plan offline'),
+                  ),
+                ],
+              ),
             ),
           ),
         );

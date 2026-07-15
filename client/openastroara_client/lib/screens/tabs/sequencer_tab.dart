@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/draft_sequence.dart';
+import '../../models/sequence/sequence_summary.dart';
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
@@ -46,7 +49,13 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
   /// Fetch the sequence's raw body and load it into the editor. Best-effort: a
   /// missing client / transport failure surfaces a SnackBar, leaves the current
   /// editor in place, and clears [_loadedId] so the sequence can be retried.
+  /// A `draft:` id loads from the local draft store instead of the daemon (§2
+  /// offline planning), so drafts open with or without a server.
   Future<void> _loadSelectedBody(String id) async {
+    if (isDraftSequenceId(id)) {
+      await _loadDraftBody(id);
+      return;
+    }
     final api = ref.read(sequenceApiProvider);
     if (api == null) {
       _onLoadFailed(id);
@@ -61,6 +70,27 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       ref.read(sequenceEditorProvider.notifier).load(detail);
     } catch (e) {
       debugPrint('[sequencer] failed to load sequence body for $id: $e');
+      _onLoadFailed(id);
+    }
+  }
+
+  Future<void> _loadDraftBody(String id) async {
+    try {
+      final drafts = await ref.read(draftSequencesProvider.future);
+      if (!mounted) return;
+      if (ref.read(selectedSequenceIdProvider) != id) return; // stale — see above
+      final draft = drafts.where((d) => d.id == id).firstOrNull;
+      if (draft == null) {
+        _onLoadFailed(id);
+        return;
+      }
+      ref.read(sequenceEditorProvider.notifier).load(SequenceDetail(
+            id: draft.id,
+            name: draft.name,
+            body: draft.body,
+          ));
+    } catch (e) {
+      debugPrint('[sequencer] failed to load draft body for $id: $e');
       _onLoadFailed(id);
     }
   }

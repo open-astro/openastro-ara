@@ -1554,3 +1554,34 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   an abort is a measurement, not a fault, and a fault-feed row per panic press would read as
   equipment trouble in the §42.6 UI. The tap→request network leg is client-side and not
   measurable server-side.
+
+## §30/§2 Launch flow + offline planning (2026-07-14, maintainer-reported gaps)
+
+- ✅ **§30.2/§30.3 launch profile box — DONE (2026-07-14, PR #844).** The launch sequence
+  previously stopped at the server gate and dropped users straight into the shell; the
+  always-shown profile box (dropdown pre-selecting the active profile, [Image], [Add a
+  Profile] → §37 wizard, [Import Profile]) now sits between server-connect and the shell.
+- ✅ **§2 offline planning entry + local draft sequences — DONE (2026-07-14, this PR).**
+  "Plan offline" on FirstRunScreen and the launch box's no-server state enters the shell
+  with no daemon. Creating a run from Planning with no server saves a client-managed local
+  draft (§28.9, app-support `sequence_drafts/`); drafts list in the Load dialog, open in
+  the editor, save locally, and push to the daemon (create + delete local) once connected.
+- **Offline append-to-draft.** Offline, each "Add to Sequence" target creates its own
+  draft; the connected path's append-to-open-sequence choreography
+  (`create_imaging_run.dart`) doesn't yet apply to a selected draft. Fold the target-block
+  append into the draft body when a draft is open.
+- **Local profile drafts + sync (§2 "drafts local, sync to Pi").** The §37 wizard still
+  requires a live daemon to save (`wizard_save.dart` posts every section). Full offline
+  profile authoring means persisting the wizard draft locally and replaying the section
+  PUTs on reconnect — a larger slice than sequences (18 screens / ~15 endpoints), tracked
+  here rather than bundled into the offline-entry PR.
+- ✅ **Offline profile choice + gear snapshot — DONE (2026-07-14, this PR,
+  maintainer-reported).** Connected sessions cache the profile list + the active profile's
+  planning sections (optics, imaging defaults, autofocus, site, filter set) to app-support
+  `profile_cache.json`; "Plan offline" now routes through an offline profile picker that
+  seeds the settings notifiers from the chosen profile's snapshot, so offline drafts are
+  built from the user's real gear. Empty cache degrades to "continue with defaults".
+- **Launch gate doesn't re-arm on a mid-session server change** (from the #844 review):
+  `profileGatePassedProvider` is one-way per session, so an empty→non-empty saved-servers
+  transition (or switching daemons in-session) skips the profile box for the new server.
+  Low severity; re-arm via a `ref.listen` on that transition if it bites.

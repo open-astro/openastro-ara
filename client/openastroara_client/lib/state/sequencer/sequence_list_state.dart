@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/draft_sequence.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../models/server.dart';
 import '../../models/ws_event.dart';
@@ -142,7 +143,11 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   Future<SequenceRunStateInfo?> _read() {
     final id = ref.read(selectedSequenceIdProvider);
     final api = ref.read(sequenceApiProvider);
-    if (id == null || api == null) return Future.value(null);
+    // A local draft (§2 offline planning) has no daemon run state — never send
+    // its client-side id to the run-state endpoint.
+    if (id == null || api == null || isDraftSequenceId(id)) {
+      return Future.value(null);
+    }
     return api.getRunState(id);
   }
 

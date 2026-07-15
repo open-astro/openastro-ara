@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/draft_sequence.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart';
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
@@ -31,15 +33,28 @@ class SequencerToolbar extends ConsumerWidget {
     final runState = runInfo?.state;
 
     // Resolve the picked sequence's name from the loaded list so the status line
-    // can confirm WHICH sequence is selected (not just "one is").
+    // can confirm WHICH sequence is selected (not just "one is"). Drafts resolve
+    // from the local store instead of the daemon list.
     String? selectedName;
     if (selectedId != null) {
-      final list = ref.watch(sequenceListProvider).asData?.value;
-      if (list != null) {
-        for (final s in list) {
-          if (s.id == selectedId) {
-            selectedName = s.name.isEmpty ? '(untitled)' : s.name;
+      if (isDraftSequenceId(selectedId)) {
+        final drafts = ref.watch(draftSequencesProvider).asData?.value;
+        for (final d in drafts ?? const []) {
+          if (d.id == selectedId) {
+            selectedName =
+                '${d.name.isEmpty ? '(untitled)' : d.name} (offline draft)';
             break;
+          }
+        }
+        selectedName ??= '(offline draft)';
+      } else {
+        final list = ref.watch(sequenceListProvider).asData?.value;
+        if (list != null) {
+          for (final s in list) {
+            if (s.id == selectedId) {
+              selectedName = s.name.isEmpty ? '(untitled)' : s.name;
+              break;
+            }
           }
         }
       }
@@ -48,10 +63,17 @@ class SequencerToolbar extends ConsumerWidget {
     // A command in flight disables all controls so a double-tap can't fire two
     // concurrent lifecycle calls.
     final busy = ref.watch(sequenceCommandBusyProvider);
-    final hasSelection = connected && selectedId != null && !busy;
-    // Save is enabled only when the open sequence has unsaved edits.
+    // §2 offline drafts live client-side: they save locally with no daemon,
+    // and never expose actions that send the draft's id to the daemon
+    // (run/pause/skip/abort/delete/export) even while connected — push the
+    // draft to the server first. Validate is the exception: it sends only the
+    // BODY (no id), so pre-push validation of a draft works while connected.
+    final isDraft = isDraftSequenceId(selectedId);
+    final hasSelection = connected && selectedId != null && !busy && !isDraft;
+    // Save is enabled only when the open sequence has unsaved edits. A draft
+    // saves to the local store, so it needs no connection.
     final dirty = ref.watch(sequenceEditorProvider.select((s) => s?.isDirty ?? false));
-    final canSave = hasSelection && dirty;
+    final canSave = dirty && !busy && (hasSelection || (isDraft && selectedId != null));
     // Validate works on whatever's loaded in the editor (even if not dirty).
     final editorLoaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
     final canValidate = connected && editorLoaded && !busy;
@@ -101,9 +123,9 @@ class SequencerToolbar extends ConsumerWidget {
                 _ToolButton(
                   icon: Icons.folder_open_outlined,
                   label: 'Load',
-                  // Enabled once a server is connected; opens the picker.
-                  onPressed:
-                      connected ? () => SequenceLoadDialog.show(context) : null,
+                  // Always enabled: offline the picker still lists the local
+                  // drafts (§2); the server section shows its no-server state.
+                  onPressed: () => SequenceLoadDialog.show(context),
                 ),
                 _ToolButton(
                   icon: Icons.file_download_outlined,
@@ -125,9 +147,12 @@ class SequencerToolbar extends ConsumerWidget {
                   icon: Icons.ios_share,
                   label: 'Export',
                   // Export the selected sequence to a NINA-compatible .json.
-                  // Enabled whenever a sequence is selected (independent of run
-                  // state — exporting is read-only).
-                  onPressed: (connected && selectedId != null)
+                  // Enabled whenever a DAEMON sequence is selected (independent
+                  // of run state — exporting is read-only). Excludes drafts:
+                  // exportSequence fetches by id from the daemon, which never
+                  // saw a draft: id (review #845). Local draft export is a
+                  // tracked follow-up.
+                  onPressed: (connected && selectedId != null && !isDraft)
                       ? () => exportSequence(context, ref,
                           id: selectedId, name: selectedName ?? selectedId)
                       : null,
@@ -259,10 +284,8 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   if (ref.read(sequenceCommandBusyProvider)) return;
   final editor = ref.read(sequenceEditorProvider);
   final api = ref.read(sequenceApiProvider);
-  // editor == null is reachable (state could clear between tap and read); the
-  // api == null half is the required null-safety check for api.updateSequence
-  // below (canSave already implies a non-null api when Save is tappable).
-  if (editor == null || api == null) return;
+  // editor == null is reachable (state could clear between tap and read).
+  if (editor == null) return;
   // Capture before the await — usable even if the widget unmounts.
   final messenger = ScaffoldMessenger.of(context);
   final busy = ref.read(sequenceCommandBusyProvider.notifier);
@@ -271,6 +294,33 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   // The exact body sent over the wire — rebaseline against THIS, not live state
   // re-read after the await, so an edit landing mid-flight stays dirty.
   final sentBody = editor.body;
+
+  // §2 offline drafts save to the local store, no daemon involved.
+  if (isDraftSequenceId(editor.id)) {
+    busy.setBusy(true);
+    try {
+      await ref
+          .read(draftSequencesProvider.notifier)
+          .saveBody(editor.id, sentBody);
+      editorNotifier.markSaved(sentBody);
+      messenger
+          .showSnackBar(const SnackBar(content: Text('Draft saved locally.')));
+    } catch (e) {
+      debugPrint('[sequencer] draft save error: $e');
+      messenger.showSnackBar(const SnackBar(
+        content: Text("Couldn't save the draft to disk."),
+        backgroundColor: AraColors.accentError,
+      ));
+    } finally {
+      busy.setBusy(false);
+    }
+    return;
+  }
+
+  // The api == null half is the required null-safety check for
+  // api.updateSequence below (canSave already implies a non-null api when Save
+  // is tappable on a daemon sequence).
+  if (api == null) return;
   busy.setBusy(true);
   try {
     await api.updateSequence(editor.id, body: sentBody);
@@ -381,7 +431,14 @@ String? _validationMessage(DioException e) {
 
 String _statusLine(bool connected, String? selectedId, String? selectedName,
     SequenceRunStateInfo? runInfo) {
-  if (!connected) return 'Idle — connect to a server to load saved sequences';
+  if (selectedId != null && isDraftSequenceId(selectedId)) {
+    // A draft is fully local: show it whether or not a server is connected,
+    // and never a run state (drafts can't run until pushed).
+    return 'Selected: ${selectedName ?? selectedId}';
+  }
+  if (!connected) {
+    return 'Offline — planning only; drafts push to the server when connected';
+  }
   if (selectedId == null) return 'Idle — Load a saved sequence';
   final name = selectedName ?? selectedId;
   final state = runInfo?.state;

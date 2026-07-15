@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../services/server_api.dart';
+import '../state/launch_gate_state.dart';
 import '../state/saved_server_state.dart';
 import '../state/server_state.dart';
 
@@ -133,6 +134,19 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               ),
             ]),
             const SizedBox(height: 16),
+            // §2 offline planning — WILMA can do real work without the Pi:
+            // enter the shell with no server to build the night's plan; drafts
+            // push to a daemon once one is connected.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () =>
+                    ref.read(offlineModeProvider.notifier).enter(),
+                icon: const Icon(Icons.cloud_off_outlined, size: 18),
+                label: const Text('Plan offline — set up your night without a server'),
+              ),
+            ),
+            const SizedBox(height: 8),
             if (selected != null)
               _HandshakePanel(
                 handshake: handshake,

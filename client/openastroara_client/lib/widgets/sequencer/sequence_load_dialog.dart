@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_share_file.dart' show shareFileName;
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_delete.dart';
@@ -31,7 +32,33 @@ class SequenceLoadDialog extends ConsumerWidget {
       title: const Text('Load sequence'),
       content: SizedBox(
         width: 420,
-        child: async.when(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // §2 offline planning — local drafts, shown above the server list
+            // (present with or without a connection; hidden when empty).
+            const _DraftsSection(),
+            _serverList(context, ref, async),
+          ],
+        ),
+      ),
+      actions: [
+        // Import a NINA sequence file; on success it selects the new sequence
+        // (loaded into the tree) and closes this picker. On a cancel/error the
+        // dialog stays open so the user can retry or pick from the list.
+        const _ImportNinaButton(),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+
+  Widget _serverList(BuildContext context, WidgetRef ref,
+      AsyncValue<List<SequenceListItem>?> async) {
+    return async.when(
           loading: () => const SizedBox(
             height: 120,
             child: Center(child: CircularProgressIndicator()),
@@ -88,19 +115,153 @@ class SequenceLoadDialog extends ConsumerWidget {
               ),
             );
           },
+        );
+  }
+}
+
+/// §2 offline drafts — the client-managed drafts, listed above the server's
+/// sequences. Tapping one loads it into the editor (works offline). Each row
+/// offers Push-to-server (enabled only while connected; creates the real
+/// sequence, deletes the local copy, and selects the new id) and Delete.
+class _DraftsSection extends ConsumerStatefulWidget {
+  const _DraftsSection();
+
+  @override
+  ConsumerState<_DraftsSection> createState() => _DraftsSectionState();
+}
+
+class _DraftsSectionState extends ConsumerState<_DraftsSection> {
+  /// One busy fence for ALL draft rows: push deletes the local file and
+  /// refreshes state, so a second overlapping push/delete (double-tap or a tap
+  /// on another row mid-flight) could act on a stale list (review #845).
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final drafts = ref.watch(draftSequencesProvider).asData?.value;
+    if (drafts == null || drafts.isEmpty) return const SizedBox.shrink();
+    final connected = ref.watch(sequenceApiProvider) != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 4),
+          child: Text('Offline drafts',
+              style: TextStyle(
+                  color: AraColors.textSecondary,
+                  fontWeight: FontWeight.bold)),
         ),
-      ),
-      actions: [
-        // Import a NINA sequence file; on success it selects the new sequence
-        // (loaded into the tree) and closes this picker. On a cancel/error the
-        // dialog stays open so the user can retry or pick from the list.
-        const _ImportNinaButton(),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 180),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: drafts.length,
+            itemBuilder: (context, i) {
+              final d = drafts[i];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    const Icon(Icons.cloud_off_outlined, size: 18),
+                title: Text(d.name.isEmpty ? '(untitled draft)' : d.name),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                      tooltip: connected
+                          ? 'Push to server'
+                          : 'Connect to a server to push this draft',
+                      onPressed: (connected && !_busy)
+                          ? () => _push(context, d.id)
+                          : null,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      tooltip: 'Delete draft',
+                      onPressed:
+                          _busy ? null : () => _delete(context, d.id, d.name),
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  ref.read(selectedSequenceIdProvider.notifier).select(d.id);
+                  Navigator.of(context).pop(d.id);
+                },
+              );
+            },
+          ),
         ),
+        const Divider(color: AraColors.border),
       ],
     );
+  }
+
+  Future<void> _push(BuildContext context, String id) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      // Was the pushed draft the one open in the editor? Read BEFORE the push
+      // (the await is a gap the selection could change under).
+      final wasOpen = ref.read(selectedSequenceIdProvider) == id;
+      final newId =
+          await ref.read(draftSequencesProvider.notifier).push(id);
+      // Swap the editor to the pushed copy ONLY when this draft was already
+      // the open one — pushing an unrelated draft must not clobber whatever
+      // (possibly dirty) sequence the user is editing (review #845).
+      if (wasOpen && context.mounted) {
+        ref.read(selectedSequenceIdProvider.notifier).select(newId);
+      }
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Draft pushed to the server.')));
+    } catch (e) {
+      debugPrint('[sequencer] draft push failed: $e');
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            "Couldn't push the draft. Check the connection and try again."),
+        backgroundColor: AraColors.accentError,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete(BuildContext context, String id, String name) async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete draft?'),
+        content: Text(
+            '"${name.isEmpty ? '(untitled draft)' : name}" will be removed from this device. This can\'t be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: AraColors.accentError),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(draftSequencesProvider.notifier).delete(id);
+    } catch (e) {
+      debugPrint('[sequencer] draft delete failed: $e');
+      messenger.showSnackBar(const SnackBar(
+        content: Text("Couldn't delete the draft."),
+        backgroundColor: AraColors.accentError,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 
