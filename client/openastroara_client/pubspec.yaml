@@ -37,7 +37,7 @@ dependencies:
   # §35.5 audible safety alarm — loops the bundled tone on safety.unsafe /
   # safety.emergency_stop until silenced.
   audioplayers: ^6.1.0
-  package_info_plus: ^10.2.0
+  package_info_plus: ^10.2.1
   # §36 Planetarium renderer: the platform's native webview embedded as a platform
   # view — WKWebView (macOS/iOS), WebView2 (Windows), WebKitGTK (Linux), System
   # WebView (Android). Replaced the CEF OSR path, which stalled under sustained GPU

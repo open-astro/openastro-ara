@@ -901,7 +901,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/multicast_dns/license
 
 ------------------------------------------------------------------------
-Package:        package_info_plus 10.2.0
+Package:        package_info_plus 10.2.1
 Copyright:      Copyright 2017 The Chromium Authors
 License:        BSD-3-Clause
 License source: https://pub.dev/packages/package_info_plus/license
