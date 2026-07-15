@@ -144,6 +144,10 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
           style: Theme.of(context).textTheme.titleSmall),
       const SizedBox(height: 8),
       DropdownButtonFormField<String>(
+        // FormFields consume initialValue only on first mount, so key on the
+        // daemon's active id: when the wizard returns with a new active
+        // profile the dropdown remounts and actually shows it (review #844).
+        key: ValueKey('launch-profile-dropdown-${list.activeId}'),
         initialValue: selected,
         items: [
           for (final p in list.profiles)
@@ -166,6 +170,9 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   /// [Image] — make the picked profile active on the daemon (when it isn't
   /// already), then pass the launch gate so the root router swaps in the shell.
   Future<void> _enter(String id) async {
+    // Re-entrancy guard: two taps in the same frame both dispatch before the
+    // disabled rebuild lands; the flag (not the button state) is authoritative.
+    if (_entering) return;
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _entering = true);
     try {
