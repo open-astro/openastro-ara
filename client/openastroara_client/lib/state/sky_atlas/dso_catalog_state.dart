@@ -14,12 +14,20 @@ final dsoCatalogServiceProvider =
 /// mirror. Materialized at the app root (main.dart) so it runs regardless of
 /// which tab is open.
 class DsoCatalogSyncNotifier extends Notifier<int> {
+  /// In-flight guard: rapid reconnects/server switches re-run build(), and two
+  /// overlapping refreshes would race writes to the same mirror file (review
+  /// #847). The skipped refresh isn't retried — the NEXT server change (or
+  /// cold start) refreshes; worst case is a stale-but-valid mirror.
+  bool _refreshing = false;
+
   @override
   int build() {
     final server = ref.watch(activeServerProvider);
-    if (server != null) {
+    if (server != null && !_refreshing) {
+      _refreshing = true;
       final svc = ref.read(dsoCatalogServiceProvider);
       unawaited(svc.refreshFrom(server).then((fetched) {
+        _refreshing = false;
         // ref.mounted guards the post-await write (server switch/dispose).
         if (fetched != null && ref.mounted) state = state + 1;
       }));
