@@ -15,8 +15,18 @@ class WindowModeService {
   static const _channel = MethodChannel('openastroara/window');
   WindowMode? _current;
   bool _unsupported = false;
+  // Serializes set() calls: overlapping calls (the router fires post-frame on
+  // every rebuild) could otherwise interleave a failure-rollback over a later
+  // call's already-committed mode (review #846 r3 TOCTOU note).
+  Future<void> _chain = Future<void>.value();
 
-  Future<void> set(WindowMode mode) async {
+  Future<void> set(WindowMode mode) {
+    final task = _chain.then((_) => _apply(mode));
+    _chain = task;
+    return task;
+  }
+
+  Future<void> _apply(WindowMode mode) async {
     if (_unsupported || _current == mode) return;
     final previous = _current;
     _current = mode;
