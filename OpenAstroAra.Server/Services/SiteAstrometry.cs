@@ -26,17 +26,6 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public static class SiteAstrometry {
 
-    /// <summary>Sun altitude below which the sky is "dark" for the given twilight definition:
-    /// civil −6°, nautical −12°, astronomical −18°. Unrecognised → astronomical (the darkest, safest
-    /// default for imaging).</summary>
-    private static double TwilightSunAltitudeDeg(string? twilightDefinition) =>
-        (twilightDefinition?.Trim().ToLowerInvariant()) switch {
-            "civil" => -6.0,
-            "nautical" => -12.0,
-            "astronomical" => -18.0,
-            _ => -18.0,
-        };
-
     /// <summary>The sun's apparent equatorial coordinates (RA/Dec, degrees) at <paramref name="atUtc"/>,
     /// via Meeus, <i>Astronomical Algorithms</i> ch. 25 "low accuracy" solar position (≈0.01° — far finer
     /// than a twilight threshold needs): geometric mean longitude + equation of centre → true ecliptic
