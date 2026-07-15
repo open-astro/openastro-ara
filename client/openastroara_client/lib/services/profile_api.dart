@@ -187,7 +187,7 @@ class ProfileApi {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/camera-electronics',
     );
-    return _cameraElectronicsFromJson(res.data ?? const {});
+    return cameraElectronicsFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's camera-electronics section. Returns the daemon's
@@ -197,9 +197,9 @@ class ProfileApi {
   ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/camera-electronics',
-      data: _cameraElectronicsToJson(value),
+      data: cameraElectronicsToJson(value),
     );
-    return _cameraElectronicsFromJson(res.data ?? const {});
+    return cameraElectronicsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's §36 custom terrain horizon (empty = none entered).
@@ -559,7 +559,7 @@ class ProfileApi {
 
   // ── Camera electronics + filter set JSON mapping (NEXTGEN §4) ──────────
 
-  static CameraElectronics _cameraElectronicsFromJson(Map<String, dynamic> j) =>
+  static CameraElectronics cameraElectronicsFromJson(Map<String, dynamic> j) =>
       CameraElectronics(
         sensorName: (j['sensor_name'] as String?) ?? '',
         readNoiseE: (j['read_noise_e'] as num?)?.toDouble() ?? 0,
@@ -571,7 +571,7 @@ class ProfileApi {
         autoCaptured: (j['auto_captured'] as bool?) ?? false,
       );
 
-  static Map<String, dynamic> _cameraElectronicsToJson(CameraElectronics v) => {
+  static Map<String, dynamic> cameraElectronicsToJson(CameraElectronics v) => {
     'sensor_name': v.sensorName,
     'read_noise_e': v.readNoiseE,
     'full_well_e': v.fullWellE,

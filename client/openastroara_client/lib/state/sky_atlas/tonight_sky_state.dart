@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../util/tonight_sky_local.dart';
 import '../saved_server_state.dart';
+import '../settings/camera_electronics_state.dart';
+import '../settings/filter_set_state.dart';
 import '../settings/optics_settings_state.dart';
 import '../settings/site_settings_state.dart';
 
@@ -34,6 +36,8 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
     return computeTonightSkyLocal(
       site: site,
       optics: ref.watch(opticsSettingsProvider),
+      filterSet: ref.watch(filterSetProvider),
+      electronics: ref.watch(cameraElectronicsProvider),
       atUtc: DateTime.now().toUtc(),
     );
   }

@@ -1,8 +1,13 @@
 import 'dart:math' as math;
 
 import '../services/tonight_sky_api.dart';
+import '../state/settings/camera_electronics_state.dart';
+import '../state/settings/filter_set_state.dart';
 import '../state/settings/optics_settings_state.dart';
 import '../state/settings/site_settings_state.dart';
+import 'filter_advice.dart';
+import 'optimal_sub.dart';
+import 'star_model.dart' as stars;
 
 /// §2 offline planning — a client-side Tonight's Sky ranker, a faithful Dart
 /// port of the daemon's `TonightSkyService` (self-contained Meeus math, no
@@ -11,11 +16,12 @@ import '../state/settings/site_settings_state.dart';
 /// server is connected; a connected daemon's ranking (full OpenNGC catalog,
 /// filter advice, optimal-sub figures, custom horizon) always supersedes it.
 ///
-/// Deliberately NOT ported (server-only, degrade to absent): filter advice +
-/// optimal-sub + star-count tags (they need the filter set / electronics /
-/// star-model stack), and the §36 custom terrain horizon (its points aren't
-/// in the offline profile cache) — the site's default horizon altitude gates
-/// instead. Follow-ups tracked in PORT_TODO.
+/// Includes the NEXTGEN §1/§3.1 advisory stack (filter advice, optimal-sub
+/// figures, star-detectability tags) via the client-side ports in
+/// filter_advice.dart / optimal_sub.dart / star_model.dart, fed by the cached
+/// filter set + camera electronics. Deliberately NOT ported: the §36 custom
+/// terrain horizon (its points aren't in the offline profile cache) — the
+/// site's default horizon altitude gates instead. Tracked in PORT_TODO.
 
 // ── Score weights / thresholds (mirror TonightSkyService.cs; see
 //    design/TONIGHT_SKY.md for the rationale) ────────────────────────────────
@@ -80,6 +86,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
   required SiteSettings site,
   required OpticsSettings optics,
   required DateTime atUtc,
+  FilterSetSettings filterSet = const FilterSetSettings(filters: []),
+  CameraElectronics electronics = const CameraElectronics(),
   int limit = 10,
 }) {
   final at = atUtc.toUtc();
@@ -128,6 +136,69 @@ List<TonightSkyObject> computeTonightSkyLocal({
   }
   final moonIlluminationPct =
       (_moonIlluminatedFraction(at) * 100.0).roundToDouble();
+
+  // NEXTGEN §1/§3.1 advisory inputs — mirrors the server's Rank preamble.
+  // Advice degrades gracefully: empty filter set → no advice; unset
+  // electronics/aperture → no optimal-sub figure (deliberately NO Tier-0
+  // fallback here, matching the tonight list's stricter contract).
+  final exposureConfigured = electronics.readNoiseE > 0 &&
+      electronics.fullWellE > 0 &&
+      optics.apertureMm > 0 &&
+      optics.focalLengthMm > 0 &&
+      optics.pixelSizeUm > 0 &&
+      optics.reducerFactor > 0;
+  final skyMag = skyMagFromBortle(site.bortleClass);
+  // Per-approach memo: (rounded floor for display, unrounded recommendation,
+  // the assembled input for the star-count tag).
+  final adviceMemo =
+      <TonightFilterAdvice, (double?, double, OptimalSubInput?)>{};
+  (double?, double, OptimalSubInput?) adviceFor(TonightFilterAdvice approach) {
+    return adviceMemo.putIfAbsent(approach, () {
+      final filter = representativeFilter(filterSet, approach);
+      if (!exposureConfigured || filter == null) return (null, 0, null);
+      final input = OptimalSubInput(
+        readNoiseE: electronics.readNoiseE,
+        fullWellE: electronics.fullWellE,
+        electronsPerAdu: math.max(0, electronics.electronsPerAdu),
+        pixelSizeUm: optics.pixelSizeUm,
+        apertureMm: optics.apertureMm,
+        focalLengthMm: optics.focalLengthMm,
+        reducerFactor: optics.reducerFactor,
+        quantumEfficiency: electronics.quantumEfficiencyPeak > 0
+            ? electronics.quantumEfficiencyPeak
+            : defaultQuantumEfficiency,
+        skyMagPerArcsec2: skyMag,
+        filterBandwidthNm: effectiveBandwidthNm(filter),
+      );
+      final result = computeOptimalSub(input);
+      return (
+        result.recommendedSec.roundToDouble(),
+        result.recommendedSec,
+        input
+      );
+    });
+  }
+
+  // §3.1 star-detectability tag inputs: SINGLE-FRAME field (registration is
+  // per sub) + the profile-snapshot seeing. Advisory-degrading throughout.
+  final singleFrameFovDeg2 = fov.$1 / 60.0 * (fov.$2 / 60.0);
+  final seeingArcsec = site.typicalSeeingArcsec;
+  final starTagAvailable = exposureConfigured &&
+      singleFrameFovDeg2.isFinite &&
+      singleFrameFovDeg2 > 0 &&
+      seeingArcsec.isFinite &&
+      seeingArcsec > 0;
+  final mLimMemo = <TonightFilterAdvice, double?>{};
+  double? registrationMLimFor(TonightFilterAdvice approach) {
+    return mLimMemo.putIfAbsent(approach, () {
+      final (_, recommendedSec, input) = adviceFor(approach);
+      if (!starTagAvailable || input == null || recommendedSec <= 0) {
+        return null;
+      }
+      return stars.limitingMagnitude(input, recommendedSec, seeingArcsec,
+          snrThreshold: stars.registrationSnr);
+    });
+  }
 
   final scored = <(double, TonightSkyObject)>[];
   final up = List<bool>.filled(sampleCount, false);
@@ -180,8 +251,37 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final mid = (run.$1 + run.$2) ~/ 2;
     final moonSeparationDeg = _angularSeparationDeg(
         o.raDeg, o.decDeg, moonRaDeg[mid], moonDecDeg[mid]);
+
+    // NEXTGEN §1 filter advice + §3.1 star tag — same zero-point reason
+    // pattern as the server: visible in the "Why?" breakdown, never a score
+    // input.
+    TonightFilterAdvice? advice;
+    String? adviceReason;
+    double? optimalSubS;
+    final adviceLines = <String>[];
+    final advised =
+        adviseFilter(classifyEmission(o.type), filterSet, site.bortleClass);
+    if (advised != null) {
+      advice = advised.$1;
+      adviceReason = advised.$2;
+      optimalSubS = adviceFor(advised.$1).$1;
+      adviceLines.add('${_adviceTag(advised.$1)} recommended (+0)');
+      final mLim = registrationMLimFor(advised.$1);
+      final subS = optimalSubS;
+      if (mLim != null && subS != null) {
+        final galLat = stars.galacticLatitudeDeg(o.raDeg, o.decDeg);
+        final starsPerSub = stars.cumulativeStarsPerDeg2(mLim, galLat) *
+            singleFrameFovDeg2;
+        if (starsPerSub < stars.minRegistrationStars) {
+          adviceLines.add('~${starsPerSub.toStringAsFixed(0)} stars/sub at '
+              '${_shortNum(subS)} s — thin for registration (+0)');
+        }
+      }
+    }
+
     final allReasons = [
       ...reasons,
+      ...adviceLines,
       if (moonUpFraction > 0)
         'moon ${moonSeparationDeg.toStringAsFixed(0)}° away, '
             '${moonIlluminationPct.toStringAsFixed(0)}% lit (+0)'
@@ -215,6 +315,9 @@ List<TonightSkyObject> computeTonightSkyLocal({
         framing: framing,
         score: double.parse(score.toStringAsFixed(1)),
         scoreReasons: allReasons,
+        filterAdvice: advice,
+        adviceReason: adviceReason,
+        optimalSubS: optimalSubS,
         moonSeparationDeg:
             double.parse(moonSeparationDeg.toStringAsFixed(1)),
         moonIlluminationPct: moonIlluminationPct,
@@ -440,3 +543,12 @@ double _mod360(double x) {
 double _deg2rad(double d) => d * math.pi / 180.0;
 double _rad2deg(double r) => r * 180.0 / math.pi;
 double _sinDeg(double deg) => math.sin(_deg2rad(_mod360(deg)));
+
+String _adviceTag(TonightFilterAdvice approach) => switch (approach) {
+      TonightFilterAdvice.narrowband => 'narrowband',
+      TonightFilterAdvice.duoband => 'OSC + dual-band',
+      TonightFilterAdvice.broadband => 'broadband',
+    };
+
+String _shortNum(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);

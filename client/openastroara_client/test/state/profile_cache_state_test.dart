@@ -9,6 +9,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -44,6 +45,14 @@ class _FakeApi extends ProfileApi {
       filters: [
         PlanningFilter(name: 'Ha', kind: FilterKind.ha, bandwidthNm: 7)
       ]);
+
+  @override
+  Future<CameraElectronics> getCameraElectronics() async =>
+      const CameraElectronics(
+          sensorName: 'IMX571',
+          readNoiseE: 1.5,
+          fullWellE: 51000,
+          quantumEfficiencyPeak: 0.8);
 }
 
 void main() {
@@ -101,6 +110,7 @@ void main() {
     expect(c.read(imagingDefaultsProvider).defaultGain, 101);
     expect(c.read(siteSettingsProvider).siteName, 'South GA');
     expect(c.read(filterSetProvider).filters.single.name, 'Ha');
+    expect(c.read(cameraElectronicsProvider).readNoiseE, 1.5);
   });
 
   test('seedPlanningFromCache returns false (and keeps defaults) with no snapshot',
