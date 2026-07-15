@@ -22,7 +22,7 @@ namespace OpenAstroAra.Server.Services;
 /// (RA/Dec) sky at a given instant so an equatorial sky-chart view can overlay it. In equatorial
 /// coordinates the horizon is a curve in RA/Dec that moves with the site latitude
 /// and the local sidereal time; this service computes that curve plus the zenith and the cardinal
-/// points. All the trig lives in <see cref="TonightSkyService"/> (the site-astrometry math home);
+/// points. All the trig lives in <see cref="SiteAstrometry"/> (the site-astrometry math home);
 /// this is a thin orchestrator over the active profile's site settings.</summary>
 public interface IHorizonService {
     /// <summary>The local horizon overlay for the active profile's site at <paramref name="atUtc"/>.</summary>
@@ -53,7 +53,7 @@ public sealed class HorizonService : IHorizonService {
             CustomHorizonDto? customHorizon = null) {
         var lat = site.LatitudeDeg;
         var horizonAlt = site.DefaultHorizonAltitudeDeg;
-        var lst = TonightSkyService.LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
+        var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
         var skyline = site.UseCustomHorizon && customHorizon is { Points.Count: > 0 }
             ? customHorizon.Points
             : null;
@@ -66,11 +66,11 @@ public sealed class HorizonService : IHorizonService {
         for (var az = 0; az <= 360; az += AzimuthStepDeg) {
             // Wrap the final vertex exactly onto the first so the polyline closes without a seam gap.
             var azimuth = az == 360 ? 0.0 : az;
-            var (ra, dec) = TonightSkyService.EquatorialFromAltAz(AltitudeAt(azimuth), azimuth, lat, lst);
+            var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(AltitudeAt(azimuth), azimuth, lat, lst);
             points.Add(new HorizonPointDto(ra, dec, azimuth));
         }
 
-        var (zenithRa, zenithDec) = TonightSkyService.EquatorialFromAltAz(90.0, 0.0, lat, lst);
+        var (zenithRa, zenithDec) = SiteAstrometry.EquatorialFromAltAz(90.0, 0.0, lat, lst);
         var cardinals = new List<CardinalPointDto> {
             Cardinal("N", 0.0, AltitudeAt(0.0), lat, lst),
             Cardinal("E", 90.0, AltitudeAt(90.0), lat, lst),
@@ -91,7 +91,7 @@ public sealed class HorizonService : IHorizonService {
     }
 
     private static CardinalPointDto Cardinal(string label, double azDeg, double altDeg, double latDeg, double lstDeg) {
-        var (ra, dec) = TonightSkyService.EquatorialFromAltAz(altDeg, azDeg, latDeg, lstDeg);
+        var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(altDeg, azDeg, latDeg, lstDeg);
         return new CardinalPointDto(label, ra, dec);
     }
 }

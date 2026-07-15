@@ -24,45 +24,53 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
 ) async {
   // The awaitable variant rather than collapsing a still-loading state to
   // null: that would resolve this provider to data([]) before the servers
-  // finished loading and flash the "connect a server" empty state for a user
-  // who does have one saved. Awaiting keeps Tonight's Sky in `loading` until
-  // the list is known.
-  final server = await ref.watch(activeServerFutureProvider.future);
-  if (server == null) {
-    final site = ref.watch(siteSettingsProvider);
-    // An unset site (the constructor's 0,0) would silently rank for a spot in
-    // the Gulf of Guinea — return empty instead; the panel's empty state
-    // explains how to get a site offline (cached profile / connect once).
-    if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
-      return const <TonightSkyObject>[];
-    }
-    final optics = ref.watch(opticsSettingsProvider);
-    final filterSet = ref.watch(filterSetProvider);
-    final electronics = ref.watch(cameraElectronicsProvider);
-    // The mirrored openngc-dso catalog when this machine has one; the
-    // ranker falls back to the 20-object starter list otherwise.
-    final catalog = await ref.watch(dsoCatalogProvider.future);
-    final at = DateTime.now().toUtc();
-    // Rank OFF the UI isolate (review #847): the mirrored catalog is
-    // thousands of rows × a 289-sample window scan each — synchronous on the
-    // UI thread that's visible jank every panel open / settings change.
-    return Isolate.run(() => computeTonightSkyLocal(
-          site: site,
-          optics: optics,
-          filterSet: filterSet,
-          electronics: electronics,
-          catalog: catalog,
-          atUtc: at,
-        ));
+  // finished loading and flash the "no site" empty state for a user whose
+  // cached site is about to load. Await keeps Tonight's Sky in `loading`.
+  await ref.watch(activeServerFutureProvider.future);
+  final site = ref.watch(siteSettingsProvider);
+  // An unset site (the constructor's 0,0) would silently rank for a spot in
+  // the Gulf of Guinea — return empty instead; the panel's empty state
+  // explains how to get a site (Settings → Site, or a cached profile).
+  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
+    return const <TonightSkyObject>[];
   }
-  final api = TonightSkyApi(server);
-  // Force-close on dispose so navigating away from the panel cancels an in-flight
-  // fetch instead of leaving the socket open until the receive timeout.
-  ref.onDispose(api.close);
-  // Watching (not reading) the overrides means an Apply/Reset in the overrides
-  // dialog refetches the ranking automatically — no manual invalidate needed.
+  var optics = ref.watch(opticsSettingsProvider);
+  // §36.8 slice 4b what-if overrides: swap the optical train fields the user
+  // dialed in; mosaic tiles enlarge the framing FOV per axis.
   final overrides = ref.watch(tonightSkyOverridesProvider);
-  return api.fetch(overrides: overrides.isActive ? overrides : null);
+  var mosaicX = 1;
+  var mosaicY = 1;
+  if (overrides.isActive) {
+    optics = OpticsSettings(
+      focalLengthMm: overrides.focalLengthMm ?? optics.focalLengthMm,
+      reducerFactor: overrides.reducer ?? optics.reducerFactor,
+      sensorWidthPx: overrides.sensorW ?? optics.sensorWidthPx,
+      sensorHeightPx: overrides.sensorH ?? optics.sensorHeightPx,
+      pixelSizeUm: overrides.pixelUm ?? optics.pixelSizeUm,
+      apertureMm: optics.apertureMm,
+    );
+    mosaicX = overrides.mosaicX;
+    mosaicY = overrides.mosaicY;
+  }
+  final filterSet = ref.watch(filterSetProvider);
+  final electronics = ref.watch(cameraElectronicsProvider);
+  // The mirrored openngc-dso catalog when this machine has one; the
+  // ranker falls back to the 20-object starter list otherwise.
+  final catalog = await ref.watch(dsoCatalogProvider.future);
+  final at = DateTime.now().toUtc();
+  final opticsFinal = optics;
+  // Rank OFF the UI isolate: the mirrored catalog is thousands of rows × a
+  // 289-sample window scan each — synchronous on the UI thread is jank.
+  return Isolate.run(() => computeTonightSkyLocal(
+        site: site,
+        optics: opticsFinal,
+        filterSet: filterSet,
+        electronics: electronics,
+        catalog: catalog,
+        mosaicTilesX: mosaicX,
+        mosaicTilesY: mosaicY,
+        atUtc: at,
+      ));
 });
 
 /// §36.8 slice 4b — the session's Tonight's Sky what-if overrides (optical

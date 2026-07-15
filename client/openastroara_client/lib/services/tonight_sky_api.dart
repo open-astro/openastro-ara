@@ -1,7 +1,3 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
-
-import '../models/server.dart';
 import '../models/stats/stats_time.dart';
 
 /// NEXTGEN §1 — the daemon's recommended filter approach for a target. Wire
@@ -296,60 +292,4 @@ class TonightOverrides {
   @override
   int get hashCode => Object.hash(
       focalLengthMm, reducer, sensorW, sensorH, pixelUm, mosaicX, mosaicY);
-}
-
-class TonightSkyApi {
-  final Dio _dio;
-
-  /// [dio] is injectable so tests can stub the transport with a fake adapter;
-  /// production callers pass only the server and get a configured one-shot Dio.
-  TonightSkyApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: server.baseUrl,
-              connectTimeout: const Duration(seconds: 3),
-              receiveTimeout: const Duration(seconds: 10),
-            ));
-
-  /// The curated objects above the active profile's site horizon right now,
-  /// highest first (server-ranked). Throws `DioException` on transport failure.
-  /// The owning provider holds the lifecycle — call [close] when done with it.
-  /// An active [overrides] re-frames the ranking against a what-if optical
-  /// train / mosaic layout (§36.8 slice 4b) instead of the profile's optics.
-  Future<List<TonightSkyObject>> fetch({
-    int limit = 12,
-    TonightOverrides? overrides,
-  }) async {
-    final res = await _dio.get<dynamic>(
-      '/api/v1/planning/tonight',
-      queryParameters: <String, dynamic>{
-        'limit': limit,
-        ...?overrides?.toQueryParameters(),
-      },
-    );
-    // A well-behaved server returns a JSON array; anything else (an error object,
-    // an HTML body, null) is not iterable — treat it as "nothing to show" rather
-    // than throwing a TypeError out of the provider. Dio already throws on 4xx/5xx,
-    // so this only fires on a 200 with an unexpected shape — log it so that's
-    // diagnosable rather than a silent empty list.
-    final raw = res.data;
-    if (raw is! List) {
-      debugPrint('TonightSkyApi: unexpected 200 body (${raw.runtimeType}); '
-          'expected a JSON array — showing no objects.');
-      return const <TonightSkyObject>[];
-    }
-    final out = <TonightSkyObject>[];
-    for (final e in raw) {
-      if (e is Map<String, dynamic>) {
-        final o = TonightSkyObject.fromJson(e);
-        if (o != null) out.add(o);
-      }
-    }
-    return out;
-  }
-
-  /// Release the underlying connection. `force: true` cancels any in-flight
-  /// request, so the provider can call this from `onDispose` to drop a pending
-  /// fetch when the panel closes rather than waiting out the receive timeout.
-  void close() => _dio.close(force: true);
 }

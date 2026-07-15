@@ -88,6 +88,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
   FilterSetSettings filterSet = const FilterSetSettings(filters: []),
   CameraElectronics electronics = const CameraElectronics(),
   List<PlanningDso>? catalog,
+  int mosaicTilesX = 1,
+  int mosaicTilesY = 1,
   int limit = 10,
 }) {
   final objects = (catalog == null || catalog.isEmpty)
@@ -98,7 +100,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final lat = site.latitudeDeg;
   final lon = site.longitudeDeg;
   final lst0 = _localSiderealTimeDeg(at, lon);
-  final fov = _fovArcmin(optics);
+  final fov = _fovArcmin(optics, mosaicTilesX, mosaicTilesY);
 
   // The night sample grid, object-independent: LST + is-the-sky-dark at each
   // 5-min sample across ±12 h.
@@ -184,7 +186,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
 
   // §3.1 star-detectability tag inputs: SINGLE-FRAME field (registration is
   // per sub) + the profile-snapshot seeing. Advisory-degrading throughout.
-  final singleFrameFovDeg2 = fov.$1 / 60.0 * (fov.$2 / 60.0);
+  final singleFrame = _fovArcmin(optics);
+  final singleFrameFovDeg2 = singleFrame.$1 / 60.0 * (singleFrame.$2 / 60.0);
   final seeingArcsec = site.typicalSeeingArcsec;
   final starTagAvailable = exposureConfigured &&
       singleFrameFovDeg2.isFinite &&
@@ -443,8 +446,10 @@ TonightFraming _classifyFraming(
       : TonightFraming.good;
 }
 
-/// FOV (arcmin) of the optical train; (NaN, NaN) when unconfigured.
-(double, double) _fovArcmin(OpticsSettings optics) {
+/// FOV (arcmin) of the optical train, enlarged by the mosaic tile count per
+/// axis; (NaN, NaN) when unconfigured.
+(double, double) _fovArcmin(OpticsSettings optics,
+    [int mosaicTilesX = 1, int mosaicTilesY = 1]) {
   final effectiveFocalMm = optics.focalLengthMm * optics.reducerFactor;
   if (effectiveFocalMm <= 0 ||
       optics.pixelSizeUm <= 0 ||
@@ -454,8 +459,8 @@ TonightFraming _classifyFraming(
   }
   final pixelScaleArcsec = 206.265 * optics.pixelSizeUm / effectiveFocalMm;
   return (
-    optics.sensorWidthPx * pixelScaleArcsec / 60.0,
-    optics.sensorHeightPx * pixelScaleArcsec / 60.0,
+    optics.sensorWidthPx * pixelScaleArcsec / 60.0 * math.max(1, mosaicTilesX),
+    optics.sensorHeightPx * pixelScaleArcsec / 60.0 * math.max(1, mosaicTilesY),
   );
 }
 
