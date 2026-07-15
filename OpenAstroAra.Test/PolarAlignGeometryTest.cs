@@ -162,7 +162,7 @@ namespace OpenAstroAra.Test {
             // Axis on the local meridian (RA = LST → hour angle 0), 10′ below the pole in dec:
             // at upper culmination above the pole, alt = lat + (90 − dec), so the altitude error
             // is +10′ − Bennett(lat). Closed form independent of the implementation's alt/az path.
-            var lst = TonightSkyService.LocalSiderealTimeDeg(T, Lon);
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(T, Lon);
             var (altErr, azErr) = PolarAlignGeometry.AxisError(lst, 90 - 10.0 / 60.0, Lat, Lon, T);
             Assert.That(altErr, Is.EqualTo(10.0 - PolarAlignGeometry.BennettRefractionArcmin(Lat)).Within(0.02));
             Assert.That(azErr, Is.EqualTo(0).Within(0.02));
@@ -173,7 +173,7 @@ namespace OpenAstroAra.Test {
             // An off-meridian axis and its mirror (RA reflected about the LST) must read equal and
             // opposite azimuth errors and identical altitude errors — the knob-direction signs
             // cannot depend on which side of the meridian the measurement happened.
-            var lst = TonightSkyService.LocalSiderealTimeDeg(T, Lon);
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(T, Lon);
             var (altE, azE) = PolarAlignGeometry.AxisError(lst + 40, 89.7, Lat, Lon, T);
             var (altW, azW) = PolarAlignGeometry.AxisError(lst - 40, 89.7, Lat, Lon, T);
             Assert.That(azE, Is.EqualTo(-azW).Within(1e-6));
@@ -186,7 +186,7 @@ namespace OpenAstroAra.Test {
             // Generate pointings from a KNOWN slightly-misaligned axis, fit it, decompose the
             // error — the whole §45 measurement pipeline on a synthetic sky. The recovered total
             // error must equal the constructed axis-to-apparent-pole separation.
-            var lst = TonightSkyService.LocalSiderealTimeDeg(T, Lon);
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(T, Lon);
             const double offArcmin = 25.0;
             var axisDec = 90 - offArcmin / 60.0;         // 25′ from the true pole, on the meridian
             var axis = Unit(lst, axisDec);

@@ -86,11 +86,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Azimuth_from_hour_angle_matches_the_compass() {
             // Upper transit south of zenith (dec < lat, H = 0) → due south.
-            Assert.That(TonightSkyService.AzimuthFromHourAngleDeg(20, 45, 0), Is.EqualTo(180).Within(1e-6));
+            Assert.That(SiteAstrometry.AzimuthFromHourAngleDeg(20, 45, 0), Is.EqualTo(180).Within(1e-6));
             // A dec-0 object 6h before transit (H = −90) rises due east from anywhere.
-            Assert.That(TonightSkyService.AzimuthFromHourAngleDeg(0, 45, -90), Is.EqualTo(90).Within(1e-6));
+            Assert.That(SiteAstrometry.AzimuthFromHourAngleDeg(0, 45, -90), Is.EqualTo(90).Within(1e-6));
             // …and 6h after transit sets due west.
-            Assert.That(TonightSkyService.AzimuthFromHourAngleDeg(0, 45, 90), Is.EqualTo(270).Within(1e-6));
+            Assert.That(SiteAstrometry.AzimuthFromHourAngleDeg(0, 45, 90), Is.EqualTo(270).Within(1e-6));
         }
 
         // ── HorizonService overlay ──────────────────────────────────────────
@@ -122,32 +122,10 @@ namespace OpenAstroAra.Test {
 
         // ── Tonight's Sky visibility ────────────────────────────────────────
 
-        [Test]
-        public void A_skyline_wall_hides_a_target_the_flat_default_would_show() {
-            var at = new DateTimeOffset(2026, 12, 21, 23, 0, 0, TimeSpan.Zero); // long northern night
-            var optics = new OpticsSettingsDto(
-                FocalLengthMm: 500, ReducerFactor: 1.0,
-                SensorWidthPx: 4000, SensorHeightPx: 3000, PixelSizeUm: 4);
-            var catalog = new List<TonightSkyService.CatalogObject> {
-                // Culminates due south at ~+40 degrees altitude from lat 45.
-                new(Id: "m42", Name: "M 42", Type: "nebula", Magnitude: 4.0,
-                    RaDeg: 83.82, DecDeg: -5.39),
-            };
-
-            var flat = TonightSkyService.Rank(catalog, Site(useCustom: false, flatAlt: 20), optics, at, 10);
-            Assert.That(flat, Has.Count.EqualTo(1), "clears a flat 20-degree horizon");
-
-            // An 85-degree wall everywhere: nothing clears it.
-            var wall = CustomHorizonValidator.Normalize(Horizon((0, 85))).Normalized!;
-            var blocked = TonightSkyService.Rank(catalog, Site(useCustom: true, flatAlt: 20), optics, at, 10,
-                customHorizon: wall);
-            Assert.That(blocked, Is.Empty, "the skyline wall blocks it");
-
-            // Disabled flag → the same skyline is ignored.
-            var ignored = TonightSkyService.Rank(catalog, Site(useCustom: false, flatAlt: 20), optics, at, 10,
-                customHorizon: wall);
-            Assert.That(ignored, Has.Count.EqualTo(1));
-        }
+        // The skyline-wall-vs-flat-horizon ranking test moved to the CLIENT with the
+        // Tonight's Sky ranker (PORT_DECISIONS 2026-07-15); the local ranker's custom-
+        // horizon support is a tracked follow-up (the points aren't in the offline
+        // profile cache yet). The validator + profile plumbing below are unchanged.
 
         // ── profile plumbing ────────────────────────────────────────────────
 

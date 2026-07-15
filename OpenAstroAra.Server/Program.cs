@@ -87,7 +87,6 @@ public partial class Program {
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticHealth>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticsMode>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FramingFit>(policy));
-            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<OptimalSubBound>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FilterKind>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FilterApproach>(policy));
             opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
@@ -456,11 +455,6 @@ public partial class Program {
         // §36/§25.5 Tonight's Sky — ranks the OpenNGC catalog by altitude (with visibility window,
         // transit, and integration hours) for the active profile's site; falls back to a starter list
         // when openngc-dso isn't installed.
-        builder.Services.AddSingleton<ITonightSkyService>(sp =>
-            new TonightSkyService(
-                sp.GetRequiredService<IProfileStore>(),
-                sp.GetRequiredService<ISkyCatalogService>()));
-
         // §36 Planning horizon — projects the site's local horizon onto the equatorial sky for a client overlay.
         builder.Services.AddSingleton<IHorizonService>(sp =>
             new HorizonService(sp.GetRequiredService<IProfileStore>()));

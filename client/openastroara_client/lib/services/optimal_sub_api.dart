@@ -1,7 +1,3 @@
-import 'package:dio/dio.dart';
-
-import '../models/server.dart';
-
 /// NEXTGEN §2/§5 — the daemon's Optimal-Sub calculation for one filter: the
 /// Glover read-noise floor intersected with the sky-background saturation
 /// ceiling (`GET /api/v1/planning/optimal-sub`, slice 2).
@@ -85,75 +81,4 @@ class OptimalSubResult {
   }
 
   static double? _optDouble(Object? v) => v is num ? v.toDouble() : null;
-}
-
-/// The daemon rejected the request as un-computable (a 400 — e.g. the imaging
-/// train has no aperture yet). [message] is the daemon's human-readable detail,
-/// good enough to show verbatim.
-class OptimalSubUnavailable implements Exception {
-  final String message;
-  const OptimalSubUnavailable(this.message);
-  @override
-  String toString() => message;
-}
-
-/// Client for `GET /api/v1/planning/optimal-sub`. Mirrors [TonightSkyApi]'s
-/// shape (own Dio bound to one server; [close] when done).
-class OptimalSubApi {
-  final Dio _dio;
-
-  OptimalSubApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: server.baseUrl,
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 10),
-            ));
-
-  /// The Optimal-Sub window for [filter] (a planning filter-set name) or an
-  /// explicit [bandwidthNm]; both absent → the daemon's effective-broadband
-  /// default (flagged in `assumed_defaults`).
-  ///
-  /// [raDeg]/[decDeg] (J2000 decimal DEGREES — convert NINA's RA hours first,
-  /// see `degFromInputCoordinates`) opt into the §3.1 star-detectability
-  /// figures; supply both or neither. An older daemon ignores the extra
-  /// parameters and simply returns no star fields.
-  ///
-  /// Returns null on a 404 — an older daemon without the endpoint, so the
-  /// advisor simply doesn't render. Throws [OptimalSubUnavailable] with the
-  /// daemon's message on a 400 (e.g. optics not yet configured); rethrows
-  /// transport errors.
-  Future<OptimalSubResult?> get(
-      {String? filter, double? bandwidthNm, double? raDeg, double? decDeg}) async {
-    // Blank-or-null filter → omit the parameter (the daemon's broadband default).
-    final trimmedFilter = switch (filter?.trim()) {
-      final f? when f.isNotEmpty => f,
-      _ => null,
-    };
-    try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/planning/optimal-sub',
-        queryParameters: {
-          'filter': ?trimmedFilter,
-          'bandwidthNm': ?bandwidthNm,
-          'raDeg': ?raDeg,
-          'decDeg': ?decDeg,
-        },
-      );
-      return OptimalSubResult.fromJson(res.data ?? const {});
-    } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      if (status == 404) return null; // pre-slice-2 daemon → hide the advisor
-      if (status == 400) {
-        final data = e.response?.data;
-        final detail = data is Map<String, dynamic> ? data['detail'] : null;
-        throw OptimalSubUnavailable(detail is String
-            ? detail
-            : 'The daemon could not compute an optimal sub for this setup.');
-      }
-      rethrow;
-    }
-  }
-
-  void close() => _dio.close(force: true);
 }

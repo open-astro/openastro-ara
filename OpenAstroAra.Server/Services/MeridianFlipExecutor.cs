@@ -572,9 +572,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     /// <summary>The target's altitude (degrees) at <paramref name="atUtc"/> from the site — the
     /// Layer-1 endpoint prediction. Same spherical-trig path Tonight's Sky uses (one sky model).</summary>
     internal static double PredictedTargetAltitudeDeg(Coordinates target, double latDeg, double lonDeg, DateTimeOffset atUtc) {
-        var lst = TonightSkyService.LocalSiderealTimeDeg(atUtc, lonDeg);
+        var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, lonDeg);
         var hourAngle = (lst - target.RADegrees % 360.0 + 360.0) % 360.0;
-        return TonightSkyService.AltitudeFromHourAngleDeg(target.Dec, latDeg, hourAngle);
+        return SiteAstrometry.AltitudeFromHourAngleDeg(target.Dec, latDeg, hourAngle);
     }
 
     // ─── §58.9 Layer 2 — in-slew watchdog ──────────────────────────────────────────────────────

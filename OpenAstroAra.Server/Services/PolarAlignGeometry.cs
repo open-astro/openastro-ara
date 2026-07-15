@@ -194,7 +194,7 @@ public static class PolarAlignGeometry {
                 "site latitude must be non-zero (the celestial pole sits on the horizon at the equator) and within ±90°");
         }
 
-        var lst = TonightSkyService.LocalSiderealTimeDeg(atUtc, longitudeDeg);
+        var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, longitudeDeg);
         var haDeg = lst - axisRaDeg;
         var (altDeg, azDeg) = AltAz(axisDecDeg, latitudeDeg, haDeg);
 
