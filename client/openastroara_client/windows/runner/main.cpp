@@ -25,8 +25,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
+  // Launchpad-first sizing: open compact; the Dart router flips to the
+  // maximized "workstation" mode via the openastroara/window channel when the
+  // §25 shell mounts (see flutter_window.cpp).
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  Win32Window::Size size(960, 680);
   if (!window.Create(L"openastroara", origin, size)) {
     return EXIT_FAILURE;
   }
