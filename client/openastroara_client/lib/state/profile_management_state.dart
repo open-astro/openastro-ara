@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/profile_list.dart';
 import '../services/profile_api.dart';
+import 'profile_cache_state.dart';
 import 'saved_server_state.dart';
 
 /// The [ProfileApi] for the active server, or null if none is connected. A
@@ -32,7 +35,7 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
   bool _busy = false;
 
   @override
-  Future<ProfileList> build() {
+  Future<ProfileList> build() async {
     // Reset the guard on every (re)build — a server switch while an action was
     // in flight must not leave new actions wedged behind a stale _busy.
     _busy = false;
@@ -45,7 +48,13 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
       throw StateError('No active server — connect to a daemon to manage profiles.');
     }
     _api = api;
-    return api.listProfiles();
+    final list = await api.listProfiles();
+    // §2 offline planning — snapshot the list + active profile's gear sections
+    // so a later offline session can plan with real settings. Fire-and-forget:
+    // the cache is a convenience and must never delay or fail the live list.
+    unawaited(captureProfileCache(
+        ref.read(profileCacheServiceProvider), api, list));
+    return list;
   }
 
   /// Re-fetch the list, surfacing transport errors through the AsyncValue. Keeps
@@ -77,7 +86,15 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
       // errors into `state`, so it can't throw here and mask op's exception).
       // Hold _busy until the refresh settles so a second action can't race it.
       try {
-        state = await AsyncValue.guard(() => api.listProfiles());
+        final next = await AsyncValue.guard(() => api.listProfiles());
+        state = next;
+        // Keep the offline cache tracking mutations too — notably select(),
+        // which changes WHICH profile's gear sections should be snapshotted.
+        final list = next.value;
+        if (list != null) {
+          unawaited(captureProfileCache(
+              ref.read(profileCacheServiceProvider), api, list));
+        }
       } finally {
         _busy = false;
       }

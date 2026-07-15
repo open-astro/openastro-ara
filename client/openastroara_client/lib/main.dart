@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
+import 'screens/offline_launch_screen.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/saved_server_state.dart';
@@ -58,7 +59,9 @@ class _RootRouter extends ConsumerWidget {
     final offline = ref.watch(offlineModeProvider);
     return saved.when(
       data: (servers) => offline
-          ? const AppShell()
+          // Offline still gets a profile step: pick which CACHED profile to
+          // plan with (seeding the settings notifiers) before the shell.
+          ? (gatePassed ? const AppShell() : const OfflineLaunchScreen())
           : servers.isEmpty
               ? const FirstRunScreen()
               : gatePassed

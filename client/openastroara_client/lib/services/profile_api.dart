@@ -152,7 +152,7 @@ class ProfileApi {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/imaging-defaults',
     );
-    return _imagingDefaultsFromJson(res.data ?? const {});
+    return imagingDefaultsFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's imaging-defaults section. Returns the daemon's
@@ -160,15 +160,15 @@ class ProfileApi {
   Future<ImagingDefaults> putImagingDefaults(ImagingDefaults value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/imaging-defaults',
-      data: _imagingDefaultsToJson(value),
+      data: imagingDefaultsToJson(value),
     );
-    return _imagingDefaultsFromJson(res.data ?? const {});
+    return imagingDefaultsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's optics section (§36 — FOV geometry inputs).
   Future<OpticsSettings> getOptics() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/optics');
-    return _opticsFromJson(res.data ?? const {});
+    return opticsFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's optics section. Returns the daemon's echo (it may
@@ -176,9 +176,9 @@ class ProfileApi {
   Future<OpticsSettings> putOptics(OpticsSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/optics',
-      data: _opticsToJson(value),
+      data: opticsToJson(value),
     );
-    return _opticsFromJson(res.data ?? const {});
+    return opticsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's camera-electronics section (NEXTGEN §3/§4 —
@@ -247,7 +247,7 @@ class ProfileApi {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/filter-set',
     );
-    return _filterSetFromJson(res.data ?? const {});
+    return filterSetFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's planning filter set. Returns the daemon's echo
@@ -255,9 +255,9 @@ class ProfileApi {
   Future<FilterSetSettings> putFilterSet(FilterSetSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/filter-set',
-      data: _filterSetToJson(value),
+      data: filterSetToJson(value),
     );
-    return _filterSetFromJson(res.data ?? const {});
+    return filterSetFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's filter-wheel slot labels (§37.4/§46.2 —
@@ -332,16 +332,16 @@ class ProfileApi {
   /// GET the active profile's site-settings section.
   Future<SiteSettings> getSiteSettings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/site');
-    return _siteSettingsFromJson(res.data ?? const {});
+    return siteSettingsFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's site-settings section.
   Future<SiteSettings> putSiteSettings(SiteSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/site',
-      data: _siteSettingsToJson(value),
+      data: siteSettingsToJson(value),
     );
-    return _siteSettingsFromJson(res.data ?? const {});
+    return siteSettingsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's filenames-settings section.
@@ -397,7 +397,7 @@ class ProfileApi {
     final res = await _dio.get<Map<String, dynamic>>(
       '/api/v1/profile/autofocus',
     );
-    return _autofocusSettingsFromJson(res.data ?? const {});
+    return autofocusSettingsFromJson(res.data ?? const {});
   }
 
   /// PUT the active profile's autofocus settings.
@@ -406,9 +406,9 @@ class ProfileApi {
   ) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/autofocus',
-      data: _autofocusSettingsToJson(value),
+      data: autofocusSettingsToJson(value),
     );
-    return _autofocusSettingsFromJson(res.data ?? const {});
+    return autofocusSettingsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's plate-solve settings.
@@ -489,7 +489,7 @@ class ProfileApi {
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
 
-  static ImagingDefaults _imagingDefaultsFromJson(Map<String, dynamic> j) =>
+  static ImagingDefaults imagingDefaultsFromJson(Map<String, dynamic> j) =>
       ImagingDefaults(
         defaultExposure: Duration(
           seconds: (j['exposure_seconds'] as num?)?.toInt() ?? 5,
@@ -504,7 +504,7 @@ class ProfileApi {
         warmupAtSessionEnd: (j['warmup_at_session_end'] as bool?) ?? false,
       );
 
-  static Map<String, dynamic> _imagingDefaultsToJson(ImagingDefaults v) => {
+  static Map<String, dynamic> imagingDefaultsToJson(ImagingDefaults v) => {
     'exposure_seconds': v.defaultExposure.inSeconds,
     'gain': v.defaultGain,
     'offset': v.defaultOffset,
@@ -531,7 +531,7 @@ class ProfileApi {
 
   // ── Storage settings JSON mapping ──────────────────────────────────────
 
-  static OpticsSettings _opticsFromJson(Map<String, dynamic> j) {
+  static OpticsSettings opticsFromJson(Map<String, dynamic> j) {
     // The daemon defaults reducer_factor to 1.0, back-fills it on upgrade, and PUT
     // rejects ≤ 0 (#467), so the wire value is always positive in practice. Coalesce
     // a missing OR non-positive value (e.g. a hand-edited profile.json) to 1.0 = "no
@@ -548,7 +548,7 @@ class ProfileApi {
     );
   }
 
-  static Map<String, dynamic> _opticsToJson(OpticsSettings v) => {
+  static Map<String, dynamic> opticsToJson(OpticsSettings v) => {
     'focal_length_mm': v.focalLengthMm,
     'reducer_factor': v.reducerFactor,
     'sensor_width_px': v.sensorWidthPx,
@@ -581,7 +581,7 @@ class ProfileApi {
     'auto_captured': v.autoCaptured,
   };
 
-  static FilterSetSettings _filterSetFromJson(Map<String, dynamic> j) =>
+  static FilterSetSettings filterSetFromJson(Map<String, dynamic> j) =>
       FilterSetSettings(
         filters: ((j['filters'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
@@ -596,7 +596,7 @@ class ProfileApi {
             .toList(),
       );
 
-  static Map<String, dynamic> _filterSetToJson(FilterSetSettings v) => {
+  static Map<String, dynamic> filterSetToJson(FilterSetSettings v) => {
     'filters': [
       for (final f in v.filters)
         {'name': f.name, 'kind': f.kind.wire, 'bandwidth_nm': f.bandwidthNm},
@@ -837,7 +837,7 @@ class ProfileApi {
 
   // ── Autofocus settings JSON mapping ────────────────────────────────────
 
-  static AutofocusSettings _autofocusSettingsFromJson(Map<String, dynamic> j) =>
+  static AutofocusSettings autofocusSettingsFromJson(Map<String, dynamic> j) =>
       AutofocusSettings(
         method: _autofocusMethodFromString(j['method'] as String?),
         steps: (j['steps'] as num?)?.toInt() ?? 7,
@@ -858,7 +858,7 @@ class ProfileApi {
         telescopeType: telescopeTypeFromWire(j['telescope_type'] as String?),
       );
 
-  static Map<String, dynamic> _autofocusSettingsToJson(AutofocusSettings v) => {
+  static Map<String, dynamic> autofocusSettingsToJson(AutofocusSettings v) => {
     'method': _autofocusMethodToString(v.method),
     'steps': v.steps,
     'step_size': v.stepSize,
@@ -1141,7 +1141,7 @@ class ProfileApi {
 
   // ── Site settings JSON mapping ─────────────────────────────────────────
 
-  static SiteSettings _siteSettingsFromJson(Map<String, dynamic> j) =>
+  static SiteSettings siteSettingsFromJson(Map<String, dynamic> j) =>
       SiteSettings(
         siteName: (j['site_name'] as String?) ?? 'Backyard',
         latitudeDeg: (j['latitude_deg'] as num?)?.toDouble() ?? 0,
@@ -1163,7 +1163,7 @@ class ProfileApi {
             (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
       );
 
-  static Map<String, dynamic> _siteSettingsToJson(SiteSettings v) => {
+  static Map<String, dynamic> siteSettingsToJson(SiteSettings v) => {
     'site_name': v.siteName,
     'latitude_deg': v.latitudeDeg,
     'longitude_deg': v.longitudeDeg,

@@ -1575,7 +1575,13 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   profile authoring means persisting the wizard draft locally and replaying the section
   PUTs on reconnect — a larger slice than sequences (18 screens / ~15 endpoints), tracked
   here rather than bundled into the offline-entry PR.
-- **Offline settings snapshot.** Offline run bodies are built from whatever the settings
-  notifiers hold (constructor defaults on a cold offline start). Caching the last-connected
-  profile's imaging-defaults/autofocus sections locally would make offline drafts match the
-  user's real defaults.
+- ✅ **Offline profile choice + gear snapshot — DONE (2026-07-14, this PR,
+  maintainer-reported).** Connected sessions cache the profile list + the active profile's
+  planning sections (optics, imaging defaults, autofocus, site, filter set) to app-support
+  `profile_cache.json`; "Plan offline" now routes through an offline profile picker that
+  seeds the settings notifiers from the chosen profile's snapshot, so offline drafts are
+  built from the user's real gear. Empty cache degrades to "continue with defaults".
+- **Launch gate doesn't re-arm on a mid-session server change** (from the #844 review):
+  `profileGatePassedProvider` is one-way per session, so an empty→non-empty saved-servers
+  transition (or switching daemons in-session) skips the profile box for the new server.
+  Low severity; re-arm via a `ref.listen` on that transition if it bites.
