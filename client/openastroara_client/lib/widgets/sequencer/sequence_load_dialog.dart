@@ -123,11 +123,21 @@ class SequenceLoadDialog extends ConsumerWidget {
 /// sequences. Tapping one loads it into the editor (works offline). Each row
 /// offers Push-to-server (enabled only while connected; creates the real
 /// sequence, deletes the local copy, and selects the new id) and Delete.
-class _DraftsSection extends ConsumerWidget {
+class _DraftsSection extends ConsumerStatefulWidget {
   const _DraftsSection();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DraftsSection> createState() => _DraftsSectionState();
+}
+
+class _DraftsSectionState extends ConsumerState<_DraftsSection> {
+  /// One busy fence for ALL draft rows: push deletes the local file and
+  /// refreshes state, so a second overlapping push/delete (double-tap or a tap
+  /// on another row mid-flight) could act on a stale list (review #845).
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
     final drafts = ref.watch(draftSequencesProvider).asData?.value;
     if (drafts == null || drafts.isEmpty) return const SizedBox.shrink();
     final connected = ref.watch(sequenceApiProvider) != null;
@@ -162,13 +172,15 @@ class _DraftsSection extends ConsumerWidget {
                       tooltip: connected
                           ? 'Push to server'
                           : 'Connect to a server to push this draft',
-                      onPressed:
-                          connected ? () => _push(context, ref, d.id) : null,
+                      onPressed: (connected && !_busy)
+                          ? () => _push(context, d.id)
+                          : null,
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 18),
                       tooltip: 'Delete draft',
-                      onPressed: () => _delete(context, ref, d.id, d.name),
+                      onPressed:
+                          _busy ? null : () => _delete(context, d.id, d.name),
                     ),
                   ],
                 ),
@@ -185,7 +197,9 @@ class _DraftsSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _push(BuildContext context, WidgetRef ref, String id) async {
+  Future<void> _push(BuildContext context, String id) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
       // Was the pushed draft the one open in the editor? Read BEFORE the push
@@ -208,11 +222,13 @@ class _DraftsSection extends ConsumerWidget {
             "Couldn't push the draft. Check the connection and try again."),
         backgroundColor: AraColors.accentError,
       ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _delete(
-      BuildContext context, WidgetRef ref, String id, String name) async {
+  Future<void> _delete(BuildContext context, String id, String name) async {
+    if (_busy) return;
     final messenger = ScaffoldMessenger.of(context);
     final ok = await showDialog<bool>(
       context: context,
@@ -234,6 +250,7 @@ class _DraftsSection extends ConsumerWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
+    setState(() => _busy = true);
     try {
       await ref.read(draftSequencesProvider.notifier).delete(id);
     } catch (e) {
@@ -242,6 +259,8 @@ class _DraftsSection extends ConsumerWidget {
         content: Text("Couldn't delete the draft."),
         backgroundColor: AraColors.accentError,
       ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 }

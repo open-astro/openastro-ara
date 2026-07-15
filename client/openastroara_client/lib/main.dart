@@ -75,11 +75,25 @@ class _RootRouter extends ConsumerWidget {
         // exception text can't leak into the user-facing surface.
         developer.log('Failed to load saved servers',
             name: 'openastroara.saved_servers', error: e, stackTrace: st);
-        return const Scaffold(
+        // A storage-read failure must not dead-end the app — offline planning
+        // stays reachable from here too (§2: offline is never blocked).
+        return Scaffold(
           body: Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('Failed to load saved servers. Please try again.'),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Failed to load saved servers. Please try again.'),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () =>
+                        ref.read(offlineModeProvider.notifier).enter(),
+                    icon: const Icon(Icons.cloud_off_outlined, size: 18),
+                    label: const Text('Plan offline'),
+                  ),
+                ],
+              ),
             ),
           ),
         );

@@ -66,11 +66,15 @@ Future<void> captureProfileCache(
     final activeId = list.activeId;
     if (activeId == null) return;
     // The section GETs read the ACTIVE profile — that's the one we snapshot.
-    final optics = await api.getOptics();
-    final imaging = await api.getImagingDefaults();
-    final autofocus = await api.getAutofocusSettings();
-    final site = await api.getSiteSettings();
-    final filters = await api.getFilterSet();
+    // Parallel (like _hydratePlanningSettings): this fires on every list load
+    // AND after every mutation, so serializing 5 round-trips adds up.
+    final (optics, imaging, autofocus, site, filters) = await (
+      api.getOptics(),
+      api.getImagingDefaults(),
+      api.getAutofocusSettings(),
+      api.getSiteSettings(),
+      api.getFilterSet(),
+    ).wait;
     await cache.saveSections(activeId, {
       'optics': ProfileApi.opticsToJson(optics),
       'imaging_defaults': ProfileApi.imagingDefaultsToJson(imaging),
