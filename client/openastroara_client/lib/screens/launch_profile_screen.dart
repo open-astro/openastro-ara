@@ -76,6 +76,15 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                         icon: const Icon(Icons.refresh, size: 18),
                         label: const Text('Retry'),
                       ),
+                      const SizedBox(height: 8),
+                      // §2 — the daemon being down must not block planning:
+                      // enter the shell offline; drafts push once it's back.
+                      TextButton.icon(
+                        onPressed: () =>
+                            ref.read(offlineModeProvider.notifier).enter(),
+                        icon: const Icon(Icons.cloud_off_outlined, size: 18),
+                        label: const Text('Plan offline'),
+                      ),
                     ],
                     data: (list) => _profileControls(list),
                   ),

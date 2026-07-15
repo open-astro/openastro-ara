@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/draft_sequence.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_api.dart';
@@ -13,6 +15,7 @@ import '../saved_server_state.dart';
 import '../settings/autofocus_settings_state.dart';
 import '../settings/imaging_defaults_state.dart';
 import '../settings/settings_nav.dart';
+import 'draft_sequences_state.dart';
 import 'sequence_editor_state.dart';
 import 'sequence_list_state.dart';
 
@@ -22,7 +25,12 @@ import 'sequence_list_state.dart';
 class ImagingRunResult {
   final String sequenceId;
   final bool appended;
-  const ImagingRunResult(this.sequenceId, {required this.appended});
+
+  /// True when no server was connected and the run was saved as a LOCAL draft
+  /// (§2 offline planning) instead of being created on the daemon.
+  final bool draft;
+  const ImagingRunResult(this.sequenceId,
+      {required this.appended, this.draft = false});
 }
 
 /// §36 — the ONE feedback surface for [createImagingRun]'s outcome. The three
@@ -50,6 +58,13 @@ void showImagingRunFeedback(
       const SnackBar(
         content: Text('Connect to a server before creating a run.'),
         backgroundColor: AraColors.accentError,
+      ),
+    );
+  } else if (result.draft) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Saved "$targetName" as an offline draft — push it to '
+            'the server from Load sequence once connected.'),
       ),
     );
   } else {
@@ -97,8 +112,43 @@ Future<ImagingRunResult?> createImagingRun(
   double? positionAngleDeg,
 }) async {
   final api = ref.read(sequenceApiProvider);
-  if (api == null) return null;
   final container = ProviderScope.containerOf(ref.context, listen: false);
+
+  // §2 offline planning — no server: build the same run body from whatever the
+  // settings notifiers currently hold (no daemon to hydrate from) and save it
+  // as a LOCAL draft; it pushes to the daemon from the Load dialog later.
+  // Append-to-open-draft is a tracked follow-up — offline, each target gets
+  // its own draft.
+  if (api == null) {
+    final defaults = container.read(imagingDefaultsProvider);
+    final af = container.read(autofocusSettingsProvider);
+    final exposureSeconds = defaults.defaultExposure.inMilliseconds /
+        Duration.millisecondsPerSecond;
+    final afEvery = af.everyNHours > 0 && exposureSeconds > 0
+        ? math.max(1, ((af.everyNHours * 3600.0) / exposureSeconds).ceil())
+        : null;
+    final body = buildImagingRunBody(
+      raDeg: raDeg,
+      decDeg: decDeg,
+      targetName: targetName,
+      exposureSeconds: exposureSeconds,
+      gain: defaults.defaultGain,
+      offset: defaults.defaultOffset,
+      binning: defaults.defaultBin,
+      frameCount: defaultFrameCount(exposureSeconds,
+          remainingDarkHours: remainingDarkHours),
+      coolToC: defaults.coolerTargetC,
+      warmAtEnd: defaults.warmupAtSessionEnd,
+      autofocusEveryNExposures: afEvery,
+      positionAngleDeg: positionAngleDeg,
+    );
+    final draftId = await container
+        .read(draftSequencesProvider.notifier)
+        .create(targetName, body);
+    container.read(selectedSequenceIdProvider.notifier).select(draftId);
+    container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    return ImagingRunResult(draftId, appended: false, draft: true);
+  }
 
   // The run is "built from the user's configured Imaging Defaults" — which
   // live on the daemon. The settings notifiers hydrate lazily (when their
@@ -124,7 +174,9 @@ Future<ImagingRunResult?> createImagingRun(
       : null;
 
   final selectedId = container.read(selectedSequenceIdProvider);
-  if (selectedId != null) {
+  // A selected local draft can't take a daemon-side append — fall through to
+  // creating a fresh sequence on the daemon instead.
+  if (selectedId != null && !isDraftSequenceId(selectedId)) {
     final block = buildTargetBlock(
       raDeg: raDeg,
       decDeg: decDeg,
@@ -166,7 +218,24 @@ Future<ImagingRunResult?> createImagingRun(
     positionAngleDeg: positionAngleDeg,
   );
 
-  final id = await api.create(targetName, body);
+  final String id;
+  try {
+    id = await api.create(targetName, body);
+  } on DioException catch (e) {
+    // §2 offline planning — a SAVED server whose daemon is down/unreachable
+    // still yields a non-null api, so "offline" surfaces here as a transport
+    // failure. Degrade the create to a local draft rather than losing the
+    // plan. Only transport-level failures qualify: a daemon that RESPONDED
+    // with an error (4xx/5xx) rejected the body, and hiding that behind a
+    // draft would just defer the same rejection to push time.
+    if (e.response != null) rethrow;
+    final draftId = await container
+        .read(draftSequencesProvider.notifier)
+        .create(targetName, body);
+    container.read(selectedSequenceIdProvider.notifier).select(draftId);
+    container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    return ImagingRunResult(draftId, appended: false, draft: true);
+  }
 
   // Same post-create choreography as the NINA import flow: refresh the list,
   // select the new sequence (the Run tab listens and loads it), then bring the

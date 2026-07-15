@@ -40,7 +40,9 @@ class OpenAstroAraApp extends StatelessWidget {
 
 /// §30.1 launch sequence: FirstRunScreen (no saved servers yet) → the
 /// LaunchProfileScreen profile box (always shown, §30.2/§30.3) → AppShell
-/// once the user clicks [Image] and the launch gate passes.
+/// once the user clicks [Image] and the launch gate passes. "Plan offline"
+/// (§2 — WILMA is a planning workstation, not a thin client) bypasses both
+/// gates and enters the shell with no server for the session.
 class _RootRouter extends ConsumerWidget {
   const _RootRouter();
 
@@ -53,12 +55,15 @@ class _RootRouter extends ConsumerWidget {
     ref.listen(backupStreamProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
+    final offline = ref.watch(offlineModeProvider);
     return saved.when(
-      data: (servers) => servers.isEmpty
-          ? const FirstRunScreen()
-          : gatePassed
-              ? const AppShell()
-              : const LaunchProfileScreen(),
+      data: (servers) => offline
+          ? const AppShell()
+          : servers.isEmpty
+              ? const FirstRunScreen()
+              : gatePassed
+                  ? const AppShell()
+                  : const LaunchProfileScreen(),
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),

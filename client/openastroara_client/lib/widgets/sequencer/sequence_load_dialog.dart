@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_share_file.dart' show shareFileName;
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_delete.dart';
@@ -31,7 +32,33 @@ class SequenceLoadDialog extends ConsumerWidget {
       title: const Text('Load sequence'),
       content: SizedBox(
         width: 420,
-        child: async.when(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // §2 offline planning — local drafts, shown above the server list
+            // (present with or without a connection; hidden when empty).
+            const _DraftsSection(),
+            _serverList(context, ref, async),
+          ],
+        ),
+      ),
+      actions: [
+        // Import a NINA sequence file; on success it selects the new sequence
+        // (loaded into the tree) and closes this picker. On a cancel/error the
+        // dialog stays open so the user can retry or pick from the list.
+        const _ImportNinaButton(),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+
+  Widget _serverList(BuildContext context, WidgetRef ref,
+      AsyncValue<List<SequenceListItem>?> async) {
+    return async.when(
           loading: () => const SizedBox(
             height: 120,
             child: Center(child: CircularProgressIndicator()),
@@ -88,19 +115,130 @@ class SequenceLoadDialog extends ConsumerWidget {
               ),
             );
           },
+        );
+  }
+}
+
+/// §2 offline drafts — the client-managed drafts, listed above the server's
+/// sequences. Tapping one loads it into the editor (works offline). Each row
+/// offers Push-to-server (enabled only while connected; creates the real
+/// sequence, deletes the local copy, and selects the new id) and Delete.
+class _DraftsSection extends ConsumerWidget {
+  const _DraftsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final drafts = ref.watch(draftSequencesProvider).asData?.value;
+    if (drafts == null || drafts.isEmpty) return const SizedBox.shrink();
+    final connected = ref.watch(sequenceApiProvider) != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 4),
+          child: Text('Offline drafts',
+              style: TextStyle(
+                  color: AraColors.textSecondary,
+                  fontWeight: FontWeight.bold)),
         ),
-      ),
-      actions: [
-        // Import a NINA sequence file; on success it selects the new sequence
-        // (loaded into the tree) and closes this picker. On a cancel/error the
-        // dialog stays open so the user can retry or pick from the list.
-        const _ImportNinaButton(),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 180),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: drafts.length,
+            itemBuilder: (context, i) {
+              final d = drafts[i];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    const Icon(Icons.cloud_off_outlined, size: 18),
+                title: Text(d.name.isEmpty ? '(untitled draft)' : d.name),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                      tooltip: connected
+                          ? 'Push to server'
+                          : 'Connect to a server to push this draft',
+                      onPressed:
+                          connected ? () => _push(context, ref, d.id) : null,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      tooltip: 'Delete draft',
+                      onPressed: () => _delete(context, ref, d.id, d.name),
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  ref.read(selectedSequenceIdProvider.notifier).select(d.id);
+                  Navigator.of(context).pop(d.id);
+                },
+              );
+            },
+          ),
         ),
+        const Divider(color: AraColors.border),
       ],
     );
+  }
+
+  Future<void> _push(BuildContext context, WidgetRef ref, String id) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final newId =
+          await ref.read(draftSequencesProvider.notifier).push(id);
+      // The draft is now a daemon sequence — select it so the editor swaps to
+      // the pushed copy (guarded: the dialog may have been dismissed).
+      if (context.mounted) {
+        ref.read(selectedSequenceIdProvider.notifier).select(newId);
+      }
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Draft pushed to the server.')));
+    } catch (e) {
+      debugPrint('[sequencer] draft push failed: $e');
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            "Couldn't push the draft. Check the connection and try again."),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
+  }
+
+  Future<void> _delete(
+      BuildContext context, WidgetRef ref, String id, String name) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete draft?'),
+        content: Text(
+            '"${name.isEmpty ? '(untitled draft)' : name}" will be removed from this device. This can\'t be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: AraColors.accentError),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await ref.read(draftSequencesProvider.notifier).delete(id);
+    } catch (e) {
+      debugPrint('[sequencer] draft delete failed: $e');
+      messenger.showSnackBar(const SnackBar(
+        content: Text("Couldn't delete the draft."),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
   }
 }
 

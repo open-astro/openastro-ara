@@ -18,3 +18,18 @@ class ProfileGateNotifier extends Notifier<bool> {
   /// One-way: the launch flow only ever passes the gate, never re-arms it.
   void pass() => state = true;
 }
+
+/// §2 offline planning — true once the user chose "Plan offline" from the
+/// launch flow, letting the root router enter the shell with no (reachable)
+/// server. Session-scoped like the profile gate: a cold start goes through the
+/// launch sequence again. One-way for the same reason — connecting a server
+/// later happens inside the shell, not by re-running the launch flow.
+final offlineModeProvider =
+    NotifierProvider<OfflineModeNotifier, bool>(OfflineModeNotifier.new);
+
+class OfflineModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void enter() => state = true;
+}
