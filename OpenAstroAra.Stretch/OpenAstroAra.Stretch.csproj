@@ -12,7 +12,7 @@
   <ItemGroup>
     <!--
       SkiaSharp for JPEG encoding. Cross-platform with native bins per
-      target RID; AOT-compatible from 3.x. JpegEncoder uses it to turn
+      target RID; AOT-compatible (3.x+). JpegEncoder uses it to turn
       a stretched 8-bit grayscale byte[] into a JPEG byte[].
     -->
     <PackageReference Include="SkiaSharp" Version="4.150.1" />
