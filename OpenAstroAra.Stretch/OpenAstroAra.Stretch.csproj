@@ -15,7 +15,7 @@
       target RID; AOT-compatible from 3.x. JpegEncoder uses it to turn
       a stretched 8-bit grayscale byte[] into a JPEG byte[].
     -->
-    <PackageReference Include="SkiaSharp" Version="3.116.1" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.116.1" />
+    <PackageReference Include="SkiaSharp" Version="4.150.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" />
   </ItemGroup>
 </Project>

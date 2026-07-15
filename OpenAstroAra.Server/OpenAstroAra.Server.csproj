@@ -59,32 +59,32 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- GHSA-v5pm-xwqc-g5wc: pin the patched Microsoft.OpenApi (≥ 2.7.5 fixes the
          circular-schema-reference parsing DoS) over the transitive 2.0.0 that
          Microsoft.AspNetCore.OpenApi 10.0.0 pulls; NU1903 is warning-as-error here.
          Remove when Microsoft.AspNetCore.OpenApi ships on the patched lib. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.9.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.9.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): pin the patched native SQLite lib
          (3.50.3 = SQLite ≥ 3.50.2) over the transitive 2.1.11 that
          Microsoft.EntityFrameworkCore.Sqlite / Microsoft.Data.Sqlite 10.0.x pull.
          See OpenAstroAra.Core.csproj for the rationale. Remove when MS ships a
          build on the patched lib. -->
-    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
-    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <!-- §31.4 USB-GPS self-sync: serial NMEA reads from /dev/ttyUSB*/ttyACM*. Microsoft-maintained,
          Linux support via a bundled native shim; plain P/Invoke so NativeAOT publish stays clean. -->
-    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.10" />
     <!-- §29.9.2 daemon log file: a rolling Compact-JSON (CLEF) sink the §29.9
          log endpoints tail/download. Both Apache-2.0 (Serilog), release-safe.
          Tail reads the CLEF lines back with System.Text.Json directly (no
          reader dependency), so the parse stays AOT-clean. -->
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
-    <PackageReference Include="Zeroconf" Version="3.6.11" />
+    <PackageReference Include="Zeroconf" Version="3.7.16" />
     <!-- §32.4 server self-advertisement over mDNS so WILMA's first-run scan finds
          the daemon (_openastroara._tcp). Zeroconf above is browse-only (used for
          Alpaca probes); it cannot publish a service, so the responder comes from
@@ -92,9 +92,9 @@
          mDNSResponder/Avahi on :5353 via the library's socket-reuse handling. -->
     <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <!-- Phase 6: ASCOM Alpaca for cross-platform equipment discovery + typed proxies per §6.2 / §52 -->
-    <PackageReference Include="ASCOM.Alpaca.Components" Version="2.1.0" />
-    <PackageReference Include="ASCOM.Alpaca.Device" Version="2.1.0" />
-    <PackageReference Include="ASCOM.Tools" Version="2.1.0" />
+    <PackageReference Include="ASCOM.Alpaca.Components" Version="3.1.0" />
+    <PackageReference Include="ASCOM.Alpaca.Device" Version="3.1.0" />
+    <PackageReference Include="ASCOM.Tools" Version="3.1.0" />
   </ItemGroup>
 
   <ItemGroup>
