@@ -114,7 +114,7 @@ NUGET_OVERRIDES: dict[str, dict[str, str]] = {
         "source": "https://github.com/ericsink/SQLitePCL.raw (SQLitePCLRaw is Apache-2.0; "
         "the bundled SQLite engine is public domain). This version is pinned over the "
         "bundle's transitive pick for CVE-2025-6965 — see design/PORT_TODO.md.",
-        "version": "3.50.3",
+        "version": "3.53.3",
     },
     "SimpleBase": {
         "license": "Apache-2.0",
