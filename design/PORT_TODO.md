@@ -1615,3 +1615,7 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   `HttpListener`: "Please call the Start() method before calling this method" — a listener
   start race on the runner, unrelated to the PR under test (#846, no C# touched). Passed
   on rerun. If it recurs, serialize the listener startup or retry-bind in the test.
+- `A_dead_device_trips_connected_to_error_and_publishes_the_fault` failed once on CI the
+  same day (6 s — a device-probe timing race), also on a client-only commit. Passed on
+  rerun. Two flakes in one day suggests the Analyzer-gate job's runner is timing-sensitive;
+  if either recurs, widen the probe/listener timeouts under test.
