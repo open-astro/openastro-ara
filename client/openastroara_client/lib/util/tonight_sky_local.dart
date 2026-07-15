@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../services/dso_catalog_service.dart';
 import '../services/tonight_sky_api.dart';
 import '../state/settings/camera_electronics_state.dart';
 import '../state/settings/filter_set_state.dart';
@@ -32,49 +33,47 @@ const double _surfaceBrightnessWeight = 12.0;
 const double _magnitudeWeight = 8.0;
 const double _framingTooSmallRatio = 0.10;
 const double _framingTooBigRatio = 0.80;
+const double _framingFloorQ = 0.15;
 const double _hoursSaturationHours = 6.0;
+const double _sbContrastSpanMag = 4.0;
+const double _sbFloorQ = 0.15;
 const double _magFaintFloor = 12.0;
 
 const int _windowStepMinutes = 5;
 const int _windowHalfSpanMinutes = 12 * 60;
 const double _siderealDegPerDay = 360.98564736629;
 
-/// One catalog entry (starter set carries no sizes — framing is Unknown,
-/// exactly like the daemon's own no-catalog fallback).
-class _CatalogObject {
-  final String id;
-  final String name;
-  final String type;
-  final double magnitude;
-  final double raDeg;
-  final double decDeg;
-  const _CatalogObject(
-      this.id, this.name, this.type, this.magnitude, this.raDeg, this.decDeg);
-}
+PlanningDso _o(String id, String name, String type, double mag, double ra,
+        double dec) =>
+    PlanningDso(
+        id: id, name: name, type: type, magnitude: mag, raDeg: ra, decDeg: dec);
 
 /// The daemon's hardcoded starter catalog (TonightSkyService.Catalog),
-/// verbatim: J2000 positions, OpenNGC type codes where definite.
-const List<_CatalogObject> _starterCatalog = [
-  _CatalogObject('M31', 'Andromeda Galaxy', 'galaxy', 3.4, 10.685, 41.269),
-  _CatalogObject('M33', 'Triangulum Galaxy', 'galaxy', 5.7, 23.462, 30.660),
-  _CatalogObject('M45', 'Pleiades', 'cluster', 1.6, 56.750, 24.117),
-  _CatalogObject('M1', 'Crab Nebula', 'SNR', 8.4, 83.633, 22.014),
-  _CatalogObject('M42', 'Orion Nebula', 'HII', 4.0, 83.822, -5.391),
-  _CatalogObject('NGC2237', 'Rosette Nebula', 'HII', 9.0, 97.950, 5.050),
-  _CatalogObject("M81", "Bode's Galaxy", 'galaxy', 6.9, 148.888, 69.065),
-  _CatalogObject('M97', 'Owl Nebula', 'PN', 9.9, 168.699, 55.019),
-  _CatalogObject('M104', 'Sombrero Galaxy', 'galaxy', 8.0, 189.998, -11.623),
-  _CatalogObject('M63', 'Sunflower Galaxy', 'galaxy', 8.6, 198.955, 42.029),
-  _CatalogObject('M51', 'Whirlpool Galaxy', 'galaxy', 8.4, 202.470, 47.195),
-  _CatalogObject('M101', 'Pinwheel Galaxy', 'galaxy', 7.9, 210.802, 54.349),
-  _CatalogObject('M13', 'Hercules Cluster', 'cluster', 5.8, 250.423, 36.461),
-  _CatalogObject('M20', 'Trifid Nebula', 'nebula', 6.3, 270.600, -23.030),
-  _CatalogObject('M8', 'Lagoon Nebula', 'HII', 6.0, 270.904, -24.387),
-  _CatalogObject('M16', 'Eagle Nebula', 'HII', 6.0, 274.700, -13.807),
-  _CatalogObject('M17', 'Omega Nebula', 'HII', 6.0, 275.196, -16.171),
-  _CatalogObject('M57', 'Ring Nebula', 'PN', 8.8, 283.396, 33.029),
-  _CatalogObject('M27', 'Dumbbell Nebula', 'PN', 7.4, 299.901, 22.721),
-  _CatalogObject(
+/// verbatim: J2000 positions, OpenNGC type codes where definite. The LAST
+/// resort — the cached openngc-dso mirror (dso_catalog_state.dart) supersedes
+/// it whenever this machine has connected to a daemon with the catalog
+/// installed.
+final List<PlanningDso> starterTonightCatalog = [
+  _o('M31', 'Andromeda Galaxy', 'galaxy', 3.4, 10.685, 41.269),
+  _o('M33', 'Triangulum Galaxy', 'galaxy', 5.7, 23.462, 30.660),
+  _o('M45', 'Pleiades', 'cluster', 1.6, 56.750, 24.117),
+  _o('M1', 'Crab Nebula', 'SNR', 8.4, 83.633, 22.014),
+  _o('M42', 'Orion Nebula', 'HII', 4.0, 83.822, -5.391),
+  _o('NGC2237', 'Rosette Nebula', 'HII', 9.0, 97.950, 5.050),
+  _o("M81", "Bode's Galaxy", 'galaxy', 6.9, 148.888, 69.065),
+  _o('M97', 'Owl Nebula', 'PN', 9.9, 168.699, 55.019),
+  _o('M104', 'Sombrero Galaxy', 'galaxy', 8.0, 189.998, -11.623),
+  _o('M63', 'Sunflower Galaxy', 'galaxy', 8.6, 198.955, 42.029),
+  _o('M51', 'Whirlpool Galaxy', 'galaxy', 8.4, 202.470, 47.195),
+  _o('M101', 'Pinwheel Galaxy', 'galaxy', 7.9, 210.802, 54.349),
+  _o('M13', 'Hercules Cluster', 'cluster', 5.8, 250.423, 36.461),
+  _o('M20', 'Trifid Nebula', 'nebula', 6.3, 270.600, -23.030),
+  _o('M8', 'Lagoon Nebula', 'HII', 6.0, 270.904, -24.387),
+  _o('M16', 'Eagle Nebula', 'HII', 6.0, 274.700, -13.807),
+  _o('M17', 'Omega Nebula', 'HII', 6.0, 275.196, -16.171),
+  _o('M57', 'Ring Nebula', 'PN', 8.8, 283.396, 33.029),
+  _o('M27', 'Dumbbell Nebula', 'PN', 7.4, 299.901, 22.721),
+  _o(
       'NGC7000', 'North America Nebula', 'HII', 4.0, 314.750, 44.330),
 ];
 
@@ -88,8 +87,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
   required DateTime atUtc,
   FilterSetSettings filterSet = const FilterSetSettings(filters: []),
   CameraElectronics electronics = const CameraElectronics(),
+  List<PlanningDso>? catalog,
   int limit = 10,
 }) {
+  final objects = (catalog == null || catalog.isEmpty)
+      ? starterTonightCatalog
+      : catalog;
   final at = atUtc.toUtc();
   final horizon = site.defaultHorizonAltitudeDeg;
   final lat = site.latitudeDeg;
@@ -202,7 +205,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
 
   final scored = <(double, TonightSkyObject)>[];
   final up = List<bool>.filled(sampleCount, false);
-  for (final o in _starterCatalog) {
+  for (final o in objects) {
     // Pre-filter: never clears the horizon at upper culmination → never up.
     final peakAltDeg = _maxAltitudeDeg(o.decDeg, lat);
     if (peakAltDeg < horizon) continue;
@@ -307,6 +310,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
         decDeg: o.decDeg,
         altitudeDeg: double.parse(altNow.toStringAsFixed(1)),
         maxAltitudeDeg: double.parse(peakAltDeg.toStringAsFixed(1)),
+        sizeMajArcmin: o.sizeMajArcmin,
+        sizeMinArcmin: o.sizeMinArcmin,
+        posAngleDeg: o.posAngleDeg,
+        surfaceBrightness: o.surfaceBrightness,
         windowStartUtc: windowStart,
         windowEndUtc: windowEnd,
         transitUtc: transitUtc,
@@ -339,7 +346,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
 // ── Scoring (port of ScoreObject) ──────────────────────────────────────────
 
 (double, TonightFraming, List<String>) _scoreObject(
-    _CatalogObject o,
+    PlanningDso o,
     double fovWidthArcmin,
     double fovHeightArcmin,
     double peakAltDeg,
@@ -347,12 +354,31 @@ List<TonightSkyObject> computeTonightSkyLocal({
     int bortleClass) {
   final reasons = <String>[];
 
-  // 1. Framing — the starter catalog carries no sizes, so this is Unknown
-  //    (neutral q = 0.5) for every object, exactly like the daemon's fallback.
-  const framing = TonightFraming.unknown;
-  const framingQ = 0.5;
-  const framingTag = 'size unknown';
-  const framingScore = _framingWeight * framingQ;
+  // 1. Framing fit (dominant) — full parity with the daemon now that the
+  //    cached catalog carries sizes; the starter list (no sizes) stays Unknown.
+  final framing =
+      _classifyFraming(o.sizeMajArcmin, fovWidthArcmin, fovHeightArcmin);
+  double framingQ;
+  String framingTag;
+  if (framing == TonightFraming.unknown) {
+    framingQ = 0.5; // neutral — no size to judge
+    framingTag = 'size unknown';
+  } else {
+    final ratio =
+        o.sizeMajArcmin! / math.min(fovWidthArcmin, fovHeightArcmin);
+    switch (framing) {
+      case TonightFraming.good:
+        framingQ = 1.0;
+        framingTag = 'fills the frame';
+      case TonightFraming.tooSmall:
+        framingQ = math.max(_framingFloorQ, ratio / _framingTooSmallRatio);
+        framingTag = 'small in frame';
+      default: // tooBig
+        framingQ = math.max(_framingFloorQ, _framingTooBigRatio / ratio);
+        framingTag = 'overflows the frame';
+    }
+  }
+  final framingScore = _framingWeight * framingQ;
   reasons.add('$framingTag (+${framingScore.toStringAsFixed(0)})');
 
   // 2. Integration hours — linear ramp saturating at 6 h.
@@ -369,9 +395,23 @@ List<TonightSkyObject> computeTonightSkyLocal({
   reasons.add(
       'peak ${peakAltDeg.toStringAsFixed(0)}° (+${altScore.toStringAsFixed(0)})');
 
-  // 4. Surface brightness — the starter catalog records none: neutral.
-  const sbScore = _surfaceBrightnessWeight * 0.5;
-  reasons.add('surface brightness unknown (+${sbScore.toStringAsFixed(0)})');
+  // 4. Surface brightness vs the Bortle sky — penalised, never zeroed.
+  double sbQ;
+  String sbTag;
+  final sb = o.surfaceBrightness;
+  if (sb != null) {
+    final contrastMag = skyMagFromBortle(bortleClass) - sb;
+    sbQ = ((contrastMag + _sbContrastSpanMag) / _sbContrastSpanMag)
+        .clamp(_sbFloorQ, 1.0);
+    sbTag = contrastMag >= 0
+        ? 'bright for Bortle $bortleClass sky'
+        : 'faint for Bortle $bortleClass sky';
+  } else {
+    sbQ = 0.5;
+    sbTag = 'surface brightness unknown';
+  }
+  final sbScore = _surfaceBrightnessWeight * sbQ;
+  reasons.add('$sbTag (+${sbScore.toStringAsFixed(0)})');
 
   // 5. Integrated magnitude — brighter nudged up, saturating at mag 12.
   final magScore = _magnitudeWeight *
@@ -386,8 +426,6 @@ List<TonightSkyObject> computeTonightSkyLocal({
   return (score, framing, reasons);
 }
 
-// Kept for a future bundled catalog WITH sizes; unused by the starter set.
-// ignore: unused_element
 TonightFraming _classifyFraming(
     double? sizeMajArcmin, double fovWidthArcmin, double fovHeightArcmin) {
   if (sizeMajArcmin == null ||

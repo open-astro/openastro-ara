@@ -7,6 +7,7 @@ import '../settings/camera_electronics_state.dart';
 import '../settings/filter_set_state.dart';
 import '../settings/optics_settings_state.dart';
 import '../settings/site_settings_state.dart';
+import 'dso_catalog_state.dart';
 
 /// §36/§25.5 — Tonight's Sky ranking (curated objects above the site horizon
 /// now, highest first). Connected: the daemon's full ranking (OpenNGC catalog,
@@ -38,6 +39,9 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
       optics: ref.watch(opticsSettingsProvider),
       filterSet: ref.watch(filterSetProvider),
       electronics: ref.watch(cameraElectronicsProvider),
+      // The mirrored openngc-dso catalog when this machine has one; the
+      // ranker falls back to the 20-object starter list otherwise.
+      catalog: await ref.watch(dsoCatalogProvider.future),
       atUtc: DateTime.now().toUtc(),
     );
   }

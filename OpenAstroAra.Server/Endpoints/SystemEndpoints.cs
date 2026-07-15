@@ -162,6 +162,40 @@ public static class SystemEndpoints {
             .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
             .WithName("GetDataManagerState");
 
+        // PORT_DECISIONS 2026-07-15 — planning compute lives in the CLIENT; the daemon stays the
+        // DATA host. Serve the full planning-shaped DSO entries (type/sizes/surface brightness —
+        // everything the client-side Tonight's Sky ranker scores on) from the installed openngc-dso
+        // catalog, culled to the realistically-shootable set by default (mag ≤ 12, the same bound
+        // TonightSkyService used). Clients fetch once per connect and cache locally, so offline
+        // planning ranks the real catalog instead of the 20-object starter list. 404 until the
+        // catalog is installed via the Data Manager.
+        data.MapGet("/dso-catalog",
+                ([FromQuery(Name = "max_mag")] double? maxMag, ISkyCatalogService svc,
+                        CancellationToken ct) => {
+                    if (maxMag is { } mm && !double.IsFinite(mm)) {
+                        return Results.Problem(detail: "max_mag must be a finite number",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    var dsos = svc.GetAllDsos(ct);
+                    if (dsos is null || dsos.Count == 0) {
+                        return Results.NotFound();
+                    }
+                    var cap = maxMag ?? 12.0;
+                    var list = new List<DsoEntryDto>();
+                    foreach (var d in dsos) {
+                        // Objects with no recorded magnitude are dropped — same rule as the
+                        // TonightSkyService cull this endpoint replaces the reach into.
+                        if (d.Magnitude is { } mag && mag <= cap) {
+                            list.Add(d);
+                        }
+                    }
+                    return Results.Ok((IReadOnlyList<DsoEntryDto>)list);
+                })
+            .Produces<IReadOnlyList<DsoEntryDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetDsoCatalog");
+
         // §36 — serve an installed catalog's objects (normalized {name, ra°, dec°, mag}) for the Sky Atlas overlay.
         // 404 when the package isn't a known catalog, isn't installed, or has no catalog.csv. Optional ?max_mag= drops
         // fainter objects (e.g. naked-eye stars only) and ?limit= caps the count, keeping the overlay payload sane.
