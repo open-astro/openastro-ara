@@ -14,13 +14,24 @@ enum WindowMode { launchpad, workstation }
 class WindowModeService {
   static const _channel = MethodChannel('openastroara/window');
   WindowMode? _current;
+  bool _unsupported = false;
 
   Future<void> set(WindowMode mode) async {
-    if (_current == mode) return;
+    if (_unsupported || _current == mode) return;
+    final previous = _current;
     _current = mode;
     try {
       await _channel.invokeMethod<void>(mode.name);
-    } catch (_) {/* no native handler — headless test or unsupported target */}
+    } on MissingPluginException {
+      // No native handler at all (headless test, a future mobile target) —
+      // permanent for the process; stop calling rather than retry-spamming.
+      _unsupported = true;
+    } catch (_) {
+      // A TRANSIENT native failure: roll the tracked mode back so the next
+      // request for this mode re-applies instead of silently no-oping against
+      // a window that never actually changed (review #846).
+      _current = previous;
+    }
   }
 }
 

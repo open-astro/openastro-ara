@@ -58,15 +58,7 @@ class _RootRouter extends ConsumerWidget {
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);
-    // The launchpad (server connect + profile box) runs in a compact window;
-    // entering the shell maximizes it. Post-frame + idempotent, so this is a
-    // no-op until the routed-to surface actually changes.
-    final inShell = gatePassed &&
-        (offline || (saved.asData?.value.isNotEmpty ?? false));
-    final windowMode = ref.read(windowModeProvider);
-    WidgetsBinding.instance.addPostFrameCallback((_) => windowMode
-        .set(inShell ? WindowMode.workstation : WindowMode.launchpad));
-    return saved.when(
+    final Widget routed = saved.when(
       data: (servers) => offline
           // Offline still gets a profile step: pick which CACHED profile to
           // plan with (seeding the settings notifiers) before the shell.
@@ -108,5 +100,15 @@ class _RootRouter extends ConsumerWidget {
         );
       },
     );
+    // The launchpad (server connect + profile box) runs in a compact window;
+    // the shell maximizes it. Derived from the WIDGET the router actually
+    // chose — not a hand-copied predicate that could drift from the branches
+    // above (review #846). Post-frame + idempotent, so it's a no-op until the
+    // routed-to surface really changes.
+    final inShell = routed is AppShell;
+    final windowMode = ref.read(windowModeProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) => windowMode
+        .set(inShell ? WindowMode.workstation : WindowMode.launchpad));
+    return routed;
   }
 }

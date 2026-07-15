@@ -27,19 +27,29 @@ void main() {
     expect(calls, ['workstation', 'launchpad', 'workstation']);
   });
 
-  test('a missing native handler is swallowed (mobile / tests)', () async {
+  test('a missing native handler is swallowed and stops further calls', () async {
     // No mock handler registered → MissingPluginException inside — must not
-    // escape, and the mode is still recorded so the router isn't retry-spammed.
+    // escape; the target is unsupported for the process, so later requests
+    // don't retry-spam the channel.
     final svc = WindowModeService();
     await svc.set(WindowMode.workstation); // completes without throwing
+    await svc.set(WindowMode.launchpad); // still silent
   });
 
-  test('a native error is swallowed too', () async {
+  test('a transient native error rolls the mode back so a retry re-applies',
+      () async {
+    var fail = true;
+    final calls = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      throw PlatformException(code: 'boom');
+      calls.add(call.method);
+      if (fail) throw PlatformException(code: 'boom');
+      return null;
     });
     final svc = WindowModeService();
-    await svc.set(WindowMode.launchpad); // completes without throwing
+    await svc.set(WindowMode.launchpad); // fails — swallowed, mode rolled back
+    fail = false;
+    await svc.set(WindowMode.launchpad); // NOT deduped: the retry re-applies
+    expect(calls, ['launchpad', 'launchpad']);
   });
 }
