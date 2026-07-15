@@ -10,12 +10,12 @@ import 'filter_advice.dart';
 import 'optimal_sub.dart';
 import 'star_model.dart' as stars;
 
-/// §2 offline planning — a client-side Tonight's Sky ranker, a faithful Dart
-/// port of the daemon's `TonightSkyService` (self-contained Meeus math, no
-/// ephemeris dependency) over the SAME 20-object starter catalog the daemon
-/// itself falls back to before openngc-dso is installed. Used only when no
-/// server is connected; a connected daemon's ranking (full OpenNGC catalog,
-/// filter advice, optimal-sub figures, custom horizon) always supersedes it.
+/// THE Tonight's Sky ranker (PORT_DECISIONS 2026-07-15 — planning compute
+/// lives in the client): a faithful Dart port of the removed daemon
+/// `TonightSkyService` (self-contained Meeus math, no ephemeris dependency).
+/// Runs unconditionally, connected or not, over the mirrored openngc-dso
+/// catalog (dso_catalog_state.dart) — or the daemon's old 20-object starter
+/// list as the never-connected last resort.
 ///
 /// Includes the NEXTGEN §1/§3.1 advisory stack (filter advice, optimal-sub
 /// figures, star-detectability tags) via the client-side ports in

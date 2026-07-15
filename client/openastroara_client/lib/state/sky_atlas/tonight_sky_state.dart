@@ -12,13 +12,12 @@ import '../settings/site_settings_state.dart';
 import 'dso_catalog_state.dart';
 
 /// §36/§25.5 — Tonight's Sky ranking (curated objects above the site horizon
-/// now, highest first). Connected: the daemon's full ranking (OpenNGC catalog,
-/// filter advice, custom horizon). No server (§2 offline planning): a local
-/// ranking over the daemon's starter catalog against the CACHED site + optics
-/// (seeded by the offline launch flow) — planning during the day with the rig
-/// off still shows what's worth shooting tonight. Auto-disposed so the list
-/// re-ranks for the current time each time the view is opened;
-/// `ref.invalidate(tonightSkyProvider)` forces a manual refresh.
+/// tonight, highest first), computed CLIENT-SIDE unconditionally (PORT_DECISIONS
+/// 2026-07-15) from the live-or-offline-seeded settings notifiers + the
+/// mirrored openngc-dso catalog — connected sessions and daytime-offline
+/// planning share one path. Auto-disposed so the list re-ranks for the current
+/// time each time the view is opened; `ref.invalidate(tonightSkyProvider)`
+/// forces a manual refresh.
 final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   ref,
 ) async {
