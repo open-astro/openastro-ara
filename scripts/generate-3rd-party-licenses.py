@@ -194,7 +194,7 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "package_info_plus": {
-        "version": "10.2.0",
+        "version": "10.2.1",
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 The Chromium Authors",
     },
