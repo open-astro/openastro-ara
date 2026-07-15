@@ -31,7 +31,9 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
   }
 
   /// Overwrite an existing draft's body (editor Save on a loaded draft).
-  /// Unknown id is treated as create-with-that-id so a Save can't be dropped.
+  /// Unknown id is treated as create-with-that-id so a Save can't be dropped —
+  /// deliberately, this RESURRECTS a draft that was deleted while still open
+  /// in the editor: losing the deletion beats losing the user's edits.
   Future<void> saveBody(String id, Map<String, dynamic> body) async {
     final svc = ref.read(draftSequenceServiceProvider);
     final current = state.value ?? await svc.loadAll();

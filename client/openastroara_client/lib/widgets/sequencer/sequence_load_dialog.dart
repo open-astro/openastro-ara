@@ -188,11 +188,15 @@ class _DraftsSection extends ConsumerWidget {
   Future<void> _push(BuildContext context, WidgetRef ref, String id) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
+      // Was the pushed draft the one open in the editor? Read BEFORE the push
+      // (the await is a gap the selection could change under).
+      final wasOpen = ref.read(selectedSequenceIdProvider) == id;
       final newId =
           await ref.read(draftSequencesProvider.notifier).push(id);
-      // The draft is now a daemon sequence — select it so the editor swaps to
-      // the pushed copy (guarded: the dialog may have been dismissed).
-      if (context.mounted) {
+      // Swap the editor to the pushed copy ONLY when this draft was already
+      // the open one — pushing an unrelated draft must not clobber whatever
+      // (possibly dirty) sequence the user is editing (review #845).
+      if (wasOpen && context.mounted) {
         ref.read(selectedSequenceIdProvider.notifier).select(newId);
       }
       messenger.showSnackBar(
