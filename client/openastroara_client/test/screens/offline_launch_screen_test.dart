@@ -51,13 +51,17 @@ void main() {
     return container;
   }
 
-  testWidgets('empty cache: explains + Continue with defaults passes the gate',
+  testWidgets(
+      'empty cache: no defaults path — only the way back to server setup',
       (tester) async {
     final container = await pump(tester);
+    container.read(offlineModeProvider.notifier).enter();
     expect(find.textContaining('No profiles are cached'), findsOneWidget);
-    await tester.tap(find.text('Continue with defaults'));
+    expect(find.text('Plan'), findsNothing); // no way to plan without a profile
+    await tester.tap(find.text('Back to server setup'));
     await tester.pumpAndSettle();
-    expect(container.read(profileGatePassedProvider), isTrue);
+    expect(container.read(offlineModeProvider), isFalse);
+    expect(container.read(profileGatePassedProvider), isFalse);
   });
 
   testWidgets(

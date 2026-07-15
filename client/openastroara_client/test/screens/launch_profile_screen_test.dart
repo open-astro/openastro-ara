@@ -32,6 +32,16 @@ class _FakeApi extends ProfileApi {
     if (selectError != null) throw selectError!;
     activeId = id;
   }
+
+  final List<String> deleteCalls = [];
+  Object? deleteError;
+
+  @override
+  Future<void> deleteProfile(String id) async {
+    deleteCalls.add(id);
+    if (deleteError != null) throw deleteError!;
+    profiles = [for (final p in profiles) if (p.id != id) p];
+  }
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, _FakeApi api) async {
@@ -121,5 +131,44 @@ void main() {
     expect(find.textContaining('No active server'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     expect(find.text('Image'), findsNothing);
+  });
+
+  testWidgets('delete is disabled for the active profile', (tester) async {
+    await _pump(tester, _FakeApi());
+    final btn = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.delete_outline));
+    expect(btn.onPressed, isNull); // pre-selected = active = protected
+  });
+
+  testWidgets('picking a non-active profile enables delete; confirm deletes it',
+      (tester) async {
+    final api = _FakeApi();
+    await _pump(tester, api);
+    await tester.tap(find.text('My Backyard Rig'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Travel Rig').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete profile?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deleteCalls, ['id-2']);
+    // The dropdown fell back to the (still-active) remaining profile.
+    expect(find.text('My Backyard Rig'), findsOneWidget);
+  });
+
+  testWidgets('cancel deletes nothing', (tester) async {
+    final api = _FakeApi();
+    await _pump(tester, api);
+    await tester.tap(find.text('My Backyard Rig'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Travel Rig').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(api.deleteCalls, isEmpty);
   });
 }

@@ -4,9 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/instruction_catalog.dart'
     show slewScopeToRaDecType, switchFilterType;
 import '../../models/sequence/nina_dom.dart';
-import '../../models/server.dart';
-import '../../services/optimal_sub_api.dart';
-import '../../state/saved_server_state.dart';
+import '../../services/optimal_sub_api.dart' show OptimalSubResult;
+import '../../state/settings/camera_electronics_state.dart';
+import '../../state/settings/filter_set_state.dart';
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
+import '../../util/optimal_sub_local.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
@@ -99,13 +102,13 @@ String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
 /// NEXTGEN §5 — the per-filter "Optimal Sub" advisor under a TakeExposure's
 /// fields: the Glover read-noise floor (criterion popularised by Dr. Robin
 /// Glover, SharpCap — attributed per the recorded permission) intersected
-/// with the saturation ceiling, fetched from `GET /planning/optimal-sub` for
-/// the exposure's filter. Apply writes a **plain number** into the standard
+/// with the saturation ceiling, computed CLIENT-SIDE (PORT_DECISIONS
+/// 2026-07-15) for the exposure's filter. Apply writes a **plain number** into the standard
 /// `ExposureTime` field via [SequenceEditorController.setNodeField] — no new
 /// instruction types, no `$type` churn — so the sequence stays NINA-valid.
 ///
-/// Renders nothing against a pre-slice-2 daemon (404) and a quiet one-line
-/// message when the daemon can't compute (400 — e.g. aperture not set up).
+/// Shows a quiet one-line message when the inputs can't compute (e.g.
+/// aperture not set up), with a jump to the Settings panel that fixes it.
 class OptimalSubAdvisor extends ConsumerStatefulWidget {
   const OptimalSubAdvisor({
     super.key,
@@ -156,38 +159,37 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     }
   }
 
+  /// Computes locally (PORT_DECISIONS 2026-07-15 — planning math lives in the
+  /// client; no daemon round-trip). Kept async-shaped and sequence-guarded so
+  /// didUpdateWidget's re-fetch semantics are unchanged.
   Future<void> _fetch() async {
     final seq = ++_fetchSeq;
-    final api = ref.read(optimalSubApiProvider);
-    if (api == null) {
-      setState(() => _hidden = true); // no server — nothing to advise from
-      return;
-    }
     setState(() {
       _loading = true;
       _error = null;
       _unavailable = null;
+      _hidden = false;
     });
     try {
-      final result = await api.get(
-        filter: widget.filterName,
+      final outcome = resolveOptimalSubLocal(
+        optics: ref.read(opticsSettingsProvider),
+        electronics: ref.read(cameraElectronicsProvider),
+        site: ref.read(siteSettingsProvider),
+        filterSet: ref.read(filterSetProvider),
+        filterName: widget.filterName,
         // Already DEGREES (targetPositionForExposure converts NINA's RA hours).
         raDeg: widget.targetPosition?.raDeg,
         decDeg: widget.targetPosition?.decDeg,
       );
-      if (!mounted || seq != _fetchSeq) {
-        return; // superseded — drop the stale response
-      }
+      if (!mounted || seq != _fetchSeq) return; // superseded
       setState(() {
-        _result = result;
-        _hidden = result == null; // 404 → feature not on this daemon
-        _loading = false;
-      });
-    } on OptimalSubUnavailable catch (e) {
-      if (!mounted || seq != _fetchSeq) return;
-      setState(() {
-        _unavailable = e.message;
-        _result = null;
+        switch (outcome) {
+          case LocalOptimalSubSuccess(:final result):
+            _result = result;
+          case LocalOptimalSubUnavailable(:final message):
+            _unavailable = message;
+            _result = null;
+        }
         _loading = false;
       });
     } catch (e) {
@@ -215,12 +217,14 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
 
   @override
   Widget build(BuildContext context) {
-    // WATCH (don't just read) the autoDispose API provider: this registered
-    // listener is what keeps it — and its Dio — alive for the widget's
-    // lifetime. With only the ref.read in _fetch, Riverpod would dispose the
-    // provider (closing the Dio, aborting the in-flight request) right after
-    // the synchronous read returned, and every fetch would die mid-flight.
-    ref.watch(optimalSubApiProvider);
+    // Recompute when the planning inputs change (a fixed filter set / optics
+    // edit in Settings must refresh the advice without a manual Retry). listen
+    // + _fetch rather than computing in build: _fetch owns the guarded state
+    // machine (loading/unavailable/error) the render below consumes.
+    ref.listen(opticsSettingsProvider, (_, _) => _fetch());
+    ref.listen(cameraElectronicsProvider, (_, _) => _fetch());
+    ref.listen(filterSetProvider, (_, _) => _fetch());
+    ref.listen(siteSettingsProvider, (_, _) => _fetch());
     if (_hidden) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final dim = theme.textTheme.bodySmall?.copyWith(
@@ -364,20 +368,3 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     _ => field,
   };
 }
-
-/// The active server's Optimal-Sub API, or null with no server. AutoDispose +
-/// close-on-dispose, mirroring `sequenceApiProvider`. NB the advisor widget
-/// WATCHES this in build — autoDispose would otherwise tear the Dio down
-/// (aborting the in-flight request) as soon as _fetch's read returned.
-final optimalSubApiProvider = Provider.autoDispose<OptimalSubApi?>((ref) {
-  final server = ref.watch(activeServerProvider);
-  if (server == null) return null;
-  final api = ref.watch(optimalSubApiFactoryProvider)(server);
-  ref.onDispose(api.close);
-  return api;
-});
-
-/// Injectable factory so widget tests can substitute a fake API without
-/// touching the transport. Production leaves the default.
-final optimalSubApiFactoryProvider =
-    Provider<OptimalSubApi Function(AraServer)>((ref) => OptimalSubApi.new);

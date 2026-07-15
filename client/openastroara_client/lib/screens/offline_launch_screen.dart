@@ -68,19 +68,21 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
     );
   }
 
+  // Near-unreachable: every "Plan offline" entry is gated on a cached profile
+  // existing (PlanOfflineButton). Kept as a safety net for a cache that was
+  // deleted between the gate check and this screen — offline planning without
+  // a profile is deliberately NOT offered (maintainer call), only the way back.
   List<Widget> _emptyCache() => [
         const Text(
-          'No profiles are cached on this device yet — connect to your '
-          'server once and they\'ll be available offline. Planning will use '
-          'default settings for now.',
+          'No profiles are cached on this device — offline planning needs '
+          'one. Connect to your server once and set up a profile first.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AraColors.textSecondary),
         ),
         const SizedBox(height: 16),
         FilledButton(
-          onPressed: () =>
-              ref.read(profileGatePassedProvider.notifier).pass(),
-          child: const Text('Continue with defaults'),
+          onPressed: () => ref.read(offlineModeProvider.notifier).exit(),
+          child: const Text('Back to server setup'),
         ),
       ];
 

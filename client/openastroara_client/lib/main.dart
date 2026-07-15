@@ -7,9 +7,11 @@ import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
+import 'widgets/plan_offline_button.dart';
 import 'services/window_mode.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
+import 'state/sky_atlas/dso_catalog_state.dart';
 import 'state/saved_server_state.dart';
 import 'theme/ara_theme.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
@@ -55,6 +57,9 @@ class _RootRouter extends ConsumerWidget {
     // open Settings → Storage first (listen, not watch — per-frame sync
     // counters must not rebuild the whole app).
     ref.listen(backupStreamProvider, (previous, next) {});
+    // Materialize the DSO-catalog mirror sync (fetch-on-connect) at the root
+    // so offline planning has the full catalog after any connected session.
+    ref.listen(dsoCatalogSyncProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);
@@ -87,12 +92,8 @@ class _RootRouter extends ConsumerWidget {
                 children: [
                   const Text('Failed to load saved servers. Please try again.'),
                   const SizedBox(height: 12),
-                  TextButton.icon(
-                    onPressed: () =>
-                        ref.read(offlineModeProvider.notifier).enter(),
-                    icon: const Icon(Icons.cloud_off_outlined, size: 18),
-                    label: const Text('Plan offline'),
-                  ),
+                  // Self-gated on a cached profile existing.
+                  const PlanOfflineButton(),
                 ],
               ),
             ),

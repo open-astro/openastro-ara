@@ -8,6 +8,7 @@ import '../state/launch_gate_state.dart';
 import '../state/profile_management_state.dart';
 import '../state/saved_server_state.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/plan_offline_button.dart';
 import '../widgets/profile/profile_import_flow.dart';
 import 'wizard/wizard_shell.dart';
 
@@ -79,12 +80,8 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                       const SizedBox(height: 8),
                       // §2 — the daemon being down must not block planning:
                       // enter the shell offline; drafts push once it's back.
-                      TextButton.icon(
-                        onPressed: () =>
-                            ref.read(offlineModeProvider.notifier).enter(),
-                        icon: const Icon(Icons.cloud_off_outlined, size: 18),
-                        label: const Text('Plan offline'),
-                      ),
+                      // Self-gated on a cached profile existing.
+                      const PlanOfflineButton(),
                     ],
                     data: (list) => _profileControls(list),
                   ),
@@ -148,22 +145,47 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
         : (list.activeId != null && ids.contains(list.activeId)
             ? list.activeId!
             : list.profiles.first.id);
+    // Delete mirrors Settings → Profiles' gating: the daemon refuses to
+    // delete the active or last-remaining profile (409), so the button is
+    // disabled in those cases rather than offering an action that must fail.
+    final selectedIsActive = selected == list.activeId;
+    final onlyOne = list.profiles.length == 1;
+    final selectedName =
+        list.profiles.firstWhere((p) => p.id == selected).name;
     return [
       Text('Active profile:',
           style: Theme.of(context).textTheme.titleSmall),
       const SizedBox(height: 8),
-      DropdownButtonFormField<String>(
-        // FormFields consume initialValue only on first mount, so key on the
-        // daemon's active id: when the wizard returns with a new active
-        // profile the dropdown remounts and actually shows it (review #844).
-        key: ValueKey('launch-profile-dropdown-${list.activeId}'),
-        initialValue: selected,
-        items: [
-          for (final p in list.profiles)
-            DropdownMenuItem(value: p.id, child: Text(p.name)),
-        ],
-        onChanged: (v) => setState(() => _pickedId = v),
-      ),
+      Row(children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            // FormFields consume initialValue only on first mount, so key on
+            // the daemon's active id: when the wizard returns with a new
+            // active profile the dropdown remounts and actually shows it
+            // (review #844).
+            key: ValueKey('launch-profile-dropdown-${list.activeId}'),
+            initialValue: selected,
+            items: [
+              for (final p in list.profiles)
+                DropdownMenuItem(value: p.id, child: Text(p.name)),
+            ],
+            onChanged: (v) => setState(() => _pickedId = v),
+          ),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          icon: const Icon(Icons.delete_outline, size: 20),
+          tooltip: selectedIsActive || onlyOne
+              ? (onlyOne
+                  ? 'The last profile can\'t be deleted'
+                  : 'The active profile can\'t be deleted — pick another '
+                      'profile in the dropdown first')
+              : 'Delete "$selectedName"',
+          onPressed: (selectedIsActive || onlyOne || _entering)
+              ? null
+              : () => unawaited(_deleteProfile(selected, selectedName)),
+        ),
+      ]),
       const SizedBox(height: 16),
       FilledButton(
         onPressed: _entering ? null : () => unawaited(_enter(selected)),
@@ -198,6 +220,43 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
       ));
     } finally {
       if (mounted) setState(() => _entering = false);
+    }
+  }
+
+  /// Delete a NON-active profile from the box (the button gates active/last).
+  /// On success the dropdown falls back to the daemon's active profile.
+  Future<void> _deleteProfile(String id, String name) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete profile?'),
+        content:
+            Text('"$name" will be permanently removed. This can\'t be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: AraColors.accentError),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ref.read(profileManagementProvider.notifier).delete(id);
+      // The deleted profile may be the local pick — fall back to active.
+      if (mounted) setState(() => _pickedId = null);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content:
+            Text(friendlyDaemonError(e, fallback: "Couldn't delete profile")),
+        backgroundColor: AraColors.accentError,
+      ));
     }
   }
 
