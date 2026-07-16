@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
+import '../../../state/saved_server_state.dart';
 import '../../../state/wizard_state.dart';
+import '../../../widgets/storage/server_folder_picker.dart';
 import '../wizard_form_kit.dart';
 
 // Read once: the wizard controller reuses a single ProfileDraft instance for the
@@ -289,20 +293,55 @@ class ScreenFileSaving extends ConsumerStatefulWidget {
 class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
   late final ProfileDraft _draft = _draftOf(ref);
   late final FileSavingSettings _fs = _draft.fileSaving;
+  // Re-seeds the (uncontrolled) directory field after a picker choice.
+  int _seed = 0;
+
+  Future<void> _browse() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content:
+              Text('Connect to a daemon first to browse its folders.')));
+      return;
+    }
+    final picked = await showServerFolderPicker(context, ref,
+        server: server, startPath: _fs.saveDirectory);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _fs.saveDirectory = picked;
+      _draft.clearedFields.remove(ClearableField.saveDirectory);
+      _seed++;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 13,
-      intro: 'Where ARA saves captured frames and how it names them. A USB drive '
-          'is recommended (§29) so a full system disk can\'t stall a session.',
+      intro: 'Where ARA saves captured frames and how it names them — a folder '
+          'ON THE SERVER (the Pi/SBC). A USB drive is recommended (§29) so a '
+          'full system disk can\'t stall a session.',
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => unawaited(_browse()),
+              icon: const Icon(Icons.folder_open_outlined, size: 16),
+              label: const Text('Browse server folders…'),
+            ),
+          ),
+        ),
         WizardTextField(
+          key: ValueKey('wiz-savedir-$_seed'),
           label: 'Save directory',
           initialValue: _fs.saveDirectory,
           hint: '/media/usb/astro (a path on the server)',
-          helperText: 'Blank keeps the current profile\'s directory; the reset '
-              'button takes the daemon default instead.',
+          helperText: 'Browse above, or type a server path. USB drives show '
+              'under /media. Blank keeps the current profile\'s directory; '
+              'the reset button takes the daemon default instead.',
           onChanged: (v) {
             final t = v.trim();
             _fs.saveDirectory = t.isEmpty ? null : t;

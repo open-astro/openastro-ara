@@ -439,6 +439,8 @@ public partial class Program {
             new UsbGpsTimeSyncWorker(
                 sp.GetRequiredService<TimeSyncService>(),
                 sp.GetRequiredService<ILogger<UsbGpsTimeSyncWorker>>()));
+        // §37.4/§29 — the save-directory picker's server-side directory walk.
+        builder.Services.AddSingleton<IStorageBrowseService, StorageBrowseService>();
         builder.Services.AddSingleton<IBackupService>(sp =>
             new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>(),
                 // Explicit: this factory lambda bypasses constructor activation, so optional params are passed

@@ -248,6 +248,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StatsSparklineDto<System.DateTimeOffset, double>))]
 [JsonSerializable(typeof(StatsTargetsDto))]
 [JsonSerializable(typeof(StatsTargetSummaryDto))]
+[JsonSerializable(typeof(StorageBrowseDto))]
+[JsonSerializable(typeof(StorageBrowseEntryDto))]
 [JsonSerializable(typeof(StorageSettingsDto))]
 [JsonSerializable(typeof(StretchDefaultsDto))]
 [JsonSerializable(typeof(StretchManualDefaultsDto))]

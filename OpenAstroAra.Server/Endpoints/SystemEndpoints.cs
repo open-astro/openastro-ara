@@ -255,6 +255,27 @@ public static class SystemEndpoints {
         // and its "execution-shared" claim was inaccurate — the flip executor reads
         // the profile's horizon scalar directly, never the RA/Dec projection.
 
+        // ─── Storage browse (§37.4/§29) — the save-directory picker's walk ───
+        var storage = app.MapGroup("/api/v1/storage").WithTags("Storage");
+        storage.MapGet("/browse", (string? path, IStorageBrowseService svc) => {
+                try {
+                    return Results.Ok(svc.Browse(path));
+                } catch (DirectoryNotFoundException ex) {
+                    return Results.Problem(title: "Not a browsable directory",
+                        detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+                } catch (UnauthorizedAccessException) {
+                    return Results.Problem(title: "Permission denied",
+                        detail: "The daemon user can't list that directory.",
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
+            })
+            .Produces<StorageBrowseDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .WithName("BrowseStorage")
+            .WithSummary("One directory level of the server's filesystem (no path = curated roots) " +
+                "for the save-directory picker. Directories only.");
+
         // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 
