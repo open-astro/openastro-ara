@@ -159,7 +159,15 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
                 PersistActivePointer();
             } else {
                 _activeId = null;
-                Create("Default", ProfileSnapshotNormalizer.Defaults, makeActive: true);
+                try {
+                    Create("Default", ProfileSnapshotNormalizer.Defaults, makeActive: true);
+                } catch (IOException ex) {
+                    // The delete itself succeeded; only the reseed write failed
+                    // (disk full / permissions). Don't fail the DELETE for it —
+                    // the repository stays at zero profiles until the next boot,
+                    // which runs the same seed logic again (LoadAll).
+                    LogPersistFailed(ex, _dir);
+                }
             }
             return ProfileDeleteResult.Deleted;
         }
