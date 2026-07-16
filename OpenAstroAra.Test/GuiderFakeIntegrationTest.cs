@@ -92,6 +92,58 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_connect_naming_a_DIFFERENT_target_reconnects_instead_of_no_op() {
+            // The wizard's Test connection while the daemon is still linked to the OLD
+            // profile's guider: an idempotent no-op accept here would false-positive
+            // ('connected' status + the NEW host in the UI message). A different target
+            // must tear down the live session and dial the new host:port.
+            await using var fakeA = FakeGuider.Start();
+            fakeA.SetOnConnectEvents(PhdEvents.Version(subver: "a"), PhdEvents.AppState("Stopped"));
+            await using var fakeB = FakeGuider.Start();
+            fakeB.SetOnConnectEvents(PhdEvents.Version(subver: "b"), PhdEvents.AppState("Stopped"));
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fakeA.Port),
+                idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var spokeA = await WaitUntilAsync(() => fakeA.ReceivedMethods.Count > 0).ConfigureAwait(false);
+            Assert.That(spokeA, Is.True, "precondition: the first target must be dialed");
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fakeB.Port),
+                idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            var spokeB = await WaitUntilAsync(() => fakeB.ReceivedMethods.Count > 0).ConfigureAwait(false);
+            Assert.That(spokeB, Is.True, "a NEW target must actually be dialed, not no-op'd");
+            Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerPort, Is.EqualTo(fakeB.Port));
+        }
+
+        [Test]
+        public async Task A_repeat_connect_to_the_SAME_target_stays_an_idempotent_no_op() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "x"), PhdEvents.AppState("Stopped"));
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port),
+                idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await WaitUntilAsync(() => fake.ReceivedMethods.Count > 0).ConfigureAwait(false);
+            var methodsAfterFirst = fake.ReceivedMethods.Count;
+
+            // Same explicit target + a blank-body repeat: both no-ops (§60.5).
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port),
+                idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await svc.ConnectAsync(new GuiderConnectRequestDto(),
+                idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(fake.ConnectionCount, Is.EqualTo(1),
+                "same-target repeats must not tear down the live session");
+            Assert.That(fake.ReceivedMethods.Count, Is.GreaterThanOrEqualTo(methodsAfterFirst));
+        }
+
+        [Test]
         public async Task An_explicit_connect_body_still_rewrites_the_profiles_target() {
             var profiles = new HeadlessProfileService();
             using var svc = new GuiderService(profiles, NewRecovery(),

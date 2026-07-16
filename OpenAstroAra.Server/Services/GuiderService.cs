@@ -133,11 +133,25 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         long generation;
         PHD2Guider guider;
         CancellationToken connectToken;
+        var requestHost = request.Host?.Trim();
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            // Idempotent: connecting while already connecting/connected is a no-op accept (§60.5).
+            // Idempotent: connecting while already connecting/connected is a no-op accept
+            // (§60.5) — UNLESS the request names a DIFFERENT target than the live session.
+            // A same/blank-target repeat stays a no-op; an explicit new host:port means
+            // "reconnect there" (the wizard's Test connection while the daemon still
+            // holds the old profile's guider would otherwise false-positive: the no-op
+            // accept + an already-Connected status read as 'connected to the new box').
             if (_state is EquipmentConnectionState.Connecting or EquipmentConnectionState.Connected) {
-                return Task.FromResult(Accepted("guider.connect", idempotencyKey));
+                var current = _profileService.ActiveProfile.GuiderSettings;
+                var sameTarget =
+                    (requestHost is null or "" || string.Equals(requestHost, current.PHD2ServerHost, StringComparison.OrdinalIgnoreCase)) &&
+                    (request.Port is null || request.Port == current.PHD2ServerPort);
+                if (sameTarget) {
+                    return Task.FromResult(Accepted("guider.connect", idempotencyKey));
+                }
+                // Different target → fall through: the connect path below disposes the
+                // live guider and dials the new host/port.
             }
             if (supersedeRecovery) {
                 // A fresh user connect supersedes any §63.3 recovery still polling
@@ -149,7 +163,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // overwriting from an empty body would repoint a remote-PHD2 profile at the DTO
             // defaults and break every later reconnect/recovery.
             var settings = _profileService.ActiveProfile.GuiderSettings;
-            if (request.Host is { Length: > 0 } host) settings.PHD2ServerHost = host;
+            if (requestHost is { Length: > 0 }) settings.PHD2ServerHost = requestHost;
             if (request.Port is { } port) settings.PHD2ServerPort = port;
             DisposeGuiderLocked();
             guider = new PHD2Guider(_profileService);
