@@ -33,6 +33,9 @@ public class FileProfileRepositoryTest {
         Directory.CreateDirectory(_dir);
         _store = new FileProfileStore(_dir);
         _repo = new FileProfileRepository(_dir, _store);
+        // The repository no longer auto-seeds (zero profiles is a first-class
+        // state) — create the baseline profile these tests operate on.
+        _repo.Create("Default", settings: null, makeActive: true);
     }
 
     [TearDown]
@@ -53,23 +56,38 @@ public class FileProfileRepositoryTest {
     private double Latitude() => _store.GetSiteSettings().LatitudeDeg;
 
     [Test]
-    public void FreshDir_seeds_exactly_one_active_profile() {
-        var list = _repo.List();
-        list.Profiles.Should().HaveCount(1);
-        list.ActiveId.Should().Be(list.Profiles[0].Id);
-        list.Profiles[0].Name.Should().Be("Default");
+    public void FreshDir_starts_with_zero_profiles_and_no_active_id() {
+        // A fresh install must land the user in profile setup, not on an
+        // unconfigured auto-seeded profile that can't run a rig.
+        var dir = Path.Combine(Path.GetTempPath(), "ara-profiles-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try {
+            var store = new FileProfileStore(dir);
+            using var repo = new FileProfileRepository(dir, store);
+            repo.List().Profiles.Should().BeEmpty();
+            repo.ActiveId.Should().BeNull();
+        } finally {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { /* best effort */ }
+        }
     }
 
     [Test]
-    public void Seed_captures_the_live_store_settings() {
-        // Re-seed scenario: a repo built over a store that already has edited settings
-        // should capture them into the initial profile (the legacy-migration path).
-        SetLatitude(42);
-        using var repo2 = new FileProfileRepository(_dir, _store);
-        // _dir already has the SetUp repo's "Default"; repo2 just re-reads it. Its active
-        // profile must reflect the latitude we wrote (mirrored from the live store).
-        var active = repo2.GetProfile(repo2.ActiveId!.Value)!;
-        active.Settings.Site.LatitudeDeg.Should().Be(42);
+    public void First_create_with_null_settings_captures_the_live_store() {
+        // The legacy single-profile migration path: pre-§37 settings live in
+        // profile.json (the live store); the first profile the user creates
+        // captures them instead of starting from factory defaults.
+        var dir = Path.Combine(Path.GetTempPath(), "ara-profiles-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try {
+            var store = new FileProfileStore(dir);
+            store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = 42 });
+            using var repo = new FileProfileRepository(dir, store);
+            var meta = repo.Create("My Rig", settings: null, makeActive: true);
+            repo.ActiveId.Should().Be(meta.Id, "the first profile becomes active");
+            repo.GetProfile(meta.Id)!.Settings.Site.LatitudeDeg.Should().Be(42);
+        } finally {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { /* best effort */ }
+        }
     }
 
     [Test]
@@ -104,19 +122,59 @@ public class FileProfileRepositoryTest {
     }
 
     [Test]
-    public void Delete_refuses_active_and_last_but_removes_an_extra() {
+    public void Delete_removes_a_non_active_profile_and_404s_an_unknown_id() {
         var activeId = _repo.ActiveId!.Value;
-        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.RefusedActive);
         _repo.Delete(Guid.NewGuid()).Should().Be(ProfileDeleteResult.NotFound);
 
         var b = _repo.Create("B", settings: null, makeActive: false);
         _repo.Delete(b.Id).Should().Be(ProfileDeleteResult.Deleted);
         _repo.List().Profiles.Should().ContainSingle().Which.Id.Should().Be(activeId);
+        _repo.ActiveId.Should().Be(activeId);
+    }
 
-        // The last remaining profile is also the active one, so the active guard fires first;
-        // RefusedLastRemaining is the defensive fallback for the (normally impossible) case of
-        // a populated set with no active profile.
-        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.RefusedActive);
+    [Test]
+    public void Delete_active_falls_back_to_the_newest_remaining_profile() {
+        SetLatitude(11);                                   // A at 11
+        var b = _repo.Create("B", settings: null, makeActive: true);
+        SetLatitude(22);                                   // B (active, newest) at 22
+        var aId = _repo.List().Profiles.Single(p => p.Id != b.Id).Id;
+
+        _repo.Delete(b.Id).Should().Be(ProfileDeleteResult.Deleted);
+
+        // Mirrors the boot-time stale-pointer recovery: newest remaining wins,
+        // and its settings load into the live store.
+        _repo.ActiveId.Should().Be(aId);
+        Latitude().Should().Be(11, "the fallback profile's settings must be applied");
+        _repo.List().Profiles.Should().ContainSingle().Which.Id.Should().Be(aId);
+    }
+
+    [Test]
+    public void Delete_last_profile_returns_to_the_zero_profile_state() {
+        // Deleting the last profile is "start over": the fresh-install state,
+        // where the client routes the user into profile setup — NOT an
+        // unconfigured auto-seeded profile.
+        SetLatitude(33); // dirty the live store with the doomed profile's settings
+        var activeId = _repo.ActiveId!.Value;
+
+        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.Deleted);
+
+        _repo.List().Profiles.Should().BeEmpty();
+        _repo.ActiveId.Should().BeNull();
+        // The live store is reset to factory defaults: the wizard's upcoming
+        // Create(settings: null) captures the live store, and without the reset
+        // it would silently inherit the DELETED profile's settings (#855 review).
+        Latitude().Should().Be(0, "no ghost settings from the deleted profile");
+        var next = _repo.Create("Fresh", settings: null, makeActive: true);
+        _repo.GetProfile(next.Id)!.Settings.Site.LatitudeDeg.Should().Be(0);
+        _repo.Delete(next.Id); // restore the zero state for the restart half below
+
+        // And the state survives a daemon restart: the active pointer was
+        // cleared, and boot doesn't resurrect a profile out of nothing.
+        _repo.Dispose();
+        var store2 = new FileProfileStore(_dir);
+        _repo = new FileProfileRepository(_dir, store2);
+        _repo.List().Profiles.Should().BeEmpty();
+        _repo.ActiveId.Should().BeNull();
     }
 
     [Test]

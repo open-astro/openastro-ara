@@ -86,6 +86,28 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     }
 
     public async Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct) {
+        // The guider is not an Alpaca device (PHD2 over JSON-RPC) and never appears in
+        // the remembered-selection store — dispatch its connect directly. A null-field
+        // request means "the active profile's phd2 host/port", so this heals a dropped
+        // guider wherever it lives (e.g. an SBC at :8080). Without this, a meridian
+        // flip that needs guider re-calibration aborted whenever the guider was not
+        // already connected (EnsureConnected saw 0 dispatched).
+        if (Normalize(type) == DeviceType.Guider) {
+            try {
+                await _services.GetRequiredService<IGuiderService>()
+                    .ConnectAsync(new GuiderConnectRequestDto(), null, ct).ConfigureAwait(false);
+                return new ReconnectOutcome(Attempted: 1, Dispatched: 1);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                throw;
+            }
+#pragma warning disable CA1031 // a failed dispatch is an outcome, not a fault — same contract as the Alpaca loop below
+            catch (Exception ex) {
+                LogDispatchFailed(ex, DeviceType.Guider, "PHD2");
+                return new ReconnectOutcome(Attempted: 1, Dispatched: 0);
+            }
+#pragma warning restore CA1031
+        }
         var remembered = await _store.GetAllAsync(ct).ConfigureAwait(false);
         var attempted = 0;
         var dispatched = 0;
@@ -122,6 +144,8 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
 
     public async Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) {
         switch (Normalize(type)) {
+            case DeviceType.Guider:
+                return (await _services.GetRequiredService<IGuiderService>().GetAsync(ct).ConfigureAwait(false))?.State;
             case DeviceType.Camera:
                 return (await _services.GetRequiredService<ICameraService>().GetAsync(ct).ConfigureAwait(false))?.State;
             case DeviceType.Telescope:

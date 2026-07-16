@@ -82,20 +82,14 @@ public static class ProfilesEndpoints {
                 return result switch {
                     ProfileDeleteResult.Deleted => Results.NoContent(),
                     ProfileDeleteResult.NotFound => Results.NotFound(),
-                    ProfileDeleteResult.RefusedActive => Results.Problem(
-                        detail: "Cannot delete the active profile — select another profile first.",
-                        statusCode: StatusCodes.Status409Conflict),
-                    ProfileDeleteResult.RefusedLastRemaining => Results.Problem(
-                        detail: "Cannot delete the last remaining profile.",
-                        statusCode: StatusCodes.Status409Conflict),
                     _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError),
                 };
             })
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("DeleteProfile")
-            .WithSummary("Delete a profile (refused for the active or the last remaining profile).");
+            .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
+                "remaining one; deleting the last profile returns to the zero-profile state.");
 
         profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo) =>
                 repo.SelectProfile(id) ? Results.Ok(repo.List()) : Results.NotFound())

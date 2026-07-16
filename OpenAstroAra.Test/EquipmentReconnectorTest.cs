@@ -151,11 +151,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task ReconnectAsync_skips_a_type_with_no_alpaca_connect_path() {
-            // Guider connects via PHD2, not this flow — even if one is remembered, nothing is dispatched.
-            var r = Build(new FakeStore(Device(DeviceType.Guider, "phd2")));
+        public async Task ReconnectAsync_dispatches_the_guider_via_its_own_connect_path() {
+            // Guider connects via PHD2 (JSON-RPC), not the remembered-Alpaca loop — the
+            // reconnector dispatches IGuiderService.ConnectAsync with a NULL-field request
+            // so the daemon uses the active profile's phd2 host/port (which may be a remote
+            // SBC). This is what lets a meridian flip's guider re-cal heal a dropped guider.
+            var guider = new Mock<IGuiderService>();
+            guider.Setup(s => s.ConnectAsync(
+                    It.Is<GuiderConnectRequestDto>(req => req.Host == null && req.Port == null),
+                    null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(), (typeof(IGuiderService), guider.Object));
+
             var outcome = await r.ReconnectAsync(DeviceType.Guider, CancellationToken.None);
-            Assert.That(outcome.Attempted, Is.EqualTo(0));
+
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
+            Assert.That(outcome.Dispatched, Is.EqualTo(1));
+            guider.VerifyAll();
+        }
+
+        [Test]
+        public async Task ReconnectAsync_reports_a_failed_guider_dispatch_as_attempted_not_dispatched() {
+            var guider = new Mock<IGuiderService>();
+            guider.Setup(s => s.ConnectAsync(It.IsAny<GuiderConnectRequestDto>(), null, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("phd2 unreachable"));
+            var r = Build(new FakeStore(), (typeof(IGuiderService), guider.Object));
+
+            var outcome = await r.ReconnectAsync(DeviceType.Guider, CancellationToken.None);
+
+            Assert.That(outcome.Attempted, Is.EqualTo(1));
             Assert.That(outcome.Dispatched, Is.EqualTo(0));
         }
     }

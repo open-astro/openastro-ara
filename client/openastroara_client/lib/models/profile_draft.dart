@@ -38,19 +38,10 @@ class ProfileDraft {
   final SafetyPolicies safety = SafetyPolicies();
   final SitePreferences site = SitePreferences();
 
-  // Stage 6 — Sky data downloads (package IDs to fetch).
-  // NOTE: screen 17 mutates this set IN PLACE (add/remove/clear under setState)
-  // rather than replacing the draft, matching the other wizard screens. Because
-  // the set reference never changes, a Riverpod consumer that diffs by identity
-  // won't see element changes — read it directly (via `ref.watch(...).draft`)
-  // and rely on the mutating widget's setState for repaints, as screen 17 does.
-  final Set<String> skyDataDownloadIds = <String>{};
-
-  // §37.6 — whether screen 17 has seeded the recommended preset THIS wizard
-  // session. Lives on the draft (not the screen's State) so back/forward
-  // navigation — which rebuilds the screen widget — can't re-seed over a
-  // user's explicit clear. Never persisted to the profile.
-  bool skyDataRecommendedSeeded = false;
+  // §37.5 — whether the Site step has seeded its safe starter numbers THIS
+  // wizard session: rebuilds on back/forward must not re-seed over an
+  // explicit blank.
+  bool sitePrefsSeeded = false;
 
   // Per-screen "skipped" flags so the profile knows to surface "Default —
   // please review in Settings" markers per §37.8.
@@ -90,10 +81,13 @@ class EquipmentSlots {
   String? rotatorDeviceId;
   String? domeDeviceId;
   String? observingConditionsDeviceId;
-  String? switchDeviceId;
+
+  /// A rig can carry several switch hubs (power box, dew controller, relay
+  /// board) — §6.4 multi-switch is wired daemon-side, so the wizard assigns
+  /// them all, not just a default.
+  final List<String> switchDeviceIds = [];
   String? safetyMonitorDeviceId;
   String? flatPanelDeviceId;
-  String? guiderDeviceId;
 }
 
 class TelescopeSettings {

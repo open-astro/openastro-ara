@@ -92,7 +92,7 @@ final wizardStepValidProvider =
 /// Static wizard catalog so the shell can look up screen metadata + the
 /// stage progress label without per-screen widgets being instantiated.
 class ProfileWizard {
-  static const int totalSteps = 18;
+  static const int totalSteps = 17;
 
   /// 1-based step → (stage number, stage label, screen title)
   static const Map<int, WizardStepInfo> steps = <int, WizardStepInfo>{
@@ -112,8 +112,7 @@ class ProfileWizard {
     14: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'Imaging defaults'),
     15: WizardStepInfo(stage: 5, stageLabel: 'Safety + site', title: 'Safety policies'),
     16: WizardStepInfo(stage: 5, stageLabel: 'Safety + site', title: 'Site preferences'),
-    17: WizardStepInfo(stage: 6, stageLabel: 'Sky data downloads', title: 'Sky data downloads'),
-    18: WizardStepInfo(stage: 7, stageLabel: 'Done', title: 'Review + Save'),
+    17: WizardStepInfo(stage: 6, stageLabel: 'Done', title: 'Review + Save'),
   };
 }
 

@@ -90,6 +90,27 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
             }
             await TryConnectAsync(device.Type, device, stoppingToken).ConfigureAwait(false);
         }
+
+        // The guider is not an Alpaca device (PHD2 over JSON-RPC), so it never appears
+        // in the remembered-selection store — honor its connect-on-boot toggle here.
+        // A null-field request means "the active profile's phd2 host/port" (which may
+        // be a remote SBC), so this works for any deployment shape.
+        if (conn.Guider && !stoppingToken.IsCancellationRequested) {
+            try {
+                LogReconnecting(DeviceType.Guider, "PHD2");
+                await _services.GetRequiredService<IGuiderService>()
+                    .ConnectAsync(new GuiderConnectRequestDto(), null, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) {
+                // clean shutdown mid-dispatch
+            }
+#pragma warning disable CA1031 // guider dispatch failure must not fault startup
+            catch (Exception ex) {
+                LogConnectFailed(ex, DeviceType.Guider, "PHD2");
+            }
+#pragma warning restore CA1031
+        }
     }
 
     private async Task TryConnectAsync(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
@@ -125,8 +146,9 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
 #pragma warning restore CA1031
     }
 
-    /// <summary>The profile auto-connect bool for a device type. Guider maps to no bool here
-    /// (its connect is out of this Alpaca path), so it never auto-connects.</summary>
+    /// <summary>The profile auto-connect bool for a device type. Guider is handled
+    /// separately (PHD2 connects over JSON-RPC using the profile's host/port, not via
+    /// the remembered-Alpaca-device loop) — see the tail of ExecuteAsync.</summary>
     private static bool AutoConnectEnabled(EquipmentConnectionDto conn, DeviceType type) => type switch {
         DeviceType.Camera => conn.Camera,
         DeviceType.Telescope => conn.Mount,

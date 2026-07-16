@@ -33,6 +33,5 @@ final Map<int, WizardScreenBuilder> wizardScreenBuilders =
   14: (_) => const ScreenImagingDefaults(),
   15: (_) => const ScreenSafety(),
   16: (_) => const ScreenSiteAltitude(),
-  17: (_) => const ScreenSkyData(),
-  18: (_) => const ScreenReview(),
+  17: (_) => const ScreenReview(),
 };

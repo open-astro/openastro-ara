@@ -58,6 +58,17 @@ public static class EquipmentEndpoints {
                     statusCode: StatusCodes.Status400BadRequest,
                     detail: $"'{type}' is not a recognized device type. See §10.6 for the list.");
             }
+            if (deviceType == DeviceType.Guider) {
+                // Not an Alpaca device — the discovery service throws for it, which
+                // surfaced as a bare 500 to the wizard. Answer with the actual guidance.
+                return Results.Problem(
+                    type: "https://openastro.net/errors/not-discoverable",
+                    title: "Guider is not Alpaca-discoverable",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    detail: "PHD2 connects over JSON-RPC at a host:port (profile phd2 " +
+                            "settings), not through Alpaca discovery. Configure it in the " +
+                            "wizard's Guider step or Settings → Guider.");
+            }
             var devices = await svc.DiscoverAsync(deviceType, forceRefresh ?? false, ct);
             return Results.Ok(devices);
         });

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/guider_status.dart';
 import '../../models/server.dart';
 import '../../services/guider_api.dart';
+import '../profile_management_state.dart';
 import '../saved_server_state.dart';
 
 /// Builds a [GuiderClient] for a server. Overridable in tests so a pure fake
@@ -52,13 +53,29 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     return api.getStatus();
   }
 
-  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
+  Future<void> connect({String? host, int? port}) async {
     // Re-entrancy guard: ignore a second call while one is in flight (loading),
     // so a double-tap doesn't fire two daemon requests with a racing refresh.
     if (state.isLoading) return;
     final api = ref.read(guiderApiProvider);
     if (api == null) return;
     state = const AsyncValue<GuiderStatus?>.loading();
+    // No explicit target → the PROFILE's phd2 host/port, fetched fresh from
+    // the daemon (the authoritative copy). Hardcoding kDefaultGuiderHost here
+    // sent every chip-dialog connect to localhost:4400 and bypassed a remote
+    // PHD2 (e.g. the SBC at :8080) the user had configured in Settings.
+    if (host == null || port == null) {
+      try {
+        final phd2 = await ref.read(profileApiProvider)?.getPhd2Settings();
+        host ??= phd2?.host ?? kDefaultGuiderHost;
+        port ??= phd2?.port ?? kDefaultGuiderPort;
+      } catch (_) {
+        // Profile fetch failed — fall back to defaults rather than blocking
+        // the connect entirely (the daemon-side request still validates).
+        host ??= kDefaultGuiderHost;
+        port ??= kDefaultGuiderPort;
+      }
+    }
     try {
       await api.connect(host: host, port: port);
     } catch (e, st) {

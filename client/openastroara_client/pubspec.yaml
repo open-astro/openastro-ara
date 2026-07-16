@@ -30,6 +30,11 @@ dependencies:
   file_picker: ^12.0.0-beta.7
   fl_chart: ^1.1.1
   collection: ^1.19.1
+  # Worldwide lat/long → IANA timezone mapping (pure Dart, offline). The IANA
+  # NAME is DST-policy-proof (rule changes land in the OS tz database), but the
+  # package's embedded boundary snapshot can age — see PORT_TODO if legislatures
+  # actually kill DST and boundaries shift.
+  lat_lng_to_timezone: ^0.2.0
   url_launcher: ^6.3.1
   path_provider: ^2.1.6
   # §44 backup stream — sha-256 verification of pulled frames.

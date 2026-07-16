@@ -18,8 +18,8 @@ import '../wizard/wizard_shell.dart';
 
 /// §37/§30 multi-profile management. Lists the daemon's known profiles with the
 /// active one badged, and offers Select / Rename / Delete per profile plus an
-/// "Add profile" action that runs the §37 wizard. Deleting the active or the
-/// last-remaining profile is refused by the daemon (409); the message is shown.
+/// "Add profile" action that runs the §37 wizard. Any profile is deletable —
+/// the confirm dialog spells out the daemon's fallback for active/last deletes.
 class ProfileManagementScreen extends ConsumerWidget {
   const ProfileManagementScreen({super.key});
 
@@ -77,7 +77,6 @@ class _ProfileListView extends ConsumerWidget {
             style: TextStyle(color: AraColors.textSecondary)),
       );
     }
-    final onlyOne = list.profiles.length == 1;
     return ListView.separated(
       itemCount: list.profiles.length,
       separatorBuilder: (_, _) =>
@@ -106,13 +105,10 @@ class _ProfileListView extends ConsumerWidget {
               // offer an action that would silently no-op.
               if (Platform.isMacOS || Platform.isLinux || Platform.isWindows)
                 const PopupMenuItem(value: 'export', child: Text('Export…')),
-              PopupMenuItem(
-                value: 'delete',
-                // The daemon refuses deleting the active or last-remaining
-                // profile; disable here too so the action reads as unavailable.
-                enabled: !isActive && !onlyOne,
-                child: const Text('Delete'),
-              ),
+              // Any profile is deletable: the daemon activates the newest
+              // remaining profile when the active one goes, and returns to the
+              // zero-profile (fresh-install) state when the last one goes.
+              const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],
           ),
         );
@@ -138,7 +134,8 @@ class _ProfileListView extends ConsumerWidget {
         await _exportProfile(context, ref, p);
         break;
       case 'delete':
-        final ok = await _confirmDelete(context, p.name);
+        final ok = await _confirmDelete(context, p.name,
+            isActive: isActive, isLast: list.profiles.length == 1);
         if (ok) {
           await _run(messenger, () => notifier.delete(p.id), 'Couldn\'t delete profile');
         }
@@ -244,12 +241,17 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
   ).whenComplete(controller.dispose);
 }
 
-Future<bool> _confirmDelete(BuildContext context, String name) async {
+Future<bool> _confirmDelete(BuildContext context, String name,
+    {bool isActive = false, bool isLast = false}) async {
+  final consequence = isLast
+      ? " This is the last profile — you'll be taken back to profile setup."
+      : (isActive ? ' The most recent remaining profile becomes active.' : '');
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Delete profile?'),
-      content: Text('"$name" will be permanently removed. This can\'t be undone.'),
+      content: Text(
+          '"$name" will be permanently removed. This can\'t be undone.$consequence'),
       actions: [
         TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
         FilledButton(

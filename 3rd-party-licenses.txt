@@ -69,8 +69,8 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (114 packages):
-    MIT: 77 packages
+License summary (115 packages):
+    MIT: 78 packages
     Apache-2.0: 19 packages
     BSD-3-Clause: 8 packages
     Microsoft .NET Library License: 5 packages
@@ -837,7 +837,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/novotnyllc/Zeroconf
 
 
-CLIENT — WILMA direct runtime pub packages (16 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
+CLIENT — WILMA direct runtime pub packages (17 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
 ===========================================================================================================================
 
 ------------------------------------------------------------------------
@@ -893,6 +893,12 @@ Package:        flutter_secure_storage 10.3.1
 Copyright:      Copyright 2017 German Saprykin
 License:        BSD-3-Clause
 License source: https://pub.dev/packages/flutter_secure_storage/license
+
+------------------------------------------------------------------------
+Package:        lat_lng_to_timezone 0.2.0
+Copyright:      Copyright (c) 2020 Shawn Lauzon
+License:        MIT
+License source: https://pub.dev/packages/lat_lng_to_timezone/license
 
 ------------------------------------------------------------------------
 Package:        multicast_dns 0.3.3

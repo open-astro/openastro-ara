@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
-import '../../../state/sky_atlas/data_manager_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
@@ -19,138 +18,7 @@ String formatBytes(int bytes) {
   return '$bytes B';
 }
 
-// ── Screen 17 — Sky data downloads ──────────────────────────────────────────
-
-/// §37.6 — optional sky-data packages (star catalogs, target lists) to fetch.
-/// The user ticks what they want; the selected ids are queued for download (via
-/// the Data Manager) after the profile is saved — see the wizard shell. The set
-/// of selected ids lives on the draft so it survives back/forward navigation.
-class ScreenSkyData extends ConsumerStatefulWidget {
-  const ScreenSkyData({super.key});
-  @override
-  ConsumerState<ScreenSkyData> createState() => _ScreenSkyDataState();
-}
-
-class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
-  @override
-  Widget build(BuildContext context) {
-    // Watch (not read) the controller so this screen rebuilds if the draft object
-    // is ever replaced (e.g. a future reset-to-defaults); `selected` is the live
-    // mutable set on the draft, and our setState calls repaint after we mutate it.
-    final selected = ref.watch(wizardControllerProvider).draft.skyDataDownloadIds;
-    final async = ref.watch(dataManagerPackagesProvider);
-    return WizardScreenScaffold(
-      step: 17,
-      intro: 'Optional sky-data downloads — star catalogs and target lists. Tick '
-          'any you want and they download in the background after you finish. You '
-          'can manage the full catalog later in Settings → Data.',
-      children: [
-        async.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (e, _) => _Message(
-            'Couldn\'t load the sky-data catalog. You can add packages later in '
-            'Settings → Data.',
-          ),
-          data: (packages) {
-            if (packages == null) {
-              return _Message(
-                  'Connect to a daemon to see available sky-data packages.');
-            }
-            final available =
-                packages.where((p) => !p.isInstalled).toList(growable: false);
-            if (available.isEmpty) {
-              return _Message('All sky-data packages are already installed.');
-            }
-            // §37.6 — seed the recommended preset ONCE per wizard session, into
-            // an untouched (empty) selection only. The flag lives on the DRAFT
-            // (#728 review): this State is rebuilt on every back/forward visit,
-            // so a widget-local flag would re-seed over an explicit Clear.
-            final draft = ref.read(wizardControllerProvider).draft;
-            if (!draft.skyDataRecommendedSeeded) {
-              draft.skyDataRecommendedSeeded = true;
-              if (selected.isEmpty) {
-                // Mutating the draft set during build is safe here: `selected` IS
-                // the rendered source and the change happens before the checkboxes
-                // read it below (no setState needed — same-frame consistency; the
-                // draft's doc comment records that consumers read it directly).
-                selected.addAll(
-                    available.where((p) => p.recommended).map((p) => p.id));
-              }
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: available.every((p) => selected.contains(p.id))
-                          ? null
-                          : () => setState(() =>
-                              selected.addAll(available.map((p) => p.id))),
-                      child: const Text('Select all'),
-                    ),
-                    TextButton(
-                      onPressed: selected.isEmpty
-                          ? null
-                          : () => setState(() => selected.clear()),
-                      child: const Text('Clear'),
-                    ),
-                  ],
-                ),
-                ...available.map((p) => CheckboxListTile(
-                      value: selected.contains(p.id),
-                      onChanged: (v) => setState(() => v == true
-                          ? selected.add(p.id)
-                          : selected.remove(p.id)),
-                      title: p.recommended
-                          ? Row(children: [
-                              Flexible(child: Text(p.name)),
-                              const SizedBox(width: 8),
-                              const Chip(
-                                label: Text('Recommended'),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ])
-                          : Text(p.name),
-                      subtitle: Text(
-                        // Drop empty parts so a package with no description
-                        // doesn't render a dangling "  ·  1.0 MB" separator.
-                        [p.description, formatBytes(p.sizeBytes)]
-                            .where((s) => s.isNotEmpty)
-                            .join('  ·  '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AraColors.textSecondary),
-                      ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                    )),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Text(text,
-            style: const TextStyle(color: AraColors.textSecondary)),
-      );
-}
-
-// ── Screen 18 — Review + Save ────────────────────────────────────────────────
+// ── Screen 17 — Review + Save ────────────────────────────────────────────────
 
 const String _notSet = 'Not set';
 
@@ -205,10 +73,12 @@ String assignedEquipment(EquipmentSlots e) {
     if (e.rotatorDeviceId != null) 'Rotator',
     if (e.domeDeviceId != null) 'Dome',
     if (e.observingConditionsDeviceId != null) 'Conditions',
-    if (e.switchDeviceId != null) 'Switch',
+    if (e.switchDeviceIds.isNotEmpty)
+      e.switchDeviceIds.length == 1
+          ? 'Switch'
+          : 'Switches ×${e.switchDeviceIds.length}',
     if (e.safetyMonitorDeviceId != null) 'Safety Monitor',
     if (e.flatPanelDeviceId != null) 'Flat Panel',
-    if (e.guiderDeviceId != null) 'Guider',
   ];
   return labels.isEmpty ? 'None assigned' : labels.join(', ');
 }
@@ -245,7 +115,7 @@ class ScreenReview extends ConsumerWidget {
     final si = draft.site;
 
     return WizardScreenScaffold(
-      step: 18,
+      step: 17,
       intro: 'Review your profile. Tap Edit on any section to jump back and '
           'change it, then choose Save Profile below to finish. Anything left '
           '"Not set" keeps the built-in default — you can adjust it later in '
@@ -387,11 +257,6 @@ class ScreenReview extends ConsumerWidget {
             TwilightOption.astronomical => 'Astronomical',
             null => _notSet,
           }),
-        ]),
-        _ReviewSection(title: 'Sky data', step: 17, onEdit: edit, rows: [
-          ('Queued downloads', draft.skyDataDownloadIds.isEmpty
-              ? 'None'
-              : '${draft.skyDataDownloadIds.length} selected'),
         ]),
       ],
     );

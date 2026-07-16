@@ -114,6 +114,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_rmc_first_chipset_still_delivers_altitude_from_the_following_gga() {
+            // Sentence order is chipset-dependent: when RMC leads the cycle, the sync applies
+            // immediately (2D) but the listen continues — the next RMC pairs with the by-then-
+            // seen GGA altitude and re-applies with the full 3D position. Before this, an
+            // RMC-first dongle could NEVER fill altitude (the wizard's GPS fill surfaced it).
+            var store = new InMemoryProfileStore();
+            var setter = new FakeClockSetter();
+            var timeSync = new TimeSyncService(NullLogger<TimeSyncService>.Instance, setter, store) {
+                GpsDeviceProbe = () => true,
+            };
+            var source = new FakeSerialSource();
+            source.LinesByDevice["/dev/ttyUSB0"] = [
+                ValidRmc, // RMC first — applies a 2D sync
+                WithChecksum("$GPGGA,061530.50,3016.20,N,09744.40,W,1,08,1.0,165.0,M,0.0,M,,"),
+                WithChecksum("$GPRMC,061531.00,A,3016.20,N,09744.40,W,0.0,0.0,110726,,,A"),
+            ];
+            using var worker = new UsbGpsTimeSyncWorker(timeSync, NullLogger<UsbGpsTimeSyncWorker>.Instance, source) {
+                PerDeviceListenWindow = TimeSpan.FromMilliseconds(500),
+            };
+
+            var applied = await worker.ProbeOnceAsync(CancellationToken.None);
+
+            Assert.That(applied, Is.True);
+            var state = await timeSync.GetStateAsync(CancellationToken.None);
+            Assert.That(state.Location, Is.Not.Null);
+            Assert.That(state.Location!.Alt, Is.EqualTo(165.0),
+                "the second RMC pairs with the GGA altitude seen in between");
+            Assert.That(store.GetSiteSettings().ElevationM, Is.EqualTo(165.0),
+                "the profile elevation gets the altitude too");
+            Assert.That(setter.LastSet, Is.EqualTo(new DateTimeOffset(2026, 7, 11, 6, 15, 31, TimeSpan.Zero)),
+                "the re-apply uses the SECOND RMC's instant, not the stale first one");
+        }
+
+        [Test]
         public async Task An_rmc_only_fix_leaves_the_profile_elevation_untouched() {
             // #834 r1 — RMC carries no altitude; a GPS sync without a GGA in the window must NOT
             // zero the site elevation the twilight/airmass math depends on.

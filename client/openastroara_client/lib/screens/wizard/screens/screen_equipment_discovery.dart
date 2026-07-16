@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -329,11 +331,11 @@ const List<_Slot> _slots = <_Slot>[
   _Slot('Observing Conditions', EquipmentDeviceType.weather, _gOc, _sOc),
   _Slot('Safety Monitor', EquipmentDeviceType.safetyMonitor, _gSafe, _sSafe),
   _Slot('Flat Panel', EquipmentDeviceType.flatPanel, _gFlat, _sFlat),
-  _Slot('Guider (PHD2)', EquipmentDeviceType.guider, _gGuider, _sGuider),
-  // Switch discovers like any other Alpaca device (§6.4 multi-switch is wired).
-  // The wizard assigns one switch as the profile's default; additional switches
-  // are added at runtime from Settings → Switch.
-  _Slot('Switch', EquipmentDeviceType.switchDevice, _gSwitch, _sSwitch),
+  // Guider (PHD2) is NOT a slot: it isn't an Alpaca device, so discovery has
+  // nothing to scan (the daemon 400s the attempt) — it's configured by
+  // host:port on the wizard's Guider step (with a Test connection button).
+  // Switch is NOT a slot either: a rig can carry several switch hubs (§6.4
+  // multi-switch), so it gets its own add-as-many-as-you-like section below.
 ];
 
 String? _gCamera(ProfileDraft d) => d.equipment.cameraDeviceId;
@@ -355,10 +357,6 @@ String? _gSafe(ProfileDraft d) => d.equipment.safetyMonitorDeviceId;
 void _sSafe(ProfileDraft d, String? v) => d.equipment.safetyMonitorDeviceId = v;
 String? _gFlat(ProfileDraft d) => d.equipment.flatPanelDeviceId;
 void _sFlat(ProfileDraft d, String? v) => d.equipment.flatPanelDeviceId = v;
-String? _gGuider(ProfileDraft d) => d.equipment.guiderDeviceId;
-void _sGuider(ProfileDraft d, String? v) => d.equipment.guiderDeviceId = v;
-String? _gSwitch(ProfileDraft d) => d.equipment.switchDeviceId;
-void _sSwitch(ProfileDraft d, String? v) => d.equipment.switchDeviceId = v;
 
 /// §37.2 Screen 3 — Discover + assign equipment.
 class ScreenEquipmentAssign extends ConsumerStatefulWidget {
@@ -375,6 +373,9 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
   // Friendly names for already-assigned devices, remembered for this wizard
   // session (the draft only persists the device id).
   final Map<EquipmentDeviceType, String> _assignedNames = {};
+
+  // id → name for the multi-assign switch section (several per rig).
+  final Map<String, String> _switchNames = {};
 
   @override
   void initState() {
@@ -420,8 +421,100 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
           'JSON-RPC, not Alpaca.',
       children: [
         for (final slot in _slots) _slotRow(context, slot),
+        _switchSection(context),
       ],
     );
+  }
+
+  /// Switches are add-as-many-as-you-use (§6.4 multi-switch): power boxes,
+  /// dew controllers, relay boards can all coexist on one rig.
+  Widget _switchSection(BuildContext context) {
+    final ids = _draft.equipment.switchDeviceIds;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AraColors.bgPanel,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AraColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Switches',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AraColors.textPrimary,
+                            )),
+                    const SizedBox(height: 2),
+                    Text(
+                      ids.isEmpty
+                          ? '— None (add every switch hub your rig uses)'
+                          : '${ids.length} assigned',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: ids.isNotEmpty
+                                ? AraColors.accentConnected
+                                : AraColors.textSecondary,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => unawaited(_addSwitch()),
+                child: const Text('Add switch'),
+              ),
+            ]),
+            if (ids.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final id in ids)
+                    InputChip(
+                      label: Text(_switchNames[id] ?? id),
+                      onDeleted: () => setState(() {
+                        ids.remove(id);
+                        _switchNames.remove(id);
+                      }),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addSwitch() async {
+    final server = ref.read(activeServerProvider);
+    final api = server == null ? null : EquipmentDiscoveryApi(server);
+    final picked = await showModalBottomSheet<_Choice>(
+      context: context,
+      backgroundColor: AraColors.bgPanel,
+      isScrollControlled: true,
+      builder: (_) => _DiscoverySheet(
+        slotLabel: 'Switch',
+        type: EquipmentDeviceType.switchDevice,
+        api: api,
+      ),
+    );
+    api?.close();
+    if (picked?.device == null || !mounted) return;
+    final device = picked!.device!;
+    setState(() {
+      if (!_draft.equipment.switchDeviceIds.contains(device.uniqueId)) {
+        _draft.equipment.switchDeviceIds.add(device.uniqueId);
+      }
+      _switchNames[device.uniqueId] = device.name;
+    });
   }
 
   Widget _slotRow(BuildContext context, _Slot slot) {
