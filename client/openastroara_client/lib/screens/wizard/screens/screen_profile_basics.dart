@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
 import '../../../state/wizard_state.dart';
+import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
 
 /// §37.1 Screen 1 — Profile name + location.
@@ -42,6 +43,35 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
       intro: 'Name this profile and (optionally) set your observing site. '
           'Everything here can be changed later in Settings.',
       children: [
+        // Equipment discovery (steps 2–3) probes the rig over Alpaca — gear
+        // that's off or on another network simply won't show up, which reads
+        // as "the wizard is broken" without this heads-up.
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: AraColors.bgPanel,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AraColors.border),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.power_settings_new,
+                  size: 20, color: AraColors.accentInfo),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Before you begin: power on your mount and the rest of your '
+                  'gear, and make sure they\'re reachable on the same local '
+                  'network as the server — the wizard discovers equipment '
+                  'live in the next steps.',
+                  style: TextStyle(color: AraColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
         WizardTextField(
           label: 'Profile name',
           required: true,
