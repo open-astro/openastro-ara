@@ -149,11 +149,23 @@ Future<String?> importSequenceFromJson(
   SequenceImportResult result;
   if (api == null) {
     // Offline import → a local draft (§2). Same warnings surface as connected.
-    final draftId = await ref
-        .read(draftSequencesProvider.notifier)
-        .create(name, translated.body);
-    result = SequenceImportResult(
-        createdSequenceId: draftId, name: name, warnings: translated.warnings);
+    try {
+      final draftId = await ref
+          .read(draftSequencesProvider.notifier)
+          .create(name, translated.body);
+      result = SequenceImportResult(
+          createdSequenceId: draftId, name: name, warnings: translated.warnings);
+    } catch (_) {
+      // Local disk write failed — same contract as a connected failure: tell
+      // the user and return null so the Load dialog stays open.
+      if (context.mounted) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text("Couldn't save the imported draft locally."),
+          backgroundColor: AraColors.accentError,
+        ));
+      }
+      return null;
+    }
   } else {
     try {
       final id = await api.create(name, translated.body,

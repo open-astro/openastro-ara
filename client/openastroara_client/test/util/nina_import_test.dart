@@ -89,6 +89,38 @@ void main() {
     expect(t.warnings.join(' '), contains('not yet supported'));
   });
 
+  test('strategies, conditions and triggers are NOT flagged as unsupported',
+      () {
+    // Every real NINA export has container Strategy nodes, and most carry
+    // conditions/triggers — all first-class in the editor. Flagging them
+    // would put a false "not yet supported" warning on essentially every
+    // import (the #854 review catch).
+    final nina = fixture();
+    nina['Conditions'] = [
+      {
+        r'$type':
+            'NINA.Sequencer.Conditions.TimeSpanCondition, NINA.Sequencer',
+        'Time': 3600,
+      }
+    ];
+    nina['Triggers'] = [
+      {
+        r'$type':
+            'NINA.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, NINA.Sequencer',
+      }
+    ];
+    final t = translateNinaSequence(nina);
+    final unsupported =
+        t.warnings.where((w) => w.contains('not yet supported')).join(' ');
+    // The made-up PulseLaser is the ONLY unsupported type — the fixture's
+    // SequentialStrategy plus the condition and trigger all resolve.
+    expect(unsupported, contains('PulseLaser'));
+    expect(unsupported, isNot(contains('Strategy')));
+    expect(unsupported, isNot(contains('TimeSpanCondition')));
+    expect(unsupported, isNot(contains('MeridianFlipTrigger')));
+    expect(unsupported, contains('1 instruction type(s)'));
+  });
+
   test('legacy single-NINA-assembly form remaps too', () {
     final t = translateNinaSequence({
       r'$type': 'NINA.Sequencer.Container.SequentialContainer, NINA',

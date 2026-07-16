@@ -1,5 +1,6 @@
-import '../models/sequence/instruction_catalog.dart'
-    show instructionCatalog;
+import '../models/sequence/condition_catalog.dart' show conditionCatalog;
+import '../models/sequence/instruction_catalog.dart' show instructionCatalog;
+import '../models/sequence/trigger_catalog.dart' show triggerCatalog;
 
 /// §38.4 — CLIENT-side NINA import translation, ported from the daemon's
 /// `NinaImportTypeNormalizer` + the import path of `ImportAsync` under the
@@ -34,9 +35,17 @@ const String _schemaVersionField = 'schemaVersion';
 /// imported, so the daemon's persist-time validator accepts it.
 const String schemaVersion = 'openastroara-sequence-v1';
 
-/// The editor-known canonical types (lazy — the catalog is a const list).
+/// The editor-known canonical types (lazy — the catalogs are const lists).
+/// Instructions AND their container strategies, conditions, and triggers —
+/// every `$type` the editor renders first-class. Missing any of these would
+/// false-flag "not yet supported" on essentially every real import (every
+/// container carries a Strategy node).
 final Set<String> _editorTypes = {
   for (final def in instructionCatalog) def.type,
+  for (final def in instructionCatalog)
+    if (def.strategyType != null) def.strategyType!,
+  for (final def in conditionCatalog) def.type,
+  for (final def in triggerCatalog) def.type,
 };
 
 /// Translate a decoded NINA sequence export into an ARA-canonical body +
@@ -76,10 +85,10 @@ void _normalizeNode(Object? node, Set<String> unsupported) {
     if (type is String) {
       final canonical = _remapNamespace(type);
       if (canonical != type) node[r'$type'] = canonical;
+      // (_remapNamespace rewrites every NINA.Sequencer prefix, so no
+      // separate still-NINA branch can ever match here.)
       if (canonical.startsWith('OpenAstroAra.Sequencer.') &&
           !_editorTypes.contains(canonical)) {
-        unsupported.add(_shortName(canonical));
-      } else if (canonical.startsWith('NINA.Sequencer.')) {
         unsupported.add(_shortName(canonical));
       }
     }
