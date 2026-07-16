@@ -17,13 +17,15 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
 
   /// Create a new draft from a built body; returns its id. Throws on a failed
   /// disk write — the caller surfaces it.
-  Future<String> create(String name, Map<String, dynamic> body) async {
+  Future<String> create(String name, Map<String, dynamic> body,
+      {String? pushKey}) async {
     final svc = ref.read(draftSequenceServiceProvider);
     final draft = DraftSequence(
       id: svc.newId(),
       name: name,
       updatedUtc: DateTime.now().toUtc(),
       body: body,
+      pushKey: pushKey,
     );
     await svc.save(draft);
     await _reload();
@@ -49,6 +51,7 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
       name: existing?.name ?? '',
       updatedUtc: DateTime.now().toUtc(),
       body: body,
+      pushKey: existing?.pushKey,
     ));
     await _reload();
   }
@@ -76,7 +79,11 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
     }
     if (draft == null) throw StateError('That draft no longer exists.');
     final newId = await api.create(
-        draft.name.isEmpty ? 'Offline draft' : draft.name, draft.body);
+        draft.name.isEmpty ? 'Offline draft' : draft.name, draft.body,
+        // Stable across retries: a push whose response was lost dedupes on
+        // the daemon instead of duplicating. A degraded connected create's
+        // original key wins (the daemon may have already applied it).
+        idempotencyKey: draft.pushKey ?? draft.id);
     await ref.read(draftSequenceServiceProvider).delete(id);
     await _reload();
     // The daemon now owns it — surface it in the server list.

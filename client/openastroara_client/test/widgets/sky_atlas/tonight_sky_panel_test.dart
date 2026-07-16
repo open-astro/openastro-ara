@@ -26,7 +26,7 @@ class _RecordingClient implements SequenceClient {
 
   @override
   Future<String> create(String name, Map<String, dynamic> body,
-      {String? description}) async {
+      {String? description, String? idempotencyKey}) async {
     if (throwOnCreate) throw Exception('boom');
     createdName = name;
     createdBody = body;

@@ -17,6 +17,11 @@ import 'star_model.dart' as stars;
 /// catalog (dso_catalog_state.dart) — or the daemon's old 20-object starter
 /// list as the never-connected last resort.
 ///
+/// TWIN ALERT: the daemon keeps a C# twin of the astronomy statics in
+/// OpenAstroAra.Server/Services/SiteAstrometry.cs (its 3am safety math) — any
+/// formula or constant change here MUST be mirrored there. The parity tests
+/// in test/util/ pin the constants and catch drift.
+///
 /// Includes the NEXTGEN §1/§3.1 advisory stack (filter advice, optimal-sub
 /// figures, star-detectability tags) via the client-side ports in
 /// filter_advice.dart / optimal_sub.dart / star_model.dart, fed by the cached

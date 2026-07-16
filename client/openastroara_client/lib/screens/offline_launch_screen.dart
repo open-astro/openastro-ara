@@ -115,6 +115,13 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
           'never active while connected) — planning will use defaults.',
           style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
         ),
+      ] else if (pick.capturedUtc case final captured?) ...[
+        const SizedBox(height: 8),
+        Text(
+          'Gear cached ${_relativeAge(captured)} — reconnect to refresh if '
+          'your setup changed.',
+          style: const TextStyle(color: AraColors.textSecondary, fontSize: 12),
+        ),
       ],
       const SizedBox(height: 16),
       FilledButton(
@@ -142,4 +149,13 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
       if (mounted) setState(() => _entering = false);
     }
   }
+}
+
+/// "just now" / "N hours ago" / "N days ago" — coarse on purpose; the point
+/// is flagging WEEKS-old gear, not precision.
+String _relativeAge(DateTime utc) {
+  final age = DateTime.now().toUtc().difference(utc);
+  if (age.inHours < 1) return 'just now';
+  if (age.inHours < 48) return '${age.inHours} h ago';
+  return '${age.inDays} days ago';
 }

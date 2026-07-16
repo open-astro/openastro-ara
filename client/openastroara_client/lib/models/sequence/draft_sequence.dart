@@ -14,11 +14,19 @@ class DraftSequence {
   /// The raw NINA/§38.1 body, same shape as `SequenceDetail.body`.
   final Map<String, dynamic> body;
 
+  /// The Idempotency-Key the eventual daemon create must use. Stamped when
+  /// the draft was born from a DEGRADED connected create (the daemon may
+  /// have already applied that create — reusing its key dedupes instead of
+  /// duplicating). Null for born-offline drafts; push falls back to [id],
+  /// which is equally stable across retries.
+  final String? pushKey;
+
   const DraftSequence({
     required this.id,
     required this.name,
     required this.updatedUtc,
     required this.body,
+    this.pushKey,
   });
 
   Map<String, dynamic> toJson() => {
@@ -26,6 +34,7 @@ class DraftSequence {
         'name': name,
         'updated_utc': updatedUtc.toIso8601String(),
         'body': body,
+        'push_key': ?pushKey,
       };
 
   /// Null on any malformed record — a corrupt draft file is skipped, never a
@@ -42,6 +51,7 @@ class DraftSequence {
           DateTime.tryParse(json['updated_utc']?.toString() ?? '')?.toUtc() ??
               DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       body: Map<String, dynamic>.from(body),
+      pushKey: json['push_key'] is String ? json['push_key'] as String : null,
     );
   }
 }

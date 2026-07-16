@@ -21,8 +21,16 @@ class CachedProfile {
   final String id;
   final String name;
   final bool hasSections;
+
+  /// When the gear snapshot was captured (null when [hasSections] is false or
+  /// the snapshot predates the stamp) — the offline picker shows this so a
+  /// stale ranking looks stale.
+  final DateTime? capturedUtc;
   const CachedProfile(
-      {required this.id, required this.name, required this.hasSections});
+      {required this.id,
+      required this.name,
+      required this.hasSections,
+      this.capturedUtc});
 }
 
 @immutable
@@ -48,6 +56,11 @@ final cachedProfilesProvider = FutureProvider<CachedProfileList>((ref) async {
               id: p['id'] as String,
               name: p['name']?.toString() ?? '',
               hasSections: sections is Map && sections[p['id']] is Map,
+              capturedUtc: sections is Map && sections[p['id']] is Map
+                  ? DateTime.tryParse(
+                      (sections[p['id']] as Map)['captured_utc']?.toString() ??
+                          '')?.toUtc()
+                  : null,
             ),
     ],
   );

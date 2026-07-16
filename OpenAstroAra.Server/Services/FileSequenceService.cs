@@ -117,7 +117,20 @@ public sealed partial class FileSequenceService : ISequenceService {
         return Task.FromResult(TryLoadFile(path));
     }
 
+    // Create-replay cache: the endpoint has always DECLARED Idempotency-Key,
+    // but the key was silently ignored — a retried create (lost response on
+    // marginal rig Wi-Fi) duplicated the sequence. Found by the 2026-07-15
+    // client/server audit; the client now sends keys on every create path.
+    private readonly IdempotencyCache<SequenceDto> _createReplays = new();
+
     public Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        if (_createReplays.TryGet(idempotencyKey) is { } replay) {
+            // Replay only while the sequence still exists — if the user deleted
+            // it since, honouring the replay would resurrect a ghost id.
+            if (File.Exists(PathFor(replay.Id))) {
+                return Task.FromResult(replay);
+            }
+        }
         var now = DateTimeOffset.UtcNow;
         var dto = new SequenceDto(
             Id: Guid.NewGuid(),
@@ -128,6 +141,7 @@ public sealed partial class FileSequenceService : ISequenceService {
             Body: request.Body,
             TemplateOrigin: request.TemplateOrigin);
         WriteFile(dto);
+        _createReplays.Record(idempotencyKey, dto);
         return Task.FromResult(dto);
     }
 
