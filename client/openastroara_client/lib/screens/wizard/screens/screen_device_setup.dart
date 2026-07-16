@@ -184,9 +184,11 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
       }
       if (optics == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('No mount connected. Assign one on the Discover step '
-                '(it will be connected automatically), or enter the values '
-                'manually.')));
+            content: Text('The mount didn\'t come up. If it\'s assigned on '
+                'the Discover step, the daemon connects it automatically — a '
+                'timeout there usually means the BRIDGE can\'t reach the '
+                'mount itself: check it\'s powered on and its connection in '
+                'AlpacaBridge. You can also enter the values manually.')));
         return;
       }
       if (!optics.hasAny) {
@@ -310,9 +312,11 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
       if (!mounted) return;
       if (geometry == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('No camera connected. Assign one on the Discover step '
-                '(it will be connected automatically), or enter the values '
-                'manually.')));
+            content: Text('The camera didn\'t come up. If it\'s assigned on '
+                'the Discover step, the daemon connects it automatically — a '
+                'timeout there usually means the bridge can\'t reach the '
+                'camera itself: check power/USB in AlpacaBridge. You can also '
+                'enter the values manually.')));
         return;
       }
       final g = geometry; // non-null after the guard; promote for the closure
@@ -485,9 +489,11 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
       if (!mounted) return;
       if (wheel == null || wheel.slots.isEmpty) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('No filter wheel connected. Assign one on the '
-                'Discover step (it will be connected automatically), or name '
-                'the slots manually.')));
+            content: Text('The filter wheel didn\'t come up. If it\'s '
+                'assigned on the Discover step, the daemon connects it '
+                'automatically — a timeout there usually means the bridge '
+                'can\'t reach the wheel itself: check power/USB in '
+                'AlpacaBridge. You can also name the slots manually.')));
         return;
       }
       final w = wheel; // non-null after the guard; promote for the closures
@@ -684,8 +690,10 @@ class _ScreenFocuserState extends ConsumerState<ScreenFocuser> {
       if (!mounted) return;
       if (props == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('No focuser connected. Assign one on the Discover '
-                'step (it will be connected automatically).')));
+            content: Text('The focuser didn\'t come up. If it\'s assigned '
+                'on the Discover step, the daemon connects it automatically — '
+                'a timeout there usually means the bridge can\'t reach the '
+                'focuser itself: check power/USB in AlpacaBridge.')));
         return;
       }
       final p = props;
