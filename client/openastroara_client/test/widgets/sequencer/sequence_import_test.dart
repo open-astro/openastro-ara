@@ -1,12 +1,16 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
+import 'package:openastroara/models/sequence/draft_sequence.dart';
+import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_import.dart';
 
@@ -14,6 +18,10 @@ import 'package:openastroara/widgets/sequencer/sequence_import.dart';
 /// the import flow now translates CLIENT-side and lands via the ordinary
 /// idempotent create (PORT_DECISIONS 2026-07-15).
 class _ImportClient implements SequenceClient {
+  /// When set, create() throws this instead of throwOnImport's Exception —
+  /// lets tests simulate a pure transport failure (DioException, response
+  /// null) vs a daemon rejection.
+  Object? throwError;
   @override
   Future<String> decideAutoFlats(String id,
           {required String choice, required bool remember}) =>
@@ -67,11 +75,31 @@ class _ImportClient implements SequenceClient {
     lastName = name;
     lastBody = body;
     lastKey = idempotencyKey;
+    if (throwError != null) throw throwError!;
     if (throwOnImport) throw Exception('boom');
     return 'imp-1';
   }
   @override
   void close() {}
+}
+
+/// In-memory draft store — widget tests can't await real file IO. Records
+/// what the degraded/offline import path saved.
+class _MemDraftService extends DraftSequenceService {
+  final Map<String, DraftSequence> store = {};
+  int _n = 0;
+
+  @override
+  String newId() => '${draftIdPrefix}mem-${_n++}';
+
+  @override
+  Future<List<DraftSequence>> loadAll() async => store.values.toList();
+
+  @override
+  Future<void> save(DraftSequence draft) async => store[draft.id] = draft;
+
+  @override
+  Future<void> delete(String id) async => store.remove(id);
 }
 
 void main() {
@@ -81,12 +109,14 @@ void main() {
   late String? returnedId;
   late bool returned;
 
-  Future<ProviderContainer> pump(WidgetTester tester, _ImportClient client,
-      {Map<String, dynamic> ninaJson = const {'Name': 'M42'}}) async {
+  Future<ProviderContainer> pump(WidgetTester tester, _ImportClient? client,
+      {Map<String, dynamic> ninaJson = const {'Name': 'M42'},
+      _MemDraftService? drafts}) async {
     returnedId = null;
     returned = false;
     final container = ProviderContainer(overrides: [
       sequenceApiProvider.overrideWithValue(client),
+      if (drafts != null) draftSequenceServiceProvider.overrideWithValue(drafts),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
@@ -153,6 +183,53 @@ void main() {
     expect(container.read(selectedSequenceIdProvider), isNull);
     // Returns null on failure so the caller keeps the Load dialog open.
     expect(returned, isTrue);
+    expect(returnedId, isNull);
+  });
+
+  testWidgets(
+      'a pure transport failure degrades to a local draft with the same key',
+      (tester) async {
+    // A saved server isn't a reachable one: DioException with NO response
+    // (link down) must not lose the translated result — it lands as a draft
+    // stamped with the import key so the eventual push dedupes (#854 round 2).
+    final client = _ImportClient()
+      ..throwError = DioException(
+          requestOptions: RequestOptions(path: '/sequences'),
+          type: DioExceptionType.connectionError);
+    final drafts = _MemDraftService();
+    await pump(tester, client, drafts: drafts);
+    await tester.tap(find.text('import'));
+    await tester.pumpAndSettle();
+
+    expect(drafts.store, hasLength(1));
+    final draft = drafts.store.values.single;
+    expect(draft.pushKey, client.lastKey,
+        reason: 'the draft reuses the key the failed create already sent');
+    expect(draft.pushKey, startsWith('import-'));
+    // Dismiss the warnings dialog (the fixture backfills schemaVersion) so
+    // importSequenceFromJson returns.
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(returnedId, draft.id, reason: 'caller closes the dialog');
+  });
+
+  testWidgets('a daemon rejection (response present) does NOT create a draft',
+      (tester) async {
+    final client = _ImportClient()
+      ..throwError = DioException(
+          requestOptions: RequestOptions(path: '/sequences'),
+          response: Response(
+              requestOptions: RequestOptions(path: '/sequences'),
+              statusCode: 422),
+          type: DioExceptionType.badResponse);
+    final drafts = _MemDraftService();
+    await pump(tester, client, drafts: drafts);
+    await tester.tap(find.text('import'));
+    await tester.pumpAndSettle();
+
+    expect(drafts.store, isEmpty,
+        reason: 'a rejected body would be rejected on push too');
+    expect(find.textContaining("Couldn't import the sequence"), findsOneWidget);
     expect(returnedId, isNull);
   });
 

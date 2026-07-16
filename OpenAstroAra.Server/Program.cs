@@ -682,9 +682,6 @@ public partial class Program {
                 profileDir,
                 sp.GetService<ILogger<PlaceholderSequenceTemplateService>>()));
 
-        // §38.4 — NINA import service persists the raw upload under
-        // {profileDir}/sequences/imported/from-nina-YYYY-MM-DD/ for audit
-        // and backfills schemaVersion when the source omits it.
         // §28 SQLite catalog. Scaffold-only at this point: the connection
         // + schema land here so subsequent sub-PRs can flip the placeholder
         // frame/session repositories over one method at a time. Profile
