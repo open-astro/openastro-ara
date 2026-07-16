@@ -6,8 +6,6 @@ import '../../models/server.dart';
 import '../../services/profile_api.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
-import '../../state/sky_atlas/data_manager_state.dart';
-import '../../models/profile_draft.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import 'wizard_save.dart';
@@ -88,27 +86,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // partial-or-complete state per §37.8), then exit the wizard. Shows a blocking
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
-  /// Queue the sky-data packages the user ticked on screen 17. Best-effort: each
-  /// download is an independent 202-accepted request, and a failure here is
-  /// non-fatal (the profile is already saved) — so per-id errors are logged, not
-  /// thrown, and never block the wizard from finishing.
-  Future<void> _queueSkyDataDownloads(ProfileDraft draft) async {
-    if (draft.skyDataDownloadIds.isEmpty) return;
-    if (!mounted) return; // widget disposed between save and queue — ref is dead
-    final dm = ref.read(dataManagerApiProvider);
-    if (dm == null) return; // no active server — nothing to queue against
-    // Fire the 202-accepted queue requests concurrently; each is independent and
-    // its failure is non-fatal (logged, not thrown), so one bad id never blocks
-    // the others or the wizard from finishing.
-    await Future.wait(draft.skyDataDownloadIds.map((id) async {
-      try {
-        await dm.download(id);
-      } catch (e) {
-        debugPrint('[wizard] sky-data download queue failed for $id: $e');
-      }
-    }));
-  }
-
+  
   Future<void> _saveAndExit(WizardController controller) async {
     if (_isSaving) return; // double-tap guard until the spinner blocks input
     // liveDraft() returns the live draft object: saveWizardProfile stamps
@@ -173,7 +151,6 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // wizard exit would race disposal and silently drop the downloads).
     if (error == null) {
       try {
-        await _queueSkyDataDownloads(draft);
       } catch (_) {
         // truly best-effort — per-id failures are already logged inside the method
       }

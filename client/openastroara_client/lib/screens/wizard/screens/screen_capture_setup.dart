@@ -38,8 +38,10 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 11,
-      intro: 'ASTAP solves your frames to confirm pointing and drive centering. '
-          'Point ARA at the ASTAP program and its star database.',
+      intro: 'ASTAP solves your frames to confirm pointing and drive '
+          'centering. It runs ON THE SERVER (the Pi/SBC) — these are paths on '
+          'that machine, not this computer. The ARA server image ships ASTAP '
+          'preinstalled, so leaving both blank uses the built-in install.',
       children: [
         // The paths carry a clear affordance (the reset suffix): the wizard's
         // new profile clones the active one, so blank alone KEEPS the old
@@ -48,7 +50,7 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
         WizardTextField(
           label: 'ASTAP binary path',
           initialValue: _ps.astapBinaryPath,
-          hint: r'/usr/bin/astap  ·  C:\Program Files\astap\astap.exe',
+          hint: '/usr/bin/astap (server path — blank = built-in install)',
           onChanged: (v) {
             final t = v.trim();
             _ps.astapBinaryPath = t.isEmpty ? null : t;
@@ -64,8 +66,9 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
         WizardTextField(
           label: 'Star database path',
           initialValue: _ps.starDatabasePath,
-          helperText:
-              'Folder holding the ASTAP star database (e.g. the D50 index).',
+          hint: '/usr/share/astap/data (server path)',
+          helperText: 'Folder ON THE SERVER holding the ASTAP star database '
+              '(e.g. the D50 index). Blank = the built-in database.',
           onChanged: (v) {
             final t = v.trim();
             _ps.starDatabasePath = t.isEmpty ? null : t;
@@ -195,8 +198,13 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 12,
-      intro: 'How ARA refocuses — the exposure it takes at each step, how many '
-          'steps it samples, and the focuser travel between them.',
+      intro: 'ARA focuses with SMART FOCUS: after a one-time calibration it '
+          'refocuses from just 2–3 exposures, automatically. These settings '
+          'tune the classic V-curve sweep it uses for that calibration and '
+          'falls back to when Smart can\'t read a frame — the defaults are '
+          'fine for almost everyone, so feel free to leave everything as-is. '
+          'The one field worth setting: your telescope type, which Smart '
+          'Focus uses to read out-of-focus stars.',
       children: [
         _posIntField(
           key: 'exposure',
@@ -292,7 +300,7 @@ class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
         WizardTextField(
           label: 'Save directory',
           initialValue: _fs.saveDirectory,
-          hint: r'/media/usb/astro  ·  D:\Astro\Captures',
+          hint: '/media/usb/astro (a path on the server)',
           helperText: 'Blank keeps the current profile\'s directory; the reset '
               'button takes the daemon default instead.',
           onChanged: (v) {
@@ -375,14 +383,17 @@ class _ScreenImagingDefaultsState
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 14,
-      intro: 'The default capture parameters a new exposure starts from. Gain, '
-          'offset, binning and cooling come from your camera setup (screen 5).',
+      intro: 'Starting values for MANUAL captures only. Planned imaging runs '
+          'compute their exposure with Optimal Sub (Robin Glover\'s '
+          'sky-limited method) from your camera + sky — nothing here caps '
+          'that. Gain, offset, binning and cooling come from the Camera step.',
       children: [
         WizardTextField(
           label: 'Default exposure (s)',
           initialValue: _img.exposure?.inSeconds.toString(),
           hint: 'e.g. 120',
-          helperText: 'Leave blank to keep the profile default.',
+          helperText: 'Fallback for one-off manual frames; planned runs use '
+              'the Optimal Sub calculation instead. Blank keeps the default.',
           errorText: _exposureError,
           keyboardType: const TextInputType.numberWithOptions(decimal: false),
           inputFormatters: WizardInput.unsignedInt,
@@ -722,11 +733,28 @@ class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
   String? _softAltError;
 
   @override
+  void initState() {
+    super.initState();
+    // Show normal, safe numbers instead of confusing blanks — users can
+    // override anything. Seeded once per wizard session (draft flag) and only
+    // into untouched fields, so back/forward navigation and deliberate blanks
+    // are respected.
+    final draft = _draftOf(ref);
+    if (!draft.sitePrefsSeeded) {
+      draft.sitePrefsSeeded = true;
+      _site.hardMinAltitudeDeg ??= 20;
+      _site.softWarningAltitudeDeg ??= 30;
+      _site.twilight ??= TwilightOption.astronomical;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 16,
       intro: 'How low ARA will image and how dark it waits for. Targets below '
-          'the horizon altitude are skipped.',
+          'the horizon altitude are skipped. These are the normal safe '
+          'numbers — override them if your site needs it.',
       children: [
         WizardTextField(
           label: 'Horizon altitude (°)',
