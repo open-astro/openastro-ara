@@ -331,8 +331,10 @@ const List<_Slot> _slots = <_Slot>[
   _Slot('Observing Conditions', EquipmentDeviceType.weather, _gOc, _sOc),
   _Slot('Safety Monitor', EquipmentDeviceType.safetyMonitor, _gSafe, _sSafe),
   _Slot('Flat Panel', EquipmentDeviceType.flatPanel, _gFlat, _sFlat),
-  _Slot('Guider (PHD2)', EquipmentDeviceType.guider, _gGuider, _sGuider),
-  // Switch is NOT a slot: a rig can carry several switch hubs (§6.4
+  // Guider (PHD2) is NOT a slot: it isn't an Alpaca device, so discovery has
+  // nothing to scan (the daemon 400s the attempt) — it's configured by
+  // host:port on the wizard's Guider step (with a Test connection button).
+  // Switch is NOT a slot either: a rig can carry several switch hubs (§6.4
   // multi-switch), so it gets its own add-as-many-as-you-like section below.
 ];
 
@@ -355,8 +357,6 @@ String? _gSafe(ProfileDraft d) => d.equipment.safetyMonitorDeviceId;
 void _sSafe(ProfileDraft d, String? v) => d.equipment.safetyMonitorDeviceId = v;
 String? _gFlat(ProfileDraft d) => d.equipment.flatPanelDeviceId;
 void _sFlat(ProfileDraft d, String? v) => d.equipment.flatPanelDeviceId = v;
-String? _gGuider(ProfileDraft d) => d.equipment.guiderDeviceId;
-void _sGuider(ProfileDraft d, String? v) => d.equipment.guiderDeviceId = v;
 
 /// §37.2 Screen 3 — Discover + assign equipment.
 class ScreenEquipmentAssign extends ConsumerStatefulWidget {

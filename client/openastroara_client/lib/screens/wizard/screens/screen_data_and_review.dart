@@ -211,7 +211,6 @@ String assignedEquipment(EquipmentSlots e) {
           : 'Switches ×${e.switchDeviceIds.length}',
     if (e.safetyMonitorDeviceId != null) 'Safety Monitor',
     if (e.flatPanelDeviceId != null) 'Flat Panel',
-    if (e.guiderDeviceId != null) 'Guider',
   ];
   return labels.isEmpty ? 'None assigned' : labels.join(', ');
 }

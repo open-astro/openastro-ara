@@ -25,9 +25,10 @@ void main() {
     expect(find.text('Switches'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Add switch'), findsOneWidget);
 
-    // The single-assign slots (Switch no longer among them; mirrors `_slots`
+    // The single-assign slots (Switch and Guider no longer among them —
+    // guider is host:port on its own step, not Alpaca-discoverable; mirrors `_slots`
     // in screen_equipment_discovery.dart — update deliberately with it).
-    expect(find.widgetWithText(TextButton, 'Choose'), findsNWidgets(10));
+    expect(find.widgetWithText(TextButton, 'Choose'), findsNWidgets(9));
   });
 
   testWidgets('assigned switches render as removable chips', (tester) async {

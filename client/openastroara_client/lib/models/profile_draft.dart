@@ -97,7 +97,6 @@ class EquipmentSlots {
   final List<String> switchDeviceIds = [];
   String? safetyMonitorDeviceId;
   String? flatPanelDeviceId;
-  String? guiderDeviceId;
 }
 
 class TelescopeSettings {
