@@ -145,10 +145,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 CancelRecoveryLocked();
             }
             // PHD2Guider reads host/port from the profile (§63.5), so honor the request by writing
-            // them in before the connect.
+            // them in before the connect. Null request fields mean "keep the profile's value" —
+            // overwriting from an empty body would repoint a remote-PHD2 profile at the DTO
+            // defaults and break every later reconnect/recovery.
             var settings = _profileService.ActiveProfile.GuiderSettings;
-            settings.PHD2ServerHost = request.Host;
-            settings.PHD2ServerPort = request.Port;
+            if (request.Host is { Length: > 0 } host) settings.PHD2ServerHost = host;
+            if (request.Port is { } port) settings.PHD2ServerPort = port;
             DisposeGuiderLocked();
             guider = new PHD2Guider(_profileService);
             // Observe a mid-session socket drop: PHD2Guider raises PHD2ConnectionLost from its

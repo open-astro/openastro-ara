@@ -73,6 +73,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_empty_connect_body_keeps_the_profiles_remote_host_and_port() {
+            // A remote-PHD2 profile (SBC at :8080) must survive a bodyless POST /connect:
+            // the old non-null DTO defaults overwrote the profile with localhost:4400 and
+            // silently repointed every later reconnect/recovery at the wrong machine.
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerHost = "sbc.local";
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerPort = 8080;
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto(), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+
+            Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerHost, Is.EqualTo("sbc.local"),
+                "null request host must not clobber the profile's remote host");
+            Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerPort, Is.EqualTo(8080));
+        }
+
+        [Test]
+        public async Task An_explicit_connect_body_still_rewrites_the_profiles_target() {
+            var profiles = new HeadlessProfileService();
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("sbc.local", 8080),
+                idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerHost, Is.EqualTo("sbc.local"));
+            Assert.That(profiles.ActiveProfile.GuiderSettings.PHD2ServerPort, Is.EqualTo(8080));
+        }
+
+        [Test]
         public async Task The_connect_handshake_queries_get_version_for_fork_identification() {
             // §63.9: the real client must run the synchronous get_version handshake on connect so it can
             // tell openastro-guider from stock PHD2 (and read overlap_support). The fake serves the fork

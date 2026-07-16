@@ -377,7 +377,10 @@ public sealed record GuiderStateDto(
     double? RmsRaArcsec = null,
     double? RmsDecArcsec = null);
 
-public sealed record GuiderConnectRequestDto(string Host = "localhost", int Port = 4400);
+/// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
+/// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at
+/// :8080) back at localhost:4400 (the old non-null defaults did exactly that).</summary>
+public sealed record GuiderConnectRequestDto(string? Host = null, int? Port = null);
 
 // ─── Guider dark library / calibration files (§63.6 guider-e-4b) ──────────────
 

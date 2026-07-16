@@ -1678,3 +1678,17 @@ Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
   if legislatures actually abolish DST and zone boundaries get redrawn (US
   Sunshine-Protection-style proposals), bump the package (or replace with a
   tzdata-derived lookup) and re-run the worldwide spot checks.
+
+## Remote-guider audit follow-up (2026-07-16)
+
+- Profile SWITCH while the guider is connected re-hydrates GuiderSettings
+  (host/port) but deliberately does not reconnect (§63.4 remarks in
+  GuiderService.ProfileLifecycle.cs) — a §63.3 recovery after the switch then
+  targets the NEW profile's host, i.e. can reconnect to a different guider than
+  the one that dropped. Edge case; if it bites, gate recovery on host equality
+  or disconnect the guider on profile select.
+- Local-only guider supervisor: EnsureGuiderReachableAsync calls
+  _supervisor.RequestStart() (systemctl, local) when the target is unreachable —
+  harmless but useless for a remote PHD2 (it can't start a unit on another SBC).
+  Skip the RequestStart when the configured host isn't loopback if the log noise
+  ever matters.

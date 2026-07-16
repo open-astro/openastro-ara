@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import '../../services/profile_api.dart';
+import '../../util/host_port.dart';
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/camera_electronics_state.dart';
@@ -149,36 +150,11 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
 
 Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
   final g = d.guider;
-  // Parse host[:port], handling IPv6 literals:
-  //  - "[::1]"          → host only, no port (ends with ']')
-  //  - "[::1]:4400"     → split on the LAST colon (after the closing bracket)
-  //  - "::1" / "fe80::1" → bare (unbracketed) IPv6, host only — a value with 2+
-  //                        colons and no brackets is an IPv6 address, since a
-  //                        port on IPv6 requires [brackets] (RFC 3986 §3.2.2)
-  //  - "localhost"      → host only
-  //  - "localhost:4400" → split on the colon
-  final hp = g.hostPort.trim();
-  final String hostPart;
-  final String portPart;
-  if (hp.endsWith(']') ||
-      (!hp.contains(']') && ':'.allMatches(hp).length >= 2)) {
-    // Bracketed IPv6 with no port, OR a bare IPv6 literal: no port to split off.
-    hostPart = hp;
-    portPart = '';
-  } else {
-    // Reached only by `[ipv6]:port`, `host:port`, `host`, or `:port` — the
-    // bracketed-no-port and bare-IPv6 cases are handled above. So for a
-    // bracketed address here (`[::1]:4401`) lastIndexOf(':') lands on the colon
-    // *after* the `]`, i.e. the real port separator; the in-bracket colons never
-    // win because a value with a port can't also end in `]`.
-    final idx = hp.lastIndexOf(':');
-    // >= 0 (not > 0): a leading-colon ":4400" yields an empty host (→ base host)
-    // and port 4400, rather than a nonsense "host = ':4400'".
-    hostPart = idx >= 0 ? hp.substring(0, idx).trim() : hp;
-    portPart = idx >= 0 ? hp.substring(idx + 1).trim() : '';
-  }
-  final host = hostPart.isNotEmpty ? hostPart : base.host;
-  final port = portPart.isNotEmpty ? (int.tryParse(portPart) ?? base.port) : base.port;
+  // parseHostPort handles IPv6 literals/bare hosts/`:port`; null parts keep the
+  // base (profile) values so a blank field never clobbers a configured target.
+  final parsed = parseHostPort(g.hostPort);
+  final host = parsed.host ?? base.host;
+  final port = parsed.port ?? base.port;
   return base.copyWith(
     host: host,
     port: port,

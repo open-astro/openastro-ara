@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
 import '../../../state/guider/guider_state.dart';
+import '../../../util/host_port.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../models/server.dart';
@@ -762,11 +763,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
           'Not connected to a server — the server is what talks to PHD2.');
       return;
     }
-    final raw = _g.hostPort.trim();
-    final colon = raw.lastIndexOf(':');
-    final host = colon > 0 ? raw.substring(0, colon) : raw;
-    final port =
-        colon > 0 ? int.tryParse(raw.substring(colon + 1)) ?? 4400 : 4400;
+    // Same parser as the save mapper (applyDraftToPhd2) so the tested target
+    // and the saved target can't drift — incl. IPv6 literal handling.
+    final parsed = parseHostPort(_g.hostPort);
+    final host = parsed.host ?? 'localhost';
+    final port = parsed.port ?? 4400;
     setState(() {
       _testing = true;
       _testOk = false;

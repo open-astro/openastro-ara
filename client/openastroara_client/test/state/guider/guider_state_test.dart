@@ -5,9 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_api.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -71,6 +74,14 @@ class _FakeGuiderApi implements GuiderClient {
   }
 }
 
+/// Serves the profile's phd2 section — the remote-PHD2 case.
+class _Phd2ProfileApi extends ProfileApi {
+  _Phd2ProfileApi() : super(const AraServer(hostname: 'test', port: 1));
+  @override
+  Future<Phd2Settings> getPhd2Settings() async =>
+      const Phd2Settings(host: 'sbc.local', port: 8080);
+}
+
 ProviderContainer _container(List<AraServer> servers, GuiderClient api) {
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
@@ -126,6 +137,34 @@ void main() {
       expect(api.lastHost, '10.0.0.5');
       expect(api.lastPort, 4401);
       expect(c.read(guiderStatusProvider).value!.connectionState, GuiderConnectionState.connecting);
+    });
+
+    test('a no-args connect() targets the PROFILE phd2 host/port, not localhost',
+        () async {
+      // The equipment-strip guider dialog calls connect() bare. Pre-fix that
+      // sent localhost:4400 and bypassed a remote PHD2 (the SBC at :8080) the
+      // user configured in Settings → Guider.
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.disconnected,
+          runtimeState: GuiderRuntimeState.stopped,
+        );
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider
+            .overrideWithValue(_FakeSavedServerService(const [server])),
+        guiderApiFactoryProvider.overrideWithValue((_) => api),
+        profileApiProvider.overrideWithValue(_Phd2ProfileApi()),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+
+      await c.read(guiderStatusProvider.notifier).connect();
+
+      expect(api.lastHost, 'sbc.local');
+      expect(api.lastPort, 8080);
     });
 
     test('a failed connect surfaces as AsyncError (not a stale value)', () async {
