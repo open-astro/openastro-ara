@@ -5,15 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
+import '../../../services/equipment_device_api.dart' show EquipmentDeviceClient;
+import '../../../state/equipment/camera_state.dart';
+import '../../../state/equipment/filter_wheel_state.dart';
+import '../../../state/equipment/mount_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../models/server.dart';
 import '../../../services/camera_geometry_api.dart';
+import '../../../services/equipment_discovery_api.dart';
 import '../../../services/filter_wheel_names_api.dart';
 import '../../../services/telescope_optics_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
@@ -47,6 +53,48 @@ ProfileDraft _draftOf(WidgetRef ref) =>
 /// addresses).
 String _describeError(Object e) =>
     e is DioException ? (e.message ?? 'network error') : e.toString();
+
+/// Connect the device the user assigned on the Discover step, then poll
+/// [read] until the daemon reports it (or ~15 s pass). The wizard assigns
+/// devices WITHOUT connecting them (connections are runtime state), so a bare
+/// read on a stage-3 screen almost always finds nothing — the AlpacaBridge
+/// config is fine, the daemon just hasn't opened the device yet. Returns null
+/// when nothing is assigned, the assigned device isn't on the bridge, or the
+/// connect never completes.
+Future<T?> _connectAssignedThenRead<T>(
+  WidgetRef ref,
+  AraServer server, {
+  required EquipmentDeviceType type,
+  required String? assignedId,
+  required EquipmentDeviceClient<Object?> Function(AraServer) apiFactory,
+  required Future<T?> Function() read,
+  required bool Function() isMounted,
+}) async {
+  if (assignedId == null) return null; // nothing assigned — nothing to connect
+  final discovery = EquipmentDiscoveryApi(server);
+  try {
+    final devices = await discovery.discover(type);
+    final device = devices.where((d) => d.uniqueId == assignedId).firstOrNull;
+    if (device == null) return null; // assigned device not on the bridge now
+    final api = apiFactory(server);
+    try {
+      await api.connect(device);
+      // Poll until the daemon reports the device (Alpaca connects can take
+      // several seconds on real hardware).
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 750));
+        if (!isMounted()) return null;
+        final result = await read();
+        if (result != null) return result;
+      }
+      return null;
+    } finally {
+      api.close();
+    }
+  } finally {
+    discovery.close();
+  }
+}
 
 /// The active daemon server, or null when none is connected — the wizard's
 /// "Refresh from connected device" affordances read the device through it.
@@ -117,27 +165,48 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
     }
     setState(() => _refreshing = true);
     try {
-      final optics = await TelescopeOpticsApi(server).read();
+      var optics = await TelescopeOpticsApi(server).read();
       if (!mounted) return;
-      if (optics == null || !optics.hasAny) {
+      if (optics == null) {
+        // No mount connected on the daemon yet — connect the one assigned on
+        // the Discover step and retry (the common wizard-time state).
+        optics = await _connectAssignedThenRead(
+          ref, server,
+          type: EquipmentDeviceType.mount,
+          assignedId: _draftOf(ref).equipment.mountDeviceId,
+          apiFactory: ref.read(mountApiFactoryProvider),
+          read: () => TelescopeOpticsApi(server).read(),
+          isMounted: () => mounted,
+        );
+        if (!mounted) return;
+      }
+      if (optics == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('Connect a mount that reports its focal length/aperture '
-                '(many don\'t), or enter them manually.')));
+            content: Text('No mount connected. Assign one on the Discover step '
+                '(it will be connected automatically), or enter the values '
+                'manually.')));
         return;
       }
+      if (!optics.hasAny) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('The mount doesn\'t report its focal length/aperture '
+                '(many don\'t) — enter them manually.')));
+        return;
+      }
+      final o = optics; // non-null after the guards; promote for the closures
       setState(() {
-        if (optics.focalLengthMm != null) _t.focalLengthMm = optics.focalLengthMm;
-        if (optics.apertureMm != null) _t.apertureMm = optics.apertureMm;
+        if (o.focalLengthMm != null) _t.focalLengthMm = o.focalLengthMm;
+        if (o.apertureMm != null) _t.apertureMm = o.apertureMm;
         _seed++;
       });
       // Be specific about what came back: a mount often reports one but not the
       // other, so a blanket "filled optics" would hide that the user still needs
       // to enter the missing field by hand.
       final filled = [
-        if (optics.focalLengthMm != null) 'focal length',
-        if (optics.apertureMm != null) 'aperture',
+        if (o.focalLengthMm != null) 'focal length',
+        if (o.apertureMm != null) 'aperture',
       ].join(' + ');
-      final missingNote = optics.focalLengthMm == null || optics.apertureMm == null
+      final missingNote = o.focalLengthMm == null || o.apertureMm == null
           ? ' (the mount didn\'t report the other — enter it manually)'
           : '';
       messenger.showSnackBar(SnackBar(
@@ -226,15 +295,27 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
     }
     setState(() => _refreshing = true);
     try {
-      final geometry = await CameraGeometryApi(server).read();
+      var geometry = await CameraGeometryApi(server).read();
+      if (!mounted) return;
+      geometry ??= await _connectAssignedThenRead(
+        ref, server,
+        type: EquipmentDeviceType.camera,
+        assignedId: _draft.equipment.cameraDeviceId,
+        apiFactory: ref.read(cameraStatusApiFactoryProvider),
+        read: () => CameraGeometryApi(server).read(),
+        isMounted: () => mounted,
+      );
       if (!mounted) return;
       if (geometry == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('Connect a camera that reports its sensor first.')));
+            content: Text('No camera connected. Assign one on the Discover step '
+                '(it will be connected automatically), or enter the values '
+                'manually.')));
         return;
       }
+      final g = geometry; // non-null after the guard; promote for the closure
       setState(() {
-        _c.pixelSizeMicrons = geometry.pixelSizeUm;
+        _c.pixelSizeMicrons = g.pixelSizeUm;
         _seed++;
       });
       messenger.showSnackBar(const SnackBar(
@@ -389,13 +470,25 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
     }
     setState(() => _refreshing = true);
     try {
-      final wheel = await FilterWheelNamesApi(server).read();
+      var wheel = await FilterWheelNamesApi(server).read();
+      if (!mounted) return;
+      wheel ??= await _connectAssignedThenRead(
+        ref, server,
+        type: EquipmentDeviceType.filterWheel,
+        assignedId: _draftOf(ref).equipment.filterWheelDeviceId,
+        apiFactory: ref.read(filterWheelApiFactoryProvider),
+        read: () => FilterWheelNamesApi(server).read(),
+        isMounted: () => mounted,
+      );
       if (!mounted) return;
       if (wheel == null || wheel.slots.isEmpty) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('Connect a filter wheel that reports its slots first.')));
+            content: Text('No filter wheel connected. Assign one on the '
+                'Discover step (it will be connected automatically), or name '
+                'the slots manually.')));
         return;
       }
+      final w = wheel; // non-null after the guard; promote for the closures
       // Replacing the list wipes anything the user already typed (names,
       // wavelengths, offsets). Confirm first if there's existing data, so a
       // fat-fingered Refresh can't silently destroy it.
@@ -409,7 +502,7 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Replace your filters?'),
-            content: Text('Load ${wheel.slots.length} slot(s) from the connected '
+            content: Text('Load ${w.slots.length} slot(s) from the connected '
                 'wheel, replacing your ${_fw.filters.length} current filter(s)? '
                 'Names + focus offsets come from the wheel; any wavelengths/types '
                 'you entered are cleared.'),
@@ -432,12 +525,12 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
         // the user to fill.
         _fw.filters
           ..clear()
-          ..addAll(wheel.slots.map((s) => FilterDef()
+          ..addAll(w.slots.map((s) => FilterDef()
             ..name = s.name.trim().isEmpty ? null : s.name.trim()
             ..focusOffsetSteps = s.focusOffset));
       });
       messenger.showSnackBar(SnackBar(
-          content: Text('Loaded ${wheel.slots.length} slot(s) from the connected '
+          content: Text('Loaded ${w.slots.length} slot(s) from the connected '
               'filter wheel.')));
     } catch (e) {
       if (mounted) {
