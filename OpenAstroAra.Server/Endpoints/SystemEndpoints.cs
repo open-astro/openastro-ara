@@ -248,26 +248,12 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetCatalog");
 
-        // ─── Planning (§36/§25.5) — Tonight's Sky ───
-        var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
-        // /planning/tonight and /planning/optimal-sub were REMOVED (PORT_DECISIONS
-        // 2026-07-15): planning compute lives in the client (Dart ports in
-        // lib/util/tonight_sky_local.dart / optimal_sub_local.dart), fed by the
-        // /data-manager/dso-catalog data endpoint above. /planning/horizon stays —
-        // HorizonService is execution-shared (altitude safety) and the atlas overlay
-        // reads this projection.
-        planning.MapGet("/horizon",
-                (IHorizonService svc, [FromQuery(Name = "at")] string? at) => {
-                    if (TryParseAt(at, out var atUtc) is { } atError) {
-                        return atError;
-                    }
-                    return Results.Ok(svc.GetHorizon(atUtc));
-                })
-            .Produces<HorizonDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status400BadRequest)
-            .WithName("GetPlanningHorizon")
-            .WithDescription("Optional 'at' is an ISO-8601 instant; include a 'Z' or offset — a " +
-                "timezone-naive value is interpreted as UTC. Absent → now.");
+        // The /api/v1/planning group was fully REMOVED (PORT_DECISIONS 2026-07-15 +
+        // the 2026-07-15 audit): /tonight and /optimal-sub moved to client-side Dart
+        // (lib/util/tonight_sky_local.dart / optimal_sub_local.dart, fed by the
+        // /data-manager/dso-catalog data endpoint above); /horizon had NO consumers
+        // and its "execution-shared" claim was inaccurate — the flip executor reads
+        // the profile's horizon scalar directly, never the RA/Dec projection.
 
         // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");

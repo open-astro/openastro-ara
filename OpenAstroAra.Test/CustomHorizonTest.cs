@@ -93,32 +93,10 @@ namespace OpenAstroAra.Test {
             Assert.That(SiteAstrometry.AzimuthFromHourAngleDeg(0, 45, 90), Is.EqualTo(270).Within(1e-6));
         }
 
-        // ── HorizonService overlay ──────────────────────────────────────────
-
-        [Test]
-        public void Overlay_serves_the_skyline_when_enabled_and_flags_only_the_empty_case() {
-            var at = new DateTimeOffset(2026, 7, 6, 2, 0, 0, TimeSpan.Zero);
-            var custom = CustomHorizonValidator.Normalize(Horizon((0, 5), (180, 45))).Normalized!;
-
-            var honored = HorizonService.Compute(Site(useCustom: true), at, custom);
-            Assert.That(honored.CustomHorizonIgnored, Is.False, "the skyline is being served");
-
-            var requestedButEmpty = HorizonService.Compute(Site(useCustom: true), at, new CustomHorizonDto([]));
-            Assert.That(requestedButEmpty.CustomHorizonIgnored, Is.True);
-
-            var disabled = HorizonService.Compute(Site(useCustom: false), at, custom);
-            Assert.That(disabled.CustomHorizonIgnored, Is.False);
-
-            // The honored overlay differs from the flat one exactly where the skyline
-            // does: both curves share the azimuth grid; at due south the 45-degree
-            // wall projects to a different declination than the flat 20-degree ring
-            // (same LST, same azimuth — only the altitude changed).
-            var flat = HorizonService.Compute(Site(useCustom: false), at, custom);
-            var southIdx = 180 / 2; // AzimuthStepDeg = 2
-            Assert.That(honored.Points[southIdx].AzimuthDeg, Is.EqualTo(180));
-            Assert.That(honored.Points[southIdx].DecDeg,
-                Is.Not.EqualTo(flat.Points[southIdx].DecDeg).Within(1e-6));
-        }
+        // The HorizonService overlay tests retired with the service (2026-07-15
+        // audit: /planning/horizon had no consumers; the flip executor reads the
+        // profile's horizon scalar, never the RA/Dec projection). The validator +
+        // profile plumbing below are unchanged.
 
         // ── Tonight's Sky visibility ────────────────────────────────────────
 

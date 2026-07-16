@@ -171,7 +171,6 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FilterWheelLabelsDto))]
 [JsonSerializable(typeof(FilterKind))]
 // NEXTGEN §1 Tonight's Sky filter advice.
-[JsonSerializable(typeof(FilterApproach))]
 [JsonSerializable(typeof(Phd2SettingsDto))]
 // §18.I plate-solve wire types (request/result were serving off the reflection fallback resolver).
 [JsonSerializable(typeof(CenterRequestDto))]
@@ -290,14 +289,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<DiscoveredDeviceDto>))]
 [JsonSerializable(typeof(IReadOnlyList<LogEntryDto>))]
 [JsonSerializable(typeof(IReadOnlyList<MosaicPanelDto>))]
-[JsonSerializable(typeof(FramingFit))]
 // NEXTGEN §2/§3 Optimal-Sub calculator — DTOs land with the pure math (slice 1);
 // the /api/v1/planning/optimal-sub endpoint consumes them in slice 2.
-[JsonSerializable(typeof(HorizonDto))]
-[JsonSerializable(typeof(HorizonPointDto))]
-[JsonSerializable(typeof(CardinalPointDto))]
-[JsonSerializable(typeof(IReadOnlyList<HorizonPointDto>))]
-[JsonSerializable(typeof(IReadOnlyList<CardinalPointDto>))]
 [JsonSerializable(typeof(IReadOnlyList<SequenceTemplateDto>))]
 [JsonSerializable(typeof(IReadOnlyList<WsEventEnvelopeDto>))]
 // §28 catalog needs JSON-blob round-trip for the per-frame `tags` column.

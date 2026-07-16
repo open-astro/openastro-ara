@@ -86,9 +86,7 @@ public partial class Program {
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<NotificationCategory>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticHealth>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticsMode>(policy));
-            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FramingFit>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FilterKind>(policy));
-            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FilterApproach>(policy));
             opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         });
 
@@ -456,9 +454,6 @@ public partial class Program {
         // transit, and integration hours) for the active profile's site; falls back to a starter list
         // when openngc-dso isn't installed.
         // §36 Planning horizon — projects the site's local horizon onto the equatorial sky for a client overlay.
-        builder.Services.AddSingleton<IHorizonService>(sp =>
-            new HorizonService(sp.GetRequiredService<IProfileStore>()));
-
         // §55.1 multi-device WILMA settings sync — opaque UI-preferences blob under {profileDir}/client-settings.json.
         // profileDir-scoped, so registered here alongside the other profile-dir-backed services.
         builder.Services.AddSingleton<IClientSettingsService>(sp =>

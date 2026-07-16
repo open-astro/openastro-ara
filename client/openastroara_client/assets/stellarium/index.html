@@ -85,20 +85,13 @@
   #info .acts #i-stop:hover { background: rgba(255,99,99,0.28); }
   #info .warn { color: #ffb74d; }
 
-  /* Left drawer cards — Tonight + Framing share the slot under the layer pills */
-  #tonight, #frame { left: 14px; top: 64px; width: 250px; padding: 13px 15px 15px; display: none;
+  /* Left drawer card — Framing sits in the slot under the layer pills */
+  #frame { left: 14px; top: 64px; width: 250px; padding: 13px 15px 15px; display: none;
     background: var(--mat); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
     border: 0.5px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
-  #tonight { max-height: 66%; overflow-y: auto; }
   .card-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 11px; display: flex; align-items: center; }
   .card-title .close { margin-left: auto; border: none; background: none; padding: 3px 7px; font-size: 13px; color: var(--dim); border-radius: 7px; }
   .card-title .close:hover { background: rgba(255,255,255,0.10); color: var(--txt); }
-  #tonight h3 { margin: 0 0 11px; font-size: 13px; font-weight: 600; }
-  #tonight .empty { color: var(--dim); font-size: 12px; padding: 6px 2px; }
-  #tonight .row { padding: 7px 9px; border-radius: 9px; cursor: pointer; }
-  #tonight .row:hover { background: rgba(255,255,255,0.08); }
-  #tonight .row .nm { font-size: 13px; font-weight: 500; }
-  #tonight .row .meta { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; margin-top: 1px; }
 
   /* Framing controls */
   #frame .frow { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
@@ -173,10 +166,6 @@
   <button id="t-now" class="on">Now</button>
 </div>
 
-<div id="tonight" class="ui">
-  <h3>Tonight's Sky — best from your site</h3>
-  <div id="tonight-list"><div class="empty">Loading…</div></div>
-</div>
 
 <div id="layers" class="ui" style="display:none">
   <button id="display-btn" title="Sky layers">Display</button>
@@ -699,60 +688,6 @@ function doSearch(q) {
   showSearchMsg('Not found: ' + q);
 }
 
-var _tonightLoaded = false;
-function loadTonight() {
-  var list = document.getElementById('tonight-list');
-  if (!API) { list.innerHTML = '<div class="empty">Connect to a server to see Tonight\'s Sky.</div>'; return; }
-  list.innerHTML = '<div class="empty">Loading…</div>';
-  fetch(API + '/api/v1/planning/tonight?limit=20')
-    .then(function (r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
-    .then(function (items) {
-      // Mark loaded only now that the fetch succeeded — a failed/disconnected load
-      // (catch arm, or the early !API return) leaves the flag false so the next
-      // panel open retries instead of being stuck on the error forever.
-      _tonightLoaded = true;
-      if (!items || !items.length) { list.innerHTML = '<div class="empty">Nothing well-placed from your site right now.</div>'; return; }
-      list.innerHTML = '';
-      items.forEach(function (it) {
-        var row = document.createElement('div');
-        row.className = 'row';
-        // Build via DOM nodes + textContent (not innerHTML) so server-supplied
-        // strings — name/id/type, and any field added later — are escaped by
-        // construction, matching renderInfo's pattern.
-        var nm = document.createElement('div');
-        nm.className = 'nm';
-        nm.textContent = it.name || it.id;
-        var meta = document.createElement('div');
-        meta.className = 'meta';
-        var parts = [];
-        if (it.type) parts.push(it.type);
-        if (it.magnitude != null) parts.push('mag ' + it.magnitude.toFixed(1));
-        parts.push('alt ' + Math.round(it.altitude_deg) + '°');
-        meta.textContent = parts.join('  ·  ');
-        row.appendChild(nm);
-        row.appendChild(meta);
-        row.onclick = function () {
-          var o = resolveQuery(it.name) || resolveQuery(it.id);
-          if (o) { selectObject(o); }
-          // Guard the coordinate fallback: a daemon row missing ra_deg/dec_deg would
-          // otherwise feed NaN into stel.s2c() and throw with no user feedback.
-          else if (it.ra_deg != null && it.dec_deg != null) { pointRaDec(it.ra_deg, it.dec_deg); }
-          else { showSearchMsg('No coordinates for ' + (it.name || it.id || 'this object')); }
-        };
-        list.appendChild(row);
-      });
-    })
-    .catch(function (e) { list.innerHTML = '<div class="empty">Tonight\'s Sky unavailable (' + escapeHtml(String(e)) + ').</div>'; });
-}
-
-function toggleTonight() {
-  var panel = document.getElementById('tonight');
-  var open = panel.style.display === 'none' || !panel.style.display;
-  panel.style.display = open ? 'block' : 'none';
-  if (open) { toggleFrame(false); hideDisplay(); hideCatalogs(); }   // one left drawer at a time
-  if (open && !_tonightLoaded) loadTonight();   // loadTonight sets _tonightLoaded only on success
-}
-
 // ---- Display panel — sky-layer toggles ----------------------------------
 // One popout of on/off dots for the engine's layers (deep-sky objects,
 // constellation lines/art, equatorial grid, DSS2 survey, atmosphere, landscape),
@@ -834,7 +769,6 @@ function toggleDisplayPanel() {
   if (open) {   // one left drawer at a time
     toggleFrame(false);
     hideCatalogs();
-    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     renderDisplayPanel();
   }
 }
@@ -1063,7 +997,6 @@ function toggleCatalogPanel() {
   if (open) {   // one left drawer at a time
     toggleFrame(false);
     hideDisplay();
-    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     loadCatalogs();
     renderCatPanel();
   }
@@ -1305,7 +1238,6 @@ function toggleFrame(on) {
     // `= null`: a JSON null can't set the pointer attribute, so null no-ops.)
     hideDisplay();
     hideCatalogs();
-    var t = document.getElementById('tonight'); if (t) t.style.display = 'none';
     stel.core.lock = 0;
     var c = viewCenterRaDec();
     // isFinite (not !isNaN): a not-yet-initialised engine can return Infinity, and
@@ -1399,7 +1331,6 @@ function pollCmd() {
     .then(function (c) {
       if (!c || !c.type) return;
       if (c.type === 'search') doSearch(c.q || '');
-      else if (c.type === 'tonight') toggleTonight();
       else if (c.type === 'goto' && c.ra != null) {
         stel.core.selection = 0;
         // A framing goto (Tonight's Sky row tap) opens the framing overlay so

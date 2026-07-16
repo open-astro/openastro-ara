@@ -1622,3 +1622,31 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   same day (6 s — a device-probe timing race), also on a client-only commit. Passed on
   rerun. Two flakes in one day suggests the Analyzer-gate job's runner is timing-sensitive;
   if either recurs, widen the probe/listener timeouts under test.
+
+## 2026-07-15 daemon audit — what else should be client-side (maintainer-requested)
+
+Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.
+
+- ✅ **/planning/horizon + HorizonService removed (this PR)**: zero consumers (no client
+  call sites), and the "execution-shared altitude safety" claim in the endpoint comment
+  was inaccurate — MeridianFlipExecutor reads the profile's horizon SCALAR directly and
+  never used the RA/Dec projection. PlanningDtos.cs retired with it (last live types).
+- ✅ **Planetarium's in-page Tonight's Sky panel removed (this PR)**: dead since #848
+  (fetched the deleted /planning/tonight → 404) and only reachable via an aracmd the
+  Dart side deliberately never sends (stellarium_view.dart:233) — the docked Flutter
+  TonightSkyPanel is the feature.
+- **KEEP /api/v1/catalogs + SkyCatalogService (verified, contrary to first impression)**:
+  it is DATA hosting for the deliberate post-2026-06-26 catalog-rings feature (one
+  MultiPolygon highlight layer over the engine's native dsos), and the rings need
+  OpenNGC's Messier/Caldwell cross-reference columns that the client's dso-catalog
+  mirror does NOT carry. Follow-up idea: enrich /data-manager/dso-catalog rows with
+  messier_num/caldwell_num + type-match ids so the rings can render offline from the
+  mirror; then /api/v1/catalogs can retire.
+- **KEEP, with audited reasons**: SqliteStatsService (§50 aggregation belongs next to the
+  frames DB on the Pi — shipping raw rows to re-aggregate client-side costs more than it
+  saves); Stretch/JPEG previews (bandwidth-bound: raw FITS stay on the Pi; also feeds
+  capture-time thumbnails); SequenceSchemaValidator (the persist-time gate guards what
+  the executor loads — authoritative server-side; the editor's Validate button is a thin
+  reuse); ProfileShareService (renders server-owned profile state); PolarAlign, GPS/time
+  sync, CalibrationSequenceBuilder, ImageHistory, CaptureScan, BugReport (execution /
+  hardware / Pi-local data).
