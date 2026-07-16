@@ -89,7 +89,7 @@ public static class ProfilesEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("DeleteProfile")
             .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
-                "remaining one; deleting the last profile re-seeds a factory 'Default'.");
+                "remaining one; deleting the last profile returns to the zero-profile state.");
 
         profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo) =>
                 repo.SelectProfile(id) ? Results.Ok(repo.List()) : Results.NotFound())

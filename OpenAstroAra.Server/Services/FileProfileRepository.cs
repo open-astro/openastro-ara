@@ -145,12 +145,12 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
             _metas.Remove(id);
             if (_activeId != id) return ProfileDeleteResult.Deleted;
 
-            // The active profile was deleted. Mirror the boot-time recovery
-            // order (LoadAll): fall back to the newest remaining profile, or —
-            // when this was the last one — seed a factory-defaults "Default",
-            // exactly what a fresh install gets. The daemon never runs without
-            // an active profile, so deleting the last one means "start over",
-            // not "run headless on ghost settings".
+            // The active profile was deleted. Fall back to the newest remaining
+            // profile (the boot-time stale-pointer recovery order), or — when
+            // this was the last one — return to the fresh-install zero-profile
+            // state: no active profile, and the client's launchpad routes the
+            // user into profile setup. An unconfigured auto-seeded profile
+            // would only park them on settings that can't image anything.
             var fallback = _metas.Values.OrderByDescending(m => m.CreatedUtc).FirstOrDefault();
             if (fallback is not null) {
                 var stored = ReadFile(fallback.Id);
@@ -159,15 +159,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
                 PersistActivePointer();
             } else {
                 _activeId = null;
-                try {
-                    Create("Default", ProfileSnapshotNormalizer.Defaults, makeActive: true);
-                } catch (IOException ex) {
-                    // The delete itself succeeded; only the reseed write failed
-                    // (disk full / permissions). Don't fail the DELETE for it —
-                    // the repository stays at zero profiles until the next boot,
-                    // which runs the same seed logic again (LoadAll).
-                    LogPersistFailed(ex, _dir);
-                }
+                TryDeleteActivePointer();
             }
             return ProfileDeleteResult.Deleted;
         }
@@ -253,10 +245,13 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         _activeId = ReadActivePointer();
 
         if (_metas.Count == 0) {
-            // Fresh install (or legacy single-profile migration): seed the live store's
-            // current snapshot — which FileProfileStore already loaded from the legacy
-            // profile.json or defaults — as the initial active profile.
-            Create("Default", settings: null, makeActive: true);
+            // Fresh install (or the last profile was deleted): zero profiles is a
+            // first-class state. No auto-seeded "Default" — an unconfigured profile
+            // can't run a rig, so the client routes the user into profile setup
+            // instead. The FIRST Create(settings: null) captures the live store,
+            // which FileProfileStore loaded from the legacy profile.json or
+            // defaults — that's the legacy single-profile migration path.
+            _activeId = null;
             return;
         }
 
@@ -357,6 +352,16 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogLoadFailed(ex, _activePtrPath);
             return null;
+        }
+    }
+
+    private void TryDeleteActivePointer() {
+        try {
+            if (File.Exists(_activePtrPath)) File.Delete(_activePtrPath);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // Stale pointer is harmless: LoadAll treats an id with no matching
+            // profile file as "no pointer" (and with zero profiles, stays empty).
+            LogPersistFailed(ex, _activePtrPath);
         }
     }
 

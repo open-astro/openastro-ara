@@ -169,17 +169,21 @@ void main() {
     expect(find.text('My Backyard Rig'), findsOneWidget);
   });
 
-  testWidgets('deleting the LAST profile warns a factory Default replaces it',
+  testWidgets('deleting the LAST profile warns it goes back to profile setup',
       (tester) async {
     final api = _FakeApi()
       ..profiles = const [ProfileMeta(id: 'id-1', name: 'My Backyard Rig')];
     await _pump(tester, api);
     await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
     await tester.pumpAndSettle();
-    expect(find.textContaining('factory "Default" profile'), findsOneWidget);
+    expect(find.textContaining('taken back to profile setup'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
     expect(api.deleteCalls, ['id-1']);
+    // The list is now empty → the box shows the no-profiles state, and the
+    // always-visible Add/Import actions are the way forward (§30.2).
+    expect(find.textContaining('No profiles yet'), findsOneWidget);
+    expect(find.text('Add a Profile'), findsOneWidget);
   });
 
   testWidgets('cancel deletes nothing', (tester) async {

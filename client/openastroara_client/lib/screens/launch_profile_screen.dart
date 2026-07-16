@@ -146,8 +146,8 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
             ? list.activeId!
             : list.profiles.first.id);
     // Any profile is deletable: the daemon falls back to the newest remaining
-    // profile when the active one is deleted, and re-seeds a factory "Default"
-    // when the last one goes (same as a fresh install).
+    // profile when the active one is deleted, and returns to the zero-profile
+    // state when the last one goes (this box then shows the setup actions).
     final selectedIsActive = selected == list.activeId;
     final onlyOne = list.profiles.length == 1;
     final selectedName =
@@ -226,8 +226,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
       {required bool isActive, required bool isLast}) async {
     final messenger = ScaffoldMessenger.of(context);
     final consequence = isLast
-        ? ' This is the last profile — a factory "Default" profile will be '
-            'created in its place.'
+        ? " This is the last profile — you'll be taken back to profile setup."
         : (isActive ? ' The most recent remaining profile becomes active.' : '');
     final ok = await showDialog<bool>(
       context: context,

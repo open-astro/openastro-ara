@@ -18,8 +18,8 @@ import '../wizard/wizard_shell.dart';
 
 /// §37/§30 multi-profile management. Lists the daemon's known profiles with the
 /// active one badged, and offers Select / Rename / Delete per profile plus an
-/// "Add profile" action that runs the §37 wizard. Deleting the active or the
-/// last-remaining profile is refused by the daemon (409); the message is shown.
+/// "Add profile" action that runs the §37 wizard. Any profile is deletable —
+/// the confirm dialog spells out the daemon's fallback for active/last deletes.
 class ProfileManagementScreen extends ConsumerWidget {
   const ProfileManagementScreen({super.key});
 
@@ -106,8 +106,8 @@ class _ProfileListView extends ConsumerWidget {
               if (Platform.isMacOS || Platform.isLinux || Platform.isWindows)
                 const PopupMenuItem(value: 'export', child: Text('Export…')),
               // Any profile is deletable: the daemon activates the newest
-              // remaining profile when the active one goes, and re-seeds a
-              // factory "Default" when the last one goes (fresh-install state).
+              // remaining profile when the active one goes, and returns to the
+              // zero-profile (fresh-install) state when the last one goes.
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],
           ),
@@ -244,8 +244,7 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
 Future<bool> _confirmDelete(BuildContext context, String name,
     {bool isActive = false, bool isLast = false}) async {
   final consequence = isLast
-      ? ' This is the last profile — a factory "Default" profile will be '
-          'created in its place.'
+      ? " This is the last profile — you'll be taken back to profile setup."
       : (isActive ? ' The most recent remaining profile becomes active.' : '');
   final ok = await showDialog<bool>(
     context: context,
