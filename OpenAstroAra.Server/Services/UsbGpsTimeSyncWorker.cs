@@ -118,15 +118,20 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
         foreach (var device in OrderCandidates(devices)) {
             ct.ThrowIfCancellationRequested();
             var sawNmea = false;
+            // Hoisted above the try: the per-device window can expire (the catch below) after a
+            // 2D fix was already applied — that pass is still a success, not a retry candidate.
+            var appliedWithoutAltitude = false;
             try {
                 using var window = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 window.CancelAfter(PerDeviceListenWindow);
                 // Altitude only rides GGA sentences (RMC has none), so remember the most recent
                 // GGA altitude and pair it with the RMC fix that supplies the instant (#834 r1).
                 // Sentence order within a reporting cycle is chipset-dependent (not standardized):
-                // when RMC arrives before the cycle's GGA, the sync deliberately applies without
-                // altitude rather than waiting — the RMC instant goes stale while we wait, and a
-                // null altitude safely preserves the profile's existing elevation.
+                // when RMC arrives before the cycle's GGA, the sync applies IMMEDIATELY without
+                // altitude (delaying would stale the RMC instant the clock is set from), but the
+                // listen continues — the next RMC, paired with the by-then-seen GGA altitude,
+                // re-applies with the full 3D position. Without the second pass an RMC-first
+                // chipset would NEVER deliver altitude (the wizard's GPS fill surfaced this).
                 double? lastGgaAltitude = null;
                 await foreach (var line in _source.ReadLinesAsync(device, window.Token).ConfigureAwait(false)) {
                     if (!sawNmea && line.StartsWith('$')) {
@@ -142,15 +147,28 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
                     if (fix.TimeUtc is not { } timeUtc) {
                         continue; // not an RMC with an active fix — keep listening
                     }
+                    var altitude = fix.AltitudeM ?? lastGgaAltitude;
+                    if (appliedWithoutAltitude && altitude is null) {
+                        continue; // already synced; only a fix that ADDS altitude is worth re-applying
+                    }
                     var location = fix.LatitudeDeg is { } lat && fix.LongitudeDeg is { } lng
-                        ? new Contracts.TimeSyncLocationDto(lat, lng, fix.AltitudeM ?? lastGgaAltitude)
+                        ? new Contracts.TimeSyncLocationDto(lat, lng, altitude)
                         : null;
                     var result = await _timeSync.ApplyGpsSyncAsync(timeUtc, location, ct).ConfigureAwait(false);
                     LogGpsSyncApplied(device, result.ClockSet);
                     _lastFixDevice = device;
-                    return true;
+                    if (location is null || altitude is not null) {
+                        return true; // full fix (or no position at all to wait on)
+                    }
+                    appliedWithoutAltitude = true; // keep listening for a GGA within the window
+                }
+                if (appliedWithoutAltitude) {
+                    return true; // window closed with a 2D fix applied — still a success
                 }
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+                if (appliedWithoutAltitude) {
+                    return true; // window closed while waiting for a GGA — the 2D sync stands
+                }
                 // The per-device listen window elapsed with no fix. NMEA chatter without a fix
                 // (no satellites yet) keeps the device a candidate; a window with zero NMEA is
                 // the not-a-GPS verdict (see _notGpsDevices) — stop pulsing its DTR every pass.
