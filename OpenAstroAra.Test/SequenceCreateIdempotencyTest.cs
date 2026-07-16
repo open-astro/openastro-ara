@@ -71,5 +71,36 @@ namespace OpenAstroAra.Test {
             Assert.That(retry.Id, Is.Not.EqualTo(first.Id),
                 "honouring the replay would resurrect a ghost id the user deleted");
         }
+        [Test]
+        public async Task Concurrent_same_key_requests_share_one_create() {
+            // The #853 TOCTOU: a retry racing the still-processing original must
+            // JOIN it, not double-create. Fire both before awaiting either.
+            var a = _svc.CreateAsync(Request(), "key-race", CancellationToken.None);
+            var b = _svc.CreateAsync(Request(), "key-race", CancellationToken.None);
+            var results = await Task.WhenAll(a, b);
+            Assert.That(results[0].Id, Is.EqualTo(results[1].Id));
+            var page = await _svc.ListAsync(50, null, CancellationToken.None);
+            Assert.That(page.Items, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task Replay_survives_a_daemon_restart_and_has_no_time_cliff() {
+            // The offline-draft case: the stamped key may come back DAYS later,
+            // possibly after a daemon restart — the persisted map (validity =
+            // the sequence file still exists) must still dedupe.
+            var first = await _svc.CreateAsync(Request(), "key-durable", CancellationToken.None);
+            var restarted = new FileSequenceService(_tempDir); // fresh process, same library dir
+            var retry = await restarted.CreateAsync(Request(), "key-durable", CancellationToken.None);
+            Assert.That(retry.Id, Is.EqualTo(first.Id), "the persisted replay map must dedupe");
+        }
+
+        [Test]
+        public async Task Restarted_daemon_does_not_replay_a_deleted_sequence() {
+            var first = await _svc.CreateAsync(Request(), "key-gone", CancellationToken.None);
+            await _svc.DeleteAsync(first.Id, CancellationToken.None);
+            var restarted = new FileSequenceService(_tempDir);
+            var retry = await restarted.CreateAsync(Request(), "key-gone", CancellationToken.None);
+            Assert.That(retry.Id, Is.Not.EqualTo(first.Id));
+        }
     }
 }

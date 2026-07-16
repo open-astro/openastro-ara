@@ -209,12 +209,9 @@ public static class SequenceEndpoints {
         seq.MapPost("/import",
                 async ([FromBody] SequenceImportRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequenceImportService svc, CancellationToken ct) => {
                     // The one create-style POST that never declared the key (2026-07-15
-                    // audit) — a retried import always duplicated the whole sequence.
-                    if (ImportReplays.TryGet(key) is { } replay) {
-                        return Results.Created($"/api/v1/sequences/{replay.CreatedSequenceId}", replay);
-                    }
-                    var result = await svc.ImportAsync(request, ct);
-                    ImportReplays.Record(key, result);
+                    // audit). Single-flight: a retry racing the still-running
+                    // original joins it (#853 review) instead of double-importing.
+                    var result = await ImportReplays.GetOrRunAsync(key, () => svc.ImportAsync(request, ct));
                     return Results.Created($"/api/v1/sequences/{result.CreatedSequenceId}", result);
                 })
            .Accepts<SequenceImportRequestDto>("application/json")

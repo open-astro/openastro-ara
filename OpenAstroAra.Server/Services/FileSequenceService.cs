@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.IO;
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -78,6 +79,8 @@ public sealed partial class FileSequenceService : ISequenceService {
         var entries = new List<SequenceDto>();
         try {
             foreach (var path in Directory.EnumerateFiles(_libraryDir, "*.json")) {
+                // Dot-files are library metadata (.create-replays.json), not sequences.
+                if (Path.GetFileName(path).StartsWith('.')) continue;
                 ct.ThrowIfCancellationRequested();
                 var dto = TryLoadFile(path);
                 if (dto is not null) entries.Add(dto);
@@ -117,32 +120,92 @@ public sealed partial class FileSequenceService : ISequenceService {
         return Task.FromResult(TryLoadFile(path));
     }
 
-    // Create-replay cache: the endpoint has always DECLARED Idempotency-Key,
-    // but the key was silently ignored — a retried create (lost response on
-    // marginal rig Wi-Fi) duplicated the sequence. Found by the 2026-07-15
-    // client/server audit; the client now sends keys on every create path.
-    private readonly IdempotencyCache<SequenceDto> _createReplays = new();
+    // Create-replay dedup (2026-07-15 audit; hardened per the #853 review):
+    // the endpoint always DECLARED Idempotency-Key but silently ignored it — a
+    // retried create (lost response on marginal rig Wi-Fi) duplicated the
+    // sequence. Two layers close it properly:
+    //   1. _createFlights — keyed SINGLE-FLIGHT, so a retry racing the
+    //      still-processing original joins that execution (no TOCTOU window).
+    //   2. _replayMap — key→id persisted as .create-replays.json NEXT TO the
+    //      sequence files, so the replay survives daemon restarts and has NO
+    //      time cliff: an offline draft can push its stamped key weeks later
+    //      and still dedupe. Validity is existence-based — the mapping only
+    //      replays while the sequence file exists (deleting the sequence
+    //      naturally retires the key; no ghost-id resurrection).
+    private readonly IdempotencyCache<SequenceDto> _createFlights = new();
+    private readonly ConcurrentDictionary<string, Guid> _replayMap = new();
+    private readonly object _replayFileLock = new();
+    private bool _replayMapLoaded;
 
-    public Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct) {
-        if (_createReplays.TryGet(idempotencyKey) is { } replay) {
-            // Replay only while the sequence still exists — if the user deleted
-            // it since, honouring the replay would resurrect a ghost id.
-            if (File.Exists(PathFor(replay.Id))) {
-                return Task.FromResult(replay);
+    private string ReplayMapPath => Path.Combine(_libraryDir, ".create-replays.json");
+
+    private void EnsureReplayMapLoaded() {
+        if (_replayMapLoaded) return;
+        lock (_replayFileLock) {
+            if (_replayMapLoaded) return;
+            try {
+                if (File.Exists(ReplayMapPath)) {
+                    var loaded = JsonSerializer.Deserialize<Dictionary<string, Guid>>(
+                        File.ReadAllText(ReplayMapPath));
+                    if (loaded is not null) {
+                        foreach (var kv in loaded) {
+                            // Only keys whose sequence still exists are alive.
+                            if (File.Exists(PathFor(kv.Value))) {
+                                _replayMap[kv.Key] = kv.Value;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) {
+                // Best-effort: a corrupt/unreadable map degrades to "no replays",
+                // never to a failed create.
+            }
+            _replayMapLoaded = true;
+        }
+    }
+
+    private void PersistReplayMap() {
+        lock (_replayFileLock) {
+            try {
+                File.WriteAllText(ReplayMapPath,
+                    JsonSerializer.Serialize(new Dictionary<string, Guid>(_replayMap)));
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                // Best-effort — losing the map costs dedup breadth, not data.
             }
         }
-        var now = DateTimeOffset.UtcNow;
-        var dto = new SequenceDto(
-            Id: Guid.NewGuid(),
-            Name: request.Name,
-            Description: request.Description,
-            CreatedUtc: now,
-            ModifiedUtc: now,
-            Body: request.Body,
-            TemplateOrigin: request.TemplateOrigin);
-        WriteFile(dto);
-        _createReplays.Record(idempotencyKey, dto);
-        return Task.FromResult(dto);
+    }
+
+    public async Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        EnsureReplayMapLoaded();
+        // Durable replay first: valid only while the created sequence still
+        // exists (a user delete retires the key instead of resurrecting it).
+        if (!string.IsNullOrWhiteSpace(idempotencyKey)
+            && _replayMap.TryGetValue(idempotencyKey, out var replayId)) {
+            if (File.Exists(PathFor(replayId)) && TryLoadFile(PathFor(replayId)) is { } existing) {
+                return existing;
+            }
+            _replayMap.TryRemove(idempotencyKey, out _);
+            _createFlights.Evict(idempotencyKey);
+        }
+        // Single-flight guards the concurrent-retry TOCTOU: two in-flight
+        // requests with the same key share ONE create.
+        return await _createFlights.GetOrRunAsync(idempotencyKey, () => {
+            var now = DateTimeOffset.UtcNow;
+            var dto = new SequenceDto(
+                Id: Guid.NewGuid(),
+                Name: request.Name,
+                Description: request.Description,
+                CreatedUtc: now,
+                ModifiedUtc: now,
+                Body: request.Body,
+                TemplateOrigin: request.TemplateOrigin);
+            WriteFile(dto);
+            if (!string.IsNullOrWhiteSpace(idempotencyKey)) {
+                _replayMap[idempotencyKey] = dto.Id;
+                PersistReplayMap();
+            }
+            return Task.FromResult(dto);
+        }).ConfigureAwait(false);
     }
 
     public async Task<SequenceUpdateResult> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) {
