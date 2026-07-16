@@ -36,9 +36,12 @@ namespace OpenAstroAra.Server.Services;
 /// store on every change, and on <see cref="Select"/> it loads a saved profile's settings
 /// into the live store.
 ///
-/// Migration: on first construction, if no profiles exist yet, the current live store
-/// snapshot (which the <see cref="FileProfileStore"/> already loaded from the legacy
-/// single <c>profile.json</c>, or defaults) is seeded as the initial "Default" profile.
+/// Zero profiles is a first-class state (fresh install, or the last profile was
+/// deleted): nothing is auto-seeded, and the client routes the user into profile
+/// setup. Migration: the FIRST <see cref="Create"/> with null settings captures the
+/// live store snapshot, which the <see cref="FileProfileStore"/> already loaded from
+/// the legacy single <c>profile.json</c> (or defaults) — so pre-multi-profile
+/// settings land in the first profile the user creates.
 /// </summary>
 public sealed partial class FileProfileRepository : IProfileRepository, IDisposable {
     private readonly object _lock = new();
@@ -50,7 +53,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     private readonly Dictionary<Guid, ProfileMetaDto> _metas = new();
     private Guid? _activeId;
 
-    // Set while loading a saved profile into the live store (Select / seed), so the
+    // Set while loading a saved profile into the live store (Select / boot / defaults reset), so the
     // per-section Changed notifications don't each rewrite the active file; the final
     // state is written once at the end. Reentrant-safe: the live store raises Changed
     // synchronously on the same thread that holds _lock here.
@@ -79,7 +82,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
 
         Directory.CreateDirectory(_dir);
         Load();
-        // Subscribe AFTER load+seed so seeding doesn't recurse through the mirror.
+        // Subscribe AFTER load so the boot-time ApplyToLive doesn't recurse through the mirror.
         _liveStore.Changed += OnLiveChanged;
     }
 
@@ -160,6 +163,20 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
             } else {
                 _activeId = null;
                 TryDeleteActivePointer();
+                // Reset the live store to factory defaults: the next
+                // Create(settings: null) — the wizard's save — captures the live
+                // store, and without this it would silently inherit the deleted
+                // profile's settings instead of the fresh-install state. Same
+                // suppress pattern as ApplyToLive (the Changed mirror also
+                // no-ops on a null _activeId, but be explicit).
+                _suppressMirror = true;
+                _applyingThreadId = Environment.CurrentManagedThreadId;
+                try {
+                    ProfileStoreSnapshot.Apply(_liveStore, ProfileSnapshotNormalizer.Defaults);
+                } finally {
+                    _applyingThreadId = 0;
+                    _suppressMirror = false;
+                }
             }
             return ProfileDeleteResult.Deleted;
         }

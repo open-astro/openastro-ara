@@ -153,12 +153,20 @@ public class FileProfileRepositoryTest {
         // Deleting the last profile is "start over": the fresh-install state,
         // where the client routes the user into profile setup — NOT an
         // unconfigured auto-seeded profile.
+        SetLatitude(33); // dirty the live store with the doomed profile's settings
         var activeId = _repo.ActiveId!.Value;
 
         _repo.Delete(activeId).Should().Be(ProfileDeleteResult.Deleted);
 
         _repo.List().Profiles.Should().BeEmpty();
         _repo.ActiveId.Should().BeNull();
+        // The live store is reset to factory defaults: the wizard's upcoming
+        // Create(settings: null) captures the live store, and without the reset
+        // it would silently inherit the DELETED profile's settings (#855 review).
+        Latitude().Should().Be(0, "no ghost settings from the deleted profile");
+        var next = _repo.Create("Fresh", settings: null, makeActive: true);
+        _repo.GetProfile(next.Id)!.Settings.Site.LatitudeDeg.Should().Be(0);
+        _repo.Delete(next.Id); // restore the zero state for the restart half below
 
         // And the state survives a daemon restart: the active pointer was
         // cleared, and boot doesn't resurrect a profile out of nothing.
