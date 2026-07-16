@@ -133,11 +133,22 @@ void main() {
     expect(find.text('Image'), findsNothing);
   });
 
-  testWidgets('delete is disabled for the active profile', (tester) async {
-    await _pump(tester, _FakeApi());
-    final btn = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.delete_outline));
-    expect(btn.onPressed, isNull); // pre-selected = active = protected
+  testWidgets(
+      'deleting the ACTIVE profile is allowed and spells out the fallback',
+      (tester) async {
+    // Any profile is deletable now — the daemon falls back (newest remaining,
+    // or a reseeded factory Default for the last one), so the client no
+    // longer disables the button; the confirm dialog states the consequence.
+    final api = _FakeApi();
+    await _pump(tester, api);
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete profile?'), findsOneWidget);
+    expect(find.textContaining('most recent remaining profile becomes active'),
+        findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deleteCalls, ['id-1']); // pre-selected = the active profile
   });
 
   testWidgets('picking a non-active profile enables delete; confirm deletes it',
@@ -156,6 +167,19 @@ void main() {
     expect(api.deleteCalls, ['id-2']);
     // The dropdown fell back to the (still-active) remaining profile.
     expect(find.text('My Backyard Rig'), findsOneWidget);
+  });
+
+  testWidgets('deleting the LAST profile warns a factory Default replaces it',
+      (tester) async {
+    final api = _FakeApi()
+      ..profiles = const [ProfileMeta(id: 'id-1', name: 'My Backyard Rig')];
+    await _pump(tester, api);
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('factory "Default" profile'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deleteCalls, ['id-1']);
   });
 
   testWidgets('cancel deletes nothing', (tester) async {

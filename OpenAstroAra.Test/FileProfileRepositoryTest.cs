@@ -104,19 +104,46 @@ public class FileProfileRepositoryTest {
     }
 
     [Test]
-    public void Delete_refuses_active_and_last_but_removes_an_extra() {
+    public void Delete_removes_a_non_active_profile_and_404s_an_unknown_id() {
         var activeId = _repo.ActiveId!.Value;
-        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.RefusedActive);
         _repo.Delete(Guid.NewGuid()).Should().Be(ProfileDeleteResult.NotFound);
 
         var b = _repo.Create("B", settings: null, makeActive: false);
         _repo.Delete(b.Id).Should().Be(ProfileDeleteResult.Deleted);
         _repo.List().Profiles.Should().ContainSingle().Which.Id.Should().Be(activeId);
+        _repo.ActiveId.Should().Be(activeId);
+    }
 
-        // The last remaining profile is also the active one, so the active guard fires first;
-        // RefusedLastRemaining is the defensive fallback for the (normally impossible) case of
-        // a populated set with no active profile.
-        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.RefusedActive);
+    [Test]
+    public void Delete_active_falls_back_to_the_newest_remaining_profile() {
+        SetLatitude(11);                                   // A at 11
+        var b = _repo.Create("B", settings: null, makeActive: true);
+        SetLatitude(22);                                   // B (active, newest) at 22
+        var aId = _repo.List().Profiles.Single(p => p.Id != b.Id).Id;
+
+        _repo.Delete(b.Id).Should().Be(ProfileDeleteResult.Deleted);
+
+        // Mirrors the boot-time stale-pointer recovery: newest remaining wins,
+        // and its settings load into the live store.
+        _repo.ActiveId.Should().Be(aId);
+        Latitude().Should().Be(11, "the fallback profile's settings must be applied");
+        _repo.List().Profiles.Should().ContainSingle().Which.Id.Should().Be(aId);
+    }
+
+    [Test]
+    public void Delete_last_profile_reseeds_a_factory_Default() {
+        // A fresh install boots with zero files and gets a seeded "Default" —
+        // deleting the last profile is "start over", so the same thing happens.
+        SetLatitude(33);                                   // dirty the live store
+        var activeId = _repo.ActiveId!.Value;
+
+        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.Deleted);
+
+        var only = _repo.List().Profiles.Should().ContainSingle().Subject;
+        only.Id.Should().NotBe(activeId);
+        only.Name.Should().Be("Default");
+        _repo.ActiveId.Should().Be(only.Id);
+        Latitude().Should().Be(0, "the reseeded Default is factory settings, not the deleted profile's ghost");
     }
 
     [Test]

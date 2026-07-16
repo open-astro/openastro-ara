@@ -22,8 +22,6 @@ namespace OpenAstroAra.Server.Services;
 public enum ProfileDeleteResult {
     Deleted,
     NotFound,
-    RefusedActive,
-    RefusedLastRemaining,
 }
 
 /// <summary>

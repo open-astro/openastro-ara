@@ -145,9 +145,9 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
         : (list.activeId != null && ids.contains(list.activeId)
             ? list.activeId!
             : list.profiles.first.id);
-    // Delete mirrors Settings → Profiles' gating: the daemon refuses to
-    // delete the active or last-remaining profile (409), so the button is
-    // disabled in those cases rather than offering an action that must fail.
+    // Any profile is deletable: the daemon falls back to the newest remaining
+    // profile when the active one is deleted, and re-seeds a factory "Default"
+    // when the last one goes (same as a fresh install).
     final selectedIsActive = selected == list.activeId;
     final onlyOne = list.profiles.length == 1;
     final selectedName =
@@ -175,15 +175,11 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
         const SizedBox(width: 4),
         IconButton(
           icon: const Icon(Icons.delete_outline, size: 20),
-          tooltip: selectedIsActive || onlyOne
-              ? (onlyOne
-                  ? 'The last profile can\'t be deleted'
-                  : 'The active profile can\'t be deleted — pick another '
-                      'profile in the dropdown first')
-              : 'Delete "$selectedName"',
-          onPressed: (selectedIsActive || onlyOne || _entering)
+          tooltip: 'Delete "$selectedName"',
+          onPressed: _entering
               ? null
-              : () => unawaited(_deleteProfile(selected, selectedName)),
+              : () => unawaited(_deleteProfile(selected, selectedName,
+                  isActive: selectedIsActive, isLast: onlyOne)),
         ),
       ]),
       const SizedBox(height: 16),
@@ -223,16 +219,22 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
     }
   }
 
-  /// Delete a NON-active profile from the box (the button gates active/last).
-  /// On success the dropdown falls back to the daemon's active profile.
-  Future<void> _deleteProfile(String id, String name) async {
+  /// Delete a profile from the box. The confirm dialog spells out the daemon's
+  /// fallback when the active/last profile is going away; on success the
+  /// dropdown falls back to whatever the daemon now reports active.
+  Future<void> _deleteProfile(String id, String name,
+      {required bool isActive, required bool isLast}) async {
     final messenger = ScaffoldMessenger.of(context);
+    final consequence = isLast
+        ? ' This is the last profile — a factory "Default" profile will be '
+            'created in its place.'
+        : (isActive ? ' The most recent remaining profile becomes active.' : '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete profile?'),
-        content:
-            Text('"$name" will be permanently removed. This can\'t be undone.'),
+        content: Text('"$name" will be permanently removed. This can\'t be '
+            'undone.$consequence'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),

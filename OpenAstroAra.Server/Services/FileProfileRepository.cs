@@ -141,10 +141,26 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     public ProfileDeleteResult Delete(Guid id) {
         lock (_lock) {
             if (!_metas.ContainsKey(id)) return ProfileDeleteResult.NotFound;
-            if (_activeId == id) return ProfileDeleteResult.RefusedActive;
-            if (_metas.Count <= 1) return ProfileDeleteResult.RefusedLastRemaining;
             TryDeleteFile(id);
             _metas.Remove(id);
+            if (_activeId != id) return ProfileDeleteResult.Deleted;
+
+            // The active profile was deleted. Mirror the boot-time recovery
+            // order (LoadAll): fall back to the newest remaining profile, or —
+            // when this was the last one — seed a factory-defaults "Default",
+            // exactly what a fresh install gets. The daemon never runs without
+            // an active profile, so deleting the last one means "start over",
+            // not "run headless on ghost settings".
+            var fallback = _metas.Values.OrderByDescending(m => m.CreatedUtc).FirstOrDefault();
+            if (fallback is not null) {
+                var stored = ReadFile(fallback.Id);
+                if (stored is not null) ApplyToLive(fallback.Id, stored.Settings);
+                _activeId = fallback.Id;
+                PersistActivePointer();
+            } else {
+                _activeId = null;
+                Create("Default", ProfileSnapshotNormalizer.Defaults, makeActive: true);
+            }
             return ProfileDeleteResult.Deleted;
         }
     }
