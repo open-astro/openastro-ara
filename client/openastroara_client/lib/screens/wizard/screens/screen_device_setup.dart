@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/profile_draft.dart';
+import '../../../state/guider/guider_state.dart';
+import '../../../widgets/profile/profile_import_flow.dart'
+    show friendlyDaemonError;
 import '../../../models/server.dart';
 import '../../../services/camera_geometry_api.dart';
 import '../../../services/filter_wheel_names_api.dart';
@@ -742,6 +747,60 @@ class ScreenGuider extends ConsumerStatefulWidget {
 class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   late final GuiderSettings _g = _draftOf(ref).guider;
 
+  bool _testing = false;
+  String? _testStatus;
+  bool _testOk = false;
+
+  /// Ask the DAEMON to reach the guider at the entered host:port — the
+  /// connection under test is server→PHD2 (the SBC's network), not this
+  /// client's. POST /equipment/guider/connect is 202-accepted; poll the
+  /// status until the link resolves.
+  Future<void> _testConnection() async {
+    final api = ref.read(guiderApiProvider);
+    if (api == null) {
+      setState(() => _testStatus =
+          'Not connected to a server — the server is what talks to PHD2.');
+      return;
+    }
+    final raw = _g.hostPort.trim();
+    final colon = raw.lastIndexOf(':');
+    final host = colon > 0 ? raw.substring(0, colon) : raw;
+    final port =
+        colon > 0 ? int.tryParse(raw.substring(colon + 1)) ?? 4400 : 4400;
+    setState(() {
+      _testing = true;
+      _testOk = false;
+      _testStatus = null;
+    });
+    try {
+      await api.connect(host: host, port: port);
+      // The connect is async on the daemon — poll briefly for the outcome.
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        final status = await api.getStatus();
+        if (status?.isConnected ?? false) {
+          setState(() {
+            _testOk = true;
+            _testStatus = 'Connected to ${status!.name} at $host:$port.';
+          });
+          return;
+        }
+      }
+      if (!mounted) return;
+      setState(() => _testStatus =
+          'No PHD2 answered at $host:$port within 10 s. Check that PHD2 is '
+          'running on that machine and its server is enabled '
+          '(Tools → Enable Server).');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _testStatus =
+          friendlyDaemonError(e, fallback: "Couldn't reach PHD2 at $host:$port"));
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
@@ -754,6 +813,35 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
           hint: 'localhost:4400',
           onChanged: (v) =>
               _g.hostPort = v.trim().isEmpty ? 'localhost:4400' : v.trim(),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _testing ? null : () => unawaited(_testConnection()),
+                icon: _testing
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.network_check, size: 18),
+                label: const Text('Test connection'),
+              ),
+              if (_testStatus != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _testStatus!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _testOk
+                        ? AraColors.accentConnected
+                        : AraColors.textSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         WizardTextField(
           label: 'Dither (pixels)',

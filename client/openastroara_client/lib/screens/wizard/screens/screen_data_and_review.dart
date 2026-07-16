@@ -205,7 +205,10 @@ String assignedEquipment(EquipmentSlots e) {
     if (e.rotatorDeviceId != null) 'Rotator',
     if (e.domeDeviceId != null) 'Dome',
     if (e.observingConditionsDeviceId != null) 'Conditions',
-    if (e.switchDeviceId != null) 'Switch',
+    if (e.switchDeviceIds.isNotEmpty)
+      e.switchDeviceIds.length == 1
+          ? 'Switch'
+          : 'Switches ×${e.switchDeviceIds.length}',
     if (e.safetyMonitorDeviceId != null) 'Safety Monitor',
     if (e.flatPanelDeviceId != null) 'Flat Panel',
     if (e.guiderDeviceId != null) 'Guider',

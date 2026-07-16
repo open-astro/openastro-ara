@@ -90,7 +90,11 @@ class EquipmentSlots {
   String? rotatorDeviceId;
   String? domeDeviceId;
   String? observingConditionsDeviceId;
-  String? switchDeviceId;
+
+  /// A rig can carry several switch hubs (power box, dew controller, relay
+  /// board) — §6.4 multi-switch is wired daemon-side, so the wizard assigns
+  /// them all, not just a default.
+  final List<String> switchDeviceIds = [];
   String? safetyMonitorDeviceId;
   String? flatPanelDeviceId;
   String? guiderDeviceId;
