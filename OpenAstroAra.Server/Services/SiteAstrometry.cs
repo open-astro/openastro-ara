@@ -21,8 +21,12 @@ namespace OpenAstroAra.Server.Services;
 /// time, and horizontal-coordinate transforms. Extracted from the removed TonightSkyService
 /// (PORT_DECISIONS 2026-07-15: planning compute moved to the client; the client's Dart port
 /// of this math lives in <c>lib/util/tonight_sky_local.dart</c>) because the EXECUTION side
-/// still needs it: HorizonService's overlay, MeridianFlipExecutor's altitude safety,
-/// PolarAlignGeometry, and UnattendedSeverity's sun gate.
+/// still needs it: MeridianFlipExecutor's altitude safety, PolarAlignGeometry, and
+/// UnattendedSeverity's sun gate.
+/// <para><b>TWIN ALERT:</b> the client carries a Dart twin of this math in
+/// <c>client/openastroara_client/lib/util/tonight_sky_local.dart</c> — any formula or
+/// constant change here MUST be mirrored there (the client's parity tests pin the
+/// constants and will catch drift).</para>
 /// </summary>
 public static class SiteAstrometry {
 

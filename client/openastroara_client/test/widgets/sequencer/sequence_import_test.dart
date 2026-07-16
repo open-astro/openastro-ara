@@ -71,7 +71,7 @@ class _ImportClient implements SequenceClient {
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
   Future<String> create(String name, Map<String, dynamic> body,
-          {String? description}) async =>
+          {String? description, String? idempotencyKey}) async =>
       'new-seq';
   @override
   void close() {}

@@ -218,9 +218,14 @@ Future<ImagingRunResult?> createImagingRun(
     positionAngleDeg: positionAngleDeg,
   );
 
+  // One key per LOGICAL create: if the request dies in transit the daemon may
+  // still have applied it — the degraded draft below carries this same key so
+  // its eventual push dedupes on the daemon instead of duplicating the run.
+  final createKey = 'run-${DateTime.now().microsecondsSinceEpoch}-'
+      '${identityHashCode(body).toRadixString(16)}';
   final String id;
   try {
-    id = await api.create(targetName, body);
+    id = await api.create(targetName, body, idempotencyKey: createKey);
   } on DioException catch (e) {
     // §2 offline planning — a SAVED server whose daemon is down/unreachable
     // still yields a non-null api, so "offline" surfaces here as a transport
@@ -231,7 +236,7 @@ Future<ImagingRunResult?> createImagingRun(
     if (e.response != null) rethrow;
     final draftId = await container
         .read(draftSequencesProvider.notifier)
-        .create(targetName, body);
+        .create(targetName, body, pushKey: createKey);
     container.read(selectedSequenceIdProvider.notifier).select(draftId);
     container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
     return ImagingRunResult(draftId, appended: false, draft: true);

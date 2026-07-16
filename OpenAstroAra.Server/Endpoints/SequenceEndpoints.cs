@@ -33,6 +33,10 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static class SequenceEndpoints {
 
+    // Import-replay cache — see the /import handler. Static: endpoint mapping is
+    // once-per-process and the cache is deliberately in-process (IdempotencyCache docs).
+    private static readonly IdempotencyCache<SequenceImportResultDto> ImportReplays = new();
+
     private static IResult NotImplementedStub(string endpoint, string section) =>
         Results.Problem(
             type: "https://openastro.net/errors/not-implemented",
@@ -203,8 +207,11 @@ public static class SequenceEndpoints {
 
         // Phase 13.15 — NINA import (§38.4) wired to ISequenceImportService.
         seq.MapPost("/import",
-                async ([FromBody] SequenceImportRequestDto request, ISequenceImportService svc, CancellationToken ct) => {
-                    var result = await svc.ImportAsync(request, ct);
+                async ([FromBody] SequenceImportRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequenceImportService svc, CancellationToken ct) => {
+                    // The one create-style POST that never declared the key (2026-07-15
+                    // audit). Single-flight: a retry racing the still-running
+                    // original joins it (#853 review) instead of double-importing.
+                    var result = await ImportReplays.GetOrRunAsync(key, () => svc.ImportAsync(request, ct));
                     return Results.Created($"/api/v1/sequences/{result.CreatedSequenceId}", result);
                 })
            .Accepts<SequenceImportRequestDto>("application/json")

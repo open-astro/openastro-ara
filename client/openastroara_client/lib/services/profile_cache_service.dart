@@ -75,7 +75,9 @@ class ProfileCacheService {
     return _mutate((cache) {
       final all = cache['sections'];
       final map = all is Map ? Map<String, dynamic>.from(all) : <String, dynamic>{};
-      map[profileId] = sections;
+      // Stamp when this gear snapshot was taken so offline surfaces can say
+      // "cached N days ago" — a stale ranking should look stale.
+      map[profileId] = {...sections, 'captured_utc': DateTime.now().toUtc().toIso8601String()};
       cache['sections'] = map;
       return cache;
     });

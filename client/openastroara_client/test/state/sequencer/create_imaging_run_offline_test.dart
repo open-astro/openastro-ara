@@ -10,6 +10,7 @@ import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
+/// Captures the key a degraded create stamps into the draft.
 class _MemDraftService extends DraftSequenceService {
   final Map<String, DraftSequence> store = {};
   int _n = 0;
@@ -34,7 +35,7 @@ class _ThrowingClient implements SequenceClient {
 
   @override
   Future<String> create(String name, Map<String, dynamic> body,
-          {String? description}) async =>
+          {String? description, String? idempotencyKey}) async =>
       throw error;
 
   @override
@@ -126,5 +127,20 @@ void main() {
     expect(outcome.error, isA<DioException>());
     expect((outcome.error as DioException).response?.statusCode, 422);
     expect(drafts.store, isEmpty);
+  });
+
+  testWidgets('a degraded create stamps its idempotency key into the draft',
+      (tester) async {
+    final api = _ThrowingClient(DioException(
+      requestOptions: RequestOptions(path: '/api/v1/sequences'),
+      type: DioExceptionType.connectionError,
+    ));
+    final outcome = await run(tester, api: api);
+    expect(outcome.result?.draft, isTrue);
+    final draft = drafts.store.values.single;
+    expect(draft.pushKey, isNotNull,
+        reason: 'the eventual push must reuse the original create key so the '
+            'daemon dedupes if the "failed" create actually landed');
+    expect(draft.pushKey, startsWith('run-'));
   });
 }

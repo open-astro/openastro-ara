@@ -11,13 +11,15 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 /// else is unused by the drafts notifier.
 class _FakeSeqClient implements SequenceClient {
   final List<(String, Map<String, dynamic>)> created = [];
+  final List<String?> keys = [];
   Object? createError;
 
   @override
   Future<String> create(String name, Map<String, dynamic> body,
-      {String? description}) async {
+      {String? description, String? idempotencyKey}) async {
     if (createError != null) throw createError!;
     created.add((name, body));
+    keys.add(idempotencyKey);
     return 'daemon-id-${created.length}';
   }
 
@@ -105,5 +107,32 @@ void main() {
     final id = await notifier.create('M 31', {'items': []});
     await notifier.delete(id);
     expect(await c.read(draftSequencesProvider.future), isEmpty);
+  });
+
+  test('push sends a stable idempotency key: the stamped pushKey, else the id',
+      () async {
+    final api = _FakeSeqClient();
+    final c = container(api: api);
+    final notifier = c.read(draftSequencesProvider.notifier);
+    await c.read(draftSequencesProvider.future);
+    // Born-offline draft → key falls back to the draft id.
+    final plain = await notifier.create('M 31', {'v': 1});
+    await notifier.push(plain);
+    expect(api.keys.single, plain);
+    // Degraded-create draft → the ORIGINAL create key is reused.
+    final stamped =
+        await notifier.create('M 42', {'v': 2}, pushKey: 'run-original-key');
+    await notifier.push(stamped);
+    expect(api.keys.last, 'run-original-key');
+  });
+
+  test('saveBody preserves the stamped pushKey', () async {
+    final c = container();
+    final notifier = c.read(draftSequencesProvider.notifier);
+    final id =
+        await notifier.create('M 31', {'v': 1}, pushKey: 'run-original-key');
+    await notifier.saveBody(id, {'v': 2});
+    final drafts = await c.read(draftSequencesProvider.future);
+    expect(drafts.single.pushKey, 'run-original-key');
   });
 }

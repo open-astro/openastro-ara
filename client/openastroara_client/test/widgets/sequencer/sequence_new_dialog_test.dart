@@ -40,7 +40,7 @@ class _NewClient implements SequenceClient {
 
   @override
   Future<String> create(String name, Map<String, dynamic> body,
-          {String? description}) async =>
+          {String? description, String? idempotencyKey}) async =>
       id;
   @override
   Future<List<SequenceTemplate>> listTemplates() async => templates;

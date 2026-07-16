@@ -83,6 +83,11 @@ void main() {
     expect(sections.keys, ['p1']); // only the active profile is snapshotted
     expect((sections['p1'] as Map)['optics'],
         containsPair('focal_length_mm', 382));
+    // The staleness stamp the offline picker surfaces ("gear cached N days ago").
+    expect(
+        DateTime.tryParse(
+            (sections['p1'] as Map)['captured_utc']?.toString() ?? ''),
+        isNotNull);
   });
 
   test('cachedProfilesProvider reflects capture, including hasSections',

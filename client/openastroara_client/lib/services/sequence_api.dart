@@ -49,6 +49,7 @@ abstract interface class SequenceClient {
     String name,
     Map<String, dynamic> body, {
     String? description,
+    String? idempotencyKey,
   });
 
   /// Fetch a sequence's full detail and parse its body into the editor tree.
@@ -246,12 +247,18 @@ class SequenceApi implements SequenceClient {
     String name,
     Map<String, dynamic> body, {
     String? description,
+    String? idempotencyKey,
   }) async {
     if (name.trim().isEmpty) {
       throw ArgumentError.value(name, 'name', 'sequence name must not be empty');
     }
     final res = await _dio.post<dynamic>(
       '/api/v1/sequences',
+      // The daemon dedupes creates carrying the same key for 24 h — a retry
+      // after a lost response (marginal rig Wi-Fi) must not duplicate a run.
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
       data: <String, dynamic>{
         'name': name.trim(),
         'description': ?description,
