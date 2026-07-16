@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../models/profile_draft.dart';
 import '../../../state/time_sync_state.dart';
@@ -62,6 +63,11 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         _draft.latitudeDeg = loc.lat;
         _draft.longitudeDeg = loc.lng;
         if (loc.alt != null) _draft.altitudeMeters = loc.alt;
+        // GPS transmits UTC + position, never a timezone — derive the IANA
+        // zone from the coordinates (worldwide polygon lookup, offline). The
+        // NAME stays valid through DST-policy changes (the OS tz database
+        // carries the rules); only boundary redraws would need a package bump.
+        _draft.timezone = tz_map.latLngToTimezoneString(loc.lat, loc.lng);
         _gpsFill++; // remount the fields so the fill is visible
         _gpsStatus =
             'Filled from the server\'s GPS fix (source: ${state.source}).';
@@ -195,9 +201,10 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           onChanged: (v) => _setDouble(v, (d) => _draft.altitudeMeters = d),
         ),
         WizardTextField(
+          key: ValueKey('wiz-tz-$_gpsFill'),
           label: 'Timezone',
           initialValue: _draft.timezone,
-          hint: 'e.g. America/Chicago',
+          hint: 'e.g. America/Denver',
           onChanged: (v) => _draft.timezone = v.trim().isEmpty ? null : v.trim(),
         ),
       ],
