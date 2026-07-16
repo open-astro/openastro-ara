@@ -191,9 +191,12 @@ public sealed partial class UsbGpsTimeSyncWorker : BackgroundService {
     partial void LogEnumerationFailed(Exception ex);
 }
 
-/// <summary>Real serial source: /dev/ttyUSB* + /dev/ttyACM* at 9600-8N1 (the NMEA 0183 default
-/// virtually every USB GPS dongle ships with). Reads are pushed to a worker thread — SerialPort's
-/// ReadLine is blocking — and surfaced as an async stream.</summary>
+/// <summary>Real serial source at 9600-8N1 (the NMEA 0183 default virtually every USB GPS
+/// dongle ships with). Linux (the Pi): /dev/ttyUSB* + /dev/ttyACM*. macOS (a dev box running
+/// the daemon locally): /dev/cu.usbmodem* + /dev/cu.usbserial* — the cu.* call-out devices,
+/// not tty.* (opening a macOS tty.* blocks until DCD asserts, which a GPS never does).
+/// Reads are pushed to a worker thread — SerialPort's ReadLine is blocking — and surfaced as
+/// an async stream.</summary>
 internal sealed class SerialPortNmeaSource : ISerialNmeaSource {
 
     public IReadOnlyList<string> EnumerateDevices() {
@@ -203,6 +206,8 @@ internal sealed class SerialPortNmeaSource : ISerialNmeaSource {
         return [
             .. Directory.GetFiles("/dev", "ttyUSB*").OrderBy(p => p, StringComparer.Ordinal),
             .. Directory.GetFiles("/dev", "ttyACM*").OrderBy(p => p, StringComparer.Ordinal),
+            .. Directory.GetFiles("/dev", "cu.usbmodem*").OrderBy(p => p, StringComparer.Ordinal),
+            .. Directory.GetFiles("/dev", "cu.usbserial*").OrderBy(p => p, StringComparer.Ordinal),
         ];
     }
 
