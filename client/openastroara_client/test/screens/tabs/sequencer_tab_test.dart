@@ -41,10 +41,6 @@ class _FakeClient implements SequenceClient {
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
   @override
-  Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f,
-          {bool treatWarningsAsErrors = false}) async =>
-      const SequenceImportResult(createdSequenceId: 'new');
-  @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: _bodyFor(id));
   @override

@@ -9,7 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../util/nina_import.dart';
 import '../../theme/ara_colors.dart';
 
 /// Upper bound on a picked NINA sequence file. Real exports are KBs; 32 MiB is
@@ -137,20 +139,39 @@ Future<String?> importSequenceFromJson(
   required Map<String, dynamic> ninaJson,
 }) async {
   final api = ref.read(sequenceApiProvider);
-  if (api == null) return null;
   final messenger = ScaffoldMessenger.of(context);
 
+  // Translation is CLIENT-side (PORT_DECISIONS 2026-07-15) — the file lives on
+  // this machine; only the create is a daemon call, and offline the result
+  // lands as a local draft that pushes on reconnect.
+  final translated = translateNinaSequence(ninaJson);
+
   SequenceImportResult result;
-  try {
-    result = await api.importNina(name, ninaJson);
-  } catch (_) {
-    if (context.mounted) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't import the sequence. Check the file and connection."),
-        backgroundColor: AraColors.accentError,
-      ));
+  if (api == null) {
+    // Offline import → a local draft (§2). Same warnings surface as connected.
+    final draftId = await ref
+        .read(draftSequencesProvider.notifier)
+        .create(name, translated.body);
+    result = SequenceImportResult(
+        createdSequenceId: draftId, name: name, warnings: translated.warnings);
+  } else {
+    try {
+      final id = await api.create(name, translated.body,
+          description: 'Imported from NINA',
+          // Stable per logical import so a retried create dedupes (PR E).
+          idempotencyKey:
+              'import-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(ninaJson).toRadixString(16)}');
+      result = SequenceImportResult(
+          createdSequenceId: id, name: name, warnings: translated.warnings);
+    } catch (_) {
+      if (context.mounted) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text("Couldn't import the sequence. Check the file and connection."),
+          backgroundColor: AraColors.accentError,
+        ));
+      }
+      return null;
     }
-    return null;
   }
 
   final id = result.createdSequenceId;

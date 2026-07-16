@@ -1623,6 +1623,24 @@ CEF-149 OSR review; nothing tracks the migration except this entry + the entitle
   rerun. Two flakes in one day suggests the Analyzer-gate job's runner is timing-sensitive;
   if either recurs, widen the probe/listener timeouts under test.
 
+## 2026-07-15/16 audit execution — idempotent creates + client-side NINA import
+
+- ✅ **Idempotent creates end-to-end (PR E)**: the daemon's declared-but-ignored
+  Idempotency-Key now actually dedupes (IdempotencyCache, 24 h in-process window,
+  ghost-resurrection guard); every client create path sends a key; a DEGRADED
+  connected create stamps its key into the offline draft (DraftSequence.pushKey)
+  so the eventual push dedupes. TWIN-ALERT cross-links on the C#/Dart astronomy
+  pair; gear snapshots stamp captured_utc and the offline picker shows it.
+- ✅ **NINA import is client-side (PR F)**: lib/util/nina_import.dart ports the
+  namespace remap + schemaVersion backfill + unsupported-type warnings (computed
+  against the editor catalog — the user-facing meaning); imports land through the
+  ordinary idempotent create, or an offline DRAFT with no server at all. The
+  daemon's POST /sequences/import, PlaceholderSequenceImportService and
+  NinaImportTypeNormalizer are retired; NinaImportFidelityTest STAYS (it pins the
+  daemon's run-time deserialization of NINA-flavoured bodies, which is unchanged).
+  Note: the raw-upload audit copy under sequences/imported/ retired with the
+  endpoint — the original file remains on the user's machine.
+
 ## 2026-07-15 daemon audit — what else should be client-side (maintainer-requested)
 
 Swept all ~135 daemon services against the PORT_DECISIONS client-planning rule.

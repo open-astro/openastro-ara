@@ -10,7 +10,9 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_import.dart';
 
-/// importNina returns a configured result (or throws); records what was sent.
+/// create() returns a configured id (or throws); records what was sent —
+/// the import flow now translates CLIENT-side and lands via the ordinary
+/// idempotent create (PORT_DECISIONS 2026-07-15).
 class _ImportClient implements SequenceClient {
   @override
   Future<String> decideAutoFlats(String id,
@@ -21,21 +23,11 @@ class _ImportClient implements SequenceClient {
   @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
-  _ImportClient({this.result, this.throwOnImport = false});
-  final SequenceImportResult? result;
+  _ImportClient({this.throwOnImport = false});
   final bool throwOnImport;
   String? lastName;
   Map<String, dynamic>? lastBody;
-
-  @override
-  Future<SequenceImportResult> importNina(String name, Map<String, dynamic> file,
-      {bool treatWarningsAsErrors = false}) async {
-    lastName = name;
-    lastBody = file;
-    if (throwOnImport) throw Exception('boom');
-    return result ??
-        const SequenceImportResult(createdSequenceId: 'imp-1', name: 'Imported');
-  }
+  String? lastKey;
 
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
@@ -71,8 +63,13 @@ class _ImportClient implements SequenceClient {
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
   Future<String> create(String name, Map<String, dynamic> body,
-          {String? description, String? idempotencyKey}) async =>
-      'new-seq';
+      {String? description, String? idempotencyKey}) async {
+    lastName = name;
+    lastBody = body;
+    lastKey = idempotencyKey;
+    if (throwOnImport) throw Exception('boom');
+    return 'imp-1';
+  }
   @override
   void close() {}
 }
@@ -84,7 +81,8 @@ void main() {
   late String? returnedId;
   late bool returned;
 
-  Future<ProviderContainer> pump(WidgetTester tester, _ImportClient client) async {
+  Future<ProviderContainer> pump(WidgetTester tester, _ImportClient client,
+      {Map<String, dynamic> ninaJson = const {'Name': 'M42'}}) async {
     returnedId = null;
     returned = false;
     final container = ProviderContainer(overrides: [
@@ -99,7 +97,7 @@ void main() {
             return ElevatedButton(
               onPressed: () async {
                 final id = await importSequenceFromJson(context, ref,
-                    name: 'M42', ninaJson: const {'Name': 'M42'});
+                    name: 'M42', ninaJson: ninaJson);
                 returnedId = id;
                 returned = true;
               },
@@ -112,39 +110,37 @@ void main() {
     return container;
   }
 
-  testWidgets('a clean import selects the new sequence + confirms', (tester) async {
-    final container = await pump(
-        tester, _ImportClient(result: const SequenceImportResult(
-            createdSequenceId: 'imp-9', name: 'M42 imported')));
+  testWidgets('a clean ARA re-import selects the new sequence + confirms',
+      (tester) async {
+    // schemaVersion present + no NINA types → no warnings → plain SnackBar.
+    final container = await pump(tester, _ImportClient(),
+        ninaJson: const {'schemaVersion': 'openastroara-sequence-v1', 'Name': 'M42'});
     await tester.tap(find.text('import'));
     await tester.pumpAndSettle();
 
-    expect(container.read(selectedSequenceIdProvider), 'imp-9');
-    expect(find.textContaining('Imported "M42 imported"'), findsOneWidget); // SnackBar
+    expect(container.read(selectedSequenceIdProvider), 'imp-1');
+    expect(find.textContaining('Imported "M42"'), findsOneWidget); // SnackBar
     // Returns the created id so the caller knows the import succeeded (→ closes
     // the Load dialog).
     expect(returned, isTrue);
-    expect(returnedId, 'imp-9');
+    expect(returnedId, 'imp-1');
   });
 
-  testWidgets('a lossy import shows the warnings dialog', (tester) async {
-    final container = await pump(
-        tester,
-        _ImportClient(
-            result: const SequenceImportResult(
-          createdSequenceId: 'imp-2',
-          name: 'M42',
-          lossyTranslation: true,
-          droppedInstructionTypes: ['NINA.X.Foo'],
-          warnings: ['Approximated a trigger'],
-        )));
+  testWidgets('a raw NINA import shows the local translation warnings dialog',
+      (tester) async {
+    // No schemaVersion + an editor-unknown NINA type → both warnings, locally.
+    final container = await pump(tester, _ImportClient(), ninaJson: const {
+      r'$type': 'NINA.Sequencer.SequenceItem.Exotic.PulseLaser, NINA.Sequencer',
+      'Name': 'M42',
+    });
     await tester.tap(find.text('import'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('with warnings'), findsOneWidget);
-    expect(find.textContaining('NINA.X.Foo'), findsOneWidget);
+    expect(find.textContaining('PulseLaser'), findsOneWidget);
+    expect(find.textContaining('schemaVersion was missing'), findsOneWidget);
     // Still selected the new sequence.
-    expect(container.read(selectedSequenceIdProvider), 'imp-2');
+    expect(container.read(selectedSequenceIdProvider), 'imp-1');
   });
 
   testWidgets('an import failure shows a SnackBar and selects nothing',
@@ -160,13 +156,22 @@ void main() {
     expect(returnedId, isNull);
   });
 
-  testWidgets('sends the NINA body + name to the API', (tester) async {
+  testWidgets('creates via the ordinary endpoint: translated body + a key',
+      (tester) async {
     final client = _ImportClient();
-    await pump(tester, client);
+    await pump(tester, client, ninaJson: const {
+      r'$type': 'NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer',
+      'Name': 'M42',
+    });
     await tester.tap(find.text('import'));
     await tester.pumpAndSettle();
     expect(client.lastName, 'M42');
-    expect(client.lastBody, const {'Name': 'M42'});
+    expect(client.lastBody![r'$type'],
+        'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        reason: 'the body arrives TRANSLATED — no daemon-side normalizer left');
+    expect(client.lastBody!['schemaVersion'], isNotNull);
+    expect(client.lastKey, startsWith('import-'),
+        reason: 'imports ride the idempotent create (PR E)');
   });
 
   group('readNinaSequenceFile', () {

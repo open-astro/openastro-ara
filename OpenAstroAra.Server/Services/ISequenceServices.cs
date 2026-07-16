@@ -123,10 +123,6 @@ public interface ISequenceTemplateService {
     Task<SequenceDto> InstantiateAsync(string templateName, TemplateInstantiateRequestDto request, CancellationToken ct);
 }
 
-/// <summary>NINA sequence-file import per §38.4. Lossy translation flagged on response.</summary>
-public interface ISequenceImportService {
-    Task<SequenceImportResultDto> ImportAsync(SequenceImportRequestDto request, CancellationToken ct);
-}
 
 /// <summary>Auto-flats interactive prompt per §48. Captures user decision mid-sequence.</summary>
 public interface IAutoFlatsService {

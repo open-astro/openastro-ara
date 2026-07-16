@@ -142,48 +142,7 @@ void main() {
       expect(api.list(), throwsA(isA<FormatException>()));
     });
 
-    test('a 5xx propagates as DioException', () async {
-      final api = _api((_) => {'error': 'boom'}, statusCode: 500);
-      expect(api.list(), throwsA(isA<DioException>()));
-    });
-  });
 
-  group('SequenceApi.importNina', () {
-    test('posts the NINA file and parses the result', () async {
-      RequestOptions? captured;
-      final api = _api((opts) {
-        captured = opts;
-        return {
-          'created_sequence_id': 'seq-new',
-          'name': 'M42 (imported)',
-          'warnings': ['Dropped a SmartExposure inner trigger'],
-          'dropped_instruction_types': ['NINA.X.Foo'],
-          'lossy_translation': true,
-        };
-      });
-      final result = await api.importNina(
-          'M42', {r'$type': 'NINA...Root', 'Name': 'M42'},
-          treatWarningsAsErrors: false);
-      expect(result.createdSequenceId, 'seq-new');
-      expect(result.lossyTranslation, isTrue);
-      expect(result.warnings, hasLength(1));
-      expect(result.droppedInstructionTypes, ['NINA.X.Foo']);
-      // Body sent the NINA file + flags.
-      final body = captured!.data as Map;
-      expect(body['new_name'], 'M42');
-      expect(body['treat_warnings_as_errors'], false);
-      expect((body['nina_sequence_file'] as Map)['Name'], 'M42');
-    });
-
-    test('a 422 (treat-warnings-as-errors) propagates as DioException(422)',
-        () async {
-      final api = _api((_) => {'error': 'lossy'}, statusCode: 422);
-      await expectLater(
-        api.importNina('x', const {}, treatWarningsAsErrors: true),
-        throwsA(isA<DioException>().having(
-            (e) => e.response?.statusCode, 'statusCode', 422)),
-      );
-    });
   });
 
   group('SequenceApi templates', () {

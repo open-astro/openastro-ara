@@ -42,10 +42,6 @@ class _RecordingClient implements SequenceClient {
   @override
   Future<SequencePage> list({int limit = 50}) => throw UnimplementedError();
   @override
-  Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f,
-          {bool treatWarningsAsErrors = false}) =>
-      throw UnimplementedError();
-  @override
   Future<List<SequenceTemplate>> listTemplates() => throw UnimplementedError();
   @override
   Future<String> instantiateTemplate(String t, String n) =>

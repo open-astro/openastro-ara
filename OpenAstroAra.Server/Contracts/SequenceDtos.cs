@@ -146,19 +146,7 @@ public sealed record SequenceValidationResultDto(
     bool Valid,
     string? Reason);
 
-/// <summary>POST /api/v1/sequences/import body per §38.4.</summary>
-public sealed record SequenceImportRequestDto(
-    string NewName,
-    System.Text.Json.JsonElement NinaSequenceFile,
-    bool TreatWarningsAsErrors);
 
-/// <summary>Result of NINA import (§38.4). Warnings explain dropped/translated instructions.</summary>
-public sealed record SequenceImportResultDto(
-    Guid CreatedSequenceId,
-    string Name,
-    IReadOnlyList<string> Warnings,
-    IReadOnlyList<string> DroppedInstructionTypes,
-    bool LossyTranslation);
 
 /// <summary>Result of POST /api/v1/sequences/{id}/share-export (§70.5). The share
 /// JSON rides inline in <see cref="Manifest"/> — the client writes it straight to
