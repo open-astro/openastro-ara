@@ -8,6 +8,7 @@ import '../../../models/profile_draft.dart';
 import '../../../services/equipment_device_api.dart' show EquipmentDeviceClient;
 import '../../../state/equipment/camera_state.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
+import '../../../state/equipment/focuser_state.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../util/host_port.dart';
@@ -17,6 +18,7 @@ import '../../../models/server.dart';
 import '../../../services/camera_geometry_api.dart';
 import '../../../services/equipment_discovery_api.dart';
 import '../../../services/filter_wheel_names_api.dart';
+import '../../../services/focuser_props_api.dart';
 import '../../../services/telescope_optics_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -654,22 +656,95 @@ class ScreenFocuser extends ConsumerStatefulWidget {
 
 class _ScreenFocuserState extends ConsumerState<ScreenFocuser> {
   late final FocuserSettings _f = _draftOf(ref).focuser;
+  // Re-seeds the (uncontrolled) step-size field after a refresh — same
+  // pattern as the telescope screen.
+  int _seed = 0;
+  bool _refreshing = false;
+
+  Future<void> _refreshFromFocuser() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the focuser.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      var props = await FocuserPropsApi(server).read();
+      if (!mounted) return;
+      props ??= await _connectAssignedThenRead(
+        ref, server,
+        type: EquipmentDeviceType.focuser,
+        assignedId: _draftOf(ref).equipment.focuserDeviceId,
+        apiFactory: ref.read(focuserApiFactoryProvider),
+        read: () => FocuserPropsApi(server).read(),
+        isMounted: () => mounted,
+      );
+      if (!mounted) return;
+      if (props == null) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('No focuser connected. Assign one on the Discover '
+                'step (it will be connected automatically).')));
+        return;
+      }
+      final p = props;
+      setState(() {
+        if (p.stepSizeUm != null) _f.stepSizeMicrons = p.stepSizeUm;
+        _seed++;
+      });
+      messenger.showSnackBar(SnackBar(
+          content: Text(p.stepSizeUm != null
+              ? 'Filled step size from the connected focuser.'
+              : 'The focuser driver doesn\'t report its step size (most '
+                  'don\'t) — it\'s fine to leave it blank.'
+              '${p.canTempComp ? '' : ' It also has no temperature-'
+                  'compensation support, so leave that off.'}')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+            content: Text('Could not read the focuser: ${_describeError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 7,
-      intro: 'Step size and backlash compensation. Values are pulled from '
-          'Alpaca where the driver reports them.',
+      intro: 'Step size and backlash compensation. Every field here is '
+          'OPTIONAL — autofocus works in raw steps, so if you don\'t know a '
+          'value, leave it blank and refine it later in Settings.',
       children: [
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected focuser',
+          busy: _refreshing,
+          onPressed: _refreshFromFocuser,
+        ),
         WizardTextField(
+          key: ValueKey('wiz-focuser-step-$_seed'),
           label: 'Step size (µm/step)',
           initialValue: _f.stepSizeMicrons?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
+          helperText: 'From the motor\'s spec sheet if the driver doesn\'t '
+              'report it. Only used for display — blank is fine.',
           onChanged: (v) => _assignDouble(v, (d) => _f.stepSizeMicrons = d),
         ),
         const WizardSectionHeader('Backlash compensation'),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Don\'t know your backlash? Leave both at 0 — the first '
+            'autofocus runs will show it as a lopsided V-curve, and you can '
+            'measure it then: move the focuser far in one direction, reverse, '
+            'and count the steps before the star size actually changes. '
+            'Typical geared focusers: 0–200 steps.',
+            style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+          ),
+        ),
         WizardTextField(
           label: 'In steps',
           initialValue: _f.backlashInSteps?.toString(),
@@ -685,6 +760,15 @@ class _ScreenFocuserState extends ConsumerState<ScreenFocuser> {
           onChanged: (v) => _f.backlashOutSteps = _toInt(v),
         ),
         const WizardSectionHeader('Temperature compensation'),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Leave OFF unless your focuser supports it and you already know '
+            'the slope — re-running autofocus on a schedule (set later, in '
+            'the Autofocus step) handles temperature drift for most rigs.',
+            style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
+          ),
+        ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enable temperature compensation'),
