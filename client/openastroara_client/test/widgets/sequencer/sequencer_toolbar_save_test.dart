@@ -79,10 +79,6 @@ class _SaveClient implements SequenceClient {
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async => _detail(id);
   @override
-  Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f,
-          {bool treatWarningsAsErrors = false}) async =>
-      const SequenceImportResult(createdSequenceId: 'new');
-  @override
   Future<SequenceNode> getSequence(String id) async =>
       SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: id);
   @override

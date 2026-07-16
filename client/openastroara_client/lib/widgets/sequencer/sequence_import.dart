@@ -4,12 +4,15 @@ import 'dart:convert';
 // (file bytes via file_picker's `bytes`) if web is ever supported.
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
+import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../util/nina_import.dart';
 import '../../theme/ara_colors.dart';
 
 /// Upper bound on a picked NINA sequence file. Real exports are KBs; 32 MiB is
@@ -137,16 +140,55 @@ Future<String?> importSequenceFromJson(
   required Map<String, dynamic> ninaJson,
 }) async {
   final api = ref.read(sequenceApiProvider);
-  if (api == null) return null;
   final messenger = ScaffoldMessenger.of(context);
+
+  // Translation is CLIENT-side (PORT_DECISIONS 2026-07-15) — the file lives on
+  // this machine; only the create is a daemon call, and offline the result
+  // lands as a local draft that pushes on reconnect.
+  final translated = translateNinaSequence(ninaJson);
+
+  // Stable per logical import so a retried create dedupes (PR E) — minted
+  // BEFORE the branch so a degraded connected create can stamp the same key
+  // into the fallback draft (the eventual push then dedupes server-side even
+  // if the "failed" create actually landed).
+  final importKey =
+      'import-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(ninaJson).toRadixString(16)}';
+
+  // Save the translated body as a local draft (the offline path, and the
+  // degraded-connected fallback). Throws on a failed disk write.
+  Future<SequenceImportResult> saveAsDraft() async {
+    final draftId = await ref
+        .read(draftSequencesProvider.notifier)
+        .create(name, translated.body, pushKey: importKey);
+    return SequenceImportResult(
+        createdSequenceId: draftId, name: name, warnings: translated.warnings);
+  }
 
   SequenceImportResult result;
   try {
-    result = await api.importNina(name, ninaJson);
+    if (api == null) {
+      // Offline import → a local draft (§2). Same warnings surface as connected.
+      result = await saveAsDraft();
+    } else {
+      try {
+        final id = await api.create(name, translated.body,
+            description: 'Imported from NINA', idempotencyKey: importKey);
+        result = SequenceImportResult(
+            createdSequenceId: id, name: name, warnings: translated.warnings);
+      } on DioException catch (e) {
+        // A saved server isn't a reachable server. Pure transport failure
+        // (no response at all) → degrade to a local draft, same as
+        // create_imaging_run: the translation isn't lost, and the draft's
+        // stamped pushKey dedupes if the create actually landed.
+        if (e.response != null) rethrow;
+        result = await saveAsDraft();
+      }
+    }
   } catch (_) {
     if (context.mounted) {
       messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't import the sequence. Check the file and connection."),
+        content:
+            Text("Couldn't import the sequence. Check the file and connection."),
         backgroundColor: AraColors.accentError,
       ));
     }

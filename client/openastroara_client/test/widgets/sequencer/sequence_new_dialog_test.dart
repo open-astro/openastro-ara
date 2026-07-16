@@ -47,10 +47,6 @@ class _NewClient implements SequenceClient {
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
   @override
-  Future<SequenceImportResult> importNina(String name, Map<String, dynamic> file,
-          {bool treatWarningsAsErrors = false}) async =>
-      const SequenceImportResult(createdSequenceId: 'imp');
-  @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: const {});
   @override

@@ -33,9 +33,6 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static class SequenceEndpoints {
 
-    // Import-replay cache — see the /import handler. Static: endpoint mapping is
-    // once-per-process and the cache is deliberately in-process (IdempotencyCache docs).
-    private static readonly IdempotencyCache<SequenceImportResultDto> ImportReplays = new();
 
     private static IResult NotImplementedStub(string endpoint, string section) =>
         Results.Problem(
@@ -205,19 +202,12 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName("InstantiateSequenceTemplate");
 
-        // Phase 13.15 — NINA import (§38.4) wired to ISequenceImportService.
-        seq.MapPost("/import",
-                async ([FromBody] SequenceImportRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequenceImportService svc, CancellationToken ct) => {
-                    // The one create-style POST that never declared the key (2026-07-15
-                    // audit). Single-flight: a retry racing the still-running
-                    // original joins it (#853 review) instead of double-importing.
-                    var result = await ImportReplays.GetOrRunAsync(key, () => svc.ImportAsync(request, ct));
-                    return Results.Created($"/api/v1/sequences/{result.CreatedSequenceId}", result);
-                })
-           .Accepts<SequenceImportRequestDto>("application/json")
-           .Produces<SequenceImportResultDto>(StatusCodes.Status201Created)
-           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-           .WithName("ImportNinaSequence");
+        // POST /sequences/import was REMOVED (PORT_DECISIONS 2026-07-15, PR F):
+        // the NINA translation is client-side Dart (lib/util/nina_import.dart) —
+        // the file lives on the client machine, and the import lands through the
+        // ordinary idempotent create (or an offline draft). The daemon still
+        // LOADS NINA-flavoured bodies at run time via JsonCreationConverter.
+
 
         // Sharing (§70) — Phase 13.13 wired to ISequenceService.
         seq.MapPost("/{id:guid}/share-export",
