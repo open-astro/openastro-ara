@@ -107,6 +107,10 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
         mosaicTilesX: mosaicX,
         mosaicTilesY: mosaicY,
         atUtc: at,
+        // 30 (was the default 10): the panel scrolls, and a filter set that
+        // spans broadband + narrowband makes far more of the sky worth
+        // listing — a 10-row cap hid the variety the scoring surfaces.
+        limit: 30,
       ));
 });
 

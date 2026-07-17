@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
@@ -157,6 +158,36 @@ void main() {
     final small = rank(14).single.score!;
     expect(fills, greaterThan(goodFit));
     expect(goodFit, greaterThan(small));
+  });
+
+  test('type + filter-capability adjust the score, advisory-sized', () {
+    final night = DateTime.utc(2026, 10, 15, 3);
+    PlanningDso typed(String id, String type) => PlanningDso(
+        id: id, name: id, type: type, magnitude: 5.0,
+        raDeg: 314.75, decDeg: 44.33,
+        sizeMajArcmin: 60, sizeMinArcmin: 60);
+    const nb = FilterSetSettings(filters: [
+      PlanningFilter(name: 'Ha', kind: FilterKind.ha),
+      PlanningFilter(name: 'L', kind: FilterKind.l),
+    ]);
+    const broadOnly = FilterSetSettings(filters: [
+      PlanningFilter(name: 'L', kind: FilterKind.l),
+    ]);
+    double scoreOf(String type, FilterSetSettings fs) => computeTonightSkyLocal(
+            site: site,
+            optics: optics,
+            atUtc: night,
+            filterSet: fs,
+            catalog: [typed('x', type)])
+        .single
+        .score!;
+
+    // Same geometry/brightness: an open cluster ranks below an HII region.
+    expect(scoreOf('OCl', nb), lessThan(scoreOf('HII', nb)));
+    // An emission target scores higher WITH narrowband glass than without.
+    expect(scoreOf('HII', broadOnly), lessThan(scoreOf('HII', nb)));
+    // Continuum targets are untouched by the filter factor.
+    expect(scoreOf('G', broadOnly), scoreOf('G', nb));
   });
 
   test('custom horizon skyline gates per azimuth', () {

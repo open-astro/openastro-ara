@@ -328,8 +328,48 @@ List<TonightSkyObject> computeTonightSkyLocal({
       }
     }
 
+    // §36.8 framing review round 2 — two gentle multiplicative adjustments so
+    // the ordering matches how imagers actually pick targets:
+    //  * Photogenic-type factor: sparse OPEN clusters rarely make compelling
+    //    images next to nebulae/galaxies — modest discount (globulars less
+    //    so). Advisory-sized on purpose: they stay listed, just ranked down.
+    //  * Filter-capability factor: an emission-line target with narrowband
+    //    (or duo/tri) glass in the wheel is MORE shootable than the raw score
+    //    says (light pollution / moon resilience); the same target with a
+    //    broadband-only filter set is less so.
+    var adjusted = score;
+    final adjustReasons = <String>[];
+    if (o.type == 'OCl') {
+      adjusted *= 0.85;
+      adjustReasons.add('open cluster — usually better visual than imaging '
+          'targets (−15%)');
+    } else if (o.type == 'GCl') {
+      adjusted *= 0.95;
+      adjustReasons.add('globular cluster (−5%)');
+    }
+    if (classifyEmission(o.type) == EmissionClass.emissionLine &&
+        filterSet.filters.isNotEmpty) {
+      final hasNarrowband = filterSet.filters.any((f) =>
+          f.kind == FilterKind.ha ||
+          f.kind == FilterKind.oiii ||
+          f.kind == FilterKind.sii ||
+          f.kind == FilterKind.duo ||
+          f.kind == FilterKind.tri);
+      if (hasNarrowband) {
+        adjusted *= 1.05;
+        adjustReasons
+            .add('emission target + narrowband in your wheel (+5%)');
+      } else {
+        adjusted *= 0.85;
+        adjustReasons.add(
+            'emission target but no narrowband filter in your set (−15%)');
+      }
+    }
+    final finalScore = adjusted.clamp(0.0, 100.0);
+
     final allReasons = [
       ...reasons,
+      ...adjustReasons,
       ...adviceLines,
       if (moonUpFraction > 0)
         'moon ${moonSeparationDeg.toStringAsFixed(0)}° away, '
@@ -346,7 +386,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     ];
 
     scored.add((
-      score,
+      finalScore,
       TonightSkyObject(
         id: o.id,
         name: o.name,
@@ -366,7 +406,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         integrationHours: double.parse(integrationHours.toStringAsFixed(2)),
         remainingHours: double.parse(remainingHours.toStringAsFixed(2)),
         framing: framing,
-        score: double.parse(score.toStringAsFixed(1)),
+        score: double.parse(finalScore.toStringAsFixed(1)),
         scoreReasons: allReasons,
         filterAdvice: advice,
         adviceReason: adviceReason,
