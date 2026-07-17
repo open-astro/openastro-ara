@@ -322,10 +322,11 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
             ),
             if (hasReasons && _showReasons)
               Padding(
-                // Top 3 / bottom 10 (was 0/6): the first bullet sat flush under
-                // the actions row and the SharpCap attribution's descenders
-                // clipped at the card edge (live-walkthrough screenshot).
-                padding: const EdgeInsets.fromLTRB(4, 3, 4, 10),
+                // Top 8 / bottom 10 (was 0/6): the first bullet ("fills the
+                // frame") sat flush against the section's top edge and the
+                // SharpCap attribution's descenders clipped at the card edge
+                // (live-walkthrough screenshots, rounds 2-3).
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
