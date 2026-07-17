@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
 
             using var svc = new SwitchService();
 
-            var n = device!.AlpacaDeviceNumber;
+            var n = device!.UniqueId;
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var connected = await PollUntilAsync(svc, n, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected, Is.Not.Null, "connection never left the Connecting state");
@@ -103,7 +103,7 @@ namespace OpenAstroAra.Test {
             Assert.That(device, Is.Not.Null, "no Switch device discovered from the running OmniSim");
 
             using var svc = new SwitchService();
-            var n = device!.AlpacaDeviceNumber;
+            var n = device!.UniqueId;
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var connected = await PollUntilAsync(svc, n, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
@@ -163,27 +163,27 @@ namespace OpenAstroAra.Test {
             return null;
         }
 
-        private static async Task<SwitchDto?> PollUntilAsync(SwitchService svc, int deviceNumber, Func<EquipmentConnectionState, bool> predicate) {
+        private static async Task<SwitchDto?> PollUntilAsync(SwitchService svc, string deviceId, Func<EquipmentConnectionState, bool> predicate) {
             for (var i = 0; i < 50; i++) {
-                var dto = await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
+                var dto = await svc.GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
                 if (dto is not null && predicate(dto.State)) {
                     return dto;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
-            return await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
+            return await svc.GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
         }
 
-        private static async Task<SwitchPortDto?> PollUntilPortAsync(SwitchService svc, int deviceNumber, int portId, double target) {
+        private static async Task<SwitchPortDto?> PollUntilPortAsync(SwitchService svc, string deviceId, int portId, double target) {
             for (var i = 0; i < 40; i++) {
-                var dto = await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
+                var dto = await svc.GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
                 var port = dto?.Ports.FirstOrDefault(p => p.Id == portId);
                 if (port is not null && Math.Abs(port.Value - target) < 1e-6) {
                     return port;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
-            var final = await svc.GetAsync(deviceNumber, CancellationToken.None).ConfigureAwait(false);
+            var final = await svc.GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
             return final?.Ports.FirstOrDefault(p => p.Id == portId);
         }
     }

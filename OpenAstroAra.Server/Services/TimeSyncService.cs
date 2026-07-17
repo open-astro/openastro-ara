@@ -171,6 +171,11 @@ public sealed partial class TimeSyncService : ITimeSyncService {
     }
 
     private TimeSyncPushResultDto ApplyCore(string stateSource, string trust, DateTimeOffset timeUtc, TimeSyncLocationDto? location) {
+        // Normalize the fix to 2-decimal (~1 km) site precision ONCE, so the profile write and the
+        // GET-state location (which clients echo into their own fill affordances) agree exactly.
+        if (location is { } raw) {
+            location = raw with { Lat = Math.Round(raw.Lat, 2), Lng = Math.Round(raw.Lng, 2) };
+        }
         var before = Now();
         var beforeOffset = (timeUtc - before).TotalSeconds;
         var clockSet = TrySetClock(timeUtc);
@@ -236,7 +241,7 @@ public sealed partial class TimeSyncService : ITimeSyncService {
         try {
             var site = _profiles.GetSiteSettings();
             _profiles.PutSiteSettings(site with {
-                LatitudeDeg = loc.Lat,
+                LatitudeDeg = loc.Lat,   // already normalized to 2 decimals by ApplyCore
                 LongitudeDeg = loc.Lng,
                 // Null altitude = unknown (an RMC-only GPS fix) — keep whatever the profile has
                 // rather than silently zeroing the elevation every twilight calc depends on.

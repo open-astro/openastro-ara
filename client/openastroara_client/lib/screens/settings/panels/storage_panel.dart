@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
@@ -20,8 +21,8 @@ class StoragePanel extends ConsumerStatefulWidget {
   ConsumerState<StoragePanel> createState() => _StoragePanelState();
 }
 
-class _StoragePanelState extends ConsumerState<StoragePanel> {
-  bool _saving = false;
+class _StoragePanelState extends ConsumerState<StoragePanel>
+    with PanelSaveRegistration {
   String? _lastError;
 
   @override
@@ -40,6 +41,9 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
     }
   }
 
+  @override
+  Future<void> panelSave() => _save();
+
   Future<void> _save() async {
     final messenger = ScaffoldMessenger.of(context);
     // §29 — block an inverted disk-space pair before it reaches the daemon (the server also rejects it 400).
@@ -49,16 +53,11 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
-    setState(() {
-      _saving = true;
-      _lastError = null;
-    });
+    setState(() => _lastError = null);
     final api = _api();
     if (api == null) {
-      setState(() {
-        _saving = false;
-        _lastError = 'No active server — connect to a daemon first.';
-      });
+      setState(
+          () => _lastError = 'No active server — connect to a daemon first.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -72,8 +71,6 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
       if (!mounted) return;
       setState(() => _lastError = 'Save failed: $e');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -214,22 +211,8 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
           ),
           const SizedBox(height: 12),
         ],
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save, size: 16),
-              label: Text(_saving ? 'Saving…' : 'Save'),
-            ),
-          ],
-        ),
+        // Save lives in the settings-shell header (PanelSaveRegistration) —
+        // fixed chrome, always visible, no scrolling to find it.
         const SizedBox(height: 24),
         const SettingsSectionHeader('Real-time frame backup (§44)'),
         Consumer(builder: (context, ref, _) {

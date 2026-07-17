@@ -96,14 +96,29 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     // wrong power hub is worse than skipping the write). Caller holds _gate.
     private SwitchConnection? TargetConnectionLocked(int alpacaDeviceNumber) {
         if (alpacaDeviceNumber >= 0) {
-            return _connections.TryGetValue(alpacaDeviceNumber, out var exact)
-                && exact.State == EquipmentConnectionState.Connected && exact.Client is not null
-                ? exact : null;
+            // The map is keyed by UniqueId now (device numbers can repeat across hosts), but the
+            // sequencer instruction still names devices by number — scan for the connected match.
+            // An AMBIGUOUS number (two live hubs sharing it) resolves to null, same as absent:
+            // writing port 3 of the wrong power hub is worse than skipping the write.
+            SwitchConnection? exact = null;
+            foreach (var conn in _connections.Values) {
+                if (conn.DeviceNumber == alpacaDeviceNumber
+                    && conn.State == EquipmentConnectionState.Connected && conn.Client is not null) {
+                    if (exact is not null) {
+                        return null; // ambiguous — refuse rather than guess
+                    }
+                    exact = conn;
+                }
+            }
+            return exact;
         }
         SwitchConnection? primary = null;
         foreach (var conn in _connections.Values) {
             if (conn.State == EquipmentConnectionState.Connected && conn.Client is not null
-                && (primary is null || conn.DeviceNumber < primary.DeviceNumber)) {
+                && (primary is null
+                    || conn.DeviceNumber < primary.DeviceNumber
+                    || (conn.DeviceNumber == primary.DeviceNumber
+                        && string.CompareOrdinal(conn.Key, primary.Key) < 0))) {
                 primary = conn;
             }
         }

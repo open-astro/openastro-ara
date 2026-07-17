@@ -37,6 +37,42 @@ class TelescopeOptics {
   }
 }
 
+/// §37 — the connected mount's wizard-relevant properties for the Mount step:
+/// the driver's device name and its fastest MoveAxis slew rate (deg/sec, the
+/// max of `move_axis_rates_deg_per_sec`; null when the mount reports no axis
+/// rates — many NotImplement MoveAxis).
+class MountProps {
+  final String? name;
+  final double? maxSlewRateDegPerSec;
+
+  const MountProps({this.name, this.maxSlewRateDegPerSec});
+
+  bool get hasAny => name != null || maxSlewRateDegPerSec != null;
+
+  /// Parse a `GET /api/v1/equipment/telescope` body, or null when no mount is
+  /// connected (same contract as [TelescopeOptics.fromTelescopeJson]).
+  static MountProps? fromTelescopeJson(Map<String, dynamic> json) {
+    if (json['state'] != 'connected') return null;
+    final rawName = json['name'];
+    final name = rawName is String && rawName.trim().isNotEmpty
+        ? rawName.trim()
+        : null;
+    double? maxRate;
+    final caps = json['capabilities'];
+    if (caps is Map<String, dynamic>) {
+      final rates = caps['move_axis_rates_deg_per_sec'];
+      if (rates is List) {
+        for (final r in rates) {
+          if (r is num && r > 0 && (maxRate == null || r > maxRate)) {
+            maxRate = r.toDouble();
+          }
+        }
+      }
+    }
+    return MountProps(name: name, maxSlewRateDegPerSec: maxRate);
+  }
+}
+
 class TelescopeOpticsApi {
   final Dio _dio;
 
@@ -59,6 +95,21 @@ class TelescopeOpticsApi {
           : null;
     } finally {
       // One-shot client: close the Dio so its connection pool isn't leaked per press.
+      _dio.close();
+    }
+  }
+
+  /// The connected mount's name + fastest slew rate, or null when none is
+  /// connected. Throws `DioException` on transport failure.
+  Future<MountProps?> readProps() async {
+    try {
+      final res =
+          await _dio.get<Map<String, dynamic>>('/api/v1/equipment/telescope');
+      final data = res.data;
+      return data is Map<String, dynamic>
+          ? MountProps.fromTelescopeJson(data)
+          : null;
+    } finally {
       _dio.close();
     }
   }

@@ -61,22 +61,22 @@ class _FakeSwitchApi implements SwitchClient {
 
 
   @override
-  Future<void> disconnect(int deviceNumber) async {
-    calls.add('disconnect:$deviceNumber');
+  Future<void> disconnect(String deviceId) async {
+    calls.add('disconnect:$deviceId');
     devices = devices
-        .map((d) => d.alpacaDeviceNumber == deviceNumber
-            ? _dev(deviceNumber, SwitchConnectionState.disconnected)
+        .map((d) => d.deviceId == deviceId
+            ? _dev(d.alpacaDeviceNumber, SwitchConnectionState.disconnected)
             : d)
         .toList();
   }
 
   @override
   Future<void> setValue({
-    required int deviceNumber,
+    required String deviceId,
     required int portId,
     required double value,
   }) async {
-    calls.add('setValue:$deviceNumber:$portId=$value');
+    calls.add('setValue:$deviceId:$portId=$value');
   }
 
   @override
@@ -260,12 +260,12 @@ void main() {
     await c.read(savedServersProvider.future);
     await c.read(switchListProvider.future);
 
-    await c.read(switchListProvider.notifier).disconnect(0);
+    await c.read(switchListProvider.notifier).disconnect('sw-0');
     await c.read(switchListProvider.notifier)
-        .setValue(deviceNumber: 1, portId: 3, value: 42.0);
+        .setValue(deviceId: 'sw-1', portId: 3, value: 42.0);
 
-    expect(api.calls, contains('disconnect:0'));
-    expect(api.calls, contains('setValue:1:3=42.0'));
+    expect(api.calls, contains('disconnect:sw-0'));
+    expect(api.calls, contains('setValue:sw-1:3=42.0'));
     final list = c.read(switchListProvider).value!;
     expect(list.firstWhere((d) => d.alpacaDeviceNumber == 0).connectionState,
         SwitchConnectionState.disconnected);

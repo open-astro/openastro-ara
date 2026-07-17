@@ -874,7 +874,7 @@ Wraps every Alpaca equipment type ARA supports (per §52, §68). Cross-refs §6 
 | `IFilterWheelMediator` | `/api/v1/equipment/filterwheel/{n}` | `FilterWheelDto`, `FilterChangeRequestDto` | `equipment.filterwheel.{connected,disconnected,state,error}`, `filterwheel.{rotating,settled}` | §6, §42 |
 | `IRotatorMediator` | `/api/v1/equipment/rotator/{n}` | `RotatorDto`, `RotatorMoveRequestDto` | `equipment.rotator.{connected,disconnected,state,error}`, `rotator.{moving,settled}` | §6, §47 |
 | `IDomeMediator` | `/api/v1/equipment/dome/{n}` | `DomeDto`, `DomeSlewRequestDto` | `equipment.dome.{connected,disconnected,state,error}`, `dome.{slewing,settled,parked}` | §6 |
-| `ISwitchMediator` | `/api/v1/equipment/switch/{n}` | `SwitchDto`, `SwitchValueRequestDto` | `equipment.switch.{connected,disconnected,state,error}`, `switch.{value_changed,value_mismatch}` | §6, §42 (value tolerance) |
+| `ISwitchMediator` | `/api/v1/equipment/switch/{id}` | `SwitchDto`, `SwitchValueRequestDto` | `equipment.switch.{connected,disconnected,state,error}`, `switch.{value_changed,value_mismatch}` | §6, §42 (value tolerance) |
 | `IWeatherMediator` (`IObservingConditions`) | `/api/v1/equipment/observingconditions/{n}` | `ObservingConditionsDto` | `equipment.observingconditions.{connected,disconnected,reading,unsafe}` | §6, §35 (weather safety) |
 | `ISafetyMonitorMediator` | `/api/v1/equipment/safetymonitor/{n}` | `SafetyMonitorDto` | `equipment.safetymonitor.{connected,disconnected,safe,unsafe}` | §6, §35 |
 | `IFlatDeviceMediator` (flat panel) | `/api/v1/equipment/flatdevice/{n}` | `FlatDeviceDto`, `FlatPanelRequestDto` | `equipment.flatdevice.{connected,disconnected,state,error}`, `flatpanel.{cover_moving,cover_settled,light_changed}` | §6, §48 |

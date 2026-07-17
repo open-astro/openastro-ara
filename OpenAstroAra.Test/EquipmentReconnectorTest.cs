@@ -45,6 +45,8 @@ namespace OpenAstroAra.Test {
             public Task RememberAsync(DiscoveredDeviceDto device, CancellationToken ct) => Task.CompletedTask;
             public Task<IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) =>
                 Task.FromResult<IReadOnlyList<DiscoveredDeviceDto>>(_devices);
+            public Task<int> ForgetAsync(DeviceType type, CancellationToken ct) =>
+                Task.FromResult(_devices.RemoveAll(d => d.Type == type));
         }
 
         // Build a reconnector whose IServiceProvider resolves the given mocked services.

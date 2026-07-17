@@ -315,19 +315,20 @@ public sealed class InMemoryProfileStore : IProfileStore {
     }
 
     // Defaults match EquipmentConnectionSettings() constructor: camera +
-    // mount + focuser + filter wheel + rotator + flat + safety on by
-    // default; dome + weather + guider off (manual connect — dome
-    // involves shutter actuation, guider starts PHD2 client).
+    // EVERY type auto-connects by default — auto-connect only attempts
+    // devices the user actually connected before (the remembered store), so
+    // an all-on default is safe for unconfigured types and matches the
+    // expectation that a working rig comes back by itself after a reboot.
     private EquipmentConnectionDto _equipmentConnection = new(
         Camera: true,
         Mount: true,
         Focuser: true,
         FilterWheel: true,
         Rotator: true,
-        Guider: false,
+        Guider: true,
         FlatPanel: true,
-        Dome: false,
-        Weather: false,
+        Dome: true,
+        Weather: true,
         SafetyMonitor: true,
         Switch: true);
 

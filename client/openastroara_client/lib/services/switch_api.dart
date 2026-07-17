@@ -12,21 +12,21 @@ abstract interface class SwitchClient {
   Future<List<SwitchDevice>> getAll();
 
   /// Connect an additional switch — does not evict the others. 202-Accepted; poll
-  /// [getAll] for the resulting state. The device's `alpaca_device_number` becomes
-  /// its address.
+  /// [getAll] for the resulting state. The device's `unique_id` becomes its
+  /// address (device NUMBERS repeat across Alpaca hosts, so they can't).
   Future<void> connect(DiscoveredDevice device);
 
-  /// Disconnect the switch at [deviceNumber] (idempotent). 202-Accepted.
-  Future<void> disconnect(int deviceNumber);
+  /// Disconnect the switch with [deviceId] (idempotent). 202-Accepted.
+  Future<void> disconnect(String deviceId);
 
   /// Reconnect every switch the daemon remembers (no re-discovery), e.g. after a
   /// gear power-cycle (`POST /api/v1/equipment/switch/reconnect`). 202-Accepted;
   /// throws a 404 when no switch has ever been connected.
   Future<void> reconnect();
 
-  /// Write [value] to [portId] of the switch at [deviceNumber]. 202-Accepted.
+  /// Write [value] to [portId] of the switch with [deviceId]. 202-Accepted.
   Future<void> setValue({
-    required int deviceNumber,
+    required String deviceId,
     required int portId,
     required double value,
   });
@@ -35,7 +35,7 @@ abstract interface class SwitchClient {
 }
 
 /// Client wrapper around the §6 multi-instance Switch surface
-/// (`/api/v1/equipment/switch[/{n}]`). Discovery of switches goes through the
+/// (`/api/v1/equipment/switch[/{id}]`). Discovery of switches goes through the
 /// shared `EquipmentDiscoveryApi` (`EquipmentDeviceType.switchDevice`); this API
 /// covers list + connect + per-device disconnect/value. Connect/disconnect/value
 /// are 202-Accepted (work runs in the background, state surfaces via `getAll`).
@@ -77,8 +77,8 @@ class SwitchApi implements SwitchClient {
   }
 
   @override
-  Future<void> disconnect(int deviceNumber) async {
-    await _dio.post<void>('$_base/$deviceNumber/disconnect');
+  Future<void> disconnect(String deviceId) async {
+    await _dio.post<void>('$_base/${Uri.encodeComponent(deviceId)}/disconnect');
   }
 
   @override
@@ -88,12 +88,12 @@ class SwitchApi implements SwitchClient {
 
   @override
   Future<void> setValue({
-    required int deviceNumber,
+    required String deviceId,
     required int portId,
     required double value,
   }) async {
     await _dio.post<void>(
-      '$_base/$deviceNumber/value',
+      '$_base/${Uri.encodeComponent(deviceId)}/value',
       data: <String, dynamic>{'port_id': portId, 'value': value},
     );
   }

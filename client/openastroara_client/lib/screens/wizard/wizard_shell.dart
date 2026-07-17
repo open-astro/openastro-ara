@@ -8,6 +8,7 @@ import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
+import 'wizard_equipment_apply.dart';
 import 'wizard_save.dart';
 import 'wizard_screens.dart';
 
@@ -156,6 +157,17 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       }
     }
 
+    // Hand the assigned equipment to the daemon while the spinner is still up:
+    // connect every assigned device (switch/weather/flat/safety/dome have no
+    // per-device wizard screen, so this is their ONLY connect) and forget the
+    // remembered device for any slot deliberately set to None (otherwise
+    // auto-connect keeps erroring on hardware the user no longer has). Skipped
+    // on save failure — the wizard stays open for a retry. Never throws.
+    var equipmentNotes = const <String>[];
+    if (error == null) {
+      equipmentNotes = await applyWizardEquipment(server, draft.equipment);
+    }
+
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
     // Clear the guard inside setState when still mounted (Flutter contract for
     // state mutations); fall back to a bare assignment if the widget is gone.
@@ -180,6 +192,16 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // Exit the wizard first, THEN notify — so if onComplete routes/pops, it can't
     // race our pop into popping an unintended route.
     if (nav.mounted) nav.pop(); // exit the wizard
+    // Profile saved fine, but some assigned devices couldn't be handed off —
+    // tell the user which, so they know to reconnect from the equipment panel.
+    if (equipmentNotes.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+            'Profile saved, but some devices didn\'t connect — '
+            '${equipmentNotes.join(' ')}'),
+        duration: const Duration(seconds: 8),
+      ));
+    }
     widget.onComplete?.call(ProfileDraftSnapshot(draft));
   }
 

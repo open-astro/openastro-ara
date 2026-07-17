@@ -60,8 +60,10 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         return;
       }
       setState(() {
-        _draft.latitudeDeg = loc.lat;
-        _draft.longitudeDeg = loc.lng;
+        // 2-decimal (~1 km) site precision: enough for ephemerides/safety
+        // limits without publishing the observer's exact backyard position.
+        _draft.latitudeDeg = _round2(loc.lat);
+        _draft.longitudeDeg = _round2(loc.lng);
         if (loc.alt != null) _draft.altitudeMeters = loc.alt;
         // GPS transmits UTC + position, never a timezone — derive the IANA
         // zone from the coordinates (worldwide polygon lookup, offline). The
@@ -80,6 +82,8 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
       if (mounted) setState(() => _gpsBusy = false);
     }
   }
+
+  static double _round2(double v) => (v * 100).roundToDouble() / 100;
 
   // Parse a possibly-empty/partial numeric field to a nullable double without
   // clobbering the stored value on transient input like "-" or "".

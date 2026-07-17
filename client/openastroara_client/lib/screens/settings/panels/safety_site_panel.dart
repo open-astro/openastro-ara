@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/panel_save_registry.dart';
+import '../../../state/time_sync_state.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -19,9 +22,11 @@ class SafetySitePanel extends ConsumerStatefulWidget {
   ConsumerState<SafetySitePanel> createState() => _SafetySitePanelState();
 }
 
-class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
-  bool _saving = false;
+class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
+    with PanelSaveRegistration {
   String? _lastError;
+  bool _gpsBusy = false;
+  String? _gpsStatus;
 
   @override
   void initState() {
@@ -42,18 +47,16 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
     }
   }
 
+  @override
+  Future<void> panelSave() => _save();
+
   Future<void> _save() async {
-    setState(() {
-      _saving = true;
-      _lastError = null;
-    });
+    setState(() => _lastError = null);
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      setState(() {
-        _saving = false;
-        _lastError = 'No active server — connect to a daemon first.';
-      });
+      setState(
+          () => _lastError = 'No active server — connect to a daemon first.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -77,10 +80,57 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
             : 'Save failed: $e',
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// Pull the server's last GPS fix (§31.3 time-sync state) into the site
+  /// fields — same source as the wizard's "Fill from GPS" (a USB dongle on
+  /// the server machine). Values still go through Save to persist.
+  Future<void> _fillFromGps() async {
+    final api = ref.read(timeSyncApiProvider);
+    if (api == null) {
+      setState(() => _gpsStatus =
+          'Not connected to a server — GPS fixes come from the dongle on the '
+          'server machine.');
+      return;
+    }
+    setState(() {
+      _gpsBusy = true;
+      _gpsStatus = null;
+    });
+    try {
+      final state = await api.getState();
+      final loc = state.location;
+      if (!mounted) return;
+      if (loc == null) {
+        setState(() => _gpsStatus =
+            'No GPS fix yet. Plug a USB GPS dongle into the computer running '
+            'Ara Server and give it a minute or two under open sky, then try '
+            'again.');
+        return;
+      }
+      final n = ref.read(siteSettingsProvider.notifier);
+      // 2-decimal (~1 km) site precision — matches the wizard's GPS fill.
+      n.setLatitudeDeg(_round2(loc.lat));
+      n.setLongitudeDeg(_round2(loc.lng));
+      final alt = loc.alt;
+      if (alt != null) n.setElevationM(alt);
+      // GPS transmits UTC + position, never a timezone — derive the IANA
+      // zone from the coordinates (offline polygon lookup).
+      n.setTimeZone(tz_map.latLngToTimezoneString(loc.lat, loc.lng));
+      setState(() => _gpsStatus =
+          'Filled from the server\'s GPS fix (source: ${state.source}). '
+          'Press Save to persist.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() =>
+          _gpsStatus = 'Couldn\'t read the server\'s GPS state — try again.');
+    } finally {
+      if (mounted) setState(() => _gpsBusy = false);
+    }
+  }
+
+  static double _round2(double v) => (v * 100).roundToDouble() / 100;
 
   ProfileApi? _api() {
     final server = ref.read(activeServerProvider);
@@ -96,6 +146,33 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Location'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('site_fill_from_gps'),
+                onPressed: _gpsBusy ? null : _fillFromGps,
+                icon: _gpsBusy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.gps_fixed, size: 18),
+                label: const Text('Fill from GPS'),
+              ),
+              if (_gpsStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _gpsStatus!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ),
+        ),
         EditableTextRow(
           label: 'Site name',
           currentValue: s.siteName,
@@ -232,22 +309,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
           ),
           const SizedBox(height: 12),
         ],
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save, size: 16),
-              label: Text(_saving ? 'Saving…' : 'Save'),
-            ),
-          ],
-        ),
+        // Save lives in the settings-shell header (PanelSaveRegistration) —
+        // fixed chrome, always visible, no scrolling to find it.
       ],
     );
   }

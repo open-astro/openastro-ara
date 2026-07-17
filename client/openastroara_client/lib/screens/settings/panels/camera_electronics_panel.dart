@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/camera_electronics_state.dart';
+import '../../../state/settings/panel_save_registry.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 
@@ -23,8 +24,7 @@ class CameraElectronicsPanel extends ConsumerStatefulWidget {
 }
 
 class _CameraElectronicsPanelState
-    extends ConsumerState<CameraElectronicsPanel> {
-  bool _saving = false;
+    extends ConsumerState<CameraElectronicsPanel> with PanelSaveRegistration {
   String? _lastError;
 
   @override
@@ -45,18 +45,16 @@ class _CameraElectronicsPanelState
     }
   }
 
+  @override
+  Future<void> panelSave() => _save();
+
   Future<void> _save() async {
-    setState(() {
-      _saving = true;
-      _lastError = null;
-    });
+    setState(() => _lastError = null);
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      setState(() {
-        _saving = false;
-        _lastError = 'No active server — connect to a daemon first.';
-      });
+      setState(
+          () => _lastError = 'No active server — connect to a daemon first.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -69,8 +67,6 @@ class _CameraElectronicsPanelState
       if (!mounted) return;
       setState(() => _lastError = 'Save failed: $e');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -183,21 +179,8 @@ class _CameraElectronicsPanelState
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
           const SizedBox(height: 12),
         ],
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.save, size: 16),
-              label: Text(_saving ? 'Saving…' : 'Save'),
-            ),
-          ],
-        ),
+        // Save lives in the settings-shell header (PanelSaveRegistration) —
+        // fixed chrome, always visible, no scrolling to find it.
       ],
     );
   }

@@ -207,11 +207,11 @@ namespace OpenAstroAra.Test {
                 HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
                 AlpacaDeviceNumber: 0, UseHttps: false);
             await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
-            await WaitForAsync(async () => (await svc.GetAsync(0, CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+            await WaitForAsync(async () => (await svc.GetAsync("switch-under-test", CancellationToken.None))?.State == EquipmentConnectionState.Connected,
                 TimeSpan.FromSeconds(15), "switch never connected");
 
             // Command the heater ON; the device accepts the PUT and keeps reading 0.
-            await svc.SetValueAsync(0, new SwitchValueRequestDto(PortId: 0, Value: 1.0), CancellationToken.None);
+            await svc.SetValueAsync("switch-under-test", new SwitchValueRequestDto(PortId: 0, Value: 1.0), CancellationToken.None);
 
             // Settle (5 s) + 3 bad ticks (~6 s) → the §42.2 re-command (which the stuck device
             // also ignores) → re-armed settle (5 s) + 3 bad ticks (~6 s) → the fault.
@@ -259,7 +259,7 @@ namespace OpenAstroAra.Test {
                 HostName: proxy.BaseUri.Host, IpAddress: proxy.BaseUri.Host, IpPort: proxy.BaseUri.Port,
                 AlpacaDeviceNumber: 0, UseHttps: false);
             await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
-            await WaitForAsync(async () => (await svc.GetAsync(0, CancellationToken.None))?.Ports.Count > 0,
+            await WaitForAsync(async () => (await svc.GetAsync("switch-under-test", CancellationToken.None))?.Ports.Count > 0,
                 TimeSpan.FromSeconds(15), "the port cache never populated");
 
             // The write path dies (connection dropped on the PUT only — reads stay healthy, so

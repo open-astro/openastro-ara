@@ -226,7 +226,7 @@ class _SwitchCard extends ConsumerWidget {
             const Divider(height: 20, color: AraColors.border),
             if (device.isConnected && device.ports.isNotEmpty)
               for (final p in device.ports)
-                _PortRow(deviceNumber: device.alpacaDeviceNumber, port: p)
+                _PortRow(deviceId: device.deviceId, port: p)
             else
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -246,7 +246,7 @@ class _SwitchCard extends ConsumerWidget {
   Future<void> _disconnect(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(switchListProvider.notifier).disconnect(device.alpacaDeviceNumber);
+      await ref.read(switchListProvider.notifier).disconnect(device.deviceId);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text("Couldn't disconnect: ${_msg(e)}"),
@@ -259,9 +259,9 @@ class _SwitchCard extends ConsumerWidget {
 /// A single port. Boolean writable → a toggle; value writable → a slider;
 /// read-only → the value as text.
 class _PortRow extends ConsumerStatefulWidget {
-  final int deviceNumber;
+  final String deviceId;
   final SwitchPort port;
-  const _PortRow({required this.deviceNumber, required this.port});
+  const _PortRow({required this.deviceId, required this.port});
 
   @override
   ConsumerState<_PortRow> createState() => _PortRowState();
@@ -283,7 +283,7 @@ class _PortRowState extends ConsumerState<_PortRow> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(switchListProvider.notifier).setValue(
-            deviceNumber: widget.deviceNumber,
+            deviceId: widget.deviceId,
             portId: widget.port.id,
             value: value,
           );

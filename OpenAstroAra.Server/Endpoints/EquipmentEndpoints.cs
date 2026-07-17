@@ -303,24 +303,26 @@ public static class EquipmentEndpoints {
         // List every connected/known switch ([] when none).
         sw.MapGet("", async (ISwitchService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetAllAsync(ct)));
-        // One switch by device number (404 when not present).
-        sw.MapGet("/{n:int}", async (int n, ISwitchService svc, CancellationToken ct) => {
-            var dto = await svc.GetAsync(n, ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        // One switch by its Alpaca UniqueId (404 when not present). Device NUMBERS can repeat across
+        // hosts (two hubs, both device 0), so the id — globally unique — is the address. Ids are
+        // URL-encoded by the client; ASP.NET decodes the route value.
+        sw.MapGet("/{id}", async (string id, ISwitchService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(id, ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
-        // Connect an ADDITIONAL switch (no longer evicts the others). The device's AlpacaDeviceNumber
+        // Connect an ADDITIONAL switch (no longer evicts the others). The device's UniqueId
         // (in the body's DiscoveredDeviceDto) becomes its address.
         sw.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) =>
             await ConnectAndRememberAsync(request, selectionStore, () => svc.ConnectAsync(request, key, ct), ct));
         // Disconnect is idempotent (like every device's disconnect): an unknown/already-disconnected
-        // device number is a no-op 202, not a 404.
-        sw.MapPost("/{n:int}/disconnect", async (int n, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.DisconnectAsync(n, key, ct)));
+        // device id is a no-op 202, not a 404.
+        sw.MapPost("/{id}/disconnect", async (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(id, key, ct)));
         // A write needs a live switch, so the errors map (per the file's convention): an out-of-range
-        // PortId → 400; no connected switch at {n} (unknown number or not Connected) → 409 Conflict —
+        // PortId → 400; no connected switch at {id} (unknown id or not Connected) → 409 Conflict —
         // instead of an opaque 500.
-        sw.MapPost("/{n:int}/value", async (int n, [FromBody] SwitchValueRequestDto request, ISwitchService svc, CancellationToken ct) => {
+        sw.MapPost("/{id}/value", async (string id, [FromBody] SwitchValueRequestDto request, ISwitchService svc, CancellationToken ct) => {
             try {
-                await svc.SetValueAsync(n, request, ct);
+                await svc.SetValueAsync(id, request, ct);
                 return Results.Accepted();
             } catch (System.ArgumentException ex) {
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
@@ -428,6 +430,21 @@ public static class EquipmentEndpoints {
         safety.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.SafetyMonitor, ct));
         flat.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.CoverCalibrator, ct));
 
+        // ─── Forget remembered selection (§52.1) ───
+        // Clear the remembered device(s) for the type so auto-connect-on-boot stops attempting
+        // hardware the user no longer has (e.g. the wizard's slot was set to "None"). Idempotent
+        // 204 either way — "nothing was remembered" and "now forgotten" both leave the same state.
+        camera.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Camera, ct));
+        telescope.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Telescope, ct));
+        focuser.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Focuser, ct));
+        filterwheel.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.FilterWheel, ct));
+        rotator.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Rotator, ct));
+        dome.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Dome, ct));
+        sw.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Switch, ct));
+        oc.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.ObservingConditions, ct));
+        safety.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.SafetyMonitor, ct));
+        flat.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.CoverCalibrator, ct));
+
         return app;
     }
 
@@ -442,6 +459,11 @@ public static class EquipmentEndpoints {
     internal static int ScaleAutofocusProgress(double progress, int maxProgress, int totalSteps) {
         var scaled = (int)System.Math.Round(progress / maxProgress * totalSteps);
         return System.Math.Clamp(scaled, 1, totalSteps);
+    }
+
+    private static async Task<IResult> ForgetRememberedAsync(IEquipmentSelectionStore store, DeviceType type, CancellationToken ct) {
+        await store.ForgetAsync(type, ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> ReconnectAsync(IEquipmentReconnector reconnector, DeviceType type, CancellationToken ct) {

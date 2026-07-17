@@ -208,6 +208,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_full_precision_gps_fix_is_normalized_to_two_decimals_everywhere() {
+            // A raw NMEA fix carries 8+ decimals of GPS noise; the profile (and the GET state
+            // clients echo into their fill affordances) must store ~1 km site precision (xx.xx).
+            var store = new InMemoryProfileStore();
+            var svc = NewService(profiles: store);
+            var raw = new TimeSyncLocationDto(Lat: 34.67111883333333, Lng: -106.7861325, Alt: 1480.1);
+
+            await svc.ApplyGpsSyncAsync(T0, raw, CancellationToken.None);
+
+            var site = store.GetSiteSettings();
+            Assert.That(site.LatitudeDeg, Is.EqualTo(34.67));
+            Assert.That(site.LongitudeDeg, Is.EqualTo(-106.79));
+            var state = await svc.GetStateAsync(CancellationToken.None);
+            Assert.That(state.Location!.Lat, Is.EqualTo(34.67), "state and profile must agree");
+            Assert.That(state.Location!.Lng, Is.EqualTo(-106.79));
+        }
+
+        [Test]
         public async Task A_gps_sync_with_an_out_of_range_position_drops_the_location_but_applies_the_time() {
             // Unlike a wire push (422), the internal GPS path must never fail on a garbled
             // position — the time is still trustworthy even when the coordinates aren't.

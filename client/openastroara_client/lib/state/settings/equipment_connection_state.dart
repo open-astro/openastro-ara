@@ -35,10 +35,10 @@ enum EquipmentDeviceType {
 }
 
 class EquipmentConnectionSettings {
-  // Single map keyed by device type. Defaults match prior panel stubs:
-  // camera + flat + safety on; dome + weather + guider off (the user usually
-  // wants to connect those manually because they involve dome shutter actuation
-  // and PHD2 startup).
+  // Single map keyed by device type. EVERY type defaults to auto-connect on:
+  // boot-time auto-connect only attempts devices the user actually connected
+  // before (the daemon's remembered store), so an all-on default is safe for
+  // unconfigured types and a working rig comes back by itself after a reboot.
   final Map<EquipmentDeviceType, bool> autoConnectOnBoot;
 
   const EquipmentConnectionSettings({
@@ -48,16 +48,16 @@ class EquipmentConnectionSettings {
       EquipmentDeviceType.focuser: true,
       EquipmentDeviceType.filterWheel: true,
       EquipmentDeviceType.rotator: true,
-      EquipmentDeviceType.guider: false,
+      EquipmentDeviceType.guider: true,
       EquipmentDeviceType.flatPanel: true,
-      EquipmentDeviceType.dome: false,
-      EquipmentDeviceType.weather: false,
+      EquipmentDeviceType.dome: true,
+      EquipmentDeviceType.weather: true,
       EquipmentDeviceType.safetyMonitor: true,
       EquipmentDeviceType.switchDevice: true,
     },
   });
 
-  bool autoConnect(EquipmentDeviceType t) => autoConnectOnBoot[t] ?? false;
+  bool autoConnect(EquipmentDeviceType t) => autoConnectOnBoot[t] ?? true;
 
   EquipmentConnectionSettings copyWithAutoConnect(
       EquipmentDeviceType t, bool v) {
