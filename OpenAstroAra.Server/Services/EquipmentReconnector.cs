@@ -92,7 +92,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         // guider wherever it lives (e.g. an SBC at :8080). Without this, a meridian
         // flip that needs guider re-calibration aborted whenever the guider was not
         // already connected (EnsureConnected saw 0 dispatched).
-        if (Normalize(type) == DeviceType.Guider) {
+        if (type.Canonical() == DeviceType.Guider) {
             try {
                 await _services.GetRequiredService<IGuiderService>()
                     .ConnectAsync(new GuiderConnectRequestDto(), null, ct).ConfigureAwait(false);
@@ -143,7 +143,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     }
 
     public async Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) {
-        switch (Normalize(type)) {
+        switch (type.Canonical()) {
             case DeviceType.Guider:
                 return (await _services.GetRequiredService<IGuiderService>().GetAsync(ct).ConfigureAwait(false))?.State;
             case DeviceType.Camera:
@@ -185,10 +185,8 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         }
     }
 
-    private static bool SameGroup(DeviceType a, DeviceType b) => Normalize(a) == Normalize(b);
-
-    private static DeviceType Normalize(DeviceType t) =>
-        t == DeviceType.FlatDevice ? DeviceType.CoverCalibrator : t;
+    // FlatDevice/CoverCalibrator collapse lives on DeviceTypeExtensions.Canonical (shared).
+    private static bool SameGroup(DeviceType a, DeviceType b) => a.Canonical() == b.Canonical();
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Reconnect dispatch for {DeviceType} '{DeviceName}' failed; the other remembered devices still get their turn.")]

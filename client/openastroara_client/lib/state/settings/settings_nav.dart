@@ -186,17 +186,6 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
     ],
   ),
   SettingsGroup(
-    id: 'skyatlas',
-    label: 'Sky Atlas',
-    panels: <SettingsPanelInfo>[
-      SettingsPanelInfo(
-        id: 'sky.data',
-        label: 'Data Manager',
-        groupId: 'skyatlas',
-      ),
-    ],
-  ),
-  SettingsGroup(
     id: 'profile',
     label: 'Profile',
     panels: <SettingsPanelInfo>[
@@ -219,6 +208,15 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       SettingsPanelInfo(
         id: 'app.monitoring',
         label: 'Monitoring',
+        groupId: 'system',
+      ),
+      // Was "Sky Atlas → Data Manager". Stellarium renders its own sky, so the
+      // atlas needs no downloads — what remains is COMPUTE data (DSO catalog
+      // for Tonight's Sky, star catalogs for plate solving, ephemerides),
+      // which is system data, not atlas imagery.
+      SettingsPanelInfo(
+        id: 'sky.data',
+        label: 'Sky data',
         groupId: 'system',
       ),
       SettingsPanelInfo(id: 'app.changelog', label: 'About', groupId: 'system'),

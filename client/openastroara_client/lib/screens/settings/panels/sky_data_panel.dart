@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/sky_atlas/data_manager_modal.dart';
 
-/// §36 Sky Atlas → Data Manager panel. The full §36.2 modal already exists
-/// from Phase 12e.1; this panel embeds a launcher + a one-paragraph
-/// orientation. Phase 12h.2c may inline the survey list directly here.
+/// §36 System → Sky data panel (was "Sky Atlas → Data Manager" pre-Stellarium:
+/// the embedded planetarium renders its own sky now, so what remains here is
+/// COMPUTE data — the catalogs planning and plate solving rank/match against,
+/// not atlas imagery). Embeds a launcher + a one-paragraph orientation for the
+/// §36.2 manager modal.
 class SkyDataPanel extends StatelessWidget {
   const SkyDataPanel({super.key});
 
@@ -20,14 +22,15 @@ class SkyDataPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Sky data — surveys, catalogs, thumbnails',
+              Text('Sky data — catalogs for planning + solving',
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
-                'Manages local downloads of HiPS sky surveys, star catalogs '
-                '(Tycho-2, GAIA DR3, UCAC4, HD, HIP), famous-target thumbnails, '
-                'and solar-system ephemerides (DE440 + MPC). Open the full '
-                'manager to browse and download.',
+                'Manages the data packages the daemon computes with: the '
+                'OpenNGC deep-sky catalog behind Tonight\'s Sky ranking and '
+                'the HYG star catalog. The planetarium itself needs no '
+                'downloads — Stellarium renders its own sky. Open the manager '
+                'to browse, download, or remove packages.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AraColors.textSecondary,
                     ),

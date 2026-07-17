@@ -42,6 +42,16 @@ public enum DeviceType {
     SafetyMonitor, Switch, ObservingConditions, CoverCalibrator, FlatDevice, Guider
 }
 
+public static class DeviceTypeExtensions {
+    /// <summary>FlatDevice/CoverCalibrator are one physical device under two tokens (ASCOM type
+    /// vs NINA concept) — canonicalize so grouping logic (reconnect, forget, fault episodes)
+    /// treats them as a single group. The one shared definition (PR #856 review): three services
+    /// each carried a private copy, and an edit to one but not the others would silently
+    /// reintroduce the mismatch this collapse exists to prevent.</summary>
+    public static DeviceType Canonical(this DeviceType t) =>
+        t == DeviceType.FlatDevice ? DeviceType.CoverCalibrator : t;
+}
+
 /// <summary>Connection state machine state. Drives <c>equipment.{type}.state</c> WS events.</summary>
 public enum EquipmentConnectionState { Disconnected, Connecting, Connected, Error }
 
