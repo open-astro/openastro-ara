@@ -2,6 +2,7 @@ import 'dart:isolate';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../util/tonight_sky_local.dart';
 import '../saved_server_state.dart';
@@ -18,6 +19,30 @@ import 'dso_catalog_state.dart';
 /// planning share one path. Auto-disposed so the list re-ranks for the current
 /// time each time the view is opened; `ref.invalidate(tonightSkyProvider)`
 /// forces a manual refresh.
+/// Hydrates the profile sections Tonight's Sky ranks from (site, optics,
+/// filters, camera electronics) ONCE per active server. Without this, those
+/// notifiers only load when their Options panels mount — so a fresh app launch
+/// ranked against the constructor defaults (site 0,0 → the "no site" empty
+/// state) until the user happened to visit Settings. Deliberately NOT
+/// auto-disposed and watched (not re-run) by the ranker: hydration mutates the
+/// very notifiers the ranker watches, so folding it into the ranker would loop.
+/// Best-effort — offline, the notifiers keep their cached/seeded state.
+final planningSettingsBootstrapProvider = FutureProvider<void>((ref) async {
+  final server = await ref.watch(activeServerFutureProvider.future);
+  if (server == null) return;
+  final api = ProfileApi(server);
+  try {
+    await Future.wait([
+      ref.read(siteSettingsProvider.notifier).hydrateFromServer(api),
+      ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
+      ref.read(filterSetProvider.notifier).hydrateFromServer(api),
+      ref.read(cameraElectronicsProvider.notifier).hydrateFromServer(api),
+    ]);
+  } catch (_) {
+    // best-effort: an unreachable daemon leaves the cached/offline state
+  }
+});
+
 final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   ref,
 ) async {
@@ -26,6 +51,9 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   // finished loading and flash the "no site" empty state for a user whose
   // cached site is about to load. Await keeps Tonight's Sky in `loading`.
   await ref.watch(activeServerFutureProvider.future);
+  // Ensure the settings this ranker reads are actually loaded from the daemon
+  // (fresh launch: nothing else hydrates them until an Options panel mounts).
+  await ref.watch(planningSettingsBootstrapProvider.future);
   final site = ref.watch(siteSettingsProvider);
   // An unset site (the constructor's 0,0) would silently rank for a spot in
   // the Gulf of Guinea — return empty instead; the panel's empty state
