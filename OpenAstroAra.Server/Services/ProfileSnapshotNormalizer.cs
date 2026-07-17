@@ -147,8 +147,8 @@ public static class ProfileSnapshotNormalizer {
             DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto"),
         EquipmentConnection: new(
             Camera: true, Mount: true, Focuser: true, FilterWheel: true,
-            Rotator: true, Guider: false, FlatPanel: true, Dome: false,
-            Weather: false, SafetyMonitor: true),
+            Rotator: true, Guider: true, FlatPanel: true, Dome: true,
+            Weather: true, SafetyMonitor: true),
         // §65.2 stretch defaults. Lights default to auto_stf (matches
         // PixInsight + NINA UX). Manual sliders seed at the §65.2 example
         // values (bp=0.02, mp=0.5, wp=0.98). Asinh β = 3.0 (§65.1 default).
