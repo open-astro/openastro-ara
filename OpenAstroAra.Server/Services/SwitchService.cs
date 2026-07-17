@@ -31,12 +31,11 @@ namespace OpenAstroAra.Server.Services;
 /// Switch devices, serves each device's live ports (id/name/value/min/max/can-write) over the REST
 /// surface, and writes a port value via <see cref="SetValueAsync"/>.
 ///
-/// <para>Multi-instance: ARA addresses switches by their <c>AlpacaDeviceNumber</c> (the <c>{n}</c> in
-/// <c>/api/v1/equipment/switch/{n}</c>). A connection map keyed by that number lets several switches
-/// be connected at once — the common multi-switch rig (a power box plus a relay board, each a distinct
-/// device number on the bridge). Two switches that share a device number across different Alpaca hosts
-/// collide on the key; the later connect replaces the earlier and the collision is logged (a documented
-/// limit of device-number addressing).</para>
+/// <para>Multi-instance: ARA addresses switches by their Alpaca <c>UniqueId</c> (the <c>{id}</c> in
+/// <c>/api/v1/equipment/switch/{id}</c>). A connection map keyed by that id lets several switches
+/// be connected at once — including the common two-host rig (a power box and a relay board on
+/// separate Alpaca servers, BOTH device number 0). The previous device-number keying made those
+/// collide: the second connect evicted the first and its toggles vanished from the client.</para>
 ///
 /// Follows the SafetyMonitor/ObservingConditions template: §60.5 202-Accepted connect lifecycle;
 /// per-connection generation-based supersede; §32.4 background-refresh cache (a single timer reads
@@ -58,10 +57,11 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     private readonly IWsBroadcaster? _ws;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
-    // Connected (and recently-disconnected) switches keyed by AlpacaDeviceNumber. Mutated only under
-    // _gate. A single shared refresh timer reads every entry's ports — keep the one-lock discipline of
-    // the original single-instance service, just one record per device.
-    private readonly Dictionary<int, SwitchConnection> _connections = new();
+    // Connected (and recently-disconnected) switches keyed by the device's Alpaca UniqueId (globally
+    // unique — the AlpacaDeviceNumber is only unique per host). Mutated only under _gate. A single
+    // shared refresh timer reads every entry's ports — keep the one-lock discipline of the original
+    // single-instance service, just one record per device.
+    private readonly Dictionary<string, SwitchConnection> _connections = new(StringComparer.Ordinal);
     private int _refreshing;
     private bool _disposed;
 
@@ -78,6 +78,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         public IReadOnlyList<SwitchPortSnapshot> CachedSnapshots { get; set; } = Array.Empty<SwitchPortSnapshot>();
         public long Generation { get; set; }
         public int DeviceNumber => Device.AlpacaDeviceNumber;
+        public string Key => Device.UniqueId;
         // §42.3 — per-connection disconnect-detection streak (multi-instance: each connected switch
         // is probed independently). Only touched from the single-flighted refresh path.
         public DeviceConnectionProbe Probe { get; } = new();
@@ -107,17 +108,21 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             foreach (var conn in _connections.Values) {
                 list.Add(ProjectDto(conn));
             }
-            // Stable order by device number so the list (and the client UI built on it) doesn't reshuffle
-            // between polls.
-            list.Sort(static (a, b) => a.AlpacaDeviceNumber.CompareTo(b.AlpacaDeviceNumber));
+            // Stable order (device number, then id for same-numbered hubs on different hosts) so the
+            // list (and the client UI built on it) doesn't reshuffle between polls.
+            list.Sort(static (a, b) => {
+                var byNumber = a.AlpacaDeviceNumber.CompareTo(b.AlpacaDeviceNumber);
+                return byNumber != 0 ? byNumber : string.CompareOrdinal(a.DeviceId, b.DeviceId);
+            });
             return Task.FromResult<IReadOnlyList<SwitchDto>>(list);
         }
     }
 
-    public Task<SwitchDto?> GetAsync(int deviceNumber, CancellationToken ct) {
+    public Task<SwitchDto?> GetAsync(string deviceId, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return Task.FromResult(_connections.TryGetValue(deviceNumber, out var conn) ? ProjectDto(conn) : null);
+            return Task.FromResult(_connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null);
         }
     }
 
@@ -137,25 +142,19 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         SwitchConnection conn;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_connections.TryGetValue(device.AlpacaDeviceNumber, out var existing)) {
-                if ((existing.State == EquipmentConnectionState.Connecting || existing.State == EquipmentConnectionState.Connected)
-                    && existing.Device.UniqueId == device.UniqueId) {
+            if (_connections.TryGetValue(device.UniqueId, out var existing)) {
+                if (existing.State == EquipmentConnectionState.Connecting || existing.State == EquipmentConnectionState.Connected) {
                     // Already connecting/connected to this exact device — idempotent, no teardown.
                     return Task.FromResult(Accepted("switch.connect", idempotencyKey));
                 }
-                if (existing.Device.UniqueId != device.UniqueId) {
-                    // Cross-host device-number collision: device-number addressing can only hold one
-                    // switch per number, so the new device takes the slot. Logged so it isn't silent.
-                    LogSwitchNumberCollision(device.AlpacaDeviceNumber, existing.Device.Name, device.Name);
-                }
-                // §60.9 — surface the superseded connection's teardown before the
-                // replacement's Connecting, so a WS subscriber tracking state deltas
-                // sees the old device go away instead of it silently vanishing.
+                // Reconnecting a known-but-down device (Disconnected/Error): tear down any stale
+                // client first. §60.9 — surface the teardown before the replacement's Connecting,
+                // so a WS subscriber tracking state deltas sees a clean transition.
                 SetState(existing, EquipmentConnectionState.Disconnected);
                 DisposeClientLocked(existing);
             }
             conn = new SwitchConnection { Device = device };
-            _connections[device.AlpacaDeviceNumber] = conn;
+            _connections[device.UniqueId] = conn;
             generation = ++conn.Generation;
             SetState(conn, EquipmentConnectionState.Connecting);
         }
@@ -163,11 +162,12 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         return Task.FromResult(Accepted("switch.connect", idempotencyKey));
     }
 
-    public Task<OperationAcceptedDto> DisconnectAsync(int deviceNumber, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> DisconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
         AlpacaSwitch? client = null;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_connections.TryGetValue(deviceNumber, out var conn)) {
+            if (_connections.TryGetValue(deviceId, out var conn)) {
                 // Supersede any in-flight connect for this slot, drop the client, and keep the entry as
                 // Disconnected (so GET still reports the known device's state, mirroring the single-instance
                 // service) until it is reconnected or the daemon restarts.
@@ -185,7 +185,8 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         return Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
     }
 
-    public async Task SetValueAsync(int deviceNumber, SwitchValueRequestDto request, CancellationToken ct) {
+    public async Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
         ArgumentNullException.ThrowIfNull(request);
         // ASCOM addresses ports by a short id; validate before the narrowing cast so an out-of-range
         // PortId fails loudly instead of silently wrapping to a different port (e.g. (short)32768 ==
@@ -197,11 +198,11 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         AlpacaSwitch? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _connections.TryGetValue(deviceNumber, out var conn)
+            client = _connections.TryGetValue(deviceId, out var conn)
                 && conn.State == EquipmentConnectionState.Connected ? conn.Client : null;
         }
         if (client is null) {
-            throw new InvalidOperationException($"switch {deviceNumber} is not connected");
+            throw new InvalidOperationException($"switch '{deviceId}' is not connected");
         }
         // Write off the request thread (blocking ASCOM HTTP PUT). The port id is a short in ASCOM.
         await Task.Run(() => client.SetSwitchValue((short)request.PortId, request.Value), ct).ConfigureAwait(false);
@@ -266,7 +267,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                         // Write back only if this exact connection + client is still the live one (a
                         // concurrent disconnect/replace supersedes the read we just did).
                         if (!_disposed
-                            && _connections.TryGetValue(conn.DeviceNumber, out var current)
+                            && _connections.TryGetValue(conn.Key, out var current)
                             && ReferenceEquals(current, conn)
                             && conn.State == EquipmentConnectionState.Connected
                             && ReferenceEquals(conn.Client, client)) {
@@ -381,7 +382,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             client.Connected = true;
             lock (_gate) {
                 if (!_disposed
-                    && _connections.TryGetValue(conn.DeviceNumber, out var current)
+                    && _connections.TryGetValue(conn.Key, out var current)
                     && ReferenceEquals(current, conn)
                     && conn.Generation == generation) {
                     conn.Client = client;
@@ -401,7 +402,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             bool stillConnected;
             lock (_gate) {
                 stillConnected = conn.State == EquipmentConnectionState.Connected
-                    && _connections.TryGetValue(conn.DeviceNumber, out var current)
+                    && _connections.TryGetValue(conn.Key, out var current)
                     && ReferenceEquals(current, conn);
             }
             if (stillConnected) {
@@ -414,7 +415,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 }
                 lock (_gate) {
                     if (!_disposed
-                        && _connections.TryGetValue(conn.DeviceNumber, out var current)
+                        && _connections.TryGetValue(conn.Key, out var current)
                         && ReferenceEquals(current, conn)
                         && conn.Generation == generation) {
                         SetState(conn, EquipmentConnectionState.Error);
@@ -563,7 +564,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         lock (_gate) {
             if (_disposed
                 || conn.State != EquipmentConnectionState.Connected
-                || !_connections.TryGetValue(conn.DeviceNumber, out var current)
+                || !_connections.TryGetValue(conn.Key, out var current)
                 || !ReferenceEquals(current, conn)
                 || !ReferenceEquals(conn.Client, client)) {
                 return null;
@@ -577,7 +578,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             // Only trip the connection we probed if it is still the live entry for its device
             // number and still Connected (a concurrent disconnect/replace supersedes the probe).
             if (conn.State != EquipmentConnectionState.Connected
-                || !_connections.TryGetValue(conn.DeviceNumber, out var current)
+                || !_connections.TryGetValue(conn.Key, out var current)
                 || !ReferenceEquals(current, conn)) {
                 return;
             }
@@ -650,9 +651,6 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Switch connect failed for {Name}")]
     private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Two Switch devices share Alpaca device number {Number} ('{Existing}' replaced by '{Incoming}'); device-number addressing keeps only the latest.")]
-    private partial void LogSwitchNumberCollision(int number, string existing, string incoming);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Switch during teardown")]
     private partial void LogTeardownIgnored(Exception ex);

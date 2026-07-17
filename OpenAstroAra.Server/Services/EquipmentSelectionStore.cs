@@ -192,10 +192,12 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     }
 
     // Upsert/dedup key: single-instance types collapse to one entry per type (newest wins);
-    // Switch is multi-instance, so each switch is kept independently by its device number.
+    // Switch is multi-instance, so each switch is kept independently by its UniqueId (device
+    // NUMBERS repeat across hosts — two hubs both "device 0" must not collapse). Legacy
+    // "Switch"/"Switch:{number}" keys are non-canonical aliases; GetAll's re-key migrates them.
     private static string KeyFor(DiscoveredDeviceDto device) =>
         device.Type == DeviceType.Switch
-            ? $"{DeviceType.Switch}:{device.AlpacaDeviceNumber}"
+            ? $"{DeviceType.Switch}:{device.UniqueId}"
             : device.Type.ToString();
 
     // Caller holds _gate.

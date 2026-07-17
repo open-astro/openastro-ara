@@ -111,17 +111,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Remember_upserts_a_switch_by_device_number() {
+        public async Task Remember_upserts_a_switch_by_unique_id() {
             await _store.RememberAsync(Device(DeviceType.Switch, "sw-a", "old", number: 0), CancellationToken.None);
             await _store.RememberAsync(Device(DeviceType.Switch, "sw-b", "other", number: 1), CancellationToken.None);
-            // Re-remembering device number 0 replaces only that switch, not number 1.
-            await _store.RememberAsync(Device(DeviceType.Switch, "sw-a2", "new", number: 0), CancellationToken.None);
+            // Re-remembering the SAME switch (by UniqueId) replaces only its entry, not the other.
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-a", "renamed", number: 0), CancellationToken.None);
 
             var switches = (await _store.GetAllAsync(CancellationToken.None))
                 .Where(d => d.Type == DeviceType.Switch).ToList();
             Assert.That(switches.Count, Is.EqualTo(2));
-            Assert.That(switches.Single(s => s.AlpacaDeviceNumber == 0).UniqueId, Is.EqualTo("sw-a2"));
-            Assert.That(switches.Single(s => s.AlpacaDeviceNumber == 1).UniqueId, Is.EqualTo("sw-b"));
+            Assert.That(switches.Single(s => s.UniqueId == "sw-a").Name, Is.EqualTo("renamed"));
+            Assert.That(switches.Single(s => s.UniqueId == "sw-b").Name, Is.EqualTo("other"));
+        }
+
+        [Test]
+        public async Task Remember_keeps_two_switches_sharing_a_device_number() {
+            // The two-host rig: a power box and a relay board on separate Alpaca servers are BOTH
+            // device number 0. UniqueId keying must remember both — the old device-number keying
+            // collapsed them, so only the last-connected hub survived a daemon restart.
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-host-a", "PowerBox", number: 0), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-host-b", "RelayBox", number: 0), CancellationToken.None);
+
+            var switches = (await _store.GetAllAsync(CancellationToken.None))
+                .Where(d => d.Type == DeviceType.Switch).ToList();
+            Assert.That(switches.Count, Is.EqualTo(2));
         }
 
         [Test]
@@ -142,40 +155,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task GetAll_collapses_a_legacy_and_canonical_switch_key_for_the_same_device() {
-            // First boot after upgrade: a file can hold BOTH the legacy bare "Switch" and a new
-            // "Switch:0" for the same switch. GetAll must return one (else auto-connect doubles up).
+        public async Task GetAll_collapses_legacy_switch_keys_naming_the_same_device() {
+            // First boot after upgrade: a file can hold the same physical switch under a legacy bare
+            // "Switch" key AND a legacy numbered "Switch:0" key. GetAll re-keys every entry by its
+            // canonical UniqueId key, so same-UniqueId aliases collapse to one (else auto-connect
+            // would attempt the same switch twice).
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
-                "{ \"Switch\": { \"UniqueId\": \"legacy\", \"Name\": \"old\", \"Type\": \"Switch\", " +
+                "{ \"Switch\": { \"UniqueId\": \"same-uid\", \"Name\": \"old\", \"Type\": \"Switch\", " +
                 "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
                 "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false }, " +
-                "\"Switch:0\": { \"UniqueId\": \"current\", \"Name\": \"new\", \"Type\": \"Switch\", " +
+                "\"Switch:0\": { \"UniqueId\": \"same-uid\", \"Name\": \"new\", \"Type\": \"Switch\", " +
                 "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
                 "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false } }");
 
             var switches = (await _store.GetAllAsync(CancellationToken.None))
                 .Where(d => d.Type == DeviceType.Switch).ToList();
             Assert.That(switches.Count, Is.EqualTo(1));
-            Assert.That(switches[0].UniqueId, Is.EqualTo("current")); // canonical "Switch:0" wins
+            Assert.That(switches[0].UniqueId, Is.EqualTo("same-uid"));
         }
 
         [Test]
-        public async Task GetAll_collapse_prefers_the_canonical_key_regardless_of_file_order() {
-            // Same device as the prior test but with the canonical "Switch:0" listed BEFORE the
-            // legacy bare "Switch" in the file (the reverse order). The canonical entry must still
-            // win — the de-dup can't depend on dictionary iteration order.
+        public async Task GetAll_keeps_legacy_switch_keys_naming_different_devices() {
+            // Legacy entries whose UniqueIds differ are genuinely different switches (e.g. two hubs
+            // remembered pre-upgrade) — both must survive the re-key, not collapse.
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName),
-                "{ \"Switch:0\": { \"UniqueId\": \"current\", \"Name\": \"new\", \"Type\": \"Switch\", " +
-                "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
+                "{ \"Switch:0\": { \"UniqueId\": \"uid-a\", \"Name\": \"PowerBox\", \"Type\": \"Switch\", " +
+                "\"HostName\": \"host-a\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
                 "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false }, " +
-                "\"Switch\": { \"UniqueId\": \"legacy\", \"Name\": \"old\", \"Type\": \"Switch\", " +
-                "\"HostName\": \"host\", \"IpAddress\": \"127.0.0.1\", \"IpPort\": 11111, " +
-                "\"AlpacaDeviceNumber\": 0, \"UseHttps\": false } }");
+                "\"Switch:1\": { \"UniqueId\": \"uid-b\", \"Name\": \"RelayBox\", \"Type\": \"Switch\", " +
+                "\"HostName\": \"host-b\", \"IpAddress\": \"127.0.0.2\", \"IpPort\": 11111, " +
+                "\"AlpacaDeviceNumber\": 1, \"UseHttps\": false } }");
 
             var switches = (await _store.GetAllAsync(CancellationToken.None))
                 .Where(d => d.Type == DeviceType.Switch).ToList();
-            Assert.That(switches.Count, Is.EqualTo(1));
-            Assert.That(switches[0].UniqueId, Is.EqualTo("current"));
+            Assert.That(switches.Count, Is.EqualTo(2));
         }
 
         [Test]

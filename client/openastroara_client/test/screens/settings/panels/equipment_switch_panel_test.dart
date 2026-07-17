@@ -35,10 +35,10 @@ class _FakeSwitchApi implements SwitchClient {
   Future<void> reconnect() async => calls.add("reconnect");
 
   @override
-  Future<void> disconnect(int deviceNumber) async => calls.add('disconnect:$deviceNumber');
+  Future<void> disconnect(String deviceId) async => calls.add('disconnect:$deviceId');
   @override
-  Future<void> setValue({required int deviceNumber, required int portId, required double value}) async =>
-      calls.add('setValue:$deviceNumber:$portId=$value');
+  Future<void> setValue({required String deviceId, required int portId, required double value}) async =>
+      calls.add('setValue:$deviceId:$portId=$value');
   @override
   void close() {}
 }
@@ -162,7 +162,7 @@ void main() {
     await tester.tap(find.descendant(
         of: find.byType(Card), matching: find.byType(Switch)));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('setValue:0:0=1.0'));
+    expect(api.calls, contains('setValue:sw-0:0=1.0'));
   });
 
   testWidgets('a writable port with degenerate bounds (min==max) shows no slider', (tester) async {
@@ -178,6 +178,6 @@ void main() {
     final api = await _pump(tester, [_device(const [])]);
     await tester.tap(find.byIcon(Icons.link_off));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('disconnect:0'));
+    expect(api.calls, contains('disconnect:sw-0'));
   });
 }

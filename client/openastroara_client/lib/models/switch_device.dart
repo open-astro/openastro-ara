@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 // Client mirror of the daemon's multi-instance Switch surface
 // (`GET /api/v1/equipment/switch` → `SwitchDto[]`). Each connected ASCOM Switch
 // device is addressed by its `alpaca_device_number` (the `{n}` in
-// `/api/v1/equipment/switch/{n}`); a device exposes one or more ports.
+// `/api/v1/equipment/switch/{id}`); a device exposes one or more ports.
 
 /// Connection state token, lowercased to match the daemon's `EquipmentConnectionState`
 /// serialization. `unknown` is a client-only fallback for an unrecognized token.
