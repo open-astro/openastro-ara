@@ -48,8 +48,28 @@ void main() {
     expect(plan.targets, hasLength(1));
     expect(plan.targets.single.object.id, 'A');
     expect(plan.targets.single.hours, closeTo(3.0, 0.01));
-    // Glover subs: 3 h at 120 s → 90 subs.
-    expect(plan.targets.single.subCount, 90);
+    // Overhead-aware Glover subs: 3 h minus 6 min setup minus one autofocus
+    // run (60 s), at 120 s + 10 s dither settle per sub → 79 subs (defaults).
+    expect(plan.targets.single.subCount, 79);
+  });
+
+  test('overheads reduce the sub count honestly', () {
+    const none = SessionOverheads(
+        setupMinutesPerTarget: 0,
+        ditherEnabled: false,
+        autofocusEveryHours: 0);
+    final ideal = planImagingSession(
+      ranked: [
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 3),
+            winEnd: DateTime.utc(2026, 7, 18, 9)),
+      ],
+      windowStartUtc: winStart,
+      windowEndUtc: winEnd,
+      overheads: none,
+    );
+    // No overheads: 3 h / 120 s = 90 subs exactly.
+    expect(ideal.targets.single.subCount, 90);
   });
 
   test('two targets: window splits where both slices are shootable', () {

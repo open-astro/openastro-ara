@@ -36,6 +36,50 @@ class SessionPlanTarget {
   });
 }
 
+/// Real-night overheads charged against each slice so the sub counts describe
+/// a night that actually happens, not an idealized one. Defaults are typical;
+/// the dialog feeds the user's own PHD2/autofocus settings in.
+class SessionOverheads {
+  /// Per-target startup: slew + PLATE SOLVE + centering + initial focus +
+  /// guider settle before the first sub.
+  final double setupMinutesPerTarget;
+
+  /// Dither cadence + the guider settle each dither costs (0/disabled = none).
+  final bool ditherEnabled;
+  final int ditherEveryNFrames;
+  final double ditherSettleSec;
+
+  /// Periodic autofocus: a run every [autofocusEveryHours] costing
+  /// [autofocusRunSec] (0 hours = never).
+  final double autofocusEveryHours;
+  final double autofocusRunSec;
+
+  const SessionOverheads({
+    this.setupMinutesPerTarget = 6,
+    this.ditherEnabled = true,
+    this.ditherEveryNFrames = 1,
+    this.ditherSettleSec = 10,
+    this.autofocusEveryHours = 2,
+    this.autofocusRunSec = 60,
+  });
+
+  /// Subs of [subSeconds] that fit into [sliceHours] after setup, dither
+  /// settles, and autofocus runs. Never negative.
+  int subsIn(double sliceHours, double subSeconds) {
+    if (subSeconds <= 0) return 0;
+    var budget = sliceHours * 3600 - setupMinutesPerTarget * 60;
+    if (autofocusEveryHours > 0) {
+      budget -= (sliceHours / autofocusEveryHours).floor() * autofocusRunSec;
+    }
+    if (budget <= 0) return 0;
+    final perSub = subSeconds +
+        (ditherEnabled && ditherEveryNFrames > 0
+            ? ditherSettleSec / ditherEveryNFrames
+            : 0.0);
+    return (budget / perSub).floor();
+  }
+}
+
 class SessionPlan {
   final List<SessionPlanTarget> targets;
   final double plannedHours;
@@ -77,7 +121,8 @@ double _valueOf(TonightSkyObject o, double hours) {
 double _hoursBetween(DateTime a, DateTime b) =>
     b.difference(a).inMinutes / 60.0;
 
-SessionPlanTarget _slice(TonightSkyObject o, DateTime s, DateTime e) {
+SessionPlanTarget _slice(TonightSkyObject o, DateTime s, DateTime e,
+    SessionOverheads overheads) {
   final hours = _hoursBetween(s, e);
   final subS = o.optimalSubS;
   return SessionPlanTarget(
@@ -86,7 +131,8 @@ SessionPlanTarget _slice(TonightSkyObject o, DateTime s, DateTime e) {
     endUtc: e,
     hours: hours,
     subSeconds: subS,
-    subCount: subS != null && subS > 0 ? (hours * 3600 / subS).floor() : null,
+    subCount:
+        subS != null && subS > 0 ? overheads.subsIn(hours, subS) : null,
   );
 }
 
@@ -102,6 +148,7 @@ SessionPlan planImagingSession({
   required DateTime windowStartUtc,
   required DateTime windowEndUtc,
   int targetCount = 1,
+  SessionOverheads overheads = const SessionOverheads(),
 }) {
   final winStart = windowStartUtc.toUtc();
   final winEnd = windowEndUtc.toUtc();
@@ -135,7 +182,7 @@ SessionPlan planImagingSession({
   }
 
   if (targetCount <= 1) {
-    final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3);
+    final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads);
     return SessionPlan(targets: [s], plannedHours: s.hours);
   }
 
@@ -161,8 +208,8 @@ SessionPlan planImagingSession({
         if (v > bestPairValue) {
           bestPairValue = v;
           bestPair = [
-            _slice(a.$1, a.$2, t),
-            _slice(b.$1, t.isAfter(b.$2) ? t : b.$2, b.$3),
+            _slice(a.$1, a.$2, t, overheads),
+            _slice(b.$1, t.isAfter(b.$2) ? t : b.$2, b.$3, overheads),
           ];
         }
       }
@@ -170,7 +217,7 @@ SessionPlan planImagingSession({
   }
 
   if (bestPair == null) {
-    final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3);
+    final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads);
     return SessionPlan(targets: [s], plannedHours: s.hours, notes: [
       'No second target fits ≥45 min in this window — planned one target.'
     ]);

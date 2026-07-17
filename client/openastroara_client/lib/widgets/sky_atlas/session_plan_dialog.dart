@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../state/settings/autofocus_settings_state.dart';
+import '../../state/settings/phd2_settings_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/session_planner.dart';
@@ -40,12 +42,24 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   void _makePlan(List<TonightSkyObject> ranked) {
     final start = _nextLocal(_start);
     final end = _nextLocal(_end, after: start);
+    // Charge the night's REAL overheads from the user's own settings, so the
+    // sub counts describe a session with dithering, guiding settles, plate
+    // solving and autofocus in it — not an idealized shutter-open number.
+    final phd2 = ref.read(phd2SettingsProvider);
+    final af = ref.read(autofocusSettingsProvider);
+    final overheads = SessionOverheads(
+      ditherEnabled: phd2.ditherEnabled,
+      ditherEveryNFrames: phd2.ditherEveryNFrames,
+      ditherSettleSec: phd2.settleTimeSec.toDouble(),
+      autofocusEveryHours: af.everyNHours.toDouble(),
+    );
     setState(() {
       _plan = planImagingSession(
         ranked: ranked,
         windowStartUtc: start.toUtc(),
         windowEndUtc: end.toUtc(),
         targetCount: _targetCount,
+        overheads: overheads,
       );
     });
   }
@@ -90,9 +104,10 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
             children: [
               Text(
                 'Tell me when you can image and I\'ll allocate the window to '
-                'the best target(s) from tonight\'s list — with sub counts '
-                'from the optimal-exposure criterion so you finish an image, '
-                'not just start one.',
+                'the best target(s) from tonight\'s list. Sub counts use the '
+                'optimal-exposure criterion and charge your real overheads — '
+                'slew, plate solve, focus, dither settles from your PHD2 '
+                'settings, and periodic autofocus.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: AraColors.textSecondary),
               ),
