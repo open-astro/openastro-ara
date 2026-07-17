@@ -246,44 +246,39 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                 _object.filterAdvice != null ||
                 _object.moonUpFraction != null) ...[
               const SizedBox(height: 6),
-              Row(
+              // Chips wrap; the timing line gets its own FULL-WIDTH row below —
+              // sharing one Row squeezed it into a sliver next to the chips and
+              // it wrapped a character per line (live-walkthrough screenshot).
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   if (framingLabel != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _FramingChip(framing: _object.framing),
-                    ),
+                    _FramingChip(framing: _object.framing),
                   if (_object.filterAdvice != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _FilterAdviceChip(advice: _object.filterAdvice!),
-                    ),
+                    _FilterAdviceChip(advice: _object.filterAdvice!),
                   if (_object.moonUpFraction != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _MoonChip(object: _object),
-                    ),
-                  if (timing != null)
-                    Expanded(
-                      child: Text(
-                        windowState == TonightWindowState.open
-                            ? 'now · $timing'
-                            : timing,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: switch (windowState) {
-                            TonightWindowState.open =>
-                              AraColors.accentConnected,
-                            TonightWindowState.passed => AraColors.textDisabled,
-                            _ => AraColors.textSecondary,
-                          },
-                          fontWeight: windowState == TonightWindowState.open
-                              ? FontWeight.w600
-                              : null,
-                        ),
-                      ),
-                    ),
+                    _MoonChip(object: _object),
                 ],
               ),
+              if (timing != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  windowState == TonightWindowState.open
+                      ? 'now · $timing'
+                      : timing,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: switch (windowState) {
+                      TonightWindowState.open => AraColors.accentConnected,
+                      TonightWindowState.passed => AraColors.textDisabled,
+                      _ => AraColors.textSecondary,
+                    },
+                    fontWeight: windowState == TonightWindowState.open
+                        ? FontWeight.w600
+                        : null,
+                  ),
+                ),
+              ],
             ],
             Row(
               children: [
