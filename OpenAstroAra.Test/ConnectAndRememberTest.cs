@@ -102,6 +102,9 @@ namespace OpenAstroAra.Test {
 
             public Task<System.Collections.Generic.IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct) =>
                 Task.FromResult<System.Collections.Generic.IReadOnlyList<DiscoveredDeviceDto>>(Remembered);
+
+            public Task<int> ForgetAsync(DeviceType type, CancellationToken ct) =>
+                Task.FromResult(Remembered.RemoveAll(d => d.Type == type));
         }
     }
 }

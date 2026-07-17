@@ -428,6 +428,21 @@ public static class EquipmentEndpoints {
         safety.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.SafetyMonitor, ct));
         flat.MapPost("/reconnect", (IEquipmentReconnector r, CancellationToken ct) => ReconnectAsync(r, DeviceType.CoverCalibrator, ct));
 
+        // ─── Forget remembered selection (§52.1) ───
+        // Clear the remembered device(s) for the type so auto-connect-on-boot stops attempting
+        // hardware the user no longer has (e.g. the wizard's slot was set to "None"). Idempotent
+        // 204 either way — "nothing was remembered" and "now forgotten" both leave the same state.
+        camera.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Camera, ct));
+        telescope.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Telescope, ct));
+        focuser.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Focuser, ct));
+        filterwheel.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.FilterWheel, ct));
+        rotator.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Rotator, ct));
+        dome.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Dome, ct));
+        sw.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.Switch, ct));
+        oc.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.ObservingConditions, ct));
+        safety.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.SafetyMonitor, ct));
+        flat.MapDelete("/remembered", (IEquipmentSelectionStore s, CancellationToken ct) => ForgetRememberedAsync(s, DeviceType.CoverCalibrator, ct));
+
         return app;
     }
 
@@ -442,6 +457,11 @@ public static class EquipmentEndpoints {
     internal static int ScaleAutofocusProgress(double progress, int maxProgress, int totalSteps) {
         var scaled = (int)System.Math.Round(progress / maxProgress * totalSteps);
         return System.Math.Clamp(scaled, 1, totalSteps);
+    }
+
+    private static async Task<IResult> ForgetRememberedAsync(IEquipmentSelectionStore store, DeviceType type, CancellationToken ct) {
+        await store.ForgetAsync(type, ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> ReconnectAsync(IEquipmentReconnector reconnector, DeviceType type, CancellationToken ct) {

@@ -38,6 +38,13 @@ public interface IEquipmentSelectionStore {
     /// Each entry carries its own <see cref="DiscoveredDeviceDto.Type"/> and Alpaca device number.
     /// Empty when nothing has been connected yet.</summary>
     Task<IReadOnlyList<DiscoveredDeviceDto>> GetAllAsync(CancellationToken ct);
+
+    /// <summary>Drop every remembered entry for <paramref name="type"/> (all switches for
+    /// <see cref="DeviceType.Switch"/>; FlatDevice and CoverCalibrator count as one group).
+    /// Lets a client clear a stale selection — e.g. hardware the user no longer has — so
+    /// auto-connect-on-boot stops attempting (and erroring on) it. Idempotent: returns the
+    /// number of entries removed (0 when nothing was remembered).</summary>
+    Task<int> ForgetAsync(DeviceType type, CancellationToken ct);
 }
 
 /// <summary>
@@ -99,6 +106,46 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             _gate.Release();
         }
     }
+
+    public async Task<int> ForgetAsync(DeviceType type, CancellationToken ct) {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var tmp = _path + ".tmp";
+        try {
+            var map = await ReadLocked(ct).ConfigureAwait(false);
+            // Match by the ENTRY's device type (not the raw key) so legacy/alias keys and
+            // every Switch:{number} entry are all caught; FlatDevice and CoverCalibrator
+            // are the same physical device under two tokens, so they forget together.
+            var doomed = map.Where(kv => Canonical(kv.Value.Type) == Canonical(type))
+                            .Select(kv => kv.Key)
+                            .ToList();
+            if (doomed.Count == 0) {
+                return 0;
+            }
+            foreach (var key in doomed) {
+                map.Remove(key);
+            }
+            var json = JsonSerializer.Serialize(map, JsonOptions);
+            await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
+            File.Move(tmp, _path, overwrite: true);
+            return doomed.Count;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            SafeDeleteTmp(tmp);
+            throw;
+        }
+        catch (IOException) {
+            SafeDeleteTmp(tmp); // don't leave an orphaned .tmp if the write/move failed mid-way
+            throw;
+        }
+        finally {
+            _gate.Release();
+        }
+    }
+
+    // FlatDevice/CoverCalibrator are one physical device under two tokens (ASCOM type vs
+    // NINA concept) — collapse them so forget/reconnect treat them as a single group.
+    private static DeviceType Canonical(DeviceType t) =>
+        t == DeviceType.FlatDevice ? DeviceType.CoverCalibrator : t;
 
     // Best-effort removal of the temp file after a failed atomic write.
     private static void SafeDeleteTmp(string tmp) {

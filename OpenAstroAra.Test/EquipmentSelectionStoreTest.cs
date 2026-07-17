@@ -179,6 +179,65 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Forget_removes_only_the_requested_type() {
+            await _store.RememberAsync(Device(DeviceType.Camera, "cam-1", "cam"), CancellationToken.None);
+            await _store.RememberAsync(DeviceOfType(DeviceType.CoverCalibrator, "flat-1"), CancellationToken.None);
+
+            var removed = await _store.ForgetAsync(DeviceType.CoverCalibrator, CancellationToken.None);
+
+            Assert.That(removed, Is.EqualTo(1));
+            var all = await _store.GetAllAsync(CancellationToken.None);
+            Assert.That(all.Single().Type, Is.EqualTo(DeviceType.Camera));
+        }
+
+        [Test]
+        public async Task Forget_is_idempotent_when_nothing_remembered() {
+            var removed = await _store.ForgetAsync(DeviceType.Dome, CancellationToken.None);
+            Assert.That(removed, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task Forget_treats_FlatDevice_and_CoverCalibrator_as_one_group() {
+            // The same physical panel can be remembered under either token — forgetting one
+            // token must clear the other, or auto-connect keeps attempting the stale device.
+            await _store.RememberAsync(DeviceOfType(DeviceType.FlatDevice, "flat-1"), CancellationToken.None);
+
+            var removed = await _store.ForgetAsync(DeviceType.CoverCalibrator, CancellationToken.None);
+
+            Assert.That(removed, Is.EqualTo(1));
+            Assert.That(await _store.GetAllAsync(CancellationToken.None), Is.Empty);
+        }
+
+        [Test]
+        public async Task Forget_switch_removes_every_remembered_switch() {
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-a", "PowerBox", number: 0), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-b", "RelayBox", number: 1), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.Camera, "cam-1", "cam"), CancellationToken.None);
+
+            var removed = await _store.ForgetAsync(DeviceType.Switch, CancellationToken.None);
+
+            Assert.That(removed, Is.EqualTo(2));
+            var all = await _store.GetAllAsync(CancellationToken.None);
+            Assert.That(all.Single().Type, Is.EqualTo(DeviceType.Camera));
+        }
+
+        [Test]
+        public async Task Forget_survives_a_fresh_store_instance() {
+            await _store.RememberAsync(DeviceOfType(DeviceType.CoverCalibrator, "flat-1"), CancellationToken.None);
+            await _store.ForgetAsync(DeviceType.CoverCalibrator, CancellationToken.None);
+
+            var reopened = new EquipmentSelectionStore(_dir, NullLogger<EquipmentSelectionStore>.Instance);
+            try {
+                Assert.That(await reopened.GetAllAsync(CancellationToken.None), Is.Empty);
+            } finally {
+                reopened.Dispose();
+            }
+        }
+
+        private static DiscoveredDeviceDto DeviceOfType(DeviceType type, string id) =>
+            Device(type, id, id);
+
+        [Test]
         public async Task GetAll_tolerates_a_corrupt_file() {
             await File.WriteAllTextAsync(Path.Combine(_dir, EquipmentSelectionStore.FileName), "{ not json");
             var all = await _store.GetAllAsync(CancellationToken.None);
