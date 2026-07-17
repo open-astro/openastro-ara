@@ -4,6 +4,7 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/time_sync_state.dart';
 import '../../../state/settings/custom_horizon_state.dart';
 import '../../../state/settings/site_settings_state.dart';
@@ -21,8 +22,8 @@ class SafetySitePanel extends ConsumerStatefulWidget {
   ConsumerState<SafetySitePanel> createState() => _SafetySitePanelState();
 }
 
-class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
-  bool _saving = false;
+class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
+    with PanelSaveRegistration {
   String? _lastError;
   bool _gpsBusy = false;
   String? _gpsStatus;
@@ -46,18 +47,16 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
     }
   }
 
+  @override
+  Future<void> panelSave() => _save();
+
   Future<void> _save() async {
-    setState(() {
-      _saving = true;
-      _lastError = null;
-    });
+    setState(() => _lastError = null);
     final api = _api();
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      setState(() {
-        _saving = false;
-        _lastError = 'No active server — connect to a daemon first.';
-      });
+      setState(
+          () => _lastError = 'No active server — connect to a daemon first.');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
@@ -81,8 +80,6 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
             : 'Save failed: $e',
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -312,22 +309,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel> {
           ),
           const SizedBox(height: 12),
         ],
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save, size: 16),
-              label: Text(_saving ? 'Saving…' : 'Save'),
-            ),
-          ],
-        ),
+        // Save lives in the settings-shell header (PanelSaveRegistration) —
+        // fixed chrome, always visible, no scrolling to find it.
       ],
     );
   }

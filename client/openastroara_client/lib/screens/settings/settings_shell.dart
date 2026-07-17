@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/settings/panel_save_registry.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/command_palette.dart';
@@ -148,12 +149,35 @@ class _PanelRow extends StatelessWidget {
   }
 }
 
-class _PanelHeader extends StatelessWidget {
+class _PanelHeader extends ConsumerStatefulWidget {
   final SettingsPanelInfo? info;
   const _PanelHeader({required this.info});
 
   @override
+  ConsumerState<_PanelHeader> createState() => _PanelHeaderState();
+}
+
+class _PanelHeaderState extends ConsumerState<_PanelHeader> {
+  // Busy flag for the header Save: the panel's registered save() owns error
+  // reporting; the header only shows progress and guards double-taps.
+  bool _saving = false;
+
+  Future<void> _save(Future<void> Function() action) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // The visible panel's Save action, registered via PanelSaveRegistration.
+    // In fixed chrome (not the panel's scroll view) so it is ALWAYS visible —
+    // panels used to hide Save below the fold of long forms.
+    final saveAction = ref.watch(panelSaveActionProvider);
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -163,9 +187,23 @@ class _PanelHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(info?.label ?? 'Settings',
+          Text(widget.info?.label ?? 'Settings',
               style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
+          if (saveAction != null) ...[
+            FilledButton.icon(
+              onPressed: _saving ? null : () => _save(saveAction),
+              icon: _saving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save, size: 16),
+              label: Text(_saving ? 'Saving…' : 'Save'),
+            ),
+            const SizedBox(width: 12),
+          ],
           // §61 smart search — opens the global command palette (also
           // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
           // adapts to host platform so the displayed shortcut matches
