@@ -565,7 +565,7 @@ class _FramingChip extends StatelessWidget {
     // that bypasses the gate renders nothing rather than a styled-but-blank chip.
     if (label == null) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
@@ -597,7 +597,7 @@ class _FilterAdviceChip extends StatelessWidget {
         ? AraColors.textSecondary
         : AraColors.accentInfo;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
@@ -645,7 +645,7 @@ class _MoonChip extends StatelessWidget {
       color = harsh ? AraColors.accentBusy : AraColors.textSecondary;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
