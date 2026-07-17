@@ -11,10 +11,16 @@ class CameraGeometry {
   final int sensorHeightPx;
   final double pixelSizeUm;
 
+  /// Highest symmetric binning the camera supports (min of max_bin_x/y),
+  /// clamped to ≥1 — drives the wizard's default-bin dropdown. 1 when the
+  /// driver doesn't report it.
+  final int maxBin;
+
   const CameraGeometry({
     required this.sensorWidthPx,
     required this.sensorHeightPx,
     required this.pixelSizeUm,
+    this.maxBin = 1,
   });
 
   /// Parse a `GET /api/v1/equipment/camera` body, or null when no camera is
@@ -34,7 +40,16 @@ class CameraGeometry {
     final h = hs is num ? hs.toInt() : 0;
     final px = ps is num ? ps.toDouble() : 0.0;
     if (w <= 0 || h <= 0 || px <= 0) return null;
-    return CameraGeometry(sensorWidthPx: w, sensorHeightPx: h, pixelSizeUm: px);
+    final bx = caps['max_bin_x'];
+    final by = caps['max_bin_y'];
+    final maxBinX = bx is num ? bx.toInt() : 0;
+    final maxBinY = by is num ? by.toInt() : 0;
+    final maxBin = maxBinX < maxBinY ? maxBinX : maxBinY;
+    return CameraGeometry(
+        sensorWidthPx: w,
+        sensorHeightPx: h,
+        pixelSizeUm: px,
+        maxBin: maxBin < 1 ? 1 : maxBin);
   }
 }
 

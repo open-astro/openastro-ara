@@ -26,6 +26,50 @@ Future<String?> showServerFolderPicker(
   ).whenComplete(api.close);
 }
 
+/// Name prompt for "New folder" — owns its TextEditingController so it is
+/// disposed with the dialog's own lifecycle (disposing it right after
+/// showDialog returns races the pop animation).
+class _NewFolderNameDialog extends StatefulWidget {
+  const _NewFolderNameDialog();
+
+  @override
+  State<_NewFolderNameDialog> createState() => _NewFolderNameDialogState();
+}
+
+class _NewFolderNameDialogState extends State<_NewFolderNameDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('New folder'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Folder name',
+          hintText: 'e.g. Lights',
+        ),
+        onSubmitted: (v) => Navigator.of(context).pop(v),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.of(context).pop(_controller.text),
+            child: const Text('Create')),
+      ],
+    );
+  }
+}
+
 class _ServerFolderPickerDialog extends StatefulWidget {
   const _ServerFolderPickerDialog({required this.api, this.startPath});
   final StorageBrowseApi api;
@@ -39,6 +83,9 @@ class _ServerFolderPickerDialog extends StatefulWidget {
 class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
   StorageBrowseLevel? _level;
   String? _error;
+  // Transient message for a failed "New folder" — shown under the listing
+  // without replacing it (unlike _error, which replaces a failed listing).
+  String? _notice;
   bool _loading = true;
 
   @override
@@ -54,6 +101,7 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
     setState(() {
       _loading = true;
       _error = null;
+      _notice = null;
     });
     try {
       final level = await widget.api.browse(path);
@@ -72,6 +120,29 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
         _loading = false;
         _error = 'Couldn\'t list that folder on the server.';
       });
+    }
+  }
+
+  /// Ask for a name, create it under the current directory, and show the
+  /// refreshed listing (the daemon responds with the parent re-listed).
+  Future<void> _newFolder(StorageBrowseLevel level) async {
+    final name = await showDialog<String?>(
+      context: context,
+      builder: (_) => const _NewFolderNameDialog(),
+    );
+    final trimmed = name?.trim();
+    if (trimmed == null || trimmed.isEmpty || !mounted) return;
+    try {
+      final refreshed = await widget.api.createFolder(level.path, trimmed);
+      if (!mounted) return;
+      setState(() {
+        _level = refreshed;
+        _notice = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _notice =
+          'Couldn\'t create "$trimmed" here — check the name and permissions.');
     }
   }
 
@@ -140,6 +211,25 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
                   ),
       ),
       actions: [
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(_notice!,
+                style: const TextStyle(
+                    fontSize: 12, color: AraColors.textSecondary)),
+          ),
+        Tooltip(
+          message: level != null && !level.isRoots && level.writable
+              ? 'Create a subfolder here'
+              : 'Open a writable folder first',
+          child: TextButton.icon(
+            onPressed: level != null && !level.isRoots && level.writable
+                ? () => _newFolder(level)
+                : null,
+            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+            label: const Text('New folder'),
+          ),
+        ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(null),
           child: const Text('Cancel'),

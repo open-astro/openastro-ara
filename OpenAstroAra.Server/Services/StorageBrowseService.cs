@@ -25,6 +25,14 @@ public interface IStorageBrowseService {
     /// missing/non-directory path and <see cref="UnauthorizedAccessException"/>
     /// when the daemon user can't list it — the endpoint maps both to Problems.</summary>
     Contracts.StorageBrowseDto Browse(string? path);
+
+    /// <summary>Create <paramref name="name"/> as a child directory of
+    /// <paramref name="parentPath"/> and return the refreshed listing of the
+    /// parent. Throws <see cref="ArgumentException"/> for an invalid name
+    /// (empty, separators, dot-leading), <see cref="DirectoryNotFoundException"/>
+    /// for a missing/virtual parent, and <see cref="UnauthorizedAccessException"/>
+    /// when the daemon user can't create there.</summary>
+    Contracts.StorageBrowseDto CreateFolder(string parentPath, string name);
 }
 
 /// <summary>
@@ -62,6 +70,28 @@ public sealed class StorageBrowseService : IStorageBrowseService {
         }
         var parent = Path.GetDirectoryName(full);
         return new Contracts.StorageBrowseDto(full, parent, Writable: IsWritable(full), dirs);
+    }
+
+    public Contracts.StorageBrowseDto CreateFolder(string parentPath, string name) {
+        if (string.IsNullOrWhiteSpace(parentPath)) {
+            throw new DirectoryNotFoundException("The roots listing is not a directory — pick a folder first.");
+        }
+        var trimmed = name?.Trim();
+        if (string.IsNullOrEmpty(trimmed)
+            || trimmed.IndexOfAny(['/', '\\']) >= 0
+            || trimmed is "." or ".."
+            || trimmed.StartsWith('.')
+            || trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) {
+            throw new ArgumentException("Folder name must be a plain name — no slashes, and it can't start with a dot.");
+        }
+        // Same reachability rules as Browse: the parent must be a real, listable,
+        // non-virtual directory before we create under it.
+        var parent = Browse(parentPath);
+        var target = Path.Combine(parent.Path, trimmed);
+        // CreateDirectory is a no-op when it already exists — treat that as
+        // success (the folder the user wants is there) and just re-list.
+        Directory.CreateDirectory(target);
+        return Browse(parent.Path);
     }
 
     private static Contracts.StorageBrowseDto Roots() {

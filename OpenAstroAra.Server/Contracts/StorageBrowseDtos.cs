@@ -36,3 +36,11 @@ public sealed record StorageBrowseEntryDto(
     string Name,
     string Path,
     bool Removable = false);
+
+/// <summary><c>POST /api/v1/storage/mkdir</c> — create <c>Name</c> as a child
+/// directory of <c>Path</c> (a plain folder name, no separators). Responds with
+/// the refreshed listing of <c>Path</c> so the picker can show the new folder
+/// without a second round-trip.</summary>
+public sealed record StorageCreateFolderRequestDto(
+    string Path,
+    string Name);

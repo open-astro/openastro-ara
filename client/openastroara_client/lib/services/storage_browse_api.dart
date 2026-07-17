@@ -79,5 +79,20 @@ class StorageBrowseApi {
     return StorageBrowseLevel.fromJson(data);
   }
 
+  /// Create [name] as a child folder of [parentPath]; returns the parent's
+  /// refreshed listing (the new folder included). Throws `DioException` on
+  /// transport failure or a 400/403/404/409 Problem.
+  Future<StorageBrowseLevel> createFolder(String parentPath, String name) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/storage/mkdir',
+      data: {'path': parentPath, 'name': name},
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('storage/mkdir returned a non-object body');
+    }
+    return StorageBrowseLevel.fromJson(data);
+  }
+
   void close() => _dio.close(force: true);
 }

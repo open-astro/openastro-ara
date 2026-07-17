@@ -276,6 +276,33 @@ public static class SystemEndpoints {
             .WithSummary("One directory level of the server's filesystem (no path = curated roots) " +
                 "for the save-directory picker. Directories only.");
 
+        storage.MapPost("/mkdir", (StorageCreateFolderRequestDto request, IStorageBrowseService svc) => {
+                try {
+                    return Results.Ok(svc.CreateFolder(request.Path, request.Name));
+                } catch (ArgumentException ex) {
+                    return Results.Problem(title: "Invalid folder name",
+                        detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+                } catch (DirectoryNotFoundException ex) {
+                    return Results.Problem(title: "Not a browsable directory",
+                        detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+                } catch (UnauthorizedAccessException) {
+                    return Results.Problem(title: "Permission denied",
+                        detail: "The daemon user can't create a folder there.",
+                        statusCode: StatusCodes.Status403Forbidden);
+                } catch (IOException ex) {
+                    return Results.Problem(title: "Could not create the folder",
+                        detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+                }
+            })
+            .Produces<StorageBrowseDto>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("CreateStorageFolder")
+            .WithSummary("Create a child folder under an existing directory and return the " +
+                "parent's refreshed listing.");
+
         // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 

@@ -77,6 +77,39 @@ public class StorageBrowseServiceTest {
     }
 
     [Test]
+    public void CreateFolder_creates_and_returns_the_refreshed_parent_listing() {
+        var result = _svc.CreateFolder(_dir, "Lights");
+        Assert.That(Directory.Exists(Path.Combine(_dir, "Lights")), Is.True);
+        Assert.That(result.Path, Is.EqualTo(Path.GetFullPath(_dir)));
+        Assert.That(result.Dirs.Select(d => d.Name), Does.Contain("Lights"));
+    }
+
+    [Test]
+    public void CreateFolder_is_idempotent_when_the_folder_already_exists() {
+        _svc.CreateFolder(_dir, "Lights");
+        var again = _svc.CreateFolder(_dir, "Lights");
+        Assert.That(again.Dirs.Count(d => d.Name == "Lights"), Is.EqualTo(1));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("a/b")]
+    [TestCase(@"a\b")]
+    [TestCase("..")]
+    [TestCase(".hidden")]
+    public void CreateFolder_rejects_invalid_names(string name) {
+        Assert.Throws<ArgumentException>(() => _svc.CreateFolder(_dir, name));
+    }
+
+    [Test]
+    public void CreateFolder_rejects_a_missing_parent_and_the_roots_listing() {
+        Assert.Throws<DirectoryNotFoundException>(
+            () => _svc.CreateFolder(Path.Combine(_dir, "nope"), "Lights"));
+        Assert.Throws<DirectoryNotFoundException>(
+            () => _svc.CreateFolder("", "Lights"));
+    }
+
+    [Test]
     public void Media_children_are_marked_removable() {
         // Simulated via the path-prefix rule (no real /media on dev boxes):
         // the flag derivation is pure, so pin it through a real browse of a

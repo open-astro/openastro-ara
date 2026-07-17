@@ -10,6 +10,7 @@ import '../../../state/equipment/camera_state.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/equipment/mount_state.dart';
+import '../../../state/equipment/rotator_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
@@ -19,6 +20,7 @@ import '../../../services/camera_geometry_api.dart';
 import '../../../services/equipment_discovery_api.dart';
 import '../../../services/filter_wheel_names_api.dart';
 import '../../../services/focuser_props_api.dart';
+import '../../../services/rotator_props_api.dart';
 import '../../../services/telescope_optics_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -288,6 +290,10 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
   // telescope screen for the same pattern.
   int _seed = 0;
   bool _refreshing = false;
+  // Bin options offered before the camera has been read: 1×1–4×4 covers
+  // typical cameras; "Refresh from connected camera" replaces this with the
+  // camera's real MaxBin.
+  int _maxBin = 4;
 
   Future<void> _refreshFromCamera() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -322,10 +328,16 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
       final g = geometry; // non-null after the guard; promote for the closure
       setState(() {
         _c.pixelSizeMicrons = g.pixelSizeUm;
+        _maxBin = g.maxBin;
+        // A previously chosen bin the camera can't do would silently persist
+        // outside the new options — clear it so the user re-picks.
+        final bin = _c.defaultBin;
+        if (bin != null && bin > g.maxBin) _c.defaultBin = null;
         _seed++;
       });
       messenger.showSnackBar(const SnackBar(
-          content: Text('Filled pixel size from the connected camera.')));
+          content: Text('Filled pixel size + binning options from the '
+              'connected camera.')));
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
@@ -408,13 +420,22 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
           inputFormatters: WizardInput.unsignedInt,
           onChanged: (v) => _c.defaultOffset = _toInt(v),
         ),
-        WizardTextField(
+        WizardDropdown<int?>(
           label: 'Default bin',
-          initialValue: _c.defaultBin?.toString(),
-          hint: 'e.g. 1 for 1×1',
-          keyboardType: TextInputType.number,
-          inputFormatters: WizardInput.unsignedInt,
-          onChanged: (v) => _c.defaultBin = _toInt(v),
+          value: _c.defaultBin,
+          helperText: 'Refresh from the camera to list what it supports; '
+              '1×1 is the usual choice for deep-sky imaging.',
+          entries: [
+            const DropdownMenuEntry<int?>(value: null, label: '— Unset'),
+            // Keep an out-of-range manual value selectable so it stays visible.
+            for (var b = 1;
+                b <= (_c.defaultBin != null && _c.defaultBin! > _maxBin
+                    ? _c.defaultBin!
+                    : _maxBin);
+                b++)
+              DropdownMenuEntry<int?>(value: b, label: '$b×$b'),
+          ],
+          onChanged: (v) => setState(() => _c.defaultBin = v),
         ),
         KeyedSubtree(
           key: ValueKey('px-$_seed'),
@@ -639,6 +660,9 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
             style: const TextStyle(color: AraColors.textPrimary),
             decoration: const InputDecoration(
               labelText: 'Wavelength (nm) — optional',
+              helperText: 'Just the number: 656 for Hα, 501 for OIII, 672 for '
+                  'SII. Leave blank for broadband (L/R/G/B).',
+              helperMaxLines: 2,
               filled: true,
               fillColor: AraColors.bgInput,
               border: OutlineInputBorder(),
@@ -809,25 +833,95 @@ class ScreenMount extends ConsumerStatefulWidget {
 
 class _ScreenMountState extends ConsumerState<ScreenMount> {
   late final MountSettings _m = _draftOf(ref).mount;
+  // Re-seeds the (uncontrolled) name/slew-rate fields after a refresh — same
+  // pattern as the telescope screen.
+  int _seed = 0;
+  bool _refreshing = false;
+
+  Future<void> _refreshFromMount() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the mount.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      var props = await TelescopeOpticsApi(server).readProps();
+      if (!mounted) return;
+      props ??= await _connectAssignedThenRead(
+        ref, server,
+        type: EquipmentDeviceType.mount,
+        assignedId: _draftOf(ref).equipment.mountDeviceId,
+        apiFactory: ref.read(mountApiFactoryProvider),
+        read: () => TelescopeOpticsApi(server).readProps(),
+        isMounted: () => mounted,
+      );
+      if (!mounted) return;
+      if (props == null || !props.hasAny) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('The mount didn\'t come up. If it\'s assigned on '
+                'the Discover step, the daemon connects it automatically — a '
+                'timeout there usually means the bridge can\'t reach the '
+                'mount itself: check power/connection in AlpacaBridge. You '
+                'can also enter the values manually.')));
+        return;
+      }
+      final p = props; // non-null after the guard; promote for the closure
+      setState(() {
+        if (p.name != null) _m.name = p.name;
+        if (p.maxSlewRateDegPerSec != null) {
+          _m.slewRateDegPerSec = p.maxSlewRateDegPerSec;
+        }
+        _seed++;
+      });
+      final filled = [
+        if (p.name != null) 'name',
+        if (p.maxSlewRateDegPerSec != null) 'max slew rate',
+      ].join(' + ');
+      messenger.showSnackBar(
+          SnackBar(content: Text('Filled $filled from the connected mount.')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+            content: Text('Could not read the mount: ${_describeError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 8,
-      intro: 'Mount name is auto-pulled from the Alpaca driver. Settle time '
-          'comes from the driver\'s SlewSettleTime and is editable.',
+      intro: 'Refresh pulls the name and fastest slew rate from the Alpaca '
+          'driver. The rest are behavior choices only you can make — the '
+          'defaults are safe.',
       children: [
-        WizardTextField(
-          label: 'Mount name',
-          initialValue: _m.name,
-          onChanged: (v) => _m.name = v.trim().isEmpty ? null : v.trim(),
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected mount',
+          busy: _refreshing,
+          onPressed: _refreshFromMount,
         ),
-        WizardTextField(
-          label: 'Slew rate (°/sec)',
-          initialValue: _m.slewRateDegPerSec?.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _assignDouble(v, (d) => _m.slewRateDegPerSec = d),
+        KeyedSubtree(
+          key: ValueKey('mname-$_seed'),
+          child: WizardTextField(
+            label: 'Mount name',
+            initialValue: _m.name,
+            onChanged: (v) => _m.name = v.trim().isEmpty ? null : v.trim(),
+          ),
+        ),
+        KeyedSubtree(
+          key: ValueKey('mslew-$_seed'),
+          child: WizardTextField(
+            label: 'Slew rate (°/sec)',
+            initialValue: _m.slewRateDegPerSec?.toString(),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            onChanged: (v) => _assignDouble(v, (d) => _m.slewRateDegPerSec = d),
+          ),
         ),
         WizardDropdown<ParkPositionMode>(
           label: 'Park position',
@@ -881,13 +975,74 @@ class ScreenRotator extends ConsumerStatefulWidget {
 
 class _ScreenRotatorState extends ConsumerState<ScreenRotator> {
   late final RotatorSettings _r = _draftOf(ref).rotator;
+  int _seed = 0;
+  bool _refreshing = false;
+
+  Future<void> _refreshFromRotator() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final server = _activeServer(ref);
+    if (server == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to read the rotator.')));
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      var props = await RotatorPropsApi(server).read();
+      if (!mounted) return;
+      props ??= await _connectAssignedThenRead(
+        ref, server,
+        type: EquipmentDeviceType.rotator,
+        assignedId: _draftOf(ref).equipment.rotatorDeviceId,
+        apiFactory: ref.read(rotatorApiFactoryProvider),
+        read: () => RotatorPropsApi(server).read(),
+        isMounted: () => mounted,
+      );
+      if (!mounted) return;
+      if (props == null) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('The rotator didn\'t come up. If it\'s assigned on '
+                'the Discover step, the daemon connects it automatically — a '
+                'timeout there usually means the bridge can\'t reach the '
+                'rotator itself: check power/USB in AlpacaBridge. You can '
+                'also enter the values manually.')));
+        return;
+      }
+      final p = props; // non-null after the guard; promote for the closure
+      setState(() {
+        if (p.stepDeg != null) _r.stepDeg = p.stepDeg;
+        _r.reverse = p.reverse;
+        _seed++;
+      });
+      messenger.showSnackBar(SnackBar(
+          content: Text(p.stepDeg != null
+              ? 'Filled step size + reverse from the connected rotator.'
+              : 'Filled reverse from the connected rotator (it doesn\'t '
+                  'report a step size — most don\'t; leaving it blank is fine).')));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+            content:
+                Text('Could not read the rotator: ${_describeError(e)}')));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 9,
-      intro: 'Mechanical limits and step size for your rotator.',
+      intro: 'Refresh pulls step size + reverse from the Alpaca driver. Min/max '
+          'angles are YOUR mechanical limits (cable wrap) — no driver knows '
+          'them; leave blank for full 0–360° travel.',
       children: [
+        _RefreshFromDeviceButton(
+          label: 'Refresh from connected rotator',
+          busy: _refreshing,
+          onPressed: _refreshFromRotator,
+        ),
         WizardTextField(
           label: 'Min angle (°)',
           initialValue: _r.minAngleDeg?.toString(),
@@ -904,12 +1059,15 @@ class _ScreenRotatorState extends ConsumerState<ScreenRotator> {
           inputFormatters: WizardInput.signedDecimal,
           onChanged: (v) => _assignDouble(v, (d) => _r.maxAngleDeg = d),
         ),
-        WizardTextField(
-          label: 'Angle step (°)',
-          initialValue: _r.stepDeg?.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _assignDouble(v, (d) => _r.stepDeg = d),
+        KeyedSubtree(
+          key: ValueKey('rstep-$_seed'),
+          child: WizardTextField(
+            label: 'Angle step (°)',
+            initialValue: _r.stepDeg?.toString(),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            onChanged: (v) => _assignDouble(v, (d) => _r.stepDeg = d),
+          ),
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,

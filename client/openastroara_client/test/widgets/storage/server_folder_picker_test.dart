@@ -48,6 +48,19 @@ class _FakeBrowse implements StorageBrowseApi {
     }
   }
 
+  final List<(String, String)> created = [];
+
+  @override
+  Future<StorageBrowseLevel> createFolder(String parentPath, String name) async {
+    created.add((parentPath, name));
+    return StorageBrowseLevel(
+      path: parentPath,
+      parent: '/media',
+      writable: true,
+      dirs: [StorageBrowseEntry(name: name, path: '$parentPath/$name')],
+    );
+  }
+
   @override
   void close() {}
 
@@ -131,6 +144,34 @@ void main() {
     expect(find.text('USB / removable (media)'), findsOneWidget,
         reason: 'stale path from another rig → roots listing');
     expect(o.api.requests.first, '/gone/rig');
+  });
+
+  testWidgets(
+      'New folder is disabled at the roots and creates + relists in a writable dir',
+      (tester) async {
+    final o = await open(tester);
+
+    // Roots: can't create there.
+    expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'New folder'))
+            .onPressed,
+        isNull);
+
+    await tester.tap(find.text('USB / removable (media)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('usb'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Lights');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+
+    expect(o.api.created, [('/media/usb', 'Lights')]);
+    expect(find.text('Lights'), findsOneWidget,
+        reason: 'the refreshed listing shows the new folder');
   });
 
   testWidgets('cancel returns null', (tester) async {
