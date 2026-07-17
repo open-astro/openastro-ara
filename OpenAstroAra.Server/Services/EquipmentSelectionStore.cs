@@ -192,12 +192,13 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     }
 
     // Upsert/dedup key: single-instance types collapse to one entry per type (newest wins);
-    // Switch is multi-instance, so each switch is kept independently by its UniqueId (device
-    // NUMBERS repeat across hosts — two hubs both "device 0" must not collapse). Legacy
+    // Switch is multi-instance, so each switch is kept independently by its PHYSICAL endpoint
+    // (host:port + device number — globally unique, unlike the bare device number, and stable
+    // unlike the UniqueId, which bridges have been observed renaming across versions). Legacy
     // "Switch"/"Switch:{number}" keys are non-canonical aliases; GetAll's re-key migrates them.
     private static string KeyFor(DiscoveredDeviceDto device) =>
         device.Type == DeviceType.Switch
-            ? $"{DeviceType.Switch}:{device.UniqueId}"
+            ? $"{DeviceType.Switch}:{DiscoveredDeviceEndpoint.KeyOf(device)}"
             : device.Type.ToString();
 
     // Caller holds _gate.

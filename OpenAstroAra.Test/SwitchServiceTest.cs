@@ -30,9 +30,9 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class SwitchServiceTest {
 
-        private static DiscoveredDeviceDto Dead(string uid, int deviceNumber) =>
+        private static DiscoveredDeviceDto Dead(string uid, int deviceNumber, string host = "127.0.0.1") =>
             new(uid, $"Unreachable {deviceNumber}", DeviceType.Switch,
-                "127.0.0.1", "127.0.0.1", 1, deviceNumber, false);
+                host, "127.0.0.1", 1, deviceNumber, false);
 
         [Test]
         public async Task GetAll_is_empty_and_GetAsync_is_null_before_any_device_is_connected() {
@@ -88,8 +88,8 @@ namespace OpenAstroAra.Test {
             // The common two-host rig: a power box and a relay board on separate Alpaca servers are
             // BOTH device number 0. UniqueId addressing must keep both — the old device-number keying
             // made the second connect evict the first (the toggles-vanish bug).
-            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-A", 0)), null, CancellationToken.None);
-            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-B", 0)), null, CancellationToken.None);
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-A", 0, host: "host-a")), null, CancellationToken.None);
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-B", 0, host: "host-b")), null, CancellationToken.None);
             await PollUntilNotConnectingAsync(svc, "uid-A");
             await PollUntilNotConnectingAsync(svc, "uid-B");
 
@@ -97,6 +97,21 @@ namespace OpenAstroAra.Test {
             Assert.That(all, Has.Count.EqualTo(2), "same-numbered switches on different hosts coexist");
             Assert.That(all[0].DeviceId, Is.EqualTo("uid-A"), "stable order: number, then id");
             Assert.That(all[1].DeviceId, Is.EqualTo("uid-B"));
+        }
+
+        [Test]
+        public async Task ConnectAsync_same_endpoint_with_a_renamed_unique_id_replaces_not_duplicates() {
+            using var svc = new SwitchService();
+            // A bridge that renamed the device's UniqueId across versions (ZWO_DEW_1 →
+            // ZWO_DEW_SN_...): the endpoint (host:port + number) is the same physical device, so
+            // the fresh connect must supersede the stale entry, not open a second connection.
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("ZWO_DEW_1", 1)), null, CancellationToken.None);
+            await svc.ConnectAsync(new ConnectRequestDto(Dead("ZWO_DEW_SN_abc", 1)), null, CancellationToken.None);
+            await PollUntilNotConnectingAsync(svc, "ZWO_DEW_SN_abc");
+
+            var all = await svc.GetAllAsync(CancellationToken.None);
+            Assert.That(all, Has.Count.EqualTo(1), "one physical device = one connection entry");
+            Assert.That(all[0].DeviceId, Is.EqualTo("ZWO_DEW_SN_abc"), "the latest id wins");
         }
 
         [Test]

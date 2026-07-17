@@ -21,6 +21,7 @@ using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -126,6 +127,8 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         }
     }
 
+    private static string EndpointKey(DiscoveredDeviceDto d) => DiscoveredDeviceEndpoint.KeyOf(d);
+
     // Caller holds _gate.
     private static SwitchDto ProjectDto(SwitchConnection conn) {
         IReadOnlyList<SwitchPortDto> ports = conn.State == EquipmentConnectionState.Connected
@@ -142,16 +145,25 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
         SwitchConnection conn;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_connections.TryGetValue(device.UniqueId, out var existing)) {
-                if (existing.State == EquipmentConnectionState.Connecting || existing.State == EquipmentConnectionState.Connected) {
+            // Same PHYSICAL device = same Alpaca endpoint (host:port + device number), not same
+            // UniqueId: bridges have been observed changing a device's UniqueId across versions
+            // (ZWO dew heater: "ZWO_DEW_1" → "ZWO_DEW_SN_..."), and a remembered old-id entry plus
+            // a fresh discovery would otherwise open TWO live connections to one device.
+            SwitchConnection? existing = _connections.TryGetValue(device.UniqueId, out var byId)
+                ? byId
+                : _connections.Values.FirstOrDefault(c => EndpointKey(c.Device) == EndpointKey(device));
+            if (existing is not null) {
+                if ((existing.State == EquipmentConnectionState.Connecting || existing.State == EquipmentConnectionState.Connected)
+                    && existing.Device.UniqueId == device.UniqueId) {
                     // Already connecting/connected to this exact device — idempotent, no teardown.
                     return Task.FromResult(Accepted("switch.connect", idempotencyKey));
                 }
-                // Reconnecting a known-but-down device (Disconnected/Error): tear down any stale
-                // client first. §60.9 — surface the teardown before the replacement's Connecting,
-                // so a WS subscriber tracking state deltas sees a clean transition.
+                // Reconnecting a known-but-down device, or the same endpoint under a renamed
+                // UniqueId: tear down the stale entry first. §60.9 — surface the teardown before
+                // the replacement's Connecting, so a WS subscriber sees a clean transition.
                 SetState(existing, EquipmentConnectionState.Disconnected);
                 DisposeClientLocked(existing);
+                _connections.Remove(existing.Key); // may differ from device.UniqueId on an id rename
             }
             conn = new SwitchConnection { Device = device };
             _connections[device.UniqueId] = conn;

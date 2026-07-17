@@ -49,8 +49,8 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static DiscoveredDeviceDto Device(DeviceType type, string id, string name, int number = 0) =>
-            new(UniqueId: id, Name: name, Type: type, HostName: "host", IpAddress: "127.0.0.1",
+        private static DiscoveredDeviceDto Device(DeviceType type, string id, string name, int number = 0, string host = "host") =>
+            new(UniqueId: id, Name: name, Type: type, HostName: host, IpAddress: "127.0.0.1",
                 IpPort: 11111, AlpacaDeviceNumber: number, UseHttps: false);
 
         [Test]
@@ -129,12 +129,26 @@ namespace OpenAstroAra.Test {
             // The two-host rig: a power box and a relay board on separate Alpaca servers are BOTH
             // device number 0. UniqueId keying must remember both — the old device-number keying
             // collapsed them, so only the last-connected hub survived a daemon restart.
-            await _store.RememberAsync(Device(DeviceType.Switch, "sw-host-a", "PowerBox", number: 0), CancellationToken.None);
-            await _store.RememberAsync(Device(DeviceType.Switch, "sw-host-b", "RelayBox", number: 0), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-host-a", "PowerBox", number: 0, host: "host-a"), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.Switch, "sw-host-b", "RelayBox", number: 0, host: "host-b"), CancellationToken.None);
 
             var switches = (await _store.GetAllAsync(CancellationToken.None))
                 .Where(d => d.Type == DeviceType.Switch).ToList();
             Assert.That(switches.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task Remember_collapses_a_renamed_unique_id_for_the_same_endpoint() {
+            // Bridges have renamed a device's UniqueId across versions (ZWO_DEW_1 → ZWO_DEW_SN_...).
+            // Same physical endpoint (host:port + device number) must upsert, not duplicate —
+            // otherwise auto-connect opens two live connections to one device.
+            await _store.RememberAsync(Device(DeviceType.Switch, "ZWO_DEW_1", "Dew", number: 1), CancellationToken.None);
+            await _store.RememberAsync(Device(DeviceType.Switch, "ZWO_DEW_SN_abc", "Dew", number: 1), CancellationToken.None);
+
+            var switches = (await _store.GetAllAsync(CancellationToken.None))
+                .Where(d => d.Type == DeviceType.Switch).ToList();
+            Assert.That(switches.Count, Is.EqualTo(1));
+            Assert.That(switches[0].UniqueId, Is.EqualTo("ZWO_DEW_SN_abc"), "the latest id wins");
         }
 
         [Test]
