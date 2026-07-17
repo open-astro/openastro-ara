@@ -142,10 +142,8 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         }
     }
 
-    // FlatDevice/CoverCalibrator are one physical device under two tokens (ASCOM type vs
-    // NINA concept) — collapse them so forget/reconnect treat them as a single group.
-    private static DeviceType Canonical(DeviceType t) =>
-        t == DeviceType.FlatDevice ? DeviceType.CoverCalibrator : t;
+    // FlatDevice/CoverCalibrator collapse — shared definition on DeviceTypeExtensions.
+    private static DeviceType Canonical(DeviceType t) => t.Canonical();
 
     // Best-effort removal of the temp file after a failed atomic write.
     private static void SafeDeleteTmp(string tmp) {

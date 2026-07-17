@@ -144,10 +144,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         return Task.WhenAll(running);
     }
 
-    // FlatDevice/CoverCalibrator are one physical device under two tokens (the
-    // EquipmentReconnector grouping) — one episode covers both.
-    private static DeviceType NormalizeType(DeviceType t) =>
-        t == DeviceType.FlatDevice ? DeviceType.CoverCalibrator : t;
+    // FlatDevice/CoverCalibrator are one physical device under two tokens — one episode
+    // covers both (shared collapse: DeviceTypeExtensions.Canonical).
+    private static DeviceType NormalizeType(DeviceType t) => t.Canonical();
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Episode boundary: a reaction episode runs on a fire-and-forget task; any escape must be logged and contained, never surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
