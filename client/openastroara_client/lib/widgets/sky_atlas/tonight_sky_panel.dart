@@ -322,7 +322,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
             ),
             if (hasReasons && _showReasons)
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+                // Top 3 / bottom 10 (was 0/6): the first bullet sat flush under
+                // the actions row and the SharpCap attribution's descenders
+                // clipped at the card edge (live-walkthrough screenshot).
+                padding: const EdgeInsets.fromLTRB(4, 3, 4, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
