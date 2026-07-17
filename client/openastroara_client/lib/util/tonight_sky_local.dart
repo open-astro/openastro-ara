@@ -7,6 +7,7 @@ import '../state/settings/filter_set_state.dart';
 import '../state/settings/optics_settings_state.dart';
 import '../state/settings/site_settings_state.dart';
 import 'filter_advice.dart';
+import 'imaging_regions.dart';
 import 'optimal_sub.dart';
 import 'star_model.dart' as stars;
 
@@ -115,9 +116,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   int mosaicTilesY = 1,
   int limit = 10,
 }) {
-  final objects = (catalog == null || catalog.isEmpty)
-      ? starterTonightCatalog
-      : catalog;
+  // The curated imaging-regions layer (realistic extents + evocative names for
+  // the famous complexes, plus region-scale fields with no catalog anchor)
+  // rides on top of whichever catalog is in play — see imaging_regions.dart.
+  final objects = applyImagingRegions(
+      (catalog == null || catalog.isEmpty) ? starterTonightCatalog : catalog);
   final at = atUtc.toUtc();
   final skyline = (site.useCustomHorizon &&
           customHorizon != null &&
