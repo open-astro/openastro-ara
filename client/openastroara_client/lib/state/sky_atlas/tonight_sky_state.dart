@@ -7,6 +7,7 @@ import '../../services/tonight_sky_api.dart';
 import '../../util/tonight_sky_local.dart';
 import '../saved_server_state.dart';
 import '../settings/camera_electronics_state.dart';
+import '../settings/custom_horizon_state.dart';
 import '../settings/filter_set_state.dart';
 import '../settings/optics_settings_state.dart';
 import '../settings/site_settings_state.dart';
@@ -37,6 +38,9 @@ final planningSettingsBootstrapProvider = FutureProvider<void>((ref) async {
       ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
       ref.read(filterSetProvider.notifier).hydrateFromServer(api),
       ref.read(cameraElectronicsProvider.notifier).hydrateFromServer(api),
+      // §36 custom terrain skyline — the ranker gates visibility on it when
+      // the site has useCustomHorizon on.
+      ref.read(customHorizonProvider.notifier).hydrateFromServer(api),
     ]);
   } catch (_) {
     // best-effort: an unreachable daemon leaves the cached/offline state
@@ -84,6 +88,11 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   // The mirrored openngc-dso catalog when this machine has one; the
   // ranker falls back to the 20-object starter list otherwise.
   final catalog = await ref.watch(dsoCatalogProvider.future);
+  // Plain records so the isolate payload stays model-free.
+  final horizonPoints = ref
+      .watch(customHorizonProvider)
+      .map((p) => (p.azimuthDeg, p.altitudeDeg))
+      .toList();
   final at = DateTime.now().toUtc();
   final opticsFinal = optics;
   // Rank OFF the UI isolate: the mirrored catalog is thousands of rows × a
@@ -94,9 +103,14 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
         filterSet: filterSet,
         electronics: electronics,
         catalog: catalog,
+        customHorizon: horizonPoints,
         mosaicTilesX: mosaicX,
         mosaicTilesY: mosaicY,
         atUtc: at,
+        // 30 (was the default 10): the panel scrolls, and a filter set that
+        // spans broadband + narrowband makes far more of the sky worth
+        // listing — a 10-row cap hid the variety the scoring surfaces.
+        limit: 30,
       ));
 });
 

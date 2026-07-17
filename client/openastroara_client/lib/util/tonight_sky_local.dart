@@ -25,9 +25,12 @@ import 'star_model.dart' as stars;
 /// Includes the NEXTGEN §1/§3.1 advisory stack (filter advice, optimal-sub
 /// figures, star-detectability tags) via the client-side ports in
 /// filter_advice.dart / optimal_sub.dart / star_model.dart, fed by the cached
-/// filter set + camera electronics. Deliberately NOT ported: the §36 custom
-/// terrain horizon (its points aren't in the offline profile cache) — the
-/// site's default horizon altitude gates instead. Tracked in PORT_TODO.
+/// filter set + camera electronics. The §36 custom terrain horizon is now
+/// honored when the caller passes its points (hydrated per server since the
+/// planning-settings bootstrap): visibility gates on the interpolated skyline
+/// altitude at the object's azimuth instead of one flat number, so a low
+/// eastern horizon FINDS more objects and a tall western treeline correctly
+/// drops them. Flat default-horizon altitude gates when no polygon is given.
 
 // ── Score weights / thresholds (mirror TonightSkyService.cs; see
 //    design/TONIGHT_SKY.md for the rationale) ────────────────────────────────
@@ -36,8 +39,15 @@ const double _hoursWeight = 25.0;
 const double _altitudeWeight = 20.0;
 const double _surfaceBrightnessWeight = 12.0;
 const double _magnitudeWeight = 8.0;
-const double _framingTooSmallRatio = 0.10;
+// §36.8 framing tiers (framing review, 2026-07-17): ratio = object major axis
+// ÷ short FOV side. "Fills frame" is reserved for targets that genuinely
+// dominate (≥40%); 15–40% is an honest "good fit" (full-ish points, ramping);
+// under 15% the rig is mismatched and the score should say so.
+const double _framingTooSmallRatio = 0.15;
+const double _framingFillsRatio = 0.40;
 const double _framingTooBigRatio = 0.80;
+// Q at the bottom of the good-fit ramp (ratio == tooSmall boundary).
+const double _framingGoodFitFloorQ = 0.70;
 const double _framingFloorQ = 0.15;
 const double _hoursSaturationHours = 6.0;
 const double _sbContrastSpanMag = 4.0;
@@ -93,6 +103,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
   FilterSetSettings filterSet = const FilterSetSettings(filters: []),
   CameraElectronics electronics = const CameraElectronics(),
   List<PlanningDso>? catalog,
+
+  /// §36 custom terrain skyline as (azimuthDeg, altitudeDeg) vertices —
+  /// visibility gates on the interpolated altitude at the object's azimuth
+  /// when non-empty AND the site has `useCustomHorizon` on. Null/empty (or
+  /// the toggle off) falls back to the flat [SiteSettings.defaultHorizonAltitudeDeg].
+  List<(double, double)>? customHorizon,
   int mosaicTilesX = 1,
   int mosaicTilesY = 1,
   int limit = 10,
@@ -101,7 +117,16 @@ List<TonightSkyObject> computeTonightSkyLocal({
       ? starterTonightCatalog
       : catalog;
   final at = atUtc.toUtc();
-  final horizon = site.defaultHorizonAltitudeDeg;
+  final skyline = (site.useCustomHorizon &&
+          customHorizon != null &&
+          customHorizon.isNotEmpty)
+      ? _HorizonSkyline(customHorizon)
+      : null;
+  // With a skyline, the FLAT pre-filter bar is its lowest vertex (an object
+  // that never clears even the lowest terrain can be dropped early); the real
+  // per-azimuth check happens in the sample loop.
+  final horizon =
+      skyline?.minAltitudeDeg ?? site.defaultHorizonAltitudeDeg;
   final lat = site.latitudeDeg;
   final lon = site.longitudeDeg;
   final lst0 = _localSiderealTimeDeg(at, lon);
@@ -222,9 +247,22 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final cosDec = math.cos(_deg2rad(o.decDeg));
     for (var i = 0; i < sampleCount; i++) {
       final hDeg = sampleLstDeg[i] - o.raDeg;
-      final cosH = math.cos(_deg2rad(hDeg));
+      final hRad = _deg2rad(hDeg);
+      final cosH = math.cos(hRad);
       final sinAlt = sinDec * sinLat + cosDec * cosLat * cosH;
-      up[i] = sinAlt >= sinHorizon && sunIsDown[i];
+      if (skyline == null) {
+        up[i] = sinAlt >= sinHorizon && sunIsDown[i];
+      } else if (!sunIsDown[i] || sinAlt < skyline.sinMinAltitude) {
+        up[i] = false; // below even the lowest terrain — no azimuth needed
+      } else {
+        // Per-azimuth terrain check: azimuth from North (Meeus A + 180°).
+        final azDeg = _mod360(_rad2deg(math.atan2(
+                math.sin(hRad),
+                cosH * sinLat - (sinDec / cosDec) * cosLat)) +
+            180.0);
+        final altDeg = _rad2deg(math.asin(sinAlt.clamp(-1.0, 1.0)));
+        up[i] = altDeg >= skyline.altitudeAt(azDeg);
+      }
     }
 
     final run = _longestRun(up);
@@ -290,8 +328,48 @@ List<TonightSkyObject> computeTonightSkyLocal({
       }
     }
 
+    // §36.8 framing review round 2 — two gentle multiplicative adjustments so
+    // the ordering matches how imagers actually pick targets:
+    //  * Photogenic-type factor: sparse OPEN clusters rarely make compelling
+    //    images next to nebulae/galaxies — modest discount (globulars less
+    //    so). Advisory-sized on purpose: they stay listed, just ranked down.
+    //  * Filter-capability factor: an emission-line target with narrowband
+    //    (or duo/tri) glass in the wheel is MORE shootable than the raw score
+    //    says (light pollution / moon resilience); the same target with a
+    //    broadband-only filter set is less so.
+    var adjusted = score;
+    final adjustReasons = <String>[];
+    if (o.type == 'OCl') {
+      adjusted *= 0.85;
+      adjustReasons.add('open cluster — usually better visual than imaging '
+          'targets (−15%)');
+    } else if (o.type == 'GCl') {
+      adjusted *= 0.95;
+      adjustReasons.add('globular cluster (−5%)');
+    }
+    if (classifyEmission(o.type) == EmissionClass.emissionLine &&
+        filterSet.filters.isNotEmpty) {
+      final hasNarrowband = filterSet.filters.any((f) =>
+          f.kind == FilterKind.ha ||
+          f.kind == FilterKind.oiii ||
+          f.kind == FilterKind.sii ||
+          f.kind == FilterKind.duo ||
+          f.kind == FilterKind.tri);
+      if (hasNarrowband) {
+        adjusted *= 1.05;
+        adjustReasons
+            .add('emission target + narrowband in your wheel (+5%)');
+      } else {
+        adjusted *= 0.85;
+        adjustReasons.add(
+            'emission target but no narrowband filter in your set (−15%)');
+      }
+    }
+    final finalScore = adjusted.clamp(0.0, 100.0);
+
     final allReasons = [
       ...reasons,
+      ...adjustReasons,
       ...adviceLines,
       if (moonUpFraction > 0)
         'moon ${moonSeparationDeg.toStringAsFixed(0)}° away, '
@@ -308,7 +386,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     ];
 
     scored.add((
-      score,
+      finalScore,
       TonightSkyObject(
         id: o.id,
         name: o.name,
@@ -328,7 +406,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         integrationHours: double.parse(integrationHours.toStringAsFixed(2)),
         remainingHours: double.parse(remainingHours.toStringAsFixed(2)),
         framing: framing,
-        score: double.parse(score.toStringAsFixed(1)),
+        score: double.parse(finalScore.toStringAsFixed(1)),
         scoreReasons: allReasons,
         filterAdvice: advice,
         adviceReason: adviceReason,
@@ -378,8 +456,18 @@ List<TonightSkyObject> computeTonightSkyLocal({
       case TonightFraming.good:
         framingQ = 1.0;
         framingTag = 'fills the frame';
+      case TonightFraming.goodFit:
+        // Ramp 0.70 → 1.0 across the 15–40% band: a clear, worthwhile target
+        // that would still benefit from a longer focal length.
+        framingQ = _framingGoodFitFloorQ +
+            (1.0 - _framingGoodFitFloorQ) *
+                (ratio - _framingTooSmallRatio) /
+                (_framingFillsRatio - _framingTooSmallRatio);
+        framingTag = 'good fit in frame';
       case TonightFraming.tooSmall:
-        framingQ = math.max(_framingFloorQ, ratio / _framingTooSmallRatio);
+        // Ramp toward the good-fit floor as the object approaches 15%.
+        framingQ = math.max(
+            _framingFloorQ, _framingGoodFitFloorQ * ratio / _framingTooSmallRatio);
         framingTag = 'small in frame';
       default: // tooBig
         framingQ = math.max(_framingFloorQ, _framingTooBigRatio / ratio);
@@ -446,9 +534,10 @@ TonightFraming _classifyFraming(
   if (minFov <= 0) return TonightFraming.unknown;
   final ratio = sizeMajArcmin / minFov;
   if (ratio < _framingTooSmallRatio) return TonightFraming.tooSmall;
-  return ratio > _framingTooBigRatio
-      ? TonightFraming.tooBig
-      : TonightFraming.good;
+  if (ratio > _framingTooBigRatio) return TonightFraming.tooBig;
+  return ratio >= _framingFillsRatio
+      ? TonightFraming.good
+      : TonightFraming.goodFit;
 }
 
 /// FOV (arcmin) of the optical train, enlarged by the mosaic tile count per
@@ -586,6 +675,42 @@ double _maxAltitudeDeg(double decDeg, double latDeg) =>
 double _mod360(double x) {
   final r = x % 360.0;
   return r < 0 ? r + 360.0 : r;
+}
+
+/// §36 custom terrain skyline: sorted (azimuth, altitude) vertices with
+/// wrap-around linear interpolation (the daemon interpolates the same way).
+class _HorizonSkyline {
+  final List<(double, double)> _sorted;
+  final double minAltitudeDeg;
+  final double sinMinAltitude;
+
+  _HorizonSkyline(List<(double, double)> vertices)
+      : _sorted = vertices.map((v) => (_mod360(v.$1), v.$2)).toList()
+          ..sort((a, b) => a.$1.compareTo(b.$1)),
+        minAltitudeDeg =
+            vertices.map((v) => v.$2).reduce((a, b) => a < b ? a : b),
+        sinMinAltitude = math.sin(_deg2rad(
+            vertices.map((v) => v.$2).reduce((a, b) => a < b ? a : b)));
+
+  /// Interpolated skyline altitude at [azDeg] (0–360, wrapping north).
+  double altitudeAt(double azDeg) {
+    final az = _mod360(azDeg);
+    if (_sorted.length == 1) return _sorted.first.$2;
+    // Find the bracketing pair (wrapping past 360° back to the first vertex).
+    for (var i = 0; i < _sorted.length; i++) {
+      final a = _sorted[i];
+      final b = _sorted[(i + 1) % _sorted.length];
+      final spanEnd = i + 1 == _sorted.length ? b.$1 + 360.0 : b.$1;
+      final target = az < a.$1 && i + 1 == _sorted.length ? az + 360.0 : az;
+      if (target >= a.$1 && target <= spanEnd) {
+        final span = spanEnd - a.$1;
+        if (span <= 0) return a.$2;
+        final t = (target - a.$1) / span;
+        return a.$2 + (b.$2 - a.$2) * t;
+      }
+    }
+    return _sorted.first.$2; // unreachable with a well-formed polygon
+  }
 }
 
 double _deg2rad(double d) => d * math.pi / 180.0;
