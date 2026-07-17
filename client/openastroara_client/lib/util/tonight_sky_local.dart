@@ -71,7 +71,9 @@ PlanningDso _o(String id, String name, String type, double mag, double ra,
 final List<PlanningDso> starterTonightCatalog = [
   _o('M31', 'Andromeda Galaxy', 'galaxy', 3.4, 10.685, 41.269),
   _o('M33', 'Triangulum Galaxy', 'galaxy', 5.7, 23.462, 30.660),
-  _o('M45', 'Pleiades', 'cluster', 1.6, 56.750, 24.117),
+  // OpenNGC type codes (not the old human-readable strings) so the §36.8
+  // type-based score factor applies on the starter path too (#858 review).
+  _o('M45', 'Pleiades', 'OCl', 1.6, 56.750, 24.117),
   _o('M1', 'Crab Nebula', 'SNR', 8.4, 83.633, 22.014),
   _o('M42', 'Orion Nebula', 'HII', 4.0, 83.822, -5.391),
   _o('NGC2237', 'Rosette Nebula', 'HII', 9.0, 97.950, 5.050),
@@ -81,7 +83,7 @@ final List<PlanningDso> starterTonightCatalog = [
   _o('M63', 'Sunflower Galaxy', 'galaxy', 8.6, 198.955, 42.029),
   _o('M51', 'Whirlpool Galaxy', 'galaxy', 8.4, 202.470, 47.195),
   _o('M101', 'Pinwheel Galaxy', 'galaxy', 7.9, 210.802, 54.349),
-  _o('M13', 'Hercules Cluster', 'cluster', 5.8, 250.423, 36.461),
+  _o('M13', 'Hercules Cluster', 'GCl', 5.8, 250.423, 36.461),
   _o('M20', 'Trifid Nebula', 'nebula', 6.3, 270.600, -23.030),
   _o('M8', 'Lagoon Nebula', 'HII', 6.0, 270.904, -24.387),
   _o('M16', 'Eagle Nebula', 'HII', 6.0, 274.700, -13.807),
@@ -256,9 +258,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
         up[i] = false; // below even the lowest terrain — no azimuth needed
       } else {
         // Per-azimuth terrain check: azimuth from North (Meeus A + 180°).
+        // Multiplied through by cosDec (≥ 0, so the angle is unchanged) —
+        // matches the daemon's AzimuthFromHourAngleDeg and avoids the
+        // tan(dec) division that blows up at the exact pole (#858 review).
         final azDeg = _mod360(_rad2deg(math.atan2(
-                math.sin(hRad),
-                cosH * sinLat - (sinDec / cosDec) * cosLat)) +
+                math.sin(hRad) * cosDec,
+                cosH * sinLat * cosDec - sinDec * cosLat)) +
             180.0);
         final altDeg = _rad2deg(math.asin(sinAlt.clamp(-1.0, 1.0)));
         up[i] = altDeg >= skyline.altitudeAt(azDeg);
