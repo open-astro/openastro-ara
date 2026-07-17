@@ -65,24 +65,7 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
     return const <TonightSkyObject>[];
   }
-  var optics = ref.watch(opticsSettingsProvider);
-  // §36.8 slice 4b what-if overrides: swap the optical train fields the user
-  // dialed in; mosaic tiles enlarge the framing FOV per axis.
-  final overrides = ref.watch(tonightSkyOverridesProvider);
-  var mosaicX = 1;
-  var mosaicY = 1;
-  if (overrides.isActive) {
-    optics = OpticsSettings(
-      focalLengthMm: overrides.focalLengthMm ?? optics.focalLengthMm,
-      reducerFactor: overrides.reducer ?? optics.reducerFactor,
-      sensorWidthPx: overrides.sensorW ?? optics.sensorWidthPx,
-      sensorHeightPx: overrides.sensorH ?? optics.sensorHeightPx,
-      pixelSizeUm: overrides.pixelUm ?? optics.pixelSizeUm,
-      apertureMm: optics.apertureMm,
-    );
-    mosaicX = overrides.mosaicX;
-    mosaicY = overrides.mosaicY;
-  }
+  final optics = ref.watch(opticsSettingsProvider);
   final filterSet = ref.watch(filterSetProvider);
   final electronics = ref.watch(cameraElectronicsProvider);
   // The mirrored openngc-dso catalog when this machine has one; the
@@ -104,8 +87,6 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
         electronics: electronics,
         catalog: catalog,
         customHorizon: horizonPoints,
-        mosaicTilesX: mosaicX,
-        mosaicTilesY: mosaicY,
         atUtc: at,
         // 30 (was the default 10): the panel scrolls, and a filter set that
         // spans broadband + narrowband makes far more of the sky worth
@@ -114,24 +95,6 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
       ));
 });
 
-/// §36.8 slice 4b — the session's Tonight's Sky what-if overrides (optical
-/// train fields + mosaic tiles). NOT auto-disposed on purpose: a user who has
-/// dialed in "what could I shoot with the 0.7× reducer?" keeps that lens while
-/// hopping between tabs; it resets with the app (overrides are a what-if, not
-/// a setting — a persistent change belongs in Settings → Optics).
-class TonightOverridesNotifier extends Notifier<TonightOverrides> {
-  @override
-  TonightOverrides build() => TonightOverrides.none;
-
-  void set(TonightOverrides value) => state = value;
-
-  void clear() => state = TonightOverrides.none;
-}
-
-final tonightSkyOverridesProvider =
-    NotifierProvider<TonightOverridesNotifier, TonightOverrides>(
-      TonightOverridesNotifier.new,
-    );
 
 /// The Tonight's Sky row the user last tapped (by [TonightSkyObject.id]), or
 /// null when nothing is selected. Tapping a row frames that object on the
