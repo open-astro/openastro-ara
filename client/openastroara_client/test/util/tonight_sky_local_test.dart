@@ -129,4 +129,78 @@ void main() {
     // Framing is the dominant score term — the mosaic plan must outrank.
     expect(mosaic.single.score!, greaterThan(single.single.score!));
   });
+
+  PlanningDso dso(String id, double sizeMajArcmin,
+          {double raDeg = 314.75, double decDeg = 44.33}) =>
+      PlanningDso(
+          id: id,
+          name: id,
+          type: 'OCl',
+          magnitude: 5.0,
+          raDeg: raDeg,
+          decDeg: decDeg,
+          sizeMajArcmin: sizeMajArcmin,
+          sizeMinArcmin: sizeMajArcmin);
+
+  test('framing tiers: fills ≥40%, good fit 15–40%, small <15% of short side', () {
+    // The 250 mm train's short FOV side ≈ 4176·(206.265·3.76/250)/60 ≈ 216'.
+    final night = DateTime.utc(2026, 10, 15, 3);
+    List<TonightSkyObject> rank(double size) => computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: [dso('x', size)]);
+
+    expect(rank(120).single.framing, TonightFraming.good); // 56% → fills
+    expect(rank(60).single.framing, TonightFraming.goodFit); // 28% → good fit
+    expect(rank(14).single.framing, TonightFraming.tooSmall); // 6.5% → small
+    // A genuine frame-filler must outrank a good-fit which outranks a small.
+    final fills = rank(120).single.score!;
+    final goodFit = rank(60).single.score!;
+    final small = rank(14).single.score!;
+    expect(fills, greaterThan(goodFit));
+    expect(goodFit, greaterThan(small));
+  });
+
+  test('custom horizon skyline gates per azimuth', () {
+    // A target culminating high in the SOUTH. A skyline with a 60° wall in
+    // the south must drop it even though the flat default (20°) would keep
+    // it; a low southern skyline must keep it.
+    final night = DateTime.utc(2026, 10, 15, 5);
+    final southern = dso('south', 60, raDeg: 340.0, decDeg: 0.0);
+    const siteWithSkyline = SiteSettings(
+      siteName: 'test',
+      latitudeDeg: 34.0,
+      longitudeDeg: -84.0,
+      bortleClass: 6,
+      defaultHorizonAltitudeDeg: 20,
+      useCustomHorizon: true,
+      twilightDefinition: TwilightDefinition.astronomical,
+      softWarningAltitudeDeg: 30,
+    );
+    // 60° terrain wall from az 90° to 270° (the whole southern sky), open north.
+    final walled = computeTonightSkyLocal(
+        site: siteWithSkyline,
+        optics: optics,
+        atUtc: night,
+        catalog: [southern],
+        customHorizon: [(0, 5), (90, 60), (270, 60), (359, 5)]);
+    expect(walled, isEmpty, reason: 'a 60° southern wall hides a dec-0 target');
+
+    // Same site, low skyline everywhere — the target is found again (and the
+    // 5° southern horizon finds it EARLIER than the flat 20° default would).
+    final open = computeTonightSkyLocal(
+        site: siteWithSkyline,
+        optics: optics,
+        atUtc: night,
+        catalog: [southern],
+        customHorizon: [(0, 5), (90, 5), (270, 5), (359, 5)]);
+    expect(open, hasLength(1));
+
+    // useCustomHorizon off → the polygon is ignored, flat default gates.
+    final toggleOff = computeTonightSkyLocal(
+        site: site,
+        optics: optics,
+        atUtc: night,
+        catalog: [southern],
+        customHorizon: [(90, 60), (270, 60)]);
+    expect(toggleOff, hasLength(1));
+  });
 }

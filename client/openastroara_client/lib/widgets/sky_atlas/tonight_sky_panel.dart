@@ -554,6 +554,7 @@ class _FramingChip extends StatelessWidget {
   /// defined exactly once and the chip + the row's gate can't drift apart.
   static (String?, Color) styleFor(TonightFraming f) => switch (f) {
     TonightFraming.good => ('Fills frame', AraColors.accentConnected),
+    TonightFraming.goodFit => ('Good fit', AraColors.accentInfo),
     TonightFraming.tooSmall => ('Small', AraColors.accentBusy),
     TonightFraming.tooBig => ('Too big', AraColors.accentBusy),
     TonightFraming.unknown => (null, AraColors.textSecondary),

@@ -29,11 +29,17 @@ enum TonightFilterAdvice {
 enum TonightFraming {
   unknown,
   tooSmall,
+
+  /// A worthwhile fit — the object reads clearly in the frame (~15–40% of the
+  /// short FOV side) without dominating it. Honest middle tier so "Fills
+  /// frame" is reserved for targets that genuinely do (§36.8 framing review).
+  goodFit,
   good,
   tooBig;
 
   static TonightFraming fromWire(Object? raw) => switch (raw) {
         'toosmall' => TonightFraming.tooSmall,
+        'goodfit' => TonightFraming.goodFit,
         'good' => TonightFraming.good,
         'toobig' => TonightFraming.tooBig,
         _ => TonightFraming.unknown,
