@@ -235,21 +235,34 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        autofocus: true,
-        onChanged: onChanged,
-        style: Theme.of(context).textTheme.bodyLarge,
-        decoration: const InputDecoration(
-          prefixIcon: Icon(Icons.search),
-          hintText:
-              'Search settings or navigate — try "dither", "park", "go to run"…',
-          border: InputBorder.none,
-          isDense: true,
+    // Deliberately unstyled (no fill, no border): the palette's search row is
+    // part of the dialog chrome — the theme's boxy filled TextField reads as a
+    // form control and its dense prefix icon sits off-baseline from the text.
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: true,
+      onChanged: onChanged,
+      style: Theme.of(context).textTheme.bodyLarge,
+      textAlignVertical: TextAlignVertical.center,
+      decoration: InputDecoration(
+        filled: false,
+        prefixIcon: const Padding(
+          padding: EdgeInsets.only(left: 16, right: 12),
+          child: Icon(Icons.search, size: 20, color: AraColors.textSecondary),
         ),
+        prefixIconConstraints:
+            const BoxConstraints(minWidth: 0, minHeight: 0),
+        hintText:
+            'Search settings or navigate — try "dither", "park", "go to run"…',
+        hintStyle: Theme.of(context)
+            .textTheme
+            .bodyLarge
+            ?.copyWith(color: AraColors.textDisabled),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(vertical: 18),
       ),
     );
   }
@@ -261,20 +274,42 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
       child: Center(
-        child: Text(
-          hasQuery
-              ? 'No matches. Try a different word — keywords cover sensor / '
-                  'cooling / dither / park / autofocus / plate-solve / file '
-                  'naming / safety / sky data / profiles / search registry, etc.'
-              : 'Start typing to search settings. ↑↓ to navigate, Enter to '
-                  'open, Esc to close. ⌘K from anywhere.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AraColors.textSecondary,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasQuery ? Icons.search_off : Icons.manage_search,
+              size: 28,
+              color: AraColors.textDisabled,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              hasQuery
+                  ? 'No matches'
+                  : 'Search settings and actions',
+              style: theme.textTheme.bodyLarge
+                  ?.copyWith(color: AraColors.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                hasQuery
+                    ? 'Try another word — sensor, cooling, dither, park, '
+                        'autofocus, plate-solve, file naming, safety, sky '
+                        'data, profiles…'
+                    : '↑ ↓ to navigate  ·  Enter to open  ·  Esc to close  ·  '
+                        '⌘K from anywhere',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textDisabled),
               ),
+            ),
+          ],
         ),
       ),
     );
