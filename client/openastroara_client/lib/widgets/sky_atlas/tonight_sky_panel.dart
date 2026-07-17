@@ -245,7 +245,9 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                 timing != null ||
                 _object.filterAdvice != null ||
                 _object.moonUpFraction != null) ...[
-              const SizedBox(height: 6),
+              // 8 (not 6): the chips' rounded border sat flush against the
+              // subtitle above and its top edge clipped by a hair.
+              const SizedBox(height: 8),
               // Chips wrap; the timing line gets its own FULL-WIDTH row below —
               // sharing one Row squeezed it into a sliver next to the chips and
               // it wrapped a character per line (live-walkthrough screenshot).
