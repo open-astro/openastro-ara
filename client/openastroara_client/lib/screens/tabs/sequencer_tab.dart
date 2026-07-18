@@ -12,6 +12,7 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/sequencer/sequence_editor_tree.dart';
 import '../../widgets/sequencer/sequence_field_editor.dart';
 import '../../widgets/sequencer/sequencer_palette.dart';
+import '../../widgets/sequencer/run_dashboard_band.dart';
 import '../../widgets/sequencer/sequencer_toolbar.dart';
 
 /// Sequencer tab per playbook §25.5.3 / §38: toolbar + the NINA-style edit
@@ -128,6 +129,10 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     return Column(
       children: [
         const SequencerToolbar(),
+        // §Run-redesign S5 — the live dashboard band renders only while a run
+        // is active (SizedBox.shrink otherwise), so compose-mood layout and
+        // its tests are untouched.
+        const RunDashboardBand(),
         Expanded(
           child: Row(
             children: [
