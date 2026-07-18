@@ -10,10 +10,13 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../services/profile_api.dart';
 import '../../services/sequence_api.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/sequencer/target_plan_dialog.dart';
 import '../app_shell_state.dart';
 import '../saved_server_state.dart';
 import '../settings/autofocus_settings_state.dart';
+import '../settings/filter_set_state.dart';
 import '../settings/imaging_defaults_state.dart';
+import '../settings/phd2_settings_state.dart';
 import '../settings/settings_nav.dart';
 import 'draft_sequences_state.dart';
 import 'sequence_editor_state.dart';
@@ -29,8 +32,15 @@ class ImagingRunResult {
   /// True when no server was connected and the run was saved as a LOCAL draft
   /// (§2 offline planning) instead of being created on the daemon.
   final bool draft;
+
+  /// True when the user cancelled out of the plan chooser — nothing was
+  /// created and no feedback should be shown.
+  final bool cancelled;
   const ImagingRunResult(this.sequenceId,
-      {required this.appended, this.draft = false});
+      {required this.appended, this.draft = false, this.cancelled = false});
+
+  static const ImagingRunResult userCancelled =
+      ImagingRunResult('', appended: false, cancelled: true);
 }
 
 /// §36 — the ONE feedback surface for [createImagingRun]'s outcome. The three
@@ -44,6 +54,7 @@ void showImagingRunFeedback(
   ImagingRunResult? result,
   bool failed = false,
 }) {
+  if (result?.cancelled ?? false) return;
   if (failed) {
     messenger.showSnackBar(
       const SnackBar(
@@ -120,6 +131,15 @@ Future<ImagingRunResult?> createImagingRun(
   // Append-to-open-draft is a tracked follow-up — offline, each target gets
   // its own draft.
   if (api == null) {
+    final choice = await _choosePlan(
+      ref,
+      container,
+      targetName: targetName,
+      raDeg: raDeg,
+      decDeg: decDeg,
+      remainingDarkHours: remainingDarkHours,
+    );
+    if (choice == null) return ImagingRunResult.userCancelled;
     final defaults = container.read(imagingDefaultsProvider);
     final af = container.read(autofocusSettingsProvider);
     final exposureSeconds = defaults.defaultExposure.inMilliseconds /
@@ -141,6 +161,9 @@ Future<ImagingRunResult?> createImagingRun(
       warmAtEnd: defaults.warmupAtSessionEnd,
       autofocusEveryNExposures: afEvery,
       positionAngleDeg: positionAngleDeg,
+      filterPlan: choice.filterPlan,
+      startGuiding: choice.guide,
+      ditherEveryNExposures: _ditherCadence(container, choice),
     );
     final draftId = await container
         .read(draftSequencesProvider.notifier)
@@ -157,6 +180,19 @@ Future<ImagingRunResult?> createImagingRun(
   // them fresh here; a failure keeps whatever the notifiers already hold (the
   // same best-effort contract the panels use).
   await _hydratePlanningSettings(container);
+
+  // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
+  // when the filter set gives a real choice. Null = the user cancelled.
+  final choice = await _choosePlan(
+    ref,
+    container,
+    targetName: targetName,
+    raDeg: raDeg,
+    decDeg: decDeg,
+    remainingDarkHours: remainingDarkHours,
+  );
+  if (choice == null) return ImagingRunResult.userCancelled;
+  final ditherEvery = _ditherCadence(container, choice);
 
   final defaults = container.read(imagingDefaultsProvider);
   final af = container.read(autofocusSettingsProvider);
@@ -188,6 +224,9 @@ Future<ImagingRunResult?> createImagingRun(
       frameCount: frameCount,
       autofocusEveryNExposures: afEveryExposures,
       positionAngleDeg: positionAngleDeg,
+      filterPlan: choice.filterPlan,
+      startGuiding: choice.guide,
+      ditherEveryNExposures: ditherEvery,
     );
     // Only PRE-PATCH problems (running, vanished, non-container root,
     // transport failure while reading) fall back to creating a fresh run. A
@@ -216,6 +255,9 @@ Future<ImagingRunResult?> createImagingRun(
     warmAtEnd: defaults.warmupAtSessionEnd,
     autofocusEveryNExposures: afEveryExposures,
     positionAngleDeg: positionAngleDeg,
+    filterPlan: choice.filterPlan,
+    startGuiding: choice.guide,
+    ditherEveryNExposures: ditherEvery,
   );
 
   // One key per LOGICAL create: if the request dies in transit the daemon may
@@ -287,8 +329,9 @@ Future<RemoveTargetOutcome> removeTargetFromSequence(
 }
 
 /// Best-effort hydration of the planning-relevant settings sections from the
-/// active server's profile (imaging defaults + autofocus). No server → no-op;
-/// a transport failure keeps the notifiers' current state.
+/// active server's profile (imaging defaults + autofocus + the filter set and
+/// PHD2 settings the plan chooser reads). No server → no-op; a transport
+/// failure keeps the notifiers' current state.
 Future<void> _hydratePlanningSettings(ProviderContainer container) async {
   final server = container.read(activeServerProvider);
   if (server == null) return;
@@ -297,10 +340,47 @@ Future<void> _hydratePlanningSettings(ProviderContainer container) async {
     await Future.wait([
       container.read(imagingDefaultsProvider.notifier).hydrateFromServer(api),
       container.read(autofocusSettingsProvider.notifier).hydrateFromServer(api),
+      container.read(filterSetProvider.notifier).hydrateFromServer(api),
+      container.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
     ]);
   } catch (e) {
     debugPrint('[planning] settings hydration failed (using local values): $e');
   }
+}
+
+/// The plan chooser, or a silent basic choice when the filter set offers no
+/// real alternative (empty / OSC-only) or the calling widget's context is
+/// gone. Null = the user explicitly cancelled — create nothing.
+Future<TargetPlanChoice?> _choosePlan(
+  WidgetRef ref,
+  ProviderContainer container, {
+  required String targetName,
+  required double raDeg,
+  required double decDeg,
+  double? remainingDarkHours,
+}) async {
+  if (!planOptionsAvailable(container.read(filterSetProvider).filters)) {
+    return const TargetPlanChoice(guide: false);
+  }
+  final context = ref.context;
+  if (!context.mounted) return const TargetPlanChoice(guide: false);
+  return showTargetPlanDialog(
+    context,
+    targetName: targetName,
+    raDeg: raDeg,
+    decDeg: decDeg,
+    remainingDarkHours: remainingDarkHours,
+  );
+}
+
+/// The dither cadence for the run's imaging loops: the PHD2 settings' every-N
+/// frames when the user chose to guide and dithering is on; null = no dither
+/// trigger (also whenever guiding was declined — dithering without a guider
+/// nudges nothing).
+int? _ditherCadence(ProviderContainer container, TargetPlanChoice choice) {
+  if (!choice.guide) return null;
+  final phd2 = container.read(phd2SettingsProvider);
+  return phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : null;
 }
 
 /// The append's PRE-PATCH phase: probe the run state, resolve the base body,

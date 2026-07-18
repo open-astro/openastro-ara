@@ -130,6 +130,8 @@ class TriggerDef {
 /// The assembly-qualified `$type` of the Autofocus-After-Exposures trigger —
 /// the single source of truth, reused by the Planning tab's imaging-run
 /// builder for the AF cadence.
+const String ditherAfterExposuresType =
+    'OpenAstroAra.Sequencer.Trigger.Guider.DitherAfterExposures, OpenAstroAra.Sequencer';
 const String autofocusAfterExposuresType =
     'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterExposures, OpenAstroAra.Sequencer';
 
@@ -162,8 +164,7 @@ const List<TriggerDef> triggerCatalog = [
   // §38 NINA import — dither every N exposures (the most common trigger in real plans, one per
   // Smart Exposure). AfterExposures is the cadence; the C# default is 1.
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.Guider.DitherAfterExposures, OpenAstroAra.Sequencer',
+    type: ditherAfterExposuresType,
     label: 'Dither After Exposures',
     icon: Icons.scatter_plot_outlined,
     fields: [

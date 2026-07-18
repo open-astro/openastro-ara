@@ -446,6 +446,8 @@ const String ditherType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer';
 const String centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
+const String startGuidingType =
+    'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
 
 /// The daemon `FilterInfo` `$type` — the value shape of `SwitchFilter.Filter`.
 /// Build instances with [buildFilterInfo] so the `{_name, _position}` wire
@@ -799,8 +801,7 @@ const List<InstructionDef> instructionCatalog = [
   ),
   // ── Guider ─────────────────────────────────────────────────────────────────
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer',
+    type: startGuidingType,
     label: 'Start Guiding',
     category: InstructionCategory.guider,
     icon: Icons.play_circle_outline,

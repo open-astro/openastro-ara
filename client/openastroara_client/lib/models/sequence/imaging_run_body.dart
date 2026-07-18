@@ -34,10 +34,13 @@ import 'trigger_catalog.dart';
 /// instead of creating a parallel run. Session-wide steps (cool / unpark /
 /// tracking / warm) stay at the root and are emitted once.
 ///
-/// Deliberately omitted until the daemon supports them end-to-end:
-/// - `StartGuiding` / `Dither`: the daemon's guider mediator is still the
-///   headless stub — both would fail validation on every run and read as
-///   FAILED steps in the report.
+/// With a [FilterPlanStep] plan (the §Run "smart target" flow), the target
+/// block becomes filter-aware: slew → switch to the FIRST plan filter →
+/// autofocus (through that filter) → optional Start Guiding → one
+/// `<Filter> Imaging` loop per plan step (each preceded by its Switch
+/// Filter), every loop carrying the dither / autofocus triggers. §63 made
+/// the guider mediator real (GuiderService drives PHD2), so guiding steps
+/// execute for real now.
 ///
 /// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to
 /// a `CenterAndRotate` carrying it (§36/§38 — the rotate half executes now);
@@ -62,6 +65,9 @@ Map<String, dynamic> buildImagingRunBody({
   bool autofocusAtStart = true,
   int? autofocusEveryNExposures,
   double? positionAngleDeg,
+  List<FilterPlanStep>? filterPlan,
+  bool startGuiding = false,
+  int? ditherEveryNExposures,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -76,6 +82,9 @@ Map<String, dynamic> buildImagingRunBody({
     autofocusAtStart: autofocusAtStart,
     autofocusEveryNExposures: autofocusEveryNExposures,
     positionAngleDeg: positionAngleDeg,
+    filterPlan: filterPlan,
+    startGuiding: startGuiding,
+    ditherEveryNExposures: ditherEveryNExposures,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -102,9 +111,27 @@ Map<String, dynamic> buildImagingRunBody({
   return root;
 }
 
+/// One step of a filter-aware target plan: image [filterName] for
+/// [frameCount] subs of [exposureSeconds] each. Built by the Run tab's plan
+/// chooser (SHO / LRGB / single filter) from the user's planning filter set.
+class FilterPlanStep {
+  final String filterName;
+  final double exposureSeconds;
+  final int frameCount;
+
+  const FilterPlanStep({
+    required this.filterName,
+    required this.exposureSeconds,
+    required this.frameCount,
+  });
+}
+
 /// One target's worth of session — a SequentialContainer named after the
-/// target holding slew → optional filter switch → optional autofocus → the
-/// Take-Exposure loop. This is the unit [buildImagingRunBody] wraps once and
+/// target holding slew → optional filter switch → optional autofocus →
+/// optional Start Guiding → the Take-Exposure loop(s). With a [filterPlan],
+/// one `<Filter> Imaging` loop per step (each with its own Switch Filter,
+/// exposure and count); without one, the single default loop as before.
+/// This is the unit [buildImagingRunBody] wraps once and
 /// [appendTargetToRunBody] grafts onto an existing run for each further
 /// "Add to Sequence".
 Map<String, dynamic> buildTargetBlock({
@@ -120,6 +147,9 @@ Map<String, dynamic> buildTargetBlock({
   bool autofocusAtStart = true,
   int? autofocusEveryNExposures,
   double? positionAngleDeg,
+  List<FilterPlanStep>? filterPlan,
+  bool startGuiding = false,
+  int? ditherEveryNExposures,
 }) {
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
@@ -131,40 +161,87 @@ Map<String, dynamic> buildTargetBlock({
   if (frameCount < 1) {
     throw ArgumentError.value(frameCount, 'frameCount', 'must be >= 1');
   }
-
-  // ── The imaging loop: TakeExposure × frameCount ──────────────────────────
-  final exposure = _item(takeExposureType)
-    ..['ExposureTime'] = exposureSeconds
-    ..['Gain'] = gain
-    ..['Offset'] = offset;
-  if (binning != 1) {
-    final bin = Map<String, dynamic>.from(exposure['Binning'] as Map);
-    bin['X'] = binning;
-    bin['Y'] = binning;
-    exposure['Binning'] = bin;
-  }
-
-  final loopDef = conditionForType(loopConditionType);
-  if (loopDef == null) {
-    throw StateError('LoopCondition missing from the condition catalog');
-  }
-  final loop = loopDef.build()..['Iterations'] = frameCount;
-
-  var imaging = _item(sequentialContainerType);
-  imaging['Name'] = 'Imaging';
-  imaging = withChildren(imaging, [exposure]);
-  imaging = withConditions(imaging, [loop]);
-
-  if (autofocusEveryNExposures != null) {
-    final afTriggerDef = triggerForType(autofocusAfterExposuresType);
-    if (afTriggerDef == null) {
-      throw StateError(
-        'AutofocusAfterExposures missing from the trigger catalog',
-      );
+  final plan = (filterPlan != null && filterPlan.isNotEmpty)
+      ? filterPlan
+      : null;
+  if (plan != null) {
+    for (final step in plan) {
+      if (step.exposureSeconds <= 0 ||
+          step.frameCount < 1 ||
+          step.filterName.trim().isEmpty) {
+        throw ArgumentError.value(
+          '${step.filterName} ${step.exposureSeconds}s ×${step.frameCount}',
+          'filterPlan',
+          'each step needs a filter name, exposure > 0 and count >= 1',
+        );
+      }
     }
-    final afTrigger = afTriggerDef.build()
-      ..['AfterExposures'] = autofocusEveryNExposures;
-    imaging = withTriggers(imaging, [afTrigger]);
+  }
+
+  Map<String, dynamic> switchTo(String filter) =>
+      _item(switchFilterType)..['Filter'] = buildFilterInfo(filter.trim());
+
+  // One `<name> Imaging` loop: TakeExposure × count, plus the autofocus /
+  // dither cadence triggers. The AF cadence is expressed in EXPOSURES, so a
+  // plan step with a different sub length re-derives it from the same time
+  // cadence the caller computed for the default exposure.
+  Map<String, dynamic> imagingLoop({
+    required String name,
+    required double expSeconds,
+    required int count,
+  }) {
+    final exposure = _item(takeExposureType)
+      ..['ExposureTime'] = expSeconds
+      ..['Gain'] = gain
+      ..['Offset'] = offset;
+    if (binning != 1) {
+      final bin = Map<String, dynamic>.from(exposure['Binning'] as Map);
+      bin['X'] = binning;
+      bin['Y'] = binning;
+      exposure['Binning'] = bin;
+    }
+
+    final loopDef = conditionForType(loopConditionType);
+    if (loopDef == null) {
+      throw StateError('LoopCondition missing from the condition catalog');
+    }
+    final loop = loopDef.build()..['Iterations'] = count;
+
+    var imaging = _item(sequentialContainerType);
+    imaging['Name'] = name;
+    imaging = withChildren(imaging, [exposure]);
+    imaging = withConditions(imaging, [loop]);
+
+    final triggers = <Map<String, dynamic>>[];
+    if (autofocusEveryNExposures != null) {
+      final afTriggerDef = triggerForType(autofocusAfterExposuresType);
+      if (afTriggerDef == null) {
+        throw StateError(
+          'AutofocusAfterExposures missing from the trigger catalog',
+        );
+      }
+      // Keep the TIME cadence constant across differing sub lengths: the
+      // caller derived its exposure count at [exposureSeconds].
+      final scaled = expSeconds == exposureSeconds
+          ? autofocusEveryNExposures
+          : math.max(
+              1,
+              (autofocusEveryNExposures * exposureSeconds / expSeconds)
+                  .round(),
+            );
+      triggers.add(afTriggerDef.build()..['AfterExposures'] = scaled);
+    }
+    if (ditherEveryNExposures != null) {
+      final ditherDef = triggerForType(ditherAfterExposuresType);
+      if (ditherDef == null) {
+        throw StateError(
+          'DitherAfterExposures missing from the trigger catalog',
+        );
+      }
+      triggers.add(ditherDef.build()..['AfterExposures'] = ditherEveryNExposures);
+    }
+    if (triggers.isNotEmpty) imaging = withTriggers(imaging, triggers);
+    return imaging;
   }
 
   // §36/§38 — a dialed framing position angle upgrades the plain slew to a
@@ -180,10 +257,30 @@ Map<String, dynamic> buildTargetBlock({
 
   final children = <Map<String, dynamic>>[
     goToTarget,
-    if (filterName != null && filterName.trim().isNotEmpty)
-      _item(switchFilterType)..['Filter'] = buildFilterInfo(filterName.trim()),
+    // Autofocus runs through the plan's FIRST filter (or the single chosen
+    // one) — focusing through a random previously-loaded filter would hand
+    // the whole session a soft start.
+    if (plan != null)
+      switchTo(plan.first.filterName)
+    else if (filterName != null && filterName.trim().isNotEmpty)
+      switchTo(filterName),
     if (autofocusAtStart) _item(runAutofocusType),
-    imaging,
+    if (startGuiding) _item(startGuidingType),
+    if (plan != null)
+      for (var i = 0; i < plan.length; i++) ...[
+        if (i > 0) switchTo(plan[i].filterName),
+        imagingLoop(
+          name: '${plan[i].filterName.trim()} Imaging',
+          expSeconds: plan[i].exposureSeconds,
+          count: plan[i].frameCount,
+        ),
+      ]
+    else
+      imagingLoop(
+        name: 'Imaging',
+        expSeconds: exposureSeconds,
+        count: frameCount,
+      ),
   ];
 
   var block = _item(sequentialContainerType);
