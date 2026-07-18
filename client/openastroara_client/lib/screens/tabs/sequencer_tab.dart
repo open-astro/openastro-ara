@@ -148,6 +148,16 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       }
     });
     final hasSequence = ref.watch(sequenceEditorProvider) != null;
+    // §Run-redesign S13 — live mood: while a run is active the palette and
+    // inspector recede (dim, still interactive) so the tree + dashboard carry
+    // the stage. Reduced-motion honours the platform setting.
+    final runActive =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final motionOff = MediaQuery.of(context).disableAnimations;
+    final dimDuration =
+        motionOff ? Duration.zero : const Duration(milliseconds: 250);
+    Widget dimmed(Widget child) => AnimatedOpacity(
+        opacity: runActive ? 0.55 : 1.0, duration: dimDuration, child: child);
 
     // §Run-redesign S12 — editor keyboard: ⌘Z/⌘⇧Z undo-redo, Delete removes
     // the selected node. Guarded to skip while a text field has focus so
@@ -192,13 +202,13 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
               ? const _ZeroState()
               : Row(
                   children: [
-                    _pane(flex: 2, child: const SequencerPalette()),
+                    _pane(flex: 2, child: dimmed(const SequencerPalette())),
                     _pane(flex: 3, child: const SequenceEditorTree()),
                     // Rightmost pane: same bg as the others, no trailing divider.
                     _pane(
                         flex: 2,
                         border: false,
-                        child: const SequenceFieldEditor()),
+                        child: dimmed(const SequenceFieldEditor())),
                   ],
                 ),
         ),

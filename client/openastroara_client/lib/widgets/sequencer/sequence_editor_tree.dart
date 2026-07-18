@@ -477,6 +477,11 @@ class _DragChip extends StatelessWidget {
             color: AraColors.bgPanelAlt,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: AraColors.selectionBg),
+            // S13 — the dragged chip floats above the tree.
+            boxShadow: const [
+              BoxShadow(
+                  color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+            ],
           ),
           child: Text(label,
               style: const TextStyle(color: AraColors.textPrimary, fontSize: 13)),

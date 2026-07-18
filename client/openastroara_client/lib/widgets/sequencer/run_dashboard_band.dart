@@ -136,11 +136,20 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
               const SizedBox(height: AraSpace.s8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 5,
-                  backgroundColor: AraColors.bgInput,
-                  valueColor: AlwaysStoppedAnimation(color),
+                // S13 — the bar glides to each new fraction instead of
+                // snapping (respects reduced motion).
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: progress ?? 0),
+                  duration: MediaQuery.of(context).disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 400),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, v, _) => LinearProgressIndicator(
+                    value: progress == null ? null : v,
+                    minHeight: 5,
+                    backgroundColor: AraColors.bgInput,
+                    valueColor: AlwaysStoppedAnimation(color),
+                  ),
                 ),
               ),
               const SizedBox(height: AraSpace.s8),

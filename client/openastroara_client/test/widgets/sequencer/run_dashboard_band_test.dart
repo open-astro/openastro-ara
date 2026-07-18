@@ -47,6 +47,8 @@ void main() {
     expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
     expect(find.text('3/12'), findsOneWidget);
     expect(find.textContaining('Take Exposure'), findsOneWidget);
+    // S13 glides the bar to its fraction — settle the tween first.
+    await tester.pump(const Duration(milliseconds: 500));
     final bar =
         tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator));
     expect(bar.value, closeTo(0.25, 0.001));
