@@ -26,6 +26,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   TimeOfDay _end = const TimeOfDay(hour: 1, minute: 0);
   int _targetCount = 1;
   SessionPlan? _plan;
+  bool _planning = false;
 
   /// The next occurrence of [t] from now, local — an end time "earlier" than
   /// the start rolls to the next day (22:00 → 01:00 spans midnight).
@@ -39,9 +40,37 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     return candidate;
   }
 
-  void _makePlan(List<TonightSkyObject> ranked) {
+  Future<void> _makePlan() async {
     final start = _nextLocal(_start);
     final end = _nextLocal(_end, after: start);
+    setState(() {
+      _planning = true;
+      _plan = null;
+    });
+    // Rank around the WINDOW's midpoint, not "now": the base list centres its
+    // ±12 h dark-window scan on the current instant, so a plan made in the
+    // afternoon would intersect tonight's window with LAST night's windows
+    // and find nothing shootable. Rounded to 5 min for a stable family key.
+    final midMs = (start.millisecondsSinceEpoch +
+            end.millisecondsSinceEpoch) ~/ 2;
+    final mid = DateTime.fromMillisecondsSinceEpoch(
+        midMs - midMs % (5 * 60 * 1000),
+        isUtc: false);
+    final List<TonightSkyObject> ranked;
+    try {
+      ranked =
+          await ref.read(tonightSkyAtProvider(mid.toUtc()).future);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _planning = false;
+        _plan = const SessionPlan(targets: [], plannedHours: 0, notes: [
+          'Could not rank the sky for that window — try again.'
+        ]);
+      });
+      return;
+    }
+    if (!mounted) return;
     // Charge the night's REAL overheads from the user's own settings, so the
     // sub counts describe a session with dithering, guiding settles, plate
     // solving and autofocus in it — not an idealized shutter-open number.
@@ -54,6 +83,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       autofocusEveryHours: af.everyNHours.toDouble(),
     );
     setState(() {
+      _planning = false;
       _plan = planImagingSession(
         ranked: ranked,
         windowStartUtc: start.toUtc(),
@@ -89,7 +119,6 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final async = ref.watch(tonightSkyProvider);
     final plan = _plan;
 
     return AlertDialog(
@@ -144,48 +173,43 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                 }),
               ),
               const SizedBox(height: 16),
-              async.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text(
-                  'Tonight\'s list isn\'t available — refresh the panel first.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: AraColors.accentError),
-                ),
-                data: (ranked) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    FilledButton.icon(
-                      icon: const Icon(Icons.auto_awesome, size: 16),
-                      label: const Text('Plan it'),
-                      onPressed:
-                          ranked.isEmpty ? null : () => _makePlan(ranked),
-                    ),
-                    if (plan != null) ...[
-                      const SizedBox(height: 16),
-                      if (plan.targets.isEmpty)
-                        Text(
-                          plan.notes.join(' '),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: AraColors.textSecondary),
-                        )
-                      else ...[
-                        for (final t in plan.targets)
-                          _PlanTargetCard(
-                              target: t, fmtLocal: _fmtLocal),
-                        if (plan.notes.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              plan.notes.join(' '),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AraColors.textSecondary),
-                            ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    icon: _planning
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.auto_awesome, size: 16),
+                    label: Text(_planning ? 'Planning…' : 'Plan it'),
+                    onPressed: _planning ? null : _makePlan,
+                  ),
+                  if (plan != null) ...[
+                    const SizedBox(height: 16),
+                    if (plan.targets.isEmpty)
+                      Text(
+                        plan.notes.join(' '),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary),
+                      )
+                    else ...[
+                      for (final t in plan.targets)
+                        _PlanTargetCard(target: t, fmtLocal: _fmtLocal),
+                      if (plan.notes.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            plan.notes.join(' '),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: AraColors.textSecondary),
                           ),
-                      ],
+                        ),
                     ],
                   ],
-                ),
+                ],
               ),
             ],
           ),
