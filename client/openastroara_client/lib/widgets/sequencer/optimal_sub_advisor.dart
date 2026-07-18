@@ -286,14 +286,20 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     } else if (_result case final r?) {
       final saturationLimited = !r.viable;
       final starLimited = r.limitingBound == 'starfloor';
-      final headline = saturationLimited
-          ? 'Saturation-limited: ${_fmt(r.recommendedSec)} max '
-                '(the sky fills the well before read noise is swamped)'
+      // Lead with the ACTION ("use N s per sub"), not the maths. The window
+      // bounds read as jargon ("8 s – 24 min") — demote them to a plain-
+      // language explanation line below the headline.
+      final headline =
+          'Suggested exposure: ${_fmt(r.recommendedSec)} per sub';
+      final explain = saturationLimited
+          ? 'Your sky is bright enough here that longer subs just saturate — '
+                'keep them at ${_fmt(r.recommendedSec)} or shorter.'
           : starLimited
-          ? 'Optimal Sub: ${_fmt(r.recommendedSec)}  (star-limited — '
-                'read-noise floor ${_fmt(r.floorSec)}, ceiling ${_fmt(r.ceilingSec)})'
-          : 'Optimal Sub: ${_fmt(r.recommendedSec)}'
-                '  (usable window ${_fmt(r.floorSec)} – ${_fmt(r.ceilingSec)})';
+          ? 'Long enough to register plenty of stars per frame; going much '
+                'longer only risks losing more to a ruined frame.'
+          : 'At this length the sky already swamps the camera\'s read noise — '
+                'longer subs won\'t improve the final stack, they just cost '
+                'more per lost frame.';
       final assumed = r.assumedDefaults ?? const [];
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,6 +325,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
               ),
             ],
           ),
+          Text(explain, style: dim),
           if (widget.filterName != null)
             Text('For filter "${widget.filterName}"', style: dim),
           // §3.1 — the daemon's ready-made star-detectability line (predicted

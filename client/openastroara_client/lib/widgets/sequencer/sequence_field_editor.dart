@@ -777,15 +777,18 @@ class _FieldControl extends StatelessWidget {
     required String initial,
     required TextInputType keyboard,
     required Object? Function(String) parse,
-  }) => TextFormField(
-    initialValue: initial,
+  }) => _ValueTextField(
+    text: initial,
     enabled: enabled,
-    keyboardType: keyboard,
-    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-    ),
+    keyboard: keyboard,
+    // "8" typed vs "8.0" echoed back by the model are the SAME value — only a
+    // genuinely different value (Apply, undo) may re-seed the controller, or
+    // every keystroke would yank the caret to a reformatted echo.
+    isEquivalent: (a, b) {
+      final pa = parse(a);
+      final pb = parse(b);
+      return pa != null && pa == pb;
+    },
     onChanged: (s) {
       final parsed = parse(s);
       // Ignore an in-progress invalid number (e.g. '' or '-'); commit valid.
@@ -1171,6 +1174,69 @@ class _WaitLoopDataEditor extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A controlled free-form text field for un-bounded number/integer/text fields.
+/// Owns a controller and re-seeds it when [text] changes EXTERNALLY (Optimal
+/// Sub "Apply", undo/redo) — a bare `TextFormField(initialValue:)` only reads
+/// its value once, so the display could show 5.0 forever while the model held
+/// the applied 8.0. The mid-edit guard mirrors [_NameEditor]: an identical
+/// value never re-seeds (would move the caret).
+class _ValueTextField extends StatefulWidget {
+  const _ValueTextField({
+    required this.text,
+    required this.keyboard,
+    required this.onChanged,
+    required this.isEquivalent,
+    this.enabled = true,
+  });
+
+  final String text;
+  final TextInputType keyboard;
+  final ValueChanged<String> onChanged;
+
+  /// True when the controller's current text already MEANS the model's text
+  /// ("8" vs "8.0") — an equivalent echo must not re-seed and move the caret.
+  final bool Function(String controllerText, String modelText) isEquivalent;
+  final bool enabled;
+
+  @override
+  State<_ValueTextField> createState() => _ValueTextFieldState();
+}
+
+class _ValueTextFieldState extends State<_ValueTextField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.text,
+  );
+
+  @override
+  void didUpdateWidget(_ValueTextField old) {
+    super.didUpdateWidget(old);
+    if (widget.text != old.text &&
+        _controller.text != widget.text &&
+        !widget.isEquivalent(_controller.text, widget.text)) {
+      _controller.text = widget.text;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _controller,
+    enabled: widget.enabled,
+    keyboardType: widget.keyboard,
+    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+    decoration: const InputDecoration(
+      isDense: true,
+      border: OutlineInputBorder(),
+    ),
+    onChanged: widget.onChanged,
+  );
 }
 
 class _Placeholder extends StatelessWidget {

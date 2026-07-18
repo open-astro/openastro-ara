@@ -238,8 +238,8 @@ void main() {
     testWidgets('renders the figure, filter and attribution from local math',
         (tester) async {
       await pumpAdvisor(tester, filterName: 'Ha 7nm');
-      expect(find.textContaining('Optimal Sub:'), findsOneWidget);
-      expect(find.textContaining('usable window'), findsOneWidget);
+      expect(find.textContaining('Suggested exposure:'), findsOneWidget);
+      expect(find.textContaining('read noise'), findsWidgets);
       expect(find.textContaining('For filter "Ha 7nm"'), findsOneWidget);
       expect(find.textContaining('Dr. Robin Glover'), findsOneWidget,
           reason: 'the attribution is a condition of the permission');
@@ -281,7 +281,7 @@ void main() {
       await pumpAdvisor(tester,
           electronics: const CameraElectronics(
               readNoiseE: 100, fullWellE: 500, quantumEfficiencyPeak: 0.8));
-      expect(find.textContaining('Saturation-limited'), findsOneWidget);
+      expect(find.textContaining('longer subs just saturate'), findsOneWidget);
       expect(find.text('Apply'), findsOneWidget); // still applicable
     });
 
@@ -289,7 +289,7 @@ void main() {
         (tester) async {
       await pumpAdvisor(tester, electronics: const CameraElectronics());
       expect(find.textContaining('generic defaults for'), findsOneWidget);
-      expect(find.textContaining('read noise'), findsOneWidget);
+      expect(find.textContaining('read noise'), findsWidgets);
     });
 
     testWidgets('a target position renders the local star line',
