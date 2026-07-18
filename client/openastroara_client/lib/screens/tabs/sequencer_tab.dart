@@ -12,7 +12,13 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/sequencer/sequence_editor_tree.dart';
 import '../../widgets/sequencer/sequence_field_editor.dart';
 import '../../widgets/sequencer/sequencer_palette.dart';
+import '../../widgets/sequencer/run_completion_sheet.dart';
 import '../../widgets/sequencer/run_dashboard_band.dart';
+import '../../widgets/sequencer/sequence_load_dialog.dart';
+import '../../widgets/sequencer/sequence_new_dialog.dart';
+import '../../state/app_shell_state.dart';
+import '../../state/settings/settings_nav.dart';
+import '../../theme/ara_metrics.dart';
 import '../../widgets/sequencer/sequencer_toolbar.dart';
 
 /// Sequencer tab per playbook §25.5.3 / §38: toolbar + the NINA-style edit
@@ -125,6 +131,21 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     ref.listen<String?>(selectedSequenceIdProvider, (prev, next) {
       if (next != null && next != _loadedId) _load(next);
     });
+    // §Run-redesign S6 — a finished run is an event: on the active→terminal
+    // transition, present the completion sheet (replacing the old silent
+    // status-line flip). Abort is excluded — the user just confirmed it.
+    ref.listen(sequenceRunStateProvider, (prev, next) {
+      final was = prev?.value?.state;
+      final now = next.value?.state;
+      if (was == null || now == null || was == now) return;
+      final wasActive = was.isActive && now != SequenceRunState.aborting;
+      final terminal = now == SequenceRunState.completed ||
+          now == SequenceRunState.failed;
+      if (wasActive && terminal && mounted) {
+        RunCompletionSheet.show(context, next.value!);
+      }
+    });
+    final hasSequence = ref.watch(sequenceEditorProvider) != null;
 
     return Column(
       children: [
@@ -134,14 +155,21 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
         // its tests are untouched.
         const RunDashboardBand(),
         Expanded(
-          child: Row(
-            children: [
-              _pane(flex: 2, child: const SequencerPalette()),
-              _pane(flex: 3, child: const SequenceEditorTree()),
-              // Rightmost pane: same bg as the others, no trailing divider.
-              _pane(flex: 2, border: false, child: const SequenceFieldEditor()),
-            ],
-          ),
+          // §Run-redesign S6 — with nothing loaded, the tab invites instead of
+          // presenting three empty grey panes.
+          child: !hasSequence
+              ? const _ZeroState()
+              : Row(
+                  children: [
+                    _pane(flex: 2, child: const SequencerPalette()),
+                    _pane(flex: 3, child: const SequenceEditorTree()),
+                    // Rightmost pane: same bg as the others, no trailing divider.
+                    _pane(
+                        flex: 2,
+                        border: false,
+                        child: const SequenceFieldEditor()),
+                  ],
+                ),
         ),
       ],
     );
@@ -162,4 +190,65 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
           child: child,
         ),
       );
+}
+
+
+/// Inviting zero state: what this tab is for + the three ways in. Replaces the
+/// old bare "No sequence loaded" center-text (which still guards the tree for
+/// the loaded-but-cleared edge).
+class _ZeroState extends ConsumerWidget {
+  const _ZeroState();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      color: AraColors.bgPrimary,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.movie_filter_outlined,
+                size: 44, color: AraColors.textDisabled),
+            const SizedBox(height: AraSpace.s16),
+            const Text('Ready to build tonight\'s run', style: AraText.title),
+            const SizedBox(height: AraSpace.s8),
+            const SizedBox(
+              width: 380,
+              child: Text(
+                'Compose a sequence from instructions, or let the planner '
+                'pick tonight\'s best targets and times for you.',
+                textAlign: TextAlign.center,
+                style: AraText.caption,
+              ),
+            ),
+            const SizedBox(height: AraSpace.s24),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.auto_awesome, size: 16),
+                  label: const Text('Plan tonight'),
+                  onPressed: () => ref
+                      .read(selectedTabIndexProvider.notifier)
+                      .select(kPlanningTabIndex),
+                ),
+                const SizedBox(width: AraSpace.s12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.note_add_outlined, size: 16),
+                  label: const Text('New sequence'),
+                  onPressed: () => SequenceNewDialog.show(context),
+                ),
+                const SizedBox(width: AraSpace.s12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.folder_open_outlined, size: 16),
+                  label: const Text('Load'),
+                  onPressed: () => SequenceLoadDialog.show(context),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

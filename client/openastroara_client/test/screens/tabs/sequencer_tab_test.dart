@@ -124,7 +124,9 @@ void main() {
 
     // Nothing loaded before selection.
     expect(_loadedId(container), isNull);
-    expect(find.text('No sequence loaded'), findsOneWidget);
+    // S6: with nothing loaded the tab shows the inviting zero state, not the
+    // bare tree placeholder.
+    expect(find.text("Ready to build tonight's run"), findsOneWidget);
 
     container.read(selectedSequenceIdProvider.notifier).select('seq-42');
     await tester.pumpAndSettle();
