@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../services/tonight_sky_api.dart';
 
 /// §36.8 "What-if run" — the session planner behind the Tonight's Sky panel.
@@ -102,9 +104,15 @@ const double _minSliceHours = 0.75;
 
 double _valueOf(TonightSkyObject o, double hours) {
   final base = o.hoursFreeScore ?? ((o.score ?? 0) * 0.75);
+  // CONCAVE hours value (sqrt, saturating at 6 h): integration has diminishing
+  // returns, and concavity is what makes the greedy allocator split windows
+  // near-EQUALLY — the linear form valued every split point the same, so
+  // every target but the last collapsed to the 45-min floor (review, live
+  // walkthrough round 5).
   return base +
-      _hoursWeight * (hours.clamp(0, _hoursSaturationHours)) /
-          _hoursSaturationHours;
+      _hoursWeight *
+          math.sqrt(hours.clamp(0, _hoursSaturationHours) /
+              _hoursSaturationHours);
 }
 
 (DateTime, DateTime)? _usable(

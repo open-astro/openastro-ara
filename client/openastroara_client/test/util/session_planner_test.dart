@@ -128,6 +128,11 @@ void main() {
       targetCount: 4,
     );
     expect(longWin.targets.length, inInclusiveRange(3, 4));
+    // Concave hours value ⇒ near-equal allocation: no slice may hog the
+    // window while others sit at the 45-min floor (the linear-value bug).
+    final hours = longWin.targets.map((t) => t.hours).toList()..sort();
+    expect(hours.last / hours.first, lessThanOrEqualTo(2.5),
+        reason: 'slices must be balanced, not floor + remainder');
     // Slices are chronological and non-overlapping.
     for (var i = 1; i < longWin.targets.length; i++) {
       expect(

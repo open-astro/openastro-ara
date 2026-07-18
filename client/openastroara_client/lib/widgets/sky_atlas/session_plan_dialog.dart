@@ -148,6 +148,10 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                     ?.copyWith(color: AraColors.textSecondary),
               ),
               const SizedBox(height: 16),
+              Text('Window',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textSecondary)),
+              const SizedBox(height: 6),
               Row(
                 children: [
                   Expanded(
@@ -168,12 +172,16 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                 ],
               ),
               const SizedBox(height: 12),
+              Text('Targets',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textSecondary)),
+              const SizedBox(height: 6),
               SegmentedButton<int>(
                 segments: const [
                   ButtonSegment(value: 1, label: Text('1')),
                   ButtonSegment(value: 2, label: Text('2')),
                   ButtonSegment(value: 3, label: Text('3')),
-                  ButtonSegment(value: 4, label: Text('4 targets')),
+                  ButtonSegment(value: 4, label: Text('4')),
                 ],
                 selected: {_targetCount},
                 onSelectionChanged: (s) => setState(() {
