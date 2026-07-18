@@ -77,6 +77,57 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   @override
   SequenceEditorState? build() => null;
 
+  // §Run-redesign S12 — undo/redo. Bodies are immutable maps replaced
+  // wholesale by every mutator, so a snapshot is an O(1) reference push.
+  // Selection is NOT snapshotted: restoring a stale NodePath post-undo is a
+  // correctness trap, so undo/redo clear it (matching removeNode's behavior).
+  static const int undoCap = 50;
+  final List<Map<String, dynamic>> _undoStack = [];
+  final List<Map<String, dynamic>> _redoStack = [];
+  // Consecutive edits to the SAME scalar field coalesce into one undo step
+  // (per-keystroke snapshots would make ⌘Z a character-eraser).
+  String? _lastCoalesceKey;
+
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  /// Route for every body mutation: snapshot the pre-edit body, clear redo,
+  /// then apply. [coalesceKey] marks a scalar-field edit; repeats on the same
+  /// key reuse the existing snapshot.
+  void _commitBody(SequenceEditorState prev, SequenceEditorState next,
+      {String? coalesceKey}) {
+    final coalesce = coalesceKey != null && coalesceKey == _lastCoalesceKey;
+    if (!coalesce) {
+      _undoStack.add(prev.body);
+      if (_undoStack.length > undoCap) _undoStack.removeAt(0);
+    }
+    _lastCoalesceKey = coalesceKey;
+    _redoStack.clear();
+    state = next;
+  }
+
+  void undo() {
+    final s = state;
+    if (s == null || _undoStack.isEmpty) return;
+    _redoStack.add(s.body);
+    _lastCoalesceKey = null;
+    state = s._copyWith(body: _undoStack.removeLast(), clearSelection: true);
+  }
+
+  void redo() {
+    final s = state;
+    if (s == null || _redoStack.isEmpty) return;
+    _undoStack.add(s.body);
+    _lastCoalesceKey = null;
+    state = s._copyWith(body: _redoStack.removeLast(), clearSelection: true);
+  }
+
+  void _resetHistory() {
+    _undoStack.clear();
+    _redoStack.clear();
+    _lastCoalesceKey = null;
+  }
+
   /// Load [detail] into the editor (discarding any current edits), with nothing
   /// selected. Seeds both [SequenceEditorState.body] and `originalBody` from the
   /// detail's raw body, so a freshly-loaded sequence is not dirty.
@@ -87,6 +138,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// shared instance lets [SequenceEditorState.isDirty] short-circuit on
   /// identity until the first edit replaces `body` with a fresh map.
   void load(SequenceDetail detail) {
+    _resetHistory();
     state = SequenceEditorState(
       id: detail.id,
       body: detail.body,
@@ -95,7 +147,10 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   }
 
   /// Clear the editor (e.g. on disconnect or sequence deselect).
-  void clear() => state = null;
+  void clear() {
+    _resetHistory();
+    state = null;
+  }
 
   /// Select the node at [path], or clear selection with null. A non-null [path]
   /// that doesn't resolve to a node is ignored (stale selection guard).
@@ -120,10 +175,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (parent == null || !isContainer(parent)) return;
     final landed = index.clamp(0, childrenOf(parent).length);
     final newBody = insertChild(s.body, parentPath, landed, def.build());
-    state = s._copyWith(
-      body: newBody,
-      selectedPath: <int>[...parentPath, landed],
-    );
+    _commitBody(
+        s,
+        s._copyWith(
+          body: newBody,
+          selectedPath: <int>[...parentPath, landed],
+        ));
   }
 
   /// Add [def] relative to the current selection — the palette's tap-to-add
@@ -160,7 +217,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final s = state;
     if (s == null || path.isEmpty) return;
     if (nodeAt(s.body, path) == null) return;
-    state = s._copyWith(body: removeAt(s.body, path), clearSelection: true);
+    _commitBody(s, s._copyWith(body: removeAt(s.body, path), clearSelection: true));
   }
 
   /// Reorder a child of the container at [parentPath]. [oldIndex]/[newIndex]
@@ -175,10 +232,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final parent = nodeAt(s.body, parentPath);
     if (parent == null) return;
     if (oldIndex < 0 || oldIndex >= childrenOf(parent).length) return;
-    state = s._copyWith(
-      body: reorderChild(s.body, parentPath, oldIndex, newIndex),
-      clearSelection: true,
-    );
+    _commitBody(
+        s,
+        s._copyWith(
+          body: reorderChild(s.body, parentPath, oldIndex, newIndex),
+          clearSelection: true,
+        ));
   }
 
   /// Move the node at [path] one slot up or down among its siblings, keeping it
@@ -199,10 +258,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     // reorderChild takes a pre-removal newIndex: moving down, the slot is one
     // past the destination; moving up it's the destination itself.
     final preRemoval = up ? newIndex : newIndex + 1;
-    state = s._copyWith(
-      body: reorderChild(s.body, parentPath, i, preRemoval),
-      selectedPath: <int>[...parentPath, newIndex],
-    );
+    _commitBody(
+        s,
+        s._copyWith(
+          body: reorderChild(s.body, parentPath, i, preRemoval),
+          selectedPath: <int>[...parentPath, newIndex],
+        ));
   }
 
   /// Move the subtree at [fromPath] into the container at [toParentPath] at
@@ -219,10 +280,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (dest == null || !isContainer(dest)) return;
     // A leaf can't take children, and a node can't move inside itself.
     if (isAncestorOrSelf(fromPath, toParentPath)) return;
-    state = s._copyWith(
-      body: moveSubtree(s.body, fromPath, toParentPath, toIndex),
-      clearSelection: true,
-    );
+    _commitBody(
+        s,
+        s._copyWith(
+          body: moveSubtree(s.body, fromPath, toParentPath, toIndex),
+          clearSelection: true,
+        ));
   }
 
   /// Set scalar field [key] to [value] on the node at [path], keeping selection
@@ -230,7 +293,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   void setNodeField(NodePath path, String key, Object? value) {
     final s = state;
     if (s == null || nodeAt(s.body, path) == null) return;
-    state = s._copyWith(body: setField(s.body, path, key, value));
+    _commitBody(s, s._copyWith(body: setField(s.body, path, key, value)),
+        coalesceKey: 'f:${path.join('.')}/$key');
   }
 
   /// Append a fresh condition built from [def] to the container at
@@ -244,7 +308,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (s == null) return;
     final container = nodeAt(s.body, containerPath);
     if (container == null || !isContainer(container)) return;
-    state = s._copyWith(body: addCondition(s.body, containerPath, def.build()));
+    _commitBody(
+        s, s._copyWith(body: addCondition(s.body, containerPath, def.build())));
   }
 
   /// Remove the condition at [index] from the container at [containerPath];
@@ -256,7 +321,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= conditionsOf(container).length) return;
-    state = s._copyWith(body: removeConditionAt(s.body, containerPath, index));
+    _commitBody(
+        s, s._copyWith(body: removeConditionAt(s.body, containerPath, index)));
   }
 
   /// Set scalar field [key] to [value] on the condition at [index] of the
@@ -269,8 +335,11 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= conditionsOf(container).length) return;
-    state =
-        s._copyWith(body: setConditionField(s.body, containerPath, index, key, value));
+    _commitBody(
+        s,
+        s._copyWith(
+            body: setConditionField(s.body, containerPath, index, key, value)),
+        coalesceKey: 'c:${containerPath.join('.')}/$index/$key');
   }
 
   /// Append a fresh trigger built from [def] to the container at [containerPath];
@@ -282,7 +351,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (s == null) return;
     final container = nodeAt(s.body, containerPath);
     if (container == null || !isContainer(container)) return;
-    state = s._copyWith(body: addTrigger(s.body, containerPath, def.build()));
+    _commitBody(
+        s, s._copyWith(body: addTrigger(s.body, containerPath, def.build())));
   }
 
   /// Remove the trigger at [index] from the container at [containerPath]; keeps
@@ -293,7 +363,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= triggersOf(container).length) return;
-    state = s._copyWith(body: removeTriggerAt(s.body, containerPath, index));
+    _commitBody(
+        s, s._copyWith(body: removeTriggerAt(s.body, containerPath, index)));
   }
 
   /// Set scalar field [key] to [value] on the trigger at [index] of the container
@@ -306,8 +377,11 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= triggersOf(container).length) return;
-    state =
-        s._copyWith(body: setTriggerField(s.body, containerPath, index, key, value));
+    _commitBody(
+        s,
+        s._copyWith(
+            body: setTriggerField(s.body, containerPath, index, key, value)),
+        coalesceKey: 't:${containerPath.join('.')}/$index/$key');
   }
 
   /// Rebaseline dirty-tracking to [savedBody] — the exact body that was just

@@ -435,4 +435,71 @@ void main() {
       expect(read()!.isDirty, isFalse);
     });
   });
+
+  group('undo/redo (S12)', () {
+    test('every structural mutator is undoable; redo replays; edits clear redo',
+        () {
+      final n = ctrl();
+      n.load(sampleDetail());
+      final original = read()!.body;
+
+      n.addInstruction(takeExposure());
+      final afterAdd = read()!.body;
+      expect(n.canUndo, isTrue);
+
+      n.undo();
+      expect(identical(read()!.body, original), isTrue);
+      expect(read()!.selectedPath, isNull,
+          reason: 'undo clears selection (stale paths are a trap)');
+      expect(n.canRedo, isTrue);
+
+      n.redo();
+      expect(identical(read()!.body, afterAdd), isTrue);
+
+      // A fresh edit clears the redo stack.
+      n.undo();
+      n.addInstruction(takeExposure());
+      expect(n.canRedo, isFalse);
+    });
+
+    test('consecutive edits to the same field coalesce into one undo step', () {
+      final n = ctrl();
+      n.load(sampleDetail());
+      final original = read()!.body;
+      n.addInstruction(takeExposure());
+      final sel = read()!.selectedPath!;
+      n.setNodeField(sel, 'ExposureTime', 1.0);
+      n.setNodeField(sel, 'ExposureTime', 12.0);
+      n.setNodeField(sel, 'ExposureTime', 120.0);
+      n.undo(); // one step back over ALL three keystroke edits
+      final node = nodeAt(read()!.body, sel);
+      expect(node!['ExposureTime'], isNot(120.0));
+      n.undo(); // back over the insert
+      expect(identical(read()!.body, original), isTrue);
+      expect(n.canUndo, isFalse);
+    });
+
+    test('load resets history', () {
+      final n = ctrl();
+      n.load(sampleDetail());
+      n.addInstruction(takeExposure());
+      n.load(sampleDetail());
+      expect(n.canUndo, isFalse);
+      expect(n.canRedo, isFalse);
+    });
+
+    test('undo cap holds at 50 snapshots', () {
+      final n = ctrl();
+      n.load(sampleDetail());
+      for (var i = 0; i < 60; i++) {
+        n.addInstruction(takeExposure());
+      }
+      var undos = 0;
+      while (n.canUndo) {
+        n.undo();
+        undos++;
+      }
+      expect(undos, SequenceEditorController.undoCap);
+    });
+  });
 }

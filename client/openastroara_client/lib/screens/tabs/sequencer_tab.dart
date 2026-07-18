@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -147,7 +149,36 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     });
     final hasSequence = ref.watch(sequenceEditorProvider) != null;
 
-    return Column(
+    // §Run-redesign S12 — editor keyboard: ⌘Z/⌘⇧Z undo-redo, Delete removes
+    // the selected node. Guarded to skip while a text field has focus so
+    // typing in the inspector never deletes tree nodes. (Run/pause keys stay
+    // off v1: lifecycle needs the toolbar's busy/confirm fences.)
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).undo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+            () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).redo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).undo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ,
+            control: true, shift: true): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).redo();
+        },
+        const SingleActivator(LogicalKeyboardKey.delete): _deleteSelected,
+        const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelected,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Column(
       children: [
         const SequencerToolbar(),
         // §Run-redesign S5 — the live dashboard band renders only while a run
@@ -172,7 +203,22 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
                 ),
         ),
       ],
+        ),
+      ),
     );
+  }
+
+  /// True while any editable text field owns focus — keyboard editing must
+  /// win over tree shortcuts.
+  bool get _textFieldFocused =>
+      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+
+  void _deleteSelected() {
+    if (_textFieldFocused) return;
+    final editor = ref.read(sequenceEditorProvider);
+    final path = editor?.selectedPath;
+    if (path == null || path.isEmpty) return;
+    ref.read(sequenceEditorProvider.notifier).removeNode(path);
   }
 
   // An editor pane: shared bg, with a trailing divider before the next pane
