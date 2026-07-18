@@ -57,10 +57,15 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
         midMs - midMs % (5 * 60 * 1000),
         isUtc: false);
     final List<TonightSkyObject> ranked;
+    // Hold a subscription for the await: a bare read of an autoDispose family
+    // doesn't keep it alive, so the provider was disposed mid-computation and
+    // the future errored ("could not rank" on every plan).
+    final keepAlive =
+        ref.listenManual(tonightSkyAtProvider(mid.toUtc()), (_, _) {});
     try {
-      ranked =
-          await ref.read(tonightSkyAtProvider(mid.toUtc()).future);
-    } catch (_) {
+      ranked = await ref.read(tonightSkyAtProvider(mid.toUtc()).future);
+    } catch (e) {
+      debugPrint('[session-plan] ranking failed: $e');
       if (!mounted) return;
       setState(() {
         _planning = false;
@@ -69,6 +74,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
         ]);
       });
       return;
+    } finally {
+      keepAlive.close();
     }
     if (!mounted) return;
     // Charge the night's REAL overheads from the user's own settings, so the
