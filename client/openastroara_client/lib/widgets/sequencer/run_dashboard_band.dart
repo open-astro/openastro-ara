@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/run_eta.dart';
 import '../../state/library/live_library_state.dart';
+import '../../state/sequencer/run_event_ticker.dart';
 import '../../state/sequencer/run_latest_frame_state.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/run_spotlight_state.dart';
@@ -25,6 +26,8 @@ class RunDashboardBand extends ConsumerStatefulWidget {
 }
 
 class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
+  bool _tickerExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -176,6 +179,13 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                     Text('$completed/$total', style: AraText.numeric),
                 ],
               ),
+              // S11 — the run's heartbeat: collapsed shows the newest event;
+              // tap to expand the recent history.
+              _TickerStrip(
+                expanded: _tickerExpanded,
+                onToggle: () =>
+                    setState(() => _tickerExpanded = !_tickerExpanded),
+              ),
             ],
           ),
               ),
@@ -215,6 +225,70 @@ class _LatestFrameThumb extends ConsumerWidget {
                   size: 18, color: AraColors.textDisabled),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Collapsed: the latest ticker event on one tappable line. Expanded: the run's
+/// recent history (newest first, capped in the provider).
+class _TickerStrip extends ConsumerWidget {
+  const _TickerStrip({required this.expanded, required this.onToggle});
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  Color _dot(RunTickerKind k) => switch (k) {
+        RunTickerKind.lifecycle => AraColors.accentInfo,
+        RunTickerKind.instruction => AraColors.textSecondary,
+        RunTickerKind.frame => AraColors.accentConnected,
+        RunTickerKind.attention => AraColors.accentError,
+      };
+
+  String _time(DateTime utc) {
+    final l = utc.toLocal();
+    return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _line(RunTickerEvent e) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(children: [
+          Container(
+              width: 6,
+              height: 6,
+              decoration:
+                  BoxDecoration(color: _dot(e.kind), shape: BoxShape.circle)),
+          const SizedBox(width: AraSpace.s8),
+          Expanded(
+              child: Text(e.label,
+                  style: AraText.caption, overflow: TextOverflow.ellipsis)),
+          Text(_time(e.at),
+              style: AraText.caption.copyWith(color: AraColors.textDisabled)),
+        ]),
+      );
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(runEventTickerProvider);
+    if (events.isEmpty) return const SizedBox.shrink();
+    return InkWell(
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final e in expanded ? events.take(12) : events.take(1))
+              _line(e),
+            if (events.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(expanded ? 'Show less' : '${events.length - 1} more…',
+                    style:
+                        AraText.caption.copyWith(color: AraColors.textDisabled)),
+              ),
+          ],
         ),
       ),
     );
