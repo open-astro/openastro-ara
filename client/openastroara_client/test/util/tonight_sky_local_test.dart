@@ -115,9 +115,11 @@ void main() {
         sizeMinArcmin: 100);
     final autumnNight = DateTime.utc(2026, 10, 15, 3);
 
+    TonightSkyObject only(List<TonightSkyObject> l) =>
+        l.where((o) => o.id == 'NGC7000').single;
     final single = computeTonightSkyLocal(
         site: site, optics: longFl, atUtc: autumnNight, catalog: [ngc7000]);
-    expect(single.single.framing, TonightFraming.tooBig);
+    expect(only(single).framing, TonightFraming.tooBig);
 
     final mosaic = computeTonightSkyLocal(
         site: site,
@@ -126,9 +128,9 @@ void main() {
         catalog: [ngc7000],
         mosaicTilesX: 3,
         mosaicTilesY: 3);
-    expect(mosaic.single.framing, TonightFraming.good);
+    expect(only(mosaic).framing, TonightFraming.good);
     // Framing is the dominant score term — the mosaic plan must outrank.
-    expect(mosaic.single.score!, greaterThan(single.single.score!));
+    expect(only(mosaic).score!, greaterThan(only(single).score!));
   });
 
   PlanningDso dso(String id, double sizeMajArcmin,
@@ -149,13 +151,15 @@ void main() {
     List<TonightSkyObject> rank(double size) => computeTonightSkyLocal(
         site: site, optics: optics, atUtc: night, catalog: [dso('x', size)]);
 
-    expect(rank(120).single.framing, TonightFraming.good); // 56% → fills
-    expect(rank(60).single.framing, TonightFraming.goodFit); // 28% → good fit
-    expect(rank(14).single.framing, TonightFraming.tooSmall); // 6.5% → small
+    TonightSkyObject one(double size) =>
+        rank(size).where((o) => o.id == 'x').single;
+    expect(one(120).framing, TonightFraming.good); // 56% → fills
+    expect(one(60).framing, TonightFraming.goodFit); // 28% → good fit
+    expect(one(14).framing, TonightFraming.tooSmall); // 6.5% → small
     // A genuine frame-filler must outrank a good-fit which outranks a small.
-    final fills = rank(120).single.score!;
-    final goodFit = rank(60).single.score!;
-    final small = rank(14).single.score!;
+    final fills = one(120).score!;
+    final goodFit = one(60).score!;
+    final small = one(14).score!;
     expect(fills, greaterThan(goodFit));
     expect(goodFit, greaterThan(small));
   });
@@ -179,6 +183,7 @@ void main() {
             atUtc: night,
             filterSet: fs,
             catalog: [typed('x', type)])
+        .where((o) => o.id == 'x')
         .single
         .score!;
 
@@ -188,6 +193,36 @@ void main() {
     expect(scoreOf('HII', broadOnly), lessThan(scoreOf('HII', nb)));
     // Continuum targets are untouched by the filter factor.
     expect(scoreOf('G', broadOnly), scoreOf('G', nb));
+  });
+
+  test('curated imaging regions override catalog core-sizes and add fields', () {
+    // OpenNGC undersells the famous complexes: NGC 6618 is a 12.6' "Checkmark"
+    // core but the imaged Swan runs ~45'; NGC 6604 is a 9.6' OCl inside the
+    // degrees-wide Sh2-54 field. The curated layer must rename + resize them
+    // so the framing tiers judge what the imager actually frames.
+    final night = DateTime.utc(2026, 7, 17, 6); // summer night, Sagittarius up
+    final catalog = [
+      PlanningDso(
+          id: 'NGC6618', name: 'Checkmark Nebula', type: 'Neb',
+          magnitude: 7.0, raDeg: 275.196, decDeg: -16.17,
+          sizeMajArcmin: 12.6),
+      PlanningDso(
+          id: 'NGC6604', name: 'NGC6604', type: 'OCl',
+          magnitude: 6.5, raDeg: 274.512, decDeg: -12.24,
+          sizeMajArcmin: 9.6),
+    ];
+    final list = computeTonightSkyLocal(
+        site: site, optics: optics, atUtc: night, catalog: catalog, limit: 30);
+    final swan = list.where((o) => o.id == 'NGC6618').single;
+    expect(swan.name, contains('Swan'));
+    expect(swan.framing, TonightFraming.goodFit,
+        reason: "45' against a 216' short side is a good fit, not Small");
+    final sh254 = list.where((o) => o.id == 'NGC6604').single;
+    expect(sh254.name, contains('Sh2-54'));
+    expect(sh254.framing, TonightFraming.good,
+        reason: "150' fills the frame — and no OCl discount as an HII region");
+    // Region-scale standalone fields ride along (Rho Oph is up in July).
+    expect(list.where((o) => o.id == 'REGION-RHO-OPH'), hasLength(1));
   });
 
   test('custom horizon skyline gates per azimuth', () {
@@ -213,7 +248,8 @@ void main() {
         atUtc: night,
         catalog: [southern],
         customHorizon: [(0, 5), (90, 60), (270, 60), (359, 5)]);
-    expect(walled, isEmpty, reason: 'a 60° southern wall hides a dec-0 target');
+    expect(walled.where((o) => o.id == 'south'), isEmpty,
+        reason: 'a 60° southern wall hides a dec-0 target');
 
     // Same site, low skyline everywhere — the target is found again (and the
     // 5° southern horizon finds it EARLIER than the flat 20° default would).
@@ -223,7 +259,7 @@ void main() {
         atUtc: night,
         catalog: [southern],
         customHorizon: [(0, 5), (90, 5), (270, 5), (359, 5)]);
-    expect(open, hasLength(1));
+    expect(open.where((o) => o.id == 'south'), hasLength(1));
 
     // useCustomHorizon off → the polygon is ignored, flat default gates.
     final toggleOff = computeTonightSkyLocal(
@@ -232,6 +268,6 @@ void main() {
         atUtc: night,
         catalog: [southern],
         customHorizon: [(90, 60), (270, 60)]);
-    expect(toggleOff, hasLength(1));
+    expect(toggleOff.where((o) => o.id == 'south'), hasLength(1));
   });
 }

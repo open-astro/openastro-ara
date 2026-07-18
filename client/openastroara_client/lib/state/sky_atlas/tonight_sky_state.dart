@@ -47,9 +47,18 @@ final planningSettingsBootstrapProvider = FutureProvider<void>((ref) async {
   }
 });
 
-final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
-  ref,
-) async {
+final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>(
+    (ref) => _rankAt(ref, DateTime.now().toUtc()));
+
+/// §36.8 session planner — the same ranking evaluated AROUND A GIVEN INSTANT
+/// (the plan window's midpoint), so a plan made in the afternoon sees
+/// TONIGHT's dark windows, not last night's (the base provider centres its
+/// ±12 h scan on "now"). Family-keyed by the instant; callers round it so the
+/// key is stable.
+final tonightSkyAtProvider = FutureProvider.autoDispose
+    .family<List<TonightSkyObject>, DateTime>((ref, atUtc) => _rankAt(ref, atUtc));
+
+Future<List<TonightSkyObject>> _rankAt(Ref ref, DateTime atUtc) async {
   // The awaitable variant rather than collapsing a still-loading state to
   // null: that would resolve this provider to data([]) before the servers
   // finished loading and flash the "no site" empty state for a user whose
@@ -65,24 +74,7 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
     return const <TonightSkyObject>[];
   }
-  var optics = ref.watch(opticsSettingsProvider);
-  // §36.8 slice 4b what-if overrides: swap the optical train fields the user
-  // dialed in; mosaic tiles enlarge the framing FOV per axis.
-  final overrides = ref.watch(tonightSkyOverridesProvider);
-  var mosaicX = 1;
-  var mosaicY = 1;
-  if (overrides.isActive) {
-    optics = OpticsSettings(
-      focalLengthMm: overrides.focalLengthMm ?? optics.focalLengthMm,
-      reducerFactor: overrides.reducer ?? optics.reducerFactor,
-      sensorWidthPx: overrides.sensorW ?? optics.sensorWidthPx,
-      sensorHeightPx: overrides.sensorH ?? optics.sensorHeightPx,
-      pixelSizeUm: overrides.pixelUm ?? optics.pixelSizeUm,
-      apertureMm: optics.apertureMm,
-    );
-    mosaicX = overrides.mosaicX;
-    mosaicY = overrides.mosaicY;
-  }
+  final optics = ref.watch(opticsSettingsProvider);
   final filterSet = ref.watch(filterSetProvider);
   final electronics = ref.watch(cameraElectronicsProvider);
   // The mirrored openngc-dso catalog when this machine has one; the
@@ -93,7 +85,6 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
       .watch(customHorizonProvider)
       .map((p) => (p.azimuthDeg, p.altitudeDeg))
       .toList();
-  final at = DateTime.now().toUtc();
   final opticsFinal = optics;
   // Rank OFF the UI isolate: the mirrored catalog is thousands of rows × a
   // 289-sample window scan each — synchronous on the UI thread is jank.
@@ -104,34 +95,14 @@ final tonightSkyProvider = FutureProvider.autoDispose<List<TonightSkyObject>>((
         electronics: electronics,
         catalog: catalog,
         customHorizon: horizonPoints,
-        mosaicTilesX: mosaicX,
-        mosaicTilesY: mosaicY,
-        atUtc: at,
+        atUtc: atUtc,
         // 30 (was the default 10): the panel scrolls, and a filter set that
         // spans broadband + narrowband makes far more of the sky worth
         // listing — a 10-row cap hid the variety the scoring surfaces.
         limit: 30,
       ));
-});
-
-/// §36.8 slice 4b — the session's Tonight's Sky what-if overrides (optical
-/// train fields + mosaic tiles). NOT auto-disposed on purpose: a user who has
-/// dialed in "what could I shoot with the 0.7× reducer?" keeps that lens while
-/// hopping between tabs; it resets with the app (overrides are a what-if, not
-/// a setting — a persistent change belongs in Settings → Optics).
-class TonightOverridesNotifier extends Notifier<TonightOverrides> {
-  @override
-  TonightOverrides build() => TonightOverrides.none;
-
-  void set(TonightOverrides value) => state = value;
-
-  void clear() => state = TonightOverrides.none;
 }
 
-final tonightSkyOverridesProvider =
-    NotifierProvider<TonightOverridesNotifier, TonightOverrides>(
-      TonightOverridesNotifier.new,
-    );
 
 /// The Tonight's Sky row the user last tapped (by [TonightSkyObject.id]), or
 /// null when nothing is selected. Tapping a row frames that object on the

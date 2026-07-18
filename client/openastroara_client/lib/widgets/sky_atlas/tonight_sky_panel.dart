@@ -8,6 +8,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
+import 'session_plan_dialog.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
 /// active profile's site and optical train, by the server's transparent 0–100
@@ -52,11 +53,6 @@ class TonightSkyPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(tonightSkyProvider);
-    // Drives the tune button's active tint; the ranking refetch itself rides
-    // tonightSkyProvider's own watch of the overrides.
-    final overridesActive = ref.watch(
-      tonightSkyOverridesProvider.select((o) => o.isActive),
-    );
     // Read once, before the async.when: if tonightSkyProvider settles (empty)
     // while savedServersProvider is still loading, reading it inside the data
     // callback would briefly mis-report "no server". Watching it here makes the
@@ -86,20 +82,15 @@ class TonightSkyPanel extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
-                    // §36.8 slice 4b — what-if optics/mosaic overrides. The
-                    // active tint (plus tooltip) is the "your list is NOT your
-                    // profile's rig right now" reminder.
-                    tooltip: overridesActive
-                        ? 'Optics / mosaic overrides active'
-                        : 'What-if optics / mosaic',
-                    icon: Icon(
-                      Icons.tune,
-                      size: 18,
-                      color: overridesActive ? AraColors.accentInfo : null,
-                    ),
+                    // §36.8 "What-if run" — the session planner: "I can image
+                    // 10pm–1am; what should I shoot to finish an image?"
+                    // (Replaces the what-if optics dialog — trying another rig
+                    // is what launchpad profiles are for.)
+                    tooltip: 'Plan tonight\'s session',
+                    icon: const Icon(Icons.edit_calendar, size: 18),
                     onPressed: () => showDialog<void>(
                       context: context,
-                      builder: (_) => const TonightOverridesDialog(),
+                      builder: (_) => const SessionPlanDialog(),
                     ),
                   ),
                   IconButton(
@@ -245,45 +236,42 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                 timing != null ||
                 _object.filterAdvice != null ||
                 _object.moonUpFraction != null) ...[
-              const SizedBox(height: 6),
-              Row(
+              // 8 (not 6): the chips' rounded border sat flush against the
+              // subtitle above and its top edge clipped by a hair.
+              const SizedBox(height: 8),
+              // Chips wrap; the timing line gets its own FULL-WIDTH row below —
+              // sharing one Row squeezed it into a sliver next to the chips and
+              // it wrapped a character per line (live-walkthrough screenshot).
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   if (framingLabel != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _FramingChip(framing: _object.framing),
-                    ),
+                    _FramingChip(framing: _object.framing),
                   if (_object.filterAdvice != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _FilterAdviceChip(advice: _object.filterAdvice!),
-                    ),
+                    _FilterAdviceChip(advice: _object.filterAdvice!),
                   if (_object.moonUpFraction != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _MoonChip(object: _object),
-                    ),
-                  if (timing != null)
-                    Expanded(
-                      child: Text(
-                        windowState == TonightWindowState.open
-                            ? 'now · $timing'
-                            : timing,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: switch (windowState) {
-                            TonightWindowState.open =>
-                              AraColors.accentConnected,
-                            TonightWindowState.passed => AraColors.textDisabled,
-                            _ => AraColors.textSecondary,
-                          },
-                          fontWeight: windowState == TonightWindowState.open
-                              ? FontWeight.w600
-                              : null,
-                        ),
-                      ),
-                    ),
+                    _MoonChip(object: _object),
                 ],
               ),
+              if (timing != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  windowState == TonightWindowState.open
+                      ? 'now · $timing'
+                      : timing,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: switch (windowState) {
+                      TonightWindowState.open => AraColors.accentConnected,
+                      TonightWindowState.passed => AraColors.textDisabled,
+                      _ => AraColors.textSecondary,
+                    },
+                    fontWeight: windowState == TonightWindowState.open
+                        ? FontWeight.w600
+                        : null,
+                  ),
+                ),
+              ],
             ],
             Row(
               children: [
@@ -325,7 +313,11 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
             ),
             if (hasReasons && _showReasons)
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+                // Top 8 / bottom 10 (was 0/6): the first bullet ("fills the
+                // frame") sat flush against the section's top edge and the
+                // SharpCap attribution's descenders clipped at the card edge
+                // (live-walkthrough screenshots, rounds 2-3).
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -568,7 +560,7 @@ class _FramingChip extends StatelessWidget {
     // that bypasses the gate renders nothing rather than a styled-but-blank chip.
     if (label == null) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
@@ -600,7 +592,7 @@ class _FilterAdviceChip extends StatelessWidget {
         ? AraColors.textSecondary
         : AraColors.accentInfo;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
@@ -648,7 +640,7 @@ class _MoonChip extends StatelessWidget {
       color = harsh ? AraColors.accentBusy : AraColors.textSecondary;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
@@ -661,235 +653,6 @@ class _MoonChip extends StatelessWidget {
           fontWeight: FontWeight.w500,
         ),
       ),
-    );
-  }
-}
-
-/// §36.8 slice 4b — the what-if optics + mosaic form. Every optics field is
-/// optional: blank means "use the active profile's value" (the server merges
-/// per-field, so overriding just the reducer is a valid what-if). Mosaic tiles
-/// enlarge the framing FOV per axis — "would the Veil fit as a 2×2 at this
-/// focal length?". Apply re-ranks Tonight's Sky against the overridden train;
-/// Reset returns to the profile's rig. Validation mirrors the server's request
-/// guards ([TonightOverrides.maxReducer] / [TonightOverrides.maxMosaicTiles])
-/// so an accepted form can't come back as a 400.
-class TonightOverridesDialog extends ConsumerStatefulWidget {
-  const TonightOverridesDialog({super.key});
-
-  @override
-  ConsumerState<TonightOverridesDialog> createState() =>
-      _TonightOverridesDialogState();
-}
-
-class _TonightOverridesDialogState
-    extends ConsumerState<TonightOverridesDialog> {
-  final _form = GlobalKey<FormState>();
-  late final TextEditingController _focal;
-  late final TextEditingController _reducer;
-  late final TextEditingController _sensorW;
-  late final TextEditingController _sensorH;
-  late final TextEditingController _pixel;
-  late final TextEditingController _mosaicX;
-  late final TextEditingController _mosaicY;
-
-  @override
-  void initState() {
-    super.initState();
-    // Pre-fill from the current overrides so re-opening the dialog edits what
-    // is applied instead of presenting a misleading blank form.
-    final o = ref.read(tonightSkyOverridesProvider);
-    String num(double? v) => v == null ? '' : _trimmed(v);
-    _focal = TextEditingController(text: num(o.focalLengthMm));
-    _reducer = TextEditingController(text: num(o.reducer));
-    _sensorW = TextEditingController(text: o.sensorW?.toString() ?? '');
-    _sensorH = TextEditingController(text: o.sensorH?.toString() ?? '');
-    _pixel = TextEditingController(text: num(o.pixelUm));
-    _mosaicX = TextEditingController(text: o.mosaicX.toString());
-    _mosaicY = TextEditingController(text: o.mosaicY.toString());
-  }
-
-  /// "0.7" not "0.700000", "530" not "530.0" — the text a user would type.
-  static String _trimmed(double v) =>
-      v == v.roundToDouble() ? v.round().toString() : v.toString();
-
-  @override
-  void dispose() {
-    _focal.dispose();
-    _reducer.dispose();
-    _sensorW.dispose();
-    _sensorH.dispose();
-    _pixel.dispose();
-    _mosaicX.dispose();
-    _mosaicY.dispose();
-    super.dispose();
-  }
-
-  /// Blank is valid (= profile value); anything typed must parse per [check].
-  static String? _optValidator(String? raw, String? Function(double) check) {
-    final text = raw?.trim() ?? '';
-    if (text.isEmpty) return null;
-    final v = double.tryParse(text);
-    if (v == null || !v.isFinite) return 'Not a number';
-    return check(v);
-  }
-
-  static String? _positive(double v) => v > 0 ? null : 'Must be > 0';
-
-  static String? _positiveInt(double v) =>
-      v > 0 && v == v.roundToDouble() ? null : 'Whole pixels > 0';
-
-  static String? _reducerRange(double v) =>
-      v > 0 && v <= TonightOverrides.maxReducer
-          ? null
-          : 'In (0, ${TonightOverrides.maxReducer.round()}]';
-
-  /// Mosaic tiles are required (they carry the 1 = no-mosaic default).
-  static String? _mosaicValidator(String? raw) {
-    final v = int.tryParse(raw?.trim() ?? '');
-    return v != null && v >= 1 && v <= TonightOverrides.maxMosaicTiles
-        ? null
-        : '1–${TonightOverrides.maxMosaicTiles}';
-  }
-
-  static double? _optDouble(TextEditingController c) {
-    final text = c.text.trim();
-    return text.isEmpty ? null : double.parse(text);
-  }
-
-  static int? _optInt(TextEditingController c) {
-    final text = c.text.trim();
-    return text.isEmpty ? null : double.parse(text).round();
-  }
-
-  void _apply() {
-    if (!(_form.currentState?.validate() ?? false)) return;
-    ref.read(tonightSkyOverridesProvider.notifier).set(TonightOverrides(
-          focalLengthMm: _optDouble(_focal),
-          reducer: _optDouble(_reducer),
-          sensorW: _optInt(_sensorW),
-          sensorH: _optInt(_sensorH),
-          pixelUm: _optDouble(_pixel),
-          mosaicX: int.parse(_mosaicX.text.trim()),
-          mosaicY: int.parse(_mosaicY.text.trim()),
-        ));
-    Navigator.of(context).pop();
-  }
-
-  void _reset() {
-    ref.read(tonightSkyOverridesProvider.notifier).clear();
-    Navigator.of(context).pop();
-  }
-
-  Widget _field(
-    TextEditingController controller,
-    String label, {
-    String? suffix,
-    required String? Function(String?) validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixText: suffix,
-        hintText: 'profile',
-        isDense: true,
-      ),
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      autovalidateMode: AutovalidateMode.onUserInteraction,
-      validator: validator,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      title: const Text('What-if optics'),
-      content: SizedBox(
-        width: 320,
-        child: Form(
-          key: _form,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Re-rank tonight\'s targets against a different rig. Blank '
-                  'fields keep your profile\'s values.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _field(_focal, 'Focal length', suffix: 'mm',
-                    validator: (v) => _optValidator(v, _positive)),
-                _field(_reducer, 'Reducer / barlow', suffix: '×',
-                    validator: (v) => _optValidator(v, _reducerRange)),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _field(_sensorW, 'Sensor width', suffix: 'px',
-                          validator: (v) => _optValidator(v, _positiveInt)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _field(_sensorH, 'Sensor height', suffix: 'px',
-                          validator: (v) => _optValidator(v, _positiveInt)),
-                    ),
-                  ],
-                ),
-                _field(_pixel, 'Pixel size', suffix: 'µm',
-                    validator: (v) => _optValidator(v, _positive)),
-                const SizedBox(height: 12),
-                Text('Mosaic panels', style: theme.textTheme.labelMedium),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _mosaicX,
-                        decoration: const InputDecoration(
-                          labelText: 'Wide',
-                          isDense: true,
-                        ),
-                        keyboardType: TextInputType.number,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        validator: _mosaicValidator,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('×'),
-                    ),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _mosaicY,
-                        decoration: const InputDecoration(
-                          labelText: 'High',
-                          isDense: true,
-                        ),
-                        keyboardType: TextInputType.number,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        validator: _mosaicValidator,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: _reset, child: const Text('Reset')),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _apply, child: const Text('Apply')),
-      ],
     );
   }
 }

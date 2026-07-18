@@ -65,6 +65,11 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
     private AlpacaObservingConditions? _client;
+    private readonly IEquipmentFaultSink? _faults;
+    // §42.3 — consecutive-failure disconnect detection (the per-sensor reads
+    // swallow failures by design, so without this a dead bridge left the
+    // service claiming Connected with all-null readings forever).
+    private readonly DeviceConnectionProbe _probe = new();
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
@@ -74,9 +79,11 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     private long _connectGeneration;
     private bool _disposed;
 
-    public ObservingConditionsService(ILogger<ObservingConditionsService>? logger = null, EquipmentEventPublisher? events = null) {
+    public ObservingConditionsService(ILogger<ObservingConditionsService>? logger = null, EquipmentEventPublisher? events = null,
+            IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<ObservingConditionsService>.Instance;
         _events = events;
+        _faults = faults;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -171,6 +178,18 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
             if (client is null) {
                 return;
             }
+            // §42.3 — the ONE deliberate connection probe per tick. The per-sensor reads below
+            // deliberately swallow failures (an unimplemented sensor must stay benign), so this
+            // probe is the only disconnect-detection source: Connected throws on transport death
+            // and reads false on a driver-side disconnect; a consecutive-failure streak (not one
+            // blip) trips the device to Error + publishes the §42.2 fault.
+            if (!ProbeConnected(client)) {
+                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
+                    TripConnectionLost(client);
+                }
+                return; // the device didn't answer — skip this tick's reads
+            }
+            ObserveProbeIfLive(client, probeSucceeded: true);
             var readings = ReadSensors(client);
             var at = DateTimeOffset.UtcNow;
             lock (_gate) {
@@ -240,6 +259,7 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
                     // device's readings under the NEW device's identity during the seed window.
                     _cached = EmptyReadings;
                     _capturedAt = DateTimeOffset.UtcNow;
+                    _probe.Reset(); // §42.3 — a fresh session starts a fresh streak
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -303,6 +323,43 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     }
 
     // Caller must hold _gate (every call site already does), so no inner lock here.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
+    private static bool ProbeConnected(AlpacaObservingConditions c) {
+        try { return c.Connected; } catch (Exception) { return false; }
+    }
+
+    // The liveness check and the Observe are ONE operation under _gate so a concurrent
+    // reconnect's Reset can't land between them; null = the probed client is stale.
+    private ProbeVerdict? ObserveProbeIfLive(AlpacaObservingConditions client, bool probeSucceeded) {
+        lock (_gate) {
+            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
+        }
+    }
+
+    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
+    // reconnect can find it) + publish the §42.2 fault event. Re-checks the probed client's
+    // identity under the gate so a reconnect between probe and trip can't flip the new session.
+    private void TripConnectionLost(AlpacaObservingConditions probed) {
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
+                return;
+            }
+            device = _device;
+            SetState(EquipmentConnectionState.Error);
+            _probe.Reset();
+        }
+        LogConnectionLost(device?.Name ?? "?");
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.ObservingConditions, device?.UniqueId,
+            device?.Name, EquipmentFaultKind.Disconnected,
+            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
+            DateTimeOffset.UtcNow));
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "ObservingConditions '{Device}' stopped answering — marked Error (§42.3)")]
+    private partial void LogConnectionLost(string device);
+
     private void SetState(EquipmentConnectionState state) {
         if (_state == state) {
             return;

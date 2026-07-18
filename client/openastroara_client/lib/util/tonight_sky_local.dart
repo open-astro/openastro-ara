@@ -7,6 +7,7 @@ import '../state/settings/filter_set_state.dart';
 import '../state/settings/optics_settings_state.dart';
 import '../state/settings/site_settings_state.dart';
 import 'filter_advice.dart';
+import 'imaging_regions.dart';
 import 'optimal_sub.dart';
 import 'star_model.dart' as stars;
 
@@ -115,9 +116,11 @@ List<TonightSkyObject> computeTonightSkyLocal({
   int mosaicTilesY = 1,
   int limit = 10,
 }) {
-  final objects = (catalog == null || catalog.isEmpty)
-      ? starterTonightCatalog
-      : catalog;
+  // The curated imaging-regions layer (realistic extents + evocative names for
+  // the famous complexes, plus region-scale fields with no catalog anchor)
+  // rides on top of whichever catalog is in play — see imaging_regions.dart.
+  final objects = applyImagingRegions(
+      (catalog == null || catalog.isEmpty) ? starterTonightCatalog : catalog);
   final at = atUtc.toUtc();
   final skyline = (site.useCustomHorizon &&
           customHorizon != null &&
@@ -293,7 +296,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
             (signedDeg / _siderealDegPerDay * 24.0 * 3600000.0).round()));
 
     final altNow = _altitudeFromHourAngleDeg(o.decDeg, lat, h0);
-    final (score, framing, reasons) = _scoreObject(
+    final (score, framing, reasons, hoursScore) = _scoreObject(
         o, fov.$1, fov.$2, peakAltDeg, integrationHours, site.bortleClass);
 
     // Moon context over THIS window (separation at the midpoint).
@@ -412,6 +415,12 @@ List<TonightSkyObject> computeTonightSkyLocal({
         remainingHours: double.parse(remainingHours.toStringAsFixed(2)),
         framing: framing,
         score: double.parse(finalScore.toStringAsFixed(1)),
+        // The multiplicative adjustments scale the whole score, so the
+        // hours-free remainder scales by the same finalScore/score ratio.
+        hoursFreeScore: score > 0
+            ? double.parse(
+                (finalScore * (score - hoursScore) / score).toStringAsFixed(1))
+            : 0,
         scoreReasons: allReasons,
         filterAdvice: advice,
         adviceReason: adviceReason,
@@ -436,7 +445,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
 
 // ── Scoring (port of ScoreObject) ──────────────────────────────────────────
 
-(double, TonightFraming, List<String>) _scoreObject(
+(double, TonightFraming, List<String>, double) _scoreObject(
     PlanningDso o,
     double fovWidthArcmin,
     double fovHeightArcmin,
@@ -524,7 +533,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
 
   final score = (framingScore + hoursScore + altScore + sbScore + magScore)
       .clamp(0.0, 100.0);
-  return (score, framing, reasons);
+  return (score, framing, reasons, hoursScore);
 }
 
 TonightFraming _classifyFraming(

@@ -107,8 +107,9 @@ void main() {
       atUtc: DateTime.utc(2026, 10, 15, 3), // autumn — M31 territory
       catalog: [PlanningDso.fromJson(_m31Row)!],
     );
-    expect(list, hasLength(1));
-    final m31 = list.single;
+    // The curated imaging-regions layer appends standalone fields to every
+    // ranking — filter to the row under test.
+    final m31 = list.where((o) => o.id == 'M31').single;
     expect(m31.sizeMajArcmin, 178.0);
     final why = m31.scoreReasons!.join(' ');
     expect(why, isNot(contains('size unknown')));
