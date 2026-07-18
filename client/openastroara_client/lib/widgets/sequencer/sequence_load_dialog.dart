@@ -10,6 +10,7 @@ import '../../services/profile_share_file.dart' show shareFileName;
 import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import 'run_state_badge.dart';
 import 'sequence_delete.dart';
 import 'sequence_import.dart';
 
@@ -97,7 +98,7 @@ class SequenceLoadDialog extends ConsumerWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _RunStateBadge(s.currentRunState),
+                      RunStateBadge(s.currentRunState),
                       // §70.5: export this sequence to a shareable .araseq.json
                       // file. Doesn't select/pop — the user may export several.
                       _ExportSequenceButton(id: s.id, name: s.name),
@@ -436,43 +437,6 @@ class _DeleteSequenceButtonState extends ConsumerState<_DeleteSequenceButton> {
   }
 }
 
-/// Small coloured chip for a sequence's current run state; nothing for idle/none.
-class _RunStateBadge extends StatelessWidget {
-  const _RunStateBadge(this.state);
-  final SequenceRunState? state;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = state;
-    if (s == null || s == SequenceRunState.idle) return const SizedBox.shrink();
-    // Exhaustive (no wildcard) so a new SequenceRunState forces a compile error
-    // here rather than silently defaulting — matching SequenceRunState.isActive.
-    final color = switch (s) {
-      SequenceRunState.running || SequenceRunState.starting => AraColors.accentBusy,
-      SequenceRunState.paused => AraColors.accentInfo,
-      // §58.12 awaiting-user reads as urgent (the rig needs a human), not as a
-      // leisurely operator pause — error red, even though the run is resumable.
-      SequenceRunState.pausedAwaitingUser ||
-      SequenceRunState.failed ||
-      SequenceRunState.aborting =>
-        AraColors.accentError,
-      SequenceRunState.stopped || SequenceRunState.completed => AraColors.textSecondary,
-      SequenceRunState.idle => AraColors.textSecondary, // unreachable (early-returned above)
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color),
-      ),
-      // The single-word states read fine as their enum names; the §58.12
-      // multi-word state needs a human label ("pausedAwaitingUser" is not UI).
-      child: Text(s == SequenceRunState.pausedAwaitingUser ? 'needs attention' : s.name,
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-    );
-  }
-}
 
 class _Message extends StatelessWidget {
   const _Message(this.text);
