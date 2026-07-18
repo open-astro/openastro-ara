@@ -161,6 +161,35 @@ void main() {
     expect(shortWin.notes, isNotEmpty);
   });
 
+  test('an early-setting candidate is never scheduled past its own window end',
+      () {
+    // A is up all night (the initial best single); B SETS mid-plan-window, so
+    // B can only be added via the candidate-first branch — whose split scan
+    // must be clamped to B's own window end (PR #860 review: unclamped, the
+    // inflated hours made the illegal split WIN the gain comparison).
+    final plan = planImagingSession(
+      ranked: [
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 2),
+            winEnd: DateTime.utc(2026, 7, 18, 12),
+            hoursFree: 70),
+        obj('B',
+            winStart: DateTime.utc(2026, 7, 18, 2),
+            winEnd: DateTime.utc(2026, 7, 18, 5, 30), // sets 1.5 h in
+            hoursFree: 68),
+      ],
+      windowStartUtc: winStart, // 04:00
+      windowEndUtc: DateTime.utc(2026, 7, 18, 10),
+      targetCount: 2,
+    );
+    expect(plan.targets, hasLength(2));
+    for (final t in plan.targets) {
+      expect(t.endUtc.isAfter(t.object.windowEndUtc!), isFalse,
+          reason: '${t.object.id} scheduled after it has set');
+      expect(t.startUtc.isBefore(t.object.windowStartUtc!), isFalse);
+    }
+  });
+
   test('empty window / no overlap produce an explanatory empty plan', () {
     final plan = planImagingSession(
       ranked: [

@@ -216,6 +216,13 @@ SessionPlan planImagingSession({
       final s0 = slices[i];
       final currentValue = _valueOf(s0.object, s0.hours);
       final own = usableOf[s0.object.id]!;
+      // The region this split may occupy: the slice itself PLUS any
+      // unallocated window on either side (up to the neighbouring slices) —
+      // the initial best-single slice covers only ITS usable interval, and a
+      // candidate that rises/sets outside it must be able to take the gap.
+      final lowerBound = i == 0 ? winStart : slices[i - 1].endUtc;
+      final upperBound =
+          i == slices.length - 1 ? winEnd : slices[i + 1].startUtc;
       for (final c in candidates.take(12)) {
         if (used.contains(c.$1.id)) continue;
         for (final existingFirst in [true, false]) {
@@ -223,18 +230,25 @@ SessionPlan planImagingSession({
           final secondUsable = existingFirst ? (c.$2, c.$3) : own;
           final firstObj = existingFirst ? s0.object : c.$1;
           final secondObj = existingFirst ? c.$1 : s0.object;
-          final lo = firstUsable.$1.isAfter(s0.startUtc)
+          final lo = firstUsable.$1.isAfter(lowerBound)
               ? firstUsable.$1
-              : s0.startUtc;
-          final hi = s0.endUtc;
+              : lowerBound;
+          // Every bound clamps to the OWNING object's dark window (PR #860
+          // review: the unclamped candidate-first scan could schedule a
+          // target after it had set — and the inflated hours made that
+          // illegal split WIN the gain comparison).
+          final hiFirst = upperBound.isBefore(firstUsable.$2)
+              ? upperBound
+              : firstUsable.$2;
+          final s2end = upperBound.isBefore(secondUsable.$2)
+              ? upperBound
+              : secondUsable.$2;
           for (var t = lo;
-              !t.isAfter(hi);
+              !t.isAfter(hiFirst);
               t = t.add(const Duration(minutes: 15))) {
             final h1 = _hoursBetween(lo, t);
             final s2start =
                 t.isAfter(secondUsable.$1) ? t : secondUsable.$1;
-            final s2end =
-                hi.isBefore(secondUsable.$2) ? hi : secondUsable.$2;
             final h2 = _hoursBetween(s2start, s2end);
             if (h1 < _minSliceHours || h2 < _minSliceHours) continue;
             final gain = _valueOf(firstObj, h1) +
