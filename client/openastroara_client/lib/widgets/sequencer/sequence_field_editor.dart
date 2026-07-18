@@ -1037,7 +1037,7 @@ class _CoordinatesEditor extends StatelessWidget {
             children: [
               for (var i = 0; i < fields.length; i++) ...[
                 if (i > 0) const SizedBox(width: 4),
-                SizedBox(width: 44, child: fields[i]),
+                SizedBox(width: 52, child: fields[i]),
               ],
             ],
           ),
@@ -1303,9 +1303,13 @@ class _NumFieldState extends State<_NumField> {
           : _SingleDecimalFormatter(isInt: widget.isInt, signed: widget.signed),
     ],
     style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+    textAlign: TextAlign.center,
     decoration: const InputDecoration(
       isDense: true,
       border: OutlineInputBorder(),
+      // The default horizontal padding ate ~24px of a 44px box and clipped
+      // two-digit values ("20" → "2("): compact padding + centered text.
+      contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 9),
     ),
     onChanged: _onChanged,
   );
