@@ -170,8 +170,10 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
               const SizedBox(height: 12),
               SegmentedButton<int>(
                 segments: const [
-                  ButtonSegment(value: 1, label: Text('1 target')),
-                  ButtonSegment(value: 2, label: Text('2 targets')),
+                  ButtonSegment(value: 1, label: Text('1')),
+                  ButtonSegment(value: 2, label: Text('2')),
+                  ButtonSegment(value: 3, label: Text('3')),
+                  ButtonSegment(value: 4, label: Text('4 targets')),
                 ],
                 selected: {_targetCount},
                 onSelectionChanged: (s) => setState(() {

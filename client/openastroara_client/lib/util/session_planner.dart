@@ -186,44 +186,78 @@ SessionPlan planImagingSession({
     return SessionPlan(targets: [s], plannedHours: s.hours);
   }
 
-  // Two targets: try every ordered pair from the top candidates, splitting on
-  // a 15-min grid. Value = sum of both slices' values.
-  final top = candidates.take(12).toList();
-  List<SessionPlanTarget>? bestPair;
-  var bestPairValue = double.negativeInfinity;
-  for (final a in top) {
-    for (final b in top) {
-      if (identical(a, b)) continue;
-      // A shoots first: its slice must START at its usable start; B takes over
-      // no earlier than B's usable start.
-      final earliest = b.$2.isAfter(a.$2) ? b.$2 : a.$2;
-      final latest = a.$3.isBefore(b.$3) ? a.$3 : b.$3;
-      for (var t = earliest;
-          !t.isAfter(latest);
-          t = t.add(const Duration(minutes: 15))) {
-        final hoursA = _hoursBetween(a.$2, t);
-        final hoursB = _hoursBetween(t.isAfter(b.$2) ? t : b.$2, b.$3);
-        if (hoursA < _minSliceHours || hoursB < _minSliceHours) continue;
-        final v = _valueOf(a.$1, hoursA) + _valueOf(b.$1, hoursB);
-        if (v > bestPairValue) {
-          bestPairValue = v;
-          bestPair = [
-            _slice(a.$1, a.$2, t, overheads),
-            _slice(b.$1, t.isAfter(b.$2) ? t : b.$2, b.$3, overheads),
-          ];
+  var slices = <SessionPlanTarget>[
+    _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads)
+  ];
+  final notes = <String>[];
+  final wanted = targetCount.clamp(1, 4);
+
+  // Greedy refinement: while more targets are wanted, find the single best
+  // "split one existing slice, hand part of it to an unused candidate" move
+  // (both orders, 15-min grid, each piece ≥ 45 min) and apply it. Stops with a
+  // note when no split improves total value — the window is honestly too short
+  // for another worthwhile target.
+  final usableOf = {
+    for (final c in candidates) c.$1.id: (c.$2, c.$3),
+  };
+  while (slices.length < wanted) {
+    final used = {for (final t in slices) t.object.id};
+    List<SessionPlanTarget>? bestSlices;
+    var bestGain = 0.0;
+    for (var i = 0; i < slices.length; i++) {
+      final s0 = slices[i];
+      final currentValue = _valueOf(s0.object, s0.hours);
+      final own = usableOf[s0.object.id]!;
+      for (final c in candidates.take(12)) {
+        if (used.contains(c.$1.id)) continue;
+        for (final existingFirst in [true, false]) {
+          final firstUsable = existingFirst ? own : (c.$2, c.$3);
+          final secondUsable = existingFirst ? (c.$2, c.$3) : own;
+          final firstObj = existingFirst ? s0.object : c.$1;
+          final secondObj = existingFirst ? c.$1 : s0.object;
+          final lo = firstUsable.$1.isAfter(s0.startUtc)
+              ? firstUsable.$1
+              : s0.startUtc;
+          final hi = s0.endUtc;
+          for (var t = lo;
+              !t.isAfter(hi);
+              t = t.add(const Duration(minutes: 15))) {
+            final h1 = _hoursBetween(lo, t);
+            final s2start =
+                t.isAfter(secondUsable.$1) ? t : secondUsable.$1;
+            final s2end =
+                hi.isBefore(secondUsable.$2) ? hi : secondUsable.$2;
+            final h2 = _hoursBetween(s2start, s2end);
+            if (h1 < _minSliceHours || h2 < _minSliceHours) continue;
+            final gain = _valueOf(firstObj, h1) +
+                _valueOf(secondObj, h2) -
+                currentValue;
+            if (gain > bestGain) {
+              bestGain = gain;
+              bestSlices = [
+                ...slices.sublist(0, i),
+                _slice(firstObj, lo, t, overheads),
+                _slice(secondObj, s2start, s2end, overheads),
+                ...slices.sublist(i + 1),
+              ];
+            }
+          }
         }
       }
     }
+    if (bestSlices == null) {
+      notes.add(slices.length == 1
+          ? 'No second target fits ≥45 min in this window — planned one target.'
+          : 'The window supports ${slices.length} worthwhile targets — '
+              'adding more would shortchange all of them.');
+      break;
+    }
+    slices = bestSlices;
   }
-
-  if (bestPair == null) {
-    final s = _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads);
-    return SessionPlan(targets: [s], plannedHours: s.hours, notes: [
-      'No second target fits ≥45 min in this window — planned one target.'
-    ]);
-  }
+  slices.sort((a, b) => a.startUtc.compareTo(b.startUtc));
   return SessionPlan(
-    targets: bestPair,
-    plannedHours: bestPair.fold(0.0, (sum, t) => sum + t.hours),
+    targets: slices,
+    plannedHours: slices.fold(0.0, (sum, t) => sum + t.hours),
+    notes: notes,
   );
 }
