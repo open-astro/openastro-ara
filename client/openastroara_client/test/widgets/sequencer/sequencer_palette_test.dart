@@ -71,4 +71,14 @@ void main() {
     // still nothing loaded → no crash, no state
     expect(container.read(sequenceEditorProvider), isNull);
   });
+
+  testWidgets('S8: search filters tiles and descriptions render', (tester) async {
+    await _pump(tester, detail: emptySequence());
+    expect(find.text('Capture one frame with the current settings.'),
+        findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'dither');
+    await tester.pump();
+    expect(find.text('Dither'), findsOneWidget);
+    expect(find.text('Take Exposure'), findsNothing);
+  });
 }
