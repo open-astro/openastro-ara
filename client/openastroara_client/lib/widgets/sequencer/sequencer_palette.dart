@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/instruction_catalog.dart';
+import '../../models/sequence/instruction_style.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -72,7 +73,13 @@ class _PaletteTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              Icon(def.icon, size: 15, color: fg),
+              // S7 — category hue on the icon only (labels stay neutral):
+              // scannable by kind without turning the palette into lights.
+              Icon(def.icon,
+                  size: 15,
+                  color: enabled
+                      ? instructionCategoryColor(def.category)
+                      : AraColors.textDisabled),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

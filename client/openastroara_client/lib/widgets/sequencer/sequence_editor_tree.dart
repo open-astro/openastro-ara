@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
+import '../../models/sequence/instruction_style.dart';
 import '../../models/sequence/node_display.dart';
 import '../../state/sequencer/run_spotlight_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
@@ -255,7 +256,8 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
                       ? spotColor
                       : isCompleted
                           ? AraColors.accentConnected.withValues(alpha: 0.7)
-                          : AraColors.textSecondary),
+                          // S7 — category hue per instruction kind.
+                          : nodeAccentColor(row.node)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
