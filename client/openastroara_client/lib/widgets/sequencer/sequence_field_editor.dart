@@ -17,7 +17,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
-import '../../models/sequence/node_display.dart' show nodeLabel, shortTypeName;
+import '../../models/sequence/instruction_style.dart';
+import '../../models/sequence/node_display.dart' show nodeLabel, nodeIcon, shortTypeName;
 import '../../models/sequence/trigger_catalog.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
@@ -49,14 +50,32 @@ class SequenceFieldEditor extends ConsumerWidget {
     final notifier = ref.read(sequenceEditorProvider.notifier);
 
     final children = <Widget>[
-      Text(
-        nodeLabel(node),
-        style: const TextStyle(
-          color: AraColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
+      // S9 — the title echoes the instruction's category hue (icon) and, for
+      // catalogued instructions, its one-line description: the inspector opens
+      // by telling you WHAT you selected before asking you to configure it.
+      Row(
+        children: [
+          Icon(nodeIcon(node), size: 16, color: nodeAccentColor(node)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              nodeLabel(node),
+              style: const TextStyle(
+                color: AraColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
+      if (def != null)
+        if (instructionDescriptions[def.label] case final String desc) ...[
+        const SizedBox(height: 4),
+        Text(desc,
+            style: const TextStyle(
+                color: AraColors.textSecondary, fontSize: 11.5)),
+      ],
       const SizedBox(height: 12),
       if (container) ...[
         _NameEditor(
@@ -110,7 +129,7 @@ class SequenceFieldEditor extends ConsumerWidget {
       children.add(
         _Placeholder(
           def == null
-              ? 'This instruction has no editable fields here.'
+              ? 'This instruction runs as-is — nothing to configure.'
               : 'No settings — this instruction runs as-is.',
         ),
       );
