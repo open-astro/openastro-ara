@@ -16,7 +16,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
 import '../../models/sequence/node_display.dart';
+import '../../state/sequencer/run_spotlight_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
+import 'run_state_badge.dart';
 import '../../theme/ara_colors.dart';
 
 /// One flattened tree row: the node, its address, and its indent depth.
@@ -168,11 +171,35 @@ void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> ou
 }
 
 /// Indented, selectable view of the editor's working sequence body.
-class SequenceEditorTree extends ConsumerWidget {
+class SequenceEditorTree extends ConsumerStatefulWidget {
   const SequenceEditorTree({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SequenceEditorTree> createState() => _SequenceEditorTreeState();
+}
+
+class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  // §Run-redesign S4 — keep the executing row in view. Approximate scroll (row
+  // heights vary with gap targets): proportional position by row index, only
+  // fired when the SPOTLIGHTED row changes so a user browsing the tree isn't
+  // fought for the scrollbar every WS tick.
+  void _autoScrollTo(int rowIndex, int rowCount) {
+    if (!_scroll.hasClients || rowCount <= 1) return;
+    final target = _scroll.position.maxScrollExtent * rowIndex / (rowCount - 1);
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final editor = ref.watch(sequenceEditorProvider);
     if (editor == null) {
       return const Center(
@@ -185,11 +212,34 @@ class SequenceEditorTree extends ConsumerWidget {
     _flatten(editor.body, const [], 0, rows);
     final selected = editor.selectedPath;
 
+    // §Run-redesign S4 — live spotlight: the executing node gets an accent bar
+    // + tint in the run-state colour; ordinal-verified completed leaves get a
+    // quiet check tint. Null spotlight = render exactly as before.
+    final spotlight = ref.watch(runSpotlightProvider);
+    final runState = ref.watch(sequenceRunStateProvider).value?.state;
+    final spotColor =
+        runState == null ? AraColors.accentBusy : RunStateBadge.colorFor(runState);
+    final currentKey = spotlight?.currentPath?.join('.');
+    final completedKeys = <String>{
+      for (final p in spotlight?.completedPaths ?? const <NodePath>[]) p.join('.'),
+    };
+    ref.listen(runSpotlightProvider, (prev, next) {
+      final path = next?.currentPath;
+      if (path == null) return;
+      if (prev?.currentPath?.join('.') == path.join('.')) return;
+      final idx = rows.indexWhere((r) => listEquals(r.path, path));
+      if (idx >= 0) _autoScrollTo(idx, rows.length);
+    });
+
     return ListView.builder(
+      controller: _scroll,
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final row = rows[i];
         final isSelected = selected != null && listEquals(row.path, selected);
+        final rowKey = row.path.join('.');
+        final isCurrent = currentKey != null && rowKey == currentKey;
+        final isCompleted = completedKeys.contains(rowKey);
         final content = Padding(
           padding: EdgeInsets.only(
             left: 8 + row.depth * 20.0,
@@ -199,7 +249,13 @@ class SequenceEditorTree extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              Icon(nodeIcon(row.node), size: 16, color: AraColors.textSecondary),
+              Icon(isCompleted ? Icons.check_circle_outline : nodeIcon(row.node),
+                  size: 16,
+                  color: isCurrent
+                      ? spotColor
+                      : isCompleted
+                          ? AraColors.accentConnected.withValues(alpha: 0.7)
+                          : AraColors.textSecondary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -240,11 +296,21 @@ class SequenceEditorTree extends ConsumerWidget {
             // Ink (not Container(color:)) so the InkWell splash paints ABOVE the
             // tint instead of being hidden by it.
             return Ink(
-              color: hovering
-                  ? AraColors.accentInfo.withValues(alpha: 0.22)
-                  : (isSelected
-                      ? AraColors.selectionBg.withValues(alpha: 0.25)
-                      : null),
+              // Hover > selection > live spotlight tint.
+              decoration: BoxDecoration(
+                color: hovering
+                    ? AraColors.accentInfo.withValues(alpha: 0.22)
+                    : (isSelected
+                        ? AraColors.selectionBg.withValues(alpha: 0.25)
+                        : isCurrent
+                            ? spotColor.withValues(alpha: 0.10)
+                            : null),
+                // The executing row carries an accent bar on its leading edge —
+                // visible from across the room, unlike a text tint.
+                border: isCurrent
+                    ? Border(left: BorderSide(color: spotColor, width: 3))
+                    : null,
+              ),
               child: InkWell(
                 onTap: () =>
                     ref.read(sequenceEditorProvider.notifier).select(row.path),
