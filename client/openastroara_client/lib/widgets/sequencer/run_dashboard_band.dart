@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/run_eta.dart';
+import '../../state/library/live_library_state.dart';
+import '../../state/sequencer/run_latest_frame_state.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/run_spotlight_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
@@ -85,7 +87,16 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                   color: needsAttention ? AraColors.accentError : AraColors.border),
             ),
           ),
-          child: Column(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // S10 — the latest frame captured this run: the single most
+              // reassuring pixel in astrophotography. Appears once the first
+              // frame lands; tapping it goes nowhere yet (Library deep-link
+              // is the completion sheet's job).
+              const _LatestFrameThumb(),
+              Expanded(
+                child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -167,8 +178,45 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
               ),
             ],
           ),
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+}
+
+/// The run's newest frame as a small live thumbnail (S10); nothing until the
+/// first frame of the run lands.
+class _LatestFrameThumb extends ConsumerWidget {
+  const _LatestFrameThumb();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final latest = ref.watch(runLatestFrameProvider);
+    final api = ref.watch(libraryApiProvider);
+    if (latest == null || api == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(right: AraSpace.s12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 56,
+          height: 42,
+          child: Image.network(
+            api.thumbnailUrl(latest.frameId),
+            key: ValueKey(latest.frameId),
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, _, _) => Container(
+              color: AraColors.bgInput,
+              child: const Icon(Icons.image_outlined,
+                  size: 18, color: AraColors.textDisabled),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
