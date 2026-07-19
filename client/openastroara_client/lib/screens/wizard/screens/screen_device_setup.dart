@@ -24,6 +24,7 @@ import '../../../services/rotator_props_api.dart';
 import '../../../services/telescope_optics_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/filter_set_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
@@ -484,6 +485,46 @@ class ScreenFilterWheel extends ConsumerStatefulWidget {
 }
 
 class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
+  /// The bandwidth field's label/helper tailor themselves to what the slot's
+  /// NAME says the filter is (same heuristic that later seeds the planning
+  /// kind) — a Red slot shouldn't lecture about "3nm/6nm/12nm" narrowband
+  /// numbers, and only narrowband actually NEEDS the entry.
+  static bool _isNarrowbandKind(FilterKind k) => switch (k) {
+        FilterKind.ha ||
+        FilterKind.oiii ||
+        FilterKind.sii ||
+        FilterKind.duo ||
+        FilterKind.tri =>
+          true,
+        _ => false,
+      };
+
+  static FilterKind _kindOf(FilterDef f) =>
+      FilterSetNotifier.guessKind(f.name ?? '');
+
+  static String _bandwidthLabel(FilterDef f) =>
+      _isNarrowbandKind(_kindOf(f))
+          ? 'Bandwidth (nm) — needed for correct exposures'
+          : 'Bandwidth (nm) — optional';
+
+  static String _bandwidthHelper(FilterDef f) => switch (_kindOf(f)) {
+        FilterKind.ha ||
+        FilterKind.oiii ||
+        FilterKind.sii =>
+          'The width printed on the filter — "3nm / 6nm / 12nm". Without it, '
+              'suggested exposures assume a generic 7 nm.',
+        FilterKind.duo || FilterKind.tri =>
+          'The per-line width from the filter\'s specs (e.g. 7 for an '
+              'L-eXtreme). Blank assumes the typical value.',
+        FilterKind.r || FilterKind.g || FilterKind.b =>
+          'Fine to leave blank — typical RGB filters are 70–100 nm and the '
+              'assumed 80 nm is close enough.',
+        FilterKind.osc => 'Leave blank — no filter in the light path.',
+        FilterKind.l =>
+          'Blank assumes 100 nm. Modern UV/IR-cut luminance filters pass '
+              '~250–300 nm — worth checking your filter\'s spec page.',
+      };
+
   late final FilterWheelSettings _fw = _draftOf(ref).filterWheel;
   bool _refreshing = false;
 
@@ -635,7 +676,11 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
               fillColor: AraColors.bgInput,
               border: OutlineInputBorder(),
             ),
-            onChanged: (v) => f.name = v.trim().isEmpty ? null : v.trim(),
+            // setState so the bandwidth helper below re-tailors itself to
+            // what the name says the filter is (Ha → narrowband advice,
+            // Luminance → UV/IR-cut advice, Red → "leave blank").
+            onChanged: (v) =>
+                setState(() => f.name = v.trim().isEmpty ? null : v.trim()),
           ),
           const SizedBox(height: 12),
           WizardDropdown<FilterType?>(
@@ -659,15 +704,13 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
                 const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: WizardInput.unsignedDecimal,
             style: const TextStyle(color: AraColors.textPrimary),
-            decoration: const InputDecoration(
-              labelText: 'Bandwidth (nm) — needed for correct exposures',
-              helperText: 'How WIDE the filter\'s window is — the "3nm / 6nm / '
-                  '12nm" printed on narrowband filters. Without it, suggested '
-                  'exposure times won\'t be right for your filter.',
+            decoration: InputDecoration(
+              labelText: _bandwidthLabel(f),
+              helperText: _bandwidthHelper(f),
               helperMaxLines: 3,
               filled: true,
               fillColor: AraColors.bgInput,
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
             ),
             onChanged: (v) => f.bandwidthNm = double.tryParse(v.trim()),
           ),
