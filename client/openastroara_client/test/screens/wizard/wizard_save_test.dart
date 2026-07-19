@@ -225,31 +225,17 @@ void main() {
       expect(out.filters[2].bandwidthNm, 0);
     });
 
-    test('applyDraftToFilterSet lets an explicit wavelength rescue an ambiguous name', () {
-      // "Filter 1" + 656 nm must land on Hα, not silently become broadband L —
-      // the user's explicit entries beat the name fallback. An informative
-      // name still wins over a contradictory wavelength.
+    test('applyDraftToFilterSet infers kind from the name alone (no line-'
+        'wavelength field anymore)', () {
       final d = ProfileDraft();
       d.filterWheel.filters.addAll([
-        FilterDef()
-          ..name = 'Filter 1'
-          ..wavelengthNm = 656,
-        FilterDef()
-          ..name = 'Filter 2'
-          ..wavelengthNm = 501,
-        FilterDef()
-          ..name = 'Filter 3'
-          ..wavelengthNm = 672,
-        FilterDef()
-          ..name = 'Red'
-          ..wavelengthNm = 656, // informative name wins
-        FilterDef()..name = 'Filter 5', // no wavelength → the L fallback stands
+        FilterDef()..name = 'Ha 6nm',
+        FilterDef()..name = 'Red',
+        FilterDef()..name = 'Filter 5', // unrecognisable → the L fallback
       ]);
       final out = applyDraftToFilterSet(const FilterSetSettings(), d);
       expect(out.filters.map((f) => f.kind), [
         FilterKind.ha,
-        FilterKind.oiii,
-        FilterKind.sii,
         FilterKind.r,
         FilterKind.l,
       ]);

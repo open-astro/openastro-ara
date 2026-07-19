@@ -519,12 +519,11 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
       }
       final w = wheel; // non-null after the guard; promote for the closures
       // Replacing the list wipes anything the user already typed (names,
-      // wavelengths, offsets). Confirm first if there's existing data, so a
+      // bandwidths, offsets). Confirm first if there's existing data, so a
       // fat-fingered Refresh can't silently destroy it.
       final hasUserData = _fw.filters.any((f) =>
           (f.name?.isNotEmpty ?? false) ||
           f.type != null ||
-          f.wavelengthNm != null ||
           f.bandwidthNm != null ||
           f.focusOffsetSteps != null);
       if (hasUserData) {
@@ -534,7 +533,7 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
             title: const Text('Replace your filters?'),
             content: Text('Load ${w.slots.length} slot(s) from the connected '
                 'wheel, replacing your ${_fw.filters.length} current filter(s)? '
-                'Names + focus offsets come from the wheel; any wavelengths/types '
+                'Names + focus offsets come from the wheel; any bandwidths/types '
                 'you entered are cleared.'),
             actions: [
               TextButton(
@@ -551,7 +550,7 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
       setState(() {
         // Replace the slots with what the wheel reports — fresh FilterDef objects
         // so each row's ObjectKey changes and its (uncontrolled) name field
-        // re-seeds. type/wavelength have no Alpaca source, so they stay blank for
+        // re-seeds. type/bandwidth have no Alpaca source, so they stay blank for
         // the user to fill.
         _fw.filters
           ..clear()
@@ -654,24 +653,6 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
             ],
             onChanged: (v) => setState(() => f.type = v),
           ),
-          TextFormField(
-            initialValue: f.wavelengthNm?.toString(),
-            keyboardType: TextInputType.number,
-            inputFormatters: WizardInput.unsignedInt,
-            style: const TextStyle(color: AraColors.textPrimary),
-            decoration: const InputDecoration(
-              labelText: 'Line wavelength (nm) — optional',
-              helperText: 'WHERE the filter sits in the spectrum: 656 for Hα, '
-                  '501 for OIII, 672 for SII. Leave blank for broadband '
-                  '(L/R/G/B).',
-              helperMaxLines: 3,
-              filled: true,
-              fillColor: AraColors.bgInput,
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) => f.wavelengthNm = _toInt(v),
-          ),
-          const SizedBox(height: 12),
           TextFormField(
             initialValue: f.bandwidthNm?.toString(),
             keyboardType:
