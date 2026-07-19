@@ -24,25 +24,38 @@ const String _centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 
 /// The filter name a TakeExposure at [path] runs under, or null: the nearest
-/// preceding SwitchFilter among its container siblings (NINA executes a
-/// SequentialContainer / SmartExposure top-to-bottom, so the last filter
-/// switch before the exposure is the one in effect). Pure — exposed for tests.
+/// preceding SwitchFilter, level by level from the root (NINA executes a
+/// SequentialContainer top-to-bottom, so at every ancestor level the last
+/// filter switch before the branch the exposure sits in is in effect —
+/// deeper/later wins). A switch that's a sibling of the exposure's CONTAINER
+/// counts too: the smart-target plan emits `Switch Filter → "Ha Imaging"
+/// [Take Exposure]`, where the switch never shares a parent with the
+/// exposure. Pure — exposed for tests.
 String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
-  if (path.isEmpty) return null;
-  final parent = nodeAt(body, path.sublist(0, path.length - 1));
-  if (parent == null) return null;
-  final siblings = childrenOf(parent);
-  final exposureIndex = path.last;
   String? name;
-  for (var i = 0; i < exposureIndex && i < siblings.length; i++) {
-    final sibling = siblings[i];
-    if (sibling[r'$type'] == switchFilterType) {
-      final filter = sibling['Filter'];
-      final n = filter is Map<String, dynamic> ? filter['Name'] : null;
-      if (n is String && n.trim().isNotEmpty) name = n.trim();
+  for (var depth = 0; depth < path.length; depth++) {
+    final parent = nodeAt(body, path.sublist(0, depth));
+    if (parent == null) return name;
+    final siblings = childrenOf(parent);
+    final index = path[depth];
+    for (var i = 0; i < index && i < siblings.length; i++) {
+      final sibling = siblings[i];
+      if (sibling[r'$type'] == switchFilterType) {
+        final n = _filterInfoName(sibling['Filter']);
+        if (n != null) name = n;
+      }
     }
   }
   return name;
+}
+
+/// The display name inside a `FilterInfo` value — the daemon serialises the
+/// backing field as `_name` (what [buildFilterInfo] writes), while some NINA
+/// exports carry a public `Name`. Either counts.
+String? _filterInfoName(Object? filter) {
+  if (filter is! Map) return null;
+  final n = filter['_name'] ?? filter['Name'];
+  return n is String && n.trim().isNotEmpty ? n.trim() : null;
 }
 
 /// §3.1 — the target position (J2000 decimal DEGREES) in effect for a

@@ -71,6 +71,49 @@ void main() {
       expect(filterNameForExposure(body, [2]), 'OIII');
     });
 
+    test(
+        'a switch that is a sibling of the exposure\'s CONTAINER counts '
+        '(the smart-target plan shape), and _name is read', () {
+      final body = {
+        r'$type': 'X.Seq',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {
+              r'$type': _switchFilter,
+              'Filter': {'_name': 'Ha'},
+            },
+            {
+              r'$type': 'X.Seq',
+              'Name': 'Ha Imaging',
+              'Items': {
+                r'$type': itemsWrapperType,
+                r'$values': [
+                  {r'$type': takeExposureType, 'ExposureTime': 110.0},
+                ],
+              },
+            },
+            {
+              r'$type': _switchFilter,
+              'Filter': {'_name': 'OIII'},
+            },
+            {
+              r'$type': 'X.Seq',
+              'Name': 'OIII Imaging',
+              'Items': {
+                r'$type': itemsWrapperType,
+                r'$values': [
+                  {r'$type': takeExposureType, 'ExposureTime': 90.0},
+                ],
+              },
+            },
+          ],
+        },
+      };
+      expect(filterNameForExposure(body, [1, 0]), 'Ha');
+      expect(filterNameForExposure(body, [3, 0]), 'OIII');
+    });
+
     test('no switch before it (or a nameless filter) → null', () {
       final body = {
         r'$type': 'X.Seq',
