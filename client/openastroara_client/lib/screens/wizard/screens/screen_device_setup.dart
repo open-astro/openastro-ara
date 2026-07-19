@@ -525,6 +525,7 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
           (f.name?.isNotEmpty ?? false) ||
           f.type != null ||
           f.wavelengthNm != null ||
+          f.bandwidthNm != null ||
           f.focusOffsetSteps != null);
       if (hasUserData) {
         final replace = await showDialog<bool>(
@@ -659,15 +660,35 @@ class _ScreenFilterWheelState extends ConsumerState<ScreenFilterWheel> {
             inputFormatters: WizardInput.unsignedInt,
             style: const TextStyle(color: AraColors.textPrimary),
             decoration: const InputDecoration(
-              labelText: 'Wavelength (nm) — optional',
-              helperText: 'Just the number: 656 for Hα, 501 for OIII, 672 for '
-                  'SII. Leave blank for broadband (L/R/G/B).',
-              helperMaxLines: 2,
+              labelText: 'Line wavelength (nm) — optional',
+              helperText: 'WHERE the filter sits in the spectrum: 656 for Hα, '
+                  '501 for OIII, 672 for SII. Leave blank for broadband '
+                  '(L/R/G/B).',
+              helperMaxLines: 3,
               filled: true,
               fillColor: AraColors.bgInput,
               border: OutlineInputBorder(),
             ),
             onChanged: (v) => f.wavelengthNm = _toInt(v),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            initialValue: f.bandwidthNm?.toString(),
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: WizardInput.unsignedDecimal,
+            style: const TextStyle(color: AraColors.textPrimary),
+            decoration: const InputDecoration(
+              labelText: 'Bandwidth (nm) — needed for correct exposures',
+              helperText: 'How WIDE the filter\'s window is — the "3nm / 6nm / '
+                  '12nm" printed on narrowband filters. Without it, suggested '
+                  'exposure times won\'t be right for your filter.',
+              helperMaxLines: 3,
+              filled: true,
+              fillColor: AraColors.bgInput,
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) => f.bandwidthNm = double.tryParse(v.trim()),
           ),
           const SizedBox(height: 12),
         ],

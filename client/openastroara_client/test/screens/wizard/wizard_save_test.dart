@@ -207,6 +207,24 @@ void main() {
       expect(out.filters[2].kind, FilterKind.r);
     });
 
+    test('applyDraftToFilterSet carries the screen\'s bandwidth into the '
+        'planning filter (0 = kind default when blank)', () {
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()
+          ..name = 'Ha'
+          ..bandwidthNm = 3,
+        FilterDef()..name = 'OIII', // blank → kind default
+        FilterDef()
+          ..name = 'SII'
+          ..bandwidthNm = 0, // explicit junk 0 → treated as unset
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters[0].bandwidthNm, 3);
+      expect(out.filters[1].bandwidthNm, 0);
+      expect(out.filters[2].bandwidthNm, 0);
+    });
+
     test('applyDraftToFilterSet lets an explicit wavelength rescue an ambiguous name', () {
       // "Filter 1" + 656 nm must land on Hα, not silently become broadband L —
       // the user's explicit entries beat the name fallback. An informative

@@ -122,6 +122,12 @@ class FilterDef {
   String? name;
   FilterType? type;
   int? wavelengthNm;
+
+  /// The filter's passband WIDTH in nm (the "3nm / 6nm / 12nm" printed on
+  /// narrowband filters) — distinct from [wavelengthNm], the line CENTER.
+  /// This is the number the Optimal-Sub (Glover) math needs; without it,
+  /// narrowband exposure suggestions fall back to a generic 7 nm.
+  double? bandwidthNm;
   int? focusOffsetSteps;
 }
 

@@ -87,7 +87,16 @@ FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) 
   if (named.isEmpty) return base;
   return FilterSetSettings(filters: [
     for (final (name, def) in named)
-      PlanningFilter(name: name, kind: _kindForDraftFilter(name, def)),
+      PlanningFilter(
+        name: name,
+        kind: _kindForDraftFilter(name, def),
+        // The screen's explicit bandwidth entry (the "3nm/6nm/12nm" printed
+        // on the filter) — the number the Optimal-Sub math runs on. 0 (unset)
+        // falls back to the kind's default passband.
+        bandwidthNm: (def.bandwidthNm != null && def.bandwidthNm! > 0)
+            ? def.bandwidthNm!
+            : 0,
+      ),
   ]);
 }
 
@@ -97,9 +106,9 @@ FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) 
 /// disambiguates the classic emission lines, so "Filter 1" + 656 nm lands on Hα
 /// instead of silently becoming broadband L. The coarse Type dropdown has no
 /// finer mapping than this (its narrowband/broadband split carries no line
-/// identity), and the wavelength is a CENTER, not a bandwidth, so
-/// PlanningFilter.bandwidthNm stays at its kind default — both refinable in
-/// Settings → Imaging → Filter set.
+/// identity). The wavelength is a CENTER, not a bandwidth — the screen asks
+/// for the bandwidth separately and it flows into PlanningFilter.bandwidthNm
+/// above; both remain refinable in Settings → Imaging → Filter set.
 FilterKind _kindForDraftFilter(String name, FilterDef f) {
   final byName = FilterSetNotifier.guessKind(name);
   if (byName != FilterKind.l) return byName; // the name was informative
