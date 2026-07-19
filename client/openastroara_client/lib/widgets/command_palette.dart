@@ -187,8 +187,11 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
                 },
               ),
             },
+            // No autofocus here: two autofocus nodes in one scope race, and
+            // this wrapper used to win — leaving the search field unfocused
+            // until clicked. The TextField's own autofocus is the one that
+            // must land (type-to-search immediately on open).
             child: Focus(
-              autofocus: true,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

@@ -61,4 +61,34 @@ void main() {
     // …and the palette itself popped (its search field is gone).
     expect(find.byType(TextField), findsNothing);
   });
+
+  testWidgets('the search field owns focus on open (type-to-search)',
+      (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showCommandPalette(context),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // Typing with NO click must land in the search box — a competing
+    // autofocus wrapper used to swallow focus until a manual click.
+    // testTextInput.enterText types into the ATTACHED input client, which
+    // only exists when an EditableText actually holds focus.
+    tester.testTextInput.enterText('dither');
+    await tester.pump();
+    expect(find.widgetWithText(TextField, 'dither'), findsOneWidget);
+  });
 }
