@@ -187,7 +187,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
       optics.focalLengthMm > 0 &&
       optics.pixelSizeUm > 0 &&
       optics.reducerFactor > 0;
-  final skyMag = skyMagFromBortle(site.bortleClass);
+  final skyMag = effectiveSkyMag(
+    bortleClass: site.bortleClass,
+    sqmMagPerArcsec2: site.sqmMagPerArcsec2,
+  );
   // Per-approach memo: (rounded floor for display, unrounded recommendation,
   // the assembled input for the star-count tag).
   final adviceMemo =

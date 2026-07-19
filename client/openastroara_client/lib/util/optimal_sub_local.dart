@@ -126,7 +126,10 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
     focalLengthMm: optics.focalLengthMm,
     reducerFactor: optics.reducerFactor,
     quantumEfficiency: qe,
-    skyMagPerArcsec2: skyMagFromBortle(site.bortleClass),
+    skyMagPerArcsec2: effectiveSkyMag(
+      bortleClass: site.bortleClass,
+      sqmMagPerArcsec2: site.sqmMagPerArcsec2,
+    ),
     filterBandwidthNm: bandwidth,
   );
 

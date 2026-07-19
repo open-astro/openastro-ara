@@ -124,7 +124,13 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     final r = outcome.result;
     var sec = math.max(r.recommendedSec, defaultExposure);
     if (r.viable) sec = math.min(sec, r.ceilingSec);
-    sec = sec.clamp(1.0, 600.0);
+    // Floor at 30 s: past the Glover floor the quality penalty is essentially
+    // flat, but a 10 s luminance plan means ~350 files/hour — hours of extra
+    // stacking for no measurable gain. (The per-node advisor still shows the
+    // pure floor; this floor is a PLAN practicality, not physics.) The
+    // saturation ceiling still wins when the sky is truly that bright.
+    sec = sec.clamp(30.0, 600.0);
+    if (r.viable && r.ceilingSec < sec) sec = math.max(1.0, r.ceilingSec);
     // Round to something a human would type: nearest 10 s above a minute,
     // nearest 5 s below.
     final step = sec >= 60 ? 10 : 5;

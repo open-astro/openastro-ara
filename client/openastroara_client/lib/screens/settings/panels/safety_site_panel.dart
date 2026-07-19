@@ -254,6 +254,17 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           },
         ),
         EditableNumberRow(
+          label: 'SQM sky brightness (0 = use Bortle)',
+          helpKey: 'safety.site.sqm_mag_per_arcsec2',
+          currentValue: s.sqmMagPerArcsec2.toString(),
+          getCanonical: () =>
+              ref.read(siteSettingsProvider).sqmMagPerArcsec2.toString(),
+          parse: (str) {
+            final v = double.tryParse(str);
+            if (v != null) n.setSqmMagPerArcsec2(v);
+          },
+        ),
+        EditableNumberRow(
           label: 'Typical seeing (″)',
           helpKey: 'safety.site.typical_seeing_arcsec',
           currentValue: s.typicalSeeingArcsec.toString(),

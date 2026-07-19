@@ -112,7 +112,12 @@ public sealed record SiteSettingsDto(
     // hard floor are excluded, targets that never CLEAR this soft mark are still
     // listed but Tonight's Sky tags them so soft, low-elevation detail is an
     // informed choice, not a surprise. Advisory-only — never a score input.
-    double SoftWarningAltitudeDeg = 30);
+    double SoftWarningAltitudeDeg = 30,
+    // Measured sky brightness in mag/arcsec² (an SQM meter reading or a
+    // lightpollutionmap value). 0 = not measured — planning derives the sky
+    // from BortleClass instead. When set (~16–22.2 for real skies) it
+    // overrides the coarse Bortle lookup in the client's exposure math.
+    double SqmMagPerArcsec2 = 0);
 
 /// <summary>§36 custom terrain horizon — one skyline vertex: the sky altitude at an
 /// azimuth (compass degrees, 0 = north, clockwise). The profile stores the user's

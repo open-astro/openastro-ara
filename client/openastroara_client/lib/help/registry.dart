@@ -578,6 +578,24 @@ const Map<String, Help> helpRegistry = {
     learnMoreUrl: 'https://en.wikipedia.org/wiki/Bortle_scale',
     relatedSettings: ['safety.site.typical_seeing_arcsec'],
   ),
+  'safety.site.sqm_mag_per_arcsec2': Help(
+    key: 'safety.site.sqm_mag_per_arcsec2',
+    title: 'Sky brightness (SQM)',
+    body: 'A MEASURED zenith sky brightness in mag/arcsec² — from an SQM meter, '
+        'an all-sky sensor, or lightpollutionmap.info for your location.\n\n'
+        'When set, exposure planning (the Optimal Sub advisor and target plans) '
+        'uses this instead of the coarse Bortle estimate. One Bortle class '
+        'spans about half a magnitude and sky flux is exponential in '
+        'magnitude, so a real reading tightens suggested exposures by up to '
+        '±30%.\n\n'
+        '* **~16-18**: city / inner suburbs\n'
+        '* **~19-20**: suburban\n'
+        '* **~21-21.7**: rural (Bortle 3-4)\n'
+        '* **~21.8-22.2**: pristine dark site\n\n'
+        'Leave at 0 to keep deriving the sky from the Bortle class.',
+    learnMoreUrl: 'https://www.lightpollutionmap.info',
+    relatedSettings: ['safety.site.bortle_class'],
+  ),
   'safety.site.typical_seeing_arcsec': Help(
     key: 'safety.site.typical_seeing_arcsec',
     title: 'Typical seeing',

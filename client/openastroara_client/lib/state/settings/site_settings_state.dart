@@ -26,6 +26,11 @@ class SiteSettings {
 
   // Observing conditions.
   final int bortleClass; // 1..9
+
+  /// Measured sky brightness in mag/arcsec2 (SQM meter / lightpollutionmap).
+  /// 0 = not measured -> the exposure math derives the sky from [bortleClass];
+  /// a real reading (~16-22.2) overrides that coarse lookup.
+  final double sqmMagPerArcsec2;
   final double typicalSeeingArcsec;
   final TwilightDefinition twilightDefinition;
 
@@ -46,6 +51,7 @@ class SiteSettings {
     this.useCustomHorizon = false,
     this.defaultHorizonAltitudeDeg = 20,
     this.bortleClass = 6,
+    this.sqmMagPerArcsec2 = 0,
     this.typicalSeeingArcsec = 2.5,
     this.twilightDefinition = TwilightDefinition.astronomical,
     this.maxSequenceRuntimeMin = 0,
@@ -61,6 +67,7 @@ class SiteSettings {
     bool? useCustomHorizon,
     double? defaultHorizonAltitudeDeg,
     int? bortleClass,
+    double? sqmMagPerArcsec2,
     double? typicalSeeingArcsec,
     TwilightDefinition? twilightDefinition,
     int? maxSequenceRuntimeMin,
@@ -76,6 +83,7 @@ class SiteSettings {
         defaultHorizonAltitudeDeg:
             defaultHorizonAltitudeDeg ?? this.defaultHorizonAltitudeDeg,
         bortleClass: bortleClass ?? this.bortleClass,
+        sqmMagPerArcsec2: sqmMagPerArcsec2 ?? this.sqmMagPerArcsec2,
         typicalSeeingArcsec:
             typicalSeeingArcsec ?? this.typicalSeeingArcsec,
         twilightDefinition: twilightDefinition ?? this.twilightDefinition,
@@ -131,6 +139,14 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
   void setBortleClass(int v) {
     if (v < 1 || v > 9) return;
     state = state.copyWith(bortleClass: v);
+  }
+
+  /// 0 clears the reading (back to Bortle-derived); real skies measure
+  /// roughly 16 (city core) to 22.2 (the darkest sites on Earth) - readings
+  /// outside that are meter noise/typos and are rejected.
+  void setSqmMagPerArcsec2(double v) {
+    if (v != 0 && (v < 16 || v > 22.5)) return;
+    state = state.copyWith(sqmMagPerArcsec2: v);
   }
 
   void setTypicalSeeingArcsec(double v) {

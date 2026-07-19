@@ -96,6 +96,18 @@ const double _adcMaxAdu = 65535;
 double skyMagFromBortle(int bortleClass) =>
     22.0 - (bortleClass.clamp(1, 9) - 1) * 0.5;
 
+/// The sky brightness planning should run on: a MEASURED SQM reading when the
+/// site has one (a real meter/lightpollutionmap value, ~16–22.2 — one Bortle
+/// class spans ~0.5 mag and sky flux is exponential in mag, so a tenth-of-a-
+/// mag reading is the single biggest accuracy upgrade available), else the
+/// coarse Bortle lookup. 0/out-of-range = no reading.
+double effectiveSkyMag({
+  required int bortleClass,
+  double sqmMagPerArcsec2 = 0,
+}) => sqmMagPerArcsec2 >= 16 && sqmMagPerArcsec2 <= 22.5
+    ? sqmMagPerArcsec2
+    : skyMagFromBortle(bortleClass);
+
 /// A filter kind's default EFFECTIVE passband (nm) when the profile entry
 /// leaves bandwidth at 0. (Mirrors FilterKind.defaultBandwidthNm — kept as
 /// the calculator-side seam like the daemon had.)
