@@ -94,6 +94,9 @@ Three grades, kept visibly separate; every constant in the eventual
 **Named conventions (citable thresholds, not derivations):**
 - SNR 5 = "clean", 3 = "detectable" — the Rose criterion (A. Rose, 1948),
   standard across astronomy and medical imaging.
+- Scattered moonlight — Krisciunas & Schaefer (1991), the model behind
+  ESO's sky-brightness calculator; inputs come from the client's existing
+  Dart moon ephemeris.
 - The sub-length floor — Dr. Robin Glover's read-noise-swamping criterion
   (SharpCap), already shipped and attributed.
 
@@ -135,9 +138,30 @@ exposure, filter, gain, and timestamp. So:
 This phase doubles as the demo: "the model predicted last Tuesday's Ha
 background within 12 %" is the credibility sentence for the feature.
 
-Known systematics deliberately EXCLUDED from v1 (documented in-app as
-assumptions, candidates for v2): moonlight (± 2–3 mag, nightly), target
-altitude/airmass, seasonal haze. v1 states "moonless, near-zenith".
+### Moonlight — IN v1 (decided 2026-07-19)
+
+The client already carries a Dart Meeus-style moon ephemeris
+(`tonight_sky_local.dart`: RA/Dec, up/down vs horizon, illuminated
+fraction — no Python/Skyfield dependency needed). v1 adds the
+**Krisciunas & Schaefer (1991)** scattered-moonlight model — the citable
+standard, used by ESO's sky-brightness calculator — which maps (moon phase
+angle, moon altitude, moon–target separation) → added sky brightness in
+mag/arcsec², composed onto the SQM/Bortle base before the SNR math runs.
+Two things fall out for free:
+- Narrowband moon immunity: moonlight is broadband reflected sunlight, so
+  the existing bandwidth term slashes it for a 6 nm filter — the model
+  *states* the "shoot narrowband under the moon" folk wisdom.
+- Tonight-vs-generic budgets: the tiered T_required can be shown both for
+  a dark night (the target's intrinsic cost) and for TONIGHT's actual moon.
+
+K&S goes in the Provenance section's "theorems/citable" grade; its
+validation rides the same Phase-V gate (moonlit frames in the library are
+exactly the residuals the base model can't explain — fitting nights with
+and without moon separates k from the moon term).
+
+Still deliberately EXCLUDED from v1 (documented in-app as assumptions,
+candidates for v2): target altitude/airmass, seasonal haze. v1 states
+"near-zenith".
 
 ## Feature phases (after the validation gate passes)
 
@@ -170,5 +194,5 @@ phase, no PR until live-tested — per standing rules.
 2. Banked hours: count only frames rated OK (§50 quality gate), or all?
 3. Where does the budget belong besides Tonight's Sky — target plan
    dialog? Stats tab?
-4. v1 ignores the Moon; acceptable, or is a simple "moon up = warn"
-   rider wanted immediately?
+4. ~~v1 ignores the Moon?~~ RESOLVED 2026-07-19: moon is IN v1 via the
+   Krisciunas & Schaefer model on the existing Dart ephemeris.
