@@ -1,6 +1,15 @@
 # Integration Budget — "how many hours does this target actually need?"
 
-**Status: DRAFT for review — no implementation until Joey signs off.**
+**Status: DRAFT for review — no implementation until sign-off.**
+
+## Why (the product thesis)
+
+The software's promise — *Astrophotography Perfected* — is that everything
+OBJECTIVE about a night is engineered for the user: what target fits their
+optics, how to split the night across filters, how long each sub should be,
+and how many total hours their sky needs for data worth processing. When
+the chain holds, the only variable left is taste in processing. This
+feature is the last objective link.
 
 ## The product claim
 
@@ -62,6 +71,49 @@ UI shows e.g. "core ~2 h · full ~9 h · faint ~35 h" — and a target whose
 faint tier exceeds ~60 h says "faint extensions impractical from this sky"
 rather than a silly number.
 
+## Provenance — what each piece of math rests on
+
+Three grades, kept visibly separate; every constant in the eventual
+`integration_budget.dart` carries one of these citations in a comment.
+
+**Theorems / textbook physics:**
+- SNR ∝ √T — Poisson photon statistics.
+- SNR(T) formula — the standard astronomical SNR equation (Howell,
+  *Handbook of CCD Astronomy*; Merline & Howell 1995), read-noise/dark
+  terms dropped under exactly the condition Glover's floor guarantees.
+  The SAME equation powers NASA/STScI exposure-time calculators — HST's
+  ETC and JWST's open-source engine **Pandeia** (Pontoppidan et al. 2016).
+  P1's unit tests include 2–3 parity cases cross-checked against
+  Pandeia-style worked examples so our Dart math is anchored to the
+  professional implementation, not just to itself.
+- Magnitude → photon flux — the Pogson relation, with the photometric
+  zero point pinned to the published Vega-system calibration
+  (Bessell 1998, ~1000 photons s⁻¹ cm⁻² Å⁻¹ at V = 0) instead of an
+  anonymous constant.
+
+**Named conventions (citable thresholds, not derivations):**
+- SNR 5 = "clean", 3 = "detectable" — the Rose criterion (A. Rose, 1948),
+  standard across astronomy and medical imaging.
+- The sub-length floor — Dr. Robin Glover's read-noise-swamping criterion
+  (SharpCap), already shipped and attributed.
+
+**Our judgment calls (documented as such, tunable):**
+- Depth-tier offsets (+2/+4 mag), the 2 %/h horizon, and treating catalog
+  surface brightness as the core tier's input.
+
+### CMOS note ("CCD equation" is a historical name)
+
+The equation is photon statistics + read noise; sensor architecture is
+irrelevant (JWST's ETC applies it to HgCdTe arrays). Glover's method was
+developed FOR modern CMOS. All CMOS-specific behavior (gain-dependent read
+noise incl. the HCG/LCG dual-gain step, e-/ADU) enters through the
+user-entered electronics values at their operating gain — which is why the
+camera-electronics settings ask for exactly those. Amp glow and fixed-
+pattern noise are calibration/dither concerns, invisible to SNR planning;
+dark current on cooled CMOS is negligible next to sky flux (the same
+condition that justified dropping the term). In-app and in-code language:
+"the standard astronomical SNR equation", never "CCD equation".
+
 ## Anti-hallucination: validate BEFORE any user sees an hours figure
 
 The model's testable intermediate is per-sub background level. The library
@@ -111,7 +163,7 @@ altitude/airmass, seasonal haze. v1 states "moonless, near-zenith".
 Each phase is a separate commit set on a feature branch, gated tests per
 phase, no PR until live-tested — per standing rules.
 
-## Open questions for Joey
+## Open questions
 
 1. Default SNR goals (5/5/3) and the 2 %/h horizon: taste constants —
    expose in Advanced settings, or hard-code v1?
