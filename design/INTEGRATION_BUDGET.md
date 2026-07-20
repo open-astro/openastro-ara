@@ -124,7 +124,20 @@ already stores **measured `backgroundAdu` and `medianAdu` per frame**, with
 exposure, filter, gain, and timestamp. So:
 
 **Phase V (validation gate, ships no UI):**
-1. For every frame in Joey's real library: predict background ADU =
+
+*Pedestal without calibration frames (decided 2026-07-19 — typical users
+rarely shoot bias/darks/flats, so the harness must not depend on them):
+per filter, regress measured background ADU against exposure length across
+the library's frames — background = pedestal + rate × exposure. The
+INTERCEPT is the camera's bias pedestal, the SLOPE is the measured sky
+flux; they separate with zero calibration frames as long as the library
+holds varied exposure lengths. A master bias, when present, just pins the
+intercept. (Dry-run precedent: Joey's 9×20 s M42 L frames showed a
+629–632 ADU background stable to 0.5 % over five minutes — the stability
+this fit rides on — but a single exposure length can't split pedestal from
+sky, which is what forced this design.)*
+
+1. For every frame in users's real library: predict background ADU =
    S_sky(filter, SQM, optics) × exposure ÷ e-/ADU(gain) + offset.
 2. Compare predicted vs measured across frames; fit one scalar calibration
    factor k (transmission/QE-curve losses the spec-sheet numbers miss);
