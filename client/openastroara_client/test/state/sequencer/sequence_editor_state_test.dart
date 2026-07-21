@@ -502,4 +502,41 @@ void main() {
       expect(undos, SequenceEditorController.undoCap);
     });
   });
+
+  group('selectAdjacent (arrow-key navigation)', () {
+    // sampleDetail flattens depth-first to: [], [0], [1], [1,0].
+    test('walks rows in tree order and stops at both ends', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(sequenceEditorProvider.notifier);
+      n.load(sampleDetail());
+
+      n.selectAdjacent(next: true); // nothing selected → first row (the root)
+      expect(c.read(sequenceEditorProvider)!.selectedPath, isEmpty);
+      n.selectAdjacent(next: true);
+      expect(c.read(sequenceEditorProvider)!.selectedPath, [0]);
+      n.selectAdjacent(next: true);
+      expect(c.read(sequenceEditorProvider)!.selectedPath, [1]);
+      n.selectAdjacent(next: true);
+      expect(c.read(sequenceEditorProvider)!.selectedPath, [1, 0]);
+      n.selectAdjacent(next: true); // last row — stays put
+      expect(c.read(sequenceEditorProvider)!.selectedPath, [1, 0]);
+      n.selectAdjacent(next: false);
+      expect(c.read(sequenceEditorProvider)!.selectedPath, [1]);
+    });
+
+    test('Up with nothing selected lands on the last row; body untouched', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(sequenceEditorProvider.notifier);
+      n.load(sampleDetail());
+      final before = c.read(sequenceEditorProvider)!.body;
+      n.selectAdjacent(next: false);
+      final after = c.read(sequenceEditorProvider)!;
+      expect(after.selectedPath, [1, 0]);
+      expect(identical(after.body, before), isTrue,
+          reason: 'navigation must never touch the body (no dirty, no undo)');
+      expect(n.canUndo, isFalse);
+    });
+  });
 }

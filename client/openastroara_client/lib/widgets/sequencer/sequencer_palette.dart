@@ -1,8 +1,10 @@
 /// §38 sequence-editor instruction palette — the catalog of instructions a user
-/// adds to the sequence, grouped by category. Tapping a tile adds that
-/// instruction relative to the current selection (see
-/// [SequenceEditorController.addInstruction]); drag-to-a-specific-position lands
-/// in a following slice. Disabled (greyed) until a sequence is loaded.
+/// adds to the sequence, grouped by category. **Drag a tile into the tree** to
+/// place it at a precise position (the tree's row/gap targets accept
+/// [InstructionDef] payloads — run-redesign S8's primary gesture); tapping
+/// still adds relative to the current selection (see
+/// [SequenceEditorController.addInstruction]) as the quick path. Disabled
+/// (greyed) until a sequence is loaded.
 library;
 
 import 'package:flutter/material.dart';
@@ -12,6 +14,7 @@ import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/instruction_style.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
+import 'sequence_editor_tree.dart' show SequenceDragChip;
 
 class SequencerPalette extends ConsumerStatefulWidget {
   const SequencerPalette({super.key});
@@ -111,7 +114,7 @@ class _PaletteTile extends StatelessWidget {
     // instead of overflowing in a narrow side pane. The transparent Material
     // gives the InkWell a splash surface confined to the tile (without one the
     // ripple climbs to the pane's Material and fills the whole column).
-    return Material(
+    final tile = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onAdd : null,
@@ -157,6 +160,19 @@ class _PaletteTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (!enabled) return tile;
+    // S8 — drag-from-palette-to-position: the tile is a plain Draggable (not
+    // long-press — on desktop press-and-move should immediately drag) whose
+    // payload the tree's row/gap DragTargets resolve to an insertInstruction.
+    // Tap-to-add still works: InkWell handles the tap, the drag only starts
+    // once the pointer moves.
+    return Draggable<InstructionDef>(
+      data: def,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: SequenceDragChip(label: def.label),
+      childWhenDragging: Opacity(opacity: 0.4, child: tile),
+      child: tile,
     );
   }
 }

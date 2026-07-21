@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
 import '../../models/sequence/instruction_style.dart';
@@ -150,6 +151,30 @@ List<NodePath> appendGapContainers(
     if (node != null && isContainer(node)) out.add(p);
   }
   return out;
+}
+
+/// Resolve dropping a NEW instruction (a palette drag) just before the row at
+/// [beforePath]: its parent's slot at [beforePath.last]. Null for the root row
+/// (no gap above it) or an unresolvable/non-container parent. Unlike the move
+/// resolvers there is no self/no-op arithmetic — a fresh node has no old slot.
+@visibleForTesting
+({NodePath parent, int index})? resolveInsertBefore(
+    Map<String, dynamic> body, NodePath beforePath) {
+  if (beforePath.isEmpty) return null;
+  final parent = beforePath.sublist(0, beforePath.length - 1);
+  final parentNode = nodeAt(body, parent);
+  if (parentNode == null || !isContainer(parentNode)) return null;
+  return (parent: parent, index: beforePath.last);
+}
+
+/// Resolve dropping a NEW instruction at the END of the container at
+/// [container] (append). Null when [container] isn't a resolvable container.
+@visibleForTesting
+({NodePath parent, int index})? resolveInsertInto(
+    Map<String, dynamic> body, NodePath container) {
+  final node = nodeAt(body, container);
+  if (node == null || !isContainer(node)) return null;
+  return (parent: container, index: childrenOf(node).length);
 }
 
 /// Stable widget key for the "insert before [path]" gap (also the test handle).
@@ -300,10 +325,17 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
           ),
         );
         // Every row (root included) is a drop target — dropping a dragged node
-        // onto a container moves it inside; only non-root rows are drag sources.
-        final rowTarget = DragTarget<NodePath>(
-          onWillAcceptWithDetails: (d) =>
-              canReparentInto(editor.body, d.data, row.path),
+        // onto a container moves it inside; dropping a PALETTE instruction
+        // ([InstructionDef]) onto a container appends a fresh node into it.
+        // Only non-root rows are drag sources. DragTarget<Object> so both
+        // payload types land here; anything else is rejected.
+        final rowTarget = DragTarget<Object>(
+          onWillAcceptWithDetails: (d) => switch (d.data) {
+            final NodePath p => canReparentInto(editor.body, p, row.path),
+            InstructionDef() =>
+              nodeAt(editor.body, row.path) != null && isContainerRow,
+            _ => false,
+          },
           onAcceptWithDetails: (d) {
             // Re-read current state at drop time rather than the build-time
             // snapshot, in case the body changed between onWillAccept and now.
@@ -313,9 +345,14 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
             final target =
                 current == null ? null : nodeAt(current.body, row.path);
             if (target == null) return;
-            ref
-                .read(sequenceEditorProvider.notifier)
-                .moveNodeTo(d.data, row.path, childrenOf(target).length);
+            final notifier = ref.read(sequenceEditorProvider.notifier);
+            switch (d.data) {
+              case final NodePath p:
+                notifier.moveNodeTo(p, row.path, childrenOf(target).length);
+              case final InstructionDef def:
+                notifier.insertInstruction(
+                    row.path, childrenOf(target).length, def);
+            }
           },
           builder: (context, candidate, rejected) {
             final hovering = candidate.isNotEmpty;
@@ -347,7 +384,7 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
                     : LongPressDraggable<NodePath>(
                         data: row.path,
                         dragAnchorStrategy: pointerDragAnchorStrategy,
-                        feedback: _DragChip(label: nodeLabel(row.node)),
+                        feedback: SequenceDragChip(label: nodeLabel(row.node)),
                         childWhenDragging:
                             Opacity(opacity: 0.4, child: content),
                         child: content,
@@ -373,6 +410,7 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
                 key: ValueKey(gapBeforeKey(row.path)),
                 resolve: (body, dragged) =>
                     resolveDropBefore(body, dragged, row.path),
+                resolveInsert: (body) => resolveInsertBefore(body, row.path),
                 indent: 8 + row.depth * 20.0,
               ),
             MouseRegion(
@@ -385,6 +423,7 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
               _GapTarget(
                 key: ValueKey(gapAppendKey(c)),
                 resolve: (body, dragged) => resolveDropInto(body, dragged, c),
+                resolveInsert: (body) => resolveInsertInto(body, c),
                 indent: 8 + (c.length + 1) * 20.0,
               ),
           ],
@@ -399,33 +438,56 @@ class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
 typedef _GapResolver = ({NodePath parent, int index})? Function(
     Map<String, dynamic> body, NodePath dragged);
 
+/// Resolves a PALETTE-instruction drop against the live body to the
+/// `(parent, index)` for [SequenceEditorController.insertInstruction], or null.
+typedef _GapInsertResolver = ({NodePath parent, int index})? Function(
+    Map<String, dynamic> body);
+
 /// A thin drop zone between/after rows: dropping a dragged node here moves it to
 /// the slot [resolve] yields against the live body — an insert-between reorder
-/// ([resolveDropBefore]) or an append into a container ([resolveDropInto]).
+/// ([resolveDropBefore]) or an append into a container ([resolveDropInto]) —
+/// and dropping a palette [InstructionDef] inserts a FRESH node at the slot
+/// [resolveInsert] yields (the drag-from-palette-to-position gesture).
 /// Shows a highlight line while a valid drop hovers. The box height is fixed so
 /// a hover never reflows the list (which could bounce the pointer in/out of the
 /// gap); only the highlight line toggles.
 class _GapTarget extends ConsumerWidget {
-  const _GapTarget({super.key, required this.resolve, required this.indent});
+  const _GapTarget(
+      {super.key,
+      required this.resolve,
+      required this.resolveInsert,
+      required this.indent});
 
   final _GapResolver resolve;
+  final _GapInsertResolver resolveInsert;
   final double indent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    bool resolves(NodePath dragged) {
+    bool resolves(Object dragged) {
       final body = ref.read(sequenceEditorProvider)?.body;
-      return body != null && resolve(body, dragged) != null;
+      if (body == null) return false;
+      return switch (dragged) {
+        final NodePath p => resolve(body, p) != null,
+        InstructionDef() => resolveInsert(body) != null,
+        _ => false,
+      };
     }
 
-    return DragTarget<NodePath>(
+    return DragTarget<Object>(
       onWillAcceptWithDetails: (d) => resolves(d.data),
       onAcceptWithDetails: (d) {
         final body = ref.read(sequenceEditorProvider)?.body;
         if (body == null) return;
-        final r = resolve(body, d.data);
-        if (r == null) return;
-        ref.read(sequenceEditorProvider.notifier).moveNodeTo(d.data, r.parent, r.index);
+        final notifier = ref.read(sequenceEditorProvider.notifier);
+        switch (d.data) {
+          case final NodePath p:
+            final r = resolve(body, p);
+            if (r != null) notifier.moveNodeTo(p, r.parent, r.index);
+          case final InstructionDef def:
+            final r = resolveInsert(body);
+            if (r != null) notifier.insertInstruction(r.parent, r.index, def);
+        }
       },
       builder: (context, candidate, rejected) {
         final hovering = candidate.isNotEmpty;
@@ -463,9 +525,10 @@ class _RowIcon extends StatelessWidget {
       );
 }
 
-/// The floating label shown under the pointer while a row is being dragged.
-class _DragChip extends StatelessWidget {
-  const _DragChip({required this.label});
+/// The floating label shown under the pointer while a row (or a palette tile —
+/// see [SequencerPalette]) is being dragged.
+class SequenceDragChip extends StatelessWidget {
+  const SequenceDragChip({super.key, required this.label});
   final String label;
 
   @override
