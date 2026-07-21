@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/widgets/sky_atlas/planning_visuals.dart';
 
 Widget _host(Widget child) =>
@@ -24,30 +23,6 @@ void main() {
       find.bySemanticsLabel(RegExp('Dark window .* transit .*')),
       findsOneWidget,
     );
-  });
-
-  testWidgets('FramingGlyph renders for a sized object and hides without FOV',
-      (tester) async {
-    const obj = TonightSkyObject(
-      id: 'x',
-      name: 'X',
-      type: 'HII',
-      magnitude: 7,
-      raDeg: 10,
-      decDeg: 20,
-      altitudeDeg: 40,
-      maxAltitudeDeg: 60,
-      sizeMajArcmin: 60,
-      sizeMinArcmin: 30,
-      framing: TonightFraming.good,
-    );
-    await tester.pumpWidget(_host(const FramingGlyph(
-        fovWArcmin: 120, fovHArcmin: 80, object: obj)));
-    expect(find.byType(CustomPaint), findsWidgets);
-
-    await tester.pumpWidget(_host(const FramingGlyph(
-        fovWArcmin: 0, fovHArcmin: 0, object: obj)));
-    expect(find.bySemanticsLabel(RegExp('Framing')), findsNothing);
   });
 
   testWidgets('BudgetRing announces banked/needed and checks when complete',

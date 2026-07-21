@@ -544,4 +544,34 @@ void main() {
     expect(find.text('32'), findsOneWidget); // low score still rendered
     expect(find.text('Too big'), findsOneWidget); // framing advice shown
   });
+
+  testWidgets('cards are uniform: no hero treatment, altitude on every row',
+      (tester) async {
+    // #861 review follow-up — the rank-#1 card must render exactly like the
+    // rest: same name style, no accent border, and the plain altitude figure
+    // (formerly swapped for the framing glyph) present on EVERY row.
+    await tester.pumpWidget(
+      _host(_RecordingClient(), objects: [_m31, _ngc]),
+    );
+    await tester.pump();
+
+    expect(find.text('55°'), findsOneWidget); // rank-#1 row's altitude
+    expect(find.text('11°'), findsOneWidget); // second row's altitude
+
+    final firstName = tester.widget<Text>(find.text('Andromeda Galaxy'));
+    final secondName = tester.widget<Text>(find.text('Orion Nebula'));
+    expect(firstName.style, secondName.style,
+        reason: 'rank-#1 must not get a bigger title than other rows');
+
+    // Neither ROW's own container carries a border (the old hero accent
+    // outline) — chips inside the row have their own borders, so check the
+    // nearest Container ancestor of each row's name, not every Container.
+    for (final name in ['Andromeda Galaxy', 'Orion Nebula']) {
+      final rowBox = tester.widget<Container>(find
+          .ancestor(of: find.text(name), matching: find.byType(Container))
+          .first);
+      expect((rowBox.decoration as BoxDecoration?)?.border, isNull,
+          reason: '"$name" row must not carry the hero accent border');
+    }
+  });
 }

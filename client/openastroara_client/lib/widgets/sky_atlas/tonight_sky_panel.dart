@@ -87,7 +87,7 @@ class TonightSkyPanel extends ConsumerWidget {
   // Wider than the old 300 px: the equipment-aware row carries a score badge, a
   // framing chip and a timing line, and the design explicitly allows a bigger
   // panel ("It's ok if the screen is bigger").
-  // S2 (planning redesign): 360 gives the hero card, window strips and
+  // S2 (planning redesign): 360 gives the cards' chips, window strips and
   // budget rings room to breathe; the sky keeps the rest.
   static const double width = 360;
 
@@ -571,7 +571,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                               ),
                             // §Integration Budget P4 — hours already banked on this
                             // target (the library's per-target integration total).
-                            if (_bankedHours() case final banked?)
+                            if (bankedHours case final banked?)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 2),
                                 child: Text(

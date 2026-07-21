@@ -308,40 +308,6 @@ Future<ImagingRunResult?> createImagingRun(
   return ImagingRunResult(id, appended: false);
 }
 
-/// What [removeTargetFromSequence] found — drives the caller's SnackBar.
-enum RemoveTargetOutcome { removed, notFound, runningBlocked, noServer }
-
-/// The undo of "Add to Sequence" for one target: remove [targetName]'s block
-/// from the sequence open in the Run tab and persist. Blocked while a run is
-/// active (the executor works from its own loaded copy, so the edit would
-/// silently not apply to it). Like the append path, the base body is the
-/// editor's working copy when it holds this sequence — the removal targets
-/// what the user SEES, and any unsaved edits are persisted along with it.
-/// Throws on transport failure — callers own their error surface.
-Future<RemoveTargetOutcome> removeTargetFromSequence(
-  WidgetRef ref, {
-  required String targetName,
-}) async {
-  final api = ref.read(sequenceApiProvider);
-  if (api == null) return RemoveTargetOutcome.noServer;
-  // Container, not WidgetRef, past the awaits — see createImagingRun.
-  final container = ProviderScope.containerOf(ref.context, listen: false);
-  final id = container.read(selectedSequenceIdProvider);
-  if (id == null) return RemoveTargetOutcome.notFound;
-
-  final runState = await api.getRunState(id);
-  if (runState?.state?.isActive ?? false) {
-    return RemoveTargetOutcome.runningBlocked;
-  }
-
-  final baseBody = await _openSequenceBaseBody(container, api, id);
-  final newBody = removeTargetFromRunBody(baseBody, targetName);
-  if (newBody == null) return RemoveTargetOutcome.notFound;
-
-  final detail = await api.updateSequence(id, body: newBody);
-  _syncAfterBodyChange(container, id, detail);
-  return RemoveTargetOutcome.removed;
-}
 
 /// Best-effort hydration of the planning-relevant settings sections from the
 /// active server's profile (imaging defaults + autofocus + the filter set and

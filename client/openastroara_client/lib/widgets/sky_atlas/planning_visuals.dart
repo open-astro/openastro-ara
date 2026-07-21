@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../services/tonight_sky_api.dart';
 import '../../theme/ara_colors.dart';
 
 /// §Planning redesign S4/S5/S6 — the three data-pictures that replace prose
@@ -155,130 +154,6 @@ class _StripPainter extends CustomPainter {
       old.windowEnd != windowEnd ||
       old.transit != transit ||
       old.now != now ||
-      old.color != color;
-}
-
-/// S5 — the framing glyph: YOUR sensor rectangle with the object's catalog
-/// ellipse drawn to scale inside it, tinted by the framing tier. The word
-/// "too small" becomes visible geometry. Renders nothing without both a FOV
-/// and an object size (an empty box would be noise, not signal).
-class FramingGlyph extends StatelessWidget {
-  const FramingGlyph({
-    super.key,
-    required this.fovWArcmin,
-    required this.fovHArcmin,
-    required this.object,
-    this.side = 44,
-  });
-
-  /// The rig's single-frame FOV in arcminutes (0/negative = unknown).
-  final double fovWArcmin;
-  final double fovHArcmin;
-  final TonightSkyObject object;
-  final double side;
-
-  @override
-  Widget build(BuildContext context) {
-    final maj = object.sizeMajArcmin;
-    if (fovWArcmin <= 0 || fovHArcmin <= 0 || maj == null || maj <= 0) {
-      return const SizedBox.shrink();
-    }
-    final min = object.sizeMinArcmin ?? maj;
-    final color = switch (object.framing) {
-      TonightFraming.good => AraColors.accentConnected,
-      TonightFraming.goodFit => AraColors.accentInfo,
-      TonightFraming.tooSmall || TonightFraming.tooBig => AraColors.accentBusy,
-      TonightFraming.unknown => AraColors.textSecondary,
-    };
-    return Semantics(
-      label:
-          'Framing: object ${maj.toStringAsFixed(0)} arcminutes across in '
-          'a ${fovWArcmin.toStringAsFixed(0)} by '
-          '${fovHArcmin.toStringAsFixed(0)} arcminute field',
-      child: SizedBox(
-        width: side,
-        height: side,
-        child: CustomPaint(
-          painter: _GlyphPainter(
-            fovW: fovWArcmin,
-            fovH: fovHArcmin,
-            objMaj: maj,
-            objMin: min,
-            posAngleDeg: object.posAngleDeg ?? 0,
-            color: color,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlyphPainter extends CustomPainter {
-  _GlyphPainter({
-    required this.fovW,
-    required this.fovH,
-    required this.objMaj,
-    required this.objMin,
-    required this.posAngleDeg,
-    required this.color,
-  });
-
-  final double fovW;
-  final double fovH;
-  final double objMaj;
-  final double objMin;
-  final double posAngleDeg;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // One scale for both shapes, chosen so the LARGER of (FOV, object) fits
-    // the box with margin — an oversized object honestly overflows the frame
-    // rectangle (clipped to the widget), a small one honestly rattles in it.
-    final maxArc = math.max(math.max(fovW, fovH), objMaj) * 1.15;
-    final pxPerArc = math.min(size.width, size.height) / maxArc;
-    final c = Offset(size.width / 2, size.height / 2);
-
-    final frame = Rect.fromCenter(
-      center: c,
-      width: fovW * pxPerArc,
-      height: fovH * pxPerArc,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(frame, const Radius.circular(2)),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = AraColors.textSecondary.withValues(alpha: 0.9),
-    );
-
-    canvas.save();
-    canvas.clipRect(Offset.zero & size);
-    canvas.translate(c.dx, c.dy);
-    canvas.rotate(posAngleDeg * math.pi / 180);
-    final ellipse = Rect.fromCenter(
-      center: Offset.zero,
-      width: objMaj * pxPerArc,
-      height: objMin * pxPerArc,
-    );
-    canvas.drawOval(ellipse, Paint()..color = color.withValues(alpha: 0.30));
-    canvas.drawOval(
-      ellipse,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = color,
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_GlyphPainter old) =>
-      old.fovW != fovW ||
-      old.fovH != fovH ||
-      old.objMaj != objMaj ||
-      old.objMin != objMin ||
-      old.posAngleDeg != posAngleDeg ||
       old.color != color;
 }
 
