@@ -126,6 +126,13 @@ class TonightSkyObject {
   /// Client-ranker only (null on wire objects).
   final double? hoursFreeScore;
 
+  /// §Integration Budget P3 — the tiered hours line for the advised filter
+  /// approach ("core ~2 h · full ~9 h · faint impractical"), computed by the
+  /// client ranker from the target's surface brightness, tonight's sky (SQM/
+  /// Bortle + Krisciunas-Schaefer moon) and the peak-altitude extinction.
+  /// Null when the rig/SB can't compute. Client-ranker only.
+  final String? integrationBudget;
+
   const TonightSkyObject({
     required this.id,
     required this.name,
@@ -154,6 +161,7 @@ class TonightSkyObject {
     this.moonIlluminationPct,
     this.moonUpFraction,
     this.hoursFreeScore,
+    this.integrationBudget,
   });
 
   /// Parse one wire object, or null when a required field is missing/wrong-typed

@@ -7,6 +7,7 @@ import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
+import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import 'session_plan_dialog.dart';
 
@@ -163,6 +164,29 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   bool _showReasons = false;
 
   TonightSkyObject get _object => widget.object;
+
+  /// The library's banked integration hours for this target, summed across
+  /// stats rows whose target name matches the object's id OR display name
+  /// (normalized: case/punctuation-insensitive, so "NGC 7000", "ngc7000" and
+  /// "North America Nebula" all find their hours). Null = nothing captured
+  /// (or no server) — the line simply doesn't render.
+  double? _bankedHours() {
+    final targets = ref.watch(statsTargetsProvider).value;
+    if (targets == null || targets.isEmpty) return null;
+    String norm(String s) =>
+        s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final keys = {norm(_object.id), norm(_object.name)}
+      ..remove('');
+    var sum = 0.0;
+    var found = false;
+    for (final t in targets) {
+      if (keys.contains(norm(t.targetName))) {
+        sum += t.integrationHours;
+        found = true;
+      }
+    }
+    return found && sum > 0 ? sum : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +366,31 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                           _object.adviceReason!,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    // §Integration Budget P3 — how many hours this target
+                    // needs from THIS sky, in honest depth tiers.
+                    if (_object.integrationBudget != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'Hours needed: ${_object.integrationBudget!}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.accentInfo,
+                          ),
+                        ),
+                      ),
+                    // §Integration Budget P4 — hours already banked on this
+                    // target (the library's per-target integration total).
+                    if (_bankedHours() case final banked?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'You have ${banked.toStringAsFixed(1)} h captured '
+                          'on this target so far.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.accentConnected,
                           ),
                         ),
                       ),

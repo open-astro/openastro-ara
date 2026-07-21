@@ -1,6 +1,6 @@
 # Integration Budget — "how many hours does this target actually need?"
 
-**Status: DRAFT for review — no implementation until sign-off.**
+**Status: IN BUILD (2026-07-21, sign-off received). P1 math core + P3 Tonight's Sky surfacing + P4 banked hours SHIPPED on feat/run-section-design; P2 calibration store and P5 planner handshake next. Decisions 1-3 resolved: constants hard-coded (gathered in BudgetTuning for a future Advanced panel), banked hours v1 shows the library's captured total (quality-gated split when the server can serve it), surfacing = Tonight's Sky rows (plan-dialog line next with P5).**
 
 ## Why (the product thesis)
 

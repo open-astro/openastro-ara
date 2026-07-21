@@ -8,6 +8,7 @@ import '../state/settings/optics_settings_state.dart';
 import '../state/settings/site_settings_state.dart';
 import 'filter_advice.dart';
 import 'imaging_regions.dart';
+import 'integration_budget.dart';
 import 'optimal_sub.dart';
 import 'star_model.dart' as stars;
 
@@ -311,6 +312,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final mid = (run.$1 + run.$2) ~/ 2;
     final moonSeparationDeg = _angularSeparationDeg(
         o.raDeg, o.decDeg, moonRaDeg[mid], moonDecDeg[mid]);
+    final moonAltMidDeg = _altitudeFromHourAngleDeg(
+        moonDecDeg[mid], lat, _mod360(sampleLstDeg[mid] - moonRaDeg[mid]));
 
     // NEXTGEN §1 filter advice + §3.1 star tag — same zero-point reason
     // pattern as the server: visible in the "Why?" breakdown, never a score
@@ -378,6 +381,29 @@ List<TonightSkyObject> computeTonightSkyLocal({
     }
     final finalScore = adjusted.clamp(0.0, 100.0);
 
+    // SIntegration Budget P3 - the tiered "how many hours from YOUR sky"
+    // line for the advised approach (design/INTEGRATION_BUDGET.md; validated
+    // against the Texas NGC 6188 campaign). Needs the advised approach's
+    // flux input AND a catalog surface brightness; degrades to null.
+    String? integrationBudgetLine;
+    if (advised != null && o.surfaceBrightness != null) {
+      final budgetInput = adviceFor(advised.$1).$3;
+      if (budgetInput != null) {
+        final budget = computeIntegrationBudget(
+          input: budgetInput,
+          surfaceBrightnessMagArcsec2: o.surfaceBrightness!,
+          peakAltitudeDeg: peakAltDeg,
+          moonIlluminatedFraction: moonIlluminationPct / 100.0,
+          moonAltitudeDeg: moonAltMidDeg,
+          moonSeparationDeg: moonSeparationDeg,
+        );
+        integrationBudgetLine = budget.moonBrighteningMag >= 0.3
+            ? '${budget.display}  (tonight\'s moon costs '
+                '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
+            : budget.display;
+      }
+    }
+
     final allReasons = [
       ...reasons,
       ...adjustReasons,
@@ -420,6 +446,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         score: double.parse(finalScore.toStringAsFixed(1)),
         // The multiplicative adjustments scale the whole score, so the
         // hours-free remainder scales by the same finalScore/score ratio.
+        integrationBudget: integrationBudgetLine,
         hoursFreeScore: score > 0
             ? double.parse(
                 (finalScore * (score - hoursScore) / score).toStringAsFixed(1))
