@@ -133,6 +133,10 @@ class TonightSkyObject {
   /// Null when the rig/SB can't compute. Client-ranker only.
   final String? integrationBudget;
 
+  /// Structured tier hours behind [integrationBudget] (client-ranker only):
+  /// the FULL-STRUCTURE tier drives the banked-progress ring. Null with it.
+  final double? budgetFullHours;
+
   const TonightSkyObject({
     required this.id,
     required this.name,
@@ -162,6 +166,7 @@ class TonightSkyObject {
     this.moonUpFraction,
     this.hoursFreeScore,
     this.integrationBudget,
+    this.budgetFullHours,
   });
 
   /// Parse one wire object, or null when a required field is missing/wrong-typed

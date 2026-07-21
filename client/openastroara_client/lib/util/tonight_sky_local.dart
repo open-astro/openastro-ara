@@ -386,6 +386,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     // against the Texas NGC 6188 campaign). Needs the advised approach's
     // flux input AND a catalog surface brightness; degrades to null.
     String? integrationBudgetLine;
+    double? budgetFullHours;
     if (advised != null && o.surfaceBrightness != null) {
       final budgetInput = adviceFor(advised.$1).$3;
       if (budgetInput != null) {
@@ -397,6 +398,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
           moonAltitudeDeg: moonAltMidDeg,
           moonSeparationDeg: moonSeparationDeg,
         );
+        budgetFullHours = budget.full.practical ? budget.full.hours : null;
         integrationBudgetLine = budget.moonBrighteningMag >= 0.3
             ? '${budget.display}  (tonight\'s moon costs '
                 '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
@@ -447,6 +449,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
         // The multiplicative adjustments scale the whole score, so the
         // hours-free remainder scales by the same finalScore/score ratio.
         integrationBudget: integrationBudgetLine,
+        budgetFullHours: budgetFullHours,
         hoursFreeScore: score > 0
             ? double.parse(
                 (finalScore * (score - hoursScore) / score).toStringAsFixed(1))

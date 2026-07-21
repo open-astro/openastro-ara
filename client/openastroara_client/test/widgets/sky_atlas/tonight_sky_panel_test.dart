@@ -11,6 +11,7 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/widgets/sky_atlas/planning_visuals.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
 /// Records create()/updateSequence() calls; the append path additionally reads
@@ -251,11 +252,12 @@ void main() {
     // The tapped row is remembered and painted selected, so the user can see
     // which row drove the atlas.
     expect(container.read(selectedTonightObjectProvider), 'M31');
+    // S3 made the row's paint a BoxDecoration (hero/selection share it).
     final rowBox = tester.widget<Container>(find
         .ancestor(of: find.text('Andromeda Galaxy'),
             matching: find.byType(Container))
         .first);
-    expect(rowBox.color, isNotNull);
+    expect((rowBox.decoration as BoxDecoration?)?.color, isNotNull);
   });
 
   testWidgets('framing a second row after the first still sends its goto',
@@ -328,10 +330,11 @@ void main() {
 
     expect(find.text('88'), findsOneWidget); // score badge
     expect(find.text('Fills frame'), findsOneWidget); // framing chip (good)
-    // Timing line: tz-agnostic substrings (the clock part is localised).
+    // S4: the window renders as the timeline strip + a duration caption
+    // (tz-agnostic — the clock labels are localised).
+    expect(find.byType(DarkWindowStrip), findsWidgets);
     expect(find.textContaining('6.3 h dark'), findsOneWidget);
     expect(find.textContaining('3.2 h left'), findsOneWidget);
-    expect(find.textContaining('transit'), findsOneWidget);
   });
 
   testWidgets('the "why" reasons stay collapsed until tapped', (tester) async {

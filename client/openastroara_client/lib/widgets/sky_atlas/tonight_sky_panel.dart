@@ -9,7 +9,9 @@ import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../state/settings/optics_settings_state.dart';
 import '../../theme/ara_metrics.dart';
+import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
@@ -140,9 +142,12 @@ class TonightSkyPanel extends ConsumerWidget {
                     ),
                     // Key by object id so the row's expand/collapse state follows the
                     // object, not the list slot, when the ranking reorders on refresh.
+                    // S3 - rank #1 renders as the hero card; the ranking
+                    // already decided the night, the eye should land there.
                     itemBuilder: (_, i) => _ObjectRow(
                       key: ValueKey(objects[i].id),
                       object: objects[i],
+                      hero: i == 0,
                     ),
                   );
                 },
@@ -157,7 +162,11 @@ class TonightSkyPanel extends ConsumerWidget {
 
 class _ObjectRow extends ConsumerStatefulWidget {
   final TonightSkyObject object;
-  const _ObjectRow({super.key, required this.object});
+
+  /// S3 - the rank-#1 hero treatment: bigger name, the framing glyph, an
+  /// accent border. Same behavior as every other row (one code path).
+  final bool hero;
+  const _ObjectRow({super.key, required this.object, this.hero = false});
 
   @override
   ConsumerState<_ObjectRow> createState() => _ObjectRowState();
@@ -168,6 +177,22 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   bool _showReasons = false;
 
   TonightSkyObject get _object => widget.object;
+
+  /// The rig's single-frame FOV in arcminutes (w, h), or null when the optics
+  /// are unset - drives the S5 framing glyph. Mirrors the ranker's geometry.
+  (double, double)? _fovArcmin() {
+    final o = ref.watch(opticsSettingsProvider);
+    if (o.focalLengthMm <= 0 ||
+        o.pixelSizeUm <= 0 ||
+        o.sensorWidthPx < 1 ||
+        o.sensorHeightPx < 1 ||
+        o.reducerFactor <= 0) {
+      return null;
+    }
+    final scale =
+        206.265 * o.pixelSizeUm / (o.focalLengthMm * o.reducerFactor);
+    return (o.sensorWidthPx * scale / 60.0, o.sensorHeightPx * scale / 60.0);
+  }
 
   /// The library's banked integration hours for this target, summed across
   /// stats rows whose target name matches the object's id OR display name
@@ -217,15 +242,37 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final selected = ref.watch(
       selectedTonightObjectProvider.select((id) => id == _object.id),
     );
+    final heroFov = widget.hero ? _fovArcmin() : null;
+    final bankedHours = _bankedHours();
 
     return InkWell(
       onTap: _frameOnAtlas,
       child: Container(
         // The highlight marks WHICH row drove the atlas (the framing box may sit
         // in a starfield with no obvious landmark) — same selected-row treatment
-        // as the command palette / settings nav.
-        color: selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
-        padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+        // as the command palette / settings nav. The hero (rank #1) gets a
+        // card of its own: accent border, panel-alt fill, breathing room.
+        margin: widget.hero
+            ? const EdgeInsets.fromLTRB(
+                AraSpace.s12, AraSpace.s4, AraSpace.s12, AraSpace.s8)
+            : null,
+        decoration: widget.hero
+            ? BoxDecoration(
+                color: selected
+                    ? AraColors.selectionBg.withValues(alpha: 0.25)
+                    : AraColors.bgPanelAlt.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AraColors.accentInfo.withValues(alpha: 0.45)),
+              )
+            : BoxDecoration(
+                color: selected
+                    ? AraColors.selectionBg.withValues(alpha: 0.25)
+                    : null,
+              ),
+        padding: widget.hero
+            ? const EdgeInsets.all(AraSpace.s12)
+            : const EdgeInsets.fromLTRB(12, 10, 8, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -242,7 +289,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_object.name, style: theme.textTheme.bodyMedium),
+                      Text(_object.name,
+                          style: widget.hero
+                              ? AraText.title
+                              : theme.textTheme.bodyMedium),
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
@@ -254,10 +304,19 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  '${_object.altitudeDeg.toStringAsFixed(0)}°',
-                  style: theme.textTheme.bodyMedium,
-                ),
+                // S5 - the hero carries the framing glyph (your sensor
+                // rectangle with the object drawn to scale); compact rows
+                // keep the altitude figure.
+                if (heroFov != null)
+                  FramingGlyph(
+                      fovWArcmin: heroFov.$1,
+                      fovHArcmin: heroFov.$2,
+                      object: _object)
+                else
+                  Text(
+                    '${_object.altitudeDeg.toStringAsFixed(0)}°',
+                    style: theme.textTheme.bodyMedium,
+                  ),
               ],
             ),
             if (framingLabel != null ||
@@ -282,22 +341,68 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     _MoonChip(object: _object),
                 ],
               ),
-              if (timing != null) ...[
+              // S4 - the dark window as a timeline strip (start/transit/end
+              // labels + a "now" dot); prose only when the wire lacks the
+              // instants the strip needs.
+              if (_object.windowStartUtc != null &&
+                  _object.windowEndUtc != null) ...[
+                const SizedBox(height: AraSpace.s8),
+                DarkWindowStrip(
+                  windowStartUtc: _object.windowStartUtc!,
+                  windowEndUtc: _object.windowEndUtc!,
+                  transitUtc: _object.transitUtc,
+                  color: switch (windowState) {
+                    TonightWindowState.open => AraColors.accentConnected,
+                    TonightWindowState.passed => AraColors.textDisabled,
+                    _ => AraColors.accentInfo,
+                  },
+                ),
+                if (_object.integrationHours > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    windowState == TonightWindowState.open
+                        ? 'open now · '
+                            '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                            '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}'
+                        : '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                            '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: windowState == TonightWindowState.open
+                          ? AraColors.accentConnected
+                          : AraColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ] else if (timing != null) ...[
                 const SizedBox(height: 6),
                 Text(
-                  windowState == TonightWindowState.open
-                      ? 'now · $timing'
-                      : timing,
+                  timing,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: switch (windowState) {
-                      TonightWindowState.open => AraColors.accentConnected,
-                      TonightWindowState.passed => AraColors.textDisabled,
-                      _ => AraColors.textSecondary,
-                    },
-                    fontWeight: windowState == TonightWindowState.open
-                        ? FontWeight.w600
-                        : null,
+                    color: AraColors.textSecondary,
                   ),
+                ),
+              ],
+              // S6 - the budget ring + one-line banked-vs-needed, visible
+              // WITHOUT expanding Why? (the crown jewel doesn't hide).
+              if (_object.budgetFullHours case final needed?) ...[
+                const SizedBox(height: AraSpace.s8),
+                Row(
+                  children: [
+                    BudgetRing(banked: bankedHours, needed: needed),
+                    const SizedBox(width: AraSpace.s8),
+                    Expanded(
+                      child: Text(
+                        bankedHours != null
+                            ? '${bankedHours.toStringAsFixed(1)} of '
+                                '~${needed.toStringAsFixed(0)} h captured'
+                            : 'needs ~${needed.toStringAsFixed(0)} h for the '
+                                'full structure',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
