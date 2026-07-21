@@ -404,7 +404,7 @@ void main() {
     );
     await tester.pumpWidget(_host(_RecordingClient(), objects: [moonlit]));
     await tester.pump();
-    expect(find.text('☾ 42° · 78%'), findsOneWidget);
+    expect(find.text('42° · 78%'), findsOneWidget); // S7: icon replaces the glyph char
     expect(find.text('Moonless'), findsNothing);
   });
 

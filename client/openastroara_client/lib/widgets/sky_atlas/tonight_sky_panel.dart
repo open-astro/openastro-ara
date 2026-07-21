@@ -86,18 +86,6 @@ class TonightSkyPanel extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
-                    // §36.8 "What-if run" — the session planner: "I can image
-                    // 10pm–1am; what should I shoot to finish an image?"
-                    // (Replaces the what-if optics dialog — trying another rig
-                    // is what launchpad profiles are for.)
-                    tooltip: 'Plan tonight\'s session',
-                    icon: const Icon(Icons.edit_calendar, size: 18),
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (_) => const SessionPlanDialog(),
-                    ),
-                  ),
-                  IconButton(
                     tooltip: 'Refresh',
                     icon: const Icon(Icons.refresh, size: 18),
                     onPressed: () => ref.invalidate(tonightSkyProvider),
@@ -151,6 +139,23 @@ class TonightSkyPanel extends ConsumerWidget {
                     ),
                   );
                 },
+              ),
+            ),
+            // S9 — the session planner gets a real door: a labelled
+            // full-width button instead of a mystery calendar icon.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AraSpace.s12, AraSpace.s8, AraSpace.s12, AraSpace.s12),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.edit_calendar, size: 16),
+                  label: const Text('Plan my night'),
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => const SessionPlanDialog(),
+                  ),
+                ),
               ),
             ),
           ],
@@ -654,6 +659,41 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       : '${(seconds / 60).toStringAsFixed(seconds >= 600 ? 0 : 1)} min';
 }
 
+
+/// S7 — the one chip shell all three advisory chips share: leading icon +
+/// label in the chip's hue, 6 px radius (the Run redesign's language).
+class _AdviceChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _AdviceChip(
+      {required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ],
+        ),
+      );
+}
+
 /// 0–100 worth-score badge, colour-graded so the eye can triage at a glance:
 /// green (strong), blue (decent), muted (low — still shown, just ranked down,
 /// per the advise-don't-dictate intent).
@@ -717,21 +757,8 @@ class _FramingChip extends StatelessWidget {
     // Self-guard anyway — release-safe (an assert is stripped) — so a future call site
     // that bypasses the gate renders nothing rather than a styled-but-blank chip.
     if (label == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label, // non-null: the early return above bails on a null label
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+    return _AdviceChip(
+        icon: Icons.crop_free, label: label, color: color);
   }
 }
 
@@ -749,21 +776,10 @@ class _FilterAdviceChip extends StatelessWidget {
     final color = advice == TonightFilterAdvice.broadband
         ? AraColors.textSecondary
         : AraColors.accentInfo;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        advice.label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+    return _AdviceChip(
+        icon: Icons.filter_vintage_outlined,
+        label: advice.label,
+        color: color);
   }
 }
 
@@ -791,27 +807,15 @@ class _MoonChip extends StatelessWidget {
       // Either measurement can be absent independently (defensive parse) —
       // show what we have rather than dropping the chip.
       label =
-          '☾'
-          '${sep == null ? '' : ' ${sep.toStringAsFixed(0)}°'}'
-          '${illum == null ? '' : ' · ${illum.toStringAsFixed(0)}%'}';
+          '${sep == null ? '' : '${sep.toStringAsFixed(0)}°'}'
+          '${illum == null ? '' : '${sep == null ? '' : ' · '}${illum.toStringAsFixed(0)}%'}';
       final harsh = (sep ?? 180) < 30 && (illum ?? 0) > 40;
       color = harsh ? AraColors.accentBusy : AraColors.textSecondary;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+    return _AdviceChip(
+        icon: Icons.dark_mode_outlined,
+        label: label.isEmpty ? 'Moon up' : label,
+        color: color);
   }
 }
 
