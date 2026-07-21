@@ -78,14 +78,24 @@ jobs:
           # loud in the log and only possible on a workflow-editing PR, which
           # the maintainer reviews by eye — exempt it so such PRs aren't
           # permanently red, while every normal PR still requires a comment.
-          if gh pr view "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" --json files --jq '.files[].path' \
+          if gh pr diff "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" --name-only \
               | grep -qx ".github/workflows/claude-review.yml"; then
             echo "::warning::This PR modifies the review workflow — the action skips itself on such PRs; passing without a review comment. Review it by eye."
             exit 0
           fi
+          # Only the BOT's comments count, and only ones touched during THIS
+          # run — a human writing "Approved" in discussion, or a sticky
+          # comment left over from a previous commit's review, must not
+          # satisfy the gate.
+          # 30 min generously covers this job's own runtime — the review step
+          # above just finished, so a comment it posted is at most minutes old.
+          started="$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
           if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
-              --paginate --jq '.[].body' | grep -qE "Approved|Issues found"; then
+              --paginate \
+              | jq -r --arg since "$started" \
+              '.[] | select(.user.login | test("^(claude|github-actions)(\\[bot\\])?$")) | select(.updated_at >= $since) | .body' \
+              | grep -qE "Approved|Issues found"; then
             echo "Review comment found."
           else
             echo "::error::The review agent finished without posting its comment — failing rather than green-lighting a review that does not exist."
