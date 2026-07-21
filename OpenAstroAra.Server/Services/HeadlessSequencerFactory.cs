@@ -194,6 +194,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             items: new List<ISequenceItem> {
                 // §38k-4 — utility instructions with no equipment deps.
                 new Annotation(),
+                // §58.12-b — pause-for-a-human step (manual filter swap on an
+                // OSC rig, etc.); arms the root's pause gate as AwaitingUser.
+                new WaitForUser(),
                 new WaitForTimeSpan(),
                 // §48.4 — WaitForSunAltitude gates the sky-flat generator's body (waits for the sun
                 // to drop through the twilight altitude); profile-only dep for the observer site.

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../state/settings/camera_electronics_state.dart';
 import '../../state/settings/filter_set_state.dart';
+import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -18,7 +19,13 @@ import '../../util/optimal_sub_local.dart';
 class TargetPlanChoice {
   final List<FilterPlanStep>? filterPlan;
   final bool guide;
-  const TargetPlanChoice({this.filterPlan, required this.guide});
+
+  /// True when the rig has NO filter wheel configured: the plan's filter
+  /// changes become Wait-for-User pauses (S58.12-b) so the user can swap
+  /// screw-in filters by hand and press Resume.
+  final bool manualFilterSwap;
+  const TargetPlanChoice(
+      {this.filterPlan, required this.guide, this.manualFilterSwap = false});
 }
 
 /// One selectable plan card: a label plus its ready-computed steps
@@ -59,19 +66,26 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
 /// Whether [filters] offers a real filter-change choice (any mono narrowband
 /// or broadband filter). OSC / dual- / tri-band shooters image through one
 /// fixed filter — no plan to choose.
-bool planOptionsAvailable(List<PlanningFilter> filters) => filters.any(
-      (f) => switch (f.kind) {
-        FilterKind.ha ||
-        FilterKind.oiii ||
-        FilterKind.sii ||
-        FilterKind.l ||
-        FilterKind.r ||
-        FilterKind.g ||
-        FilterKind.b =>
-          true,
-        FilterKind.osc || FilterKind.duo || FilterKind.tri => false,
-      },
-    );
+bool planOptionsAvailable(List<PlanningFilter> filters) {
+  final hasMono = filters.any(
+    (f) => switch (f.kind) {
+      FilterKind.ha ||
+      FilterKind.oiii ||
+      FilterKind.sii ||
+      FilterKind.l ||
+      FilterKind.r ||
+      FilterKind.g ||
+      FilterKind.b =>
+        true,
+      FilterKind.osc || FilterKind.duo || FilterKind.tri => false,
+    },
+  );
+  // An OSC/manual rig with two or more swappable filters (e.g. a dual-band
+  // plus a UV/IR cut) also has a real choice to make - the plan chooser
+  // offers "X only" sessions and the swaps become Wait-for-User pauses.
+  final swappable = filters.where((f) => f.kind != FilterKind.osc).length;
+  return hasMono || swappable >= 2;
+}
 
 class _TargetPlanDialog extends ConsumerStatefulWidget {
   const _TargetPlanDialog({
@@ -93,12 +107,18 @@ class _TargetPlanDialog extends ConsumerStatefulWidget {
 class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
   int _selected = 0;
   late bool _guide;
+  late final bool _manualSwap;
   late final List<_PlanOption> _options;
 
   @override
   void initState() {
     super.initState();
     _guide = ref.read(phd2SettingsProvider).ditherEnabled;
+    // No labelled wheel slots = no filter wheel on this rig: the plan's
+    // filter changes become Wait-for-User pauses (screw-in swap + Resume).
+    final wheel = ref.read(filterWheelLabelsProvider);
+    _manualSwap = !List.generate(wheel.slotCount, (i) => wheel.labelAt(i + 1))
+        .any((l) => l.trim().isNotEmpty);
     _options = _buildOptions();
   }
 
@@ -238,6 +258,16 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                 style:
                     TextStyle(color: AraColors.textSecondary, fontSize: 12),
               ),
+              if (_manualSwap) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'No filter wheel configured - at each filter change the run '
+                  'will pause and wait for you to swap the filter and press '
+                  'Resume.',
+                  style:
+                      TextStyle(color: AraColors.accentInfo, fontSize: 12),
+                ),
+              ],
               const SizedBox(height: 12),
               for (var i = 0; i < _options.length; i++)
                 _PlanCard(
@@ -277,6 +307,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
           onPressed: () => Navigator.of(context).pop(TargetPlanChoice(
             filterPlan: _options[_selected].steps,
             guide: _guide,
+            manualFilterSwap: _manualSwap,
           )),
           child: const Text('Create run'),
         ),

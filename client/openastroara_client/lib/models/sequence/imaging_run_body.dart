@@ -68,6 +68,7 @@ Map<String, dynamic> buildImagingRunBody({
   List<FilterPlanStep>? filterPlan,
   bool startGuiding = false,
   int? ditherEveryNExposures,
+  bool manualFilterSwap = false,
 }) {
   final target = buildTargetBlock(
     raDeg: raDeg,
@@ -85,6 +86,7 @@ Map<String, dynamic> buildImagingRunBody({
     filterPlan: filterPlan,
     startGuiding: startGuiding,
     ditherEveryNExposures: ditherEveryNExposures,
+    manualFilterSwap: manualFilterSwap,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -150,6 +152,7 @@ Map<String, dynamic> buildTargetBlock({
   List<FilterPlanStep>? filterPlan,
   bool startGuiding = false,
   int? ditherEveryNExposures,
+  bool manualFilterSwap = false,
 }) {
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
@@ -178,8 +181,15 @@ Map<String, dynamic> buildTargetBlock({
     }
   }
 
-  Map<String, dynamic> switchTo(String filter) =>
-      _item(switchFilterType)..['Filter'] = buildFilterInfo(filter.trim());
+  // With a filter wheel, a real SwitchFilter; without one (screw-in filters
+  // on an OSC or manual rig), a Wait for User that parks the run in the
+  // awaiting-user state until the human has swapped the glass and pressed
+  // Resume (S58.12-b).
+  Map<String, dynamic> switchTo(String filter) => manualFilterSwap
+      ? (_item(waitForUserType)
+          ..['Text'] =
+              'Switch to the ${filter.trim()} filter, then press Resume.')
+      : (_item(switchFilterType)..['Filter'] = buildFilterInfo(filter.trim()));
 
   // One `<name> Imaging` loop: TakeExposure × count, plus the autofocus /
   // dither cadence triggers. The AF cadence is expressed in EXPOSURES, so a

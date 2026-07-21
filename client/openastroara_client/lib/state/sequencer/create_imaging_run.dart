@@ -164,6 +164,7 @@ Future<ImagingRunResult?> createImagingRun(
       filterPlan: choice.filterPlan,
       startGuiding: choice.guide,
       ditherEveryNExposures: _ditherCadence(container, choice),
+      manualFilterSwap: choice.manualFilterSwap,
     );
     final draftId = await container
         .read(draftSequencesProvider.notifier)
@@ -227,6 +228,7 @@ Future<ImagingRunResult?> createImagingRun(
       filterPlan: choice.filterPlan,
       startGuiding: choice.guide,
       ditherEveryNExposures: ditherEvery,
+      manualFilterSwap: choice.manualFilterSwap,
     );
     // Only PRE-PATCH problems (running, vanished, non-container root,
     // transport failure while reading) fall back to creating a fresh run. A
@@ -258,6 +260,7 @@ Future<ImagingRunResult?> createImagingRun(
     filterPlan: choice.filterPlan,
     startGuiding: choice.guide,
     ditherEveryNExposures: ditherEvery,
+    manualFilterSwap: choice.manualFilterSwap,
   );
 
   // One key per LOGICAL create: if the request dies in transit the daemon may

@@ -60,6 +60,9 @@ const Map<String, String> instructionDescriptions = {
   'Wait (duration)': 'Pause the sequence for a fixed time.',
   'Wait (until time)': 'Hold until a clock time (e.g. astro dark).',
   'Annotation': 'A note to yourself inside the plan.',
+  'Wait for User':
+      'Pauses the run until you press Resume — for manual filter swaps and '
+          'other hands-on steps.',
   'Sequential Instruction Set': 'Run children in order, with loops + triggers.',
   'Parallel Instruction Set': 'Run children at the same time.',
   'Deep Sky Object': 'A target block: coordinates + its own instructions.',

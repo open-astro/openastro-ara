@@ -439,5 +439,26 @@ void main() {
       expect(loops.single['Name'], 'Imaging');
       expect(conditionsOf(loops.single).single['Iterations'], 10);
     });
+
+    test('manualFilterSwap emits Wait-for-User pauses instead of SwitchFilter',
+        () {
+      final b = buildTargetBlock(
+        raDeg: 10,
+        decDeg: 20,
+        exposureSeconds: 60,
+        frameCount: 10,
+        filterPlan: plan,
+        manualFilterSwap: true,
+      );
+      final kids = childrenOf(b);
+      final types = kids.map((c) => c[r'$type'] as String?).toList();
+      expect(types, isNot(contains(switchFilterType)));
+      final waits =
+          kids.where((c) => c[r'$type'] == waitForUserType).toList();
+      expect(waits, hasLength(2));
+      expect(waits[0]['Text'], contains('Ha'));
+      expect(waits[1]['Text'], contains('OIII'));
+      expect(waits[0]['Text'], contains('Resume'));
+    });
   });
 }
