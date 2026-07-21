@@ -154,8 +154,11 @@ void main() {
     expect(json, contains('SlewScopeToRaDec'));
     expect(json, contains('TakeExposure'));
     expect(json, contains('LoopCondition'));
-    expect(find.textContaining('Created an imaging run for "Andromeda Galaxy"'),
+    // S8: success renders the panel's confirmation card, not a SnackBar.
+    expect(find.textContaining('Run created for "Andromeda Galaxy"'),
         findsOneWidget);
+    // S8: flush the confirmation card's auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 7));
   });
 
   // The append-path harness: a session for M 42 already open (selected), then
@@ -207,8 +210,10 @@ void main() {
     expect(names.indexOf('Andromeda Galaxy'), greaterThan(names.indexOf('M 42')));
     expect((childrenOf(client.updatedBody!).last[r'$type'] as String),
         contains('WarmCamera'));
-    expect(find.textContaining('Added "Andromeda Galaxy" to the open sequence'),
+    expect(find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),
         findsOneWidget);
+    // S8: flush the confirmation card's auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets('an actively-running open sequence gets a fresh run instead',
@@ -226,8 +231,11 @@ void main() {
 
     expect(client.updatedId, isNull);
     expect(client.createdName, 'Andromeda Galaxy');
-    expect(find.textContaining('Created an imaging run for "Andromeda Galaxy"'),
+    // S8: success renders the panel's confirmation card, not a SnackBar.
+    expect(find.textContaining('Run created for "Andromeda Galaxy"'),
         findsOneWidget);
+    // S8: flush the confirmation card's auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets('tapping the row sends a framing goto and highlights the row',

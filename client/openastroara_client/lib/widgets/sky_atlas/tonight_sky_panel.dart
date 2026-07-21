@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../state/app_shell_state.dart' show selectedTabIndexProvider;
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -10,6 +13,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
@@ -35,6 +39,37 @@ import 'session_plan_dialog.dart';
 /// instant-parameterised so it unit-tests without a clock seam. Boundary
 /// instants count as open (isBefore/isAfter are strict) — an exposure started
 /// in the window's last minute is still in the window.
+/// S8 — the commit-moment confirmation: (target name, appended?) shown as a
+/// card at the panel's foot for ~6 s after a successful add (the panel no
+/// longer yanks the user to the Run tab — planning several targets in a row
+/// is the whole point of the list).
+class PlanConfirmationNotifier extends Notifier<(String, bool)?> {
+  Timer? _dismissTimer;
+
+  @override
+  (String, bool)? build() {
+    ref.onDispose(() => _dismissTimer?.cancel());
+    return null;
+  }
+
+  void show(String targetName, {required bool appended}) {
+    _dismissTimer?.cancel();
+    state = (targetName, appended);
+    _dismissTimer = Timer(const Duration(seconds: 6), () {
+      if (ref.mounted) state = null;
+    });
+  }
+
+  void dismiss() {
+    _dismissTimer?.cancel();
+    state = null;
+  }
+}
+
+final planConfirmationProvider =
+    NotifierProvider<PlanConfirmationNotifier, (String, bool)?>(
+        PlanConfirmationNotifier.new);
+
 enum TonightWindowState { none, upcoming, open, passed }
 
 TonightWindowState windowStateFor(TonightSkyObject o, DateTime nowUtc) {
@@ -66,6 +101,7 @@ class TonightSkyPanel extends ConsumerWidget {
     final hasServer = ref
         .watch(savedServersProvider)
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
+    final theme = Theme.of(context);
     // Material (not a bare Container colour) so the rows' ink splashes have a
     // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
@@ -141,6 +177,55 @@ class TonightSkyPanel extends ConsumerWidget {
                 },
               ),
             ),
+            // S8 — the commit-moment card: slides in on a successful add,
+            // offers the jump the flow no longer forces.
+            if (ref.watch(planConfirmationProvider)
+                case (final String name, final bool appended))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AraSpace.s12, AraSpace.s8, AraSpace.s12, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AraSpace.s12, vertical: AraSpace.s8),
+                  decoration: BoxDecoration(
+                    color: AraColors.accentConnected.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color:
+                            AraColors.accentConnected.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline,
+                          size: 16, color: AraColors.accentConnected),
+                      const SizedBox(width: AraSpace.s8),
+                      Expanded(
+                        child: Text(
+                          appended
+                              ? '"$name" joined tonight\'s run.'
+                              : 'Run created for "$name".',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: AraColors.textPrimary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact),
+                        onPressed: () {
+                          ref
+                              .read(planConfirmationProvider.notifier)
+                              .dismiss();
+                          ref
+                              .read(selectedTabIndexProvider.notifier)
+                              .select(kRunTabIndex);
+                        },
+                        child: const Text('View in Run'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             // S9 — the session planner gets a real door: a labelled
             // full-width button instead of a mystery calendar icon.
             Padding(
@@ -582,6 +667,8 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
         decDeg: _object.decDeg,
         targetName: name,
         remainingDarkHours: _object.remainingHours,
+        // S8 — stay here: the confirmation card offers "View in Run".
+        jumpToRun: false,
       );
     } catch (e, st) {
       debugPrint('[planning] create-run failed: $e\n$st');
@@ -595,7 +682,15 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     // Gate on mounted before touching ref: the row can scroll out of the
     // ListView (disposing it) during the create await, leaving ref defunct.
     if (!mounted) return;
-    showImagingRunFeedback(messenger, targetName: name, result: result);
+    // S8 — a clean success gets the panel's confirmation card; every other
+    // outcome (no server / draft / cancelled) keeps the shared SnackBar copy.
+    if (result != null && !result.cancelled && !result.draft) {
+      ref
+          .read(planConfirmationProvider.notifier)
+          .show(name, appended: result.appended);
+    } else {
+      showImagingRunFeedback(messenger, targetName: name, result: result);
+    }
   }
 
   // Friendly names for both the starter catalog's plain types and the OpenNGC

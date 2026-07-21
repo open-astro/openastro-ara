@@ -121,6 +121,10 @@ Future<ImagingRunResult?> createImagingRun(
   // §36/§38 — a framing position angle to carry into the run: the target's
   // slew becomes a Center and Rotate at this angle. Null = plain slew.
   double? positionAngleDeg,
+  // Planning-redesign S8: false = stay on the CALLING tab after a create
+  // (the Tonight's Sky panel shows its own confirmation card with a
+  // "View in Run" action instead of yanking the user away mid-planning).
+  bool jumpToRun = true,
 }) async {
   final api = ref.read(sequenceApiProvider);
   final container = ProviderScope.containerOf(ref.context, listen: false);
@@ -170,7 +174,9 @@ Future<ImagingRunResult?> createImagingRun(
         .read(draftSequencesProvider.notifier)
         .create(targetName, body);
     container.read(selectedSequenceIdProvider.notifier).select(draftId);
-    container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    if (jumpToRun) {
+      container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    }
     return ImagingRunResult(draftId, appended: false, draft: true);
   }
 
@@ -239,7 +245,9 @@ Future<ImagingRunResult?> createImagingRun(
     if (newBody != null) {
       final detail = await api.updateSequence(selectedId, body: newBody);
       _syncAfterBodyChange(container, selectedId, detail);
-      container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+      if (jumpToRun) {
+        container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+      }
       return ImagingRunResult(selectedId, appended: true);
     }
   }
@@ -283,7 +291,9 @@ Future<ImagingRunResult?> createImagingRun(
         .read(draftSequencesProvider.notifier)
         .create(targetName, body, pushKey: createKey);
     container.read(selectedSequenceIdProvider.notifier).select(draftId);
-    container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    if (jumpToRun) {
+      container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+    }
     return ImagingRunResult(draftId, appended: false, draft: true);
   }
 
@@ -292,7 +302,9 @@ Future<ImagingRunResult?> createImagingRun(
   // Run tab forward so "Create Run" lands the user ON the run it created.
   container.invalidate(sequenceListProvider);
   container.read(selectedSequenceIdProvider.notifier).select(id);
-  container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+  if (jumpToRun) {
+    container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+  }
   return ImagingRunResult(id, appended: false);
 }
 
