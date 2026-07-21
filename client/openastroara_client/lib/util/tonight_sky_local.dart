@@ -412,7 +412,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
     }
     final finalScore = adjusted.clamp(0.0, 100.0);
 
-    // SIntegration Budget P3 - the tiered "how many hours from YOUR sky"
+    // §Integration Budget P3 - the tiered "how many hours from YOUR sky"
     // line for the advised approach (design/INTEGRATION_BUDGET.md; validated
     // against the Texas NGC 6188 campaign). Needs the advised approach's
     // flux input AND a catalog surface brightness; degrades to null.

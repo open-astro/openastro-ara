@@ -291,5 +291,26 @@ void main() {
     }
     // And the daytime window is the COMING night: it opens after "now".
     expect(a.first.windowStartUtc!.isAfter(morning), isTrue);
+
+    // #861 review round 2 — the day/night branch boundary and the small
+    // hours. A mid-night ask (02:00 local, inside the window: sun-down
+    // branch, anchor = now) and an ask just before dusk (sun-up branch,
+    // anchor = coming midnight) must both describe the SAME night as the
+    // daytime asks: the 5-min snap phase-aligns every grid, so windows are
+    // bit-identical while the night fits the ±12 h span.
+    final midNight = DateTime.utc(2026, 1, 15, 7); // ≈ 02:00 local Jan 15
+    final nearDusk = DateTime.utc(2026, 1, 14, 22); // ≈ 17:00 local, sun up
+    final c = rank(at: midNight, limit: 20);
+    final d = rank(at: nearDusk, limit: 20);
+    expect(c.map((o) => o.id), a.map((o) => o.id));
+    expect(d.map((o) => o.id), a.map((o) => o.id));
+    for (var i = 0; i < a.length; i++) {
+      expect(c[i].windowStartUtc, a[i].windowStartUtc,
+          reason: '${a[i].id}: a small-hours ask must score the SAME night');
+      expect(d[i].windowStartUtc, a[i].windowStartUtc,
+          reason: '${a[i].id}: a near-dusk ask must score the SAME night');
+      expect(c[i].score, a[i].score);
+      expect(d[i].score, a[i].score);
+    }
   });
 }
