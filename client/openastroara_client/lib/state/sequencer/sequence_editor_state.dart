@@ -163,6 +163,37 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
         : s._copyWith(selectedPath: path);
   }
 
+  /// Move the selection one row up/down in depth-first (tree display) order —
+  /// the arrow-key navigation (run-redesign S12). With nothing selected, Down
+  /// selects the first row (the root) and Up the last; at either end the
+  /// selection stays put. Pure navigation: never mutates the body.
+  void selectAdjacent({required bool next}) {
+    final s = state;
+    if (s == null) return;
+    final paths = <NodePath>[];
+    // Same flattening order as the tree view; the parser's depth cap bounds a
+    // pathological body the same way the tree's renderer does.
+    void walk(Map<String, dynamic> node, NodePath path, int depth) {
+      paths.add(path);
+      if (depth >= 64) return;
+      final kids = childrenOf(node);
+      for (var i = 0; i < kids.length; i++) {
+        walk(kids[i], <int>[...path, i], depth + 1);
+      }
+    }
+
+    walk(s.body, const [], 0);
+    if (paths.isEmpty) return;
+    final sel = s.selectedPath;
+    final current = sel == null
+        ? -1
+        : paths.indexWhere((p) => const ListEquality<int>().equals(p, sel));
+    final target = current < 0
+        ? (next ? 0 : paths.length - 1)
+        : (next ? current + 1 : current - 1).clamp(0, paths.length - 1);
+    state = s._copyWith(selectedPath: paths[target]);
+  }
+
   /// Insert a fresh node built from [def] as a child of the container at
   /// [parentPath] at [index] (clamped), and select the new node. No-op if no
   /// sequence is loaded, or [parentPath] doesn't resolve to a container (a leaf

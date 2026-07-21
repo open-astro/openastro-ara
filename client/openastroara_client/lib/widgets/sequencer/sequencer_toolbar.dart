@@ -187,7 +187,7 @@ class SequencerToolbar extends ConsumerWidget {
                   label: isPaused ? 'Resume' : 'Run',
                   kind: _LifecycleKind.primary,
                   onPressed: canRunOrResume
-                      ? () => _lifecycle(context, ref,
+                      ? () => runSequenceLifecycle(context, ref,
                           (api, id) => isPaused ? api.resume(id) : api.start(id))
                       : null,
                 ),
@@ -196,7 +196,7 @@ class SequencerToolbar extends ConsumerWidget {
                   label: 'Pause',
                   kind: _LifecycleKind.caution,
                   onPressed: canPause
-                      ? () => _lifecycle(context, ref, (api, id) => api.pause(id))
+                      ? () => runSequenceLifecycle(context, ref, (api, id) => api.pause(id))
                       : null,
                 ),
                 _ToolButton(
@@ -205,7 +205,7 @@ class SequencerToolbar extends ConsumerWidget {
                   // Skip the current target/item (e.g. one that's dropped below the
                   // horizon) so the run advances to the next without aborting.
                   onPressed: canSkip
-                      ? () => _lifecycle(
+                      ? () => runSequenceLifecycle(
                           context, ref, (api, id) => api.skipCurrent(id))
                       : null,
                 ),
@@ -239,7 +239,9 @@ class SequencerToolbar extends ConsumerWidget {
 
 /// Run a lifecycle transition on the selected sequence, surface a transport
 /// failure as a SnackBar, then re-read the run state so the buttons re-gate.
-Future<void> _lifecycle(
+/// Public: the tab-level keyboard shortcuts (Space, R — run-redesign S12)
+/// drive the same fenced path as the toolbar buttons.
+Future<void> runSequenceLifecycle(
   BuildContext context,
   WidgetRef ref,
   Future<String> Function(SequenceClient api, String id) op,
@@ -523,7 +525,7 @@ Future<void> _confirmAbort(BuildContext context, WidgetRef ref) async {
     ),
   );
   if (confirmed != true || !context.mounted) return;
-  await _lifecycle(context, ref, (api, id) => api.abort(id));
+  await runSequenceLifecycle(context, ref, (api, id) => api.abort(id));
 }
 
 enum _LifecycleKind { primary, caution, destructive }

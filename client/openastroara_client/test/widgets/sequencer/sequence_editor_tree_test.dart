@@ -470,6 +470,62 @@ void main() {
       expect(hasAccentBar, isTrue, reason: 'executing row carries the 3px bar');
     });
   });
+
+  group('resolveInsertBefore / resolveInsertInto (palette-drop policy)', () {
+    test('insert before a row lands in its parent at its slot', () {
+      final r = resolveInsertBefore(nestedDetail().body, const [1]);
+      expect(r, isNotNull);
+      expect(r!.parent, isEmpty);
+      expect(r.index, 1);
+      final deep = resolveInsertBefore(nestedDetail().body, const [1, 0]);
+      expect(deep!.parent, [1]);
+      expect(deep.index, 0);
+    });
+
+    test('no gap above the root; append resolves to the child count', () {
+      expect(resolveInsertBefore(nestedDetail().body, const []), isNull);
+      final r = resolveInsertInto(nestedDetail().body, const []);
+      expect(r!.index, 2); // root has TakeExposure + Inner
+      expect(resolveInsertInto(nestedDetail().body, const [0]), isNull,
+          reason: 'a leaf cannot take children');
+    });
+  });
+
+  testWidgets('dragging a palette instruction onto a container inserts into it',
+      (tester) async {
+    final c = await _pump(tester, detail: sampleDetail());
+    // Simulate the palette's Draggable<InstructionDef> with one in the tree's
+    // own harness: the tree only sees the payload type, not who dragged it.
+    final def = _def(_takeExposure);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(children: [
+              Draggable<InstructionDef>(
+                data: def,
+                feedback: const SizedBox(width: 10, height: 10),
+                child: const Text('SOURCE'),
+              ),
+              const Expanded(child: SequenceEditorTree()),
+            ]),
+          ),
+        ),
+      ),
+    );
+    final gesture =
+        await tester.startGesture(tester.getCenter(find.text('SOURCE')));
+    await gesture.moveTo(tester.getCenter(find.text('My Sequence')));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final body = c.read(sequenceEditorProvider)!.body;
+    expect(childrenOf(body), hasLength(3),
+        reason: 'the palette drop appends a fresh instruction to the root');
+    expect(childrenOf(body).last[r'$type'], contains('TakeExposure'));
+  });
 }
 
 /// Fixed spotlight: leaf [1] executing, leaf [0] completed (verified).

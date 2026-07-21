@@ -160,11 +160,27 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
         opacity: runActive ? 0.55 : 1.0, duration: dimDuration, child: child);
 
     // §Run-redesign S12 — editor keyboard: ⌘Z/⌘⇧Z undo-redo, Delete removes
-    // the selected node. Guarded to skip while a text field has focus so
-    // typing in the inspector never deletes tree nodes. (Run/pause keys stay
-    // off v1: lifecycle needs the toolbar's busy/confirm fences.)
+    // the selected node, ↑/↓ walk the tree, ⌘R runs/resumes and Space
+    // pauses/resumes — the lifecycle keys drive the toolbar's OWN fenced path
+    // (runSequenceLifecycle: busy re-entrancy guard + state re-read), gated by
+    // the same conditions as its buttons. Abort stays mouse-only: destructive,
+    // behind its confirm dialog. All guarded to skip while a text field has
+    // focus so typing in the inspector never fires tree/run actions.
     return CallbackShortcuts(
       bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).selectAdjacent(next: false);
+        },
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).selectAdjacent(next: true);
+        },
+        const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
+            _runOrResumeKey,
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+            _runOrResumeKey,
+        const SingleActivator(LogicalKeyboardKey.space): _spaceKey,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () {
           if (_textFieldFocused) return;
           ref.read(sequenceEditorProvider.notifier).undo();
@@ -229,6 +245,48 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     final path = editor?.selectedPath;
     if (path == null || path.isEmpty) return;
     ref.read(sequenceEditorProvider.notifier).removeNode(path);
+  }
+
+  /// The toolbar buttons' gate, for the lifecycle keys: a real (non-draft)
+  /// sequence selected on a connected daemon with no command in flight.
+  bool get _lifecycleKeysArmed {
+    final id = ref.read(selectedSequenceIdProvider);
+    return ref.read(sequenceApiProvider) != null &&
+        id != null &&
+        !isDraftSequenceId(id) &&
+        !ref.read(sequenceCommandBusyProvider);
+  }
+
+  /// ⌘R — Run when idle/finished, Resume when paused. Mirrors the toolbar's
+  /// canRunOrResume gate exactly; a mid-run press is a silent no-op.
+  void _runOrResumeKey() {
+    if (_textFieldFocused || !_lifecycleKeysArmed) return;
+    final state = ref.read(sequenceRunStateProvider).value?.state;
+    final isPaused = state?.isAnyPaused ?? false;
+    if ((state?.isActive ?? false) && !isPaused) return;
+    unawaited(runSequenceLifecycle(
+        context, ref, (api, id) => isPaused ? api.resume(id) : api.start(id)));
+  }
+
+  /// Space — Pause while running, Resume while paused; anything else no-ops
+  /// (so Space can't START a run by surprise — starting is ⌘R's deliberate
+  /// gesture). Skipped while a button owns focus: Space there activates the
+  /// focused button, and firing both would double-command the daemon.
+  void _spaceKey() {
+    if (_textFieldFocused || _buttonFocused || !_lifecycleKeysArmed) return;
+    final state = ref.read(sequenceRunStateProvider).value?.state;
+    if (state == SequenceRunState.running) {
+      unawaited(runSequenceLifecycle(context, ref, (api, id) => api.pause(id)));
+    } else if (state?.isAnyPaused ?? false) {
+      unawaited(
+          runSequenceLifecycle(context, ref, (api, id) => api.resume(id)));
+    }
+  }
+
+  /// True while a button-like control owns focus (Space would activate it).
+  bool get _buttonFocused {
+    final w = FocusManager.instance.primaryFocus?.context?.widget;
+    return w is ButtonStyleButton || w is IconButton;
   }
 
   // An editor pane: shared bg, with a trailing divider before the next pane
