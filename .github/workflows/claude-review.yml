@@ -73,6 +73,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The action refuses to run on a PR that modifies this very workflow
+          # (it requires the file to match the default branch). That skip is
+          # loud in the log and only possible on a workflow-editing PR, which
+          # the maintainer reviews by eye — exempt it so such PRs aren't
+          # permanently red, while every normal PR still requires a comment.
+          if gh pr view "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" --json files --jq '.files[].path' \
+              | grep -qx ".github/workflows/claude-review.yml"; then
+            echo "::warning::This PR modifies the review workflow — the action skips itself on such PRs; passing without a review comment. Review it by eye."
+            exit 0
+          fi
           if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
               --paginate --jq '.[].body' | grep -qE "Approved|Issues found"; then
             echo "Review comment found."
