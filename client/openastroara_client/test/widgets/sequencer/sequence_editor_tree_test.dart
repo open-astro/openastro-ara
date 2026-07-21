@@ -5,6 +5,8 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/node_display.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/run_index_map.dart';
+import 'package:openastroara/state/sequencer/run_spotlight_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_editor_tree.dart';
 
@@ -438,4 +440,41 @@ void main() {
       ['X.C', 'X.A', 'X.B'],
     );
   });
+
+  group('live spotlight (S4)', () {
+    testWidgets('no spotlight → tree renders exactly as before', (tester) async {
+      await _pump(tester, detail: sampleDetail());
+      expect(find.byIcon(Icons.check_circle_outline), findsNothing);
+    });
+
+    testWidgets('spotlighted row gets the accent bar; completed rows a check',
+        (tester) async {
+      final container = ProviderContainer(overrides: [
+        runSpotlightProvider.overrideWith(_FixedSpotlight.new),
+      ]);
+      addTearDown(container.dispose);
+      container.read(sequenceEditorProvider.notifier).load(sampleDetail());
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequenceEditorTree())),
+      ));
+      await tester.pump();
+      // Leaf [0] completed (check icon), leaf [1] current (accent border).
+      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+      final inks = tester.widgetList<Ink>(find.byType(Ink));
+      final hasAccentBar = inks.any((ink) {
+        final d = ink.decoration;
+        return d is BoxDecoration && d.border is Border &&
+            (d.border! as Border).left.width == 3;
+      });
+      expect(hasAccentBar, isTrue, reason: 'executing row carries the 3px bar');
+    });
+  });
+}
+
+/// Fixed spotlight: leaf [1] executing, leaf [0] completed (verified).
+class _FixedSpotlight extends RunSpotlightNotifier {
+  @override
+  RunSpotlight? build() => const RunSpotlight(
+      leaves: [ [0], [1] ], currentLeaf: 1, verified: true);
 }

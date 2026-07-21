@@ -17,7 +17,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
-import '../../models/sequence/node_display.dart' show nodeLabel, shortTypeName;
+import '../../models/sequence/instruction_style.dart';
+import '../../models/sequence/node_display.dart' show nodeLabel, nodeIcon, shortTypeName;
 import '../../models/sequence/trigger_catalog.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
@@ -49,14 +50,32 @@ class SequenceFieldEditor extends ConsumerWidget {
     final notifier = ref.read(sequenceEditorProvider.notifier);
 
     final children = <Widget>[
-      Text(
-        nodeLabel(node),
-        style: const TextStyle(
-          color: AraColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
+      // S9 — the title echoes the instruction's category hue (icon) and, for
+      // catalogued instructions, its one-line description: the inspector opens
+      // by telling you WHAT you selected before asking you to configure it.
+      Row(
+        children: [
+          Icon(nodeIcon(node), size: 16, color: nodeAccentColor(node)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              nodeLabel(node),
+              style: const TextStyle(
+                color: AraColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
+      if (def != null)
+        if (instructionDescriptions[def.label] case final String desc) ...[
+        const SizedBox(height: 4),
+        Text(desc,
+            style: const TextStyle(
+                color: AraColors.textSecondary, fontSize: 11.5)),
+      ],
       const SizedBox(height: 12),
       if (container) ...[
         _NameEditor(
@@ -110,7 +129,7 @@ class SequenceFieldEditor extends ConsumerWidget {
       children.add(
         _Placeholder(
           def == null
-              ? 'This instruction has no editable fields here.'
+              ? 'This instruction runs as-is — nothing to configure.'
               : 'No settings — this instruction runs as-is.',
         ),
       );
@@ -758,15 +777,18 @@ class _FieldControl extends StatelessWidget {
     required String initial,
     required TextInputType keyboard,
     required Object? Function(String) parse,
-  }) => TextFormField(
-    initialValue: initial,
+  }) => _ValueTextField(
+    text: initial,
     enabled: enabled,
-    keyboardType: keyboard,
-    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-    decoration: const InputDecoration(
-      isDense: true,
-      border: OutlineInputBorder(),
-    ),
+    keyboard: keyboard,
+    // "8" typed vs "8.0" echoed back by the model are the SAME value — only a
+    // genuinely different value (Apply, undo) may re-seed the controller, or
+    // every keystroke would yank the caret to a reformatted echo.
+    isEquivalent: (a, b) {
+      final pa = parse(a);
+      final pb = parse(b);
+      return pa != null && pa == pb;
+    },
     onChanged: (s) {
       final parsed = parse(s);
       // Ignore an in-progress invalid number (e.g. '' or '-'); commit valid.
@@ -1018,7 +1040,7 @@ class _CoordinatesEditor extends StatelessWidget {
             children: [
               for (var i = 0; i < fields.length; i++) ...[
                 if (i > 0) const SizedBox(width: 4),
-                SizedBox(width: 44, child: fields[i]),
+                SizedBox(width: 52, child: fields[i]),
               ],
             ],
           ),
@@ -1154,6 +1176,69 @@ class _WaitLoopDataEditor extends StatelessWidget {
   }
 }
 
+/// A controlled free-form text field for un-bounded number/integer/text fields.
+/// Owns a controller and re-seeds it when [text] changes EXTERNALLY (Optimal
+/// Sub "Apply", undo/redo) — a bare `TextFormField(initialValue:)` only reads
+/// its value once, so the display could show 5.0 forever while the model held
+/// the applied 8.0. The mid-edit guard mirrors [_NameEditor]: an identical
+/// value never re-seeds (would move the caret).
+class _ValueTextField extends StatefulWidget {
+  const _ValueTextField({
+    required this.text,
+    required this.keyboard,
+    required this.onChanged,
+    required this.isEquivalent,
+    this.enabled = true,
+  });
+
+  final String text;
+  final TextInputType keyboard;
+  final ValueChanged<String> onChanged;
+
+  /// True when the controller's current text already MEANS the model's text
+  /// ("8" vs "8.0") — an equivalent echo must not re-seed and move the caret.
+  final bool Function(String controllerText, String modelText) isEquivalent;
+  final bool enabled;
+
+  @override
+  State<_ValueTextField> createState() => _ValueTextFieldState();
+}
+
+class _ValueTextFieldState extends State<_ValueTextField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.text,
+  );
+
+  @override
+  void didUpdateWidget(_ValueTextField old) {
+    super.didUpdateWidget(old);
+    if (widget.text != old.text &&
+        _controller.text != widget.text &&
+        !widget.isEquivalent(_controller.text, widget.text)) {
+      _controller.text = widget.text;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: _controller,
+    enabled: widget.enabled,
+    keyboardType: widget.keyboard,
+    style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+    decoration: const InputDecoration(
+      isDense: true,
+      border: OutlineInputBorder(),
+    ),
+    onChanged: widget.onChanged,
+  );
+}
+
 class _Placeholder extends StatelessWidget {
   const _Placeholder(this.text);
   final String text;
@@ -1284,9 +1369,13 @@ class _NumFieldState extends State<_NumField> {
           : _SingleDecimalFormatter(isInt: widget.isInt, signed: widget.signed),
     ],
     style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+    textAlign: TextAlign.center,
     decoration: const InputDecoration(
       isDense: true,
       border: OutlineInputBorder(),
+      // The default horizontal padding ate ~24px of a 44px box and clipped
+      // two-digit values ("20" → "2("): compact padding + centered text.
+      contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 9),
     ),
     onChanged: _onChanged,
   );

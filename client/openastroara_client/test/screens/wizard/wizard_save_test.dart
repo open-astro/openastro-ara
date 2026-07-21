@@ -207,31 +207,35 @@ void main() {
       expect(out.filters[2].kind, FilterKind.r);
     });
 
-    test('applyDraftToFilterSet lets an explicit wavelength rescue an ambiguous name', () {
-      // "Filter 1" + 656 nm must land on Hα, not silently become broadband L —
-      // the user's explicit entries beat the name fallback. An informative
-      // name still wins over a contradictory wavelength.
+    test('applyDraftToFilterSet carries the screen\'s bandwidth into the '
+        'planning filter (0 = kind default when blank)', () {
       final d = ProfileDraft();
       d.filterWheel.filters.addAll([
         FilterDef()
-          ..name = 'Filter 1'
-          ..wavelengthNm = 656,
+          ..name = 'Ha'
+          ..bandwidthNm = 3,
+        FilterDef()..name = 'OIII', // blank → kind default
         FilterDef()
-          ..name = 'Filter 2'
-          ..wavelengthNm = 501,
-        FilterDef()
-          ..name = 'Filter 3'
-          ..wavelengthNm = 672,
-        FilterDef()
-          ..name = 'Red'
-          ..wavelengthNm = 656, // informative name wins
-        FilterDef()..name = 'Filter 5', // no wavelength → the L fallback stands
+          ..name = 'SII'
+          ..bandwidthNm = 0, // explicit junk 0 → treated as unset
+      ]);
+      final out = applyDraftToFilterSet(const FilterSetSettings(), d);
+      expect(out.filters[0].bandwidthNm, 3);
+      expect(out.filters[1].bandwidthNm, 0);
+      expect(out.filters[2].bandwidthNm, 0);
+    });
+
+    test('applyDraftToFilterSet infers kind from the name alone (no line-'
+        'wavelength field anymore)', () {
+      final d = ProfileDraft();
+      d.filterWheel.filters.addAll([
+        FilterDef()..name = 'Ha 6nm',
+        FilterDef()..name = 'Red',
+        FilterDef()..name = 'Filter 5', // unrecognisable → the L fallback
       ]);
       final out = applyDraftToFilterSet(const FilterSetSettings(), d);
       expect(out.filters.map((f) => f.kind), [
         FilterKind.ha,
-        FilterKind.oiii,
-        FilterKind.sii,
         FilterKind.r,
         FilterKind.l,
       ]);

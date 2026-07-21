@@ -24,25 +24,38 @@ const String _centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
 
 /// The filter name a TakeExposure at [path] runs under, or null: the nearest
-/// preceding SwitchFilter among its container siblings (NINA executes a
-/// SequentialContainer / SmartExposure top-to-bottom, so the last filter
-/// switch before the exposure is the one in effect). Pure — exposed for tests.
+/// preceding SwitchFilter, level by level from the root (NINA executes a
+/// SequentialContainer top-to-bottom, so at every ancestor level the last
+/// filter switch before the branch the exposure sits in is in effect —
+/// deeper/later wins). A switch that's a sibling of the exposure's CONTAINER
+/// counts too: the smart-target plan emits `Switch Filter → "Ha Imaging"
+/// [Take Exposure]`, where the switch never shares a parent with the
+/// exposure. Pure — exposed for tests.
 String? filterNameForExposure(Map<String, dynamic> body, NodePath path) {
-  if (path.isEmpty) return null;
-  final parent = nodeAt(body, path.sublist(0, path.length - 1));
-  if (parent == null) return null;
-  final siblings = childrenOf(parent);
-  final exposureIndex = path.last;
   String? name;
-  for (var i = 0; i < exposureIndex && i < siblings.length; i++) {
-    final sibling = siblings[i];
-    if (sibling[r'$type'] == switchFilterType) {
-      final filter = sibling['Filter'];
-      final n = filter is Map<String, dynamic> ? filter['Name'] : null;
-      if (n is String && n.trim().isNotEmpty) name = n.trim();
+  for (var depth = 0; depth < path.length; depth++) {
+    final parent = nodeAt(body, path.sublist(0, depth));
+    if (parent == null) return name;
+    final siblings = childrenOf(parent);
+    final index = path[depth];
+    for (var i = 0; i < index && i < siblings.length; i++) {
+      final sibling = siblings[i];
+      if (sibling[r'$type'] == switchFilterType) {
+        final n = _filterInfoName(sibling['Filter']);
+        if (n != null) name = n;
+      }
     }
   }
   return name;
+}
+
+/// The display name inside a `FilterInfo` value — the daemon serialises the
+/// backing field as `_name` (what [buildFilterInfo] writes), while some NINA
+/// exports carry a public `Name`. Either counts.
+String? _filterInfoName(Object? filter) {
+  if (filter is! Map) return null;
+  final n = filter['_name'] ?? filter['Name'];
+  return n is String && n.trim().isNotEmpty ? n.trim() : null;
 }
 
 /// §3.1 — the target position (J2000 decimal DEGREES) in effect for a
@@ -286,14 +299,20 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
     } else if (_result case final r?) {
       final saturationLimited = !r.viable;
       final starLimited = r.limitingBound == 'starfloor';
-      final headline = saturationLimited
-          ? 'Saturation-limited: ${_fmt(r.recommendedSec)} max '
-                '(the sky fills the well before read noise is swamped)'
+      // Lead with the ACTION ("use N s per sub"), not the maths. The window
+      // bounds read as jargon ("8 s – 24 min") — demote them to a plain-
+      // language explanation line below the headline.
+      final headline =
+          'Suggested exposure: ${_fmt(r.recommendedSec)} per sub';
+      final explain = saturationLimited
+          ? 'Your sky is bright enough here that longer subs just saturate — '
+                'keep them at ${_fmt(r.recommendedSec)} or shorter.'
           : starLimited
-          ? 'Optimal Sub: ${_fmt(r.recommendedSec)}  (star-limited — '
-                'read-noise floor ${_fmt(r.floorSec)}, ceiling ${_fmt(r.ceilingSec)})'
-          : 'Optimal Sub: ${_fmt(r.recommendedSec)}'
-                '  (usable window ${_fmt(r.floorSec)} – ${_fmt(r.ceilingSec)})';
+          ? 'Long enough to register plenty of stars per frame; going much '
+                'longer only risks losing more to a ruined frame.'
+          : 'At this length the sky already swamps the camera\'s read noise — '
+                'longer subs won\'t improve the final stack, they just cost '
+                'more per lost frame.';
       final assumed = r.assumedDefaults ?? const [];
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,6 +338,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
               ),
             ],
           ),
+          Text(explain, style: dim),
           if (widget.filterName != null)
             Text('For filter "${widget.filterName}"', style: dim),
           // §3.1 — the daemon's ready-made star-detectability line (predicted

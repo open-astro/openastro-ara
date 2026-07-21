@@ -87,30 +87,22 @@ FilterSetSettings applyDraftToFilterSet(FilterSetSettings base, ProfileDraft d) 
   if (named.isEmpty) return base;
   return FilterSetSettings(filters: [
     for (final (name, def) in named)
-      PlanningFilter(name: name, kind: _kindForDraftFilter(name, def)),
+      PlanningFilter(
+        // Kind by the same name heuristic as the Settings seed ("Ha 6nm" → Hα,
+        // "Red" → r); an oddly-named filter's kind is directly editable in
+        // Settings → Imaging → Filter set.
+        name: name,
+        kind: FilterSetNotifier.guessKind(name),
+        // The screen's explicit bandwidth entry (the "3nm/6nm/12nm" printed
+        // on the filter) — the number the Optimal-Sub math runs on. 0 (unset)
+        // falls back to the kind's default passband.
+        bandwidthNm: (def.bandwidthNm != null && def.bandwidthNm! > 0)
+            ? def.bandwidthNm!
+            : 0,
+      ),
   ]);
 }
 
-/// Kind inference for one wizard filter: the name heuristic first (identical to
-/// the Settings seed), then — ONLY when the name told us nothing (guessKind's
-/// `l` is its no-match fallback) — the screen's explicit wavelength entry
-/// disambiguates the classic emission lines, so "Filter 1" + 656 nm lands on Hα
-/// instead of silently becoming broadband L. The coarse Type dropdown has no
-/// finer mapping than this (its narrowband/broadband split carries no line
-/// identity), and the wavelength is a CENTER, not a bandwidth, so
-/// PlanningFilter.bandwidthNm stays at its kind default — both refinable in
-/// Settings → Imaging → Filter set.
-FilterKind _kindForDraftFilter(String name, FilterDef f) {
-  final byName = FilterSetNotifier.guessKind(name);
-  if (byName != FilterKind.l) return byName; // the name was informative
-  final nm = f.wavelengthNm;
-  if (nm != null) {
-    if (nm >= 650 && nm <= 662) return FilterKind.ha; //  Hα 656.3
-    if (nm >= 495 && nm <= 506) return FilterKind.oiii; // OIII 500.7
-    if (nm >= 668 && nm <= 677) return FilterKind.sii; //  SII 672.4
-  }
-  return byName;
-}
 
 OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
   final fl = d.telescope.focalLengthMm;

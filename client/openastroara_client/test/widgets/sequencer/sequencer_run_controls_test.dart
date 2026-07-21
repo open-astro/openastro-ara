@@ -124,8 +124,12 @@ void main() {
       return container;
     }
 
-    TextButton btn(WidgetTester tester, String label) => tester.widget<TextButton>(
-        find.ancestor(of: find.text(label), matching: find.byType(TextButton)));
+    // Lifecycle buttons vary by kind since S2 (filled Run, outlined Abort,
+    // text Pause) — match any ButtonStyleButton carrying the label.
+    ButtonStyleButton btn(WidgetTester tester, String label) =>
+        tester.widget<ButtonStyleButton>(find.ancestor(
+            of: find.text(label),
+            matching: find.bySubtype<ButtonStyleButton>()));
 
     testWidgets('the status line counts INSTRUCTIONS, never "frames" (r1 on the '
         'frames_*→instructions_* rename)', (tester) async {
@@ -279,6 +283,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
       expect(find.text('Sequence command failed.'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Abort asks for confirmation; Keep running cancels', (tester) async {
+      await pump(tester, run: _info(SequenceRunState.running, done: 1, total: 9));
+      btn(tester, 'Abort').onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.text('Abort this run?'), findsOneWidget);
+      await tester.tap(find.text('Keep running'));
+      await tester.pumpAndSettle();
+      expect(find.text('Abort this run?'), findsNothing);
     });
   });
 }

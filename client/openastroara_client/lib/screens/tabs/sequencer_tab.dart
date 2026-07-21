@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +14,13 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/sequencer/sequence_editor_tree.dart';
 import '../../widgets/sequencer/sequence_field_editor.dart';
 import '../../widgets/sequencer/sequencer_palette.dart';
+import '../../widgets/sequencer/run_completion_sheet.dart';
+import '../../widgets/sequencer/run_dashboard_band.dart';
+import '../../widgets/sequencer/sequence_load_dialog.dart';
+import '../../widgets/sequencer/sequence_new_dialog.dart';
+import '../../state/app_shell_state.dart';
+import '../../state/settings/settings_nav.dart';
+import '../../theme/ara_metrics.dart';
 import '../../widgets/sequencer/sequencer_toolbar.dart';
 
 /// Sequencer tab per playbook §25.5.3 / §38: toolbar + the NINA-style edit
@@ -124,22 +133,102 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     ref.listen<String?>(selectedSequenceIdProvider, (prev, next) {
       if (next != null && next != _loadedId) _load(next);
     });
+    // §Run-redesign S6 — a finished run is an event: on the active→terminal
+    // transition, present the completion sheet (replacing the old silent
+    // status-line flip). Abort is excluded — the user just confirmed it.
+    ref.listen(sequenceRunStateProvider, (prev, next) {
+      final was = prev?.value?.state;
+      final now = next.value?.state;
+      if (was == null || now == null || was == now) return;
+      final wasActive = was.isActive && now != SequenceRunState.aborting;
+      final terminal = now == SequenceRunState.completed ||
+          now == SequenceRunState.failed;
+      if (wasActive && terminal && mounted) {
+        RunCompletionSheet.show(context, next.value!);
+      }
+    });
+    final hasSequence = ref.watch(sequenceEditorProvider) != null;
+    // §Run-redesign S13 — live mood: while a run is active the palette and
+    // inspector recede (dim, still interactive) so the tree + dashboard carry
+    // the stage. Reduced-motion honours the platform setting.
+    final runActive =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final motionOff = MediaQuery.of(context).disableAnimations;
+    final dimDuration =
+        motionOff ? Duration.zero : const Duration(milliseconds: 250);
+    Widget dimmed(Widget child) => AnimatedOpacity(
+        opacity: runActive ? 0.55 : 1.0, duration: dimDuration, child: child);
 
-    return Column(
+    // §Run-redesign S12 — editor keyboard: ⌘Z/⌘⇧Z undo-redo, Delete removes
+    // the selected node. Guarded to skip while a text field has focus so
+    // typing in the inspector never deletes tree nodes. (Run/pause keys stay
+    // off v1: lifecycle needs the toolbar's busy/confirm fences.)
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).undo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+            () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).redo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).undo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyZ,
+            control: true, shift: true): () {
+          if (_textFieldFocused) return;
+          ref.read(sequenceEditorProvider.notifier).redo();
+        },
+        const SingleActivator(LogicalKeyboardKey.delete): _deleteSelected,
+        const SingleActivator(LogicalKeyboardKey.backspace): _deleteSelected,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Column(
       children: [
         const SequencerToolbar(),
+        // §Run-redesign S5 — the live dashboard band renders only while a run
+        // is active (SizedBox.shrink otherwise), so compose-mood layout and
+        // its tests are untouched.
+        const RunDashboardBand(),
         Expanded(
-          child: Row(
-            children: [
-              _pane(flex: 2, child: const SequencerPalette()),
-              _pane(flex: 3, child: const SequenceEditorTree()),
-              // Rightmost pane: same bg as the others, no trailing divider.
-              _pane(flex: 2, border: false, child: const SequenceFieldEditor()),
-            ],
-          ),
+          // §Run-redesign S6 — with nothing loaded, the tab invites instead of
+          // presenting three empty grey panes.
+          child: !hasSequence
+              ? const _ZeroState()
+              : Row(
+                  children: [
+                    _pane(flex: 2, child: dimmed(const SequencerPalette())),
+                    _pane(flex: 3, child: const SequenceEditorTree()),
+                    // Rightmost pane: same bg as the others, no trailing divider.
+                    _pane(
+                        flex: 2,
+                        border: false,
+                        child: dimmed(const SequenceFieldEditor())),
+                  ],
+                ),
         ),
       ],
+        ),
+      ),
     );
+  }
+
+  /// True while any editable text field owns focus — keyboard editing must
+  /// win over tree shortcuts.
+  bool get _textFieldFocused =>
+      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+
+  void _deleteSelected() {
+    if (_textFieldFocused) return;
+    final editor = ref.read(sequenceEditorProvider);
+    final path = editor?.selectedPath;
+    if (path == null || path.isEmpty) return;
+    ref.read(sequenceEditorProvider.notifier).removeNode(path);
   }
 
   // An editor pane: shared bg, with a trailing divider before the next pane
@@ -157,4 +246,65 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
           child: child,
         ),
       );
+}
+
+
+/// Inviting zero state: what this tab is for + the three ways in. Replaces the
+/// old bare "No sequence loaded" center-text (which still guards the tree for
+/// the loaded-but-cleared edge).
+class _ZeroState extends ConsumerWidget {
+  const _ZeroState();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      color: AraColors.bgPrimary,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.movie_filter_outlined,
+                size: 44, color: AraColors.textDisabled),
+            const SizedBox(height: AraSpace.s16),
+            const Text('Ready to build tonight\'s run', style: AraText.title),
+            const SizedBox(height: AraSpace.s8),
+            const SizedBox(
+              width: 380,
+              child: Text(
+                'Compose a sequence from instructions, or let the planner '
+                'pick tonight\'s best targets and times for you.',
+                textAlign: TextAlign.center,
+                style: AraText.caption,
+              ),
+            ),
+            const SizedBox(height: AraSpace.s24),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.auto_awesome, size: 16),
+                  label: const Text('Plan tonight'),
+                  onPressed: () => ref
+                      .read(selectedTabIndexProvider.notifier)
+                      .select(kPlanningTabIndex),
+                ),
+                const SizedBox(width: AraSpace.s12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.note_add_outlined, size: 16),
+                  label: const Text('New sequence'),
+                  onPressed: () => SequenceNewDialog.show(context),
+                ),
+                const SizedBox(width: AraSpace.s12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.folder_open_outlined, size: 16),
+                  label: const Text('Load'),
+                  onPressed: () => SequenceLoadDialog.show(context),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

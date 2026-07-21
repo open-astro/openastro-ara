@@ -8,6 +8,7 @@ import '../state/settings/optics_settings_state.dart';
 import '../state/settings/site_settings_state.dart';
 import 'filter_advice.dart';
 import 'imaging_regions.dart';
+import 'integration_budget.dart';
 import 'optimal_sub.dart';
 import 'star_model.dart' as stars;
 
@@ -138,15 +139,44 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final fov = _fovArcmin(optics, mosaicTilesX, mosaicTilesY);
 
   // The night sample grid, object-independent: LST + is-the-sky-dark at each
-  // 5-min sample across ±12 h.
+  // 5-min sample across ±12 h. The grid is anchored on the NIGHT, not the
+  // wall clock: centering ±12 h on a daytime "now" clips the previous night's
+  // dusk out of the span minute by minute, so the same target scored lower at
+  // noon than at 9 AM (live repro: Eastern Veil 92 → 89 between 10:58 and
+  // 11:41). When the sun is up, anchor on the COMING solar midnight so the
+  // window always describes tonight; when the sun is already down, "now" sits
+  // inside the night and ±12 h covers all of it, so anchor there directly
+  // (this also keeps the current night scored through the small hours instead
+  // of skipping ahead to the next one).
   final twilight = _twilightSunAltitudeDeg(site.twilightDefinition);
+  final sunAtNow = _sunEquatorialDeg(at);
+  final sunHaNowDeg = _mod360(lst0 - sunAtNow.$1);
+  final sunAltNowDeg =
+      _altitudeFromHourAngleDeg(sunAtNow.$2, lat, sunHaNowDeg);
+  // Sun hour angle 180° = solar midnight; advance to the next one. Snapped
+  // to a 5-min UTC boundary so two daytime asks land on the SAME grid — the
+  // midnight estimate drifts by seconds across the day (equation of time)
+  // and would otherwise jitter every window timestamp with it.
+  final rawAnchor = sunAltNowDeg < twilight
+      ? at
+      : at.add(Duration(
+          milliseconds:
+              (_mod360(180.0 - sunHaNowDeg) / 360.0 * 24.0 * 3600000.0)
+                  .round()));
+  final anchor = DateTime.fromMillisecondsSinceEpoch(
+      (rawAnchor.millisecondsSinceEpoch / (_windowStepMinutes * 60000))
+              .round() *
+          _windowStepMinutes *
+          60000,
+      isUtc: true);
   const stepsPerSide = _windowHalfSpanMinutes ~/ _windowStepMinutes;
   const sampleCount = stepsPerSide * 2 + 1;
   final sampleUtc = List<DateTime>.filled(sampleCount, at);
   final sampleLstDeg = List<double>.filled(sampleCount, 0);
   final sunIsDown = List<bool>.filled(sampleCount, false);
   for (var i = 0; i < sampleCount; i++) {
-    final t = at.add(Duration(minutes: (i - stepsPerSide) * _windowStepMinutes));
+    final t =
+        anchor.add(Duration(minutes: (i - stepsPerSide) * _windowStepMinutes));
     final lst = _localSiderealTimeDeg(t, lon);
     final sun = _sunEquatorialDeg(t);
     final sunAlt =
@@ -174,8 +204,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
             m.$2, lat, _mod360(sampleLstDeg[i] - m.$1)) >
         0.0;
   }
+  // Illumination at the anchor (tonight's midnight when planning by day) so
+  // the advisory matches the night being scored, not the daytime moment.
   final moonIlluminationPct =
-      (_moonIlluminatedFraction(at) * 100.0).roundToDouble();
+      (_moonIlluminatedFraction(anchor) * 100.0).roundToDouble();
 
   // NEXTGEN §1/§3.1 advisory inputs — mirrors the server's Rank preamble.
   // Advice degrades gracefully: empty filter set → no advice; unset
@@ -187,7 +219,10 @@ List<TonightSkyObject> computeTonightSkyLocal({
       optics.focalLengthMm > 0 &&
       optics.pixelSizeUm > 0 &&
       optics.reducerFactor > 0;
-  final skyMag = skyMagFromBortle(site.bortleClass);
+  final skyMag = effectiveSkyMag(
+    bortleClass: site.bortleClass,
+    sqmMagPerArcsec2: site.sqmMagPerArcsec2,
+  );
   // Per-approach memo: (rounded floor for display, unrounded recommendation,
   // the assembled input for the star-count tag).
   final adviceMemo =
@@ -308,6 +343,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
     final mid = (run.$1 + run.$2) ~/ 2;
     final moonSeparationDeg = _angularSeparationDeg(
         o.raDeg, o.decDeg, moonRaDeg[mid], moonDecDeg[mid]);
+    final moonAltMidDeg = _altitudeFromHourAngleDeg(
+        moonDecDeg[mid], lat, _mod360(sampleLstDeg[mid] - moonRaDeg[mid]));
 
     // NEXTGEN §1 filter advice + §3.1 star tag — same zero-point reason
     // pattern as the server: visible in the "Why?" breakdown, never a score
@@ -375,6 +412,31 @@ List<TonightSkyObject> computeTonightSkyLocal({
     }
     final finalScore = adjusted.clamp(0.0, 100.0);
 
+    // §Integration Budget P3 - the tiered "how many hours from YOUR sky"
+    // line for the advised approach (design/INTEGRATION_BUDGET.md; validated
+    // against the Texas NGC 6188 campaign). Needs the advised approach's
+    // flux input AND a catalog surface brightness; degrades to null.
+    String? integrationBudgetLine;
+    double? budgetFullHours;
+    if (advised != null && o.surfaceBrightness != null) {
+      final budgetInput = adviceFor(advised.$1).$3;
+      if (budgetInput != null) {
+        final budget = computeIntegrationBudget(
+          input: budgetInput,
+          surfaceBrightnessMagArcsec2: o.surfaceBrightness!,
+          peakAltitudeDeg: peakAltDeg,
+          moonIlluminatedFraction: moonIlluminationPct / 100.0,
+          moonAltitudeDeg: moonAltMidDeg,
+          moonSeparationDeg: moonSeparationDeg,
+        );
+        budgetFullHours = budget.full.practical ? budget.full.hours : null;
+        integrationBudgetLine = budget.moonBrighteningMag >= 0.3
+            ? '${budget.display}  (tonight\'s moon costs '
+                '${budget.moonBrighteningMag.toStringAsFixed(1)} mag)'
+            : budget.display;
+      }
+    }
+
     final allReasons = [
       ...reasons,
       ...adjustReasons,
@@ -417,6 +479,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
         score: double.parse(finalScore.toStringAsFixed(1)),
         // The multiplicative adjustments scale the whole score, so the
         // hours-free remainder scales by the same finalScore/score ratio.
+        integrationBudget: integrationBudgetLine,
+        budgetFullHours: budgetFullHours,
         hoursFreeScore: score > 0
             ? double.parse(
                 (finalScore * (score - hoursScore) / score).toStringAsFixed(1))

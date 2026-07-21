@@ -177,17 +177,24 @@ class SequencerToolbar extends ConsumerWidget {
                       : null,
                 ),
                 const VerticalDivider(width: 16, indent: 8, endIndent: 8),
-                _ToolButton(
+                // ── Lifecycle cluster (run-redesign S2): the run verbs get
+                // semantic colour + weight so the tab's most important action
+                // reads as one — filled green Run/Resume, amber Pause, and a
+                // destructive red-outline Abort behind a confirm. Labels stay
+                // identical so test finders and muscle memory survive.
+                _LifecycleButton(
                   icon: Icons.play_arrow,
                   label: isPaused ? 'Resume' : 'Run',
+                  kind: _LifecycleKind.primary,
                   onPressed: canRunOrResume
                       ? () => _lifecycle(context, ref,
                           (api, id) => isPaused ? api.resume(id) : api.start(id))
                       : null,
                 ),
-                _ToolButton(
+                _LifecycleButton(
                   icon: Icons.pause,
                   label: 'Pause',
+                  kind: _LifecycleKind.caution,
                   onPressed: canPause
                       ? () => _lifecycle(context, ref, (api, id) => api.pause(id))
                       : null,
@@ -202,11 +209,12 @@ class SequencerToolbar extends ConsumerWidget {
                           context, ref, (api, id) => api.skipCurrent(id))
                       : null,
                 ),
-                _ToolButton(
+                _LifecycleButton(
                   icon: Icons.stop,
                   label: 'Abort',
+                  kind: _LifecycleKind.destructive,
                   onPressed: canAbort
-                      ? () => _lifecycle(context, ref, (api, id) => api.abort(id))
+                      ? () => _confirmAbort(context, ref)
                       : null,
                 ),
               ]),
@@ -487,5 +495,100 @@ class _ToolButton extends StatelessWidget {
         disabledForegroundColor: AraColors.textDisabled,
       ),
     );
+  }
+}
+
+/// Aborting mid-run is destructive (the night's remaining plan dies with it)
+/// — confirm before dispatching, per the S2 design.
+Future<void> _confirmAbort(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: AraColors.bgPanel,
+      title: const Text('Abort this run?'),
+      content: const Text(
+          'The sequence stops where it is — completed frames are kept, the '
+          'rest of tonight\'s plan is cancelled.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Keep running'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AraColors.accentError),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Abort run'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  await _lifecycle(context, ref, (api, id) => api.abort(id));
+}
+
+enum _LifecycleKind { primary, caution, destructive }
+
+/// Run-verb button: primary = filled green (the tab's hero action), caution =
+/// amber tint, destructive = red outline. Compact to sit inline with the
+/// utility _ToolButtons.
+class _LifecycleButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final _LifecycleKind kind;
+  final VoidCallback? onPressed;
+  const _LifecycleButton({
+    required this.icon,
+    required this.label,
+    required this.kind,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: switch (kind) {
+        _LifecycleKind.primary => FilledButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 16),
+            label: Text(label),
+            style: FilledButton.styleFrom(
+              backgroundColor: AraColors.accentConnected,
+              foregroundColor: Colors.black,
+              disabledBackgroundColor: AraColors.bgInput,
+              disabledForegroundColor: AraColors.textDisabled,
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: const StadiumBorder(),
+            ),
+          ),
+        _LifecycleKind.caution => TextButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 16),
+            label: Text(label),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.accentBusy,
+              disabledForegroundColor: AraColors.textDisabled,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        _LifecycleKind.destructive => OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 16),
+            label: Text(label),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AraColors.accentError,
+              disabledForegroundColor: AraColors.textDisabled,
+              side: BorderSide(
+                  color: onPressed == null
+                      ? AraColors.border
+                      : AraColors.accentError.withValues(alpha: 0.6)),
+              visualDensity: VisualDensity.compact,
+              shape: const StadiumBorder(),
+            ),
+          ),
+      },
+    );
+    return child;
   }
 }

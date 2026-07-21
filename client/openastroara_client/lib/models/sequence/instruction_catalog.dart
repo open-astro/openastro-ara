@@ -446,6 +446,10 @@ const String ditherType =
     'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer';
 const String centerAndRotateType =
     'OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate, OpenAstroAra.Sequencer';
+const String startGuidingType =
+    'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
+const String waitForUserType =
+    'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForUser, OpenAstroAra.Sequencer';
 
 /// The daemon `FilterInfo` `$type` — the value shape of `SwitchFilter.Filter`.
 /// Build instances with [buildFilterInfo] so the `{_name, _position}` wire
@@ -799,8 +803,7 @@ const List<InstructionDef> instructionCatalog = [
   ),
   // ── Guider ─────────────────────────────────────────────────────────────────
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer',
+    type: startGuidingType,
     label: 'Start Guiding',
     category: InstructionCategory.guider,
     icon: Icons.play_circle_outline,
@@ -917,6 +920,23 @@ const List<InstructionDef> instructionCatalog = [
         'Offset (min)',
         InstructionFieldType.integer,
         defaultValue: 0,
+      ),
+    ],
+  ),
+  // §58.12-b — pause-for-a-human step: the daemon parks the run in the
+  // awaiting-user state until Resume. Emitted by the plan chooser for manual
+  // (screw-in) filter swaps on rigs without a filter wheel.
+  InstructionDef(
+    type: waitForUserType,
+    label: 'Wait for User',
+    category: InstructionCategory.utility,
+    icon: Icons.front_hand_outlined,
+    fields: [
+      InstructionField(
+        'Text',
+        'Message',
+        InstructionFieldType.text,
+        defaultValue: '',
       ),
     ],
   ),

@@ -71,6 +71,49 @@ void main() {
       expect(filterNameForExposure(body, [2]), 'OIII');
     });
 
+    test(
+        'a switch that is a sibling of the exposure\'s CONTAINER counts '
+        '(the smart-target plan shape), and _name is read', () {
+      final body = {
+        r'$type': 'X.Seq',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {
+              r'$type': _switchFilter,
+              'Filter': {'_name': 'Ha'},
+            },
+            {
+              r'$type': 'X.Seq',
+              'Name': 'Ha Imaging',
+              'Items': {
+                r'$type': itemsWrapperType,
+                r'$values': [
+                  {r'$type': takeExposureType, 'ExposureTime': 110.0},
+                ],
+              },
+            },
+            {
+              r'$type': _switchFilter,
+              'Filter': {'_name': 'OIII'},
+            },
+            {
+              r'$type': 'X.Seq',
+              'Name': 'OIII Imaging',
+              'Items': {
+                r'$type': itemsWrapperType,
+                r'$values': [
+                  {r'$type': takeExposureType, 'ExposureTime': 90.0},
+                ],
+              },
+            },
+          ],
+        },
+      };
+      expect(filterNameForExposure(body, [1, 0]), 'Ha');
+      expect(filterNameForExposure(body, [3, 0]), 'OIII');
+    });
+
     test('no switch before it (or a nameless filter) → null', () {
       final body = {
         r'$type': 'X.Seq',
@@ -238,8 +281,8 @@ void main() {
     testWidgets('renders the figure, filter and attribution from local math',
         (tester) async {
       await pumpAdvisor(tester, filterName: 'Ha 7nm');
-      expect(find.textContaining('Optimal Sub:'), findsOneWidget);
-      expect(find.textContaining('usable window'), findsOneWidget);
+      expect(find.textContaining('Suggested exposure:'), findsOneWidget);
+      expect(find.textContaining('read noise'), findsWidgets);
       expect(find.textContaining('For filter "Ha 7nm"'), findsOneWidget);
       expect(find.textContaining('Dr. Robin Glover'), findsOneWidget,
           reason: 'the attribution is a condition of the permission');
@@ -281,7 +324,7 @@ void main() {
       await pumpAdvisor(tester,
           electronics: const CameraElectronics(
               readNoiseE: 100, fullWellE: 500, quantumEfficiencyPeak: 0.8));
-      expect(find.textContaining('Saturation-limited'), findsOneWidget);
+      expect(find.textContaining('longer subs just saturate'), findsOneWidget);
       expect(find.text('Apply'), findsOneWidget); // still applicable
     });
 
@@ -289,7 +332,7 @@ void main() {
         (tester) async {
       await pumpAdvisor(tester, electronics: const CameraElectronics());
       expect(find.textContaining('generic defaults for'), findsOneWidget);
-      expect(find.textContaining('read noise'), findsOneWidget);
+      expect(find.textContaining('read noise'), findsWidgets);
     });
 
     testWidgets('a target position renders the local star line',

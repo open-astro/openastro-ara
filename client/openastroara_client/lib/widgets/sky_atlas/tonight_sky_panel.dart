@@ -1,13 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../state/app_shell_state.dart' show selectedTabIndexProvider;
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
+import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../state/settings/settings_nav.dart' show kRunTabIndex;
+import '../../theme/ara_metrics.dart';
+import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
@@ -31,6 +38,38 @@ import 'session_plan_dialog.dart';
 /// instant-parameterised so it unit-tests without a clock seam. Boundary
 /// instants count as open (isBefore/isAfter are strict) — an exposure started
 /// in the window's last minute is still in the window.
+/// S8 — the commit-moment confirmation: (target name, appended?) shown as a
+/// card at the panel's foot for ~6 s after a successful add (the panel no
+/// longer yanks the user to the Run tab — planning several targets in a row
+/// is the whole point of the list).
+class PlanConfirmationNotifier extends Notifier<(String, bool)?> {
+  Timer? _dismissTimer;
+
+  @override
+  (String, bool)? build() {
+    ref.onDispose(() => _dismissTimer?.cancel());
+    return null;
+  }
+
+  void show(String targetName, {required bool appended}) {
+    _dismissTimer?.cancel();
+    state = (targetName, appended);
+    _dismissTimer = Timer(const Duration(seconds: 6), () {
+      if (ref.mounted) state = null;
+    });
+  }
+
+  void dismiss() {
+    _dismissTimer?.cancel();
+    state = null;
+  }
+}
+
+final planConfirmationProvider =
+    NotifierProvider<PlanConfirmationNotifier, (String, bool)?>(
+      PlanConfirmationNotifier.new,
+    );
+
 enum TonightWindowState { none, upcoming, open, passed }
 
 TonightWindowState windowStateFor(TonightSkyObject o, DateTime nowUtc) {
@@ -48,7 +87,9 @@ class TonightSkyPanel extends ConsumerWidget {
   // Wider than the old 300 px: the equipment-aware row carries a score badge, a
   // framing chip and a timing line, and the design explicitly allows a bigger
   // panel ("It's ok if the screen is bigger").
-  static const double width = 340;
+  // S2 (planning redesign): 360 gives the cards' chips, window strips and
+  // budget rings room to breathe; the sky keeps the rest.
+  static const double width = 360;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,7 +102,6 @@ class TonightSkyPanel extends ConsumerWidget {
         .watch(savedServersProvider)
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
     final theme = Theme.of(context);
-
     // Material (not a bare Container colour) so the rows' ink splashes have a
     // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
@@ -75,24 +115,7 @@ class TonightSkyPanel extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      "Tonight's Sky",
-                      style: theme.textTheme.titleSmall,
-                    ),
-                  ),
-                  IconButton(
-                    // §36.8 "What-if run" — the session planner: "I can image
-                    // 10pm–1am; what should I shoot to finish an image?"
-                    // (Replaces the what-if optics dialog — trying another rig
-                    // is what launchpad profiles are for.)
-                    tooltip: 'Plan tonight\'s session',
-                    icon: const Icon(Icons.edit_calendar, size: 18),
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (_) => const SessionPlanDialog(),
-                    ),
-                  ),
+                  Expanded(child: Text("Tonight's Sky", style: AraText.title)),
                   IconButton(
                     tooltip: 'Refresh',
                     icon: const Icon(Icons.refresh, size: 18),
@@ -103,7 +126,10 @@ class TonightSkyPanel extends ConsumerWidget {
             ),
             Expanded(
               child: async.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                // S2 — skeleton rows instead of a bare spinner: the panel's
+                // shape appears instantly, the data fades into it (no looping
+                // animation, so tests settle and reduced-motion is moot).
+                loading: () => const _SkeletonList(),
                 error: (e, _) => _Message(
                   message: 'Could not load Tonight\'s Sky.',
                   onRetry: () => ref.invalidate(tonightSkyProvider),
@@ -138,9 +164,91 @@ class TonightSkyPanel extends ConsumerWidget {
                     itemBuilder: (_, i) => _ObjectRow(
                       key: ValueKey(objects[i].id),
                       object: objects[i],
+                      index: i,
                     ),
                   );
                 },
+              ),
+            ),
+            // S8 — the commit-moment card: slides in on a successful add,
+            // offers the jump the flow no longer forces.
+            if (ref.watch(planConfirmationProvider) case (
+              final String name,
+              final bool appended,
+            ))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AraSpace.s12,
+                  AraSpace.s8,
+                  AraSpace.s12,
+                  0,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AraSpace.s12,
+                    vertical: AraSpace.s8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AraColors.accentConnected.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AraColors.accentConnected.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle_outline,
+                        size: 16,
+                        color: AraColors.accentConnected,
+                      ),
+                      const SizedBox(width: AraSpace.s8),
+                      Expanded(
+                        child: Text(
+                          appended
+                              ? '"$name" joined tonight\'s run.'
+                              : 'Run created for "$name".',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () {
+                          ref.read(planConfirmationProvider.notifier).dismiss();
+                          ref
+                              .read(selectedTabIndexProvider.notifier)
+                              .select(kRunTabIndex);
+                        },
+                        child: const Text('View in Run'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // S9 — the session planner gets a real door: a labelled
+            // full-width button instead of a mystery calendar icon.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AraSpace.s12,
+                AraSpace.s8,
+                AraSpace.s12,
+                AraSpace.s12,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.edit_calendar, size: 16),
+                  label: const Text('Plan my night'),
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => const SessionPlanDialog(),
+                  ),
+                ),
               ),
             ),
           ],
@@ -152,7 +260,14 @@ class TonightSkyPanel extends ConsumerWidget {
 
 class _ObjectRow extends ConsumerStatefulWidget {
   final TonightSkyObject object;
-  const _ObjectRow({super.key, required this.object});
+
+  /// List position — drives the S10 entrance stagger only.
+  final int index;
+  const _ObjectRow({
+    super.key,
+    required this.object,
+    this.index = 0,
+  });
 
   @override
   ConsumerState<_ObjectRow> createState() => _ObjectRowState();
@@ -163,6 +278,28 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   bool _showReasons = false;
 
   TonightSkyObject get _object => widget.object;
+
+  /// The library's banked integration hours for this target, summed across
+  /// stats rows whose target name matches the object's id OR display name
+  /// (normalized: case/punctuation-insensitive, so "NGC 7000", "ngc7000" and
+  /// "North America Nebula" all find their hours). Null = nothing captured
+  /// (or no server) — the line simply doesn't render.
+  double? _bankedHours() {
+    final targets = ref.watch(statsTargetsProvider).value;
+    if (targets == null || targets.isEmpty) return null;
+    String norm(String s) =>
+        s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final keys = {norm(_object.id), norm(_object.name)}..remove('');
+    var sum = 0.0;
+    var found = false;
+    for (final t in targets) {
+      if (keys.contains(norm(t.targetName))) {
+        sum += t.integrationHours;
+        found = true;
+      }
+    }
+    return found && sum > 0 ? sum : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,182 +326,284 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final selected = ref.watch(
       selectedTonightObjectProvider.select((id) => id == _object.id),
     );
+    final bankedHours = _bankedHours();
 
-    return InkWell(
-      onTap: _frameOnAtlas,
-      child: Container(
-        // The highlight marks WHICH row drove the atlas (the framing box may sit
-        // in a starfield with no obvious landmark) — same selected-row treatment
-        // as the command palette / settings nav.
-        color: selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
-        padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // No badge for a scoreless object (a pre-§36.8 server) — better a
-                // missing badge than a misleading "0".
-                if (_object.score != null) ...[
-                  _ScoreBadge(score: _object.score!),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_object.name, style: theme.textTheme.bodyMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '${_object.altitudeDeg.toStringAsFixed(0)}°',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-            ),
-            if (framingLabel != null ||
-                timing != null ||
-                _object.filterAdvice != null ||
-                _object.moonUpFraction != null) ...[
-              // 8 (not 6): the chips' rounded border sat flush against the
-              // subtitle above and its top edge clipped by a hair.
-              const SizedBox(height: 8),
-              // Chips wrap; the timing line gets its own FULL-WIDTH row below —
-              // sharing one Row squeezed it into a sliver next to the chips and
-              // it wrapped a character per line (live-walkthrough screenshot).
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: reduceMotion
+          ? Duration.zero
+          : Duration(milliseconds: 220 + 30 * widget.index.clamp(0, 8)),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - t)),
+          child: child,
+        ),
+      ),
+      child: InkWell(
+        onTap: _frameOnAtlas,
+        child: Container(
+          // The highlight marks WHICH row drove the atlas (the framing box may sit
+          // in a starfield with no obvious landmark) — same selected-row treatment
+          // as the command palette / settings nav.
+          decoration: BoxDecoration(
+            color: selected
+                ? AraColors.selectionBg.withValues(alpha: 0.25)
+                : null,
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (framingLabel != null)
-                    _FramingChip(framing: _object.framing),
-                  if (_object.filterAdvice != null)
-                    _FilterAdviceChip(advice: _object.filterAdvice!),
-                  if (_object.moonUpFraction != null)
-                    _MoonChip(object: _object),
+                  // No badge for a scoreless object (a pre-§36.8 server) — better a
+                  // missing badge than a misleading "0".
+                  if (_object.score != null) ...[
+                    _ScoreBadge(score: _object.score!),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_object.name, style: theme.textTheme.bodyMedium),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${_object.altitudeDeg.toStringAsFixed(0)}°',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ],
               ),
-              if (timing != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  windowState == TonightWindowState.open
-                      ? 'now · $timing'
-                      : timing,
-                  style: theme.textTheme.bodySmall?.copyWith(
+              if (framingLabel != null ||
+                  timing != null ||
+                  _object.filterAdvice != null ||
+                  _object.moonUpFraction != null) ...[
+                // 8 (not 6): the chips' rounded border sat flush against the
+                // subtitle above and its top edge clipped by a hair.
+                const SizedBox(height: 8),
+                // Chips wrap; the timing line gets its own FULL-WIDTH row below —
+                // sharing one Row squeezed it into a sliver next to the chips and
+                // it wrapped a character per line (live-walkthrough screenshot).
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    if (framingLabel != null)
+                      _FramingChip(framing: _object.framing),
+                    if (_object.filterAdvice != null)
+                      _FilterAdviceChip(advice: _object.filterAdvice!),
+                    if (_object.moonUpFraction != null)
+                      _MoonChip(object: _object),
+                  ],
+                ),
+                // S4 - the dark window as a timeline strip (start/transit/end
+                // labels + a "now" dot); prose only when the wire lacks the
+                // instants the strip needs.
+                if (_object.windowStartUtc != null &&
+                    _object.windowEndUtc != null) ...[
+                  const SizedBox(height: AraSpace.s8),
+                  DarkWindowStrip(
+                    windowStartUtc: _object.windowStartUtc!,
+                    windowEndUtc: _object.windowEndUtc!,
+                    transitUtc: _object.transitUtc,
                     color: switch (windowState) {
                       TonightWindowState.open => AraColors.accentConnected,
                       TonightWindowState.passed => AraColors.textDisabled,
-                      _ => AraColors.textSecondary,
+                      _ => AraColors.accentInfo,
                     },
-                    fontWeight: windowState == TonightWindowState.open
-                        ? FontWeight.w600
-                        : null,
                   ),
-                ),
-              ],
-            ],
-            Row(
-              children: [
-                _busy
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : IconButton(
-                        iconSize: 18,
-                        visualDensity: VisualDensity.compact,
-                        tooltip: 'Add to a new sequence',
-                        icon: const Icon(Icons.playlist_add),
-                        onPressed: canAdd ? _addToSequence : null,
+                  if (_object.integrationHours > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      windowState == TonightWindowState.open
+                          ? 'open now · '
+                                '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                                '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}'
+                          : '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                                '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: windowState == TonightWindowState.open
+                            ? AraColors.accentConnected
+                            : AraColors.textSecondary,
                       ),
-                IconButton(
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Centre the planetarium on this object',
-                  icon: const Icon(Icons.my_location),
-                  onPressed: _recentre,
-                ),
-                const Spacer(),
-                if (hasReasons)
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: AraColors.textSecondary,
                     ),
-                    onPressed: () =>
-                        setState(() => _showReasons = !_showReasons),
-                    child: Text(_showReasons ? 'Hide' : 'Why?'),
+                  ],
+                ] else if (timing != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    timing,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AraColors.textSecondary,
+                    ),
                   ),
-              ],
-            ),
-            if (hasReasons && _showReasons)
-              Padding(
-                // Top 8 / bottom 10 (was 0/6): the first bullet ("fills the
-                // frame") sat flush against the section's top edge and the
-                // SharpCap attribution's descenders clipped at the card edge
-                // (live-walkthrough screenshots, rounds 2-3).
-                padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final r in reasons)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                ],
+                // S6 - the budget ring + one-line banked-vs-needed, visible
+                // WITHOUT expanding Why? (the crown jewel doesn't hide).
+                if (_object.budgetFullHours case final needed?) ...[
+                  const SizedBox(height: AraSpace.s8),
+                  Row(
+                    children: [
+                      BudgetRing(banked: bankedHours, needed: needed),
+                      const SizedBox(width: AraSpace.s8),
+                      Expanded(
                         child: Text(
-                          '• $r',
+                          bankedHours != null
+                              ? '${bankedHours.toStringAsFixed(1)} of '
+                                    '~${needed.toStringAsFixed(0)} h captured'
+                              : 'needs ~${needed.toStringAsFixed(0)} h for the '
+                                    'full structure',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: AraColors.textSecondary,
                           ),
-                        ),
-                      ),
-                    // NEXTGEN §1 — the filter-advice explanation + the per-filter
-                    // Optimal Sub, tucked into the Why? breakdown so the row stays
-                    // one-glance. The attribution is a design-doc requirement of
-                    // the permission to use the criterion.
-                    if (_object.adviceReason != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 2),
-                        child: Text(
-                          _object.adviceReason!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    if (_object.optimalSubS != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      Text(
-                        'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textDisabled,
-                          fontSize: 10,
                         ),
                       ),
                     ],
-                  ],
-                ),
+                  ),
+                ],
+              ],
+              Row(
+                children: [
+                  _busy
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          iconSize: 18,
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Add to a new sequence',
+                          icon: const Icon(Icons.playlist_add),
+                          onPressed: canAdd ? _addToSequence : null,
+                        ),
+                  IconButton(
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Centre the planetarium on this object',
+                    icon: const Icon(Icons.my_location),
+                    onPressed: _recentre,
+                  ),
+                  const Spacer(),
+                  if (hasReasons)
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: AraColors.textSecondary,
+                      ),
+                      onPressed: () =>
+                          setState(() => _showReasons = !_showReasons),
+                      child: Text(_showReasons ? 'Hide' : 'Why?'),
+                    ),
+                ],
               ),
-          ],
+              AnimatedSize(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: !(hasReasons && _showReasons)
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        // Top 8 / bottom 10 (was 0/6): the first bullet ("fills the
+                        // frame") sat flush against the section's top edge and the
+                        // SharpCap attribution's descenders clipped at the card edge
+                        // (live-walkthrough screenshots, rounds 2-3).
+                        padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final r in reasons)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  '• $r',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            // NEXTGEN §1 — the filter-advice explanation + the per-filter
+                            // Optimal Sub, tucked into the Why? breakdown so the row stays
+                            // one-glance. The attribution is a design-doc requirement of
+                            // the permission to use the criterion.
+                            if (_object.adviceReason != null)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 4,
+                                  bottom: 2,
+                                ),
+                                child: Text(
+                                  _object.adviceReason!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            // §Integration Budget P3 — how many hours this target
+                            // needs from THIS sky, in honest depth tiers.
+                            if (_object.integrationBudget != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  'Hours needed: ${_object.integrationBudget!}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.accentInfo,
+                                  ),
+                                ),
+                              ),
+                            // §Integration Budget P4 — hours already banked on this
+                            // target (the library's per-target integration total).
+                            if (bankedHours case final banked?)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  'You have ${banked.toStringAsFixed(1)} h captured '
+                                  'on this target so far.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.accentConnected,
+                                  ),
+                                ),
+                              ),
+                            if (_object.optimalSubS != null) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                              Text(
+                                'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AraColors.textDisabled,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -419,6 +658,8 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
         decDeg: _object.decDeg,
         targetName: name,
         remainingDarkHours: _object.remainingHours,
+        // S8 — stay here: the confirmation card offers "View in Run".
+        jumpToRun: false,
       );
     } catch (e, st) {
       debugPrint('[planning] create-run failed: $e\n$st');
@@ -432,7 +673,15 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     // Gate on mounted before touching ref: the row can scroll out of the
     // ListView (disposing it) during the create await, leaving ref defunct.
     if (!mounted) return;
-    showImagingRunFeedback(messenger, targetName: name, result: result);
+    // S8 — a clean success gets the panel's confirmation card; every other
+    // outcome (no server / draft / cancelled) keeps the shared SnackBar copy.
+    if (result != null && !result.cancelled && !result.draft) {
+      ref
+          .read(planConfirmationProvider.notifier)
+          .show(name, appended: result.appended);
+    } else {
+      showImagingRunFeedback(messenger, targetName: name, result: result);
+    }
   }
 
   // Friendly names for both the starter catalog's plain types and the OpenNGC
@@ -494,6 +743,43 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   static String _formatSub(double seconds) => seconds < 120
       ? '${seconds.round()} s'
       : '${(seconds / 60).toStringAsFixed(seconds >= 600 ? 0 : 1)} min';
+}
+
+/// S7 — the one chip shell all three advisory chips share: leading icon +
+/// label in the chip's hue, 6 px radius (the Run redesign's language).
+class _AdviceChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _AdviceChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.13),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: color.withValues(alpha: 0.45)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// 0–100 worth-score badge, colour-graded so the eye can triage at a glance:
@@ -559,21 +845,7 @@ class _FramingChip extends StatelessWidget {
     // Self-guard anyway — release-safe (an assert is stripped) — so a future call site
     // that bypasses the gate renders nothing rather than a styled-but-blank chip.
     if (label == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label, // non-null: the early return above bails on a null label
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+    return _AdviceChip(icon: Icons.crop_free, label: label, color: color);
   }
 }
 
@@ -591,20 +863,10 @@ class _FilterAdviceChip extends StatelessWidget {
     final color = advice == TonightFilterAdvice.broadband
         ? AraColors.textSecondary
         : AraColors.accentInfo;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        advice.label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+    return _AdviceChip(
+      icon: Icons.filter_vintage_outlined,
+      label: advice.label,
+      color: color,
     );
   }
 }
@@ -633,28 +895,68 @@ class _MoonChip extends StatelessWidget {
       // Either measurement can be absent independently (defensive parse) —
       // show what we have rather than dropping the chip.
       label =
-          '☾'
-          '${sep == null ? '' : ' ${sep.toStringAsFixed(0)}°'}'
-          '${illum == null ? '' : ' · ${illum.toStringAsFixed(0)}%'}';
+          '${sep == null ? '' : '${sep.toStringAsFixed(0)}°'}'
+          '${illum == null ? '' : '${sep == null ? '' : ' · '}${illum.toStringAsFixed(0)}%'}';
       final harsh = (sep ?? 180) < 30 && (illum ?? 0) > 40;
       color = harsh ? AraColors.accentBusy : AraColors.textSecondary;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+    return _AdviceChip(
+      icon: Icons.dark_mode_outlined,
+      label: label.isEmpty ? 'Moon up' : label,
+      color: color,
     );
   }
+}
+
+/// S2 — three quiet placeholder rows shown while the ranking computes.
+class _SkeletonList extends StatelessWidget {
+  const _SkeletonList();
+
+  Widget _bar(double w, {double h = 10}) => Container(
+    width: w,
+    height: h,
+    decoration: BoxDecoration(
+      color: AraColors.bgInput,
+      borderRadius: BorderRadius.circular(4),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(AraSpace.s16),
+    children: [
+      for (var i = 0; i < 3; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AraSpace.s24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AraColors.bgInput,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(width: AraSpace.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _bar(140),
+                    const SizedBox(height: AraSpace.s8),
+                    _bar(200, h: 8),
+                    const SizedBox(height: AraSpace.s8),
+                    _bar(90, h: 8),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
 }
 
 class _Message extends StatelessWidget {

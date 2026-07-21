@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/slew_target_body.dart';
 
 void main() {
@@ -332,6 +333,132 @@ void main() {
       expect(defaultFrameCount(120), 60);
       expect(defaultFrameCount(120, remainingDarkHours: 0), 60);
       expect(defaultFrameCount(0, remainingDarkHours: 4), 60);
+    });
+  });
+
+  group('buildTargetBlock filterPlan (smart targets)', () {
+    const plan = [
+      FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20),
+      FilterPlanStep(filterName: 'OIII', exposureSeconds: 240, frameCount: 24),
+    ];
+
+    Map<String, dynamic> block() => buildTargetBlock(
+          raDeg: 10,
+          decDeg: 20,
+          targetName: 'Veil',
+          exposureSeconds: 60,
+          frameCount: 30,
+          filterPlan: plan,
+          startGuiding: true,
+          ditherEveryNExposures: 2,
+          autofocusEveryNExposures: 30, // 30 × 60 s = every 30 min
+        );
+
+    List<String?> types(Map<String, dynamic> node) =>
+        childrenOf(node).map((c) => c[r'$type'] as String?).toList();
+
+    test('slew -> first-filter switch -> AF -> StartGuiding -> per-filter loops',
+        () {
+      final b = block();
+      final t = types(b);
+      expect(t, [
+        slewScopeToRaDecType,
+        switchFilterType, // Ha, so autofocus runs through it
+        runAutofocusType,
+        startGuidingType,
+        sequentialContainerType, // Ha Imaging
+        switchFilterType, // OIII
+        sequentialContainerType, // OIII Imaging
+      ]);
+      final kids = childrenOf(b);
+      expect((kids[1]['Filter'] as Map)['_name'], 'Ha');
+      expect(kids[4]['Name'], 'Ha Imaging');
+      expect((kids[5]['Filter'] as Map)['_name'], 'OIII');
+      expect(kids[6]['Name'], 'OIII Imaging');
+    });
+
+    test('each loop carries its own exposure, count, dither + scaled AF', () {
+      final kids = childrenOf(block());
+      final ha = kids[4];
+      final exposure = childrenOf(ha).single;
+      expect(exposure['ExposureTime'], 300.0);
+      expect(conditionsOf(ha).single['Iterations'], 20);
+      final triggers = triggersOf(ha);
+      expect(triggers, hasLength(2));
+      final dither = triggers
+          .firstWhere((t) => t[r'$type'] == ditherAfterExposuresType);
+      expect(dither['AfterExposures'], 2);
+      final af = triggers.firstWhere(
+          (t) => t[r'$type'] == autofocusAfterExposuresType);
+      // 30 exposures at 60 s = every 30 min -> 6 exposures at 300 s.
+      expect(af['AfterExposures'], 6);
+    });
+
+    test('no guiding -> no StartGuiding and no dither trigger', () {
+      final b = buildTargetBlock(
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 60,
+        frameCount: 10,
+        filterPlan: plan,
+      );
+      expect(types(b), isNot(contains(startGuidingType)));
+      final loops = childrenOf(b)
+          .where((c) => c[r'$type'] == sequentialContainerType);
+      for (final loop in loops) {
+        expect(triggersOf(loop), isEmpty);
+      }
+    });
+
+    test('an invalid plan step throws', () {
+      expect(
+        () => buildTargetBlock(
+          raDeg: 1,
+          decDeg: 2,
+          exposureSeconds: 60,
+          frameCount: 10,
+          filterPlan: const [
+            FilterPlanStep(filterName: ' ', exposureSeconds: 60, frameCount: 5),
+          ],
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('empty plan falls back to the single default loop', () {
+      final b = buildTargetBlock(
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 60,
+        frameCount: 10,
+        filterPlan: const [],
+      );
+      final loops = childrenOf(b)
+          .where((c) => c[r'$type'] == sequentialContainerType)
+          .toList();
+      expect(loops.single['Name'], 'Imaging');
+      expect(conditionsOf(loops.single).single['Iterations'], 10);
+    });
+
+    test('manualFilterSwap emits Wait-for-User pauses instead of SwitchFilter',
+        () {
+      final b = buildTargetBlock(
+        raDeg: 10,
+        decDeg: 20,
+        exposureSeconds: 60,
+        frameCount: 10,
+        filterPlan: plan,
+        manualFilterSwap: true,
+      );
+      final kids = childrenOf(b);
+      final types = kids.map((c) => c[r'$type'] as String?).toList();
+      expect(types, isNot(contains(switchFilterType)));
+      final waits =
+          kids.where((c) => c[r'$type'] == waitForUserType).toList();
+      expect(waits, hasLength(2));
+      expect(waits[0]['Text'], contains('Ha'));
+      expect(waits[1]['Text'], contains('OIII'));
+      expect(waits[0]['Text'], contains('Resume'));
     });
   });
 }

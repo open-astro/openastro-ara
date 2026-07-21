@@ -15,8 +15,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
+import '../../models/sequence/instruction_style.dart';
 import '../../models/sequence/node_display.dart';
+import '../../state/sequencer/run_spotlight_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
+import 'run_state_badge.dart';
 import '../../theme/ara_colors.dart';
 
 /// One flattened tree row: the node, its address, and its indent depth.
@@ -168,11 +172,39 @@ void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> ou
 }
 
 /// Indented, selectable view of the editor's working sequence body.
-class SequenceEditorTree extends ConsumerWidget {
+class SequenceEditorTree extends ConsumerStatefulWidget {
   const SequenceEditorTree({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SequenceEditorTree> createState() => _SequenceEditorTreeState();
+}
+
+class _SequenceEditorTreeState extends ConsumerState<SequenceEditorTree> {
+  final _scroll = ScrollController();
+  // S9 — hover-revealed row actions (desktop): tracked by flattened row key so
+  // one row at most shows its affordances; selection still shows them too (the
+  // touch fallback).
+  String? _hoveredKey;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  // §Run-redesign S4 — keep the executing row in view. Approximate scroll (row
+  // heights vary with gap targets): proportional position by row index, only
+  // fired when the SPOTLIGHTED row changes so a user browsing the tree isn't
+  // fought for the scrollbar every WS tick.
+  void _autoScrollTo(int rowIndex, int rowCount) {
+    if (!_scroll.hasClients || rowCount <= 1) return;
+    final target = _scroll.position.maxScrollExtent * rowIndex / (rowCount - 1);
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final editor = ref.watch(sequenceEditorProvider);
     if (editor == null) {
       return const Center(
@@ -185,12 +217,43 @@ class SequenceEditorTree extends ConsumerWidget {
     _flatten(editor.body, const [], 0, rows);
     final selected = editor.selectedPath;
 
+    // §Run-redesign S4 — live spotlight: the executing node gets an accent bar
+    // + tint in the run-state colour; ordinal-verified completed leaves get a
+    // quiet check tint. Null spotlight = render exactly as before.
+    final spotlight = ref.watch(runSpotlightProvider);
+    final runState = ref.watch(sequenceRunStateProvider).value?.state;
+    final spotColor =
+        runState == null ? AraColors.accentBusy : RunStateBadge.colorFor(runState);
+    final currentKey = spotlight?.currentPath?.join('.');
+    final completedKeys = <String>{
+      for (final p in spotlight?.completedPaths ?? const <NodePath>[]) p.join('.'),
+    };
+    ref.listen(runSpotlightProvider, (prev, next) {
+      final path = next?.currentPath;
+      if (path == null) return;
+      if (prev?.currentPath?.join('.') == path.join('.')) return;
+      final idx = rows.indexWhere((r) => listEquals(r.path, path));
+      if (idx >= 0) _autoScrollTo(idx, rows.length);
+    });
+
     return ListView.builder(
+      controller: _scroll,
       itemCount: rows.length,
       itemBuilder: (context, i) {
         final row = rows[i];
         final isSelected = selected != null && listEquals(row.path, selected);
-        final content = Padding(
+        final rowKey = row.path.join('.');
+        final isCurrent = currentKey != null && rowKey == currentKey;
+        final isCompleted = completedKeys.contains(rowKey);
+        final isContainerRow = isContainer(row.node);
+        final conditionCount = isContainerRow ? conditionsOf(row.node).length : 0;
+        final triggerCount = isContainerRow ? triggersOf(row.node).length : 0;
+        final showActions =
+            (isSelected || _hoveredKey == rowKey) && row.path.isNotEmpty;
+        final content = ConstrainedBox(
+          // S9 — rows breathe: 36px minimum instead of text-height + 12.
+          constraints: const BoxConstraints(minHeight: 36),
+          child: Padding(
           padding: EdgeInsets.only(
             left: 8 + row.depth * 20.0,
             right: 8,
@@ -199,22 +262,41 @@ class SequenceEditorTree extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              Icon(nodeIcon(row.node), size: 16, color: AraColors.textSecondary),
+              Icon(isCompleted ? Icons.check_circle_outline : nodeIcon(row.node),
+                  size: 16,
+                  color: isCurrent
+                      ? spotColor
+                      : isCompleted
+                          ? AraColors.accentConnected.withValues(alpha: 0.7)
+                          // S7 — category hue per instruction kind.
+                          : nodeAccentColor(row.node)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   nodeLabel(row.node),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+                  style: TextStyle(
+                      color: AraColors.textPrimary,
+                      fontSize: 13,
+                      // Containers are structure — a touch of weight sets the
+                      // grouping without another colour.
+                      fontWeight:
+                          isContainerRow ? FontWeight.w600 : FontWeight.w400),
                 ),
               ),
+              // S9 — a container's loops/triggers surface inline as quiet
+              // chips instead of hiding in the inspector.
+              if (conditionCount > 0)
+                _MetaChip(icon: Icons.loop, count: conditionCount),
+              if (triggerCount > 0)
+                _MetaChip(icon: Icons.bolt_outlined, count: triggerCount),
               // Reorder + delete affordances on the selected row — never the
               // root, which can't move or be removed (it's the sequence
               // container itself).
-              if (isSelected && row.path.isNotEmpty)
-                ..._rowActions(ref, editor.body, row.path),
+              if (showActions) ..._rowActions(ref, editor.body, row.path),
             ],
+          ),
           ),
         );
         // Every row (root included) is a drop target — dropping a dragged node
@@ -240,11 +322,23 @@ class SequenceEditorTree extends ConsumerWidget {
             // Ink (not Container(color:)) so the InkWell splash paints ABOVE the
             // tint instead of being hidden by it.
             return Ink(
-              color: hovering
-                  ? AraColors.accentInfo.withValues(alpha: 0.22)
-                  : (isSelected
-                      ? AraColors.selectionBg.withValues(alpha: 0.25)
-                      : null),
+              // Hover > selection > live spotlight tint > container band.
+              decoration: BoxDecoration(
+                color: hovering
+                    ? AraColors.accentInfo.withValues(alpha: 0.22)
+                    : (isSelected
+                        ? AraColors.selectionBg.withValues(alpha: 0.25)
+                        : isCurrent
+                            ? spotColor.withValues(alpha: 0.10)
+                            : isContainerRow && row.path.isNotEmpty
+                                ? AraColors.bgPanelAlt.withValues(alpha: 0.6)
+                                : null),
+                // The executing row carries an accent bar on its leading edge —
+                // visible from across the room, unlike a text tint.
+                border: isCurrent
+                    ? Border(left: BorderSide(color: spotColor, width: 3))
+                    : null,
+              ),
               child: InkWell(
                 onTap: () =>
                     ref.read(sequenceEditorProvider.notifier).select(row.path),
@@ -281,7 +375,12 @@ class SequenceEditorTree extends ConsumerWidget {
                     resolveDropBefore(body, dragged, row.path),
                 indent: 8 + row.depth * 20.0,
               ),
-            rowTarget,
+            MouseRegion(
+              onEnter: (_) => setState(() => _hoveredKey = rowKey),
+              onExit: (_) => setState(
+                  () => _hoveredKey = _hoveredKey == rowKey ? null : _hoveredKey),
+              child: rowTarget,
+            ),
             for (final c in appendContainers)
               _GapTarget(
                 key: ValueKey(gapAppendKey(c)),
@@ -378,9 +477,43 @@ class _DragChip extends StatelessWidget {
             color: AraColors.bgPanelAlt,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: AraColors.selectionBg),
+            // S13 — the dragged chip floats above the tree.
+            boxShadow: const [
+              BoxShadow(
+                  color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+            ],
           ),
           child: Text(label,
               style: const TextStyle(color: AraColors.textPrimary, fontSize: 13)),
         ),
       );
+}
+
+
+/// Quiet count chip for a container's loops/triggers (S9).
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final int count;
+  const _MetaChip({required this.icon, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: AraColors.bgInput,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 11, color: AraColors.textSecondary),
+          const SizedBox(width: 3),
+          Text('$count',
+              style: const TextStyle(
+                  fontSize: 10.5, color: AraColors.textSecondary)),
+        ]),
+      ),
+    );
+  }
 }

@@ -1152,6 +1152,7 @@ class ProfileApi {
         defaultHorizonAltitudeDeg:
             (j['default_horizon_altitude_deg'] as num?)?.toDouble() ?? 20,
         bortleClass: (j['bortle_class'] as num?)?.toInt() ?? 6,
+        sqmMagPerArcsec2: (j['sqm_mag_per_arcsec2'] as num?)?.toDouble() ?? 0,
         typicalSeeingArcsec:
             (j['typical_seeing_arcsec'] as num?)?.toDouble() ?? 2.5,
         twilightDefinition: _twilightFromString(
@@ -1172,6 +1173,7 @@ class ProfileApi {
     'use_custom_horizon': v.useCustomHorizon,
     'default_horizon_altitude_deg': v.defaultHorizonAltitudeDeg,
     'bortle_class': v.bortleClass,
+    'sqm_mag_per_arcsec2': v.sqmMagPerArcsec2,
     'typical_seeing_arcsec': v.typicalSeeingArcsec,
     'twilight_definition': v.twilightDefinition.name,
     'max_sequence_runtime_min': v.maxSequenceRuntimeMin,

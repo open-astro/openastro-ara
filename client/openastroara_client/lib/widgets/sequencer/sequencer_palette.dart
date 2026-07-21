@@ -9,22 +9,64 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/instruction_catalog.dart';
+import '../../models/sequence/instruction_style.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
-class SequencerPalette extends ConsumerWidget {
+class SequencerPalette extends ConsumerStatefulWidget {
   const SequencerPalette({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SequencerPalette> createState() => _SequencerPaletteState();
+}
+
+class _SequencerPaletteState extends ConsumerState<SequencerPalette> {
+  String _filter = '';
+
+  @override
+  Widget build(BuildContext context) {
     // Only the loaded/not-loaded transition matters here, so select on that to
     // avoid rebuilding the (static) tile list on every selection/field edit.
     final loaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
+    final q = _filter.trim().toLowerCase();
+    bool matches(InstructionDef d) =>
+        q.isEmpty ||
+        d.label.toLowerCase().contains(q) ||
+        (instructionDescriptions[d.label]?.toLowerCase().contains(q) ?? false);
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return Column(
       children: [
-        for (final entry in instructionCatalogByCategory.entries) ...[
+        // S8 — find an instruction without hunting nine category sections.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+          child: TextField(
+            onChanged: (v) => setState(() => _filter = v),
+            style: const TextStyle(fontSize: 12.5),
+            decoration: InputDecoration(
+              isDense: true,
+              prefixIcon:
+                  const Icon(Icons.search, size: 16, color: AraColors.textSecondary),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 30, minHeight: 0),
+              hintText: 'Find an instruction…',
+              hintStyle: const TextStyle(
+                  color: AraColors.textDisabled, fontSize: 12.5),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              filled: true,
+              fillColor: AraColors.bgInput,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              for (final entry in instructionCatalogByCategory.entries)
+                if (entry.value.any(matches)) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: Text(
@@ -37,14 +79,19 @@ class SequencerPalette extends ConsumerWidget {
               ),
             ),
           ),
-          for (final def in entry.value)
-            _PaletteTile(
-              def: def,
-              enabled: loaded,
-              onAdd: () =>
-                  ref.read(sequenceEditorProvider.notifier).addInstruction(def),
-            ),
-        ],
+                  for (final def in entry.value)
+                    if (matches(def))
+                      _PaletteTile(
+                        def: def,
+                        enabled: loaded,
+                        onAdd: () => ref
+                            .read(sequenceEditorProvider.notifier)
+                            .addInstruction(def),
+                      ),
+                ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -72,14 +119,38 @@ class _PaletteTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              Icon(def.icon, size: 15, color: fg),
+              // S7 — category hue on the icon only (labels stay neutral):
+              // scannable by kind without turning the palette into lights.
+              Icon(def.icon,
+                  size: 15,
+                  color: enabled
+                      ? instructionCategoryColor(def.category)
+                      : AraColors.textDisabled),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  def.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: fg, fontSize: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      def.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: fg, fontSize: 12.5),
+                    ),
+                    // S8 — the one-line "what this does" turns the palette
+                    // from a jargon list into something a new user can read.
+                    if (instructionDescriptions[def.label] case final d?)
+                      Text(
+                        d,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: enabled
+                                ? AraColors.textSecondary
+                                : AraColors.textDisabled,
+                            fontSize: 10.5),
+                      ),
+                  ],
                 ),
               ),
             ],

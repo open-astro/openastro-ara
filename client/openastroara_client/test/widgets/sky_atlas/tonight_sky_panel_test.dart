@@ -11,6 +11,7 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/widgets/sky_atlas/planning_visuals.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
 
 /// Records create()/updateSequence() calls; the append path additionally reads
@@ -153,8 +154,11 @@ void main() {
     expect(json, contains('SlewScopeToRaDec'));
     expect(json, contains('TakeExposure'));
     expect(json, contains('LoopCondition'));
-    expect(find.textContaining('Created an imaging run for "Andromeda Galaxy"'),
+    // S8: success renders the panel's confirmation card, not a SnackBar.
+    expect(find.textContaining('Run created for "Andromeda Galaxy"'),
         findsOneWidget);
+    // S8: flush the confirmation card's auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 7));
   });
 
   // The append-path harness: a session for M 42 already open (selected), then
@@ -206,8 +210,10 @@ void main() {
     expect(names.indexOf('Andromeda Galaxy'), greaterThan(names.indexOf('M 42')));
     expect((childrenOf(client.updatedBody!).last[r'$type'] as String),
         contains('WarmCamera'));
-    expect(find.textContaining('Added "Andromeda Galaxy" to the open sequence'),
+    expect(find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),
         findsOneWidget);
+    // S8: flush the confirmation card's auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets('an actively-running open sequence gets a fresh run instead',
@@ -225,8 +231,11 @@ void main() {
 
     expect(client.updatedId, isNull);
     expect(client.createdName, 'Andromeda Galaxy');
-    expect(find.textContaining('Created an imaging run for "Andromeda Galaxy"'),
+    // S8: success renders the panel's confirmation card, not a SnackBar.
+    expect(find.textContaining('Run created for "Andromeda Galaxy"'),
         findsOneWidget);
+    // S8: flush the confirmation card's auto-dismiss timer.
+    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets('tapping the row sends a framing goto and highlights the row',
@@ -251,11 +260,12 @@ void main() {
     // The tapped row is remembered and painted selected, so the user can see
     // which row drove the atlas.
     expect(container.read(selectedTonightObjectProvider), 'M31');
+    // S3 made the row's paint a BoxDecoration (hero/selection share it).
     final rowBox = tester.widget<Container>(find
         .ancestor(of: find.text('Andromeda Galaxy'),
             matching: find.byType(Container))
         .first);
-    expect(rowBox.color, isNotNull);
+    expect((rowBox.decoration as BoxDecoration?)?.color, isNotNull);
   });
 
   testWidgets('framing a second row after the first still sends its goto',
@@ -328,10 +338,11 @@ void main() {
 
     expect(find.text('88'), findsOneWidget); // score badge
     expect(find.text('Fills frame'), findsOneWidget); // framing chip (good)
-    // Timing line: tz-agnostic substrings (the clock part is localised).
+    // S4: the window renders as the timeline strip + a duration caption
+    // (tz-agnostic — the clock labels are localised).
+    expect(find.byType(DarkWindowStrip), findsWidgets);
     expect(find.textContaining('6.3 h dark'), findsOneWidget);
     expect(find.textContaining('3.2 h left'), findsOneWidget);
-    expect(find.textContaining('transit'), findsOneWidget);
   });
 
   testWidgets('the "why" reasons stay collapsed until tapped', (tester) async {
@@ -401,7 +412,7 @@ void main() {
     );
     await tester.pumpWidget(_host(_RecordingClient(), objects: [moonlit]));
     await tester.pump();
-    expect(find.text('☾ 42° · 78%'), findsOneWidget);
+    expect(find.text('42° · 78%'), findsOneWidget); // S7: icon replaces the glyph char
     expect(find.text('Moonless'), findsNothing);
   });
 
@@ -532,5 +543,35 @@ void main() {
     expect(find.text('Orion Nebula'), findsOneWidget);
     expect(find.text('32'), findsOneWidget); // low score still rendered
     expect(find.text('Too big'), findsOneWidget); // framing advice shown
+  });
+
+  testWidgets('cards are uniform: no hero treatment, altitude on every row',
+      (tester) async {
+    // #861 review follow-up — the rank-#1 card must render exactly like the
+    // rest: same name style, no accent border, and the plain altitude figure
+    // (formerly swapped for the framing glyph) present on EVERY row.
+    await tester.pumpWidget(
+      _host(_RecordingClient(), objects: [_m31, _ngc]),
+    );
+    await tester.pump();
+
+    expect(find.text('55°'), findsOneWidget); // rank-#1 row's altitude
+    expect(find.text('11°'), findsOneWidget); // second row's altitude
+
+    final firstName = tester.widget<Text>(find.text('Andromeda Galaxy'));
+    final secondName = tester.widget<Text>(find.text('Orion Nebula'));
+    expect(firstName.style, secondName.style,
+        reason: 'rank-#1 must not get a bigger title than other rows');
+
+    // Neither ROW's own container carries a border (the old hero accent
+    // outline) — chips inside the row have their own borders, so check the
+    // nearest Container ancestor of each row's name, not every Container.
+    for (final name in ['Andromeda Galaxy', 'Orion Nebula']) {
+      final rowBox = tester.widget<Container>(find
+          .ancestor(of: find.text(name), matching: find.byType(Container))
+          .first);
+      expect((rowBox.decoration as BoxDecoration?)?.border, isNull,
+          reason: '"$name" row must not carry the hero accent border');
+    }
   });
 }
