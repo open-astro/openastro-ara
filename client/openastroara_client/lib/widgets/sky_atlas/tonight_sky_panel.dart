@@ -12,7 +12,6 @@ import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
-import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/settings_nav.dart' show kRunTabIndex;
 import '../../theme/ara_metrics.dart';
 import 'planning_visuals.dart';
@@ -162,12 +161,9 @@ class TonightSkyPanel extends ConsumerWidget {
                     ),
                     // Key by object id so the row's expand/collapse state follows the
                     // object, not the list slot, when the ranking reorders on refresh.
-                    // S3 - rank #1 renders as the hero card; the ranking
-                    // already decided the night, the eye should land there.
                     itemBuilder: (_, i) => _ObjectRow(
                       key: ValueKey(objects[i].id),
                       object: objects[i],
-                      hero: i == 0,
                       index: i,
                     ),
                   );
@@ -265,16 +261,11 @@ class TonightSkyPanel extends ConsumerWidget {
 class _ObjectRow extends ConsumerStatefulWidget {
   final TonightSkyObject object;
 
-  /// S3 - the rank-#1 hero treatment: bigger name, the framing glyph, an
-  /// accent border. Same behavior as every other row (one code path).
-  final bool hero;
-
   /// List position — drives the S10 entrance stagger only.
   final int index;
   const _ObjectRow({
     super.key,
     required this.object,
-    this.hero = false,
     this.index = 0,
   });
 
@@ -287,21 +278,6 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   bool _showReasons = false;
 
   TonightSkyObject get _object => widget.object;
-
-  /// The rig's single-frame FOV in arcminutes (w, h), or null when the optics
-  /// are unset - drives the S5 framing glyph. Mirrors the ranker's geometry.
-  (double, double)? _fovArcmin() {
-    final o = ref.watch(opticsSettingsProvider);
-    if (o.focalLengthMm <= 0 ||
-        o.pixelSizeUm <= 0 ||
-        o.sensorWidthPx < 1 ||
-        o.sensorHeightPx < 1 ||
-        o.reducerFactor <= 0) {
-      return null;
-    }
-    final scale = 206.265 * o.pixelSizeUm / (o.focalLengthMm * o.reducerFactor);
-    return (o.sensorWidthPx * scale / 60.0, o.sensorHeightPx * scale / 60.0);
-  }
 
   /// The library's banked integration hours for this target, summed across
   /// stats rows whose target name matches the object's id OR display name
@@ -350,7 +326,6 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final selected = ref.watch(
       selectedTonightObjectProvider.select((id) => id == _object.id),
     );
-    final heroFov = widget.hero ? _fovArcmin() : null;
     final bankedHours = _bankedHours();
 
     final reduceMotion = MediaQuery.of(context).disableAnimations;
@@ -372,34 +347,13 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
         child: Container(
           // The highlight marks WHICH row drove the atlas (the framing box may sit
           // in a starfield with no obvious landmark) — same selected-row treatment
-          // as the command palette / settings nav. The hero (rank #1) gets a
-          // card of its own: accent border, panel-alt fill, breathing room.
-          margin: widget.hero
-              ? const EdgeInsets.fromLTRB(
-                  AraSpace.s12,
-                  AraSpace.s4,
-                  AraSpace.s12,
-                  AraSpace.s8,
-                )
-              : null,
-          decoration: widget.hero
-              ? BoxDecoration(
-                  color: selected
-                      ? AraColors.selectionBg.withValues(alpha: 0.25)
-                      : AraColors.bgPanelAlt.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: AraColors.accentInfo.withValues(alpha: 0.45),
-                  ),
-                )
-              : BoxDecoration(
-                  color: selected
-                      ? AraColors.selectionBg.withValues(alpha: 0.25)
-                      : null,
-                ),
-          padding: widget.hero
-              ? const EdgeInsets.all(AraSpace.s12)
-              : const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          // as the command palette / settings nav.
+          decoration: BoxDecoration(
+            color: selected
+                ? AraColors.selectionBg.withValues(alpha: 0.25)
+                : null,
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -416,12 +370,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _object.name,
-                          style: widget.hero
-                              ? AraText.title
-                              : theme.textTheme.bodyMedium,
-                        ),
+                        Text(_object.name, style: theme.textTheme.bodyMedium),
                         const SizedBox(height: 2),
                         Text(
                           subtitle,
@@ -433,20 +382,10 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  // S5 - the hero carries the framing glyph (your sensor
-                  // rectangle with the object drawn to scale); compact rows
-                  // keep the altitude figure.
-                  if (heroFov != null)
-                    FramingGlyph(
-                      fovWArcmin: heroFov.$1,
-                      fovHArcmin: heroFov.$2,
-                      object: _object,
-                    )
-                  else
-                    Text(
-                      '${_object.altitudeDeg.toStringAsFixed(0)}°',
-                      style: theme.textTheme.bodyMedium,
-                    ),
+                  Text(
+                    '${_object.altitudeDeg.toStringAsFixed(0)}°',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ],
               ),
               if (framingLabel != null ||
