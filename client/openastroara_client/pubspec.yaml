@@ -75,6 +75,10 @@ flutter:
   uses-material-design: true
 
   assets:
+    # The Ara constellation app icon: bundled so the Linux runner can set the
+    # GTK window/taskbar icon from the asset bundle (macOS/Windows embed
+    # theirs natively in the iconset/.ico).
+    - assets/icons/
     # §35.5 bundled alarm tones (generated sine-synth loops, no third-party
     # audio licensing to carry).
     - assets/audio/
