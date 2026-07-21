@@ -61,9 +61,14 @@ jobs:
             to save it to /tmp/review.md, then run exactly
             `gh pr comment <PR NUMBER> --body-file /tmp/review.md`.
             Do not submit the review text as a chat message.
+          # Read-only exploration tools included: without them the agent burns
+          # its turns on permission denials while trying to read the checkout
+          # (24 denials on PR #861's last run) and sometimes gives up before
+          # posting. Grep/Glob/Read touch nothing; the only write surfaces
+          # remain Write (for the review body) and `gh pr comment`.
           claude_args: |
             --model sonnet
-            --allowedTools "Write,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
 
       # The action exits 0 even when the agent never manages to post its
       # comment (seen on PR #861: 20 permission denials, green check, no
@@ -88,9 +93,10 @@ jobs:
           # run — a human writing "Approved" in discussion, or a sticky
           # comment left over from a previous commit's review, must not
           # satisfy the gate.
-          # 30 min generously covers this job's own runtime — the review step
-          # above just finished, so a comment it posted is at most minutes old.
-          started="$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          # Anchor freshness to THIS run's creation: a comment from a previous
+          # commit's review round must not satisfy the gate (on #861 a
+          # 15-min-old round-2 comment green-lit a run that posted nothing).
+          started="$(gh run view "$GITHUB_RUN_ID" --repo "${{ github.repository }}" --json createdAt --jq .createdAt)"
           if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
               --paginate \
               | jq -r --arg since "$started" \
