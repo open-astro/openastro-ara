@@ -151,6 +151,35 @@ sky, which is what forced this design.)*
 This phase doubles as the demo: "the model predicted last Tuesday's Ha
 background within 12 %" is the credibility sentence for the feature.
 
+### Dry run #2 — the Texas NGC 6188 campaign (2026-07-21, real data)
+
+123 lights (LRGB 30 s + SHO 300 s) over a 9-day dark-site trip, full
+calibration set, RedCat 91 + 2600MM gain 100, target forced to ~11°
+altitude (dec −49° from lat 29.5° N). Findings, each now a design input:
+
+- **Broadband PASSES.** Measured e⁻/s/px vs model @ SQM 21.9:
+  L 0.79 (0.82) · R 0.29 (0.25) · G 0.25 (0.21) — within 5–20 %, and the
+  L:R:G ratios track the bandwidth term independently.
+- **Blue at 0.15 vs 0.29 predicted** — Rayleigh extinction at 5 airmasses
+  (~1.4 mag in B). Second real-data vote for promoting the
+  altitude/airmass term into v1's T_required (it also directly scales the
+  TARGET signal: this campaign's 6.75 h of SHO ≈ ~2 h zenith-equivalent).
+- **Narrowband: model conservative.** True background (p05) Ha 0.010 vs
+  0.016 predicted; SII 0.004; OIII 0.001 — 13× darker than the flat
+  "continuum × bandwidth" scaling. Dark-sky light is airglow-line
+  dominated and the OIII band dodges the lines. Consequence: Phase V fits
+  k PER FILTER KIND, not globally; the flat scaling stays as the
+  never-optimistic upper bound on sky noise.
+- **Background estimator must be a low percentile, not the median** — a
+  frame-filling emission nebula contaminates the median (Ha med-rate 2.7×
+  its p05-rate on this target). The daemon's frame-stats backgroundAdu
+  should be verified to use sigma-clipped/percentile background before
+  Phase V trusts it.
+- **Stability verified:** bias 501.0 ADU on every frame; 300 s darks ALSO
+  501.0 (zero measurable dark current at −10 °C — the dropped dark term
+  verified on real hardware); night-to-night narrowband scatter 6–9 %
+  across 3 nights, far inside the 30 % gate.
+
 ### Moonlight — IN v1 (decided 2026-07-19)
 
 The client already carries a Dart Meeus-style moon ephemeris
