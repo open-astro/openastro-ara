@@ -9,6 +9,7 @@ import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
 import 'session_plan_dialog.dart';
 
 /// §36/§25.5 Tonight's Sky — a ranked side list of the best targets for the
@@ -49,7 +50,9 @@ class TonightSkyPanel extends ConsumerWidget {
   // Wider than the old 300 px: the equipment-aware row carries a score badge, a
   // framing chip and a timing line, and the design explicitly allows a bigger
   // panel ("It's ok if the screen is bigger").
-  static const double width = 340;
+  // S2 (planning redesign): 360 gives the hero card, window strips and
+  // budget rings room to breathe; the sky keeps the rest.
+  static const double width = 360;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,8 +64,6 @@ class TonightSkyPanel extends ConsumerWidget {
     final hasServer = ref
         .watch(savedServersProvider)
         .maybeWhen(data: (list) => list.isNotEmpty, orElse: () => false);
-    final theme = Theme.of(context);
-
     // Material (not a bare Container colour) so the rows' ink splashes have a
     // Material ancestor to paint on — a ColoredBox between them would hide them.
     return Material(
@@ -79,7 +80,7 @@ class TonightSkyPanel extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       "Tonight's Sky",
-                      style: theme.textTheme.titleSmall,
+                      style: AraText.title,
                     ),
                   ),
                   IconButton(
@@ -104,7 +105,10 @@ class TonightSkyPanel extends ConsumerWidget {
             ),
             Expanded(
               child: async.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                // S2 — skeleton rows instead of a bare spinner: the panel's
+                // shape appears instantly, the data fades into it (no looping
+                // animation, so tests settle and reduced-motion is moot).
+                loading: () => const _SkeletonList(),
                 error: (e, _) => _Message(
                   message: 'Could not load Tonight\'s Sky.',
                   onRetry: () => ref.invalidate(tonightSkyProvider),
@@ -704,6 +708,57 @@ class _MoonChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// S2 — three quiet placeholder rows shown while the ranking computes.
+class _SkeletonList extends StatelessWidget {
+  const _SkeletonList();
+
+  Widget _bar(double w, {double h = 10}) => Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(
+          color: AraColors.bgInput,
+          borderRadius: BorderRadius.circular(4),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.all(AraSpace.s16),
+        children: [
+          for (var i = 0; i < 3; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AraSpace.s24),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AraColors.bgInput,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(width: AraSpace.s12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _bar(140),
+                        const SizedBox(height: AraSpace.s8),
+                        _bar(200, h: 8),
+                        const SizedBox(height: AraSpace.s8),
+                        _bar(90, h: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
 }
 
 class _Message extends StatelessWidget {
