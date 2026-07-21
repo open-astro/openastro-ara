@@ -284,9 +284,21 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
   }
 
   /// True while a button-like control owns focus (Space would activate it).
+  /// Material buttons attach their FocusNode inside InkWell's internal Focus
+  /// widget, so the focused context's OWN widget is never the button — walk
+  /// the ancestors to find one (review #864).
   bool get _buttonFocused {
-    final w = FocusManager.instance.primaryFocus?.context?.widget;
-    return w is ButtonStyleButton || w is IconButton;
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    var found = false;
+    ctx.visitAncestorElements((e) {
+      if (e.widget is ButtonStyleButton || e.widget is IconButton) {
+        found = true;
+        return false;
+      }
+      return true;
+    });
+    return found;
   }
 
   // An editor pane: shared bg, with a trailing divider before the next pane

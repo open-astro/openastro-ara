@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
@@ -256,4 +257,108 @@ void main() {
     await tester.pumpAndSettle();
     expect(_loadedId(container), 'seq-r'); // retry succeeded
   });
+
+  // §Run-redesign S12 — the lifecycle keys (review #864: the riskiest wiring
+  // needs coverage: state-dependent gating + the focus guard).
+  group('lifecycle keyboard shortcuts', () {
+    Future<(ProviderContainer, _RecordingClient)> pumpWithRun(
+        WidgetTester tester, SequenceRunState? state) async {
+      final client = _RecordingClient(state);
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(client),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      return (container, client);
+    }
+
+    testWidgets('meta-R starts an idle sequence', (tester) async {
+      final (_, client) = await pumpWithRun(tester, SequenceRunState.idle);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.calls, contains('start'));
+    });
+
+    testWidgets('meta-R resumes while paused', (tester) async {
+      final (_, paused) = await pumpWithRun(tester, SequenceRunState.paused);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(paused.calls, contains('resume'));
+    });
+
+    testWidgets('Space pauses while running', (tester) async {
+      final (_, running) = await pumpWithRun(tester, SequenceRunState.running);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(running.calls, contains('pause'));
+    });
+
+    testWidgets('Space is a no-op when idle (it must never START a run)',
+        (tester) async {
+      final (_, client) = await pumpWithRun(tester, SequenceRunState.idle);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.calls, isEmpty);
+    });
+
+    testWidgets('Space defers to a focused button instead of pausing',
+        (tester) async {
+      final (_, client) = await pumpWithRun(tester, SequenceRunState.running);
+      // Tab moves primary focus from the tab-level Focus into the first
+      // toolbar button; Space must then activate THAT (or nothing), never
+      // fire the pause shortcut on top of it (review #864 — the old widget-
+      // type check never matched a Material button's internal focus node).
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
+          reason: 'the shortcut must yield while a button owns focus');
+    });
+  });
+}
+
+/// [_FakeClient] with a pinned run state and recorded lifecycle calls, for the
+/// keyboard-shortcut tests.
+class _RecordingClient extends _FakeClient {
+  _RecordingClient(this._state);
+  final SequenceRunState? _state;
+  final List<String> calls = [];
+  @override
+  Future<SequenceRunStateInfo?> getRunState(String id) async => _state == null
+      ? null
+      : SequenceRunStateInfo(
+          state: _state, instructionsCompleted: 0, instructionsTotal: 0);
+  @override
+  Future<String> start(String id) async {
+    calls.add('start');
+    return 'op';
+  }
+
+  @override
+  Future<String> pause(String id) async {
+    calls.add('pause');
+    return 'op';
+  }
+
+  @override
+  Future<String> resume(String id) async {
+    calls.add('resume');
+    return 'op';
+  }
 }
