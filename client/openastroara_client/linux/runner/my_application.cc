@@ -91,6 +91,29 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "openastroara");
   }
 
+  // Window/taskbar icon: the Ara constellation mark, loaded from the Flutter
+  // asset bundle next to the executable (no hicolor-theme install required —
+  // works from a bare `flutter run`/unpacked bundle). Best-effort: a missing
+  // file just leaves the WM default.
+  {
+    g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
+    if (exe_path != nullptr) {
+      g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
+      g_autofree gchar* icon_path = g_build_filename(
+          exe_dir, "data", "flutter_assets", "assets", "icons",
+          "app_icon.png", nullptr);
+      g_autoptr(GError) icon_error = nullptr;
+      GdkPixbuf* icon = gdk_pixbuf_new_from_file(icon_path, &icon_error);
+      if (icon != nullptr) {
+        gtk_window_set_icon(window, icon);
+        g_object_unref(icon);
+      } else {
+        g_warning("app icon not loaded from %s: %s", icon_path,
+                  icon_error != nullptr ? icon_error->message : "unknown");
+      }
+    }
+  }
+
   // Launchpad-first sizing: open compact (server connect + profile box); the
   // Dart router flips to the maximized "workstation" mode when the §25 shell
   // mounts, via the openastroara/window channel registered below.
