@@ -46,7 +46,8 @@ class DarkWindowStrip extends StatelessWidget {
     double frac(DateTime t) =>
         (t.difference(trackStart).inSeconds / span).clamp(0.0, 1.0);
 
-    final label = 'Dark window ${_hhmm(windowStartUtc)} to '
+    final label =
+        'Dark window ${_hhmm(windowStartUtc)} to '
         '${_hhmm(windowEndUtc)}'
         '${transitUtc == null ? '' : ', transit ${_hhmm(transitUtc!)}'}';
 
@@ -116,23 +117,35 @@ class _StripPainter extends CustomPainter {
       ..color = AraColors.bgInput
       ..style = PaintingStyle.fill;
     RRect bar(double x0, double x1, double h) => RRect.fromRectAndRadius(
-          Rect.fromLTRB(x0 * size.width, midY - h / 2, x1 * size.width,
-              midY + h / 2),
-          const Radius.circular(2),
-        );
+      Rect.fromLTRB(
+        x0 * size.width,
+        midY - h / 2,
+        x1 * size.width,
+        midY + h / 2,
+      ),
+      const Radius.circular(2),
+    );
     canvas.drawRRect(bar(0, 1, trackH), track);
     canvas.drawRRect(
-        bar(windowStart, windowEnd, trackH + 1), Paint()..color = color);
+      bar(windowStart, windowEnd, trackH + 1),
+      Paint()..color = color,
+    );
     if (transit case final t?) {
       canvas.drawRect(
         Rect.fromCenter(
-            center: Offset(t * size.width, midY), width: 1.5, height: 8),
+          center: Offset(t * size.width, midY),
+          width: 1.5,
+          height: 8,
+        ),
         Paint()..color = AraColors.textSecondary,
       );
     }
     if (now case final n?) {
-      canvas.drawCircle(Offset(n * size.width, midY), 3,
-          Paint()..color = AraColors.accentConnected);
+      canvas.drawCircle(
+        Offset(n * size.width, midY),
+        3,
+        Paint()..color = AraColors.accentConnected,
+      );
     }
   }
 
@@ -178,7 +191,8 @@ class FramingGlyph extends StatelessWidget {
       TonightFraming.unknown => AraColors.textSecondary,
     };
     return Semantics(
-      label: 'Framing: object ${maj.toStringAsFixed(0)} arcminutes across in '
+      label:
+          'Framing: object ${maj.toStringAsFixed(0)} arcminutes across in '
           'a ${fovWArcmin.toStringAsFixed(0)} by '
           '${fovHArcmin.toStringAsFixed(0)} arcminute field',
       child: SizedBox(
@@ -247,8 +261,7 @@ class _GlyphPainter extends CustomPainter {
       width: objMaj * pxPerArc,
       height: objMin * pxPerArc,
     );
-    canvas.drawOval(
-        ellipse, Paint()..color = color.withValues(alpha: 0.30));
+    canvas.drawOval(ellipse, Paint()..color = color.withValues(alpha: 0.30));
     canvas.drawOval(
       ellipse,
       Paint()
@@ -286,9 +299,11 @@ class BudgetRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fraction =
-        needed > 0 ? ((banked ?? 0) / needed).clamp(0.0, 1.0) : 0.0;
+    final fraction = needed > 0
+        ? ((banked ?? 0) / needed).clamp(0.0, 1.0)
+        : 0.0;
     final complete = fraction >= 1.0;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
     return Semantics(
       label:
           '${(banked ?? 0).toStringAsFixed(1)} of ${needed.toStringAsFixed(0)} '
@@ -299,18 +314,30 @@ class BudgetRing extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            CustomPaint(
-              size: Size.square(size),
-              painter: _RingPainter(
-                fraction: fraction,
-                color: complete
-                    ? AraColors.accentConnected
-                    : AraColors.accentInfo,
+            // S10 — the arc sweeps to its fraction on first build (one-shot,
+            // no loop; reduced motion renders it instantly).
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: fraction),
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, f, _) => CustomPaint(
+                size: Size.square(size),
+                painter: _RingPainter(
+                  fraction: f,
+                  color: complete
+                      ? AraColors.accentConnected
+                      : AraColors.accentInfo,
+                ),
               ),
             ),
             if (complete)
-              const Icon(Icons.check,
-                  size: 13, color: AraColors.accentConnected),
+              const Icon(
+                Icons.check,
+                size: 13,
+                color: AraColors.accentConnected,
+              ),
           ],
         ),
       ),

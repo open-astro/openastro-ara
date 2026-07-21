@@ -68,7 +68,8 @@ class PlanConfirmationNotifier extends Notifier<(String, bool)?> {
 
 final planConfirmationProvider =
     NotifierProvider<PlanConfirmationNotifier, (String, bool)?>(
-        PlanConfirmationNotifier.new);
+      PlanConfirmationNotifier.new,
+    );
 
 enum TonightWindowState { none, upcoming, open, passed }
 
@@ -115,12 +116,7 @@ class TonightSkyPanel extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      "Tonight's Sky",
-                      style: AraText.title,
-                    ),
-                  ),
+                  Expanded(child: Text("Tonight's Sky", style: AraText.title)),
                   IconButton(
                     tooltip: 'Refresh',
                     icon: const Icon(Icons.refresh, size: 18),
@@ -172,6 +168,7 @@ class TonightSkyPanel extends ConsumerWidget {
                       key: ValueKey(objects[i].id),
                       object: objects[i],
                       hero: i == 0,
+                      index: i,
                     ),
                   );
                 },
@@ -179,43 +176,54 @@ class TonightSkyPanel extends ConsumerWidget {
             ),
             // S8 — the commit-moment card: slides in on a successful add,
             // offers the jump the flow no longer forces.
-            if (ref.watch(planConfirmationProvider)
-                case (final String name, final bool appended))
+            if (ref.watch(planConfirmationProvider) case (
+              final String name,
+              final bool appended,
+            ))
               Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    AraSpace.s12, AraSpace.s8, AraSpace.s12, 0),
+                  AraSpace.s12,
+                  AraSpace.s8,
+                  AraSpace.s12,
+                  0,
+                ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AraSpace.s12, vertical: AraSpace.s8),
+                    horizontal: AraSpace.s12,
+                    vertical: AraSpace.s8,
+                  ),
                   decoration: BoxDecoration(
                     color: AraColors.accentConnected.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color:
-                            AraColors.accentConnected.withValues(alpha: 0.5)),
+                      color: AraColors.accentConnected.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline,
-                          size: 16, color: AraColors.accentConnected),
+                      const Icon(
+                        Icons.check_circle_outline,
+                        size: 16,
+                        color: AraColors.accentConnected,
+                      ),
                       const SizedBox(width: AraSpace.s8),
                       Expanded(
                         child: Text(
                           appended
                               ? '"$name" joined tonight\'s run.'
                               : 'Run created for "$name".',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: AraColors.textPrimary),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textPrimary,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       TextButton(
                         style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact),
+                          visualDensity: VisualDensity.compact,
+                        ),
                         onPressed: () {
-                          ref
-                              .read(planConfirmationProvider.notifier)
-                              .dismiss();
+                          ref.read(planConfirmationProvider.notifier).dismiss();
                           ref
                               .read(selectedTabIndexProvider.notifier)
                               .select(kRunTabIndex);
@@ -230,7 +238,11 @@ class TonightSkyPanel extends ConsumerWidget {
             // full-width button instead of a mystery calendar icon.
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AraSpace.s12, AraSpace.s8, AraSpace.s12, AraSpace.s12),
+                AraSpace.s12,
+                AraSpace.s8,
+                AraSpace.s12,
+                AraSpace.s12,
+              ),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonalIcon(
@@ -256,7 +268,15 @@ class _ObjectRow extends ConsumerStatefulWidget {
   /// S3 - the rank-#1 hero treatment: bigger name, the framing glyph, an
   /// accent border. Same behavior as every other row (one code path).
   final bool hero;
-  const _ObjectRow({super.key, required this.object, this.hero = false});
+
+  /// List position — drives the S10 entrance stagger only.
+  final int index;
+  const _ObjectRow({
+    super.key,
+    required this.object,
+    this.hero = false,
+    this.index = 0,
+  });
 
   @override
   ConsumerState<_ObjectRow> createState() => _ObjectRowState();
@@ -279,8 +299,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
         o.reducerFactor <= 0) {
       return null;
     }
-    final scale =
-        206.265 * o.pixelSizeUm / (o.focalLengthMm * o.reducerFactor);
+    final scale = 206.265 * o.pixelSizeUm / (o.focalLengthMm * o.reducerFactor);
     return (o.sensorWidthPx * scale / 60.0, o.sensorHeightPx * scale / 60.0);
   }
 
@@ -294,8 +313,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     if (targets == null || targets.isEmpty) return null;
     String norm(String s) =>
         s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    final keys = {norm(_object.id), norm(_object.name)}
-      ..remove('');
+    final keys = {norm(_object.id), norm(_object.name)}..remove('');
     var sum = 0.0;
     var found = false;
     for (final t in targets) {
@@ -335,284 +353,318 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final heroFov = widget.hero ? _fovArcmin() : null;
     final bankedHours = _bankedHours();
 
-    return InkWell(
-      onTap: _frameOnAtlas,
-      child: Container(
-        // The highlight marks WHICH row drove the atlas (the framing box may sit
-        // in a starfield with no obvious landmark) — same selected-row treatment
-        // as the command palette / settings nav. The hero (rank #1) gets a
-        // card of its own: accent border, panel-alt fill, breathing room.
-        margin: widget.hero
-            ? const EdgeInsets.fromLTRB(
-                AraSpace.s12, AraSpace.s4, AraSpace.s12, AraSpace.s8)
-            : null,
-        decoration: widget.hero
-            ? BoxDecoration(
-                color: selected
-                    ? AraColors.selectionBg.withValues(alpha: 0.25)
-                    : AraColors.bgPanelAlt.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AraColors.accentInfo.withValues(alpha: 0.45)),
-              )
-            : BoxDecoration(
-                color: selected
-                    ? AraColors.selectionBg.withValues(alpha: 0.25)
-                    : null,
-              ),
-        padding: widget.hero
-            ? const EdgeInsets.all(AraSpace.s12)
-            : const EdgeInsets.fromLTRB(12, 10, 8, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // No badge for a scoreless object (a pre-§36.8 server) — better a
-                // missing badge than a misleading "0".
-                if (_object.score != null) ...[
-                  _ScoreBadge(score: _object.score!),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_object.name,
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: reduceMotion
+          ? Duration.zero
+          : Duration(milliseconds: 220 + 30 * widget.index.clamp(0, 8)),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - t)),
+          child: child,
+        ),
+      ),
+      child: InkWell(
+        onTap: _frameOnAtlas,
+        child: Container(
+          // The highlight marks WHICH row drove the atlas (the framing box may sit
+          // in a starfield with no obvious landmark) — same selected-row treatment
+          // as the command palette / settings nav. The hero (rank #1) gets a
+          // card of its own: accent border, panel-alt fill, breathing room.
+          margin: widget.hero
+              ? const EdgeInsets.fromLTRB(
+                  AraSpace.s12,
+                  AraSpace.s4,
+                  AraSpace.s12,
+                  AraSpace.s8,
+                )
+              : null,
+          decoration: widget.hero
+              ? BoxDecoration(
+                  color: selected
+                      ? AraColors.selectionBg.withValues(alpha: 0.25)
+                      : AraColors.bgPanelAlt.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AraColors.accentInfo.withValues(alpha: 0.45),
+                  ),
+                )
+              : BoxDecoration(
+                  color: selected
+                      ? AraColors.selectionBg.withValues(alpha: 0.25)
+                      : null,
+                ),
+          padding: widget.hero
+              ? const EdgeInsets.all(AraSpace.s12)
+              : const EdgeInsets.fromLTRB(12, 10, 8, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // No badge for a scoreless object (a pre-§36.8 server) — better a
+                  // missing badge than a misleading "0".
+                  if (_object.score != null) ...[
+                    _ScoreBadge(score: _object.score!),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _object.name,
                           style: widget.hero
                               ? AraText.title
-                              : theme.textTheme.bodyMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
+                              : theme.textTheme.bodyMedium,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                // S5 - the hero carries the framing glyph (your sensor
-                // rectangle with the object drawn to scale); compact rows
-                // keep the altitude figure.
-                if (heroFov != null)
-                  FramingGlyph(
+                  const SizedBox(width: 6),
+                  // S5 - the hero carries the framing glyph (your sensor
+                  // rectangle with the object drawn to scale); compact rows
+                  // keep the altitude figure.
+                  if (heroFov != null)
+                    FramingGlyph(
                       fovWArcmin: heroFov.$1,
                       fovHArcmin: heroFov.$2,
-                      object: _object)
-                else
-                  Text(
-                    '${_object.altitudeDeg.toStringAsFixed(0)}°',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-              ],
-            ),
-            if (framingLabel != null ||
-                timing != null ||
-                _object.filterAdvice != null ||
-                _object.moonUpFraction != null) ...[
-              // 8 (not 6): the chips' rounded border sat flush against the
-              // subtitle above and its top edge clipped by a hair.
-              const SizedBox(height: 8),
-              // Chips wrap; the timing line gets its own FULL-WIDTH row below —
-              // sharing one Row squeezed it into a sliver next to the chips and
-              // it wrapped a character per line (live-walkthrough screenshot).
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  if (framingLabel != null)
-                    _FramingChip(framing: _object.framing),
-                  if (_object.filterAdvice != null)
-                    _FilterAdviceChip(advice: _object.filterAdvice!),
-                  if (_object.moonUpFraction != null)
-                    _MoonChip(object: _object),
+                      object: _object,
+                    )
+                  else
+                    Text(
+                      '${_object.altitudeDeg.toStringAsFixed(0)}°',
+                      style: theme.textTheme.bodyMedium,
+                    ),
                 ],
               ),
-              // S4 - the dark window as a timeline strip (start/transit/end
-              // labels + a "now" dot); prose only when the wire lacks the
-              // instants the strip needs.
-              if (_object.windowStartUtc != null &&
-                  _object.windowEndUtc != null) ...[
-                const SizedBox(height: AraSpace.s8),
-                DarkWindowStrip(
-                  windowStartUtc: _object.windowStartUtc!,
-                  windowEndUtc: _object.windowEndUtc!,
-                  transitUtc: _object.transitUtc,
-                  color: switch (windowState) {
-                    TonightWindowState.open => AraColors.accentConnected,
-                    TonightWindowState.passed => AraColors.textDisabled,
-                    _ => AraColors.accentInfo,
-                  },
-                ),
-                if (_object.integrationHours > 0) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    windowState == TonightWindowState.open
-                        ? 'open now · '
-                            '${_object.integrationHours.toStringAsFixed(1)} h dark'
-                            '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}'
-                        : '${_object.integrationHours.toStringAsFixed(1)} h dark'
-                            '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: windowState == TonightWindowState.open
-                          ? AraColors.accentConnected
-                          : AraColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ] else if (timing != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  timing,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
-                ),
-              ],
-              // S6 - the budget ring + one-line banked-vs-needed, visible
-              // WITHOUT expanding Why? (the crown jewel doesn't hide).
-              if (_object.budgetFullHours case final needed?) ...[
-                const SizedBox(height: AraSpace.s8),
-                Row(
+              if (framingLabel != null ||
+                  timing != null ||
+                  _object.filterAdvice != null ||
+                  _object.moonUpFraction != null) ...[
+                // 8 (not 6): the chips' rounded border sat flush against the
+                // subtitle above and its top edge clipped by a hair.
+                const SizedBox(height: 8),
+                // Chips wrap; the timing line gets its own FULL-WIDTH row below —
+                // sharing one Row squeezed it into a sliver next to the chips and
+                // it wrapped a character per line (live-walkthrough screenshot).
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
-                    BudgetRing(banked: bankedHours, needed: needed),
-                    const SizedBox(width: AraSpace.s8),
-                    Expanded(
-                      child: Text(
-                        bankedHours != null
-                            ? '${bankedHours.toStringAsFixed(1)} of '
-                                '~${needed.toStringAsFixed(0)} h captured'
-                            : 'needs ~${needed.toStringAsFixed(0)} h for the '
-                                'full structure',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
+                    if (framingLabel != null)
+                      _FramingChip(framing: _object.framing),
+                    if (_object.filterAdvice != null)
+                      _FilterAdviceChip(advice: _object.filterAdvice!),
+                    if (_object.moonUpFraction != null)
+                      _MoonChip(object: _object),
+                  ],
+                ),
+                // S4 - the dark window as a timeline strip (start/transit/end
+                // labels + a "now" dot); prose only when the wire lacks the
+                // instants the strip needs.
+                if (_object.windowStartUtc != null &&
+                    _object.windowEndUtc != null) ...[
+                  const SizedBox(height: AraSpace.s8),
+                  DarkWindowStrip(
+                    windowStartUtc: _object.windowStartUtc!,
+                    windowEndUtc: _object.windowEndUtc!,
+                    transitUtc: _object.transitUtc,
+                    color: switch (windowState) {
+                      TonightWindowState.open => AraColors.accentConnected,
+                      TonightWindowState.passed => AraColors.textDisabled,
+                      _ => AraColors.accentInfo,
+                    },
+                  ),
+                  if (_object.integrationHours > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      windowState == TonightWindowState.open
+                          ? 'open now · '
+                                '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                                '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}'
+                          : '${_object.integrationHours.toStringAsFixed(1)} h dark'
+                                '${_object.remainingHours > 0 ? ' · ${_object.remainingHours.toStringAsFixed(1)} h left' : ''}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: windowState == TonightWindowState.open
+                            ? AraColors.accentConnected
+                            : AraColors.textSecondary,
                       ),
                     ),
                   ],
-                ),
-              ],
-            ],
-            Row(
-              children: [
-                _busy
-                    ? const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : IconButton(
-                        iconSize: 18,
-                        visualDensity: VisualDensity.compact,
-                        tooltip: 'Add to a new sequence',
-                        icon: const Icon(Icons.playlist_add),
-                        onPressed: canAdd ? _addToSequence : null,
-                      ),
-                IconButton(
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Centre the planetarium on this object',
-                  icon: const Icon(Icons.my_location),
-                  onPressed: _recentre,
-                ),
-                const Spacer(),
-                if (hasReasons)
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: AraColors.textSecondary,
+                ] else if (timing != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    timing,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AraColors.textSecondary,
                     ),
-                    onPressed: () =>
-                        setState(() => _showReasons = !_showReasons),
-                    child: Text(_showReasons ? 'Hide' : 'Why?'),
                   ),
-              ],
-            ),
-            if (hasReasons && _showReasons)
-              Padding(
-                // Top 8 / bottom 10 (was 0/6): the first bullet ("fills the
-                // frame") sat flush against the section's top edge and the
-                // SharpCap attribution's descenders clipped at the card edge
-                // (live-walkthrough screenshots, rounds 2-3).
-                padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final r in reasons)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                ],
+                // S6 - the budget ring + one-line banked-vs-needed, visible
+                // WITHOUT expanding Why? (the crown jewel doesn't hide).
+                if (_object.budgetFullHours case final needed?) ...[
+                  const SizedBox(height: AraSpace.s8),
+                  Row(
+                    children: [
+                      BudgetRing(banked: bankedHours, needed: needed),
+                      const SizedBox(width: AraSpace.s8),
+                      Expanded(
                         child: Text(
-                          '• $r',
+                          bankedHours != null
+                              ? '${bankedHours.toStringAsFixed(1)} of '
+                                    '~${needed.toStringAsFixed(0)} h captured'
+                              : 'needs ~${needed.toStringAsFixed(0)} h for the '
+                                    'full structure',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: AraColors.textSecondary,
                           ),
-                        ),
-                      ),
-                    // NEXTGEN §1 — the filter-advice explanation + the per-filter
-                    // Optimal Sub, tucked into the Why? breakdown so the row stays
-                    // one-glance. The attribution is a design-doc requirement of
-                    // the permission to use the criterion.
-                    if (_object.adviceReason != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 2),
-                        child: Text(
-                          _object.adviceReason!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    // §Integration Budget P3 — how many hours this target
-                    // needs from THIS sky, in honest depth tiers.
-                    if (_object.integrationBudget != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          'Hours needed: ${_object.integrationBudget!}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AraColors.accentInfo,
-                          ),
-                        ),
-                      ),
-                    // §Integration Budget P4 — hours already banked on this
-                    // target (the library's per-target integration total).
-                    if (_bankedHours() case final banked?)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          'You have ${banked.toStringAsFixed(1)} h captured '
-                          'on this target so far.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AraColors.accentConnected,
-                          ),
-                        ),
-                      ),
-                    if (_object.optimalSubS != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      Text(
-                        'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textDisabled,
-                          fontSize: 10,
                         ),
                       ),
                     ],
-                  ],
-                ),
+                  ),
+                ],
+              ],
+              Row(
+                children: [
+                  _busy
+                      ? const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          iconSize: 18,
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Add to a new sequence',
+                          icon: const Icon(Icons.playlist_add),
+                          onPressed: canAdd ? _addToSequence : null,
+                        ),
+                  IconButton(
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Centre the planetarium on this object',
+                    icon: const Icon(Icons.my_location),
+                    onPressed: _recentre,
+                  ),
+                  const Spacer(),
+                  if (hasReasons)
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: AraColors.textSecondary,
+                      ),
+                      onPressed: () =>
+                          setState(() => _showReasons = !_showReasons),
+                      child: Text(_showReasons ? 'Hide' : 'Why?'),
+                    ),
+                ],
               ),
-          ],
+              AnimatedSize(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: !(hasReasons && _showReasons)
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        // Top 8 / bottom 10 (was 0/6): the first bullet ("fills the
+                        // frame") sat flush against the section's top edge and the
+                        // SharpCap attribution's descenders clipped at the card edge
+                        // (live-walkthrough screenshots, rounds 2-3).
+                        padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final r in reasons)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  '• $r',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            // NEXTGEN §1 — the filter-advice explanation + the per-filter
+                            // Optimal Sub, tucked into the Why? breakdown so the row stays
+                            // one-glance. The attribution is a design-doc requirement of
+                            // the permission to use the criterion.
+                            if (_object.adviceReason != null)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 4,
+                                  bottom: 2,
+                                ),
+                                child: Text(
+                                  _object.adviceReason!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            // §Integration Budget P3 — how many hours this target
+                            // needs from THIS sky, in honest depth tiers.
+                            if (_object.integrationBudget != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  'Hours needed: ${_object.integrationBudget!}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.accentInfo,
+                                  ),
+                                ),
+                              ),
+                            // §Integration Budget P4 — hours already banked on this
+                            // target (the library's per-target integration total).
+                            if (_bankedHours() case final banked?)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  'You have ${banked.toStringAsFixed(1)} h captured '
+                                  'on this target so far.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AraColors.accentConnected,
+                                  ),
+                                ),
+                              ),
+                            if (_object.optimalSubS != null) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  'Optimal sub ≈ ${_formatSub(_object.optimalSubS!)}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                              Text(
+                                'Sub-exposure criterion popularised by Dr. Robin Glover (SharpCap)',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AraColors.textDisabled,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -754,39 +806,41 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
       : '${(seconds / 60).toStringAsFixed(seconds >= 600 ? 0 : 1)} min';
 }
 
-
 /// S7 — the one chip shell all three advisory chips share: leading icon +
 /// label in the chip's hue, 6 px radius (the Run redesign's language).
 class _AdviceChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _AdviceChip(
-      {required this.icon, required this.label, required this.color});
+  const _AdviceChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.13),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.45)),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.13),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: color.withValues(alpha: 0.45)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
 
 /// 0–100 worth-score badge, colour-graded so the eye can triage at a glance:
@@ -852,8 +906,7 @@ class _FramingChip extends StatelessWidget {
     // Self-guard anyway — release-safe (an assert is stripped) — so a future call site
     // that bypasses the gate renders nothing rather than a styled-but-blank chip.
     if (label == null) return const SizedBox.shrink();
-    return _AdviceChip(
-        icon: Icons.crop_free, label: label, color: color);
+    return _AdviceChip(icon: Icons.crop_free, label: label, color: color);
   }
 }
 
@@ -872,9 +925,10 @@ class _FilterAdviceChip extends StatelessWidget {
         ? AraColors.textSecondary
         : AraColors.accentInfo;
     return _AdviceChip(
-        icon: Icons.filter_vintage_outlined,
-        label: advice.label,
-        color: color);
+      icon: Icons.filter_vintage_outlined,
+      label: advice.label,
+      color: color,
+    );
   }
 }
 
@@ -908,9 +962,10 @@ class _MoonChip extends StatelessWidget {
       color = harsh ? AraColors.accentBusy : AraColors.textSecondary;
     }
     return _AdviceChip(
-        icon: Icons.dark_mode_outlined,
-        label: label.isEmpty ? 'Moon up' : label,
-        color: color);
+      icon: Icons.dark_mode_outlined,
+      label: label.isEmpty ? 'Moon up' : label,
+      color: color,
+    );
   }
 }
 
@@ -919,50 +974,50 @@ class _SkeletonList extends StatelessWidget {
   const _SkeletonList();
 
   Widget _bar(double w, {double h = 10}) => Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          color: AraColors.bgInput,
-          borderRadius: BorderRadius.circular(4),
-        ),
-      );
+    width: w,
+    height: h,
+    decoration: BoxDecoration(
+      color: AraColors.bgInput,
+      borderRadius: BorderRadius.circular(4),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(AraSpace.s16),
-        children: [
-          for (var i = 0; i < 3; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AraSpace.s24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AraColors.bgInput,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  const SizedBox(width: AraSpace.s12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _bar(140),
-                        const SizedBox(height: AraSpace.s8),
-                        _bar(200, h: 8),
-                        const SizedBox(height: AraSpace.s8),
-                        _bar(90, h: 8),
-                      ],
-                    ),
-                  ),
-                ],
+    padding: const EdgeInsets.all(AraSpace.s16),
+    children: [
+      for (var i = 0; i < 3; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AraSpace.s24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AraColors.bgInput,
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-            ),
-        ],
-      );
+              const SizedBox(width: AraSpace.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _bar(140),
+                    const SizedBox(height: AraSpace.s8),
+                    _bar(200, h: 8),
+                    const SizedBox(height: AraSpace.s8),
+                    _bar(90, h: 8),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
 }
 
 class _Message extends StatelessWidget {

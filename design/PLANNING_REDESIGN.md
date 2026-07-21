@@ -1,7 +1,9 @@
 # Planning Redesign — from "a list beside a sky" to "your night, decided"
 
-**Status: DRAFT for review. Senior-design pass over the Planning tab,
-2026-07-21. No implementation until sign-off.**
+**Status: SHIPPED 2026-07-21 (S1–S10 on feat/run-section-design, one commit
+per slice group; awaiting Joey's live visual pass). Note: S5's glyph rides
+the hero card (rows keep the framing chip — a 44 px glyph per compact row
+read as noise in practice).**
 
 ## The honest critique
 
