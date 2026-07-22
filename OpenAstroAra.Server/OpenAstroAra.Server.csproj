@@ -66,8 +66,8 @@
          Remove when Microsoft.AspNetCore.OpenApi ships on the patched lib. 3.x is a
          breaking major (IOpenApiMediaType.Example is read-only) the AspNetCore.OpenApi
          10.0.x source generator cannot compile against — keep 2.7.x. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.12" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.9.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.16" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <!-- CVE-2025-6965 (GHSA-2m69-gcr7-jv3q): pin the patched native SQLite lib
