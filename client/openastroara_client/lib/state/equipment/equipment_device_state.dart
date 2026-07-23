@@ -97,7 +97,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
     // both timers). If this provider ever gains keepAlive, also cancel settle here.
     ref.onCancel(_cancelLive);
     ref.onResume(() {
-      if (ref.mounted) refresh();
+      // Deferred: refresh() does a ref.read (readClient), which Riverpod
+      // forbids synchronously inside a life-cycle callback.
+      scheduleMicrotask(() {
+        if (ref.mounted) refresh();
+      });
     });
     // §60.9 push — an equipment.state_changed for THIS device type triggers an
     // immediate re-read instead of waiting out the next poll tick. Only the
