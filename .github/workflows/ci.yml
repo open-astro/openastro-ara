@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
           lfs: false
           persist-credentials: false  # checkout step needs no push access; reduces blast radius
@@ -94,7 +94,7 @@ jobs:
       contents: read  # only needs to check out + download a public release artifact
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
           lfs: false
           persist-credentials: false
@@ -178,13 +178,13 @@ jobs:
       contents: read  # checkout + download a public release artifact; no write scope
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
           lfs: false
           persist-credentials: false
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v4.x pinned per zizmor pattern
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
         with:
           dotnet-version: '10.0.x'
 
@@ -248,13 +248,13 @@ jobs:
     needs: sanity
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
           lfs: false
           persist-credentials: false
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v4.x pinned per zizmor pattern
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
         with:
           dotnet-version: '10.0.x'
 
@@ -315,14 +315,14 @@ jobs:
     needs: sanity
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
           lfs: false
           persist-credentials: false
           fetch-depth: 0  # need full history + tags so `git describe --tags --exact-match HEAD` can find the release tag for the .deb version step
 
       - name: Setup .NET 10 SDK
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1  # v4.x pinned per zizmor pattern
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
         with:
           dotnet-version: '10.0.x'
 
@@ -650,7 +650,7 @@ jobs:
     needs: sanity
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x pinned per zizmor immutable-ref policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
         with:
           lfs: false
           persist-credentials: false
@@ -685,7 +685,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x pinned per zizmor + CodeRabbit security policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor + CodeRabbit security policy
         with:
           lfs: false
           persist-credentials: false
@@ -748,7 +748,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x pinned per zizmor immutable-ref policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
         with:
           lfs: false
           persist-credentials: false
@@ -802,7 +802,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x pinned per zizmor immutable-ref policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
         with:
           lfs: false
           persist-credentials: false
@@ -817,7 +817,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v4.x pinned per zizmor immutable-ref policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
         with:
           persist-credentials: false
 
