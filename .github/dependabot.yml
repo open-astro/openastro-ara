@@ -30,6 +30,19 @@ updates:
       nuget:
         patterns:
           - "*"
+    ignore:
+      # Pinned to 7.x: FluentAssertions 8+ is commercially licensed (Xceed);
+      # see OpenAstroAra.Test.csproj.
+      - dependency-name: FluentAssertions
+        update-types: ["version-update:semver-major"]
+      # Pinned to 2.7.x: 3.x is a breaking major the AspNetCore.OpenApi 10.0.x
+      # source generator cannot compile against; see OpenAstroAra.Server.csproj.
+      - dependency-name: Microsoft.OpenApi
+        update-types: ["version-update:semver-major"]
+      # Pinned to 2.x: 3.0.0 drops SerialPortDevice from modern TFMs;
+      # see OpenAstroAra.Equipment.csproj.
+      - dependency-name: SharpGIS.NmeaParser
+        update-types: ["version-update:semver-major"]
 
   # Flutter / Dart client.
   - package-ecosystem: pub

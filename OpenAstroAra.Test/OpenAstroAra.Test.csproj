@@ -22,7 +22,7 @@
     <!-- Pinned to 7.x: FluentAssertions 8+ is commercially licensed (Xceed) for
          for-profit use — staying on the last Apache-2.0 line is a deliberate
          licensing decision, not a version lag. -->
-    <PackageReference Include="FluentAssertions" Version="[8.10.0]" />
+    <PackageReference Include="FluentAssertions" Version="[7.0.0]" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="NUnit" Version="4.6.1" />
