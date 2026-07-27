@@ -552,7 +552,7 @@ namespace OpenAstroAra.Test {
             await Task.Delay(200);
             Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State, Is.EqualTo(SequenceRunState.Paused));
 
-            await svc.ResumeAsync(id, null, CancellationToken.None);
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
@@ -761,7 +761,7 @@ namespace OpenAstroAra.Test {
             // The user sorts the rig out and resumes: the trigger re-fires at the
             // next boundary and this time the flip goes through.
             flipSucceeds = true;
-            await svc.ResumeAsync(id, null, CancellationToken.None);
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "both instructions ran after resume");
@@ -812,7 +812,7 @@ namespace OpenAstroAra.Test {
                 "entering PausedAwaitingUser must start the §58.12 clock");
 
             flipSucceeds = true;
-            await svc.ResumeAsync(id, null, CancellationToken.None);
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
             Assert.That(shutdown.IsCountingDown, Is.False,
                 "the explicit resume IS the user coming back — countdown cancelled");
             var state = await WaitForTerminalAsync(svc, id);
@@ -892,7 +892,7 @@ namespace OpenAstroAra.Test {
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed).Or.EqualTo(SequenceRunState.Paused));
             if (state.State == SequenceRunState.Paused) {
                 // The request landed before the last boundary — resume finishes it.
-                await svc.ResumeAsync(id, null, CancellationToken.None);
+                await svc.ResumeAsync(id, null, null, CancellationToken.None);
                 state = await WaitForTerminalAsync(svc, id);
                 Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
             }
@@ -904,12 +904,12 @@ namespace OpenAstroAra.Test {
             var svc = BuildService(id, BuildBody());
             // Unknown run — accepted, nothing to do.
             Assert.That(await svc.PauseAsync(id, null, CancellationToken.None), Is.Not.Null);
-            Assert.That(await svc.ResumeAsync(id, null, CancellationToken.None), Is.Not.Null);
+            Assert.That(await svc.ResumeAsync(id, null, null, CancellationToken.None), Is.Not.Null);
             // Finished run — still accepted no-ops.
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
             await WaitForTerminalAsync(svc, id);
             Assert.That(await svc.PauseAsync(id, null, CancellationToken.None), Is.Not.Null);
-            Assert.That(await svc.ResumeAsync(id, null, CancellationToken.None), Is.Not.Null);
+            Assert.That(await svc.ResumeAsync(id, null, null, CancellationToken.None), Is.Not.Null);
             Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State, Is.EqualTo(SequenceRunState.Completed));
         }
 

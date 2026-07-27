@@ -102,6 +102,12 @@ public static class WsEventCatalog {
     public const string SequenceStarted = "sequence.started";
     public const string SequencePaused = "sequence.paused";
     public const string SequenceResumed = "sequence.resumed";
+    // §38.10 — a same-target resume is running its pre-release refinement
+    // (plate-solve re-center and/or autofocus) while the engine stays
+    // suspended; payload { sequence_id, run_id, recenter, refocus }. Fires
+    // after sequence.resumed; imaging continues when the refinement ends
+    // (outcome rides a notification, not a WS event).
+    public const string SequenceResumeRecentering = "sequence.resume_recentering";
     public const string SequenceAborted = "sequence.aborted";
     public const string SequenceStopped = "sequence.stopped";
     public const string SequenceComplete = "sequence.complete";
@@ -223,7 +229,7 @@ public static class WsEventCatalog {
         AutofocusFallbackClassic,
 
         SequenceCreated, SequenceUpdated, SequenceDeleted,
-        SequenceStarted, SequencePaused, SequenceResumed, SequenceAborted,
+        SequenceStarted, SequencePaused, SequenceResumed, SequenceResumeRecentering, SequenceAborted,
         SequenceStopped, SequenceComplete,
         SequenceInstructionStarted, SequenceInstructionComplete, SequenceInstructionFailed,
         SequenceProgress, SequenceRunItemsChanged, SequenceImported, SequenceImportWarning,

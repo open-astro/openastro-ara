@@ -190,9 +190,13 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("PauseSequence");
 
+        // §38.10 — the body is optional: absent = defaults (re-center when the
+        // run is still on the target it paused on, no refocus), so pre-§38.10
+        // clients keep working and gain the pointing refinement.
         seq.MapPost("/{id:guid}/resume",
-                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.ResumeAsync(id, key, ct)))
+                async (Guid id, [FromBody] SequenceResumeRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.ResumeAsync(id, request, key, ct)))
+           .Accepts<SequenceResumeRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("ResumeSequence");
