@@ -253,6 +253,37 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Appending_into_a_finished_sub_container_is_refused() {
+            var id = Guid.NewGuid();
+            // Block A (an annotation) completes immediately; the slow leaf then
+            // holds the run open. A's strategy loop has exited — an accepted
+            // append into it would sit CREATED forever, so it must refuse.
+            var (svc, store) = BuildService(id, BuildBody(c => {
+                var blockA = new SequentialContainer { Name = "block-a" };
+                blockA.Items.Add(new Annotation { Name = "quick" });
+                c.Items.Add(blockA);
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForRunningAsync(svc, id);
+            // Ensure block A has fully finished (its leaf is terminal) before editing.
+            for (var i = 0; i < 100; i++) {
+                var s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                if ((s?.InstructionsCompleted ?? 0) >= 1) break;
+                await Task.Delay(20);
+            }
+
+            var result = await svc.AddRunItemAsync(id,
+                new SequenceRunItemAddRequestDto(ParentPath: [0], Index: null, Item: Fragment("too-late-block")),
+                CancellationToken.None);
+
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.ItemAlreadyStarted));
+            Assert.That(store.ReplacedBody, Is.Null);
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
         public async Task A_fragment_whose_lifecycle_hook_throws_is_rolled_back_and_refused() {
             var id = Guid.NewGuid();
             var factory = HeadlessSequencerFactory.WithDefaults();

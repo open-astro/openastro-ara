@@ -73,6 +73,16 @@ public sealed partial class SequencerService {
                 return (new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidPath,
                     "the addressed container does not accept inserted items"), null);
             }
+            // Same principle as the root teardown refusal, applied to the
+            // addressed SUB-container (review #871 r2): once a container's own
+            // strategy loop has exited (FINISHED/FAILED/SKIPPED), it is never
+            // revisited — an accepted append there would sit CREATED forever.
+            // (Remove/move of pending items in such a container stay allowed:
+            // they only ever take work away, never promise execution.)
+            if (parent.Status is not (SequenceEntityStatus.CREATED or SequenceEntityStatus.RUNNING)) {
+                return (new SequenceLiveEditResult(SequenceLiveEditOutcome.ItemAlreadyStarted,
+                    "that block has already finished — add the item to a block that hasn't run yet (or the end of the plan)"), null);
+            }
             var children = ItemsOf(parent);
             var floor = LastStartedIndex(children) + 1;
             var index = request.Index ?? children.Count;
