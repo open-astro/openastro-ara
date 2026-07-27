@@ -967,6 +967,7 @@ namespace OpenAstroAra.Test {
             public Task<SequenceUpdateResult> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceDeleteResult> DeleteAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+            public Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, JsonElement body, CancellationToken ct) => throw new NotSupportedException();
         }
 
         /// <summary>Records the event types published, to assert the WS lifecycle.</summary>
@@ -1003,6 +1004,18 @@ namespace OpenAstroAra.Test {
             public Task<SequenceUpdateResult> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceDeleteResult> DeleteAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
             public Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+
+            // §38.9 — the live-edit persistence path. Records the replaced body so
+            // live-edit tests can assert the persisted plan matches the edited tree.
+            public JsonElement? ReplacedBody { get; private set; }
+            public Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, JsonElement body, CancellationToken ct) {
+                if (id != _id) return Task.FromResult<SequenceDto?>(null);
+                ReplacedBody = body;
+                return Task.FromResult<SequenceDto?>(new SequenceDto(
+                    Id: id, Name: "Test", Description: null,
+                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
+                    Body: body, TemplateOrigin: null));
+            }
         }
 
         /// <summary>

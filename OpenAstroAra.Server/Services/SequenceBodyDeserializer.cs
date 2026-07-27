@@ -90,6 +90,23 @@ public sealed partial class SequenceBodyDeserializer {
         }
     }
 
+    /// <summary>
+    /// §38.9 — serialize a live container tree back to a stored-body
+    /// <see cref="JsonElement"/>, re-adding the top-level ARA
+    /// <c>schemaVersion</c> field the NINA serializer doesn't know about.
+    /// Used by the live-edit path to persist the executor's current tree, so
+    /// file and run stay identical by construction (including Newtonsoft's
+    /// <c>$id</c>/<c>$ref</c> numbering, which a JSON splice could corrupt).
+    /// </summary>
+    public JsonElement SerializeBody(ISequenceContainer container) {
+        var rawJson = _converter.Serialize(container);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(rawJson)
+            ?? throw new InvalidOperationException("Serialized sequence body parsed to null.");
+        node[SequenceSchemaValidator.SchemaVersionField] = SequenceSchemaValidator.SchemaVersion;
+        using var doc = JsonDocument.Parse(node.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sequence body failed to deserialize as NINA $type tree")]
     private partial void LogMalformedBody(Exception ex);
 

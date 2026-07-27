@@ -47,7 +47,38 @@ public interface ISequenceService {
     /// that to 404); otherwise a share carrying the sequence body inline in
     /// <c>Manifest</c>, mirroring the profile-share contract.</summary>
     Task<SequenceShareDto?> ShareExportAsync(Guid id, CancellationToken ct);
+
+    /// <summary>§38.9 — persist the live run's CURRENT body (re-serialized from the
+    /// executor's in-memory tree after an accepted live edit). Deliberately bypasses
+    /// the active-run refusal of <see cref="UpdateAsync"/>: only
+    /// <see cref="ISequencerService"/>'s live-edit path calls this, AFTER mutating
+    /// the tree — persisting the re-serialized tree (rather than patching JSON)
+    /// keeps file and executor identical by construction, including Newtonsoft's
+    /// <c>$id</c>/<c>$ref</c> numbering. Returns the updated dto, or null when the
+    /// sequence file is missing/unreadable (the caller rolls the tree op back).</summary>
+    Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, System.Text.Json.JsonElement body, CancellationToken ct);
 }
+
+/// <summary>§38.9 — outcome of a live mid-run edit, mapped by the endpoint:
+/// <c>Applied</c> → 200; <c>NoActiveRun</c> → 409 (edit the sequence normally);
+/// <c>RunNotMutable</c> → 409 (run winding down / terminal); <c>ItemAlreadyStarted</c>
+/// → 409; <c>InvalidPath</c>/<c>InvalidItem</c> → 422; <c>PersistFailed</c> → 500.</summary>
+public enum SequenceLiveEditOutcome {
+    Applied,
+    NoActiveRun,
+    RunNotMutable,
+    ItemAlreadyStarted,
+    InvalidPath,
+    InvalidItem,
+    PersistFailed,
+}
+
+/// <summary>§38.9 — live-edit result. <c>Sequence</c> is the updated stored dto on
+/// <c>Applied</c>; <c>Reason</c> carries the specific refusal detail otherwise.</summary>
+public sealed record SequenceLiveEditResult(
+    SequenceLiveEditOutcome Outcome,
+    string? Reason = null,
+    SequenceDto? Sequence = null);
 
 /// <summary>§38 — outcome of a sequence delete. Split three ways (not a bool) so the
 /// endpoint can tell "gone" (404) from "refused: a live run owns this file" (409) —
@@ -115,6 +146,20 @@ public interface ISequencerService {
     /// auto-resume re-centering consumes this.
     /// </summary>
     Task<OpenAstroAra.Astrometry.Coordinates?> GetActiveTargetCoordinatesAsync(Guid id, CancellationToken ct);
+
+    /// <summary>§38.9 — insert a new pending item into the LIVE run's tree (and the
+    /// stored body) while the run executes. Only positions strictly after the
+    /// parent's last started item are accepted; the engine picks the item up at
+    /// the next instruction boundary.</summary>
+    Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, CancellationToken ct);
+
+    /// <summary>§38.9 — remove a not-yet-started item from the live run + stored
+    /// body. The currently-running item is refused (skip it first).</summary>
+    Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, CancellationToken ct);
+
+    /// <summary>§38.9 — reorder a not-yet-started item within its parent, to a
+    /// position strictly after the parent's last started item.</summary>
+    Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>

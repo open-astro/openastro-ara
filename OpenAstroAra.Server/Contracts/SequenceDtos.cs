@@ -162,6 +162,27 @@ public sealed record SequenceShareDto(
     // route to GET (mirrors ProfileShareDto.DownloadUrl).
     Uri? DownloadUrl);
 
+/// <summary>POST /api/v1/sequences/{id}/run/items body — §38.9 live mid-run edit:
+/// insert <c>Item</c> (a NINA-$type node, same schema as body nodes) into the
+/// container addressed by <c>ParentPath</c> (child-index path over the body's
+/// <c>Items</c> arrays, rooted at the body's top container). Null <c>Index</c>
+/// appends. The position must be strictly after the parent's last started item.</summary>
+public sealed record SequenceRunItemAddRequestDto(
+    IReadOnlyList<int> ParentPath,
+    int? Index,
+    System.Text.Json.JsonElement Item);
+
+/// <summary>DELETE /api/v1/sequences/{id}/run/items body — §38.9: remove the
+/// not-yet-started node at <c>Path</c> from the live run and the stored body.</summary>
+public sealed record SequenceRunItemRemoveRequestDto(IReadOnlyList<int> Path);
+
+/// <summary>POST /api/v1/sequences/{id}/run/items/move body — §38.9: reorder the
+/// not-yet-started node at <c>Path</c> to <c>NewIndex</c> within the same parent.
+/// The destination must also be strictly after the parent's last started item.</summary>
+public sealed record SequenceRunItemMoveRequestDto(
+    IReadOnlyList<int> Path,
+    int NewIndex);
+
 /// <summary>POST /api/v1/sequences/{id}/autoflats body — §48.1: the user's answer to
 /// the "capture calibration tonight?" prompt. Choice: <c>panel_at_end</c> |
 /// <c>sky_at_twilight</c> | <c>later</c>. Remember=true persists the choice as the
