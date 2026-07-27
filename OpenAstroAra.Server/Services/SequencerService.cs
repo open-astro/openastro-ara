@@ -426,8 +426,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // Always disarm — also cancels a pause that was requested but never
             // reached a boundary; harmless on terminal runs (which don't count:
             // the returned figure feeds the safety.action_taken runs_resumed
-            // payload and must not overstate — #731 review).
-            run.Gate.Resume();
+            // payload and must not overstate — #731 review). EXCEPT while a
+            // §38.10 resume refinement holds the gate (review #873): the user
+            // already resumed this run and the refinement task owns the ONE
+            // release — yanking the gate open here would let imaging continue
+            // mid-plate-solve. The run still counts as released: it IS resuming.
+            if (!run.ResumeRefinementInFlight) {
+                run.Gate.Resume();
+            }
             if (released) {
                 resumed++;
             }

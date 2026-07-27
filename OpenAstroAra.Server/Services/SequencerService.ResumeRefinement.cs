@@ -96,10 +96,20 @@ public sealed partial class SequencerService {
             await EmitResumeRecenteringAsync(id, run, recenter, refocus);
 
             if (recenter) {
-                var centering = _centeringResolver?.Invoke();
-                var coords = target.Target?.InputCoordinates?.Coordinates;
-                if (centering is null || coords is null) {
-                    centeringOutcome = "skipped";
+                // Resolver + coordinate reads live INSIDE the guarded region too
+                // (review #873): a throw here must still reach the outcome
+                // notification below, never fault the discarded Task.Run.
+                ICenteringService? centering = null;
+                OpenAstroAra.Astrometry.Coordinates? coords = null;
+                try {
+                    centering = _centeringResolver?.Invoke();
+                    coords = target.Target?.InputCoordinates?.Coordinates;
+                } catch (Exception ex) {
+                    LogResumeRecenterFailed(ex, id);
+                    centeringOutcome = "failed";
+                }
+                if (centeringOutcome == "failed" || centering is null || coords is null) {
+                    centeringOutcome = centeringOutcome == "failed" ? "failed" : "skipped";
                 } else {
                     using var bounded = CancellationTokenSource.CreateLinkedTokenSource(runToken);
                     bounded.CancelAfter(ResumeRecenterTimeout);
@@ -123,7 +133,12 @@ public sealed partial class SequencerService {
             }
 
             if (refocus) {
-                var autofocus = _autofocusResolver?.Invoke();
+                IAutofocusExecutor? autofocus = null;
+                try {
+                    autofocus = _autofocusResolver?.Invoke();
+                } catch (Exception ex) {
+                    LogResumeRefocusFailed(ex, id);
+                }
                 if (autofocus is null) {
                     focusOutcome = "skipped";
                 } else {

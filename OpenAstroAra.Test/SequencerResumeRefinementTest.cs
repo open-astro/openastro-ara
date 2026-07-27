@@ -185,6 +185,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Safety_auto_resume_cannot_release_the_gate_mid_refinement() {
+            // Review #873 — §35's ResumeRunsAsync must not yank the gate open
+            // while the user-resume refinement still holds it: imaging would
+            // continue mid-plate-solve. The refinement's own release (after the
+            // solve completes) is the ONE release.
+            var id = Guid.NewGuid();
+            using var solveStarted = new SemaphoreSlim(0);
+            using var solveHold = new SemaphoreSlim(0);
+            var (svc, _, _) = BuildService(id, async ct => {
+                solveStarted.Release();
+                await solveHold.WaitAsync(ct);
+                return new PlateSolveResult { Success = true };
+            });
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            Assert.That(await solveStarted.WaitAsync(TimeSpan.FromSeconds(5)), Is.True);
+
+            // The safety engine's auto-resume lands mid-solve (state is Running).
+            await svc.ResumeRunsAsync([id], CancellationToken.None);
+            await Task.Delay(300);
+            var during = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(during!.State, Is.EqualTo(SequenceRunState.Running));
+            Assert.That(during.InstructionsCompleted, Is.EqualTo(1),
+                "the engine must still be suspended at the boundary — the safety resume must not release the held gate");
+
+            solveHold.Release();
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
         public async Task Abort_during_the_recenter_still_ends_the_run() {
             var id = Guid.NewGuid();
             using var started = new SemaphoreSlim(0);
