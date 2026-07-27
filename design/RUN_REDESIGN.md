@@ -37,6 +37,18 @@ The Run tab should morph between two states:
   latest frame thumbnail, event ticker. One glance from across the room
   answers "is my night going well?"
 
+**Live mood is no longer read-only (§38.9, 2026-07-27).** While a run
+executes, the tree accepts a scoped set of edits that go straight into the
+EXECUTING plan via the daemon's live-edit endpoints: add a target/instruction
+group, remove a not-yet-started item, and reorder pending items — always
+strictly AFTER the running position (items at/before it render locked; the
+running target is dropped with Skip, not delete). Field, condition, and
+trigger edits stay compose-mood only (they would silently not join the run)
+and are refused with a notice. "Add to Sequence" from Planning/Framing joins
+the live run instead of forking a fresh sequence. Every accepted live edit is
+persisted by the daemon in the same operation, so the saved sequence always
+matches what actually ran.
+
 ---
 
 ## The plan (itemized, roughly in build order)

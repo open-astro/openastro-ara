@@ -8,6 +8,7 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
 /// Captures the key a degraded create stamps into the draft.
@@ -30,6 +31,19 @@ class _MemDraftService extends DraftSequenceService {
 
 /// Daemon client whose create() throws a configurable error.
 class _ThrowingClient implements SequenceClient {
+  @override
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+
   _ThrowingClient(this.error);
   final Object error;
 

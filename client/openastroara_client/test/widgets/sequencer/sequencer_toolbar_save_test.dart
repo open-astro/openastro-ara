@@ -32,6 +32,19 @@ SequenceDetail _detail(String id) => SequenceDetail(
 
 class _SaveClient implements SequenceClient {
   @override
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+
+  @override
   Future<String> decideAutoFlats(String id,
           {required String choice, required bool remember}) =>
       throw UnimplementedError();

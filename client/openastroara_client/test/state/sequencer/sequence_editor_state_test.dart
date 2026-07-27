@@ -5,7 +5,9 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
 // A template-shaped body: a root SequentialContainer wrapping a SwitchFilter and
 // a nested container that holds one TakeExposure.
@@ -539,4 +541,128 @@ void main() {
       expect(n.canUndo, isFalse);
     });
   });
+
+  // §38.9 — while the LOADED sequence has an active run, structural edits
+  // route to the daemon's live-edit endpoints; locked slots and field edits
+  // are refused with a notice; the returned detail reloads the editor.
+  group('live mid-run editing', () {
+    late _LiveFakeClient api;
+
+    // sampleDetail's leaves in DFS order: [0] (SwitchFilter) and [1,0]
+    // (TakeExposure). Running index 0 → leaf [0] is the current item.
+    ProviderContainer liveContainer() {
+      api = _LiveFakeClient();
+      final c = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(api),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(
+            const SequenceRunStateInfo(
+                sequenceId: 'seq-1',
+                runId: 'run-1',
+                state: SequenceRunState.running,
+                currentInstructionIndex: 0,
+                instructionsTotal: 2))),
+      ]);
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    Future<SequenceEditorController> liveCtrl(ProviderContainer c) async {
+      // Settle the async run-state notifier so _liveRunActive sees the value.
+      await c.read(sequenceRunStateProvider.future);
+      final n = c.read(sequenceEditorProvider.notifier);
+      n.load(sampleDetail());
+      return n;
+    }
+
+    test('removing a pending node routes to the daemon and reloads', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.removeNode(const [1]);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.removedPaths, [
+        [1]
+      ]);
+      // The editor reloaded the daemon's returned detail (fresh, not dirty).
+      expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
+      expect(c.read(sequenceEditorProvider)!.id, 'seq-1');
+    });
+
+    test('the running node is locked: no call, a notice instead', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.removeNode(const [0]);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.removedPaths, isEmpty);
+      expect(c.read(liveEditNoticeProvider), isNotNull);
+    });
+
+    test('a leaf add is wrapped in a container group and sent', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.insertInstruction(const [], 2, takeExposure());
+      await Future<void>.delayed(Duration.zero);
+      expect(api.addedItems, hasLength(1));
+      final sent = api.addedItems.single;
+      expect(sent[r'$type'], contains('SequentialContainer'),
+          reason: 'bare instructions ride inside a fresh group');
+      expect(childrenOf(sent).single[r'$type'], contains('TakeExposure'));
+    });
+
+    test('field edits are refused with a notice (body untouched)', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      final before = c.read(sequenceEditorProvider)!.body;
+      n.setNodeField(const [1, 0], 'ExposureTime', 120.0);
+      expect(identical(c.read(sequenceEditorProvider)!.body, before), isTrue);
+      expect(c.read(liveEditNoticeProvider), isNotNull);
+    });
+
+    test('cross-parent drag is refused; same-parent reorder is sent', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.moveNodeTo(const [0], const [1], 0); // reparent into the nested container
+      expect(api.moves, isEmpty);
+      expect(c.read(liveEditNoticeProvider), isNotNull);
+    });
+  });
+}
+
+class _FakeRunNotifier extends SequenceRunStateNotifier {
+  _FakeRunNotifier(this._v);
+  final SequenceRunStateInfo? _v;
+  @override
+  Future<SequenceRunStateInfo?> build() async => _v;
+}
+
+/// Records live-edit calls; returns a fresh sampleDetail as the updated dto.
+class _LiveFakeClient implements SequenceClient {
+  final List<List<int>> removedPaths = [];
+  final List<Map<String, dynamic>> addedItems = [];
+  final List<(List<int>, int)> moves = [];
+
+  @override
+  Future<SequenceDetail> addRunItem(String id,
+      {required List<int> parentPath,
+      int? index,
+      required Map<String, dynamic> item}) async {
+    addedItems.add(item);
+    return sampleDetail();
+  }
+
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) async {
+    removedPaths.add(path);
+    return sampleDetail();
+  }
+
+  @override
+  Future<SequenceDetail> moveRunItem(
+      String id, List<int> path, int newIndex) async {
+    moves.add((path, newIndex));
+    return sampleDetail();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
 }

@@ -16,6 +16,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   @override
@@ -56,6 +57,19 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
 }
 
 class _FakeSeqClient implements SequenceClient {
+  @override
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+
   final List<String> lifecycle = [];
 
   @override

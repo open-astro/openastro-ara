@@ -236,6 +236,20 @@ Future<ImagingRunResult?> createImagingRun(
       ditherEveryNExposures: ditherEvery,
       manualFilterSwap: choice.manualFilterSwap,
     );
+    // §38.9 — a RUNNING selected sequence now takes the append LIVE: the
+    // daemon grafts the target into the executing plan (and the stored body)
+    // in one operation, so the new object images tonight instead of forking a
+    // second sequence. Only a 409 refusal (the run ended/wound down between
+    // the probe and the call) falls through to the ordinary paths below; any
+    // other failure rethrows — the daemon may have applied the edit, and
+    // creating a fresh run then would duplicate the target.
+    final liveResult = await _tryLiveAppend(container, api, selectedId, block);
+    if (liveResult != null) {
+      if (jumpToRun) {
+        container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+      }
+      return liveResult;
+    }
     // Only PRE-PATCH problems (running, vanished, non-container root,
     // transport failure while reading) fall back to creating a fresh run. A
     // failed updateSequence rethrows instead: the daemon may have applied the
@@ -362,6 +376,48 @@ int? _ditherCadence(ProviderContainer container, TargetPlanChoice choice) {
   if (!choice.guide) return null;
   final phd2 = container.read(phd2SettingsProvider);
   return phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : null;
+}
+
+/// §38.9 — the live-append phase: when the selected sequence's run is ACTIVE,
+/// send [targetBlock] through the daemon's live-add (it joins the executing
+/// plan at the same slot [appendTargetToRunBody] would pick — before any
+/// session-end warm/park steps). Returns the appended result, or null to fall
+/// through: no active run (probe says idle — the ordinary append handles it),
+/// a failed probe, or a 409 refusal (the run ended or is winding down, so the
+/// compose-mood paths apply after all). Non-409 daemon errors and transport
+/// failures on the live-add itself rethrow — the edit may have been applied.
+Future<ImagingRunResult?> _tryLiveAppend(
+  ProviderContainer container,
+  SequenceClient api,
+  String id,
+  Map<String, dynamic> targetBlock,
+) async {
+  bool active;
+  try {
+    active = (await api.getRunState(id))?.state?.isActive ?? false;
+  } catch (e) {
+    debugPrint('[planning] run-state probe failed, using compose path: $e');
+    return null;
+  }
+  if (!active) return null;
+  try {
+    final baseBody = await _openSequenceBaseBody(container, api, id);
+    final detail = await api.addRunItem(
+      id,
+      parentPath: const [],
+      index: liveAppendIndex(baseBody),
+      item: targetBlock,
+    );
+    _syncAfterBodyChange(container, id, detail);
+    return ImagingRunResult(id, appended: true);
+  } on DioException catch (e) {
+    // 409: the run ended/wound down — compose path. 422: the slot is locked
+    // (the session-end steps already started, so nothing can join this run) —
+    // fall through, where the still-active run makes it a fresh sequence.
+    final code = e.response?.statusCode;
+    if (code == 409 || code == 422) return null;
+    rethrow;
+  }
 }
 
 /// The append's PRE-PATCH phase: probe the run state, resolve the base body,

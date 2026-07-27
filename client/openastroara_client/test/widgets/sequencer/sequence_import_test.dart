@@ -18,6 +18,19 @@ import 'package:openastroara/widgets/sequencer/sequence_import.dart';
 /// the import flow now translates CLIENT-side and lands via the ordinary
 /// idempotent create (PORT_DECISIONS 2026-07-15).
 class _ImportClient implements SequenceClient {
+  @override
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+
   /// When set, create() throws this instead of throwOnImport's Exception —
   /// lets tests simulate a pure transport failure (DioException, response
   /// null) vs a daemon rejection.

@@ -238,3 +238,13 @@ phase, no PR until live-tested — per standing rules.
    dialog? Stats tab?
 4. ~~v1 ignores the Moon?~~ RESOLVED 2026-07-19: moon is IN v1 via the
    Krisciunas & Schaefer model on the existing Dart ephemeris.
+
+## Mid-night live appends (§38.9, 2026-07-27)
+
+"Add to Sequence" can now join an ACTIVELY RUNNING sequence (the daemon's
+live-edit endpoints graft the target into the executing plan). Budget
+implication: the frame-count default for a live append is still computed
+against `remainingDarkHours` at append time — the same warn-don't-block
+contract as compose-mood appends. The budget check must never gate the API
+call itself: the user watching their rig add a second target at 1am knows
+their own night better than the model does.

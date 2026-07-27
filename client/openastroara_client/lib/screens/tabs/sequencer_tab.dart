@@ -20,6 +20,7 @@ import '../../widgets/sequencer/sequence_load_dialog.dart';
 import '../../widgets/sequencer/sequence_new_dialog.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/settings/settings_nav.dart';
+import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/sequencer/sequencer_toolbar.dart';
 
@@ -146,6 +147,24 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       if (wasActive && terminal && mounted) {
         RunCompletionSheet.show(context, next.value!);
       }
+    });
+    // §38.9 — a refused/failed live edit surfaces its reason here (the editor
+    // controller can't own a ScaffoldMessenger); one-shot, then cleared.
+    ref.listen<String?>(liveEditNoticeProvider, (prev, next) {
+      if (next == null || !mounted) return;
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(next)));
+      ref.read(liveEditNoticeProvider.notifier).clear();
+    });
+    // §38.9 — an applied live edit changed the STORED body (this client's edit
+    // or another's): re-fetch the detail so the tree matches the executing
+    // plan. The editor reload path already drops stale/mismatched responses.
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null || event.type != 'sequence.run_items_changed') return;
+      final id = ref.read(selectedSequenceIdProvider);
+      if (id == null || event.payload['sequence_id'] != id) return;
+      unawaited(_loadSelectedBody(id));
     });
     final hasSequence = ref.watch(sequenceEditorProvider) != null;
     // §Run-redesign S13 — live mood: while a run is active the palette and

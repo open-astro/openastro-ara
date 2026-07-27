@@ -12,6 +12,19 @@ import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 /// record which action fired so the gating wiring can be asserted.
 class _FakeClient implements SequenceClient {
   @override
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+
+  @override
   Future<String> decideAutoFlats(String id,
           {required String choice, required bool remember}) =>
       throw UnimplementedError();
