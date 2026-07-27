@@ -414,34 +414,51 @@ class SequenceApi implements SequenceClient {
     int? index,
     required Map<String, dynamic> item,
   }) =>
-      _liveEdit(id, (path) => _dio.post<dynamic>(path, data: {
-            'parent_path': parentPath,
-            // Omitted when null: a missing key means "append" server-side.
-            'index': ?index,
-            'item': item,
-          }));
+      _liveEdit(
+          id,
+          (url, options) => _dio.post<dynamic>(url,
+              options: options,
+              data: {
+                'parent_path': parentPath,
+                // Omitted when null: a missing key means "append" server-side.
+                'index': ?index,
+                'item': item,
+              }));
 
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) => _liveEdit(
-      id, (url) => _dio.delete<dynamic>(url, data: {'path': path}));
+      id,
+      // The item address rides the query string — DELETE bodies are dropped by
+      // some intermediaries (mirrors the daemon's contract).
+      (url, options) => _dio.delete<dynamic>(url,
+          options: options, queryParameters: {'path': path.join(',')}));
 
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
       _liveEdit(
           id,
-          (url) => _dio.post<dynamic>('$url/move',
+          (url, options) => _dio.post<dynamic>('$url/move',
+              options: options,
               data: {'path': path, 'new_index': newIndex}));
 
-  /// Shared §38.9 live-edit plumbing: build the run-items URL, run [send], and
-  /// parse the updated detail the daemon returns on 200. Refusals (409/422/500
-  /// with an RFC 7807 body) propagate as DioExceptions the caller maps to UX.
+  /// Shared §38.9 live-edit plumbing: build the run-items URL, stamp a fresh
+  /// Idempotency-Key (a retry after a lost response replays the original
+  /// outcome daemon-side instead of double-applying against a live run), run
+  /// [send], and parse the updated detail the daemon returns on 200. Refusals
+  /// (409/422/500 with an RFC 7807 body) propagate as DioExceptions the caller
+  /// maps to UX.
   Future<SequenceDetail> _liveEdit(
-      String id, Future<Response<dynamic>> Function(String url) send) async {
+      String id,
+      Future<Response<dynamic>> Function(String url, Options options)
+          send) async {
     if (id.isEmpty) {
       throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
     }
-    final res =
-        await send('/api/v1/sequences/${Uri.encodeComponent(id)}/run/items');
+    final key = 'le-${DateTime.now().microsecondsSinceEpoch}-'
+        '${identityHashCode(this).toRadixString(16)}';
+    final res = await send(
+        '/api/v1/sequences/${Uri.encodeComponent(id)}/run/items',
+        Options(headers: {'Idempotency-Key': key}));
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
