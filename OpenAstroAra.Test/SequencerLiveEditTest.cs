@@ -307,7 +307,7 @@ namespace OpenAstroAra.Test {
                 new SequenceRunItemRemoveRequestDto(Path: [1]), null, CancellationToken.None);
             Assert.That(removed.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), removed.Reason);
 
-            await svc.ResumeAsync(id, null, CancellationToken.None);
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
             var terminal = await WaitForTerminalAsync(svc, id);
             Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(ws.Events, Does.Not.Contain("sequence.instruction_failed"),

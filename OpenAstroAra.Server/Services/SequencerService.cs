@@ -102,7 +102,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             IProfileStore? profileStore = null,
             Func<ICalibrationService?>? calibrationResolver = null,
             INotificationService? notifications = null,
-            ActiveRunSessionRegistry? runSessions = null) {
+            ActiveRunSessionRegistry? runSessions = null,
+            // §38.10 — resume-refinement deps, resolver-shaped to dodge the
+            // construction cycles the other cross-service deps already dodge.
+            Func<ICenteringService?>? centeringResolver = null,
+            Func<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor?>? autofocusResolver = null) {
         _deserializer = deserializer;
         _ws = ws;
         _sequencesResolver = sequencesResolver;
@@ -114,6 +118,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _calibrationResolver = calibrationResolver;
         _notifications = notifications;
         _runSessions = runSessions;
+        _centeringResolver = centeringResolver;
+        _autofocusResolver = autofocusResolver;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -251,7 +257,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.pause", idempotencyKey));
     }
 
-    public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.resume");
         if (_runs.TryGetValue(id, out var run)) {
             // CAS BEFORE releasing the gate: while the engine is suspended it
@@ -267,11 +273,23 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 || run.TryTransition(SequenceRunState.PausedAwaitingUser, SequenceRunState.Running)) {
                 _ = EmitAsync("sequence.resumed", id, run);
                 WriteCheckpointIfOwner(run, id);
+                // §38.10 — while the rig sat paused on the SAME target, pointing
+                // (and focus) may have drifted: plate-solve + re-center — and
+                // optionally refocus — BEFORE the gate releases, while the engine
+                // is still suspended and the rig idle. The background task owns
+                // the gate release; every path ends in Gate.Resume().
+                if (TryBeginResumeRefinement(id, run, request)) {
+                    return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
+                }
             }
             // Always disarm — this also cancels a pause that was requested but
             // never reached a boundary (state still Running, CAS above failed),
-            // and is harmless on terminal runs.
-            run.Gate.Resume();
+            // and is harmless on terminal runs. EXCEPT while a §38.10 resume
+            // refinement is in flight: that task owns the release, and a
+            // double-tapped Resume must not yank the gate open mid-solve.
+            if (!run.ResumeRefinementInFlight) {
+                run.Gate.Resume();
+            }
         }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
     }
@@ -294,6 +312,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
             _ = EmitAsync("sequence.paused", sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
+            // §38.10 — snapshot which target the pause interrupted, so a later
+            // resume can tell "still on the same target" (re-center applies)
+            // from "the plan moved on" (a re-center would slew backwards).
+            // Reference identity is the cleanest test: the tree is pinned via
+            // run.SetRoot for the run's lifetime. Runs on the engine thread.
+            if (run.Root is ISequenceContainer pausedRoot) {
+                run.PausedTarget = FindActiveDeepSkyTarget(pausedRoot);
+            }
             if (target == SequenceRunState.PausedAwaitingUser) {
                 // §58.12 — the rig needs a human; start the unattended-shutdown
                 // clock. Runs on the engine thread: the call only arms a timer.
@@ -1138,6 +1164,24 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // with the RunState on eviction; the live-edit path guards the
         // wait against that narrow disposal race.
         public SemaphoreSlim EditLock { get; } = new(1, 1);
+
+        // §38.10 — the DSO container the pause interrupted (set in OnPauseEntered,
+        // consumed by the resume refinement's same-target check). Reference to a
+        // node of the pinned run tree; cleared when consumed.
+        private IDeepSkyObjectContainer? _pausedTarget;
+        public IDeepSkyObjectContainer? PausedTarget {
+            get { lock (_gate) { return _pausedTarget; } }
+            set { lock (_gate) { _pausedTarget = value; } }
+        }
+
+        // §38.10 — single-flight claim for the resume refinement (re-center /
+        // refocus): the claimant owns the eventual Gate.Resume(); a second
+        // resume request while it runs must neither start another refinement
+        // nor release the gate early.
+        private int _resumeRefinement;
+        public bool ResumeRefinementInFlight => Volatile.Read(ref _resumeRefinement) == 1;
+        public bool TryClaimResumeRefinement() => Interlocked.CompareExchange(ref _resumeRefinement, 1, 0) == 0;
+        public void ReleaseResumeRefinementClaim() => Volatile.Write(ref _resumeRefinement, 0);
 
         // §38.9 — per-run Idempotency-Key replay cache for live edits: a retry
         // after a lost response returns the original Applied outcome instead of

@@ -109,7 +109,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.skip", idempotencyKey));
     }
 
-    public Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Paused) {
             run.State = SequenceRunState.Running;
             _ = EmitAsync("sequence.resumed", id, run);

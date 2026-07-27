@@ -598,7 +598,11 @@ public partial class Program {
                 () => sp.GetService<ICalibrationService>(),
                 sp.GetService<INotificationService>(),
                 // §42.5 — same lesson: the run-session registry by hand.
-                sp.GetService<ActiveRunSessionRegistry>()));
+                sp.GetService<ActiveRunSessionRegistry>(),
+                // §38.10 — resume-refinement deps (re-center + refocus before the
+                // gate releases), resolver-shaped like the §35 centering seam.
+                () => sp.GetService<ICenteringService>(),
+                () => sp.GetService<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>()));
         builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
         // The same singleton as a hosted service so its IHostedService.StopAsync
         // cancels any in-flight sequence runs on daemon shutdown.

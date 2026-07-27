@@ -162,6 +162,14 @@ public sealed record SequenceShareDto(
     // route to GET (mirrors ProfileShareDto.DownloadUrl).
     Uri? DownloadUrl);
 
+/// <summary>POST /api/v1/sequences/{id}/resume optional body — §38.10 resume
+/// options. <c>Recenter</c>: plate-solve + re-center the paused target before
+/// imaging continues (null = true when the run is still on the same target it
+/// paused on). <c>Refocus</c>: also run an autofocus sweep after the re-center
+/// (null = false). Both are best-effort — a missing solver/equipment skips
+/// gracefully and the resume proceeds with an honest notification.</summary>
+public sealed record SequenceResumeRequestDto(bool? Recenter, bool? Refocus);
+
 /// <summary>POST /api/v1/sequences/{id}/run/items body — §38.9 live mid-run edit:
 /// insert <c>Item</c> (a NINA-$type node, same schema as body nodes) into the
 /// container addressed by <c>ParentPath</c> (child-index path over the body's

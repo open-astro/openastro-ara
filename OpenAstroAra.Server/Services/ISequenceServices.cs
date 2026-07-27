@@ -104,7 +104,12 @@ public interface ISequencerService {
     Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct);
-    Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct);
+    /// <summary>§38.10 — resume a paused run. <paramref name="request"/> carries the
+    /// resume options (re-center / refocus); null = defaults (re-center when still
+    /// on the same target, no refocus). The re-center/refocus run BEFORE the pause
+    /// gate releases (the engine stays suspended, so the rig is idle), bounded and
+    /// best-effort — the release is never starved by a solve/AF fault.</summary>
+    Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SkipAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct);
