@@ -185,6 +185,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_throwing_resolver_probe_degrades_to_a_plain_resume() {
+            // Review #873 r3 — the probe runs on the request path between the
+            // resume CAS and the gate release: a factory fault must degrade to
+            // plain-resume, never 500 the request with the gate never released.
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var store = new FakeStore(id, DsoBody(factory));
+            var svc = new SequencerService(new SequenceBodyDeserializer(factory),
+                ws: null, sequencesResolver: () => store, checkpoint: null,
+                centeringResolver: () => throw new InvalidOperationException("provider disposed"),
+                autofocusResolver: () => throw new InvalidOperationException("provider disposed"));
+            await PauseAtBoundaryAsync(svc, id);
+
+            Assert.That(await svc.ResumeAsync(id, null, null, CancellationToken.None), Is.Not.Null,
+                "the resume request itself must not fault");
+
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed),
+                "the gate was released and the run finished without refinement");
+        }
+
+        [Test]
         public async Task Safety_auto_resume_cannot_release_the_gate_mid_refinement() {
             // Review #873 — §35's ResumeRunsAsync must not yank the gate open
             // while the user-resume refinement still holds it: imaging would

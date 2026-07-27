@@ -53,6 +53,8 @@ public sealed partial class SequencerService {
     /// (options declined it, the plan moved past the paused target, no centering
     /// service is wired, or another refinement already owns the release).
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The resolver probes run on the request path between the resume CAS and the gate release; any escape would fail the HTTP request with the gate never released. A probe fault degrades to plain-resume. CA1031's log-and-recover boundary applies.")]
     private bool TryBeginResumeRefinement(Guid id, RunState run, SequenceResumeRequestDto? request) {
         var recenter = request?.Recenter ?? true;
         var refocus = request?.Refocus ?? false;
@@ -69,8 +71,20 @@ public sealed partial class SequencerService {
             // would slew BACKWARDS to the old target.
             return false;
         }
-        var wantsCentering = recenter && _centeringResolver?.Invoke() is not null;
-        var wantsFocus = refocus && _autofocusResolver?.Invoke() is not null;
+        // Resolver probes are guarded here too (review #873 r3): this runs
+        // synchronously inside ResumeAsync AFTER the Paused→Running CAS but
+        // BEFORE any Gate.Resume() — a throwing resolver (factory fault,
+        // disposed provider during shutdown) escaping would 500 the request
+        // with the gate never released. On a probe fault: no refinement, and
+        // the caller releases the gate as usual.
+        bool wantsCentering, wantsFocus;
+        try {
+            wantsCentering = recenter && _centeringResolver?.Invoke() is not null;
+            wantsFocus = refocus && _autofocusResolver?.Invoke() is not null;
+        } catch (Exception ex) {
+            LogResumeRefinementProbeFailed(ex, id);
+            return false;
+        }
         if (!wantsCentering && !wantsFocus) return false;
         if (!run.TryClaimResumeRefinement()) return false;
 
@@ -217,6 +231,9 @@ public sealed partial class SequencerService {
             // Best-effort; the refinement itself proceeds.
         }
     }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10 resume refinement on run {SequenceId}: a service resolver faulted during the probe — resuming without refinement")]
+    private partial void LogResumeRefinementProbeFailed(Exception ex, Guid sequenceId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "§38.10 resume refinement on run {SequenceId}: re-centering the paused target before releasing the gate")]
     private partial void LogResumeRecenterStarted(Guid sequenceId);
