@@ -187,8 +187,12 @@ class SequencerToolbar extends ConsumerWidget {
                   label: isPaused ? 'Resume' : 'Run',
                   kind: _LifecycleKind.primary,
                   onPressed: canRunOrResume
-                      ? () => runSequenceLifecycle(context, ref,
-                          (api, id) => isPaused ? api.resume(id) : api.start(id))
+                      ? () => isPaused
+                          // §38.10 — resuming offers the pointing/focus
+                          // refinement choice before imaging continues.
+                          ? promptAndResumeSequence(context, ref)
+                          : runSequenceLifecycle(
+                              context, ref, (api, id) => api.start(id))
                       : null,
                 ),
                 _LifecycleButton(
@@ -498,6 +502,46 @@ class _ToolButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// §38.10 — the resume choice: while the rig sat paused on this target,
+/// pointing (and focus) may have drifted. Offers [Resume & re-center]
+/// (default), [Re-center + refocus], and [Just resume]; dismissing the dialog
+/// cancels (no resume — the user backed out). Public: the tab's keyboard
+/// shortcuts (⌘R / Space on a paused run) drive the same path as the button.
+/// The daemon skips the refinement gracefully when the run moved past the
+/// paused target or no plate solver is configured, so offering it is always safe.
+Future<void> promptAndResumeSequence(BuildContext context, WidgetRef ref) async {
+  final choice = await showDialog<(bool recenter, bool refocus)>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: AraColors.bgPanel,
+      title: const Text('Resume imaging?'),
+      content: const Text(
+          'The target can be re-centered with a plate solve before imaging '
+          'continues — recommended after a pause. You can also refocus first.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop((false, false)),
+          child: const Text('Just resume'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop((true, true)),
+          child: const Text('Re-center + refocus'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop((true, false)),
+          child: const Text('Resume & re-center'),
+        ),
+      ],
+    ),
+  );
+  if (choice == null || !context.mounted) return; // dismissed — user backed out
+  await runSequenceLifecycle(
+      context,
+      ref,
+      (api, id) =>
+          api.resume(id, recenter: choice.$1, refocus: choice.$2));
 }
 
 /// Aborting mid-run is destructive (the night's remaining plan dies with it)

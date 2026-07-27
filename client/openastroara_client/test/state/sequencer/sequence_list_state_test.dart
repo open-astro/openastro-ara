@@ -74,7 +74,8 @@ class _FakeSeqClient implements SequenceClient {
   @override
   Future<String> pause(String id) async => 'op';
   @override
-  Future<String> resume(String id) async => 'op';
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async => 'op';
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override

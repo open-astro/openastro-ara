@@ -73,7 +73,8 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> pause(String id) async => 'op';
   @override
-  Future<String> resume(String id) async => 'op';
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async => 'op';
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override
@@ -301,11 +302,16 @@ void main() {
       expect(client.calls, contains('start'));
     });
 
-    testWidgets('meta-R resumes while paused', (tester) async {
+    testWidgets('meta-R while paused offers the §38.10 resume choice',
+        (tester) async {
       final (_, paused) = await pumpWithRun(tester, SequenceRunState.paused);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+      // The keyboard resume routes through the same dialog as the button.
+      expect(find.text('Resume imaging?'), findsOneWidget);
+      await tester.tap(find.text('Resume & re-center'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(paused.calls, contains('resume'));
@@ -370,7 +376,8 @@ class _RecordingClient extends _FakeClient {
   }
 
   @override
-  Future<String> resume(String id) async {
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async {
     calls.add('resume');
     return 'op';
   }

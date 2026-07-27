@@ -81,7 +81,12 @@ abstract interface class SequenceClient {
 
   Future<String> start(String id);
   Future<String> pause(String id);
-  Future<String> resume(String id);
+
+  /// §38.10 resume with options: [recenter] plate-solves + re-centers the
+  /// paused target before imaging continues (daemon skips it when the run
+  /// moved past that target or no solver is configured); [refocus] also runs
+  /// an autofocus sweep. Both execute BEFORE the pause gate releases.
+  Future<String> resume(String id, {bool recenter = true, bool refocus = false});
 
   /// §38 skip-current: cancel whatever the run is executing right now (e.g. a
   /// target that's no longer well-positioned) so the sequence advances to the
@@ -396,7 +401,10 @@ class SequenceApi implements SequenceClient {
   Future<String> pause(String id) => _lifecycle(id, 'pause');
 
   @override
-  Future<String> resume(String id) => _lifecycle(id, 'resume');
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) =>
+      _lifecycle(id, 'resume',
+          body: {'recenter': recenter, 'refocus': refocus});
 
   @override
   Future<String> skipCurrent(String id) => _lifecycle(id, 'skip-current');

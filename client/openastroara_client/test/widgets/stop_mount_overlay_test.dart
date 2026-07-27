@@ -73,7 +73,8 @@ class _FakeSeqClient implements SequenceClient {
   final List<String> lifecycle = [];
 
   @override
-  Future<String> resume(String id) async {
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async {
     lifecycle.add('resume:$id');
     return 'op';
   }
