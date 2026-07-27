@@ -789,6 +789,9 @@ paths:
 # Event catalog (see §60.10 for full schemas):
 #   equipment.state         — connection + per-device runtime state changes
 #   sequence.progress       — frame-completion, target-switch, instruction-step events
+#   sequence.run_items_changed — §38.9 live mid-run edit applied (add/remove/move of a
+#                             pending item); instructions_total may change mid-run —
+#                             consumers must re-read totals from each progress snapshot
 #   frame.complete          — new frame written to library; payload includes preview URL
 #   frame.analyzed          — §59.5 post-capture star analysis landed: {frame_id, hfr, star_count}
 #   log.line                — server log emission (filterable per channel subscribe)

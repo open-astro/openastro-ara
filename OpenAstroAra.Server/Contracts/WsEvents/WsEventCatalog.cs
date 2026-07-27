@@ -109,6 +109,11 @@ public static class WsEventCatalog {
     public const string SequenceInstructionComplete = "sequence.instruction_complete";
     public const string SequenceInstructionFailed = "sequence.instruction_failed";
     public const string SequenceProgress = "sequence.progress";
+    // §38.9 — a live mid-run edit (add/remove/move of a pending item) was applied
+    // to the executing plan and persisted; payload { sequence_id, run_id, op,
+    // instructions_completed, instructions_total }. Clients re-fetch the sequence
+    // detail (the body changed) and refresh run progress totals.
+    public const string SequenceRunItemsChanged = "sequence.run_items_changed";
     public const string SequenceImported = "sequence.imported";
     public const string SequenceImportWarning = "sequence.import_warning";
     public const string SequenceAutoFlatsPrompt = "sequence.auto_flats_prompt";
@@ -221,7 +226,7 @@ public static class WsEventCatalog {
         SequenceStarted, SequencePaused, SequenceResumed, SequenceAborted,
         SequenceStopped, SequenceComplete,
         SequenceInstructionStarted, SequenceInstructionComplete, SequenceInstructionFailed,
-        SequenceProgress, SequenceImported, SequenceImportWarning,
+        SequenceProgress, SequenceRunItemsChanged, SequenceImported, SequenceImportWarning,
         SequenceAutoFlatsPrompt, SequenceAutoFlatsDecided,
 
         CalibrationFlatsGenerated,
