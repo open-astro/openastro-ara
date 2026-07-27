@@ -62,8 +62,14 @@ class _FakeClient implements SequenceClient {
   }
   @override
   Future<String> pause(String id) async => (calls..add('pause')).last;
+  (bool, bool)? resumeFlags;
   @override
-  Future<String> resume(String id) async => (calls..add('resume')).last;
+  Future<String> resume(String id,
+      {bool recenter = true, bool refocus = false}) async {
+    resumeFlags = (recenter, refocus);
+    calls.add('resume');
+    return 'op';
+  }
   @override
   Future<String> skipCurrent(String id) async => (calls..add('skip-current')).last;
   @override
@@ -306,6 +312,76 @@ void main() {
       await tester.tap(find.text('Keep running'));
       await tester.pumpAndSettle();
       expect(find.text('Abort this run?'), findsNothing);
+    });
+  });
+
+  // §38.10 — resuming a paused run offers the re-center/refocus choice; the
+  // selected options ride the resume request body.
+  group('resume refinement dialog', () {
+    Future<_FakeClient> pumpPaused(WidgetTester tester) async {
+      final client = _FakeClient();
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(client),
+        sequenceRunStateProvider
+            .overrideWith(() => _FakeRunNotifier(_info(SequenceRunState.paused))),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      return client;
+    }
+
+    Future<void> tapResume(WidgetTester tester) async {
+      // Invoke the button directly — the toolbar overflows the 800px test
+      // viewport, so a coordinate tap can't reach it (same technique as the
+      // gating group's btn() assertions).
+      tester
+          .widget<ButtonStyleButton>(find.ancestor(
+              of: find.text('Resume'),
+              matching: find.bySubtype<ButtonStyleButton>()))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.text('Resume imaging?'), findsOneWidget);
+    }
+
+    testWidgets('the default action resumes with re-center only',
+        (tester) async {
+      final client = await pumpPaused(tester);
+      await tapResume(tester);
+      await tester.tap(find.text('Resume & re-center'));
+      await tester.pumpAndSettle();
+      expect(client.calls, contains('resume'));
+      expect(client.resumeFlags, (true, false));
+    });
+
+    testWidgets("'Re-center + refocus' sends both flags", (tester) async {
+      final client = await pumpPaused(tester);
+      await tapResume(tester);
+      await tester.tap(find.text('Re-center + refocus'));
+      await tester.pumpAndSettle();
+      expect(client.resumeFlags, (true, true));
+    });
+
+    testWidgets("'Just resume' declines both", (tester) async {
+      final client = await pumpPaused(tester);
+      await tapResume(tester);
+      await tester.tap(find.text('Just resume'));
+      await tester.pumpAndSettle();
+      expect(client.resumeFlags, (false, false));
+    });
+
+    testWidgets('dismissing the dialog resumes nothing (user backed out)',
+        (tester) async {
+      final client = await pumpPaused(tester);
+      await tapResume(tester);
+      await tester.tapAt(const Offset(5, 5)); // barrier
+      await tester.pumpAndSettle();
+      expect(find.text('Resume imaging?'), findsNothing);
+      expect(client.calls, isNot(contains('resume')));
     });
   });
 }

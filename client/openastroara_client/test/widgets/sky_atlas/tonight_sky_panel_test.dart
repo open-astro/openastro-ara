@@ -95,7 +95,8 @@ class _RecordingClient implements SequenceClient {
   @override
   Future<String> pause(String id) => throw UnimplementedError();
   @override
-  Future<String> resume(String id) => throw UnimplementedError();
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) => throw UnimplementedError();
   @override
   Future<String> skipCurrent(String id) => throw UnimplementedError();
   @override

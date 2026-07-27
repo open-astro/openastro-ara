@@ -161,10 +161,20 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     // plan. The editor reload path already drops stale/mismatched responses.
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
-      if (event == null || event.type != 'sequence.run_items_changed') return;
+      if (event == null) return;
       final id = ref.read(selectedSequenceIdProvider);
       if (id == null || event.payload['sequence_id'] != id) return;
-      unawaited(_loadSelectedBody(id));
+      if (event.type == 'sequence.run_items_changed') {
+        unawaited(_loadSelectedBody(id));
+      } else if (event.type == 'sequence.resume_recentering' && mounted) {
+        // §38.10 — the daemon is refining pointing/focus before imaging
+        // continues; tell the user why frames aren't rolling yet.
+        final refocus = event.payload['refocus'] == true;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+            content: Text(refocus
+                ? 'Re-centering and refocusing before imaging continues…'
+                : 'Re-centering the target before imaging continues…')));
+      }
     });
     final hasSequence = ref.watch(sequenceEditorProvider) != null;
     // §Run-redesign S13 — live mood: while a run is active the palette and
@@ -283,8 +293,11 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     final state = ref.read(sequenceRunStateProvider).value?.state;
     final isPaused = state?.isAnyPaused ?? false;
     if ((state?.isActive ?? false) && !isPaused) return;
-    unawaited(runSequenceLifecycle(
-        context, ref, (api, id) => isPaused ? api.resume(id) : api.start(id)));
+    // §38.10 — a keyboard resume offers the same re-center/refocus choice as
+    // the toolbar button (one path, one dialog).
+    unawaited(isPaused
+        ? promptAndResumeSequence(context, ref)
+        : runSequenceLifecycle(context, ref, (api, id) => api.start(id)));
   }
 
   /// Space — Pause while running, Resume while paused; anything else no-ops
@@ -297,8 +310,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     if (state == SequenceRunState.running) {
       unawaited(runSequenceLifecycle(context, ref, (api, id) => api.pause(id)));
     } else if (state?.isAnyPaused ?? false) {
-      unawaited(
-          runSequenceLifecycle(context, ref, (api, id) => api.resume(id)));
+      unawaited(promptAndResumeSequence(context, ref));
     }
   }
 
