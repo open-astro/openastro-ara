@@ -253,6 +253,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_fragment_whose_lifecycle_hook_throws_is_rolled_back_and_refused() {
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            factory.Containers.Add(new ThrowingInitContainer());
+            var converter = new SequenceJsonConverter(factory);
+            // The fragment CONTAINER's own hook throws (children only initialize
+            // when their block executes, so the container is the surface the
+            // live-add's hook call touches).
+            using var fragmentDoc = JsonDocument.Parse(
+                converter.Serialize(new ThrowingInitContainer { Name = "poisoned-block" }));
+
+            var store = new RecordingSequenceStore(id, BuildBodyWith(factory, c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            var svc = new SequencerService(new SequenceBodyDeserializer(factory),
+                ws: null, sequencesResolver: () => store, checkpoint: null);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForRunningAsync(svc, id);
+            var totalBefore = (await svc.GetRunStateAsync(id, CancellationToken.None))!.InstructionsTotal;
+
+            var result = await svc.AddRunItemAsync(id,
+                new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: fragmentDoc.RootElement.Clone()),
+                CancellationToken.None);
+
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem),
+                "a throwing lifecycle hook must refuse cleanly, not fault the request");
+            Assert.That(store.ReplacedBody, Is.Null, "nothing persisted for the rolled-back splice");
+            var after = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(after!.InstructionsTotal, Is.EqualTo(totalBefore),
+                "the splice was rolled back — plan shape unchanged");
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
         public async Task A_persist_failure_reports_PersistFailed() {
             var id = Guid.NewGuid();
             var (svc, store) = BuildService(id, BuildBody(c => {
@@ -267,6 +302,23 @@ namespace OpenAstroAra.Test {
                 CancellationToken.None);
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.PersistFailed));
             await WaitForTerminalAsync(svc, id);
+        }
+
+        /// <summary>Serialize with a specific factory (for bodies referencing custom test items).</summary>
+        private static JsonElement BuildBodyWith(
+                HeadlessSequencerFactory factory, Action<SequentialContainer> populate) {
+            var converter = new SequenceJsonConverter(factory);
+            var root = new SequentialContainer { Name = "Live-edit test sequence" };
+            populate(root);
+            using var doc = JsonDocument.Parse(converter.Serialize(root));
+            return doc.RootElement.Clone();
+        }
+
+        /// <summary>A container whose block-initialize hook throws — exercises the §38.9 splice rollback.</summary>
+        private sealed class ThrowingInitContainer : SequentialContainer {
+            public override void SequenceBlockInitialize() =>
+                throw new InvalidOperationException("deliberate init failure");
+            public override object Clone() => new ThrowingInitContainer { Name = Name };
         }
 
         /// <summary>ISequenceService fake that serves the body and records live-edit replacements.</summary>

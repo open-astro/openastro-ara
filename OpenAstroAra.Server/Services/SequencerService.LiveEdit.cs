@@ -54,6 +54,8 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class SequencerService {
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The fragment's SequenceBlockInitialize/Started hooks run arbitrary item code (equipment/template types); any escape must roll the splice back and surface as a clean InvalidItem refusal instead of a raw 500 with the live tree mutated but unpersisted. CA1031's log-and-recover boundary applies.")]
     public async Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.live_edit");
         // Deserialize the fragment OUTSIDE the edit gate (it can be arbitrarily
@@ -84,9 +86,20 @@ public sealed partial class SequencerService {
             // executes with the same lifecycle as its siblings. Initialize is
             // always due once the run started; Started only once the parent
             // block itself is past its start hooks (RUNNING or later).
-            fragment.SequenceBlockInitialize();
-            if (parent.Status != SequenceEntityStatus.CREATED) {
-                fragment.SequenceBlockStarted();
+            // Hook code is arbitrary item code (equipment/template types can
+            // throw) — a throw here must UNDO the splice and come back as a
+            // clean refusal, never escape as a raw 500 with the tree mutated
+            // but unpersisted (review #871). CA1031's log-and-recover boundary.
+            try {
+                fragment.SequenceBlockInitialize();
+                if (parent.Status != SequenceEntityStatus.CREATED) {
+                    fragment.SequenceBlockStarted();
+                }
+            } catch (Exception ex) {
+                parent.Remove(fragment);
+                LogLiveEditHookFailed(ex, id);
+                return (new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidItem,
+                    "the item could not be initialized for the running plan and was not added"), null);
             }
             return (null, fragment);
         }, ct);
@@ -165,10 +178,20 @@ public sealed partial class SequencerService {
             return new(SequenceLiveEditOutcome.PersistFailed, "sequence store unavailable");
         }
 
-        SequenceLiveEditResult refusalOrApplied;
-        JsonElement? newBody = null;
-        lock (run.EditGate) {
-            // Re-check under the gate: the run may have wound down while we
+        // The edit lock is held across mutation, serialization AND persist
+        // (review #871): releasing before the file write would let a slower
+        // request's older tree snapshot land on disk after a newer one,
+        // silently regressing the stored body relative to the executing plan.
+        try {
+            await run.EditLock.WaitAsync(ct);
+        } catch (ObjectDisposedException) {
+            // The terminal run was evicted while we queued — same answer as
+            // finding it terminal below.
+            return new(SequenceLiveEditOutcome.NoActiveRun, "no active run for this sequence — edit it with the normal update endpoint");
+        }
+        SequenceDto? updated;
+        try {
+            // Re-check under the lock: the run may have wound down while we
             // queued behind another edit. Mutable = a live run whose tree is
             // published and whose root hasn't reached its teardown phase (once
             // the root leaves RUNNING/CREATED the strategy no longer picks up
@@ -196,33 +219,34 @@ public sealed partial class SequencerService {
             var leaves = run.Leaves;
             run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
 
-            // Serialize the live tree inside the gate so no competing edit can
+            // Serialize the live tree under the lock so no competing edit can
             // interleave between mutation and snapshot. The engine only writes
             // item STATUS scalars mid-run (collection mutations all come through
-            // this gate), so the enumeration is safe.
+            // this lock), so the enumeration is safe.
+            JsonElement newBody;
             try {
                 newBody = _deserializer.SerializeBody(bodyTop);
             } catch (Exception ex) when (ex is InvalidOperationException or JsonException or Newtonsoft.Json.JsonException) {
                 LogLiveEditSerializeFailed(ex, id);
                 return new(SequenceLiveEditOutcome.PersistFailed, "the edited plan could not be re-serialized; the change was not saved");
             }
-            refusalOrApplied = new(SequenceLiveEditOutcome.Applied);
-        }
 
-        // Persist outside the gate (file IO must not block the engine-adjacent
-        // lock). The tree op already happened; a store failure leaves tree and
-        // file diverged until the next accepted edit, so surface it loudly —
-        // the client re-fetches and re-tries rather than us attempting a
-        // fragile inverse tree op against a plan that kept executing.
-        var updated = await sequences.ReplaceRunBodyAsync(id, newBody!.Value, ct);
-        if (updated is null) {
-            LogLiveEditPersistFailed(id, op);
-            return new(SequenceLiveEditOutcome.PersistFailed, "the live plan was updated but could not be saved to the sequence file");
+            // A store failure leaves tree and file diverged until the next
+            // accepted edit, so surface it loudly — the client re-fetches and
+            // re-tries rather than us attempting a fragile inverse tree op
+            // against a plan that kept executing.
+            updated = await sequences.ReplaceRunBodyAsync(id, newBody, ct);
+            if (updated is null) {
+                LogLiveEditPersistFailed(id, op);
+                return new(SequenceLiveEditOutcome.PersistFailed, "the live plan was updated but could not be saved to the sequence file");
+            }
+        } finally {
+            run.EditLock.Release();
         }
 
         await EmitRunItemsChangedAsync(id, run, op);
         WriteCheckpointIfOwner(run, id);
-        return refusalOrApplied with { Sequence = updated };
+        return new(SequenceLiveEditOutcome.Applied, Sequence: updated);
     }
 
     private sealed record ResolvedContainer(ISequenceContainer? Container, SequenceLiveEditResult? Error);
@@ -318,6 +342,9 @@ public sealed partial class SequencerService {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.9 live remove on run {SequenceId} raced the engine — the item started mid-remove and was folded away via skip-current")]
     private partial void LogLiveEditRemoveRaced(Guid sequenceId);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.9 live add on run {SequenceId}: the fragment's block lifecycle hooks threw — splice rolled back, add refused")]
+    private partial void LogLiveEditHookFailed(Exception ex, Guid sequenceId);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "§38.9 live edit on run {SequenceId} could not re-serialize the edited plan")]
     private partial void LogLiveEditSerializeFailed(Exception ex, Guid sequenceId);

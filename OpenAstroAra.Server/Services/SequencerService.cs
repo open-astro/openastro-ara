@@ -1130,9 +1130,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             lock (_gate) { _root = root; _bodyTop = bodyTop ?? root; }
         }
 
-        // §38.9 — serializes competing live-edit requests against each other (the
-        // engine itself serializes on each container's own lock for the list ops).
-        public object EditGate { get; } = new();
+        // §38.9 — serializes competing live-edit requests against each other,
+        // ACROSS the persist await (review #871: an object lock can't span the
+        // file write, and releasing before persisting lets a slower request's
+        // older tree snapshot overwrite a newer one on disk). The engine itself
+        // serializes on each container's own lock for the list ops. Disposed
+        // with the RunState on eviction; the live-edit path guards the
+        // wait against that narrow disposal race.
+        public SemaphoreSlim EditLock { get; } = new(1, 1);
 
         // §38.9 — the run's ordered leaf-instruction list, the denominator for
         // instructions_total / completed / index. Captured once at run start and
@@ -1173,7 +1178,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// <summary>Dispose the CTS once — the record itself stays queryable in _runs.</summary>
         public void DisposeCts() => DisposeCtsOnce();
 
-        public void Dispose() => DisposeCtsOnce();
+        public void Dispose() {
+            DisposeCtsOnce();
+            // Only full eviction (terminal runs leaving _runs) disposes the edit
+            // lock — DisposeCts at run end keeps it, since a late live-edit
+            // request may still be queued on it (and gets its terminal-state
+            // refusal after acquiring).
+            EditLock.Dispose();
+        }
 
         public SequenceRunStateDto ToDto(Guid sequenceId) {
             lock (_gate) {
