@@ -98,6 +98,30 @@ abstract interface class SequenceClient {
   Future<String> decideAutoFlats(String id,
       {required String choice, required bool remember});
 
+  /// §38.9 live mid-run edit: insert [item] (a container node in the raw body
+  /// dialect) into the RUNNING sequence's plan, inside the container at
+  /// [parentPath] (child-index path from the body's top container) at [index]
+  /// (null = append). Positions at/above the running item are refused (422),
+  /// as are edits when the run is winding down (409). Returns the updated
+  /// detail — the daemon persists the edited plan in the same operation.
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  });
+
+  /// §38.9 live mid-run edit: remove the not-yet-started node at [path] from
+  /// the RUNNING sequence's plan (409 `sequence-item-already-started` for a
+  /// started node — skip-current handles the running target). Returns the
+  /// updated detail.
+  Future<SequenceDetail> removeRunItem(String id, List<int> path);
+
+  /// §38.9 live mid-run edit: reorder the not-yet-started node at [path] to
+  /// [newIndex] within its parent (destination must be after the running
+  /// item). Returns the updated detail.
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex);
+
   /// §70.5 share-export: fetch the sequence's shareable manifest
   /// (`POST /{id}/share-export`) so the client can write it to a `.araseq.json`
   /// file. Throws on transport failure / unknown id (the daemon answers 404 → a
@@ -382,6 +406,77 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> stop(String id) => _lifecycle(id, 'stop');
+
+  @override
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) =>
+      _liveEdit(
+          id,
+          (url, options) => _dio.post<dynamic>(url,
+              options: options,
+              data: {
+                'parent_path': parentPath,
+                // Omitted when null: a missing key means "append" server-side.
+                'index': ?index,
+                'item': item,
+              }));
+
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) => _liveEdit(
+      id,
+      // The item address rides the query string — DELETE bodies are dropped by
+      // some intermediaries (mirrors the daemon's contract).
+      (url, options) => _dio.delete<dynamic>(url,
+          options: options, queryParameters: {'path': path.join(',')}));
+
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      _liveEdit(
+          id,
+          (url, options) => _dio.post<dynamic>('$url/move',
+              options: options,
+              data: {'path': path, 'new_index': newIndex}));
+
+  /// Shared §38.9 live-edit plumbing: build the run-items URL, stamp a fresh
+  /// Idempotency-Key (a retry after a lost response replays the original
+  /// outcome daemon-side instead of double-applying against a live run), run
+  /// [send], and parse the updated detail the daemon returns on 200. Refusals
+  /// (409/422/500 with an RFC 7807 body) propagate as DioExceptions the caller
+  /// maps to UX.
+  Future<SequenceDetail> _liveEdit(
+      String id,
+      Future<Response<dynamic>> Function(String url, Options options)
+          send) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    final key = 'le-${DateTime.now().microsecondsSinceEpoch}-'
+        '${identityHashCode(this).toRadixString(16)}';
+    final url = '/api/v1/sequences/${Uri.encodeComponent(id)}/run/items';
+    final options = Options(headers: {'Idempotency-Key': key});
+    Response<dynamic> res;
+    try {
+      res = await send(url, options);
+    } on DioException catch (e) {
+      // Transport-level failure (no response landed): the daemon may have
+      // APPLIED the edit before the connection died. Retry once with the SAME
+      // key — the daemon's per-run replay cache then returns the original
+      // outcome instead of double-applying against the live run. A daemon that
+      // RESPONDED (4xx/5xx) rejected/refused; rethrow those untouched.
+      if (e.response != null) rethrow;
+      res = await send(url, options);
+    }
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'live edit returned an unexpected body (${data.runtimeType})');
+    }
+    return SequenceDetail.fromJson(data);
+  }
 
   @override
   Future<SequenceShareExport> exportShare(String id) async {

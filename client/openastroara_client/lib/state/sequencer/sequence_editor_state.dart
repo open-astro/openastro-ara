@@ -9,14 +9,21 @@
 /// pure value and dirty-tracking is a deep compare against the loaded original.
 library;
 
+import 'dart:async';
+
 import 'package:collection/collection.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/condition_catalog.dart';
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
+import '../../models/sequence/run_index_map.dart';
 import '../../models/sequence/trigger_catalog.dart';
 import '../../models/sequence/sequence_summary.dart';
+import '../../services/sequence_api.dart';
+import 'sequence_list_state.dart';
 
 const DeepCollectionEquality _bodyEquality = DeepCollectionEquality();
 
@@ -88,14 +95,165 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   // (per-keystroke snapshots would make ⌘Z a character-eraser).
   String? _lastCoalesceKey;
 
-  bool get canUndo => _undoStack.isNotEmpty;
-  bool get canRedo => _redoStack.isNotEmpty;
+  bool get canUndo => !_liveRunActive && _undoStack.isNotEmpty;
+  bool get canRedo => !_liveRunActive && _redoStack.isNotEmpty;
+
+  // ── §38.9 live mid-run editing ────────────────────────────────────────────
+  // While the LOADED sequence has an active run, structural edits (insert /
+  // remove / reorder) route to the daemon's live-edit endpoints instead of the
+  // local body: the daemon mutates the EXECUTING plan, persists it, and returns
+  // the updated detail, which reloads the editor (server-authoritative). Nodes
+  // at/before the running position are locked; the daemon re-validates every
+  // rule, so these client checks are UX (fail fast with a message), not the
+  // enforcement. Scalar-field and condition/trigger edits stay local-only in
+  // live mood — they'd silently not join the run, so [_commitBody] refuses them.
+
+  /// Whether the loaded sequence currently has an active run — live mood.
+  bool get _liveRunActive {
+    final s = state;
+    if (s == null) return false;
+    final run = ref.read(sequenceRunStateProvider).value;
+    return run != null &&
+        run.sequenceId == s.id &&
+        (run.state?.isActive ?? false);
+  }
+
+  // Monotonic description-fallback matching, mirroring RunSpotlightNotifier
+  // (review #872 r4): repeated identical labels (ten TakeExposures) must
+  // advance instead of always matching the first occurrence. The notifier
+  // itself can't be read from here — it WATCHES this editor provider, so
+  // ref.read(runSpotlightProvider) is a circular dependency — hence the same
+  // persisted-lastMatchedLeaf technique, reset per run.
+  int? _liveLastMatchedLeaf;
+  String? _liveLastRunId;
+
+  /// The running leaf's [NodePath], resolved like the spotlight (including its
+  /// monotonic fallback matching), or null when it can't be mapped confidently
+  /// (the daemon still enforces every rule).
+  NodePath? _liveCurrentPath(SequenceEditorState s) {
+    final run = ref.read(sequenceRunStateProvider).value;
+    if (run == null) return null;
+    if (run.runId != _liveLastRunId) {
+      _liveLastRunId = run.runId;
+      _liveLastMatchedLeaf = null; // a fresh run starts the match over
+    }
+    final spotlight = resolveSpotlight(
+      s.body,
+      index: run.currentInstructionIndex,
+      total: run.instructionsTotal == 0 ? null : run.instructionsTotal,
+      description: run.currentInstructionDescription,
+      lastMatchedLeaf: _liveLastMatchedLeaf,
+    );
+    _liveLastMatchedLeaf = spotlight.currentLeaf ?? _liveLastMatchedLeaf;
+    return spotlight.currentPath;
+  }
+
+  /// Whether [path] addresses a slot strictly AFTER [current] in depth-first
+  /// order. False for the current node itself, anything ordered before it, and
+  /// any ancestor of it (an ancestor slot insert would shift the running item).
+  static bool _isAfterInDfs(NodePath path, NodePath current) {
+    final n = path.length < current.length ? path.length : current.length;
+    for (var i = 0; i < n; i++) {
+      if (path[i] != current[i]) return path[i] > current[i];
+    }
+    return false; // equal, prefix, or descendant of the running leaf — locked
+  }
+
+  /// Whether the node at [path] is editable in live mood (pending, strictly
+  /// after the running item). The root (`[]`) is never editable as a node.
+  bool isLiveEditable(NodePath path) {
+    final s = state;
+    if (s == null || !_liveRunActive) return true;
+    if (path.isEmpty) return false;
+    final current = _liveCurrentPath(s);
+    if (current == null) return true; // unmappable — let the daemon decide
+    return _isAfterInDfs(path, current);
+  }
+
+  void _notice(String message) =>
+      ref.read(liveEditNoticeProvider.notifier).show(message);
+
+  // §38.9 — one structural live edit at a time (review #872 r3): every op
+  // addresses nodes by POSITIONAL path computed against the loaded body, so a
+  // second op fired before the first one's reload would target pre-edit
+  // indices — against a live telescope run. Refuse with a notice instead.
+  bool _liveEditInFlight = false;
+
+  bool _liveBusy() {
+    if (_liveEditInFlight) {
+      _notice('Hold on — the previous change is still being applied.');
+      return true;
+    }
+    return false;
+  }
+
+  /// A fresh sequential group holding [leaf] — the daemon's live-add accepts
+  /// container nodes, so a bare instruction rides in one, named after itself.
+  static Map<String, dynamic> _wrapInGroup(
+      Map<String, dynamic> leaf, String label) {
+    final group = instructionForType(sequentialContainerType)!.build();
+    group['Name'] = label;
+    return withChildren(group, [leaf]);
+  }
+
+  /// Shared live reorder: lock-check both the item and its destination slot,
+  /// then send the daemon's same-parent move ([newIndex] is post-removal).
+  void _liveMove(
+      SequenceEditorState s, NodePath parentPath, int oldIndex, int newIndex) {
+    if (_liveBusy()) return;
+    final path = <int>[...parentPath, oldIndex];
+    if (!isLiveEditable(path) ||
+        !isLiveEditable(<int>[...parentPath, newIndex])) {
+      _notice('Items at or before the running one are locked while it runs.');
+      return;
+    }
+    if (oldIndex == newIndex) return;
+    unawaited(_applyLive((api) => api.moveRunItem(s.id, path, newIndex)));
+  }
+
+  /// Run a live-edit API call: on success, reload the returned detail (which
+  /// also clears undo history — live edits are server-authoritative and not
+  /// locally undoable); on refusal, surface the daemon's reason.
+  Future<void> _applyLive(
+      Future<SequenceDetail> Function(SequenceClient api) send) async {
+    final s = state;
+    if (s == null) return;
+    final api = ref.read(sequenceApiProvider);
+    if (api == null) return;
+    _liveEditInFlight = true;
+    try {
+      final detail = await send(api);
+      // Stale guard: the editor may have moved to another sequence mid-flight.
+      if (state?.id == s.id) load(detail);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final detail = data is Map<String, dynamic>
+          ? (data['detail'] ?? data['error'])
+          : null;
+      _notice(detail is String && detail.isNotEmpty
+          ? detail
+          : "The running plan couldn't be changed. Check the connection and try again.");
+      debugPrint('[sequencer] live edit refused/failed: $e');
+    } finally {
+      _liveEditInFlight = false;
+    }
+  }
 
   /// Route for every body mutation: snapshot the pre-edit body, clear redo,
   /// then apply. [coalesceKey] marks a scalar-field edit; repeats on the same
   /// key reuse the existing snapshot.
   void _commitBody(SequenceEditorState prev, SequenceEditorState next,
       {String? coalesceKey}) {
+    // §38.9 — every LOCAL body mutation funnels through here; in live mood the
+    // structural ops route to the daemon before reaching this, so anything that
+    // does arrive (field/condition/trigger edits, or a routed op's local
+    // fallback) would silently not join the executing run. Refuse with a notice
+    // instead of quietly forking the working copy from the live plan.
+    if (_liveRunActive) {
+      _notice('The sequence is running — pause-proof edits only: add, remove, '
+          'or reorder upcoming items. Field changes need the run to finish.');
+      return;
+    }
     final coalesce = coalesceKey != null && coalesceKey == _lastCoalesceKey;
     if (!coalesce) {
       _undoStack.add(prev.body);
@@ -205,6 +363,21 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final parent = nodeAt(s.body, parentPath);
     if (parent == null || !isContainer(parent)) return;
     final landed = index.clamp(0, childrenOf(parent).length);
+    if (_liveRunActive) {
+      if (_liveBusy()) return;
+      // §38.9 — the daemon's live-add accepts CONTAINER nodes; a bare leaf
+      // instruction rides inside a fresh sequential group so it can still be
+      // added mid-run (and reads as "added live" in the tree).
+      if (!isLiveEditable(<int>[...parentPath, landed])) {
+        _notice('That spot has already run — add after the current item.');
+        return;
+      }
+      final node =
+          def.isContainer ? def.build() : _wrapInGroup(def.build(), def.label);
+      unawaited(_applyLive((api) => api.addRunItem(s.id,
+          parentPath: List<int>.of(parentPath), index: landed, item: node)));
+      return;
+    }
     final newBody = insertChild(s.body, parentPath, landed, def.build());
     _commitBody(
         s,
@@ -248,6 +421,17 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final s = state;
     if (s == null || path.isEmpty) return;
     if (nodeAt(s.body, path) == null) return;
+    if (_liveRunActive) {
+      if (_liveBusy()) return;
+      if (!isLiveEditable(path)) {
+        _notice('That item has already started — use Skip to drop the current '
+            'one, or wait for it to finish.');
+        return;
+      }
+      unawaited(
+          _applyLive((api) => api.removeRunItem(s.id, List<int>.of(path))));
+      return;
+    }
     _commitBody(s, s._copyWith(body: removeAt(s.body, path), clearSelection: true));
   }
 
@@ -263,6 +447,13 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final parent = nodeAt(s.body, parentPath);
     if (parent == null) return;
     if (oldIndex < 0 || oldIndex >= childrenOf(parent).length) return;
+    if (_liveRunActive) {
+      _liveMove(s, parentPath, oldIndex,
+          // reorderChild's Flutter onReorder convention is pre-removal; the
+          // daemon's move takes a post-removal destination.
+          newIndex > oldIndex ? newIndex - 1 : newIndex);
+      return;
+    }
     _commitBody(
         s,
         s._copyWith(
@@ -285,6 +476,10 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final i = path.last;
     final count = childrenOf(parent).length;
     if (up ? i <= 0 : i >= count - 1) return; // already at the boundary
+    if (_liveRunActive) {
+      _liveMove(state!, parentPath, i, up ? i - 1 : i + 1);
+      return;
+    }
     final newIndex = up ? i - 1 : i + 1; // destination sibling index
     // reorderChild takes a pre-removal newIndex: moving down, the slot is one
     // past the destination; moving up it's the destination itself.
@@ -311,6 +506,20 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (dest == null || !isContainer(dest)) return;
     // A leaf can't take children, and a node can't move inside itself.
     if (isAncestorOrSelf(fromPath, toParentPath)) return;
+    if (_liveRunActive) {
+      final sameParent = const ListEquality<int>()
+          .equals(fromPath.sublist(0, fromPath.length - 1), toParentPath);
+      if (!sameParent) {
+        // v1 live moves are same-parent only (the daemon's move op contract);
+        // reparenting mid-run stays a compose-mood edit.
+        _notice("While running, items can be reordered within their group — "
+            "moving into a different group needs the run to finish.");
+        return;
+      }
+      _liveMove(s, toParentPath, fromPath.last,
+          toIndex.clamp(0, childrenOf(dest).length - 1));
+      return;
+    }
     _commitBody(
         s,
         s._copyWith(
@@ -432,3 +641,16 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
 final sequenceEditorProvider =
     NotifierProvider<SequenceEditorController, SequenceEditorState?>(
         SequenceEditorController.new);
+
+/// §38.9 — transient user-facing message from a refused/failed live edit; the
+/// Run tab listens and surfaces it as a SnackBar, then clears it. (Riverpod
+/// 3.x removed StateProvider, so this is a minimal Notifier.)
+class LiveEditNotice extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void show(String message) => state = message;
+  void clear() => state = null;
+}
+
+final liveEditNoticeProvider =
+    NotifierProvider<LiveEditNotice, String?>(LiveEditNotice.new);

@@ -319,11 +319,21 @@ Map<String, dynamic> appendTargetToRunBody(
     );
   }
   final children = childrenOf(root);
+  final insertAt = liveAppendIndex(root);
+  return withChildren(root, [...children]..insert(insertAt, targetBlock));
+}
+
+/// The root-child index a new target block should land at: the end, but before
+/// any trailing session-end steps (warm/park). Shared by the compose-mood
+/// graft above and the §38.9 live-append (which sends the daemon this index).
+int liveAppendIndex(Map<String, dynamic> root) {
+  if (!isContainer(root)) return 0;
+  final children = childrenOf(root);
   var insertAt = children.length;
   while (insertAt > 0 && _isSessionEndStep(children[insertAt - 1])) {
     insertAt--;
   }
-  return withChildren(root, [...children]..insert(insertAt, targetBlock));
+  return insertAt;
 }
 
 /// A leaf step that belongs at the very end of a session — appending a target

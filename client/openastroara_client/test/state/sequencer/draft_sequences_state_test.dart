@@ -6,10 +6,24 @@ import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 
 /// Fake daemon client for the push path — records create() calls; everything
 /// else is unused by the drafts notifier.
 class _FakeSeqClient implements SequenceClient {
+  @override
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+
   final List<(String, Map<String, dynamic>)> created = [];
   final List<String?> keys = [];
   Object? createError;
