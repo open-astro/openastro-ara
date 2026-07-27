@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.DragDrop;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Server.Contracts;
@@ -82,6 +83,13 @@ public sealed partial class SequencerService {
             if (parent.Status is not (SequenceEntityStatus.CREATED or SequenceEntityStatus.RUNNING)) {
                 return (new SequenceLiveEditResult(SequenceLiveEditOutcome.ItemAlreadyStarted,
                     "that block has already finished — add the item to a block that hasn't run yet (or the end of the plan)"), null);
+            }
+            // A parallel block launches ALL its children in one Task.WhenAll at
+            // block start — an item added while it's RUNNING would never be
+            // picked up (only SequentialStrategy re-scans at boundaries).
+            if (parent.Strategy is not SequentialStrategy && parent.Status == SequenceEntityStatus.RUNNING) {
+                return (new SequenceLiveEditResult(SequenceLiveEditOutcome.ItemAlreadyStarted,
+                    "a parallel block that is already running cannot take new items"), null);
             }
             var children = ItemsOf(parent);
             var floor = LastStartedIndex(children) + 1;

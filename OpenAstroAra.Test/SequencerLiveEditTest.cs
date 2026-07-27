@@ -253,6 +253,48 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_item_removed_during_a_pause_does_not_execute_on_resume() {
+            // Review #871 r3 — the strategy picks `next` BEFORE awaiting the
+            // pause gate, so a live remove during the pause detaches an item the
+            // loop still holds. The strategy's resume re-validation must re-pick
+            // instead of running the deleted (would-fail) item.
+            var id = Guid.NewGuid();
+            var ws = new RecordingWs();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var deserializer = new SequenceBodyDeserializer(factory);
+            var store = new RecordingSequenceStore(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 1 });
+                c.Items.Add(new ExternalScript { Name = "Poison", Script = "/definitely/not/a/real/command-xyz" });
+                c.Items.Add(new Annotation { Name = "after" });
+            }));
+            var svc = new SequencerService(deserializer, ws: ws, sequencesResolver: () => store, checkpoint: null);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForRunningAsync(svc, id);
+            // Arm the pause during the slow leaf; the engine suspends at the
+            // boundary AFTER it — with the poison item already picked as `next`.
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            for (var i = 0; i < 250; i++) {
+                var s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                if (s?.State == SequenceRunState.Paused) break;
+                await Task.Delay(20);
+            }
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.State,
+                Is.EqualTo(SequenceRunState.Paused), "the engine must actually suspend first");
+
+            var removed = await svc.RemoveRunItemAsync(id,
+                new SequenceRunItemRemoveRequestDto(Path: [1]), CancellationToken.None);
+            Assert.That(removed.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), removed.Reason);
+
+            await svc.ResumeAsync(id, null, CancellationToken.None);
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.instruction_failed"),
+                "the removed poison item must not have executed after resume");
+            Assert.That(terminal.InstructionsTotal, Is.EqualTo(2), "slow leaf + annotation remain");
+        }
+
+        [Test]
         public async Task Appending_into_a_finished_sub_container_is_refused() {
             var id = Guid.NewGuid();
             // Block A (an annotation) completes immediately; the slow leaf then
@@ -343,6 +385,17 @@ namespace OpenAstroAra.Test {
             populate(root);
             using var doc = JsonDocument.Parse(converter.Serialize(root));
             return doc.RootElement.Clone();
+        }
+
+        /// <summary>Minimal WS recorder — event types only, for absence assertions.</summary>
+        private sealed class RecordingWs : IWsBroadcaster {
+            private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();
+            public IReadOnlyCollection<string> Events => _events;
+            public long CurrentSequence => _events.Count;
+            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+                _events.Enqueue(eventType);
+                return Task.CompletedTask;
+            }
         }
 
         /// <summary>A container whose block-initialize hook throws — exercises the §38.9 splice rollback.</summary>
