@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
@@ -245,7 +247,18 @@ void main() {
     final client = _RecordingClient()
       ..runState = const SequenceRunStateInfo(
           sequenceId: 'seq-open', state: SequenceRunState.running);
-    await pumpWithOpenSequence(tester, client);
+    final container = await pumpWithOpenSequence(tester, client);
+    // A DIRTY editor holding a diverged working copy (extra leading child):
+    // the live-append index must come from the daemon's saved body, not this
+    // local structure (review #872 — only the integer travels to the server).
+    final divergedBody = Map<String, dynamic>.of(client.detail!.body);
+    container.read(sequenceEditorProvider.notifier).load(SequenceDetail(
+        id: 'seq-open',
+        name: 'M 42',
+        body: withChildren(divergedBody, [
+          instructionForType(sequentialContainerType)!.build(),
+          ...childrenOf(divergedBody),
+        ])));
 
     await tester.tap(find.byIcon(Icons.playlist_add));
     await tester.pump();
@@ -256,7 +269,9 @@ void main() {
     expect(client.updatedId, isNull);
     expect(client.liveAddedId, 'seq-open');
     expect(client.liveAddedItem!['Name'], 'Andromeda Galaxy');
-    // The insert slot skips the trailing warm-up (session-end) step.
+    // The insert slot skips the trailing warm-up (session-end) step, computed
+    // from the SERVER's saved body — the diverged editor copy (one extra
+    // child) would have produced a different index.
     expect(client.liveAddedIndex,
         childrenOf(client.detail!.body).length - 1);
     expect(find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),

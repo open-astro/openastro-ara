@@ -401,11 +401,17 @@ Future<ImagingRunResult?> _tryLiveAppend(
   }
   if (!active) return null;
   try {
-    final baseBody = await _openSequenceBaseBody(container, api, id);
+    // The insert index must be computed against the daemon's OWN saved body —
+    // only the integer travels to the server, which applies it to the
+    // executing plan. The editor's working copy (what _openSequenceBaseBody
+    // prefers for whole-body PATCHes) can hold unsaved edits that diverge from
+    // the running plan, which would land the index in the wrong slot without
+    // tripping the daemon's range checks (review #872).
+    final serverBody = (await api.getSequenceDetail(id)).body;
     final detail = await api.addRunItem(
       id,
       parentPath: const [],
-      index: liveAppendIndex(baseBody),
+      index: liveAppendIndex(serverBody),
       item: targetBlock,
     );
     _syncAfterBodyChange(container, id, detail);
