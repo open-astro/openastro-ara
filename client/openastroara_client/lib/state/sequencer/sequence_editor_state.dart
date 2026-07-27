@@ -118,18 +118,33 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
         (run.state?.isActive ?? false);
   }
 
-  /// The running leaf's [NodePath], resolved the same way the spotlight does,
-  /// or null when it can't be mapped confidently (the daemon still enforces).
+  // Monotonic description-fallback matching, mirroring RunSpotlightNotifier
+  // (review #872 r4): repeated identical labels (ten TakeExposures) must
+  // advance instead of always matching the first occurrence. The notifier
+  // itself can't be read from here — it WATCHES this editor provider, so
+  // ref.read(runSpotlightProvider) is a circular dependency — hence the same
+  // persisted-lastMatchedLeaf technique, reset per run.
+  int? _liveLastMatchedLeaf;
+  String? _liveLastRunId;
+
+  /// The running leaf's [NodePath], resolved like the spotlight (including its
+  /// monotonic fallback matching), or null when it can't be mapped confidently
+  /// (the daemon still enforces every rule).
   NodePath? _liveCurrentPath(SequenceEditorState s) {
     final run = ref.read(sequenceRunStateProvider).value;
     if (run == null) return null;
+    if (run.runId != _liveLastRunId) {
+      _liveLastRunId = run.runId;
+      _liveLastMatchedLeaf = null; // a fresh run starts the match over
+    }
     final spotlight = resolveSpotlight(
       s.body,
       index: run.currentInstructionIndex,
       total: run.instructionsTotal == 0 ? null : run.instructionsTotal,
       description: run.currentInstructionDescription,
-      lastMatchedLeaf: null,
+      lastMatchedLeaf: _liveLastMatchedLeaf,
     );
+    _liveLastMatchedLeaf = spotlight.currentLeaf ?? _liveLastMatchedLeaf;
     return spotlight.currentPath;
   }
 
