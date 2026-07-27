@@ -504,8 +504,6 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
-/// Aborting mid-run is destructive (the night's remaining plan dies with it)
-/// — confirm before dispatching, per the S2 design.
 /// §38.10 — the resume choice: while the rig sat paused on this target,
 /// pointing (and focus) may have drifted. Offers [Resume & re-center]
 /// (default), [Re-center + refocus], and [Just resume]; dismissing the dialog
@@ -546,6 +544,8 @@ Future<void> promptAndResumeSequence(BuildContext context, WidgetRef ref) async 
           api.resume(id, recenter: choice.$1, refocus: choice.$2));
 }
 
+/// Aborting mid-run is destructive (the night's remaining plan dies with it)
+/// — confirm before dispatching, per the S2 design.
 Future<void> _confirmAbort(BuildContext context, WidgetRef ref) async {
   final confirmed = await showDialog<bool>(
     context: context,

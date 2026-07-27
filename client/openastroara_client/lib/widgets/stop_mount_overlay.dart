@@ -271,12 +271,18 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
       for (final id in ids) {
         switch (action) {
           case _StopModalAction.resume:
-            await api.resume(id);
+            // §38.10 — DELIBERATELY no resume-options dialog here: this modal
+            // is already the emergency-stop choice surface, and a pointing
+            // re-center is exactly what a run needs right after a panic stop.
+            // Explicit flags so the safe default reads as chosen, not inherited.
+            await api.resume(id, recenter: true, refocus: false);
           case _StopModalAction.skipTarget:
             // §57.4 "Skip this target": skip what the run is executing now,
-            // then let it continue with the rest of the plan.
+            // then let it continue with the rest of the plan. No re-center —
+            // the skipped target's pointing is irrelevant and the next target
+            // block slews itself.
             await api.skipCurrent(id);
-            await api.resume(id);
+            await api.resume(id, recenter: false, refocus: false);
           case _StopModalAction.endSession:
             await api.stop(id);
         }
