@@ -1139,6 +1139,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // wait against that narrow disposal race.
         public SemaphoreSlim EditLock { get; } = new(1, 1);
 
+        // §38.9 — per-run Idempotency-Key replay cache for live edits: a retry
+        // after a lost response returns the original Applied outcome instead of
+        // double-applying. Written/read only under EditLock.
+        public ConcurrentDictionary<string, SequenceLiveEditResult> LiveEditReplays { get; } = new();
+
         // §38.9 — the run's ordered leaf-instruction list, the denominator for
         // instructions_total / completed / index. Captured once at run start and
         // REBASED after every accepted live edit, so the worker's progress

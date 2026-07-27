@@ -57,7 +57,7 @@ public sealed partial class SequencerService {
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The fragment's SequenceBlockInitialize/Started hooks run arbitrary item code (equipment/template types); any escape must roll the splice back and surface as a clean InvalidItem refusal instead of a raw 500 with the live tree mutated but unpersisted. CA1031's log-and-recover boundary applies.")]
-    public async Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, CancellationToken ct) {
+    public async Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.live_edit");
         // Deserialize the fragment OUTSIDE the edit gate (it can be arbitrarily
         // large and touches no shared state). Only container nodes are accepted
@@ -66,7 +66,7 @@ public sealed partial class SequencerService {
         if (!_deserializer.TryDeserialize(request.Item, out var fragment, out var fragmentError) || fragment is null) {
             return new(SequenceLiveEditOutcome.InvalidItem, fragmentError ?? "item is not a deserializable sequence node");
         }
-        return await MutateRunAsync(id, "add", run => {
+        return await MutateRunAsync(id, "add", idempotencyKey, run => {
             var resolved = ResolveParent(run, request.ParentPath);
             if (resolved.Error is not null) return (resolved.Error, null);
             var parent = resolved.Container!;
@@ -123,9 +123,9 @@ public sealed partial class SequencerService {
         }, ct);
     }
 
-    public Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, CancellationToken ct) {
+    public Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.live_edit");
-        return MutateRunAsync(id, "remove", run => {
+        return MutateRunAsync(id, "remove", idempotencyKey, run => {
             var resolved = ResolveItem(run, request.Path, out var parent);
             if (resolved.Error is not null) return (resolved.Error, null);
             var item = resolved.Item!;
@@ -136,18 +136,20 @@ public sealed partial class SequencerService {
             parent!.Remove(item);
             // Best-effort boundary race: the engine can pick this item as `next`
             // between the status check and the Remove. If it raced into RUNNING,
-            // fold it away with the same mechanism as skip-current.
+            // skip ONLY the raced item (Skip marks it SKIPPED and cancels its own
+            // token) — the root-level SkipCurrentRunningItems would also fold
+            // away genuinely-running parallel siblings (review #871 r4).
             if (item.Status == SequenceEntityStatus.RUNNING) {
                 LogLiveEditRemoveRaced(id);
-                run.Root?.SkipCurrentRunningItems();
+                item.Skip();
             }
             return (null, item);
         }, ct);
     }
 
-    public Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, CancellationToken ct) {
+    public Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.live_edit");
-        return MutateRunAsync(id, "move", run => {
+        return MutateRunAsync(id, "move", idempotencyKey, run => {
             var resolved = ResolveItem(run, request.Path, out var parent);
             if (resolved.Error is not null) return (resolved.Error, null);
             var item = resolved.Item!;
@@ -185,7 +187,7 @@ public sealed partial class SequencerService {
     /// (null, touchedItem) after mutating the tree.
     /// </summary>
     private async Task<SequenceLiveEditResult> MutateRunAsync(
-            Guid id, string op,
+            Guid id, string op, string? idempotencyKey,
             Func<RunState, (SequenceLiveEditResult? Error, ISequenceItem? Item)> mutate,
             CancellationToken ct) {
         if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) {
@@ -209,6 +211,14 @@ public sealed partial class SequencerService {
         }
         SequenceDto? updated;
         try {
+            // Idempotency replay (review #871 r4): a retry after a lost response
+            // must not double-apply a mutation against a live run. Keys are
+            // per-run; only APPLIED outcomes are cached (a refusal is safe to
+            // re-attempt and should be re-evaluated against current state).
+            if (!string.IsNullOrWhiteSpace(idempotencyKey)
+                && run.LiveEditReplays.TryGetValue(idempotencyKey, out var replay)) {
+                return replay;
+            }
             // Re-check under the lock: the run may have wound down while we
             // queued behind another edit. Mutable = a live run whose tree is
             // published and whose root hasn't reached its teardown phase (once
@@ -264,7 +274,13 @@ public sealed partial class SequencerService {
 
         await EmitRunItemsChangedAsync(id, run, op);
         WriteCheckpointIfOwner(run, id);
-        return new(SequenceLiveEditOutcome.Applied, Sequence: updated);
+        var applied = new SequenceLiveEditResult(SequenceLiveEditOutcome.Applied, Sequence: updated);
+        // Bounded per-run replay cache (a night's worth of edits is tiny; the
+        // cap is a runaway-client backstop, not a working limit).
+        if (!string.IsNullOrWhiteSpace(idempotencyKey) && run.LiveEditReplays.Count < 256) {
+            run.LiveEditReplays.TryAdd(idempotencyKey, applied);
+        }
+        return applied;
     }
 
     private sealed record ResolvedContainer(ISequenceContainer? Container, SequenceLiveEditResult? Error);

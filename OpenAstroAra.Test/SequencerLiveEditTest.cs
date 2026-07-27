@@ -96,7 +96,7 @@ namespace OpenAstroAra.Test {
             var before = await svc.GetRunStateAsync(id, CancellationToken.None);
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: Fragment("late-target")),
-                CancellationToken.None);
+                null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
             Assert.That(result.Sequence, Is.Not.Null, "the updated stored dto rides the Applied result");
@@ -128,7 +128,7 @@ namespace OpenAstroAra.Test {
             await WaitForRunningAsync(svc, id);
 
             var result = await svc.RemoveRunItemAsync(id,
-                new SequenceRunItemRemoveRequestDto(Path: [1]), CancellationToken.None);
+                new SequenceRunItemRemoveRequestDto(Path: [1]), null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
             Assert.That(store.ReplacedBody!.Value.GetRawText(), Does.Not.Contain("command-xyz"));
@@ -149,7 +149,7 @@ namespace OpenAstroAra.Test {
             await WaitForRunningAsync(svc, id);
 
             var result = await svc.RemoveRunItemAsync(id,
-                new SequenceRunItemRemoveRequestDto(Path: [0]), CancellationToken.None);
+                new SequenceRunItemRemoveRequestDto(Path: [0]), null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.ItemAlreadyStarted));
             await WaitForTerminalAsync(svc, id);
@@ -167,7 +167,7 @@ namespace OpenAstroAra.Test {
 
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [], Index: 0, Item: Fragment("queue-jumper")),
-                CancellationToken.None);
+                null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidPath));
             await WaitForTerminalAsync(svc, id);
@@ -187,12 +187,12 @@ namespace OpenAstroAra.Test {
             await WaitForRunningAsync(svc, id);
 
             var above = await svc.MoveRunItemAsync(id,
-                new SequenceRunItemMoveRequestDto(Path: [2], NewIndex: 0), CancellationToken.None);
+                new SequenceRunItemMoveRequestDto(Path: [2], NewIndex: 0), null, CancellationToken.None);
             Assert.That(above.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidPath),
                 "the slot of the running item is locked");
 
             var legal = await svc.MoveRunItemAsync(id,
-                new SequenceRunItemMoveRequestDto(Path: [2], NewIndex: 1), CancellationToken.None);
+                new SequenceRunItemMoveRequestDto(Path: [2], NewIndex: 1), null, CancellationToken.None);
             Assert.That(legal.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), legal.Reason);
 
             var raw = store.ReplacedBody!.Value.GetRawText();
@@ -214,7 +214,7 @@ namespace OpenAstroAra.Test {
 
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: Fragment("too-late")),
-                CancellationToken.None);
+                null, CancellationToken.None);
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.NoActiveRun));
         }
 
@@ -230,7 +230,7 @@ namespace OpenAstroAra.Test {
             using var notAnObject = JsonDocument.Parse("42");
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: notAnObject.RootElement.Clone()),
-                CancellationToken.None);
+                null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem));
             Assert.That(store.ReplacedBody, Is.Null, "nothing persisted for a refused edit");
@@ -247,8 +247,29 @@ namespace OpenAstroAra.Test {
             await WaitForRunningAsync(svc, id);
 
             var result = await svc.RemoveRunItemAsync(id,
-                new SequenceRunItemRemoveRequestDto(Path: [7]), CancellationToken.None);
+                new SequenceRunItemRemoveRequestDto(Path: [7]), null, CancellationToken.None);
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidPath));
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_retried_add_with_the_same_idempotency_key_applies_once() {
+            var id = Guid.NewGuid();
+            var (svc, _) = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 2 });
+            }));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForRunningAsync(svc, id);
+
+            var request = new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: Fragment("retried-target"));
+            var first = await svc.AddRunItemAsync(id, request, "retry-key-1", CancellationToken.None);
+            var totalAfterFirst = (await svc.GetRunStateAsync(id, CancellationToken.None))!.InstructionsTotal;
+            var second = await svc.AddRunItemAsync(id, request, "retry-key-1", CancellationToken.None);
+
+            Assert.That(first.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), first.Reason);
+            Assert.That(second.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), "the replay reports the original outcome");
+            Assert.That((await svc.GetRunStateAsync(id, CancellationToken.None))!.InstructionsTotal,
+                Is.EqualTo(totalAfterFirst), "the retry must not double-insert");
             await WaitForTerminalAsync(svc, id);
         }
 
@@ -283,7 +304,7 @@ namespace OpenAstroAra.Test {
                 Is.EqualTo(SequenceRunState.Paused), "the engine must actually suspend first");
 
             var removed = await svc.RemoveRunItemAsync(id,
-                new SequenceRunItemRemoveRequestDto(Path: [1]), CancellationToken.None);
+                new SequenceRunItemRemoveRequestDto(Path: [1]), null, CancellationToken.None);
             Assert.That(removed.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), removed.Reason);
 
             await svc.ResumeAsync(id, null, CancellationToken.None);
@@ -317,7 +338,7 @@ namespace OpenAstroAra.Test {
 
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [0], Index: null, Item: Fragment("too-late-block")),
-                CancellationToken.None);
+                null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.ItemAlreadyStarted));
             Assert.That(store.ReplacedBody, Is.Null);
@@ -348,7 +369,7 @@ namespace OpenAstroAra.Test {
 
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: fragmentDoc.RootElement.Clone()),
-                CancellationToken.None);
+                null, CancellationToken.None);
 
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem),
                 "a throwing lifecycle hook must refuse cleanly, not fault the request");
@@ -372,7 +393,7 @@ namespace OpenAstroAra.Test {
 
             var result = await svc.AddRunItemAsync(id,
                 new SequenceRunItemAddRequestDto(ParentPath: [], Index: null, Item: Fragment("unsaved")),
-                CancellationToken.None);
+                null, CancellationToken.None);
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.PersistFailed));
             await WaitForTerminalAsync(svc, id);
         }

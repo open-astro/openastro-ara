@@ -79,6 +79,19 @@ public static class SequenceEndpoints {
             detail: $"Sequence {id}: {result.Reason}"),
     };
 
+    /// <summary>§38.9 — parse a `?path=1,2` child-index path; null on any
+    /// non-integer/negative segment or an empty string.</summary>
+    private static int[]? ParseIndexPath(string raw) {
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return null;
+        var result = new int[parts.Length];
+        for (var i = 0; i < parts.Length; i++) {
+            if (!int.TryParse(parts[i], out var idx) || idx < 0) return null;
+            result[i] = idx;
+        }
+        return result;
+    }
+
     public static IEndpointRouteBuilder MapSequenceEndpoints(this IEndpointRouteBuilder app) {
         var seq = app.MapGroup("/api/v1/sequences").WithTags("Sequences");
 
@@ -197,26 +210,33 @@ public static class SequenceEndpoints {
         // the run executes. Positions at/above the running item are locked; the
         // stored body is updated in the same operation (file == executing plan).
         seq.MapPost("/{id:guid}/run/items",
-                async (Guid id, [FromBody] SequenceRunItemAddRequestDto request, ISequencerService svc, CancellationToken ct) =>
-                    LiveEditResultToHttp(id, await svc.AddRunItemAsync(id, request, ct)))
+                async (Guid id, [FromBody] SequenceRunItemAddRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    LiveEditResultToHttp(id, await svc.AddRunItemAsync(id, request, key, ct)))
            .Accepts<SequenceRunItemAddRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status409Conflict)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("AddRunItem");
 
+        // The item address rides the query string (`?path=1,2`), not a body —
+        // DELETE bodies are dropped by some intermediaries/client stacks
+        // (review #871 r4), and a child-index path is trivially query-encodable.
         seq.MapDelete("/{id:guid}/run/items",
-                async (Guid id, [FromBody] SequenceRunItemRemoveRequestDto request, ISequencerService svc, CancellationToken ct) =>
-                    LiveEditResultToHttp(id, await svc.RemoveRunItemAsync(id, request, ct)))
-           .Accepts<SequenceRunItemRemoveRequestDto>("application/json")
+                async (Guid id, [FromQuery] string path, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) => {
+                    var parsed = ParseIndexPath(path);
+                    if (parsed is null) {
+                        return Results.UnprocessableEntity(new { error = "path must be a comma-separated list of child indices, e.g. ?path=1,2" });
+                    }
+                    return LiveEditResultToHttp(id, await svc.RemoveRunItemAsync(id, new SequenceRunItemRemoveRequestDto(parsed), key, ct));
+                })
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status409Conflict)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("RemoveRunItem");
 
         seq.MapPost("/{id:guid}/run/items/move",
-                async (Guid id, [FromBody] SequenceRunItemMoveRequestDto request, ISequencerService svc, CancellationToken ct) =>
-                    LiveEditResultToHttp(id, await svc.MoveRunItemAsync(id, request, ct)))
+                async (Guid id, [FromBody] SequenceRunItemMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    LiveEditResultToHttp(id, await svc.MoveRunItemAsync(id, request, key, ct)))
            .Accepts<SequenceRunItemMoveRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status409Conflict)

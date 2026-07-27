@@ -151,15 +151,18 @@ public interface ISequencerService {
     /// stored body) while the run executes. Only positions strictly after the
     /// parent's last started item are accepted; the engine picks the item up at
     /// the next instruction boundary.</summary>
-    Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, CancellationToken ct);
+    /// <para>All three live-edit ops accept an optional Idempotency-Key: a retry
+    /// after a lost response replays the original outcome instead of applying
+    /// the mutation twice against a live run that's hard to undo.</para>
+    Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, string? idempotencyKey, CancellationToken ct);
 
     /// <summary>§38.9 — remove a not-yet-started item from the live run + stored
     /// body. The currently-running item is refused (skip it first).</summary>
-    Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, CancellationToken ct);
+    Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, string? idempotencyKey, CancellationToken ct);
 
     /// <summary>§38.9 — reorder a not-yet-started item within its parent, to a
     /// position strictly after the parent's last started item.</summary>
-    Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, CancellationToken ct);
+    Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>

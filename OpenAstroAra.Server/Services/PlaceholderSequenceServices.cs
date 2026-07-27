@@ -180,13 +180,13 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         Task.FromResult<OpenAstroAra.Astrometry.Coordinates?>(null);
 
     // §38.9 — no plan tree either, so live edits have nothing to mutate.
-    public Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, CancellationToken ct) =>
+    public Task<SequenceLiveEditResult> AddRunItemAsync(Guid id, SequenceRunItemAddRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(new SequenceLiveEditResult(SequenceLiveEditOutcome.RunNotMutable, "placeholder runs carry no editable plan tree"));
 
-    public Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, CancellationToken ct) =>
+    public Task<SequenceLiveEditResult> RemoveRunItemAsync(Guid id, SequenceRunItemRemoveRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(new SequenceLiveEditResult(SequenceLiveEditOutcome.RunNotMutable, "placeholder runs carry no editable plan tree"));
 
-    public Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, CancellationToken ct) =>
+    public Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(new SequenceLiveEditResult(SequenceLiveEditOutcome.RunNotMutable, "placeholder runs carry no editable plan tree"));
 
     public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
