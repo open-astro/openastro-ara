@@ -202,6 +202,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ReplaceRunBodyAsync_writes_while_the_public_update_still_refuses() {
+            // §38.9 — the live-edit persistence path deliberately bypasses the
+            // active-run refusal (the sequencer already mutated the executing tree);
+            // the public PATCH keeps its 409 so external writers stay locked out.
+            var svc = new FileSequenceService(_profileDir, SequencerReporting(SequenceRunState.Running).Object);
+            var dto = await svc.CreateAsync(BodyRequest("live"), null, CancellationToken.None);
+
+            var refused = await svc.UpdateAsync(dto.Id, RenameRequest, CancellationToken.None);
+            Assert.That(refused, Is.EqualTo(SequenceUpdateResult.Refused));
+
+            var newBody = JsonDocument.Parse("""{ "schemaVersion": "openastroara-sequence-v1", "edited": true }""").RootElement;
+            var replaced = await svc.ReplaceRunBodyAsync(dto.Id, newBody, CancellationToken.None);
+            Assert.That(replaced, Is.Not.Null);
+            Assert.That(replaced!.Body.GetProperty("edited").GetBoolean(), Is.True);
+
+            var reloaded = await svc.GetAsync(dto.Id, CancellationToken.None);
+            Assert.That(reloaded!.Body.TryGetProperty("edited", out _), Is.True, "the replaced body persisted to disk");
+            Assert.That(reloaded.ModifiedUtc, Is.GreaterThanOrEqualTo(dto.ModifiedUtc));
+
+            Assert.That(await svc.ReplaceRunBodyAsync(Guid.NewGuid(), newBody, CancellationToken.None), Is.Null,
+                "an unknown id reports null (the sequencer surfaces persist failure)");
+        }
+
+        [Test]
         public async Task Unknown_id_maps_to_not_found_without_consulting_the_sequencer() {
             var sequencer = SequencerReporting(SequenceRunState.Running);
             var svc = new FileSequenceService(_profileDir, sequencer.Object);

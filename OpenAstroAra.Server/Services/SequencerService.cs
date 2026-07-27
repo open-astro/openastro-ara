@@ -171,8 +171,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         Justification = "Body-load boundary on the background worker: deserialization / store access can throw IO/Json/argument/etc.; any escape must surface as a Failed run via WS and be contained, not fault the worker. CA1031's log-and-recover boundary exception applies.")]
     private async Task LoadAndRunAsync(Guid id, RunState run) {
         ISequenceRootContainer? root;
+        ISequenceContainer? bodyTop;
         try {
-            root = await LoadRootAsync(id, run);
+            (root, bodyTop) = await LoadRootAsync(id, run);
         } catch (OperationCanceledException) when (run.Cts.IsCancellationRequested) {
             // Abort/stop arrived during the body load (RequestCancelAsync already
             // set Aborting/Stopped + cancelled the token). Route through the
@@ -207,8 +208,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             host.PauseGate = run.Gate;
             run.Gate.PauseEntered += (_, _) => OnPauseEntered(id, run);
         }
-        // Publish the running root so SkipAsync can reach it for the duration of the run.
-        run.SetRoot(root);
+        // Publish the running root (and the body's top container — the §38.9
+        // live-edit path anchor) so SkipAsync / live edits can reach it for the
+        // duration of the run.
+        run.SetRoot(root, bodyTop);
         try {
             await RunWorkerAsync(id, run, root);
         } finally {
@@ -220,17 +223,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
     }
 
-    private async Task<ISequenceRootContainer?> LoadRootAsync(Guid id, RunState run) {
+    private async Task<(ISequenceRootContainer? Root, ISequenceContainer? BodyTop)> LoadRootAsync(Guid id, RunState run) {
         var sequences = _sequencesResolver?.Invoke();
-        if (sequences is null) return null;
+        if (sequences is null) return (null, null);
         // Use the run's own token (the request CT is gone once StartAsync
         // returned), so an abort during load still cancels it.
         var dto = await sequences.GetAsync(id, run.Cts.Token);
-        if (dto is null) return null;
+        if (dto is null) return (null, null);
         // instructions_total + instructions_completed are derived from the deserialized leaf
         // instructions by the worker (UpdateProgress) — the precise denominator we
         // count completions against — so no separate inspector count is set here.
-        return ToRootContainer(dto.Body);
+        var root = ToRootContainer(dto.Body, out var bodyTop);
+        return (root, bodyTop);
     }
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
@@ -604,10 +608,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// root so the <see cref="Sequencer"/> can drive it. Returns null when the
     /// body can't be deserialized.
     /// </summary>
-    private ISequenceRootContainer? ToRootContainer(JsonElement body) {
+    private ISequenceRootContainer? ToRootContainer(JsonElement body) =>
+        ToRootContainer(body, out _);
+
+    private ISequenceRootContainer? ToRootContainer(JsonElement body, out ISequenceContainer? bodyTop) {
+        bodyTop = null;
         if (!_deserializer.TryDeserialize(body, out var container, out _) || container is null) {
             return null;
         }
+        bodyTop = container;
         if (container is ISequenceRootContainer root) {
             return root;
         }
@@ -684,11 +693,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // straight through to the terminal (aborted/stopped) emit below.
             if (run.State is not (SequenceRunState.Aborting or SequenceRunState.Stopped)) {
                 run.State = SequenceRunState.Running;
-                // Flatten the tree once to the ordered leaf instructions; their
-                // Status drives precise instructions_completed / current_instruction_index.
-                // (instructions_total = leaf count, the same denominator we count against.)
-                var leaves = CollectLeaves(root);
-                run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
+                // Flatten the tree to the ordered leaf instructions; their Status
+                // drives precise instructions_completed / current_instruction_index.
+                // (instructions_total = leaf count, the same denominator we count
+                // against.) Held on the RunState — NOT a local — because a §38.9
+                // live edit re-bases it mid-run; every reader below re-fetches
+                // run.Leaves so it always counts against the current plan shape.
+                run.SetLeaves(CollectLeaves(root));
+                run.UpdateProgress(run.Leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
 
                 // §42.4 — sequence.instruction_failed: the engine raises FailureEvent with the
@@ -726,7 +738,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     if (args.Entity is not ISequenceItem item || item.Status != SequenceEntityStatus.FAILED) {
                         return Task.CompletedTask; // mid-attempt raise — not (yet) a FAILED transition
                     }
-                    var index = leaves.IndexOf(item);
+                    var index = run.Leaves.IndexOf(item);
                     if (index < 0) {
                         return Task.CompletedTask; // triggers/conditions/containers report through their leaves
                     }
@@ -751,6 +763,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     () => EmitAsync("sequence.progress", sequenceId, run));
                 var progress = new Progress<ApplicationStatus>(status => {
                     run.SetDescription(status.Status);
+                    var leaves = run.Leaves;
                     run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
                     progressPublisher.Poke();
                     WriteCheckpointIfOwner(run, sequenceId);
@@ -792,7 +805,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
                 // Final snapshot — fast instructions may finish without firing a
                 // progress tick, so settle the completed count after the run.
-                run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), runningIndex: null);
+                var finalLeaves = run.Leaves;
+                run.UpdateProgress(finalLeaves.Count, CountTerminalLeaves(finalLeaves), runningIndex: null);
                 // Every instruction_failed for this run is published before its
                 // terminal event below.
                 await DrainFailureReportsAsync();
@@ -1102,11 +1116,41 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         private volatile Task? _worker;
         public Task? Worker { get => _worker; set => _worker = value; }
 
-        // The running root container, so live controls (skip-current) can reach it. Set on the
-        // worker once the body loads; read on request threads — guarded by _gate.
+        // The running root container, so live controls (skip-current, §38.9 live
+        // edits) can reach it. Set on the worker once the body loads; read on
+        // request threads — guarded by _gate. BodyTop is the container the STORED
+        // body's top node deserialized to (== Root unless ToRootContainer wrapped a
+        // plain container in a fresh root): §38.9 edit paths are rooted at the
+        // body's top container so tree walks and JSON replays address identically.
         private ISequenceRootContainer? _root;
+        private ISequenceContainer? _bodyTop;
         public ISequenceRootContainer? Root { get { lock (_gate) { return _root; } } }
-        public void SetRoot(ISequenceRootContainer? root) { lock (_gate) { _root = root; } }
+        public ISequenceContainer? BodyTop { get { lock (_gate) { return _bodyTop; } } }
+        public void SetRoot(ISequenceRootContainer? root, ISequenceContainer? bodyTop = null) {
+            lock (_gate) { _root = root; _bodyTop = bodyTop ?? root; }
+        }
+
+        // §38.9 — serializes competing live-edit requests against each other,
+        // ACROSS the persist await (review #871: an object lock can't span the
+        // file write, and releasing before persisting lets a slower request's
+        // older tree snapshot overwrite a newer one on disk). The engine itself
+        // serializes on each container's own lock for the list ops. Disposed
+        // with the RunState on eviction; the live-edit path guards the
+        // wait against that narrow disposal race.
+        public SemaphoreSlim EditLock { get; } = new(1, 1);
+
+        // §38.9 — per-run Idempotency-Key replay cache for live edits: a retry
+        // after a lost response returns the original Applied outcome instead of
+        // double-applying. Written/read only under EditLock.
+        public ConcurrentDictionary<string, SequenceLiveEditResult> LiveEditReplays { get; } = new();
+
+        // §38.9 — the run's ordered leaf-instruction list, the denominator for
+        // instructions_total / completed / index. Captured once at run start and
+        // REBASED after every accepted live edit, so the worker's progress
+        // callbacks always count against the current plan shape.
+        private List<ISequenceItem> _leaves = [];
+        public List<ISequenceItem> Leaves { get { lock (_gate) { return _leaves; } } }
+        public void SetLeaves(List<ISequenceItem> leaves) { lock (_gate) { _leaves = leaves; } }
 
         public void SetDescription(string? description) {
             if (string.IsNullOrEmpty(description)) return;
@@ -1139,7 +1183,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// <summary>Dispose the CTS once — the record itself stays queryable in _runs.</summary>
         public void DisposeCts() => DisposeCtsOnce();
 
-        public void Dispose() => DisposeCtsOnce();
+        public void Dispose() {
+            DisposeCtsOnce();
+            // Only full eviction (terminal runs leaving _runs) disposes the edit
+            // lock — DisposeCts at run end keeps it, since a late live-edit
+            // request may still be queued on it (and gets its terminal-state
+            // refusal after acquiring). Review #871 r5: the worker flips State
+            // terminal WITHOUT holding EditLock, so eviction can race an
+            // in-flight edit that still owns the semaphore — only dispose when
+            // it's free right now; otherwise leak it (SemaphoreSlim without a
+            // wait handle holds no unmanaged resources, and the holder's
+            // Release is additionally ODE-guarded).
+            if (EditLock.Wait(0)) {
+                EditLock.Dispose();
+            }
+        }
 
         public SequenceRunStateDto ToDto(Guid sequenceId) {
             lock (_gate) {

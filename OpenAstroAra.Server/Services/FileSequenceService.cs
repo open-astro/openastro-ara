@@ -237,6 +237,27 @@ public sealed partial class FileSequenceService : ISequenceService {
         }
     }
 
+    public Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, JsonElement body, CancellationToken ct) {
+        // §38.9 — deliberately NO HasActiveRunAsync guard: this is the live-edit
+        // persistence path, called by SequencerService AFTER it mutated the
+        // executing tree; the body is that tree re-serialized. The public PATCH
+        // (UpdateAsync) keeps its 409 refusal — external writers still cannot
+        // rewrite the file under a live executor.
+        var path = PathFor(id);
+        if (!File.Exists(path)) return Task.FromResult<SequenceDto?>(null);
+        var existing = TryLoadFile(path);
+        if (existing is null) return Task.FromResult<SequenceDto?>(null);
+        var updated = existing with { Body = body, ModifiedUtc = DateTimeOffset.UtcNow };
+        try {
+            WriteFile(updated);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // WriteFile already logged; live-edit persistence reports failure via
+            // null so the sequencer can surface it, rather than throwing 500 raw.
+            return Task.FromResult<SequenceDto?>(null);
+        }
+        return Task.FromResult<SequenceDto?>(updated);
+    }
+
     /// <summary>§38 — whether a live run currently owns this sequence's file. The
     /// guard-then-mutate window that remains is microseconds (vs. the client's old
     /// probe→request round-trip); closing it entirely would need a cross-service

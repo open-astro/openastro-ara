@@ -50,6 +50,48 @@ public static class SequenceEndpoints {
             statusCode: StatusCodes.Status409Conflict,
             detail: $"Sequence {id} cannot be {verb} while its run is active. Stop or abort the run first.");
 
+    /// <summary>§38.9 — map a live-edit outcome to its HTTP shape. Refusals ride
+    /// RFC 7807 problems whose <c>type</c> distinguishes "no run" / "not mutable" /
+    /// "item started" so the client can render the right affordance.</summary>
+    private static IResult LiveEditResultToHttp(Guid id, SequenceLiveEditResult result) => result.Outcome switch {
+        SequenceLiveEditOutcome.Applied => Results.Ok(result.Sequence),
+        SequenceLiveEditOutcome.NoActiveRun => Results.Problem(
+            type: "https://openastro.net/errors/sequence-run-not-active",
+            title: "Sequence has no active run",
+            statusCode: StatusCodes.Status409Conflict,
+            detail: $"Sequence {id}: {result.Reason}"),
+        SequenceLiveEditOutcome.RunNotMutable => Results.Problem(
+            type: "https://openastro.net/errors/sequence-run-not-mutable",
+            title: "Run is not accepting live edits",
+            statusCode: StatusCodes.Status409Conflict,
+            detail: $"Sequence {id}: {result.Reason}"),
+        SequenceLiveEditOutcome.ItemAlreadyStarted => Results.Problem(
+            type: "https://openastro.net/errors/sequence-item-already-started",
+            title: "Item has already started",
+            statusCode: StatusCodes.Status409Conflict,
+            detail: $"Sequence {id}: {result.Reason}"),
+        SequenceLiveEditOutcome.InvalidPath or SequenceLiveEditOutcome.InvalidItem =>
+            Results.UnprocessableEntity(new { error = result.Reason }),
+        _ => Results.Problem(
+            type: "https://openastro.net/errors/sequence-live-edit-persist-failed",
+            title: "Live edit could not be persisted",
+            statusCode: StatusCodes.Status500InternalServerError,
+            detail: $"Sequence {id}: {result.Reason}"),
+    };
+
+    /// <summary>§38.9 — parse a `?path=1,2` child-index path; null on any
+    /// non-integer/negative segment or an empty string.</summary>
+    private static int[]? ParseIndexPath(string raw) {
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return null;
+        var result = new int[parts.Length];
+        for (var i = 0; i < parts.Length; i++) {
+            if (!int.TryParse(parts[i], out var idx) || idx < 0) return null;
+            result[i] = idx;
+        }
+        return result;
+    }
+
     public static IEndpointRouteBuilder MapSequenceEndpoints(this IEndpointRouteBuilder app) {
         var seq = app.MapGroup("/api/v1/sequences").WithTags("Sequences");
 
@@ -163,6 +205,43 @@ public static class SequenceEndpoints {
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("SkipCurrentSequence");
+
+        // §38.9 — live mid-run editing: add / remove / reorder PENDING items while
+        // the run executes. Positions at/above the running item are locked; the
+        // stored body is updated in the same operation (file == executing plan).
+        seq.MapPost("/{id:guid}/run/items",
+                async (Guid id, [FromBody] SequenceRunItemAddRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    LiveEditResultToHttp(id, await svc.AddRunItemAsync(id, request, key, ct)))
+           .Accepts<SequenceRunItemAddRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .WithName("AddRunItem");
+
+        // The item address rides the query string (`?path=1,2`), not a body —
+        // DELETE bodies are dropped by some intermediaries/client stacks
+        // (review #871 r4), and a child-index path is trivially query-encodable.
+        seq.MapDelete("/{id:guid}/run/items",
+                async (Guid id, [FromQuery] string path, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) => {
+                    var parsed = ParseIndexPath(path);
+                    if (parsed is null) {
+                        return Results.UnprocessableEntity(new { error = "path must be a comma-separated list of child indices, e.g. ?path=1,2" });
+                    }
+                    return LiveEditResultToHttp(id, await svc.RemoveRunItemAsync(id, new SequenceRunItemRemoveRequestDto(parsed), key, ct));
+                })
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .WithName("RemoveRunItem");
+
+        seq.MapPost("/{id:guid}/run/items/move",
+                async (Guid id, [FromBody] SequenceRunItemMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    LiveEditResultToHttp(id, await svc.MoveRunItemAsync(id, request, key, ct)))
+           .Accepts<SequenceRunItemMoveRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .WithName("MoveRunItem");
 
         seq.MapPost("/{id:guid}/abort",
                 async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>

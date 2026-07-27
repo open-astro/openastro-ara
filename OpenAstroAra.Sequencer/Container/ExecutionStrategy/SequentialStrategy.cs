@@ -69,6 +69,16 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                             // Free when the gate is unarmed.
                             await pauseGate.WaitWhilePausedAsync(token);
                         }
+                        // §38.9 live edit — the pause window: `next` was picked
+                        // BEFORE the gate suspended, so a live remove during the
+                        // pause detaches it from this container (Remove nulls its
+                        // Parent) while the loop still holds the reference. Re-
+                        // validate on resume: a detached item must never execute —
+                        // re-pick from the current snapshot instead.
+                        if (!ReferenceEquals(next.Parent, context)) {
+                            (next, canContinue) = GetNextItem(context, previous);
+                            continue;
+                        }
                         await next.Run(progress, token);
                         previous = next;
 
