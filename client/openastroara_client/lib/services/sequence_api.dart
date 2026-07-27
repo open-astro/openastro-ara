@@ -456,9 +456,20 @@ class SequenceApi implements SequenceClient {
     }
     final key = 'le-${DateTime.now().microsecondsSinceEpoch}-'
         '${identityHashCode(this).toRadixString(16)}';
-    final res = await send(
-        '/api/v1/sequences/${Uri.encodeComponent(id)}/run/items',
-        Options(headers: {'Idempotency-Key': key}));
+    final url = '/api/v1/sequences/${Uri.encodeComponent(id)}/run/items';
+    final options = Options(headers: {'Idempotency-Key': key});
+    Response<dynamic> res;
+    try {
+      res = await send(url, options);
+    } on DioException catch (e) {
+      // Transport-level failure (no response landed): the daemon may have
+      // APPLIED the edit before the connection died. Retry once with the SAME
+      // key — the daemon's per-run replay cache then returns the original
+      // outcome instead of double-applying against the live run. A daemon that
+      // RESPONDED (4xx/5xx) rejected/refused; rethrow those untouched.
+      if (e.response != null) rethrow;
+      res = await send(url, options);
+    }
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(

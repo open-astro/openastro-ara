@@ -158,6 +158,20 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   void _notice(String message) =>
       ref.read(liveEditNoticeProvider.notifier).show(message);
 
+  // §38.9 — one structural live edit at a time (review #872 r3): every op
+  // addresses nodes by POSITIONAL path computed against the loaded body, so a
+  // second op fired before the first one's reload would target pre-edit
+  // indices — against a live telescope run. Refuse with a notice instead.
+  bool _liveEditInFlight = false;
+
+  bool _liveBusy() {
+    if (_liveEditInFlight) {
+      _notice('Hold on — the previous change is still being applied.');
+      return true;
+    }
+    return false;
+  }
+
   /// A fresh sequential group holding [leaf] — the daemon's live-add accepts
   /// container nodes, so a bare instruction rides in one, named after itself.
   static Map<String, dynamic> _wrapInGroup(
@@ -171,6 +185,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// then send the daemon's same-parent move ([newIndex] is post-removal).
   void _liveMove(
       SequenceEditorState s, NodePath parentPath, int oldIndex, int newIndex) {
+    if (_liveBusy()) return;
     final path = <int>[...parentPath, oldIndex];
     if (!isLiveEditable(path) ||
         !isLiveEditable(<int>[...parentPath, newIndex])) {
@@ -190,6 +205,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (s == null) return;
     final api = ref.read(sequenceApiProvider);
     if (api == null) return;
+    _liveEditInFlight = true;
     try {
       final detail = await send(api);
       // Stale guard: the editor may have moved to another sequence mid-flight.
@@ -203,6 +219,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
           ? detail
           : "The running plan couldn't be changed. Check the connection and try again.");
       debugPrint('[sequencer] live edit refused/failed: $e');
+    } finally {
+      _liveEditInFlight = false;
     }
   }
 
@@ -331,6 +349,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (parent == null || !isContainer(parent)) return;
     final landed = index.clamp(0, childrenOf(parent).length);
     if (_liveRunActive) {
+      if (_liveBusy()) return;
       // §38.9 — the daemon's live-add accepts CONTAINER nodes; a bare leaf
       // instruction rides inside a fresh sequential group so it can still be
       // added mid-run (and reads as "added live" in the tree).
@@ -388,6 +407,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (s == null || path.isEmpty) return;
     if (nodeAt(s.body, path) == null) return;
     if (_liveRunActive) {
+      if (_liveBusy()) return;
       if (!isLiveEditable(path)) {
         _notice('That item has already started — use Skip to drop the current '
             'one, or wait for it to finish.');
