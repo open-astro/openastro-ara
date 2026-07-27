@@ -213,10 +213,12 @@ public sealed partial class SequencerService {
         try {
             // Idempotency replay (review #871 r4): a retry after a lost response
             // must not double-apply a mutation against a live run. Keys are
-            // per-run; only APPLIED outcomes are cached (a refusal is safe to
-            // re-attempt and should be re-evaluated against current state).
-            if (!string.IsNullOrWhiteSpace(idempotencyKey)
-                && run.LiveEditReplays.TryGetValue(idempotencyKey, out var replay)) {
+            // per-run and NAMESPACED BY OP (r5) so a client that reuses one key
+            // across different ops can't silently no-op a different mutation;
+            // only APPLIED outcomes are cached (a refusal is safe to re-attempt
+            // and should be re-evaluated against current state).
+            var replayKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : $"{op}:{idempotencyKey}";
+            if (replayKey is not null && run.LiveEditReplays.TryGetValue(replayKey, out var replay)) {
                 return replay;
             }
             // Re-check under the lock: the run may have wound down while we
@@ -269,7 +271,12 @@ public sealed partial class SequencerService {
                 return new(SequenceLiveEditOutcome.PersistFailed, "the live plan was updated but could not be saved to the sequence file");
             }
         } finally {
-            run.EditLock.Release();
+            try {
+                run.EditLock.Release();
+            } catch (ObjectDisposedException) {
+                // Eviction raced this edit and gave up on disposing a held lock
+                // (see RunState.Dispose) — nothing left to release into.
+            }
         }
 
         await EmitRunItemsChangedAsync(id, run, op);
@@ -278,7 +285,7 @@ public sealed partial class SequencerService {
         // Bounded per-run replay cache (a night's worth of edits is tiny; the
         // cap is a runaway-client backstop, not a working limit).
         if (!string.IsNullOrWhiteSpace(idempotencyKey) && run.LiveEditReplays.Count < 256) {
-            run.LiveEditReplays.TryAdd(idempotencyKey, applied);
+            run.LiveEditReplays.TryAdd($"{op}:{idempotencyKey}", applied);
         }
         return applied;
     }

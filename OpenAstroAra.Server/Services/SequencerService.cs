@@ -1188,8 +1188,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // Only full eviction (terminal runs leaving _runs) disposes the edit
             // lock — DisposeCts at run end keeps it, since a late live-edit
             // request may still be queued on it (and gets its terminal-state
-            // refusal after acquiring).
-            EditLock.Dispose();
+            // refusal after acquiring). Review #871 r5: the worker flips State
+            // terminal WITHOUT holding EditLock, so eviction can race an
+            // in-flight edit that still owns the semaphore — only dispose when
+            // it's free right now; otherwise leak it (SemaphoreSlim without a
+            // wait handle holds no unmanaged resources, and the holder's
+            // Release is additionally ODE-guarded).
+            if (EditLock.Wait(0)) {
+                EditLock.Dispose();
+            }
         }
 
         public SequenceRunStateDto ToDto(Guid sequenceId) {
