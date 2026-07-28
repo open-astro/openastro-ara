@@ -296,7 +296,22 @@ Map<String, dynamic> buildTargetBlock({
   var block = _item(sequentialContainerType);
   final name = targetName?.trim();
   block['Name'] = (name != null && name.isNotEmpty) ? name : 'Target';
-  return withChildren(block, children);
+  block = withChildren(block, children);
+  // §38.10a — the block self-terminates when the target sets below the
+  // profile's (custom) horizon: the daemon evaluates this at every instruction
+  // boundary, so a paused-then-resumed (or simply long-running) target that
+  // sank too low ends its block instead of imaging the murk. The target's own
+  // coordinates ride in the condition — these generated blocks are plain
+  // SequentialContainers, not DSO containers, so there is no parent to
+  // inherit them from.
+  final horizonDef = conditionForType(aboveHorizonConditionType);
+  if (horizonDef == null) {
+    throw StateError('AboveHorizonCondition missing from the condition catalog');
+  }
+  final horizon = horizonDef.build();
+  (horizon['Data'] as Map<String, dynamic>)['Coordinates'] =
+      inputCoordinatesFromDeg(raDeg, decDeg);
+  return withConditions(block, [horizon]);
 }
 
 /// A copy of [root] with [targetBlock] appended as another target: inserted
