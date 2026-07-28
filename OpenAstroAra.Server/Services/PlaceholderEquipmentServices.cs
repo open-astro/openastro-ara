@@ -201,6 +201,12 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromException<CalibrationFilesStatusDto>(new InvalidOperationException("guider is not connected"));
     public Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct) =>
         Task.FromException<CalibrationFilesStatusDto>(new InvalidOperationException("guider is not connected"));
+    // §63.17 — placeholder has no guider: choices follow the null-when-disconnected contract, discovery the
+    // faulted-task not-connected contract (→ 409 at the endpoint), same as the enable toggles above.
+    public Task<GuiderEquipmentChoicesDto?> GetEquipmentChoicesAsync(CancellationToken ct) =>
+        Task.FromResult<GuiderEquipmentChoicesDto?>(null);
+    public Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct) =>
+        Task.FromException<GuiderAlpacaDiscoveryDto>(new InvalidOperationException("guider is not connected"));
     // Best-effort by contract: the placeholder has no guider, so cleanup is a no-op false.
     public Task<bool> TryDeleteAraGuiderProfileAsync(string? araProfileName, Guid araProfileId, CancellationToken ct) =>
         Task.FromResult(false);

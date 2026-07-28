@@ -148,6 +148,34 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.GetCalibrationFilesStatusAsync(CancellationToken.None), Is.Null);
         }
 
+        // ── §63.17 PR 1: equipment choices + daemon-side Alpaca discovery ──
+
+        [Test]
+        public async System.Threading.Tasks.Task GetEquipmentChoicesAsync_returns_null_before_connect() {
+            using var svc = NewService();
+            // Same disconnected contract as the calibration-status read: null, not an error.
+            Assert.That(await svc.GetEquipmentChoicesAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public void DiscoverAlpacaServersAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            // An explicit user action ARA can't run — 409 at the endpoint, unlike the null-contract choices read.
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.DiscoverAlpacaServersAsync(new DiscoverAlpacaServersRequestDto(), CancellationToken.None); });
+        }
+
+        [Test]
+        public void DiscoverAlpacaServersAsync_validates_before_the_connection_check() {
+            using var svc = NewService();
+            // Validation runs first, so a bad range surfaces as 400 even while disconnected — the endpoint
+            // relies on this ordering (same as the calibration builds).
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.DiscoverAlpacaServersAsync(new DiscoverAlpacaServersRequestDto(NumQueries: 0), CancellationToken.None); });
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.DiscoverAlpacaServersAsync(new DiscoverAlpacaServersRequestDto(TimeoutSeconds: 31), CancellationToken.None); });
+        }
+
         // ── §63.6 guider-e-4c-b-2: defect-map build dispatch (mirrors the dark-library dispatch) ──
 
         [Test]

@@ -277,6 +277,43 @@ namespace OpenAstroAra.Test {
             Assert.That(after, Is.Null, "disconnect should drop the guider so GetAsync returns null");
         }
 
+        private static readonly string[] ExpectedChoiceCameras = ["Alpaca Camera", "Simulator"];
+        private static readonly string[] ExpectedChoiceMounts = ["On-camera"];
+        private static readonly string[] ExpectedDiscoveredServers = ["192.168.1.154:6800"];
+
+        [Test]
+        public async Task Equipment_choices_and_alpaca_discovery_round_trip_through_the_fake() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            // §63.17 — per-slot choices as the daemon serializes them, including the caps "AO" key and an
+            // omitted rotator slot (a build without rotator support) which must map to an empty list.
+            fake.OnRpc("get_equipment_choices", _ => new JsonObject {
+                ["camera"] = new JsonArray("Alpaca Camera", "Simulator"),
+                ["mount"] = new JsonArray("On-camera"),
+                ["aux_mount"] = new JsonArray(),
+                ["AO"] = new JsonArray(),
+            });
+            fake.OnRpc("discover_alpaca_servers", _ => new JsonArray("192.168.1.154:6800"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            var choices = await svc.GetEquipmentChoicesAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(choices, Is.Not.Null, "a connected guider should answer the choices read");
+            Assert.That(choices!.Cameras, Is.EqualTo(ExpectedChoiceCameras));
+            Assert.That(choices.Mounts, Is.EqualTo(ExpectedChoiceMounts));
+            Assert.That(choices.Rotators, Is.Empty, "an omitted slot maps to an empty list, not null");
+
+            var discovery = await svc.DiscoverAlpacaServersAsync(new DiscoverAlpacaServersRequestDto(), CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(discovery.Servers, Is.EqualTo(ExpectedDiscoveredServers));
+            Assert.That(fake.ReceivedMethods, Does.Contain("discover_alpaca_servers"));
+        }
+
         [Test]
         public async Task Reflects_star_lost_when_the_guide_star_is_lost() {
             await using var fake = FakeGuider.Start();
