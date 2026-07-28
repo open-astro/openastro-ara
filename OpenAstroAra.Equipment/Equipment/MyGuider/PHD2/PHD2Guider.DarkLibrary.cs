@@ -257,6 +257,25 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 new Phd2SetDefectMapEnabled { Parameters = new() { Enabled = enabled } }, "set_defect_map_enabled");
         }
 
+        /// <summary>§63.17 — delete the stored calibration files for the active profile (dark library and/or
+        /// defect map; both true = the daemon's documented "delete everything" default). Returns the updated
+        /// calibration-files status. Requires a connected guider; throws on RPC error.</summary>
+        public Task<Phd2CalibrationFilesStatus> DeleteCalibrationFilesAsync(
+                bool deleteDarkLibrary, bool deleteDefectMap, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            if (!deleteDarkLibrary && !deleteDefectMap) {
+                throw new ArgumentException("at least one of the dark library or defect map must be selected for deletion.", nameof(deleteDarkLibrary));
+            }
+            Logger.Info($"Phd2 - Deleting calibration files (darkLibrary={deleteDarkLibrary}, defectMap={deleteDefectMap}).");
+            return SendCalibrationStatusRpcAsync(
+                new Phd2DeleteCalibrationFiles {
+                    Parameters = new() { DeleteDarkLibrary = deleteDarkLibrary, DeleteDefectMap = deleteDefectMap },
+                }, "delete_calibration_files");
+        }
+
         // Shared send-and-unwrap for the three RPCs that return the calibration-files status object
         // (get_calibration_files_status, set_dark_library_enabled, set_defect_map_enabled): one error/empty-result
         // contract, one place.

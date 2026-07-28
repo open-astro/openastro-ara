@@ -375,6 +375,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Delete_calibration_files_round_trips_through_the_fake() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            // The RPC answers the calibration-files status object (same as get_calibration_files_status).
+            fake.OnRpc("delete_calibration_files", req => {
+                // §63.17 — flags arrive as explicit named booleans.
+                Assert.That((bool?)req["params"]?["delete_dark_library"], Is.True);
+                Assert.That((bool?)req["params"]?["delete_defect_map"], Is.False);
+                return new JsonObject { ["profile_id"] = 1, ["dark_library_exists"] = false, ["defect_map_exists"] = true };
+            });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            var status = await svc.DeleteCalibrationFilesAsync(true, false, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.DarkLibraryExists, Is.False);
+            Assert.That(status.DefectMapExists, Is.True, "the kept defect map must survive a darks-only delete");
+            Assert.That(fake.ReceivedMethods, Does.Contain("delete_calibration_files"));
+        }
+
+        [Test]
         public async Task Reflects_star_lost_when_the_guide_star_is_lost() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));

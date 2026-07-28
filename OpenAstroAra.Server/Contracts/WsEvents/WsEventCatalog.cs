@@ -78,6 +78,9 @@ public static class WsEventCatalog {
     // §63.17 — an on-demand POST /guider/profile/push completed; payload carries the RPC method names
     // attempted so the client can show what reached the daemon.
     public const string GuiderProfilePushed = "guider.profile_pushed";
+    // §63.17 — a profile push changed the guide-camera selection while a dark library exists: the stored
+    // darks belong to the previous camera and should be rebuilt. Payload: {reason: "guide_camera_changed"}.
+    public const string GuiderDarkLibraryInvalidated = "guider.dark_library.invalidated";
     // §45 polar alignment — the routine lifecycle. started/stopped land with the service skeleton;
     // the in-loop frame_complete/solved/unsolved/paused events arrive with the capture-loop slice.
     public const string PolarAlignStarted = "polar_align.started";

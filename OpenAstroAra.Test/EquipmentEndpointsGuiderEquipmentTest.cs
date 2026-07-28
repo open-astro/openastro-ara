@@ -128,6 +128,36 @@ namespace OpenAstroAra.Test {
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }
 
+        // ── §63.17 PR 4: calibration-files delete ──
+
+        [Test]
+        public async Task Delete_returns_200_with_updated_status_and_maps_errors() {
+            var status = new CalibrationFilesStatusDto(1, null, null, false, false, false, false, false, false, true, true, null, null, null);
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.DeleteCalibrationFilesAsync(true, false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(status);
+            var ok = await EquipmentEndpoints.DeleteCalibrationFilesAsync(true, false, svc.Object, CancellationToken.None);
+            Assert.That((ok as Ok<CalibrationFilesStatusDto>)?.Value, Is.SameAs(status));
+
+            svc.Setup(s => s.DeleteCalibrationFilesAsync(false, false, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new ArgumentException("at least one"));
+            Assert.That(ProblemStatusOf(await EquipmentEndpoints.DeleteCalibrationFilesAsync(false, false, svc.Object, CancellationToken.None)),
+                Is.EqualTo(StatusCodes.Status400BadRequest));
+
+            svc.Setup(s => s.DeleteCalibrationFilesAsync(true, true, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider is not connected"));
+            var conflict = await EquipmentEndpoints.DeleteCalibrationFilesAsync(true, true, svc.Object, CancellationToken.None);
+            Assert.Multiple(() => {
+                Assert.That(ProblemStatusOf(conflict), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(ProblemTypeOf(conflict), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
+            });
+
+            svc.Setup(s => s.DeleteCalibrationFilesAsync(true, true, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new GuiderRpcException("delete_calibration_files", 1, "capture active"));
+            Assert.That(ProblemStatusOf(await EquipmentEndpoints.DeleteCalibrationFilesAsync(true, true, svc.Object, CancellationToken.None)),
+                Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+        }
+
         private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
 
         private static string? ProblemTypeOf(IResult result) => (result as ProblemHttpResult)?.ProblemDetails.Type;

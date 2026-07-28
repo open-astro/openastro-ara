@@ -421,6 +421,12 @@ public static class EquipmentEndpoints {
         // the 202 returns; guider.profile_pushed then carries the attempted method names.
         guider.MapPost("/profile/push", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await PushGuiderProfileAsync(key, svc, ct));
+        // §63.17 delete the stored calibration files — synchronous 200 with the updated status (same shape as
+        // the enable toggles). Query flags default to the daemon's "delete everything"; ?darks=false keeps the
+        // dark library, ?defectmap=false keeps the defect map. Both false → 400; disconnected → 409; daemon
+        // rejected → 422.
+        guider.MapDelete("/darklibrary", async (bool? darks, bool? defectmap, IGuiderService svc, CancellationToken ct) =>
+            await DeleteCalibrationFilesAsync(darks ?? true, defectmap ?? true, svc, ct));
         guider.MapPost("/darklibrary/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
             await SetDarkLibraryEnabledAsync(request, svc, ct));
         guider.MapPost("/defectmap/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
@@ -598,6 +604,21 @@ public static class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             // Push landed per-message best-effort, but the post-push equipment reconnect failed — actionable.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    // §63.17 calibration-files delete (extracted for the error-mapping tests). 200 with the updated status;
+    // both flags false → 400; disconnected → 409 (typed); daemon rejected → 422.
+    public static async Task<IResult> DeleteCalibrationFilesAsync(
+            bool darks, bool defectmap, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Ok(await svc.DeleteCalibrationFilesAsync(darks, defectmap, ct));
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }
