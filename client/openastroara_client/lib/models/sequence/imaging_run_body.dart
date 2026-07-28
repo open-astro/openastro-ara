@@ -305,13 +305,21 @@ Map<String, dynamic> buildTargetBlock({
   // SequentialContainers, not DSO containers, so there is no parent to
   // inherit them from.
   final horizonDef = conditionForType(aboveHorizonConditionType);
-  if (horizonDef == null) {
-    throw StateError('AboveHorizonCondition missing from the condition catalog');
+  final loopDef = conditionForType(loopConditionType);
+  if (horizonDef == null || loopDef == null) {
+    throw StateError('condition catalog is missing a required condition');
   }
   final horizon = horizonDef.build();
   (horizon['Data'] as Map<String, dynamic>)['Coordinates'] =
       inputCoordinatesFromDeg(raDeg, decDeg);
-  return withConditions(block, [horizon]);
+  // A container WITH conditions loops its whole child list while they hold
+  // (SequentialStrategy semantics — a lone horizon condition would re-slew,
+  // re-focus, and re-image the block all night until the target sets). The
+  // conditions are ANDed, so pairing a one-iteration LoopCondition makes the
+  // block run ONCE but still end early mid-pass when the target sets
+  // (review #876 — proven by SequentialStrategyConditionSemanticsTest).
+  final onePass = loopDef.build()..['Iterations'] = 1;
+  return withConditions(block, [onePass, horizon]);
 }
 
 /// A copy of [root] with [targetBlock] appended as another target: inserted

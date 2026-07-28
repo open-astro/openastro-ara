@@ -476,6 +476,13 @@ void main() {
         frameCount: 10,
       );
       final conditions = conditionsOf(block);
+      // Paired with a one-iteration LoopCondition: conditions turn a container
+      // into a LOOP (ANDed), so the lone horizon guard would re-run the whole
+      // block all night — see SequentialStrategyConditionSemanticsTest.
+      final loop = conditions
+          .where((c) => (c[r'$type'] as String).contains('LoopCondition'))
+          .single;
+      expect(loop['Iterations'], 1);
       final horizon = conditions
           .where((c) => (c[r'$type'] as String).contains('AboveHorizonCondition'))
           .single;
