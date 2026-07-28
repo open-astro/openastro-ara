@@ -36,6 +36,12 @@ import 'instruction_catalog.dart'
 const String loopConditionType =
     'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer';
 
+/// §38.10a — reused by the Planning tab's imaging-run builder: every generated
+/// target block carries this condition so a target that sets below the
+/// profile's (custom) horizon ends its block instead of imaging the murk.
+const String aboveHorizonConditionType =
+    'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer';
+
 const String waitLoopDataType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitLoopData, OpenAstroAra.Sequencer';
 
@@ -275,8 +281,7 @@ const List<ConditionDef> conditionCatalog = [
   // Loop a container until the target is above the (custom) horizon. Same shape
   // as AltitudeCondition; the offset is added to the horizon altitude.
   ConditionDef(
-    type:
-        'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
+    type: aboveHorizonConditionType,
     label: 'Until above horizon',
     icon: Icons.terrain_outlined,
     fields: [

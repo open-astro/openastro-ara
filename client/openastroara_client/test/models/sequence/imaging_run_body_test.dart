@@ -461,4 +461,56 @@ void main() {
       expect(waits[0]['Text'], contains('Resume'));
     });
   });
+
+  // §38.10a — every generated target block carries an AboveHorizonCondition
+  // with the TARGET's own coordinates, so a target that sets below the
+  // profile's horizon ends its block instead of imaging the murk.
+  group('target block horizon condition', () {
+    test('buildTargetBlock attaches AboveHorizonCondition with the target coords',
+        () {
+      final block = buildTargetBlock(
+        raDeg: 83.8,
+        decDeg: -5.4,
+        targetName: 'M 42',
+        exposureSeconds: 120,
+        frameCount: 10,
+      );
+      final conditions = conditionsOf(block);
+      // Paired with a one-iteration LoopCondition: conditions turn a container
+      // into a LOOP (ANDed), so the lone horizon guard would re-run the whole
+      // block all night — see SequentialStrategyConditionSemanticsTest.
+      final loop = conditions
+          .where((c) => (c[r'$type'] as String).contains('LoopCondition'))
+          .single;
+      expect(loop['Iterations'], 1);
+      final horizon = conditions
+          .where((c) => (c[r'$type'] as String).contains('AboveHorizonCondition'))
+          .single;
+      final data = horizon['Data'] as Map<String, dynamic>;
+      final coords = data['Coordinates'] as Map<String, dynamic>;
+      // 83.8° RA = 5h 35m 12s; dec −5.4° = −5° 24′ 0″.
+      expect(coords['RAHours'], 5);
+      expect(coords['NegativeDec'], isTrue);
+      expect(coords['DecDegrees'], 5);
+      expect(coords['DecMinutes'], 24);
+    });
+
+    test('the full run body carries the condition on every target block', () {
+      final body = buildImagingRunBody(
+        raDeg: 10.68,
+        decDeg: 41.27,
+        targetName: 'M 31',
+        exposureSeconds: 60,
+        frameCount: 5,
+        warmAtEnd: true,
+      );
+      final target = childrenOf(body)
+          .where((c) => c['Name'] == 'M 31')
+          .single;
+      expect(
+          conditionsOf(target)
+              .any((c) => (c[r'$type'] as String).contains('AboveHorizonCondition')),
+          isTrue);
+    });
+  });
 }
