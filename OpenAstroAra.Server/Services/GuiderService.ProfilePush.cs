@@ -32,8 +32,15 @@ public sealed partial class GuiderService {
     /// (it's a handful of quick RPCs, seconds at most — not a §60.5 background job), then the
     /// <c>guider.profile_pushed</c> event reports the attempted method names. Disconnected guider throws
     /// InvalidOperationException (→ 409, typed).</summary>
-    public async Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct) {
+    // Non-async outer so RequireConnectedGuider's "not connected" surfaces synchronously — same contract as
+    // the other explicit guide ops (and what the endpoint's 409 mapping relies on).
+    public Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
+        return PushAsync(guider, idempotencyKey, ct);
+    }
+
+    private async Task<OperationAcceptedDto> PushAsync(
+            OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider guider, string? idempotencyKey, CancellationToken ct) {
         var methods = await guider.RepushGuiderEngineConfigAsync(ct).ConfigureAwait(false);
         var payload = new JsonObject {
             ["methods"] = new JsonArray(methods.Select(m => (JsonNode)JsonValue.Create(m)).ToArray()),

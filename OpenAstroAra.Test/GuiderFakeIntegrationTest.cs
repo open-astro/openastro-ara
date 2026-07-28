@@ -315,6 +315,42 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_push_sends_the_equipment_selections_to_the_fake() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            // The real daemon answers get_connected with a boolean; FakeGuider's generic default (result 0)
+            // would make EnsurePHD2EquipmentConnected's bool cast throw.
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            var profiles = new HeadlessProfileService();
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera";
+            settings.GuiderMount = "On-camera";
+            settings.GuiderRotator = "Alpaca Rotator";
+            settings.GuiderAlpacaHost = "192.168.1.20";
+            settings.GuiderAlpacaPort = 11111;
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            // §63.17 — the on-demand push drives the selection setters over the wire (the connect path
+            // already pushed once; the explicit push must send them again).
+            var before = fake.ReceivedMethods.Count(m => m == "set_selected_camera");
+            var accepted = await svc.PushGuiderProfileAsync("push-1", CancellationToken.None).ConfigureAwait(false);
+            Assert.That(accepted.OperationType, Is.EqualTo("guider.profile.push"));
+            Assert.That(fake.ReceivedMethods.Count(m => m == "set_selected_camera"), Is.GreaterThan(before),
+                "the push should re-send set_selected_camera");
+            Assert.That(fake.ReceivedMethods, Does.Contain("set_selected_mount"));
+            Assert.That(fake.ReceivedMethods, Does.Contain("set_selected_rotator"));
+            Assert.That(fake.ReceivedMethods, Does.Contain("set_alpaca_server"));
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("set_selected_aux_mount"),
+                "an unset selection must not be pushed");
+        }
+
+        [Test]
         public async Task Reflects_star_lost_when_the_guide_star_is_lost() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));

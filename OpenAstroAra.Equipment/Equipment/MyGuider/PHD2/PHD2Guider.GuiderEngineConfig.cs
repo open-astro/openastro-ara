@@ -204,6 +204,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// the RPC method names attempted, for the <c>guider.profile_pushed</c> event's fields-changed payload.
         /// Requires a connected guider (throws <see cref="InvalidOperationException"/>).
         /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Catch-and-rethrow-typed boundary: a post-push equipment reconnect failure (transport drop, daemon contract break) is converted to GuiderRpcException so the service layer maps it to an actionable 422 instead of a raw 500. OperationCanceledException is rethrown untouched.")]
         public async Task<IReadOnlyList<string>> RepushGuiderEngineConfigAsync(CancellationToken ct) {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
@@ -212,8 +214,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 .Select(m => m.Method).Distinct().ToList();
             await PushGuiderEngineConfigAsync(ct);
             // The push only reconnects equipment when it opened the disconnect window; make the post-push
-            // state deterministic for the endpoint either way.
-            await EnsurePHD2EquipmentConnected();
+            // state deterministic for the caller either way. A reconnect failure here is a real, actionable
+            // fault (the push landed but the daemon's equipment is now off) — surface it as a typed RPC error
+            // (→ 422 at the endpoint) rather than an opaque transport exception.
+            try {
+                await EnsurePHD2EquipmentConnected();
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                throw new GuiderRpcException("set_connected", -1,
+                    $"profile pushed, but reconnecting the guider's equipment failed: {ex.Message}");
+            }
             return pushed;
         }
 

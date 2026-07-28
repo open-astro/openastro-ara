@@ -415,6 +415,12 @@ public static class EquipmentEndpoints {
         // short-lived daemon connection) — merely wasteful, so no single-flight gate.
         guider.MapPost("/discover", async ([FromBody] DiscoverAlpacaServersRequestDto request, IGuiderService svc, CancellationToken ct) =>
             await DiscoverAlpacaServersAsync(request, svc, ct));
+        // §63.17 on-demand profile push — re-runs the §63.5 engine-config + equipment-selection push (with
+        // its disconnect → reconnect window when a selection/setup message is queued) so a settings edit
+        // takes effect without a full guider reconnect. Quick (a handful of RPCs): the push completes before
+        // the 202 returns; guider.profile_pushed then carries the attempted method names.
+        guider.MapPost("/profile/push", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            await PushGuiderProfileAsync(key, svc, ct));
         guider.MapPost("/darklibrary/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
             await SetDarkLibraryEnabledAsync(request, svc, ct));
         guider.MapPost("/defectmap/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
@@ -578,6 +584,20 @@ public static class EquipmentEndpoints {
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    // §63.17 profile push (extracted for the error-mapping tests). 202 with the accepted op; disconnected
+    // guider → 409 (typed). The push itself is per-message best-effort inside PHD2Guider, so a daemon
+    // rejection of an individual setter is logged + skipped there, not surfaced as an HTTP error.
+    public static async Task<IResult> PushGuiderProfileAsync(string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.PushGuiderProfileAsync(idempotencyKey, ct));
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            // Push landed per-message best-effort, but the post-push equipment reconnect failed — actionable.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }

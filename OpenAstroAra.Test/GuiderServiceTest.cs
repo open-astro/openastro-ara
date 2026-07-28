@@ -176,6 +176,14 @@ namespace OpenAstroAra.Test {
                 () => { _ = svc.DiscoverAlpacaServersAsync(new DiscoverAlpacaServersRequestDto(TimeoutSeconds: 31), CancellationToken.None); });
         }
 
+        [Test]
+        public void PushGuiderProfileAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            // §63.17 — a push ARA can't run is a 409 at the endpoint, not a silent no-op.
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.PushGuiderProfileAsync(null, CancellationToken.None); });
+        }
+
         // ── §63.6 guider-e-4c-b-2: defect-map build dispatch (mirrors the dark-library dispatch) ──
 
         [Test]
