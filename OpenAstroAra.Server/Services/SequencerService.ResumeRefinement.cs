@@ -203,31 +203,20 @@ public sealed partial class SequencerService {
             var site = _profileStore?.GetSiteSettings();
             var coords = target.Target?.InputCoordinates?.Coordinates;
             if (site is null || coords is null) return null;
-            // Fully managed spherical-astronomy path — NOT Coordinates.Transform
-            // or AstroUtil.GetLocalSiderealTime, both NOVAS-native-backed: the
-            // guard must work wherever the daemon runs, and a sub-degree
-            // refraction/precession/GMST-approximation difference is irrelevant
-            // to a horizon-floor comparison.
-            var lst = ApproximateLstHours(DateTime.UtcNow, site.LongitudeDeg);
-            var hourAngle = OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(
-                OpenAstroAra.Astrometry.AstroUtil.GetHourAngle(lst, coords.RA));
-            var altitude = OpenAstroAra.Astrometry.AstroUtil.GetAltitude(hourAngle, site.LatitudeDeg, coords.Dec);
-            var azimuth = OpenAstroAra.Astrometry.AstroUtil.GetAzimuth(hourAngle, altitude, site.LatitudeDeg, coords.Dec);
+            // SiteAstrometry — the server's ONE managed sky model (shared with
+            // the §58.9 flip predictor and Tonight's Sky; deliberately not the
+            // NOVAS-native Transform, which needs the native library and whose
+            // sub-degree precision is irrelevant to a horizon floor).
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, site.LongitudeDeg);
+            var hourAngle = (lst - coords.RADegrees % 360.0 + 360.0) % 360.0;
+            var altitude = SiteAstrometry.AltitudeFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
+            var azimuth = SiteAstrometry.AzimuthFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
             var limit = HorizonLimitDeg(site, azimuth);
             return altitude < limit ? (altitude, limit) : null;
         } catch (Exception ex) {
             LogResumeAltitudeCheckFailed(ex);
             return null;
         }
-    }
-
-    /// <summary>Local apparent sidereal time (hours) via the standard GMST
-    /// polynomial approximation — pure managed math, accurate to seconds over
-    /// decades, which is orders of magnitude finer than a horizon floor needs.</summary>
-    internal static double ApproximateLstHours(DateTime utc, double longitudeDeg) {
-        var daysSinceJ2000 = (utc - new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc)).TotalDays;
-        var lst = (18.697374558 + 24.06570982441908 * daysSinceJ2000 + longitudeDeg / 15.0) % 24.0;
-        return lst < 0 ? lst + 24.0 : lst;
     }
 
     /// <summary>The horizon altitude at <paramref name="azimuthDeg"/>: linear
