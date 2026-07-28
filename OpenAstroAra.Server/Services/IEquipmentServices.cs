@@ -168,6 +168,16 @@ public interface IGuiderService {
     /// <summary>§63.6 — enable/disable bad-pixel (defect-map) correction; returns the updated calibration status.</summary>
     Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct);
 
+    /// <summary>§63.17 — read the daemon's per-slot equipment choices (camera / mount / aux-mount / AO /
+    /// rotator device names). Returns null when no guider is connected.</summary>
+    Task<GuiderEquipmentChoicesDto?> GetEquipmentChoicesAsync(CancellationToken ct);
+
+    /// <summary>§63.17 — daemon-side Alpaca network discovery (blocking for roughly queries × timeout).
+    /// Throws ArgumentOutOfRangeException on out-of-range parameters (→ 400), InvalidOperationException when
+    /// disconnected (→ 409), and GuiderRpcException when the daemon rejects the sweep (→ 422, e.g. a build
+    /// without Alpaca support).</summary>
+    Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct);
+
     /// <summary>§63.4 delete hook — best-effort removal of the PHD2 profile mapped to a just-deleted ARA
     /// profile (its <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin, dark files included). Never throws: returns
     /// true when the daemon accepted the delete, false when no guider is connected, the profile wasn't

@@ -444,6 +444,37 @@ public sealed record CalibrationFilesStatusDto(
     double? DarkMinExposureSecondsLoaded,
     double? DarkMaxExposureSecondsLoaded);
 
+// ─── Guider equipment choices / Alpaca discovery (§63.17 PR 1) ────────────────
+
+/// <summary>The choices read's envelope: <c>Connected</c> distinguishes "guider not connected"
+/// (Choices null) from "connected, here are the device lists" — same 200-always contract as
+/// <see cref="CalibrationFilesStatusResponseDto"/> so a client driving the equipment pickers never has to
+/// read a 404 as a missing route.</summary>
+public sealed record GuiderEquipmentChoicesResponseDto(
+    bool Connected,
+    GuiderEquipmentChoicesDto? Choices);
+
+/// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
+/// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for
+/// that slot (e.g. no rotator support compiled in).</summary>
+public sealed record GuiderEquipmentChoicesDto(
+    IReadOnlyList<string> Cameras,
+    IReadOnlyList<string> Mounts,
+    IReadOnlyList<string> AuxMounts,
+    IReadOnlyList<string> AdaptiveOptics,
+    IReadOnlyList<string> Rotators);
+
+/// <summary>Daemon-side Alpaca discovery sweep. Null fields use the daemon defaults (2 queries × 2 s);
+/// bounds are validated server-side (queries 1..20, timeout 1..30 s) before the sweep is dispatched. The
+/// request blocks for roughly <c>queries × timeout</c> seconds.</summary>
+public sealed record DiscoverAlpacaServersRequestDto(
+    int? NumQueries = null,
+    int? TimeoutSeconds = null);
+
+/// <summary>Result of a daemon-side Alpaca discovery sweep: <c>"host:port"</c> strings as the guider saw
+/// them on its network.</summary>
+public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
+
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
 public sealed record PolarAlignStateDto(

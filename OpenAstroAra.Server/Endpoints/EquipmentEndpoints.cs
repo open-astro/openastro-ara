@@ -400,6 +400,18 @@ public static class EquipmentEndpoints {
             await BuildDefectMapDarksAsync(request, key, svc, ct));
         // §63.6 enable/disable the loaded calibration artifacts — synchronous (returns the updated status), not a
         // 202 build. Disconnected → 409; the daemon rejecting the toggle (e.g. enable with no camera) → 422.
+        // §63.17 equipment choices: always 200 with a {connected, choices} envelope (same polling contract as
+        // /darklibrary/status) so the client's equipment pickers can tell "guider not connected" from a
+        // missing route.
+        guider.MapGet("/choices", async (IGuiderService svc, CancellationToken ct) => {
+            var dto = await svc.GetEquipmentChoicesAsync(ct);
+            return Results.Ok(new GuiderEquipmentChoicesResponseDto(Connected: dto is not null, Choices: dto));
+        });
+        // §63.17 daemon-side Alpaca discovery — synchronous (blocks roughly queries × timeout, bounded 10 min
+        // worst case), 200 with the discovered servers. Bad range → 400; disconnected → 409; daemon rejected
+        // (e.g. no Alpaca support in the build) → 422.
+        guider.MapPost("/discover", async ([FromBody] DiscoverAlpacaServersRequestDto request, IGuiderService svc, CancellationToken ct) =>
+            await DiscoverAlpacaServersAsync(request, svc, ct));
         guider.MapPost("/darklibrary/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
             await SetDarkLibraryEnabledAsync(request, svc, ct));
         guider.MapPost("/defectmap/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
@@ -546,6 +558,22 @@ public static class EquipmentEndpoints {
             return Results.Ok(await toggle());
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    // §63.17 daemon-side Alpaca discovery (extracted for the error-mapping tests). 200 with the discovered
+    // servers; out-of-range sweep parameters → 400; disconnected guider → 409 (typed); daemon rejected the
+    // sweep (e.g. Alpaca support not compiled in) → 422.
+    public static async Task<IResult> DiscoverAlpacaServersAsync(
+            DiscoverAlpacaServersRequestDto request, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Ok(await svc.DiscoverAlpacaServersAsync(request, ct));
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
