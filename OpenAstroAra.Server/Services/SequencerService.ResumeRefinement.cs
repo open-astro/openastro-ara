@@ -21,6 +21,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -109,6 +110,19 @@ public sealed partial class SequencerService {
             }
             await EmitResumeRecenteringAsync(id, run, recenter, refocus);
 
+            // §38.10a altitude guard — during a long pause the target may have
+            // sunk below the horizon limit; re-centering (and refocusing) on it
+            // would waste minutes of rig time on a target the plan's altitude
+            // conditions are about to abandon. Unknown altitude (no profile,
+            // math fault) proceeds with the refinement — the guard only ever
+            // SKIPS work, never blocks a resume.
+            var tooLow = TryGetTargetBelowHorizon(target);
+            if (tooLow is { } low) {
+                LogResumeTargetTooLow(id, low.AltitudeDeg, low.LimitDeg);
+                await NotifyTargetTooLowAsync(low.AltitudeDeg, low.LimitDeg, refocus).ConfigureAwait(false);
+                return; // finally releases the gate; the plan's conditions decide what's next
+            }
+
             if (recenter) {
                 // Resolver + coordinate reads live INSIDE the guarded region too
                 // (review #873): a throw here must still reach the outcome
@@ -178,6 +192,93 @@ public sealed partial class SequencerService {
         }
     }
 
+    /// <summary>§38.10a — the target's current altitude vs. the profile's horizon
+    /// limit at its azimuth (custom-horizon interpolation when enabled, else the
+    /// flat default floor). Null = fine to proceed (above the limit, or the
+    /// altitude/limit can't be determined — the guard only ever skips work).</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A profile read or transform fault must degrade to 'unknown — proceed with the refinement', never fault the background task. Log-and-recover boundary.")]
+    private (double AltitudeDeg, double LimitDeg)? TryGetTargetBelowHorizon(IDeepSkyObjectContainer target) {
+        try {
+            var site = _profileStore?.GetSiteSettings();
+            var coords = target.Target?.InputCoordinates?.Coordinates;
+            if (site is null || coords is null) return null;
+            // Fully managed spherical-astronomy path — NOT Coordinates.Transform
+            // or AstroUtil.GetLocalSiderealTime, both NOVAS-native-backed: the
+            // guard must work wherever the daemon runs, and a sub-degree
+            // refraction/precession/GMST-approximation difference is irrelevant
+            // to a horizon-floor comparison.
+            var lst = ApproximateLstHours(DateTime.UtcNow, site.LongitudeDeg);
+            var hourAngle = OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(
+                OpenAstroAra.Astrometry.AstroUtil.GetHourAngle(lst, coords.RA));
+            var altitude = OpenAstroAra.Astrometry.AstroUtil.GetAltitude(hourAngle, site.LatitudeDeg, coords.Dec);
+            var azimuth = OpenAstroAra.Astrometry.AstroUtil.GetAzimuth(hourAngle, altitude, site.LatitudeDeg, coords.Dec);
+            var limit = HorizonLimitDeg(site, azimuth);
+            return altitude < limit ? (altitude, limit) : null;
+        } catch (Exception ex) {
+            LogResumeAltitudeCheckFailed(ex);
+            return null;
+        }
+    }
+
+    /// <summary>Local apparent sidereal time (hours) via the standard GMST
+    /// polynomial approximation — pure managed math, accurate to seconds over
+    /// decades, which is orders of magnitude finer than a horizon floor needs.</summary>
+    internal static double ApproximateLstHours(DateTime utc, double longitudeDeg) {
+        var daysSinceJ2000 = (utc - new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc)).TotalDays;
+        var lst = (18.697374558 + 24.06570982441908 * daysSinceJ2000 + longitudeDeg / 15.0) % 24.0;
+        return lst < 0 ? lst + 24.0 : lst;
+    }
+
+    /// <summary>The horizon altitude at <paramref name="azimuthDeg"/>: linear
+    /// interpolation over the custom-horizon vertices (wrapping 360→0) when
+    /// enabled and populated, else the flat default floor.</summary>
+    private double HorizonLimitDeg(SiteSettingsDto site, double azimuthDeg) {
+        if (!site.UseCustomHorizon) return site.DefaultHorizonAltitudeDeg;
+        var points = _profileStore?.GetCustomHorizon()?.Points;
+        if (points is null || points.Count == 0) return site.DefaultHorizonAltitudeDeg;
+        if (points.Count == 1) return points[0].AltitudeDeg;
+        var az = ((azimuthDeg % 360) + 360) % 360;
+        var ordered = points.OrderBy(p => p.AzimuthDeg).ToList();
+        // Find the bracketing pair, wrapping the last→first segment across 0°.
+        for (var i = 0; i < ordered.Count; i++) {
+            var a = ordered[i];
+            var b = ordered[(i + 1) % ordered.Count];
+            var span = ((b.AzimuthDeg - a.AzimuthDeg) % 360 + 360) % 360;
+            var into = ((az - a.AzimuthDeg) % 360 + 360) % 360;
+            if (span > 0 && into <= span) {
+                return a.AltitudeDeg + (b.AltitudeDeg - a.AltitudeDeg) * (into / span);
+            }
+        }
+        return site.DefaultHorizonAltitudeDeg;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Notification store faults must never delay or mask the gate release. Log-and-recover boundary.")]
+    private async Task NotifyTargetTooLowAsync(double altitudeDeg, double limitDeg, bool refocusRequested) {
+        if (_notifications is null) return;
+        try {
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Sequence,
+                Title: "Sequence resumed — target is low",
+                Message: $"The paused target now sits at {altitudeDeg:F0}°, below your "
+                    + $"{limitDeg:F0}° horizon limit, so the re-center"
+                    + (refocusRequested ? " and refocus were" : " was")
+                    + " skipped. The plan's altitude conditions decide whether imaging continues.",
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogResumeNotifyFailed(ex);
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Notification store faults must never delay or mask the gate release. Log-and-recover boundary.")]
     private async Task NotifyResumeRefinementAsync(string centeringOutcome, string focusOutcome, bool refocusRequested) {
@@ -231,6 +332,12 @@ public sealed partial class SequencerService {
             // Best-effort; the refinement itself proceeds.
         }
     }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10a resume refinement on run {SequenceId}: target sits at {AltitudeDeg}° — below the {LimitDeg}° horizon limit; re-center/refocus skipped")]
+    private partial void LogResumeTargetTooLow(Guid sequenceId, double altitudeDeg, double limitDeg);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10a altitude check failed — proceeding with the refinement (the guard only ever skips work)")]
+    private partial void LogResumeAltitudeCheckFailed(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "§38.10 resume refinement on run {SequenceId}: a service resolver faulted during the probe — resuming without refinement")]
     private partial void LogResumeRefinementProbeFailed(Exception ex, Guid sequenceId);

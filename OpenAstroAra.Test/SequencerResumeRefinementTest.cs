@@ -52,6 +52,20 @@ namespace OpenAstroAra.Test {
             return doc.RootElement.Clone();
         }
 
+        /// <summary>A near-pole site (89.9°N): the default dec-0° target hugs the
+        /// horizon (altitude ≈ ±0.1° regardless of time), so the guard's verdict
+        /// is decided purely by the flat [floorDeg] horizon floor: +20° → too
+        /// low, −20° → clears it. No custom horizon, no NOVAS involved.</summary>
+        private static Mock<IProfileStore> PolarSite(double floorDeg) {
+            var store = new Mock<IProfileStore>();
+            store.Setup(p => p.GetSiteSettings()).Returns(new SiteSettingsDto(
+                SiteName: "pole", LatitudeDeg: 89.9, LongitudeDeg: 0, ElevationM: 0,
+                TimeZone: "UTC", UseCustomHorizon: false, DefaultHorizonAltitudeDeg: floorDeg,
+                BortleClass: 4, TypicalSeeingArcsec: 2.0, TwilightDefinition: "astronomical"));
+            store.Setup(p => p.GetCustomHorizon()).Returns(new CustomHorizonDto([]));
+            return store;
+        }
+
         private sealed class FakeAutofocus : IAutofocusExecutor {
             public int Runs;
             public bool Converge = true;
@@ -62,7 +76,8 @@ namespace OpenAstroAra.Test {
         }
 
         private static (SequencerService Svc, Mock<ICenteringService> Centering, FakeAutofocus Af) BuildService(
-                Guid id, Func<CancellationToken, Task<PlateSolveResult>>? centerBehaviour = null) {
+                Guid id, Func<CancellationToken, Task<PlateSolveResult>>? centerBehaviour = null,
+                IProfileStore? profileStore = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var body = DsoBody(factory);
             var store = new FakeStore(id, body);
@@ -79,6 +94,7 @@ namespace OpenAstroAra.Test {
             var af = new FakeAutofocus();
             var svc = new SequencerService(new SequenceBodyDeserializer(factory),
                 ws: null, sequencesResolver: () => store, checkpoint: null,
+                profileStore: profileStore,
                 centeringResolver: () => centering.Object,
                 autofocusResolver: () => af);
             return (svc, centering, af);
@@ -182,6 +198,48 @@ namespace OpenAstroAra.Test {
 
             var terminal = await WaitForTerminalAsync(svc, id);
             Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public async Task A_target_below_the_horizon_limit_skips_the_refinement_with_a_warning() {
+            // §38.10a — near-pole site: the dec-0° target sits at ~0° altitude,
+            // below the +20° floor — the re-center must be skipped entirely.
+            var id = Guid.NewGuid();
+            var (svc, centering, af) = BuildService(id,
+                profileStore: PolarSite(floorDeg: 20.0).Object);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, new SequenceResumeRequestDto(Recenter: true, Refocus: true), null, CancellationToken.None);
+
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+            centering.Verify(c => c.CenterOnTarget(
+                It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                It.IsAny<IProgress<PlateSolveProgress>?>(),
+                It.IsAny<IProgress<ApplicationStatus>?>(),
+                It.IsAny<CancellationToken>()), Times.Never,
+                "no re-center on a target below the horizon limit");
+            Assert.That(af.Runs, Is.Zero, "no refocus either — the plan may abandon the target next");
+        }
+
+        [Test]
+        public async Task A_target_above_the_horizon_limit_still_recenters() {
+            // Same site + target, but a −20° floor: ~0° altitude clears it, so
+            // the refinement proceeds normally.
+            var id = Guid.NewGuid();
+            var (svc, centering, _) = BuildService(id,
+                profileStore: PolarSite(floorDeg: -20.0).Object);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+            centering.Verify(c => c.CenterOnTarget(
+                It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                It.IsAny<IProgress<PlateSolveProgress>?>(),
+                It.IsAny<IProgress<ApplicationStatus>?>(),
+                It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
