@@ -161,6 +161,10 @@ class RotatorSettings {
 
 class GuiderSettings {
   String hostPort = 'localhost:4400';
+  // §63.17 — guide-camera selection (a daemon choice string, verbatim from
+  // GET /equipment/guider/choices). Null = untouched, keeps the base profile's
+  // value on Save (like the other nullable draft fields).
+  String? guiderCamera;
   double ditherPixels = 5.0;
   double settleThresholdPx = 1.5;
   Duration settleDuration = const Duration(seconds: 10);
