@@ -87,6 +87,47 @@ namespace OpenAstroAra.Test {
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }
 
+        // ── §63.17 PR 2: on-demand profile push ──
+
+        [Test]
+        public async Task ProfilePush_returns_202_accepted_on_success() {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.profile.push", DateTimeOffset.UtcNow, "idem-2");
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderProfileAsync("idem-2", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PushGuiderProfileAsync("idem-2", svc.Object, CancellationToken.None);
+
+            var typed = result as Accepted<OperationAcceptedDto>;
+            Assert.That(typed, Is.Not.Null);
+            Assert.That(typed!.Value, Is.SameAs(accepted));
+        }
+
+        [Test]
+        public async Task ProfilePush_maps_not_connected_InvalidOperation_to_typed_409() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider is not connected"));
+
+            var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
+            });
+        }
+
+        [Test]
+        public async Task ProfilePush_maps_reconnect_failure_GuiderRpcException_to_422() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new GuiderRpcException("set_connected", -1, "profile pushed, but the daemon could not reconnect its equipment"));
+
+            var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+        }
+
         private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
 
         private static string? ProblemTypeOf(IResult result) => (result as ProblemHttpResult)?.ProblemDetails.Type;

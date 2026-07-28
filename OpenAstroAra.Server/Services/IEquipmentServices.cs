@@ -178,6 +178,11 @@ public interface IGuiderService {
     /// without Alpaca support).</summary>
     Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct);
 
+    /// <summary>§63.17 — on-demand re-push of the §63.5 engine config + equipment selections to the daemon
+    /// (runs to completion before the accept returns, then emits <c>guider.profile_pushed</c>). Throws
+    /// InvalidOperationException when disconnected (→ 409, typed).</summary>
+    Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct);
+
     /// <summary>§63.4 delete hook — best-effort removal of the PHD2 profile mapped to a just-deleted ARA
     /// profile (its <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin, dark files included). Never throws: returns
     /// true when the daemon accepted the delete, false when no guider is connected, the profile wasn't

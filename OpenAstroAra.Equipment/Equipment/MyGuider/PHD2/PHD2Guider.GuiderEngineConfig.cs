@@ -60,11 +60,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Debug("PHD2 §63.5 push - dec-guide-mode is Auto (PHD2's default); not pushed, leaving the daemon's own setting.");
             }
 
-            // Only set_profile_setup (focal/pixel) needs the equipment off, so only pay the
+            // Only set_profile_setup and the §63.17 selection setters need the equipment off, so only pay the
             // disconnect → reconnect cost when one is actually being sent — otherwise the algo-param /
             // dec-mode pushes apply at runtime and we leave an already-connected (possibly calibrated)
             // session alone.
-            var disconnectedForSetup = messages.OfType<Phd2SetProfileSetup>().Any();
+            var disconnectedForSetup = messages.Any(RequiresDisconnectedEquipment);
             if (disconnectedForSetup) {
                 // Best-effort like the sends: a socket drop here must not propagate into Connect's catch
                 // (user-visible error + aborted connect). Log + proceed — set_profile_setup will then just fail
@@ -118,6 +118,35 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public static IReadOnlyList<Phd2Method> BuildGuiderEngineConfigMessages(IGuiderSettings guider) {
             var messages = new List<Phd2Method>();
 
+            // §63.17 equipment selection — ordered FIRST (the daemon's own integration flow selects devices
+            // before profile setup). Every selection treats ""/whitespace as "unset, keep the daemon's own"
+            // (same sentinel convention as the numeric 0s below); values are the daemon's choice strings
+            // verbatim. All of these are blocked while equipment is connected, so they ride the same
+            // disconnected window as set_profile_setup (see RequiresDisconnectedEquipment).
+            if (!string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost) || guider.GuiderAlpacaPort > 0) {
+                messages.Add(new Phd2SetAlpacaServer {
+                    Parameters = new Phd2SetAlpacaServerParameter {
+                        Host = string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost) ? null : guider.GuiderAlpacaHost.Trim(),
+                        Port = guider.GuiderAlpacaPort > 0 ? guider.GuiderAlpacaPort : null,
+                    },
+                });
+            }
+            if (!string.IsNullOrWhiteSpace(guider.GuiderCamera)) {
+                messages.Add(new Phd2SetSelectedCamera { Parameters = new() { Camera = guider.GuiderCamera.Trim() } });
+            }
+            if (!string.IsNullOrWhiteSpace(guider.GuiderCameraId)) {
+                messages.Add(new Phd2SetSelectedCameraId { Parameters = new() { CameraId = guider.GuiderCameraId.Trim() } });
+            }
+            if (!string.IsNullOrWhiteSpace(guider.GuiderMount)) {
+                messages.Add(new Phd2SetSelectedMount { Parameters = new() { Mount = guider.GuiderMount.Trim() } });
+            }
+            if (!string.IsNullOrWhiteSpace(guider.GuiderAuxMount)) {
+                messages.Add(new Phd2SetSelectedAuxMount { Parameters = new() { AuxMount = guider.GuiderAuxMount.Trim() } });
+            }
+            if (!string.IsNullOrWhiteSpace(guider.GuiderRotator)) {
+                messages.Add(new Phd2SetSelectedRotator { Parameters = new() { Rotator = guider.GuiderRotator.Trim() } });
+            }
+
             var setup = new Phd2ProfileSetupParameter();
             if (guider.GuideFocalLength > 0) {
                 setup.FocalLength = guider.GuideFocalLength;
@@ -153,6 +182,60 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = decMode } });
             }
             return messages;
+        }
+
+        /// <summary>§63.17 — the daemon blocks these RPCs while equipment is connected (doc/jsonrpc_api.md),
+        /// so their presence in a push forces the disconnect → reconnect window. Single source of truth for
+        /// the push's disconnect decision; unit-tested so a new selection setter can't silently skip it.</summary>
+        public static bool RequiresDisconnectedEquipment(Phd2Method message) => message
+            is Phd2SetProfileSetup
+            or Phd2SetAlpacaServer
+            or Phd2SetSelectedCamera
+            or Phd2SetSelectedCameraId
+            or Phd2SetSelectedMount
+            or Phd2SetSelectedAuxMount
+            or Phd2SetSelectedRotator;
+
+        /// <summary>
+        /// §63.17 — on-demand re-push of the §63.5 engine config + equipment selections (the connect path
+        /// pushes automatically; this serves POST /guider/profile/push so a settings edit takes effect without
+        /// a full reconnect). Runs the same best-effort push — including its disconnect window when a
+        /// selection/setup message is queued — then re-ensures the daemon's equipment is connected. Returns
+        /// the RPC method names attempted, for the <c>guider.profile_pushed</c> event's fields-changed payload.
+        /// Requires a connected guider (throws <see cref="InvalidOperationException"/>).
+        /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Catch-and-rethrow-typed boundary: a post-push equipment reconnect failure (transport drop, daemon contract break) is converted to GuiderRpcException so the service layer maps it to an actionable 422 instead of a raw 500. OperationCanceledException is rethrown untouched.")]
+        public async Task<IReadOnlyList<string>> RepushGuiderEngineConfigAsync(CancellationToken ct) {
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings)
+                .Select(m => m.Method).Distinct().ToList();
+            await PushGuiderEngineConfigAsync(ct);
+            // The push only reconnects equipment when it opened the disconnect window; make the post-push
+            // state deterministic for the caller either way. A reconnect failure here is a real, actionable
+            // fault — the realistic case being a just-pushed selection the daemon can't connect (wrong
+            // camera/mount choice) — and the push must NOT read as success while the daemon's equipment is
+            // left off. EnsurePHD2EquipmentConnected reports failure by RETURNING FALSE (SendMessage swallows
+            // transport errors into synthetic error responses, so it effectively never throws): check the
+            // bool and surface a typed RPC error (→ 422 at the endpoint). The catch stays as a belt for a
+            // daemon contract break (e.g. a non-boolean get_connected result throws InvalidCastException).
+            bool equipmentConnected;
+            try {
+                equipmentConnected = await EnsurePHD2EquipmentConnected();
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                throw new GuiderRpcException("set_connected", -1,
+                    $"profile pushed, but reconnecting the guider's equipment failed: {ex.Message}");
+            }
+            if (!equipmentConnected) {
+                throw new GuiderRpcException("set_connected", -1,
+                    "profile pushed, but the daemon could not reconnect its equipment — check that the "
+                    + "selected camera/mount/rotator are reachable (get_connected/set_connected failed).");
+            }
+            return pushed;
         }
 
         private static Phd2SetAlgoParam AlgoParam(string axis, string name, double value) =>

@@ -1086,6 +1086,15 @@ components:
         dec_aggressiveness:             { type: number, format: double, minimum: 0, maximum: 1 }
         minimum_move:                   { type: number, format: double, minimum: 0 }
         dec_guide_mode:                 { type: string, enum: [auto, north, south, off] }
+        # §63.17 guider equipment selection (pushed inside the §63.5 disconnected window; ""/0 = unset).
+        # Values are the daemon's own choice strings, verbatim from GET /equipment/guider/choices.
+        guider_camera:                  { type: string }
+        guider_camera_id:               { type: string }
+        guider_mount:                   { type: string }
+        guider_aux_mount:               { type: string }
+        guider_rotator:                 { type: string }
+        guider_alpaca_host:             { type: string }
+        guider_alpaca_port:             { type: integer, minimum: 0, maximum: 65535 }
 
     DiagnosticsMode:
       type: object

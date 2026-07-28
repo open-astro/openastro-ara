@@ -40,6 +40,76 @@ namespace OpenAstroAra.Test {
             return s.Object;
         }
 
+        // §63.17 — a settings mock with equipment selections set (the plain Settings() mock leaves them at
+        // Moq's null defaults, which the builder must treat as unset).
+        private static IGuiderSettings SettingsWithSelections() {
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("  Alpaca Camera ");
+            s.SetupGet(x => x.GuiderCameraId).Returns("cam-01");
+            s.SetupGet(x => x.GuiderMount).Returns("On-camera");
+            s.SetupGet(x => x.GuiderAuxMount).Returns("Alpaca Telescope");
+            s.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator");
+            s.SetupGet(x => x.GuiderAlpacaHost).Returns("192.168.1.20");
+            s.SetupGet(x => x.GuiderAlpacaPort).Returns(11111);
+            return s.Object;
+        }
+
+        // ── §63.17: equipment-selection messages ──
+
+        [Test]
+        public void Build_maps_equipment_selections_trimmed_and_ordered_first() {
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(SettingsWithSelections());
+
+            var alpaca = msgs.OfType<Phd2SetAlpacaServer>().Single();
+            Assert.That(alpaca.Parameters!.Host, Is.EqualTo("192.168.1.20"));
+            Assert.That(alpaca.Parameters.Port, Is.EqualTo(11111));
+            // Choice strings are trimmed — the daemon matches them verbatim.
+            Assert.That(msgs.OfType<Phd2SetSelectedCamera>().Single().Parameters!.Camera, Is.EqualTo("Alpaca Camera"));
+            Assert.That(msgs.OfType<Phd2SetSelectedCameraId>().Single().Parameters!.CameraId, Is.EqualTo("cam-01"));
+            Assert.That(msgs.OfType<Phd2SetSelectedMount>().Single().Parameters!.Mount, Is.EqualTo("On-camera"));
+            Assert.That(msgs.OfType<Phd2SetSelectedAuxMount>().Single().Parameters!.AuxMount, Is.EqualTo("Alpaca Telescope"));
+            Assert.That(msgs.OfType<Phd2SetSelectedRotator>().Single().Parameters!.Rotator, Is.EqualTo("Alpaca Rotator"));
+            // Selections precede everything else (the daemon's flow selects devices before profile setup);
+            // the alpaca server binding comes first of all.
+            Assert.That(msgs[0], Is.InstanceOf<Phd2SetAlpacaServer>());
+        }
+
+        [Test]
+        public void Build_skips_unset_selections_including_moq_null_defaults() {
+            // The plain Settings() mock returns null for every §63.17 selection — none may be pushed
+            // (a null/""/whitespace choice must never reach the daemon as a selection of "nothing").
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(Settings());
+            Assert.That(msgs.OfType<Phd2SetAlpacaServer>(), Is.Empty);
+            Assert.That(msgs.OfType<Phd2SetSelectedCamera>(), Is.Empty);
+            Assert.That(msgs.OfType<Phd2SetSelectedCameraId>(), Is.Empty);
+            Assert.That(msgs.OfType<Phd2SetSelectedMount>(), Is.Empty);
+            Assert.That(msgs.OfType<Phd2SetSelectedAuxMount>(), Is.Empty);
+            Assert.That(msgs.OfType<Phd2SetSelectedRotator>(), Is.Empty);
+        }
+
+        [Test]
+        public void Alpaca_server_message_omits_the_unset_half() {
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderAlpacaHost).Returns("sbc.local");
+            // Port 0 = unset → must serialize as absent, not 0 (the daemon would reject port 0).
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object);
+            var alpaca = msgs.OfType<Phd2SetAlpacaServer>().Single();
+            Assert.That(alpaca.Parameters!.Host, Is.EqualTo("sbc.local"));
+            Assert.That(alpaca.Parameters.Port, Is.Null);
+        }
+
+        [Test]
+        public void RequiresDisconnectedEquipment_covers_setup_and_every_selection_setter() {
+            // Single source of truth for the push's disconnect window — every §63.17 selection message and
+            // set_profile_setup force it; runtime-safe messages (algo params, dec mode) must not.
+            var forced = PHD2Guider.BuildGuiderEngineConfigMessages(SettingsWithSelections());
+            Assert.That(forced, Is.Not.Empty);
+            Assert.That(forced.All(PHD2Guider.RequiresDisconnectedEquipment), Is.True);
+            var runtimeSafe = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(focal: 0, pixel: 0));
+            Assert.That(runtimeSafe, Is.Not.Empty);
+            Assert.That(runtimeSafe.Any(PHD2Guider.RequiresDisconnectedEquipment), Is.False);
+        }
+
         [Test]
         public void Build_maps_profile_setup_algo_params_and_dec_mode() {
             var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(Settings());
