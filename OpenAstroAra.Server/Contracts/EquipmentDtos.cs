@@ -465,8 +465,9 @@ public sealed record GuiderEquipmentChoicesDto(
     IReadOnlyList<string> Rotators);
 
 /// <summary>Daemon-side Alpaca discovery sweep. Null fields use the daemon defaults (2 queries × 2 s);
-/// bounds are validated server-side (queries 1..20, timeout 1..30 s) before the sweep is dispatched. The
-/// request blocks for roughly <c>queries × timeout</c> seconds.</summary>
+/// bounds are validated server-side (queries 1..20, timeout 1..30 s, combined sweep ≤ 60 s) before the
+/// sweep is dispatched. The request blocks for roughly <c>queries × timeout</c> seconds — the combined cap
+/// keeps this synchronous endpoint well inside common client HTTP timeouts.</summary>
 public sealed record DiscoverAlpacaServersRequestDto(
     int? NumQueries = null,
     int? TimeoutSeconds = null);

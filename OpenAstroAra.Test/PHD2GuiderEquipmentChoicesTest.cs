@@ -45,6 +45,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Discover_request_rejects_a_combined_sweep_over_the_synchronous_cap() {
+            // Individually daemon-valid fields whose product exceeds 60 s must be rejected — the REST
+            // /discover endpoint is synchronous, so a dispatched sweep has to finish promptly.
+            Assert.Throws<ArgumentException>(() => PHD2Guider.DiscoverAlpacaServersRequest(20, 30));
+            Assert.Throws<ArgumentException>(() => PHD2Guider.DiscoverAlpacaServersRequest(3, 30));
+            // Exactly at the cap (and defaults for the other field) is fine.
+            Assert.That(PHD2Guider.DiscoverAlpacaServersRequest(2, 30).Parameters!.TimeoutSeconds, Is.EqualTo(30));
+            Assert.That(PHD2Guider.DiscoverAlpacaServersRequest(20, 3).Parameters!.NumQueries, Is.EqualTo(20));
+        }
+
+        [Test]
         public void Discover_request_rejects_out_of_range_params() {
             Assert.Throws<ArgumentOutOfRangeException>(() => PHD2Guider.DiscoverAlpacaServersRequest(0, null));
             Assert.Throws<ArgumentOutOfRangeException>(() => PHD2Guider.DiscoverAlpacaServersRequest(21, null));
@@ -65,8 +76,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Discover_receive_timeout_scales_with_effective_params() {
-            // Explicit worst case: 20 queries × 30 s = 600 s sweep + 30 s grace.
-            Assert.That(PHD2Guider.DiscoverReceiveTimeoutMs(20, 30), Is.EqualTo(630000));
+            // Worst admissible case under the 60 s combined cap: 2 × 30 s sweep + 30 s grace.
+            Assert.That(PHD2Guider.DiscoverReceiveTimeoutMs(2, 30), Is.EqualTo(90000));
             // Daemon defaults (2 × 2 s) apply for omitted fields.
             Assert.That(PHD2Guider.DiscoverReceiveTimeoutMs(null, null), Is.EqualTo(34000));
             Assert.That(PHD2Guider.DiscoverReceiveTimeoutMs(5, null), Is.EqualTo(40000));

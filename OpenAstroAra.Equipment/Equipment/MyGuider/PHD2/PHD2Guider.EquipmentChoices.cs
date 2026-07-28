@@ -32,10 +32,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         internal const int DiscoverMaxTimeoutSeconds = 30;
         internal const int DiscoverDefaultTimeoutSeconds = 2;
 
-        // discover_alpaca_servers blocks for roughly num_queries × timeout_seconds before answering (worst case
-        // 20 × 30 s = 10 min, past the default 60 s SendMessage receive timeout), so the receive timeout is
-        // derived from the effective parameters plus a fixed grace for daemon overhead.
+        // discover_alpaca_servers blocks for roughly num_queries × timeout_seconds before answering, so the
+        // receive timeout is derived from the effective parameters plus a fixed grace for daemon overhead.
         internal const int DiscoverReceiveGraceMs = 30000;
+
+        // ARA-side combined bound: the REST /discover endpoint is a SYNCHRONOUS 200 (a picker-button action,
+        // not a 202 background job), so the sweep must finish well inside common client HTTP timeouts
+        // (HttpClient defaults to 100 s). The daemon's per-field maxima (20 × 30 s = 10 min) are far past
+        // that, so ARA rejects any request whose effective sweep exceeds this bound — 60 s sweep + 30 s grace
+        // keeps the whole request under ~90 s worst case. A caller needing a longer sweep runs several
+        // requests back to back.
+        internal const int DiscoverMaxSweepSeconds = 60;
 
         /// <summary>§63.17 — read the device names the daemon can offer per equipment slot (camera / mount /
         /// aux-mount / AO / rotator). A quick query usable regardless of the daemon's equipment-connected state.
@@ -69,6 +76,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 throw new ArgumentOutOfRangeException(nameof(timeoutSeconds), t,
                     $"timeout_seconds must be {DiscoverMinTimeoutSeconds}..{DiscoverMaxTimeoutSeconds}.");
             }
+            // Combined bound: /discover is a synchronous endpoint, so the whole sweep must stay well inside
+            // common client HTTP timeouts even when both fields are individually daemon-valid.
+            var sweepSeconds = (numQueries ?? DiscoverDefaultQueries) * (timeoutSeconds ?? DiscoverDefaultTimeoutSeconds);
+            if (sweepSeconds > DiscoverMaxSweepSeconds) {
+                throw new ArgumentException(
+                    $"num_queries × timeout_seconds must not exceed {DiscoverMaxSweepSeconds} s of sweep time "
+                    + $"(requested {sweepSeconds} s); run multiple shorter sweeps instead.", nameof(numQueries));
+            }
             return new Phd2DiscoverAlpacaServers {
                 Parameters = new Phd2DiscoverAlpacaServersParameter {
                     NumQueries = numQueries,
@@ -79,16 +94,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         /// <summary>The receive timeout matched to a discovery request: the daemon blocks for roughly
         /// <c>num_queries × timeout_seconds</c> (defaults applied for omitted fields) plus a fixed grace —
-        /// so a long sweep isn't cut off by the default 60 s bound and a short one fails fast.</summary>
+        /// so a max-bound sweep (60 s) isn't cut off by the default 60 s receive bound and a short one
+        /// fails fast.</summary>
         public static int DiscoverReceiveTimeoutMs(int? numQueries, int? timeoutSeconds) =>
             ((numQueries ?? DiscoverDefaultQueries) * (timeoutSeconds ?? DiscoverDefaultTimeoutSeconds) * 1000)
                 + DiscoverReceiveGraceMs;
 
         /// <summary>
         /// §63.17 — daemon-side Alpaca network discovery (useful when ARA's own discovery and the guider's
-        /// disagree about what's on the network). Blocking for roughly <c>num_queries × timeout_seconds</c>;
-        /// returns the discovered <c>"host:port"</c> strings. Requires a connected guider; throws
-        /// <see cref="ArgumentOutOfRangeException"/> on out-of-range parameters and
+        /// disagree about what's on the network). Blocking for roughly <c>num_queries × timeout_seconds</c>
+        /// (capped at <see cref="DiscoverMaxSweepSeconds"/> combined, so a dispatched sweep always finishes
+        /// promptly); returns the discovered <c>"host:port"</c> strings. Requires a connected guider; throws
+        /// <see cref="ArgumentException"/> on out-of-range or over-long parameters and
         /// <see cref="GuiderRpcException"/> on RPC error (including a daemon build without Alpaca support).
         /// </summary>
         /// <remarks>Same in-flight contract as the calibration builds: <paramref name="ct"/> is honored only at

@@ -407,9 +407,12 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetEquipmentChoicesAsync(ct);
             return Results.Ok(new GuiderEquipmentChoicesResponseDto(Connected: dto is not null, Choices: dto));
         });
-        // §63.17 daemon-side Alpaca discovery — synchronous (blocks roughly queries × timeout, bounded 10 min
-        // worst case), 200 with the discovered servers. Bad range → 400; disconnected → 409; daemon rejected
-        // (e.g. no Alpaca support in the build) → 422.
+        // §63.17 daemon-side Alpaca discovery — deliberately synchronous (a picker-button action, not a §60.5
+        // 202 background job): the combined sweep is capped server-side at 60 s (PHD2Guider.
+        // DiscoverMaxSweepSeconds), so the request always answers well inside common client HTTP timeouts.
+        // 200 with the discovered servers; bad/over-long range → 400; disconnected → 409; daemon rejected
+        // (e.g. no Alpaca support in the build) → 422. Concurrent sweeps are safe (each RPC dials its own
+        // short-lived daemon connection) — merely wasteful, so no single-flight gate.
         guider.MapPost("/discover", async ([FromBody] DiscoverAlpacaServersRequestDto request, IGuiderService svc, CancellationToken ct) =>
             await DiscoverAlpacaServersAsync(request, svc, ct));
         guider.MapPost("/darklibrary/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
