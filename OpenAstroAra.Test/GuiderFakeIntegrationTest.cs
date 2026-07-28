@@ -351,6 +351,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Profile_push_surfaces_a_failed_equipment_reconnect_as_a_typed_rpc_error() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            // The realistic §63.17 failure: a just-pushed selection the daemon can't connect. get_connected
+            // answers false, then set_connected fails → EnsurePHD2EquipmentConnected returns false → the push
+            // must NOT read as success (reviewer-caught bug on #879: 202 while equipment was left off).
+            fake.OnRpc("get_connected", JsonValue.Create(false));
+            fake.OnRpc("set_connected", _ => throw new InvalidOperationException("simulated: equipment failed to connect"));
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Bogus Camera";
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            Assert.ThrowsAsync<GuiderRpcException>(
+                () => svc.PushGuiderProfileAsync("push-fail", CancellationToken.None),
+                "a push whose equipment reconnect fails must surface, not return 202");
+        }
+
+        [Test]
         public async Task Reflects_star_lost_when_the_guide_star_is_lost() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));

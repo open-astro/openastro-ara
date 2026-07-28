@@ -215,15 +215,25 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             await PushGuiderEngineConfigAsync(ct);
             // The push only reconnects equipment when it opened the disconnect window; make the post-push
             // state deterministic for the caller either way. A reconnect failure here is a real, actionable
-            // fault (the push landed but the daemon's equipment is now off) — surface it as a typed RPC error
-            // (→ 422 at the endpoint) rather than an opaque transport exception.
+            // fault — the realistic case being a just-pushed selection the daemon can't connect (wrong
+            // camera/mount choice) — and the push must NOT read as success while the daemon's equipment is
+            // left off. EnsurePHD2EquipmentConnected reports failure by RETURNING FALSE (SendMessage swallows
+            // transport errors into synthetic error responses, so it effectively never throws): check the
+            // bool and surface a typed RPC error (→ 422 at the endpoint). The catch stays as a belt for a
+            // daemon contract break (e.g. a non-boolean get_connected result throws InvalidCastException).
+            bool equipmentConnected;
             try {
-                await EnsurePHD2EquipmentConnected();
+                equipmentConnected = await EnsurePHD2EquipmentConnected();
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception ex) {
                 throw new GuiderRpcException("set_connected", -1,
                     $"profile pushed, but reconnecting the guider's equipment failed: {ex.Message}");
+            }
+            if (!equipmentConnected) {
+                throw new GuiderRpcException("set_connected", -1,
+                    "profile pushed, but the daemon could not reconnect its equipment — check that the "
+                    + "selected camera/mount/rotator are reachable (get_connected/set_connected failed).");
             }
             return pushed;
         }

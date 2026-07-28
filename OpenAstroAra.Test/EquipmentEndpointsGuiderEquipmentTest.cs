@@ -117,6 +117,17 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [Test]
+        public async Task ProfilePush_maps_reconnect_failure_GuiderRpcException_to_422() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new GuiderRpcException("set_connected", -1, "profile pushed, but the daemon could not reconnect its equipment"));
+
+            var result = await EquipmentEndpoints.PushGuiderProfileAsync(null, svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+        }
+
         private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
 
         private static string? ProblemTypeOf(IResult result) => (result as ProblemHttpResult)?.ProblemDetails.Type;
