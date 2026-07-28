@@ -296,7 +296,30 @@ Map<String, dynamic> buildTargetBlock({
   var block = _item(sequentialContainerType);
   final name = targetName?.trim();
   block['Name'] = (name != null && name.isNotEmpty) ? name : 'Target';
-  return withChildren(block, children);
+  block = withChildren(block, children);
+  // §38.10a — the block self-terminates when the target sets below the
+  // profile's (custom) horizon: the daemon evaluates this at every instruction
+  // boundary, so a paused-then-resumed (or simply long-running) target that
+  // sank too low ends its block instead of imaging the murk. The target's own
+  // coordinates ride in the condition — these generated blocks are plain
+  // SequentialContainers, not DSO containers, so there is no parent to
+  // inherit them from.
+  final horizonDef = conditionForType(aboveHorizonConditionType);
+  final loopDef = conditionForType(loopConditionType);
+  if (horizonDef == null || loopDef == null) {
+    throw StateError('condition catalog is missing a required condition');
+  }
+  final horizon = horizonDef.build();
+  (horizon['Data'] as Map<String, dynamic>)['Coordinates'] =
+      inputCoordinatesFromDeg(raDeg, decDeg);
+  // A container WITH conditions loops its whole child list while they hold
+  // (SequentialStrategy semantics — a lone horizon condition would re-slew,
+  // re-focus, and re-image the block all night until the target sets). The
+  // conditions are ANDed, so pairing a one-iteration LoopCondition makes the
+  // block run ONCE but still end early mid-pass when the target sets
+  // (review #876 — proven by SequentialStrategyConditionSemanticsTest).
+  final onePass = loopDef.build()..['Iterations'] = 1;
+  return withConditions(block, [onePass, horizon]);
 }
 
 /// A copy of [root] with [targetBlock] appended as another target: inserted
