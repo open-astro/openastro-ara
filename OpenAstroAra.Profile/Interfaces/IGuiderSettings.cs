@@ -73,5 +73,23 @@ namespace OpenAstroAra.Profile.Interfaces {
         double MinimumMove { get; set; }
         /// <summary>Dec guide mode: "auto" | "north" | "south" | "off".</summary>
         string DecGuideMode { get; set; }
+
+        // §63.17 guider equipment selection — pushed to the daemon inside the §63.5 disconnected window
+        // (the set_selected_* RPCs are blocked while equipment is connected). Values are the daemon's own
+        // choice strings, verbatim from get_equipment_choices; "" = unset (not pushed, daemon keeps its own).
+        /// <summary>Guide camera choice string ("" = unset).</summary>
+        string GuiderCamera { get; set; }
+        /// <summary>Driver-specific camera id disambiguating multiple cameras of the same model ("" = unset).</summary>
+        string GuiderCameraId { get; set; }
+        /// <summary>Guide-output mount choice string ("" = unset).</summary>
+        string GuiderMount { get; set; }
+        /// <summary>Aux (pointing) mount choice string ("" = unset).</summary>
+        string GuiderAuxMount { get; set; }
+        /// <summary>Rotator choice string ("" = unset).</summary>
+        string GuiderRotator { get; set; }
+        /// <summary>Alpaca server host the guider's Alpaca devices live on ("" = unset).</summary>
+        string GuiderAlpacaHost { get; set; }
+        /// <summary>Alpaca server port (0 = unset).</summary>
+        int GuiderAlpacaPort { get; set; }
     }
 }

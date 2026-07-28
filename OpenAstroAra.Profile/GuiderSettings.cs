@@ -678,5 +678,91 @@ namespace OpenAstroAra.Profile {
                 }
             }
         }
+
+        // §63.17 guider equipment selection (pushed inside the §63.5 disconnected window; "" / 0 = unset).
+
+        private string guiderCamera = string.Empty;
+        [DataMember]
+        public string GuiderCamera {
+            get => guiderCamera;
+            set {
+                if (guiderCamera != value) {
+                    guiderCamera = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private string guiderCameraId = string.Empty;
+        [DataMember]
+        public string GuiderCameraId {
+            get => guiderCameraId;
+            set {
+                if (guiderCameraId != value) {
+                    guiderCameraId = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private string guiderMount = string.Empty;
+        [DataMember]
+        public string GuiderMount {
+            get => guiderMount;
+            set {
+                if (guiderMount != value) {
+                    guiderMount = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private string guiderAuxMount = string.Empty;
+        [DataMember]
+        public string GuiderAuxMount {
+            get => guiderAuxMount;
+            set {
+                if (guiderAuxMount != value) {
+                    guiderAuxMount = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private string guiderRotator = string.Empty;
+        [DataMember]
+        public string GuiderRotator {
+            get => guiderRotator;
+            set {
+                if (guiderRotator != value) {
+                    guiderRotator = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private string guiderAlpacaHost = string.Empty;
+        [DataMember]
+        public string GuiderAlpacaHost {
+            get => guiderAlpacaHost;
+            set {
+                if (guiderAlpacaHost != value) {
+                    guiderAlpacaHost = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private int guiderAlpacaPort;
+        [DataMember]
+        public int GuiderAlpacaPort {
+            get => guiderAlpacaPort;
+            set {
+                if (guiderAlpacaPort != value) {
+                    guiderAlpacaPort = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
     }
 }

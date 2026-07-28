@@ -364,7 +364,18 @@ public sealed record Phd2SettingsDto(
     double RaAggressiveness = 0.7,
     double DecAggressiveness = 0.7,
     double MinimumMove = 0.15,
-    string DecGuideMode = "auto");
+    string DecGuideMode = "auto",
+    // §63.17 guider equipment selection — pushed to the daemon inside the §63.5 disconnected window
+    // (set_selected_* / set_alpaca_server are blocked while equipment is connected). Values are the daemon's
+    // own choice strings, verbatim from GET /equipment/guider/choices; "" / 0 = unset (not pushed, the daemon
+    // keeps its own selection). Optional ctor defaults keep a pre-§63.17 profile.json deserializing.
+    string GuiderCamera = "",
+    string GuiderCameraId = "",
+    string GuiderMount = "",
+    string GuiderAuxMount = "",
+    string GuiderRotator = "",
+    string GuiderAlpacaHost = "",
+    int GuiderAlpacaPort = 0);
 
 /// <summary>
 /// §36 imaging-train optics + sensor geometry — the inputs the Planning

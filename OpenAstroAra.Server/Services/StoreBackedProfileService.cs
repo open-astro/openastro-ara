@@ -187,6 +187,16 @@ internal static class ProfileStoreMapper {
         guider.DecAggressiveness = Math.Clamp(phd2.DecAggressiveness, 0.0, 1.0);
         guider.MinimumMove = Math.Max(0.0, phd2.MinimumMove);
         guider.DecGuideMode = NormalizeDecGuideMode(phd2.DecGuideMode);
+        // §63.17 equipment selections — trimmed (choice strings are matched verbatim by the daemon; stray
+        // whitespace from a hand-edited profile.json would silently select nothing) and the port clamped to
+        // the valid range with 0 = unset.
+        guider.GuiderCamera = (phd2.GuiderCamera ?? string.Empty).Trim();
+        guider.GuiderCameraId = (phd2.GuiderCameraId ?? string.Empty).Trim();
+        guider.GuiderMount = (phd2.GuiderMount ?? string.Empty).Trim();
+        guider.GuiderAuxMount = (phd2.GuiderAuxMount ?? string.Empty).Trim();
+        guider.GuiderRotator = (phd2.GuiderRotator ?? string.Empty).Trim();
+        guider.GuiderAlpacaHost = (phd2.GuiderAlpacaHost ?? string.Empty).Trim();
+        guider.GuiderAlpacaPort = Math.Clamp(phd2.GuiderAlpacaPort, 0, 65535);
         // DitherEnabled / DitherEveryNFrames are per-sequence concerns in NINA (the Dither
         // instruction + trigger carry them), and Phd2Profile selection is a §63 connect-time
         // concern — store-only here.
