@@ -178,6 +178,11 @@ public interface IGuiderService {
     /// without Alpaca support).</summary>
     Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct);
 
+    /// <summary>§63.17 — delete the stored calibration files (dark library and/or defect map); returns the
+    /// updated status. Disconnected → InvalidOperationException (409); both flags false → ArgumentException
+    /// (400); daemon rejection → GuiderRpcException (422).</summary>
+    Task<CalibrationFilesStatusDto> DeleteCalibrationFilesAsync(bool deleteDarkLibrary, bool deleteDefectMap, CancellationToken ct);
+
     /// <summary>§63.17 — on-demand re-push of the §63.5 engine config + equipment selections to the daemon
     /// (runs to completion before the accept returns, then emits <c>guider.profile_pushed</c>). Throws
     /// InvalidOperationException when disconnected (→ 409, typed).</summary>

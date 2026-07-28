@@ -177,6 +177,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void DeleteCalibrationFilesAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.DeleteCalibrationFilesAsync(true, true, CancellationToken.None); });
+        }
+
+        // ── §63.17: dark-library invalidation decision (pure) ──
+
+        [Test]
+        public void GuideCameraChanged_needs_a_baseline_and_a_real_difference() {
+            // No baseline (first push this session) → never invalidate.
+            Assert.That(GuiderService.GuideCameraChanged(null, null, "Cam A", ""), Is.False);
+            // Same selection re-pushed → no invalidation.
+            Assert.That(GuiderService.GuideCameraChanged("Cam A", "", "Cam A", ""), Is.False);
+            // Camera or camera-id changed → invalidate.
+            Assert.That(GuiderService.GuideCameraChanged("Cam A", "", "Cam B", ""), Is.True);
+            Assert.That(GuiderService.GuideCameraChanged("Cam A", "id-1", "Cam A", "id-2"), Is.True);
+            // Clearing the selection to unset ("") is not a change — nothing new was pushed.
+            Assert.That(GuiderService.GuideCameraChanged("Cam A", "", "", ""), Is.False);
+        }
+
+        [Test]
         public void PushGuiderProfileAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = NewService();
             // §63.17 — a push ARA can't run is a 409 at the endpoint, not a silent no-op.

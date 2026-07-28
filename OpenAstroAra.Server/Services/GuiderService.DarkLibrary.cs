@@ -237,6 +237,15 @@ public sealed partial class GuiderService {
         return MapStatusAsync(guider.SetDefectMapEnabledAsync(enabled, ct));
     }
 
+    /// <summary>§63.17 — delete the stored calibration files; returns the updated status. Same error contract
+    /// as the enable toggles: disconnected → InvalidOperationException (409), daemon rejection / bad flag
+    /// combination surfaces for the endpoint's 400/422 mapping.</summary>
+    public Task<CalibrationFilesStatusDto> DeleteCalibrationFilesAsync(
+            bool deleteDarkLibrary, bool deleteDefectMap, CancellationToken ct) {
+        var guider = RequireConnectedGuider();
+        return MapStatusAsync(guider.DeleteCalibrationFilesAsync(deleteDarkLibrary, deleteDefectMap, ct));
+    }
+
     private static async Task<CalibrationFilesStatusDto> MapStatusAsync(Task<Phd2CalibrationFilesStatus> rpc) =>
         MapStatus(await rpc.ConfigureAwait(false));
 
