@@ -119,7 +119,7 @@ public sealed partial class SequencerService {
             var tooLow = TryGetTargetBelowHorizon(target);
             if (tooLow is { } low) {
                 LogResumeTargetTooLow(id, low.AltitudeDeg, low.LimitDeg);
-                await NotifyTargetTooLowAsync(low.AltitudeDeg, low.LimitDeg, refocus).ConfigureAwait(false);
+                await NotifyTargetTooLowAsync(low.AltitudeDeg, low.LimitDeg, recenter, refocus).ConfigureAwait(false);
                 return; // finally releases the gate; the plan's conditions decide what's next
             }
 
@@ -219,33 +219,31 @@ public sealed partial class SequencerService {
         }
     }
 
-    /// <summary>The horizon altitude at <paramref name="azimuthDeg"/>: linear
-    /// interpolation over the custom-horizon vertices (wrapping 360→0) when
-    /// enabled and populated, else the flat default floor.</summary>
+    /// <summary>The horizon altitude at <paramref name="azimuthDeg"/>: the §36
+    /// custom-horizon skyline interpolated via the ONE shared implementation
+    /// (<see cref="CustomHorizonValidator.AltitudeAtAzimuth"/> — review #875 r2:
+    /// no second copy of the wraparound math), else the flat default floor. The
+    /// stored points are re-normalized here because AltitudeAtAzimuth's contract
+    /// requires the canonical sorted/de-duplicated form.</summary>
     private double HorizonLimitDeg(SiteSettingsDto site, double azimuthDeg) {
         if (!site.UseCustomHorizon) return site.DefaultHorizonAltitudeDeg;
-        var points = _profileStore?.GetCustomHorizon()?.Points;
+        var (normalized, _) = CustomHorizonValidator.Normalize(_profileStore?.GetCustomHorizon());
+        var points = normalized?.Points;
         if (points is null || points.Count == 0) return site.DefaultHorizonAltitudeDeg;
-        if (points.Count == 1) return points[0].AltitudeDeg;
-        var az = ((azimuthDeg % 360) + 360) % 360;
-        var ordered = points.OrderBy(p => p.AzimuthDeg).ToList();
-        // Find the bracketing pair, wrapping the last→first segment across 0°.
-        for (var i = 0; i < ordered.Count; i++) {
-            var a = ordered[i];
-            var b = ordered[(i + 1) % ordered.Count];
-            var span = ((b.AzimuthDeg - a.AzimuthDeg) % 360 + 360) % 360;
-            var into = ((az - a.AzimuthDeg) % 360 + 360) % 360;
-            if (span > 0 && into <= span) {
-                return a.AltitudeDeg + (b.AltitudeDeg - a.AltitudeDeg) * (into / span);
-            }
-        }
-        return site.DefaultHorizonAltitudeDeg;
+        return CustomHorizonValidator.AltitudeAtAzimuth(points, azimuthDeg);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Notification store faults must never delay or mask the gate release. Log-and-recover boundary.")]
-    private async Task NotifyTargetTooLowAsync(double altitudeDeg, double limitDeg, bool refocusRequested) {
+    private async Task NotifyTargetTooLowAsync(double altitudeDeg, double limitDeg, bool recenterRequested, bool refocusRequested) {
         if (_notifications is null) return;
+        // Name only what was actually requested (review #875 r2 — a
+        // refocus-only resume must not claim a re-center was skipped).
+        var skipped = (recenterRequested, refocusRequested) switch {
+            (true, true) => "the re-center and refocus were",
+            (true, false) => "the re-center was",
+            _ => "the refocus was",
+        };
         try {
             await _notifications.CreateAsync(new NotificationDto(
                 Id: Guid.NewGuid(),
@@ -254,9 +252,8 @@ public sealed partial class SequencerService {
                 Category: NotificationCategory.Sequence,
                 Title: "Sequence resumed — target is low",
                 Message: $"The paused target now sits at {altitudeDeg:F0}°, below your "
-                    + $"{limitDeg:F0}° horizon limit, so the re-center"
-                    + (refocusRequested ? " and refocus were" : " was")
-                    + " skipped. The plan's altitude conditions decide whether imaging continues.",
+                    + $"{limitDeg:F0}° horizon limit, so {skipped} skipped. "
+                    + "The plan's altitude conditions decide whether imaging continues.",
                 Read: false,
                 Dismissed: false,
                 DismissedUtc: null,

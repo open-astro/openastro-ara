@@ -223,6 +223,39 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_custom_horizon_skyline_decides_when_enabled() {
+            // §36 custom horizon at the polar site: a flat +10° skyline (all
+            // vertices) sits above the ~0° target → too low, refinement
+            // skipped — even though the flat DefaultHorizonAltitudeDeg floor
+            // of −20° would have let it through. Proves the custom-horizon
+            // branch (CustomHorizonValidator.AltitudeAtAzimuth) is consulted.
+            var id = Guid.NewGuid();
+            var store = new Mock<IProfileStore>();
+            store.Setup(p => p.GetSiteSettings()).Returns(new SiteSettingsDto(
+                SiteName: "pole", LatitudeDeg: 89.9, LongitudeDeg: 0, ElevationM: 0,
+                TimeZone: "UTC", UseCustomHorizon: true, DefaultHorizonAltitudeDeg: -20.0,
+                BortleClass: 4, TypicalSeeingArcsec: 2.0, TwilightDefinition: "astronomical"));
+            store.Setup(p => p.GetCustomHorizon()).Returns(new CustomHorizonDto([
+                new CustomHorizonPointDto(0, 10),
+                new CustomHorizonPointDto(120, 10),
+                new CustomHorizonPointDto(240, 10),
+            ]));
+            var (svc, centering, _) = BuildService(id, profileStore: store.Object);
+            await PauseAtBoundaryAsync(svc, id);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+            centering.Verify(c => c.CenterOnTarget(
+                It.IsAny<OpenAstroAra.Astrometry.Coordinates>(),
+                It.IsAny<IProgress<PlateSolveProgress>?>(),
+                It.IsAny<IProgress<ApplicationStatus>?>(),
+                It.IsAny<CancellationToken>()), Times.Never,
+                "the custom skyline (+10° everywhere) beats the −20° flat floor");
+        }
+
+        [Test]
         public async Task A_target_above_the_horizon_limit_still_recenters() {
             // Same site + target, but a −20° floor: ~0° altitude clears it, so
             // the refinement proceeds normally.
