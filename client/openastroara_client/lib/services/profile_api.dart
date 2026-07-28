@@ -731,6 +731,14 @@ class ProfileApi {
     decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
     minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
     decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
+    // §63.17 guider equipment selection ("" / 0 = unset).
+    guiderCamera: (j['guider_camera'] as String?) ?? '',
+    guiderCameraId: (j['guider_camera_id'] as String?) ?? '',
+    guiderMount: (j['guider_mount'] as String?) ?? '',
+    guiderAuxMount: (j['guider_aux_mount'] as String?) ?? '',
+    guiderRotator: (j['guider_rotator'] as String?) ?? '',
+    guiderAlpacaHost: (j['guider_alpaca_host'] as String?) ?? '',
+    guiderAlpacaPort: (j['guider_alpaca_port'] as num?)?.toInt() ?? 0,
   );
 
   static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
@@ -750,6 +758,13 @@ class ProfileApi {
     'dec_aggressiveness': v.decAggressiveness,
     'minimum_move': v.minimumMove,
     'dec_guide_mode': v.decGuideMode,
+    'guider_camera': v.guiderCamera,
+    'guider_camera_id': v.guiderCameraId,
+    'guider_mount': v.guiderMount,
+    'guider_aux_mount': v.guiderAuxMount,
+    'guider_rotator': v.guiderRotator,
+    'guider_alpaca_host': v.guiderAlpacaHost,
+    'guider_alpaca_port': v.guiderAlpacaPort,
   };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────

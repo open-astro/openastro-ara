@@ -155,6 +155,8 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
     settleTimeSec: g.settleDuration.inSeconds,
     forceCalibrationEachSession:
         g.calibrationCadence == CalibrationCadence.eachSession,
+    // §63.17 — null (untouched picker) keeps the base profile's selection.
+    guiderCamera: g.guiderCamera,
   );
 }
 

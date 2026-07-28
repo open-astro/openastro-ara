@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/guider_equipment_choices.dart';
 import '../../../services/profile_api.dart';
+import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/phd2_settings_state.dart';
+import '../../../util/host_port.dart';
+import '../../../widgets/profile/profile_import_flow.dart'
+    show friendlyDaemonError;
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -26,6 +31,12 @@ class EquipmentGuiderPanel extends ConsumerStatefulWidget {
 class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     with PanelSaveRegistration {
   String? _lastError;
+
+  // §63.17 guider equipment — transient discovery/apply UI state.
+  bool _discovering = false;
+  bool _applying = false;
+  List<String>? _discoveredServers;
+  String? _equipmentStatus;
 
   @override
   void initState() {
@@ -66,6 +77,64 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       if (!mounted) return;
       setState(() => _lastError = 'Save failed: $e');
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+    }
+  }
+
+  Future<void> _discoverAlpaca() async {
+    setState(() {
+      _discovering = true;
+      _equipmentStatus = null;
+      _discoveredServers = null;
+    });
+    try {
+      final servers =
+          await ref.read(guiderEquipmentProvider.notifier).discoverAlpaca();
+      if (!mounted) return;
+      setState(() {
+        _discoveredServers = servers;
+        _equipmentStatus = servers.isEmpty
+            ? 'No Alpaca servers answered on the guider\'s network.'
+            : 'Found ${servers.length} Alpaca '
+                'server${servers.length == 1 ? '' : 's'} — tap one to fill '
+                'host/port.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _equipmentStatus =
+          friendlyDaemonError(e, fallback: 'Alpaca discovery failed'));
+    } finally {
+      if (mounted) setState(() => _discovering = false);
+    }
+  }
+
+  /// Save the panel's PHD2 settings (so the daemon-side profile carries the
+  /// current selections), then ask the daemon to re-push them to the guider.
+  Future<void> _applyToGuider() async {
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('No active server — connect to a daemon first.')));
+      return;
+    }
+    setState(() {
+      _applying = true;
+      _equipmentStatus = null;
+    });
+    try {
+      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
+      await ref.read(guiderEquipmentProvider.notifier).pushProfile();
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Equipment selection pushed to the guider.')));
+    } catch (e) {
+      if (!mounted) return;
+      final msg =
+          friendlyDaemonError(e, fallback: 'Apply to guider failed');
+      setState(() => _equipmentStatus = msg);
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _applying = false);
     }
   }
 
@@ -255,6 +324,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
             if (v != null) phd2N.setDecGuideMode(v);
           },
         ),
+        const SettingsSectionHeader('Guider equipment'),
+        ..._equipmentSection(context),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(
@@ -267,5 +338,168 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         // fixed chrome, always visible, no scrolling to find it.
       ],
     );
+  }
+
+  /// Dropdown items for a device slot: the daemon's choices plus '' ("daemon
+  /// default") plus the current profile value even when the daemon doesn't
+  /// list it (disconnected, or a stale selection) — so hydrated state is
+  /// always representable and never silently coerced.
+  static Map<String, String> _slotItems(List<String> choices, String current) {
+    final items = <String, String>{'': '(daemon default)'};
+    for (final c in choices) {
+      items[c] = c;
+    }
+    if (current.isNotEmpty) items.putIfAbsent(current, () => current);
+    return items;
+  }
+
+  // §63.17 — equipment pickers fed by GET /equipment/guider/choices, daemon-
+  // side Alpaca discovery, and the on-demand profile push. Save (header) only
+  // persists the profile; "Apply to guider" persists AND pushes.
+  List<Widget> _equipmentSection(BuildContext context) {
+    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2N = ref.read(phd2SettingsProvider.notifier);
+    final equipment = ref.watch(guiderEquipmentProvider);
+    final envelope = equipment.value;
+    final connected = envelope?.connected ?? false;
+    final choices = envelope?.choices ?? const GuiderEquipmentChoices();
+    final refreshing = equipment.isLoading;
+
+    return [
+      Wrap(spacing: 12, runSpacing: 8, children: [
+        OutlinedButton.icon(
+          onPressed: refreshing
+              ? null
+              : () => ref.read(guiderEquipmentProvider.notifier).refresh(),
+          icon: refreshing
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.refresh, size: 18),
+          label: const Text('Refresh choices'),
+        ),
+        OutlinedButton.icon(
+          onPressed:
+              (_discovering || !connected) ? null : () => _discoverAlpaca(),
+          icon: _discovering
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.travel_explore, size: 18),
+          label: const Text('Discover Alpaca'),
+        ),
+      ]),
+      if (!connected)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'Guider not connected — connect the guider to load device choices, '
+            'discover Alpaca servers, or apply a selection.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      if (_discoveredServers != null && _discoveredServers!.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Wrap(spacing: 8, runSpacing: 4, children: [
+            for (final s in _discoveredServers!)
+              ActionChip(
+                label: Text(s),
+                onPressed: () {
+                  final parsed = parseHostPort(s);
+                  if (parsed.host != null) {
+                    phd2N.setGuiderAlpacaHost(parsed.host!);
+                  }
+                  if (parsed.port != null) {
+                    phd2N.setGuiderAlpacaPort(parsed.port!);
+                  }
+                },
+              ),
+          ]),
+        ),
+      SettingsDropdownRow<String>(
+        label: 'Guide camera',
+        value: phd2.guiderCamera,
+        items: _slotItems(choices.cameras, phd2.guiderCamera),
+        onChanged: (v) {
+          if (v != null) phd2N.setGuiderCamera(v);
+        },
+      ),
+      EditableTextRow(
+        label: 'Guide camera ID',
+        currentValue: phd2.guiderCameraId,
+        getCanonical: () => ref.read(phd2SettingsProvider).guiderCameraId,
+        parse: phd2N.setGuiderCameraId,
+        hint: 'Disambiguates duplicate camera names; blank = daemon default',
+      ),
+      SettingsDropdownRow<String>(
+        label: 'Guide mount',
+        value: phd2.guiderMount,
+        items: _slotItems(choices.mounts, phd2.guiderMount),
+        onChanged: (v) {
+          if (v != null) phd2N.setGuiderMount(v);
+        },
+      ),
+      SettingsDropdownRow<String>(
+        label: 'Aux mount',
+        value: phd2.guiderAuxMount,
+        items: _slotItems(choices.auxMounts, phd2.guiderAuxMount),
+        onChanged: (v) {
+          if (v != null) phd2N.setGuiderAuxMount(v);
+        },
+      ),
+      SettingsDropdownRow<String>(
+        label: 'Rotator',
+        value: phd2.guiderRotator,
+        items: _slotItems(choices.rotators, phd2.guiderRotator),
+        onChanged: (v) {
+          if (v != null) phd2N.setGuiderRotator(v);
+        },
+      ),
+      EditableTextRow(
+        label: 'Alpaca host',
+        currentValue: phd2.guiderAlpacaHost,
+        getCanonical: () => ref.read(phd2SettingsProvider).guiderAlpacaHost,
+        parse: phd2N.setGuiderAlpacaHost,
+        hint: 'Blank = daemon default',
+      ),
+      EditableNumberRow(
+        label: 'Alpaca port',
+        currentValue: phd2.guiderAlpacaPort.toString(),
+        getCanonical: () =>
+            ref.read(phd2SettingsProvider).guiderAlpacaPort.toString(),
+        parse: (s) {
+          final v = int.tryParse(s);
+          if (v != null) phd2N.setGuiderAlpacaPort(v);
+        },
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed:
+                (_applying || !connected) ? null : () => _applyToGuider(),
+            icon: _applying
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.send, size: 18),
+            label: const Text('Apply to guider'),
+          ),
+        ),
+      ),
+      if (_equipmentStatus != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            _equipmentStatus!,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+    ];
   }
 }

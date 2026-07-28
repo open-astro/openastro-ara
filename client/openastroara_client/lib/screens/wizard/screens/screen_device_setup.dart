@@ -11,6 +11,7 @@ import '../../../state/equipment/filter_wheel_state.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/equipment/mount_state.dart';
 import '../../../state/equipment/rotator_state.dart';
+import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
@@ -18,6 +19,7 @@ import '../../../widgets/profile/profile_import_flow.dart'
 import '../../../models/server.dart';
 import '../../../services/camera_geometry_api.dart';
 import '../../../services/equipment_discovery_api.dart';
+import '../../../services/profile_api.dart';
 import '../../../services/filter_wheel_names_api.dart';
 import '../../../services/focuser_props_api.dart';
 import '../../../services/rotator_props_api.dart';
@@ -1140,6 +1142,45 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   String? _testStatus;
   bool _testOk = false;
 
+  // §63.17 — guide-camera picker + on-demand profile push.
+  bool _applying = false;
+  String? _applyStatus;
+  bool _applyOk = false;
+
+  /// Merge the draft's guide-camera pick into the daemon-side PHD2 settings,
+  /// then ask the daemon to re-push the profile to the guider — so the wizard
+  /// selection takes effect without waiting for the final wizard Save.
+  Future<void> _applyCameraToGuider() async {
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
+      setState(() => _applyStatus =
+          'Not connected to a server — the server is what talks to the guider.');
+      return;
+    }
+    setState(() {
+      _applying = true;
+      _applyOk = false;
+      _applyStatus = null;
+    });
+    final api = ProfileApi(server);
+    try {
+      final base = await api.getPhd2Settings();
+      await api.putPhd2Settings(base.copyWith(guiderCamera: _g.guiderCamera));
+      await ref.read(guiderEquipmentProvider.notifier).pushProfile();
+      if (!mounted) return;
+      setState(() {
+        _applyOk = true;
+        _applyStatus = 'Camera selection pushed to the guider.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _applyStatus =
+          friendlyDaemonError(e, fallback: "Couldn't apply the selection"));
+    } finally {
+      if (mounted) setState(() => _applying = false);
+    }
+  }
+
   /// Ask the DAEMON to reach the guider at the entered host:port — the
   /// connection under test is server→PHD2 (the SBC's network), not this
   /// client's. POST /equipment/guider/connect is 202-accepted; poll the
@@ -1232,6 +1273,76 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             ],
           ),
         ),
+        // §63.17 — guide-camera pick from the daemon's own choice strings.
+        // The current draft value stays representable even when the guider is
+        // disconnected (empty choices) or the pick isn't in the daemon's list.
+        Builder(builder: (context) {
+          final equipment = ref.watch(guiderEquipmentProvider);
+          final envelope = equipment.value;
+          final connected = envelope?.connected ?? false;
+          final cameras = <String>{
+            '',
+            ...?envelope?.choices?.cameras,
+            if (_g.guiderCamera != null && _g.guiderCamera!.isNotEmpty)
+              _g.guiderCamera!,
+          };
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              WizardDropdown<String>(
+                label: 'Guide camera',
+                value: cameras.contains(_g.guiderCamera ?? '')
+                    ? (_g.guiderCamera ?? '')
+                    : '',
+                entries: [
+                  for (final c in cameras)
+                    DropdownMenuEntry(
+                        value: c, label: c.isEmpty ? '(daemon default)' : c),
+                ],
+                onChanged: (v) => setState(
+                    () => _g.guiderCamera = (v == null || v.isEmpty) ? null : v),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Wrap(spacing: 12, runSpacing: 8, children: [
+                  OutlinedButton.icon(
+                    onPressed: equipment.isLoading
+                        ? null
+                        : () => unawaited(ref
+                            .read(guiderEquipmentProvider.notifier)
+                            .refresh()),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Refresh choices'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: (_applying || !connected)
+                        ? null
+                        : () => unawaited(_applyCameraToGuider()),
+                    icon: _applying
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.send, size: 18),
+                    label: const Text('Apply to guider'),
+                  ),
+                ]),
+              ),
+              if (_applyStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    _applyStatus!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _applyOk
+                          ? AraColors.accentConnected
+                          : AraColors.textSecondary,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }),
         WizardTextField(
           label: 'Dither (pixels)',
           initialValue: _g.ditherPixels.toString(),

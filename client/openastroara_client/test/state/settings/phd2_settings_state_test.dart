@@ -20,6 +20,49 @@ void main() {
       expect(s.settleTimeSec, 10);
       expect(s.settleTimeoutSec, 60);
       expect(s.forceCalibrationEachSession, isFalse);
+      // §63.17 guider equipment selection — "" / 0 = unset.
+      expect(s.guiderCamera, '');
+      expect(s.guiderCameraId, '');
+      expect(s.guiderMount, '');
+      expect(s.guiderAuxMount, '');
+      expect(s.guiderRotator, '');
+      expect(s.guiderAlpacaHost, '');
+      expect(s.guiderAlpacaPort, 0);
+    });
+
+    test('§63.17 equipment setters trim and accept empty (= unset)', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuiderCamera('  ZWO ASI120MM  ');
+      n.setGuiderCameraId(' cam-1 ');
+      n.setGuiderMount(' On-camera ');
+      n.setGuiderAuxMount(' INDI Mount ');
+      n.setGuiderRotator(' Alpaca Rotator ');
+      n.setGuiderAlpacaHost(' 192.168.1.20 ');
+      var s = container.read(phd2SettingsProvider);
+      expect(s.guiderCamera, 'ZWO ASI120MM');
+      expect(s.guiderCameraId, 'cam-1');
+      expect(s.guiderMount, 'On-camera');
+      expect(s.guiderAuxMount, 'INDI Mount');
+      expect(s.guiderRotator, 'Alpaca Rotator');
+      expect(s.guiderAlpacaHost, '192.168.1.20');
+
+      // Empty is a valid value — it clears the selection back to daemon default.
+      n.setGuiderCamera('  ');
+      n.setGuiderAlpacaHost('');
+      s = container.read(phd2SettingsProvider);
+      expect(s.guiderCamera, '');
+      expect(s.guiderAlpacaHost, '');
+    });
+
+    test('setGuiderAlpacaPort accepts 0 (= unset) and rejects out-of-range', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuiderAlpacaPort(11111);
+      expect(container.read(phd2SettingsProvider).guiderAlpacaPort, 11111);
+      n.setGuiderAlpacaPort(-1);
+      n.setGuiderAlpacaPort(65536);
+      expect(container.read(phd2SettingsProvider).guiderAlpacaPort, 11111);
+      n.setGuiderAlpacaPort(0);
+      expect(container.read(phd2SettingsProvider).guiderAlpacaPort, 0);
     });
 
     test('setHost trims + rejects empty', () {

@@ -34,6 +34,18 @@ class Phd2Settings {
   final double minimumMove; // px
   final String decGuideMode; // auto | north | south | off
 
+  // §63.17 guider equipment selection — pushed to the daemon inside the §63.5
+  // disconnected window. Values are the daemon's own choice strings, verbatim
+  // from GET /equipment/guider/choices; "" / 0 = unset (not pushed, the daemon
+  // keeps its own selection).
+  final String guiderCamera;
+  final String guiderCameraId;
+  final String guiderMount;
+  final String guiderAuxMount;
+  final String guiderRotator;
+  final String guiderAlpacaHost;
+  final int guiderAlpacaPort; // 0 = unset
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -51,6 +63,13 @@ class Phd2Settings {
     this.decAggressiveness = 0.7,
     this.minimumMove = 0.15,
     this.decGuideMode = 'auto',
+    this.guiderCamera = '',
+    this.guiderCameraId = '',
+    this.guiderMount = '',
+    this.guiderAuxMount = '',
+    this.guiderRotator = '',
+    this.guiderAlpacaHost = '',
+    this.guiderAlpacaPort = 0,
   });
 
   Phd2Settings copyWith({
@@ -70,6 +89,13 @@ class Phd2Settings {
     double? decAggressiveness,
     double? minimumMove,
     String? decGuideMode,
+    String? guiderCamera,
+    String? guiderCameraId,
+    String? guiderMount,
+    String? guiderAuxMount,
+    String? guiderRotator,
+    String? guiderAlpacaHost,
+    int? guiderAlpacaPort,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -89,6 +115,13 @@ class Phd2Settings {
         decAggressiveness: decAggressiveness ?? this.decAggressiveness,
         minimumMove: minimumMove ?? this.minimumMove,
         decGuideMode: decGuideMode ?? this.decGuideMode,
+        guiderCamera: guiderCamera ?? this.guiderCamera,
+        guiderCameraId: guiderCameraId ?? this.guiderCameraId,
+        guiderMount: guiderMount ?? this.guiderMount,
+        guiderAuxMount: guiderAuxMount ?? this.guiderAuxMount,
+        guiderRotator: guiderRotator ?? this.guiderRotator,
+        guiderAlpacaHost: guiderAlpacaHost ?? this.guiderAlpacaHost,
+        guiderAlpacaPort: guiderAlpacaPort ?? this.guiderAlpacaPort,
       );
 }
 
@@ -180,6 +213,33 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     final m = v.trim().toLowerCase();
     if (!decGuideModes.contains(m)) return;
     state = state.copyWith(decGuideMode: m);
+  }
+
+  // §63.17 — guider equipment selection. "" / 0 mean unset (the daemon keeps
+  // its own selection), so empty values are ACCEPTED here — trimming only.
+
+  void setGuiderCamera(String s) =>
+      state = state.copyWith(guiderCamera: s.trim());
+
+  void setGuiderCameraId(String s) =>
+      state = state.copyWith(guiderCameraId: s.trim());
+
+  void setGuiderMount(String s) => state = state.copyWith(guiderMount: s.trim());
+
+  void setGuiderAuxMount(String s) =>
+      state = state.copyWith(guiderAuxMount: s.trim());
+
+  void setGuiderRotator(String s) =>
+      state = state.copyWith(guiderRotator: s.trim());
+
+  void setGuiderAlpacaHost(String s) =>
+      state = state.copyWith(guiderAlpacaHost: s.trim());
+
+  void setGuiderAlpacaPort(int v) {
+    // 0 = unset; otherwise any valid TCP port (Alpaca commonly uses 11111 but
+    // simulators bind wherever).
+    if (v < 0 || v > 65535) return;
+    state = state.copyWith(guiderAlpacaPort: v);
   }
 
   Future<void> hydrateFromServer(ProfileApi api) =>
