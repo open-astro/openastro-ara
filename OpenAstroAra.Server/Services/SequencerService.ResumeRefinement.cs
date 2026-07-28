@@ -21,7 +21,6 @@ using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
