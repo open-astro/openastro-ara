@@ -6,8 +6,10 @@ import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/phd2_settings_state.dart';
+import '../../../util/guide_optics.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
@@ -48,10 +50,26 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     final api = _api();
     if (api == null) return;
     try {
+      // §63.19 — optics first: the OAG-derived guide focal length reads the
+      // main optics section, which is hydrated by a different panel.
+      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+      _syncDerivedFocalLength();
     } catch (e) {
       if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
     }
+  }
+
+  /// §63.19 — when the setup type is OAG the guide focal length is derived
+  /// from the main optics (focal_length_mm × reducer_factor), not
+  /// user-entered. There is no cross-section reactive pattern for derived
+  /// settings in this client, so the recompute is explicit: on panel load,
+  /// on setup-type change, and before every save/apply.
+  void _syncDerivedFocalLength() {
+    if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
+    final optics = ref.read(opticsSettingsProvider);
+    ref.read(phd2SettingsProvider.notifier).setGuideFocalLength(
+        derivedOagGuideFocalLength(optics.focalLengthMm, optics.reducerFactor));
   }
 
   @override
@@ -67,6 +85,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
       return;
     }
+    _syncDerivedFocalLength();
     try {
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
@@ -121,6 +140,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       _applying = true;
       _equipmentStatus = null;
     });
+    _syncDerivedFocalLength();
     try {
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
@@ -255,17 +275,51 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           hint: '§35 meridian-flip behaviour',
         ),
         const SettingsSectionHeader('Guider engine'),
-        EditableNumberRow(
-          label: 'Guide focal length (mm)',
-          helpKey: 'eq.guider.guide_focal_length',
-          currentValue: phd2.guideFocalLength.toString(),
-          getCanonical: () =>
-              ref.read(phd2SettingsProvider).guideFocalLength.toString(),
-          parse: (s) {
-            final v = int.tryParse(s);
-            if (v != null) phd2N.setGuideFocalLength(v);
+        // §63.19 — how the guide camera sees the sky: through its own guide
+        // scope (focal length user-entered) or an off-axis guider behind the
+        // main optics (focal length derived).
+        SettingsDropdownRow<String>(
+          label: 'Guide setup',
+          helpKey: 'eq.guider.setup_type',
+          value: phd2.guiderSetupType,
+          items: const {
+            'guide_scope': 'Guide scope',
+            'oag': 'Off-axis guider (OAG)',
+          },
+          onChanged: (v) {
+            if (v == null) return;
+            phd2N.setGuiderSetupType(v);
+            _syncDerivedFocalLength();
           },
         ),
+        if (phd2.guiderSetupType == 'oag')
+          Builder(builder: (context) {
+            final optics = ref.watch(opticsSettingsProvider);
+            final derived = derivedOagGuideFocalLength(
+                optics.focalLengthMm, optics.reducerFactor);
+            return SettingsRow(
+              label: 'Guide focal length (mm)',
+              value: derived == 0 ? 'unset' : '$derived',
+              hint: derived == 0
+                  ? 'Derived from main optics — set the telescope focal '
+                      'length in Equipment → Optics first'
+                  : 'Derived from main optics: '
+                      '${_fmtMm(optics.focalLengthMm)} mm × '
+                      '${_fmtFactor(optics.reducerFactor)} = $derived mm',
+            );
+          })
+        else
+          EditableNumberRow(
+            label: 'Guide focal length (mm)',
+            helpKey: 'eq.guider.guide_focal_length',
+            currentValue: phd2.guideFocalLength.toString(),
+            getCanonical: () =>
+                ref.read(phd2SettingsProvider).guideFocalLength.toString(),
+            parse: (s) {
+              final v = int.tryParse(s);
+              if (v != null) phd2N.setGuideFocalLength(v);
+            },
+          ),
         EditableNumberRow(
           label: 'Guide pixel size (µm)',
           helpKey: 'eq.guider.guide_pixel_size',
@@ -339,6 +393,13 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ],
     );
   }
+
+  /// Trim trailing ".0" noise from the derived-focal-length caption numbers.
+  static String _fmtMm(double v) =>
+      v == v.roundToDouble() ? v.round().toString() : v.toString();
+
+  static String _fmtFactor(double v) =>
+      v == v.roundToDouble() ? '${v.round()}.0' : v.toString();
 
   /// Dropdown items for a device slot: the daemon's choices plus '' ("daemon
   /// default") plus the current profile value even when the daemon doesn't

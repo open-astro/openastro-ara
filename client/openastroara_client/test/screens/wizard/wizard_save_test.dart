@@ -134,6 +134,47 @@ void main() {
       expect(out.forceCalibrationEachSession, isFalse);
     });
 
+    test('applyDraftToPhd2 §63.19 guide-scope maps FL + pixel size, null keeps base', () {
+      final d = ProfileDraft();
+      d.guider
+        ..setupType = 'guide_scope'
+        ..guideFocalLengthMm = 240
+        ..guidePixelSizeUm = 2.9;
+      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      expect(out.guiderSetupType, 'guide_scope');
+      expect(out.guideFocalLength, 240);
+      expect(out.guidePixelSize, 2.9);
+
+      // Untouched draft keeps the base values.
+      final base = const Phd2Settings(
+          guiderSetupType: 'oag', guideFocalLength: 999, guidePixelSize: 3.8);
+      final kept = applyDraftToPhd2(base, ProfileDraft());
+      expect(kept.guiderSetupType, 'oag');
+      expect(kept.guidePixelSize, 3.8);
+    });
+
+    test('applyDraftToPhd2 §63.19 OAG derives FL from the telescope screen', () {
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 1480;
+      d.guider
+        ..setupType = 'oag'
+        ..guideFocalLengthMm = 240 // ignored for OAG
+        ..guidePixelSizeUm = 2.9;
+      final out = applyDraftToPhd2(const Phd2Settings(guideFocalLength: 111), d);
+      expect(out.guiderSetupType, 'oag');
+      // Wizard collects no reducer factor, so factor = 1.0 here.
+      expect(out.guideFocalLength, 1480);
+      expect(out.guidePixelSize, 2.9);
+    });
+
+    test('applyDraftToPhd2 §63.19 OAG without telescope FL keeps the base FL', () {
+      final d = ProfileDraft();
+      d.guider.setupType = 'oag';
+      final out = applyDraftToPhd2(const Phd2Settings(guideFocalLength: 350), d);
+      expect(out.guiderSetupType, 'oag');
+      expect(out.guideFocalLength, 350);
+    });
+
     test('applyDraftToPlateSolve maps ASTAP paths + search tuning', () {
       final d = ProfileDraft();
       d.plateSolve

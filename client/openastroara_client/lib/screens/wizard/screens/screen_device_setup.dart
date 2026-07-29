@@ -13,6 +13,7 @@ import '../../../state/equipment/mount_state.dart';
 import '../../../state/equipment/rotator_state.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
+import '../../../util/guide_optics.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
@@ -1343,6 +1344,51 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             ],
           );
         }),
+        // §63.19 — guide setup type: separate guide scope (focal length
+        // user-entered) or off-axis guider (focal length derived from the
+        // telescope screen's optics). Null draft = keep the base profile.
+        WizardDropdown<String>(
+          label: 'Guide setup',
+          value: _g.setupType ?? 'guide_scope',
+          entries: const [
+            DropdownMenuEntry(value: 'guide_scope', label: 'Guide scope'),
+            DropdownMenuEntry(
+                value: 'oag', label: 'Off-axis guider (OAG)'),
+          ],
+          onChanged: (v) => setState(() => _g.setupType = v),
+        ),
+        if ((_g.setupType ?? 'guide_scope') == 'oag')
+          Builder(builder: (context) {
+            final mainFl = _draftOf(ref).telescope.focalLengthMm ?? 0;
+            final derived = derivedOagGuideFocalLength(mainFl, 1.0);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                derived == 0
+                    ? 'Guide focal length: derived from the main optics — '
+                        'enter the telescope focal length first.'
+                    : 'Guide focal length: $derived mm '
+                        '(derived from the main optics).',
+                style: const TextStyle(
+                    fontSize: 12, color: AraColors.textSecondary),
+              ),
+            );
+          })
+        else
+          WizardTextField(
+            label: 'Guide focal length (mm)',
+            initialValue: _g.guideFocalLengthMm?.toString(),
+            keyboardType: TextInputType.number,
+            inputFormatters: WizardInput.unsignedInt,
+            onChanged: (v) => _g.guideFocalLengthMm = _toInt(v),
+          ),
+        WizardTextField(
+          label: 'Guide pixel size (µm)',
+          initialValue: _g.guidePixelSizeUm?.toString(),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          onChanged: (v) => _assignDouble(v, (d) => _g.guidePixelSizeUm = d),
+        ),
         WizardTextField(
           label: 'Dither (pixels)',
           initialValue: _g.ditherPixels.toString(),

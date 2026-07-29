@@ -165,6 +165,14 @@ class GuiderSettings {
   // GET /equipment/guider/choices). Null = untouched, keeps the base profile's
   // value on Save (like the other nullable draft fields).
   String? guiderCamera;
+  // §63.19 — guide setup type ('guide_scope' | 'oag') + the guide-scope
+  // optics. Null = untouched, keeps the base profile's value on Save. With
+  // 'oag' the guide focal length is DERIVED from the telescope screen's
+  // focal length at save time, so guideFocalLengthMm only applies to
+  // 'guide_scope'; the pixel size is the guide camera's own either way.
+  String? setupType;
+  int? guideFocalLengthMm;
+  double? guidePixelSizeUm;
   double ditherPixels = 5.0;
   double settleThresholdPx = 1.5;
   Duration settleDuration = const Duration(seconds: 10);

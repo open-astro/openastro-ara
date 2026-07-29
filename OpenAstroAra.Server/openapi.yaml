@@ -1095,6 +1095,9 @@ components:
         guider_rotator:                 { type: string }
         guider_alpaca_host:             { type: string }
         guider_alpaca_port:             { type: integer, minimum: 0, maximum: 65535 }
+        # §63.19 guide setup type — "oag" derives guide_focal_length client-side from the main optics
+        # (focal_length_mm × reducer_factor); "guide_scope" uses the manually entered value.
+        guider_setup_type:              { type: string, enum: [guide_scope, oag] }
 
     DiagnosticsMode:
       type: object

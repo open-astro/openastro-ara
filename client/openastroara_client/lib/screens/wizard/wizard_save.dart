@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import '../../services/profile_api.dart';
+import '../../util/guide_optics.dart';
 import '../../util/host_port.dart';
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
@@ -142,6 +143,22 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
 
 Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
   final g = d.guider;
+  // §63.19 — with an OAG the guide focal length is derived from the main
+  // optics entered on the telescope screen (the wizard doesn't collect a
+  // reducer factor, so the factor is 1.0 here; the Settings panel re-derives
+  // with the profile's reducer on its next save). 0/unset telescope focal
+  // length maps to null = keep the base value.
+  final setupType = g.setupType == null
+      ? null
+      : Phd2SettingsNotifier.normalizeGuiderSetupType(g.setupType!);
+  final effectiveType = setupType ?? base.guiderSetupType;
+  int? focalLength;
+  if (effectiveType == 'oag') {
+    final derived = derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, 1.0);
+    focalLength = derived == 0 ? null : derived;
+  } else {
+    focalLength = g.guideFocalLengthMm;
+  }
   // parseHostPort handles IPv6 literals/bare hosts/`:port`; null parts keep the
   // base (profile) values so a blank field never clobbers a configured target.
   final parsed = parseHostPort(g.hostPort);
@@ -157,6 +174,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
         g.calibrationCadence == CalibrationCadence.eachSession,
     // §63.17 — null (untouched picker) keeps the base profile's selection.
     guiderCamera: g.guiderCamera,
+    // §63.19 — null keeps the base for anything the user left untouched.
+    guiderSetupType: setupType,
+    guideFocalLength: focalLength,
+    guidePixelSize: g.guidePixelSizeUm,
   );
 }
 
