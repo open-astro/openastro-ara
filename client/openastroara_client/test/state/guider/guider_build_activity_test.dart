@@ -42,5 +42,30 @@ void main() {
       expect(foldGuiderBuildEvent(const {}, _ev('guider.dark_library.progress')), isNull,
           reason: 'a future subtype this build does not know is skipped, not misfiled');
     });
+
+    test('invalidated is NOT a build phase — the activity fold skips it', () {
+      expect(foldGuiderBuildEvent(const {}, _ev('guider.dark_library.invalidated')), isNull);
+    });
+  });
+
+  group('foldDarkLibraryInvalidation', () {
+    test('invalidated raises the flag', () {
+      expect(
+          foldDarkLibraryInvalidation(
+              _ev('guider.dark_library.invalidated', {'reason': 'guide_camera_changed'})),
+          isTrue);
+    });
+
+    test('a completed dark-library rebuild clears it', () {
+      expect(foldDarkLibraryInvalidation(_ev('guider.dark_library.complete')), isFalse);
+    });
+
+    test('everything else is a no-op (null)', () {
+      expect(foldDarkLibraryInvalidation(_ev('guider.dark_library.started')), isNull);
+      expect(foldDarkLibraryInvalidation(_ev('guider.dark_library.failed')), isNull,
+          reason: 'a failed rebuild does not vouch for the stale library');
+      expect(foldDarkLibraryInvalidation(_ev('guider.defect_map.complete')), isNull);
+      expect(foldDarkLibraryInvalidation(_ev('guider.state')), isNull);
+    });
   });
 }

@@ -14,6 +14,11 @@ abstract final class GuiderBuildWsEvents {
   static const started = 'started';
   static const complete = 'complete';
   static const failed = 'failed';
+
+  /// §63.17 — fired when a profile push changed the guide camera while a dark
+  /// library / defect map exists (payload `{reason: "guide_camera_changed"}`).
+  /// Not a build phase: it feeds the staleness banner, not the activity map.
+  static const darkLibraryInvalidated = '${darkLibraryPrefix}invalidated';
 }
 
 /// Which calibration artifact a build event belongs to. Values double as the
@@ -100,6 +105,50 @@ class GuiderBuildActivityNotifier
     return const {};
   }
 }
+
+/// Pure fold of one WS event into the §63.17 dark-library-invalidated flag.
+/// `true` on `guider.dark_library.invalidated` (the guide camera changed under
+/// an existing library), `false` on `guider.dark_library.complete` (a rebuild
+/// supersedes the stale library), `null` for everything else (no state write).
+/// Exposed for unit tests.
+bool? foldDarkLibraryInvalidation(WsEvent event) {
+  if (event.type == GuiderBuildWsEvents.darkLibraryInvalidated) return true;
+  if (event.type ==
+      '${GuiderBuildWsEvents.darkLibraryPrefix}${GuiderBuildWsEvents.complete}') {
+    return false;
+  }
+  return null;
+}
+
+/// §63.17 "dark library may be stale" flag: raised by
+/// `guider.dark_library.invalidated`, cleared by a completed rebuild
+/// (`guider.dark_library.complete`) or an explicit [dismiss]. Like the build
+/// activity above it is NOT autoDispose — the event can arrive while no
+/// calibration UI is open, and the banner must still show on the next open.
+class GuiderDarkLibraryInvalidationNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    final stream = ref.watch(wsEventStreamProvider);
+    if (stream == null) return false;
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event == null) return;
+      final folded = foldDarkLibraryInvalidation(event);
+      if (folded != null) state = folded;
+    });
+    return false;
+  }
+
+  /// User-dismissed: the banner is advisory, not a gate.
+  void dismiss() => state = false;
+}
+
+/// Whether the §63.17 staleness banner should show (guide camera changed while
+/// a dark library / defect map exists; no rebuild has completed since).
+final guiderDarkLibraryInvalidatedProvider =
+    NotifierProvider<GuiderDarkLibraryInvalidationNotifier, bool>(
+  GuiderDarkLibraryInvalidationNotifier.new,
+);
 
 /// Per-artifact build activity for the §63.6 calibration dialog. Deliberately
 /// **not** autoDispose: a build runs for minutes and the user will close the

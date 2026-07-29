@@ -62,6 +62,22 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
   Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
   @override
   Future<void> setDefectMapEnabled(bool enabled) async => defectEnabled = enabled;
+  int deletes = 0;
+  bool? lastDeleteDarks;
+  bool? lastDeleteDefectmap;
+  bool throwOnDelete = false;
+  @override
+  Future<CalibrationStatusResponse> deleteCalibrationFiles({
+    bool darks = true,
+    bool defectmap = true,
+  }) async {
+    deletes++;
+    lastDeleteDarks = darks;
+    lastDeleteDefectmap = defectmap;
+    if (throwOnDelete) throw StateError('delete failed');
+    return response;
+  }
+
   @override
   void close() {}
 }
@@ -181,6 +197,35 @@ void main() {
       final r = c.read(guiderCalibrationProvider).value;
       expect(r!.status!.darkLibraryExists, isTrue,
           reason: 'ends on server B status — the stale action refresh is dropped by the gen guard');
+    });
+
+    test('deleteCalibrationFiles forwards the flags then refreshes', () async {
+      final api = _FakeCalibrationClient(_resp(darkExists: true));
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      api.response = _resp(); // deleted → next status read has no dark library
+      await c
+          .read(guiderCalibrationProvider.notifier)
+          .deleteCalibrationFiles(defectmap: false);
+
+      expect(api.deletes, 1);
+      expect(api.lastDeleteDarks, isTrue);
+      expect(api.lastDeleteDefectmap, isFalse);
+      expect(c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists, isFalse,
+          reason: 'the trailing refresh re-read status after the delete');
+    });
+
+    test('a failed delete surfaces as AsyncError', () async {
+      final api = _FakeCalibrationClient(_resp(darkExists: true))..throwOnDelete = true;
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      await c.read(guiderCalibrationProvider.notifier).deleteCalibrationFiles();
+
+      expect(c.read(guiderCalibrationProvider).hasError, isTrue);
     });
 
     test('a failed build surfaces as AsyncError', () async {

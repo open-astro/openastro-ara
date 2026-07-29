@@ -41,6 +41,14 @@ String describeCalibrationActionError(Object? error) {
     if (type == kGuiderNotConnectedProblemType) {
       return 'The guider is not connected — connect it and try again.';
     }
+    // §63.17: a 422 is the daemon itself refusing the request (e.g. a capture
+    // is active during a delete). Its problem `detail` is written for humans —
+    // surface it; otherwise a still-actionable generic.
+    if (error.response?.statusCode == 422) {
+      final detail = data is Map ? data['detail'] : null;
+      if (detail is String && detail.isNotEmpty) return detail;
+      return 'The guider daemon rejected the request — stop any active capture and try again.';
+    }
   }
   return 'The last guider request failed. Tap Refresh to recheck.';
 }
@@ -85,6 +93,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   Widget build(BuildContext context) {
     final async = ref.watch(guiderCalibrationProvider);
     final builds = ref.watch(guiderBuildActivityProvider);
+    final invalidated = ref.watch(guiderDarkLibraryInvalidatedProvider);
     final busy = async.isLoading;
     final response = async.asData?.value;
     final status = response?.status;
@@ -100,6 +109,14 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (invalidated) ...[
+              _InvalidatedBanner(
+                onDismiss: () => ref
+                    .read(guiderDarkLibraryInvalidatedProvider.notifier)
+                    .dismiss(),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (busy && response == null)
               const Padding(
                 padding: EdgeInsets.all(8),
@@ -196,6 +213,13 @@ class _CalibrationBody extends StatelessWidget {
           onToggle: (locked || !status.darkLibraryExists)
               ? null
               : (v) => unawaited(notifier.setDarkLibraryEnabled(v)),
+          // Delete needs an existing artifact and no build in flight (the
+          // daemon 422s a delete under an active capture anyway — don't invite it).
+          onDelete: (locked || anyBuilding || !status.darkLibraryExists)
+              ? null
+              : () => unawaited(_confirmThenDelete(
+                  context, 'dark library',
+                  () => notifier.deleteCalibrationFiles(defectmap: false))),
         ),
         const SizedBox(height: 12),
         _Artifact(
@@ -212,6 +236,11 @@ class _CalibrationBody extends StatelessWidget {
           onToggle: (locked || !status.defectMapExists)
               ? null
               : (v) => unawaited(notifier.setDefectMapEnabled(v)),
+          onDelete: (locked || anyBuilding || !status.defectMapExists)
+              ? null
+              : () => unawaited(_confirmThenDelete(
+                  context, 'defect map',
+                  () => notifier.deleteCalibrationFiles(darks: false))),
         ),
       ],
     );
@@ -242,6 +271,30 @@ class _CalibrationBody extends StatelessWidget {
     if (confirmed == true) await build();
   }
 
+  /// §63.17 destructive-action gate: a dark library takes minutes of covered-
+  /// scope capture to rebuild, so never delete on a single tap.
+  static Future<void> _confirmThenDelete(
+      BuildContext context, String what, Future<void> Function() delete) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete the $what?'),
+        content: Text(
+          'This removes the stored $what from the guider profile. '
+          'Rebuilding it needs a covered scope and several minutes of capture.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await delete();
+  }
+
   String? _darkDetail(CalibrationStatus s) {
     if (!s.darkLibraryLoaded || s.darkCountLoaded == null) return null;
     final n = s.darkCountLoaded!;
@@ -261,6 +314,50 @@ class _CalibrationBody extends StatelessWidget {
   }
 }
 
+/// §63.17 staleness banner: the daemon saw a guide-camera change while a dark
+/// library / defect map exists — the stored darks belong to the old sensor.
+/// Advisory and dismissible; a completed rebuild clears it automatically.
+class _InvalidatedBanner extends StatelessWidget {
+  final VoidCallback onDismiss;
+  const _InvalidatedBanner({required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: scheme.onErrorContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Guide camera changed — the dark library may be stale. '
+              'Rebuild recommended.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onErrorContainer),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            iconSize: 16,
+            visualDensity: VisualDensity.compact,
+            color: scheme.onErrorContainer,
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Artifact extends StatelessWidget {
   final String label;
   final bool exists;
@@ -273,6 +370,8 @@ class _Artifact extends StatelessWidget {
   final bool switchValue;
   final VoidCallback? onBuild;
   final ValueChanged<bool>? onToggle;
+  // §63.17 — null disables the Delete button (not built / locked / building).
+  final VoidCallback? onDelete;
 
   const _Artifact({
     required this.label,
@@ -283,6 +382,7 @@ class _Artifact extends StatelessWidget {
     required this.switchValue,
     required this.onBuild,
     required this.onToggle,
+    required this.onDelete,
   });
 
   @override
@@ -320,16 +420,29 @@ class _Artifact extends StatelessWidget {
             'Build failed${activity?.error is String ? ': ${activity!.error}' : ''}',
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: onBuild,
-            icon: building
-                ? const SizedBox(
-                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.build, size: 16),
-            label: Text(building ? 'Building…' : (exists ? 'Rebuild' : 'Build')),
-          ),
+        // Wrap, not Row: two labeled buttons can exceed the 360-wide dialog —
+        // let the Delete drop to a second line instead of overflowing.
+        Wrap(
+          spacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton.icon(
+              onPressed: onBuild,
+              icon: building
+                  ? const SizedBox(
+                      width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.build, size: 16),
+              label: Text(building ? 'Building…' : (exists ? 'Rebuild' : 'Build')),
+            ),
+            Semantics(
+              label: 'Delete ${label.toLowerCase()}',
+              child: TextButton.icon(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Delete'),
+              ),
+            ),
+          ],
         ),
       ],
     );

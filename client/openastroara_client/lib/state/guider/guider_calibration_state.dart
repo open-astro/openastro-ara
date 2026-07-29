@@ -75,6 +75,14 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
   Future<void> setDefectMapEnabled(bool enabled) =>
       _run((api) => api.setDefectMapEnabled(enabled));
 
+  /// §63.17 delete the stored calibration files (darks and/or defect map).
+  /// The DELETE itself returns the updated status, but _run's trailing
+  /// _refresh() re-reads it anyway — deliberately, so the write goes through
+  /// the same generation-guarded path as every other action (a server switch
+  /// mid-delete can't land a stale status).
+  Future<void> deleteCalibrationFiles({bool darks = true, bool defectmap = true}) =>
+      _run((api) => api.deleteCalibrationFiles(darks: darks, defectmap: defectmap));
+
   /// Runs an action against the active client, then refreshes status. Ignores
   /// overlapping calls and surfaces failures as [AsyncError] so the UI can show
   /// them rather than leaving a stale value.
