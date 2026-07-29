@@ -88,6 +88,19 @@ void main() {
       expect(b.samples.first, _s(2, 2));
     });
 
+    test('a constant RMS at advancing timestamps keeps appending — the '
+        'duplicate rejection keys on timestamp, not value', () {
+      final b = RmsRingBuffer(window: const Duration(seconds: 10));
+      b.add(_s(0, 0.5));
+      b.add(_s(2, 0.5));
+      b.add(_s(4, 0.5));
+      expect(b.samples.length, 3,
+          reason: 'steady guiding must not freeze the trace');
+      // ...and eviction still slides the window as those samples age.
+      b.add(_s(15, 0.5));
+      expect(b.samples, [_s(15, 0.5)]);
+    });
+
     test('clear() empties the buffer', () {
       final b = RmsRingBuffer();
       b.add(_s(0, 0.5));
@@ -144,11 +157,28 @@ void main() {
         runtimeState: GuiderRuntimeState.guiding,
         rmsTotal: 0.7,
       );
-      await c.read(guiderStatusProvider.notifier).refresh();
-      // ref.listen delivers on the next microtask.
-      await Future<void>.delayed(Duration.zero);
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
       expect(sub.read().length, 2);
       expect(sub.read().last.total, 0.7);
+    });
+
+    test('an UNCHANGED RMS still appends a fresh point on every poll tick',
+        () async {
+      // GuiderStatus has value equality, so a listener-driven fold would see
+      // nothing during steady guiding — the poll tick must append regardless.
+      final api = _FakeGuiderApi()..status = _guiding;
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read().length, 1);
+
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
+      expect(sub.read().length, 3,
+          reason: 'constant-RMS guiding must keep the trace sliding');
+      expect(sub.read().map((s) => s.total), everyElement(0.5));
     });
 
     test('non-guiding statuses (stopped, star lost) are not folded', () async {
@@ -174,8 +204,7 @@ void main() {
         runtimeState: GuiderRuntimeState.starLost,
         rmsTotal: 2.5,
       );
-      await c.read(guiderStatusProvider.notifier).refresh();
-      await Future<void>.delayed(Duration.zero);
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
       expect(sub.read(), isEmpty,
           reason: 'star-lost RMS is stale — it must not pollute the trace');
     });

@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
-import '../../services/profile_api.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/guider/live_guiding_state.dart';
-import '../../state/saved_server_state.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
@@ -34,26 +33,51 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
   bool _applying = false;
   String? _status;
 
+  // Hydrate gate for Apply. persistToServer PUTs the WHOLE Phd2Settings object
+  // (host/port/profile and the §63.17 equipment slots included), so applying
+  // before the daemon's saved values have been loaded would clobber the
+  // daemon-side profile with client defaults. Apply stays disabled until the
+  // initial hydrate has succeeded; a failure is surfaced, not swallowed.
+  bool _hydrated = false;
+  bool _hydrating = false;
+  String? _hydrateError;
+
   static const _emDash = '—';
 
   @override
   void initState() {
     super.initState();
     // Hydrate the §63 settings so the quick-adjust controls start from the
-    // daemon's saved values, not the client defaults. Best-effort: a failure
-    // leaves defaults and Apply still round-trips.
+    // daemon's saved values, not the client defaults. The active server loads
+    // asynchronously, so also retry when the profile API (re)appears — a panel
+    // mounted before saved servers resolve must not stay unhydrated forever.
+    ref.listenManual(profileApiProvider, (prev, next) {
+      if (next != null && !_hydrated && !_hydrating) _hydrate();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
   Future<void> _hydrate() async {
-    final server = ref.read(activeServerProvider);
-    if (server == null) return;
+    final api = ref.read(profileApiProvider);
+    if (api == null || _hydrating || _hydrated) return;
+    _hydrating = true;
     try {
-      await ref
-          .read(phd2SettingsProvider.notifier)
-          .hydrateFromServer(ProfileApi(server));
-    } catch (_) {
-      // Non-fatal — the panel still works from local state.
+      await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+      if (mounted) {
+        setState(() {
+          _hydrated = true;
+          _hydrateError = null;
+        });
+      }
+    } catch (e) {
+      // Same surfacing as equipment_guider_panel — a visible message, and
+      // Apply stays gated so a full-object PUT can't overwrite the daemon's
+      // profile with the client defaults.
+      if (mounted) {
+        setState(() => _hydrateError = 'Could not load saved values: $e');
+      }
+    } finally {
+      _hydrating = false;
     }
   }
 
@@ -61,9 +85,9 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
   /// profile to the guider (set_algo_param / set_dec_guide_mode — runtime-safe,
   /// guiding is not interrupted).
   Future<void> _apply() async {
-    final server = ref.read(activeServerProvider);
+    final api = ref.read(profileApiProvider);
     final messenger = ScaffoldMessenger.of(context);
-    if (server == null) {
+    if (api == null) {
       messenger.showSnackBar(const SnackBar(
           content: Text('No active server — connect to a daemon first.')));
       return;
@@ -73,9 +97,7 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
       _status = null;
     });
     try {
-      await ref
-          .read(phd2SettingsProvider.notifier)
-          .persistToServer(ProfileApi(server));
+      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
       if (!mounted) return;
       setState(() => _status = 'Applied — guiding continues uninterrupted.');
@@ -326,7 +348,9 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
           Row(
             children: [
               FilledButton.icon(
-                onPressed: _applying ? null : _apply,
+                // Gated on the hydrate (see the field comment): Apply PUTs the
+                // full settings object, so it must never run from defaults.
+                onPressed: (_applying || !_hydrated) ? null : _apply,
                 icon: _applying
                     ? const SizedBox(
                         width: 16,
@@ -347,6 +371,17 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
               ),
             ],
           ),
+          if (_hydrateError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _hydrateError!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
           if (_status != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),

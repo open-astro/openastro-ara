@@ -102,28 +102,34 @@ class LiveGuidingNotifier extends Notifier<List<RmsSample>> {
 
   @override
   List<RmsSample> build() {
-    // listen (not watch) — the fold below assigns state itself; a watch would
-    // rebuild this notifier (and reset the poll timer) on every status change.
-    ref.listen<AsyncValue<GuiderStatus?>>(guiderStatusProvider, (prev, next) {
-      final status = next.asData?.value;
-      if (status == null) return;
-      _fold(status);
-    });
     // Seed from whatever status is already loaded so the panel doesn't start
     // blank when the chip/dialog polled recently.
     final current = ref.read(guiderStatusProvider).asData?.value;
     if (current != null) _fold(current);
+    // Deliberately NOT ref.listen on guiderStatusProvider: GuiderStatus has
+    // value equality, so steady guiding with an unchanged RMS would never fire
+    // the listener — the trace would freeze and old points would never age out
+    // (eviction runs on append). Instead every poll tick appends a
+    // freshly-timestamped sample, so a constant RMS still draws a live,
+    // sliding trace.
     _timer?.cancel();
-    _timer = Timer.periodic(kLiveGuidingPollInterval, (_) {
-      // refresh() is null-api-safe and self-serializing; a poll on a
-      // disconnected daemon is a cheap no-op error kept out of this buffer.
-      ref.read(guiderStatusProvider.notifier).refresh();
-    });
+    _timer = Timer.periodic(kLiveGuidingPollInterval, (_) => pollTick());
     ref.onDispose(() {
       _timer?.cancel();
       _timer = null;
     });
     return _buffer.samples;
+  }
+
+  /// One poll cycle: re-read guider status, then fold the result (also called
+  /// directly by tests — the timer is just a scheduler around this).
+  /// refresh() is null-api-safe and self-serializing; a poll on a disconnected
+  /// daemon is a cheap no-op error kept out of this buffer.
+  Future<void> pollTick() async {
+    await ref.read(guiderStatusProvider.notifier).refresh();
+    if (!ref.mounted) return;
+    final status = ref.read(guiderStatusProvider).asData?.value;
+    if (status != null) _fold(status);
   }
 
   void _fold(GuiderStatus status) {
