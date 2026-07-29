@@ -177,6 +177,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async System.Threading.Tasks.Task RestartGuiderAsync_requests_a_supervisor_restart_even_when_disconnected() {
+            // §63.17 — the manual restart is deliberately NOT gated on a connected guider (it's most useful
+            // when the daemon is hung), so it must accept and kick the supervisor with nothing connected.
+            var supervisor = new Mock<IGuiderProcessSupervisor>();
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, supervisor.Object);
+            var accepted = await svc.RestartGuiderAsync("idem-r", CancellationToken.None);
+            Assert.That(accepted.OperationType, Is.EqualTo("guider.restart"));
+            supervisor.Verify(s => s.RequestRestart(), Times.Once);
+        }
+
+        [Test]
         public void DeleteCalibrationFilesAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = NewService();
             Assert.Throws<InvalidOperationException>(

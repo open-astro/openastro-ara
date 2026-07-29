@@ -207,6 +207,9 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromResult<GuiderEquipmentChoicesDto?>(null);
     public Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct) =>
         Task.FromException<GuiderAlpacaDiscoveryDto>(new InvalidOperationException("guider is not connected"));
+    // Restart never needs a connected guider — the placeholder just accepts (there is no unit to kick).
+    public Task<OperationAcceptedDto> RestartGuiderAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.restart", idempotencyKey));
     public Task<CalibrationFilesStatusDto> DeleteCalibrationFilesAsync(bool deleteDarkLibrary, bool deleteDefectMap, CancellationToken ct) =>
         Task.FromException<CalibrationFilesStatusDto>(new InvalidOperationException("guider is not connected"));
     public Task<OperationAcceptedDto> PushGuiderProfileAsync(string? idempotencyKey, CancellationToken ct) =>
