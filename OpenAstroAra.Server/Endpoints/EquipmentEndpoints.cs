@@ -65,9 +65,12 @@ public static class EquipmentEndpoints {
                     type: "https://openastro.net/errors/not-discoverable",
                     title: "Guider is not Alpaca-discoverable",
                     statusCode: StatusCodes.Status400BadRequest,
-                    detail: "PHD2 connects over JSON-RPC at a host:port (profile phd2 " +
-                            "settings), not through Alpaca discovery. Configure it in the " +
-                            "wizard's Guider step or Settings → Guider.");
+                    detail: "The guider connects over JSON-RPC at a host:port (profile phd2 " +
+                            "settings), not through Alpaca discovery. Configure the connection AND " +
+                            "the guider's own equipment (guide camera, mount, rotator, dark library) " +
+                            "in the wizard's Guider step or Settings → Guider — the daemon's web " +
+                            "portal is not needed. Its Alpaca devices can be found via " +
+                            "POST /equipment/guider/discover.");
             }
             var devices = await svc.DiscoverAsync(deviceType, forceRefresh ?? false, ct);
             return Results.Ok(devices);
@@ -421,6 +424,11 @@ public static class EquipmentEndpoints {
         // the 202 returns; guider.profile_pushed then carries the attempted method names.
         guider.MapPost("/profile/push", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await PushGuiderProfileAsync(key, svc, ct));
+        // §63.17 manual restart — fire-and-forget systemctl restart of the guider unit (202 immediately;
+        // §63.3 recovery + guider.state WS events report the outcome). Deliberately not gated on a
+        // connected guider: it's most useful when the daemon is hung.
+        guider.MapPost("/restart", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.RestartGuiderAsync(key, ct)));
         // §63.17 delete the stored calibration files — synchronous 200 with the updated status (same shape as
         // the enable toggles). Query flags default to the daemon's "delete everything"; ?darks=false keeps the
         // dark library, ?defectmap=false keeps the defect map. Both false → 400; disconnected → 409; daemon

@@ -48,7 +48,12 @@ devices are discovered on the LAN, and the daemon remembers your choices for aut
   Sequencer side (see §7).
 - **Guider** — Ara drives a separate guiding daemon (openastro-guider, a PHD2 fork) over its own
   port. The guider chip connects it; the Calibration dialog builds its **dark library / defect
-  map** — you'll be asked to confirm the scope is covered first, and the build shows live progress.
+  map** — you'll be asked to confirm the scope is covered first, and the build shows live progress —
+  and can also **delete** either artifact (with confirmation). The daemon's own equipment (guide
+  camera, mount, rotator, Alpaca server) is configured entirely from **Settings → Guider → Guider
+  equipment**: refresh the daemon's device choices, discover Alpaca servers on its network, pick
+  devices, and **Apply to guider** — no visit to the daemon's web portal is ever needed. If you
+  change the guide camera, Ara flags the existing dark library as stale and recommends a rebuild.
 - **Dome / flat panel / switches / safety monitor / observing conditions** — each has a panel with
   the controls its capabilities report.
 

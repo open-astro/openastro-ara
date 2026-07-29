@@ -375,6 +375,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Camera_change_push_emits_the_dark_library_invalidated_event() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(true));
+            // A dark library exists → an actual camera change should invalidate it.
+            fake.OnRpc("get_calibration_files_status", _ => new JsonObject { ["profile_id"] = 1, ["dark_library_exists"] = true });
+            var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            var ws = new Mock<IWsBroadcaster>();
+            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((t, _, _) => events.Enqueue(t))
+                .Returns(Task.CompletedTask);
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Cam A";
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object);
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            // First push establishes the baseline — no invalidation (no prior push to differ from).
+            await svc.PushGuiderProfileAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(events, Does.Not.Contain("guider.dark_library.invalidated"),
+                "the baseline-establishing first push must not invalidate");
+
+            // Change the camera and push again — NOW the darks belong to the old camera.
+            profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Cam B";
+            await svc.PushGuiderProfileAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(events, Does.Contain("guider.profile_pushed"));
+            Assert.That(events, Does.Contain("guider.dark_library.invalidated"),
+                "a camera-changing push with an existing dark library must emit the invalidation");
+        }
+
+        [Test]
         public async Task Delete_calibration_files_round_trips_through_the_fake() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));

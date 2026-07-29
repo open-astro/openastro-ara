@@ -178,6 +178,11 @@ public interface IGuiderService {
     /// without Alpaca support).</summary>
     Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct);
 
+    /// <summary>§63.17 — request a systemd restart of the guider unit (fire-and-forget 202; §63.3 recovery
+    /// reports the outcome over guider.state). Never requires a connected guider — a manual restart is most
+    /// useful when the daemon is hung.</summary>
+    Task<OperationAcceptedDto> RestartGuiderAsync(string? idempotencyKey, CancellationToken ct);
+
     /// <summary>§63.17 — delete the stored calibration files (dark library and/or defect map); returns the
     /// updated status. Disconnected → InvalidOperationException (409); both flags false → ArgumentException
     /// (400); daemon rejection → GuiderRpcException (422).</summary>
