@@ -141,20 +141,24 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
   );
 }
 
-Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
+Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
+    {OpticsSettings? baseOptics}) {
   final g = d.guider;
   // §63.19 — with an OAG the guide focal length is derived from the main
-  // optics entered on the telescope screen (the wizard doesn't collect a
-  // reducer factor, so the factor is 1.0 here; the Settings panel re-derives
-  // with the profile's reducer on its next save). 0/unset telescope focal
-  // length maps to null = keep the base value.
+  // optics: the telescope screen's focal length × the base profile's optics
+  // reducer factor (the wizard collects no reducer of its own; the base
+  // section is the source, falling back to 1.0 when it's unset/invalid).
+  // 0/unset telescope focal length maps to null = keep the base value.
   final setupType = g.setupType == null
       ? null
       : Phd2SettingsNotifier.normalizeGuiderSetupType(g.setupType!);
   final effectiveType = setupType ?? base.guiderSetupType;
   int? focalLength;
   if (effectiveType == 'oag') {
-    final derived = derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, 1.0);
+    final baseReducer = baseOptics?.reducerFactor ?? 0;
+    final reducer = baseReducer > 0 ? baseReducer : 1.0;
+    final derived =
+        derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, reducer);
     focalLength = derived == 0 ? null : derived;
   } else {
     focalLength = g.guideFocalLengthMm;
@@ -306,7 +310,12 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     _trySave(() async => api.putOptics(applyDraftToOptics(await api.getOptics(), d))),
     _trySave(() async =>
         api.putImagingDefaults(applyDraftToImaging(await api.getImagingDefaults(), d))),
-    _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(await api.getPhd2Settings(), d))),
+    // §63.19 — the OAG derivation needs the base optics reducer factor; the
+    // draft never writes the reducer, so reading it concurrently with the
+    // optics-section save above is race-free.
+    _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(
+        await api.getPhd2Settings(), d,
+        baseOptics: await api.getOptics()))),
     _trySave(() async => api.putPlateSolveSettings(
         applyDraftToPlateSolve(await api.getPlateSolveSettings(), d))),
     _trySave(() async => api.putAutofocusSettings(

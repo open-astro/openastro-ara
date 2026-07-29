@@ -153,18 +153,33 @@ void main() {
       expect(kept.guidePixelSize, 3.8);
     });
 
-    test('applyDraftToPhd2 §63.19 OAG derives FL from the telescope screen', () {
+    test('applyDraftToPhd2 §63.19 OAG derives FL × the base optics reducer', () {
       final d = ProfileDraft();
       d.telescope.focalLengthMm = 1480;
       d.guider
         ..setupType = 'oag'
         ..guideFocalLengthMm = 240 // ignored for OAG
         ..guidePixelSizeUm = 2.9;
-      final out = applyDraftToPhd2(const Phd2Settings(guideFocalLength: 111), d);
+      final out = applyDraftToPhd2(
+        const Phd2Settings(guideFocalLength: 111),
+        d,
+        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+      );
       expect(out.guiderSetupType, 'oag');
-      // Wizard collects no reducer factor, so factor = 1.0 here.
-      expect(out.guideFocalLength, 1480);
+      expect(out.guideFocalLength, 1184); // 1480 × 0.8
       expect(out.guidePixelSize, 2.9);
+    });
+
+    test('applyDraftToPhd2 §63.19 OAG falls back to reducer 1.0 when unset', () {
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 1480;
+      d.guider.setupType = 'oag';
+      // Invalid/unset reducer (≤ 0) → 1.0; missing baseOptics entirely → 1.0.
+      final invalid = applyDraftToPhd2(const Phd2Settings(), d,
+          baseOptics: const OpticsSettings(reducerFactor: 0));
+      expect(invalid.guideFocalLength, 1480);
+      final absent = applyDraftToPhd2(const Phd2Settings(), d);
+      expect(absent.guideFocalLength, 1480);
     });
 
     test('applyDraftToPhd2 §63.19 OAG without telescope FL keeps the base FL', () {

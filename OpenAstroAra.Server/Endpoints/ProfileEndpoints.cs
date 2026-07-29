@@ -246,8 +246,12 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's PHD2 settings.");
 
         profile.MapPut("/phd2", (Phd2SettingsDto body, IProfileStore store) => {
-            store.PutPhd2Settings(body);
-            return Results.Ok(body);
+            // §63.19 — normalize the setup type at the write boundary so an out-of-band PUT can't persist an
+            // arbitrary token (#885 review): unknown → the guide_scope default, matching the client's read-side
+            // coercion. Other fields keep the store's existing store-verbatim posture.
+            var normalized = body with { GuiderSetupType = NormalizeGuiderSetupType(body.GuiderSetupType) };
+            store.PutPhd2Settings(normalized);
+            return Results.Ok(normalized);
         })
             .Accepts<Phd2SettingsDto>("application/json")
             .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
@@ -452,4 +456,10 @@ public static class ProfileEndpoints {
     internal static SafetyPoliciesDto PreserveDaemonOwnedSafetyFields(
         SafetyPoliciesDto incoming, SafetyPoliciesDto stored) =>
         incoming with { FirstFlipConfirmed = stored.FirstFlipConfirmed };
+
+    /// <summary>§63.19 — write-boundary normalization for the guide setup type: only the openapi enum
+    /// tokens pass through; anything else (case/whitespace variants included, matching the client's
+    /// read-side coercion) becomes the <c>guide_scope</c> default. Extracted for unit tests.</summary>
+    internal static string NormalizeGuiderSetupType(string? setupType) =>
+        setupType?.Trim().ToLowerInvariant() == "oag" ? "oag" : "guide_scope";
 }
