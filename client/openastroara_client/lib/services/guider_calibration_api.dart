@@ -24,6 +24,10 @@ abstract interface class GuiderCalibrationClient {
   });
   Future<void> setDarkLibraryEnabled(bool enabled);
   Future<void> setDefectMapEnabled(bool enabled);
+  Future<CalibrationStatusResponse> deleteCalibrationFiles({
+    bool darks,
+    bool defectmap,
+  });
   void close();
 }
 
@@ -114,6 +118,26 @@ class GuiderCalibrationApi implements GuiderCalibrationClient {
       '/api/v1/equipment/guider/defectmap/enabled',
       data: <String, dynamic>{'enabled': enabled},
     );
+  }
+
+  /// §63.17 delete the stored calibration files. Synchronous — the daemon
+  /// returns 200 with the updated status envelope (same shape as getStatus()).
+  /// Both flags false is a client bug the server answers with 400; disconnected
+  /// → typed 409; daemon rejection (e.g. capture active) → 422.
+  @override
+  Future<CalibrationStatusResponse> deleteCalibrationFiles({
+    bool darks = true,
+    bool defectmap = true,
+  }) async {
+    final res = await _dio.delete<dynamic>(
+      '/api/v1/equipment/guider/darklibrary',
+      queryParameters: <String, dynamic>{'darks': darks, 'defectmap': defectmap},
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      return const CalibrationStatusResponse(connected: false);
+    }
+    return CalibrationStatusResponse.fromJson(data);
   }
 
   @override
