@@ -13,6 +13,7 @@ import '../../widgets/imaging/diagnostic_panel.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/fault_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
+import '../../widgets/imaging/guiding_panel.dart';
 import '../../widgets/imaging/histogram_strip.dart';
 import '../../widgets/imaging/solve_panel.dart';
 import '../../widgets/status_indicator.dart';
@@ -42,6 +43,7 @@ class ImagingTab extends ConsumerWidget {
                     HistogramStrip(),
                     SolvePanel(),
                     DiagnosticPanel(),
+                    GuidingPanel(),
                     FaultPanel(),
                   ],
                 ),
