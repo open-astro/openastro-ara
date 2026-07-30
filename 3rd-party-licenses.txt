@@ -865,7 +865,7 @@ License:        MIT
 License source: https://pub.dev/packages/cupertino_icons/license
 
 ------------------------------------------------------------------------
-Package:        dio 5.10.0
+Package:        dio 5.11.0
 Copyright:      Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team
 License:        MIT
 License source: https://pub.dev/packages/dio/license
@@ -883,7 +883,7 @@ License:        MIT
 License source: https://pub.dev/packages/fl_chart/license
 
 ------------------------------------------------------------------------
-Package:        flutter_riverpod 3.3.2
+Package:        flutter_riverpod 3.4.2
 Copyright:      Copyright (c) 2020 Remi Rousselet
 License:        MIT
 License source: https://pub.dev/packages/flutter_riverpod/license
@@ -919,7 +919,7 @@ License:        BSD-3-Clause
 License source: https://pub.dev/packages/path_provider/license
 
 ------------------------------------------------------------------------
-Package:        riverpod 3.3.2
+Package:        riverpod 3.4.2
 Copyright:      Copyright (c) 2020 Remi Rousselet
 License:        MIT
 License source: https://pub.dev/packages/riverpod/license
