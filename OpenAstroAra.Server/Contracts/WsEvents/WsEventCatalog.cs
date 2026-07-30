@@ -81,10 +81,17 @@ public static class WsEventCatalog {
     // §63.17 — a profile push changed the guide-camera selection while a dark library exists: the stored
     // darks belong to the previous camera and should be rebuilt. Payload: {reason: "guide_camera_changed"}.
     public const string GuiderDarkLibraryInvalidated = "guider.dark_library.invalidated";
-    // §45 polar alignment — the routine lifecycle. started/stopped land with the service skeleton;
-    // the in-loop frame_complete/solved/unsolved/paused events arrive with the capture-loop slice.
+    // §45 polar alignment — the routine lifecycle (started/stopped) plus the engine's live stream:
+    // progress per solved iteration ({iteration, altitude/azimuth/total_error_arcmin, zone, solved}),
+    // frame_complete per capture ({frame_id, solved, consecutive_solve_failures}), paused when
+    // 5 consecutive solves fail (§45.11 — the loop keeps retrying and resumes on the next good
+    // solve), and error on a fatal routine failure ({reason, message}).
     public const string PolarAlignStarted = "polar_align.started";
     public const string PolarAlignStopped = "polar_align.stopped";
+    public const string PolarAlignProgress = "polar_align.progress";
+    public const string PolarAlignFrameComplete = "polar_align.frame_complete";
+    public const string PolarAlignPaused = "polar_align.paused";
+    public const string PolarAlignError = "polar_align.error";
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;

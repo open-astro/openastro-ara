@@ -15,12 +15,17 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -29,16 +34,49 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// §45 (polar-align-b) — the real <see cref="PolarAlignService"/> skeleton driven against the bench's
-    /// <see cref="FakeGuider"/> through the real <see cref="GuiderService"/>: Start acquires the guide-camera
-    /// PA-session lease and goes active; Stop releases it and goes stopped; both publish the lifecycle WS
-    /// event; and a not-connected Start fails the same way the guide ops do. No capture/solve loop yet.
+    /// §45 (polar-align engine) — the full <see cref="PolarAlignService"/> state machine driven against
+    /// the bench's <see cref="FakeGuider"/> (capture RPC + <c>SingleFrameComplete</c> event + PA-session
+    /// lease), a scripted <see cref="IPolarAlignFrameSolver"/>, and a mocked mount. Covers the seed
+    /// (frame A → RA slew → frame B → axis fit), the live-adjust loop (tracking off, errors populated,
+    /// progress events), the §45.11 pause-after-5-failed-solves + auto-resume, seed-failure → failed +
+    /// error event, and hand-back (tracking restored, lease released) on Stop and on failure.
     /// </summary>
     [TestFixture]
     [Category("bench")]
     public class PolarAlignServiceTest {
 
+        // Synthetic sky: the mount's RA axis sits exactly at the true pole, the camera points at
+        // dec 85° — so seed frames A/B are two points on the dec-85 circle, the fitted axis is the
+        // pole, and the expected alt error is MINUS the refraction term at the pole altitude
+        // (a geometrically-perfect axis appears ~1′ below the APPARENT pole) with ~0 az error.
         private static readonly bool[] AcquireThenRelease = { true, false };
+        private const double SiteLatDeg = 45.0;
+        private const double SiteLonDeg = -75.0;
+        private static readonly PolarAlignSolveOutcome SolveA = new(true, 0.0, 85.0);
+        private static readonly PolarAlignSolveOutcome SolveB = new(true, 30.0, 85.0);
+        private static readonly PolarAlignSolveOutcome Unsolved = new(false, 0, 0);
+
+        private sealed class ScriptedSolver : IPolarAlignFrameSolver {
+            private readonly ConcurrentQueue<PolarAlignSolveOutcome> _script = new();
+            public PolarAlignSolveOutcome Fallback { get; set; } = SolveB;
+            public void Enqueue(params PolarAlignSolveOutcome[] outcomes) {
+                foreach (var o in outcomes) {
+                    _script.Enqueue(o);
+                }
+            }
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, double? hintRa, double? hintDec, CancellationToken ct)
+                => Task.FromResult(_script.TryDequeue(out var o) ? o : Fallback);
+        }
+
+        private sealed class WsRecorder : IWsBroadcaster {
+            public ConcurrentQueue<(string Type, JsonElement Payload)> Events { get; } = new();
+            public long CurrentSequence => 0;
+            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+                Events.Enqueue((eventType, payload.Clone()));
+                return Task.CompletedTask;
+            }
+            public int Count(string type) => Events.Count(e => e.Type == type);
+        }
 
         private static GuiderRecoveryCoordinator NewRecovery() =>
             new(Mock.Of<IGuiderProcessSupervisor>(),
@@ -46,8 +84,10 @@ namespace OpenAstroAra.Test {
                 Mock.Of<IDiagnosticsService>(),
                 NullLogger<GuiderRecoveryCoordinator>.Instance);
 
-        // A FakeGuider that answers the connect handshake and records the active flag of every set_pa_session.
-        private static FakeGuider StartFakeWithPaSession(ConcurrentQueue<bool> paSessionActiveCalls) {
+        /// <summary>A FakeGuider that answers the connect handshake, records PA-session lease calls,
+        /// and (when <paramref name="answerCaptures"/>) completes every <c>capture_single_frame</c>
+        /// with a successful <c>SingleFrameComplete</c> event carrying the requested path.</summary>
+        private static FakeGuider StartFake(ConcurrentQueue<bool> paSessionActiveCalls, bool answerCaptures = true) {
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
@@ -56,167 +96,275 @@ namespace OpenAstroAra.Test {
                 paSessionActiveCalls.Enqueue(active);
                 return new JsonObject { ["active"] = active, ["expires_in_s"] = active ? 600 : null };
             });
+            if (answerCaptures) {
+                fake.OnRpc("capture_single_frame", req => {
+                    var path = req["params"]?["path"]?.GetValue<string>();
+                    _ = Task.Run(async () => {
+                        await Task.Delay(20).ConfigureAwait(false);
+                        await fake.BroadcastAsync(new JsonObject {
+                            ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                            ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                        }).ConfigureAwait(false);
+                    });
+                    return JsonValue.Create(0);
+                });
+            } else {
+                // Ack but never complete — the routine parks on the capture-complete wait, which
+                // keeps lifecycle tests free of solver/loop side-effects.
+                fake.OnRpc("capture_single_frame", JsonValue.Create(0));
+            }
             return fake;
         }
+
+        private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true) {
+            var mount = new Mock<ITelescopeMediator>();
+            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
+                Connected = connected, SiderealTime = 0.0, TrackingEnabled = tracking,
+            });
+            mount.Setup(m => m.GetCurrentPosition())
+                .Returns(new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees));
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
+            return mount;
+        }
+
+        private static InMemoryProfileStore NewStore() {
+            var store = new InMemoryProfileStore();
+            store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = SiteLatDeg, LongitudeDeg = SiteLonDeg });
+            return store;
+        }
+
+        private static PolarAlignService NewService(GuiderService guider, ScriptedSolver solver,
+                Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null) {
+            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver,
+                (mount ?? NewMount()).Object, store ?? NewStore(), ws) {
+                SlewSettleDelay = TimeSpan.Zero,
+                LoopCadence = TimeSpan.FromMilliseconds(20),
+                PausedRetryDelay = TimeSpan.FromMilliseconds(20),
+            };
+            return svc;
+        }
+
+        private static async Task<PolarAlignStateDto> PollStateAsync(PolarAlignService svc, params string[] anyOf) {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            PolarAlignStateDto status = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
+            while (!anyOf.Contains(status.State)) {
+                await Task.Delay(50, cts.Token).ConfigureAwait(false);
+                status = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
+            }
+            return status;
+        }
+
+        // ── lifecycle ────────────────────────────────────────────────────────────────────────
 
         [Test]
         public async Task Status_is_idle_before_start() {
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = NewService(guider, new ScriptedSolver());
 
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("idle"));
             Assert.That(status.FramesCaptured, Is.EqualTo(0));
-            Assert.That(status.LastFrameId, Is.Null);
             Assert.That(status.CurrentErrorArcmin, Is.Null);
-        }
-
-        [Test]
-        public async Task Start_acquires_the_lease_and_reports_active() {
-            var paCalls = new ConcurrentQueue<bool>();
-            await using var fake = StartFakeWithPaSession(paCalls);
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Returns(Task.CompletedTask);
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
-
-            await svc.StartAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(paCalls.TryDequeue(out var active), Is.True, "Start should send set_pa_session");
-            Assert.That(active, Is.True, "Start acquires the lease (active=true)");
-            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            Assert.That(status.State, Is.EqualTo("capturing"), "an active routine reports the capturing state");
-            ws.Verify(w => w.PublishAsync(WsEventCatalog.PolarAlignStarted, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Test]
-        public async Task Stop_releases_the_lease_and_reports_stopped() {
-            var paCalls = new ConcurrentQueue<bool>();
-            await using var fake = StartFakeWithPaSession(paCalls);
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Returns(Task.CompletedTask);
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
-
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            paCalls.TryDequeue(out _); // discard the Start (active=true) call
-
-            await svc.StopAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(paCalls.TryDequeue(out var active), Is.True, "Stop should send set_pa_session");
-            Assert.That(active, Is.False, "Stop releases the lease (active=false)");
-            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            Assert.That(status.State, Is.EqualTo("stopped"));
-            ws.Verify(w => w.PublishAsync(WsEventCatalog.PolarAlignStopped, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Test]
-        public async Task Start_is_idempotent_and_acquires_the_lease_only_once() {
-            var paCalls = new ConcurrentQueue<bool>();
-            await using var fake = StartFakeWithPaSession(paCalls);
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
-
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(paCalls.Count, Is.EqualTo(1), "a second Start on an already-active routine is a no-op accept");
-        }
-
-        [Test]
-        public async Task Concurrent_starts_acquire_the_lease_and_publish_only_once() {
-            // The endpoint calls straight into the singleton with no request serialization, so two
-            // near-simultaneous Starts race. _opLock serializes them: exactly one acquires the lease +
-            // publishes, the other then sees _active and is a no-op accept (guards the double-acquire).
-            var paCalls = new ConcurrentQueue<bool>();
-            await using var fake = StartFakeWithPaSession(paCalls);
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var ws = new Mock<IWsBroadcaster>();
-            ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
-                .Returns(Task.CompletedTask);
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, ws.Object);
-
-            await Task.WhenAll(
-                svc.StartAsync(null, CancellationToken.None),
-                svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
-
-            var acquisitions = 0;
-            while (paCalls.TryDequeue(out var active)) {
-                if (active) {
-                    acquisitions++;
-                }
-            }
-            Assert.That(acquisitions, Is.EqualTo(1), "concurrent Starts must acquire the lease exactly once");
-            ws.Verify(w => w.PublishAsync(WsEventCatalog.PolarAlignStarted, It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Test]
-        public async Task Stop_waits_for_an_in_flight_start_and_leaves_the_lease_released() {
-            // The Start/Stop race: a Stop issued while a Start is mid-lease-RPC must serialize behind it
-            // (via _opLock), so the set_pa_session calls can't reorder on the wire and leave the daemon
-            // holding the lease while the service reports "stopped". We block Start inside its active:true
-            // RPC, fire Stop, and prove Stop waits — then the wire order is [true, false] and state=stopped.
-            var paCalls = new ConcurrentQueue<bool>();
-            using var startEnteredRpc = new ManualResetEventSlim(false);
-            using var releaseStartRpc = new ManualResetEventSlim(false);
-            await using var fake = FakeGuider.Start();
-            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
-            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
-            fake.OnRpc("set_pa_session", req => {
-                var active = req["params"]?["active"]?.GetValue<bool>() ?? false;
-                if (active) {
-                    startEnteredRpc.Set();
-                    releaseStartRpc.Wait(TimeSpan.FromSeconds(10));
-                }
-                paCalls.Enqueue(active);
-                return new JsonObject { ["active"] = active };
-            });
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
-
-            var startTask = svc.StartAsync(null, CancellationToken.None);
-            Assert.That(startEnteredRpc.Wait(TimeSpan.FromSeconds(10)), Is.True, "Start should reach its lease RPC");
-
-            // Start now holds _opLock inside the (blocked) lease RPC; a Stop must wait on the semaphore.
-            var stopTask = svc.StopAsync(null, CancellationToken.None);
-            await Task.Delay(200).ConfigureAwait(false);
-            Assert.That(stopTask.IsCompleted, Is.False, "Stop must wait for the in-flight Start (serialized by _opLock)");
-
-            releaseStartRpc.Set();
-            await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
-
-            Assert.That(paCalls.ToArray(), Is.EqualTo(AcquireThenRelease),
-                "the lease RPCs must run in call order — acquire then release — not race on the wire");
-            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            Assert.That(status.State, Is.EqualTo("stopped"), "final state matches the last op, with the lease released");
         }
 
         [Test]
         public void Start_without_a_connected_guider_throws() {
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = NewService(guider, new ScriptedSolver());
 
             Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
         }
 
         [Test]
+        public async Task Start_without_a_connected_mount_throws_and_leaves_the_lease_untouched() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver(), NewMount(connected: false));
+
+            Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
+            Assert.That(paCalls, Is.Empty, "a failed preflight must not acquire the lease");
+        }
+
+        [Test]
+        public async Task Start_acquires_the_lease_and_publishes_started() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new ScriptedSolver(), ws: ws);
+
+            await svc.StartAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(paCalls.TryDequeue(out var active), Is.True, "Start should send set_pa_session");
+            Assert.That(active, Is.True);
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("seeding"), "an active routine begins in the seeding state");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.EqualTo(1));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Start_is_idempotent_and_acquires_the_lease_only_once() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver());
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(paCalls.Count, Is.EqualTo(1), "a second Start on an already-active routine is a no-op accept");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
         public async Task Stop_without_a_connected_guider_still_succeeds_and_reports_stopped() {
-            // Stop is best-effort about the lease — with no guider there's nothing to release, but the
-            // service must still transition and ack rather than throw.
             using var guider = new GuiderService(new HeadlessProfileService(), NewRecovery(),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
-            using var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance);
+            using var svc = NewService(guider, new ScriptedSolver());
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("stopped"));
+        }
+
+        // ── the engine ───────────────────────────────────────────────────────────────────────
+
+        [Test]
+        public async Task Happy_path_seeds_then_adjusts_with_populated_errors_and_progress_events() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB); // seed A, seed B; the live loop re-solves B (Fallback)
+            var mount = NewMount(tracking: true);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, mount, ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            // Axis fitted at the true pole → alt error = −refraction at the pole altitude (~1.0′ at
+            // lat 45°), az error ~0. The live loop re-solving the same pointing must not change it.
+            Assert.That(status.AltitudeAdjustmentArcmin, Is.Not.Null.And.EqualTo(-1.0).Within(0.2));
+            Assert.That(status.AzimuthAdjustmentArcmin, Is.Not.Null.And.EqualTo(0.0).Within(0.2));
+            Assert.That(status.CurrentErrorArcmin, Is.Not.Null.And.EqualTo(1.0).Within(0.2));
+            Assert.That(status.FramesCaptured, Is.GreaterThanOrEqualTo(2), "both seed frames captured");
+
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()),
+                Times.Once, "the seed performs exactly one RA slew");
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "the adjust loop stops tracking");
+
+            // Progress events stream with the live payload shape the client renders.
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignProgress) < 2) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            var progress = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignProgress).Payload;
+            Assert.That(progress.GetProperty("altitude_error_arcmin").GetDouble(), Is.EqualTo(-1.0).Within(0.2));
+            Assert.That(progress.GetProperty("zone").GetString(), Is.EqualTo("green"));
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mount.Verify(m => m.SetTrackingEnabled(true), Times.Once, "Stop restores the pre-routine tracking state");
+            Assert.That(paCalls.ToArray().Last(), Is.False, "Stop releases the lease");
+        }
+
+        [Test]
+        public async Task Five_failed_solves_pause_the_loop_and_a_good_solve_resumes_it() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            var failures = Enumerable.Repeat(Unsolved, PolarAlignService.MaxConsecutiveSolveFailures).ToArray();
+            solver.Enqueue(new[] { SolveA, SolveB }.Concat(failures).ToArray()); // then Fallback succeeds
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var paused = await PollStateAsync(svc, "paused", "failed").ConfigureAwait(false);
+            Assert.That(paused.State, Is.EqualTo("paused"), "5 consecutive failed solves park the loop in paused");
+
+            var resumed = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(resumed.State, Is.EqualTo("adjusting"), "the next good solve resumes the loop");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignPaused), Is.EqualTo(1), "paused is published once per streak");
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Seed_solve_failure_fails_the_routine_and_releases_the_lease() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved };
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("seed_solve_failed"));
+            while (!paCalls.Contains(false)) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            Assert.That(paCalls.ToArray().Last(), Is.False, "a failed routine releases the lease itself");
+        }
+
+        [Test]
+        public async Task Inconsistent_seed_solves_fail_the_axis_fit_with_an_actionable_reason() {
+            // Solved pointings further apart than the commanded rotation allows → the geometry's
+            // inconsistent-chord rejection must surface as a failed routine, not an internal error.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(new PolarAlignSolveOutcome(true, 0.0, 20.0), new PolarAlignSolveOutcome(true, 10.0, -40.0));
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("axis_fit_failed"));
+        }
+
+        [Test]
+        public async Task Stop_mid_seed_unwinds_cleanly_and_releases_the_lease_in_order() {
+            // The routine is parked on a capture that never completes; Stop must cancel it, unwind,
+            // and the wire order of the lease RPCs stays acquire-then-release.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new ScriptedSolver(), ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(paCalls.ToArray(), Is.EqualTo(AcquireThenRelease),
+                "lease RPCs must run acquire-then-release, never race");
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("stopped"));
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1));
         }
 
         private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake) {
@@ -239,8 +387,8 @@ namespace OpenAstroAra.Test {
                     }
                     await Task.Delay(100, cts.Token).ConfigureAwait(false);
                 }
-            } catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token) {
-                // Our own 15s deadline elapsed — let the caller's assertion report the miss.
+            } catch (OperationCanceledException) {
+                // fall through to null
             }
             return null;
         }

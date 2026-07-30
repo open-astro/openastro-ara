@@ -212,6 +212,24 @@ public static class PolarAlignGeometry {
         return (altErrArcmin, azErrArcmin);
     }
 
+    /// <summary>
+    /// Horizontal coordinates of a pointing at the site — altitude + azimuth (degrees, azimuth
+    /// from north through east) of apparent-of-date (<paramref name="raDeg"/>, <paramref name="decDeg"/>)
+    /// at <paramref name="atUtc"/>. The live-adjust loop's reverse-projection needs this: with
+    /// tracking stopped the camera direction is FIXED in alt/az, so each new solve's alt/az delta
+    /// from the seed pointing IS the knob adjustment the user just made, and the axis error updates
+    /// by exactly that delta without re-slewing (§45.8).
+    /// </summary>
+    public static (double AltDeg, double AzDeg) PointingAltAz(
+            double raDeg, double decDeg, double latitudeDeg, double longitudeDeg, DateTimeOffset atUtc) {
+        RequireFinite(raDeg, nameof(raDeg));
+        RequireFinite(decDeg, nameof(decDeg));
+        RequireFinite(latitudeDeg, nameof(latitudeDeg));
+        RequireFinite(longitudeDeg, nameof(longitudeDeg));
+        var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, longitudeDeg);
+        return AltAz(decDeg, latitudeDeg, lst - raDeg);
+    }
+
     // ── spherical helpers (unit-vector algebra; RA/Dec degrees) ─────────────────────────────
 
     private static (double X, double Y, double Z) UnitVector(double raDeg, double decDeg) {
