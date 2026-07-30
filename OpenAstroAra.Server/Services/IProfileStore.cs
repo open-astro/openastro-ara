@@ -64,6 +64,10 @@ public interface IProfileStore {
     AutofocusSettingsDto GetAutofocusSettings();
     void PutAutofocusSettings(AutofocusSettingsDto value);
 
+    // §45.12 polar-alignment settings.
+    PolarAlignSettingsDto GetPolarAlignSettings();
+    void PutPolarAlignSettings(PolarAlignSettingsDto value);
+
     PlateSolveSettingsDto GetPlateSolveSettings();
     void PutPlateSolveSettings(PlateSolveSettingsDto value);
 

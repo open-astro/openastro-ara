@@ -299,6 +299,8 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>()));
+        builder.Services.AddSingleton<IPolarAlignmentLog>(sp =>
+            new SqlitePolarAlignmentLog(sp.GetRequiredService<SqliteAraDatabase>()));
         builder.Services.AddSingleton<IPolarAlignService>(sp =>
             new PolarAlignService(
                 sp.GetRequiredService<GuiderService>(),
@@ -306,7 +308,8 @@ public partial class Program {
                 sp.GetRequiredService<IPolarAlignFrameSolver>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
                 sp.GetRequiredService<IProfileStore>(),
-                sp.GetService<IWsBroadcaster>()));
+                sp.GetService<IWsBroadcaster>(),
+                sp.GetRequiredService<IPolarAlignmentLog>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control

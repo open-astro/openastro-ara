@@ -131,18 +131,28 @@ namespace OpenAstroAra.Test {
             return mount;
         }
 
+        private sealed class RecordingLog : IPolarAlignmentLog {
+            public ConcurrentQueue<PolarAlignmentRecord> Rows { get; } = new();
+            public Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) {
+                Rows.Enqueue(record);
+                return Task.CompletedTask;
+            }
+        }
+
         private static InMemoryProfileStore NewStore() {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = SiteLatDeg, LongitudeDeg = SiteLonDeg });
+            // Bench cadences: the real §45.12 defaults would make loop tests take minutes.
+            store.PutPolarAlignSettings(new PolarAlignSettingsDto(
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0));
             return store;
         }
 
         private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
-                Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null) {
+                Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null,
+                IPolarAlignmentLog? log = null) {
             var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver,
-                (mount ?? NewMount()).Object, store ?? NewStore(), ws) {
-                SlewSettleDelay = TimeSpan.Zero,
-                LoopCadence = TimeSpan.FromMilliseconds(20),
+                (mount ?? NewMount()).Object, store ?? NewStore(), ws, log) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
             };
             return svc;
@@ -641,6 +651,99 @@ namespace OpenAstroAra.Test {
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("stopped"));
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1));
+        }
+
+        // ── §45.13 session log + complete ────────────────────────────────────────────────────
+
+        [Test]
+        public async Task Complete_logs_the_achieved_error_and_unwinds_like_stop() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var log = new RecordingLog();
+            var mount = NewMount();
+            using var svc = NewService(guider, solver, mount, log: log);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            // Wait for the first LIVE iteration (not just the seed) so the row's iteration count is real.
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
+                while ((await svc.GetStatusAsync(cts.Token).ConfigureAwait(false)).LastFrameId?.StartsWith("live-", StringComparison.Ordinal) != true) {
+                    await Task.Delay(25, cts.Token).ConfigureAwait(false);
+                }
+            }
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(log.Rows.TryDequeue(out var row), Is.True, "Complete writes exactly one session row");
+            Assert.That(row!.Outcome, Is.EqualTo("complete"));
+            Assert.That(row.FinalErrorArcmin, Is.Not.Null.And.EqualTo(1.0).Within(0.2));
+            Assert.That(row.Iterations, Is.GreaterThanOrEqualTo(1));
+            Assert.That(log.Rows, Is.Empty);
+            Assert.That(paCalls.ToArray().Last(), Is.False, "Complete releases the lease");
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("stopped"));
+        }
+
+        [Test]
+        public async Task Stop_logs_an_aborted_row_and_a_second_stop_does_not_duplicate_it() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var log = new RecordingLog();
+            using var svc = NewService(guider, solver, log: log);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(log.Rows.Count, Is.EqualTo(1), "only the Stop that ended the routine logs a row");
+            Assert.That(log.Rows.TryDequeue(out var row), Is.True);
+            Assert.That(row!.Outcome, Is.EqualTo("aborted"));
+        }
+
+        [Test]
+        public async Task A_failed_routine_logs_a_failed_row_and_stop_does_not_add_another() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved };
+            var log = new RecordingLog();
+            using var svc = NewService(guider, solver, log: log);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (log.Rows.IsEmpty) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(log.Rows.Count, Is.EqualTo(1));
+            Assert.That(log.Rows.TryDequeue(out var row), Is.True);
+            Assert.That(row!.Outcome, Is.EqualTo("failed"));
+            Assert.That(row.FinalErrorArcmin, Is.Null, "a routine that never reached adjusting has no error");
+        }
+
+        [Test]
+        public void Polar_align_settings_round_trip_through_the_store_with_defaults() {
+            var store = new InMemoryProfileStore();
+            var defaults = store.GetPolarAlignSettings();
+            Assert.That(defaults.ExposureSeconds, Is.EqualTo(1.0));
+            Assert.That(defaults.Binning, Is.EqualTo(1));
+            Assert.That(defaults.TargetToleranceArcmin, Is.EqualTo(1.0));
+            Assert.That(defaults.SeedRotationDeg, Is.EqualTo(30.0));
+            Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
+            Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
+
+            store.PutPolarAlignSettings(defaults with { ExposureSeconds = 0.5, Binning = 2 });
+            var updated = store.GetPolarAlignSettings();
+            Assert.That(updated.ExposureSeconds, Is.EqualTo(0.5));
+            Assert.That(updated.Binning, Is.EqualTo(2));
         }
 
         private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake) {

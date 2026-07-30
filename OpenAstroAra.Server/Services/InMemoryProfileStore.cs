@@ -202,6 +202,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // §45.12 — ctor defaults ARE the playbook defaults.
+    private PolarAlignSettingsDto _polarAlign = new();
+
+    public PolarAlignSettingsDto GetPolarAlignSettings() {
+        lock (_lock) { return _polarAlign; }
+    }
+
+    public void PutPolarAlignSettings(PolarAlignSettingsDto value) {
+        lock (_lock) { _polarAlign = value; }
+        RaiseChanged();
+    }
+
     // Defaults match PlateSolveSettings() constructor.
     private PlateSolveSettingsDto _plateSolve = new(
         Engine: "astap",

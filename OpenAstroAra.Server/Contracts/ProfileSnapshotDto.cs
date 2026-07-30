@@ -73,4 +73,7 @@ public sealed record ProfileSnapshotDto(
     // §30.7.4 calibration-state block (guider slice, e-4b-2) — daemon-owned validity records the
     // dark-library / defect-map builds stamp on completion. Optional so older profile.json keeps
     // deserializing; the normalizer back-fills null to the everything-invalid default.
-    CalibrationStateDto? CalibrationState = null);
+    CalibrationStateDto? CalibrationState = null,
+    // §45.12 polar-alignment settings. Optional so older profile.json keeps deserializing; the
+    // normalizer back-fills null to the all-defaults section.
+    PolarAlignSettingsDto? PolarAlign = null);

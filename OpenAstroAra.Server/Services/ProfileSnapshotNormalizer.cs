@@ -87,6 +87,8 @@ public static class ProfileSnapshotNormalizer {
             // e-4b-2 — back-fill missing entries too (an older file could carry a partial
             // block); never-calibrated is the safe default for any hole.
             CalibrationState = NormalizeCalibrationState(snap.CalibrationState),
+            // §45.12 — a pre-§45 file back-fills to the all-defaults section.
+            PolarAlign = (PolarAlignSettingsDto?)snap.PolarAlign ?? new PolarAlignSettingsDto(),
         };
     }
 

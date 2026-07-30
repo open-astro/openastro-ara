@@ -551,6 +551,33 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AutofocusSettings' }
 
+  /profile/polar-align:
+    get:
+      summary: Get active profile's polar-alignment settings
+      description: |
+        §45.12 polar-alignment section.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current polar-align-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolarAlignSettings' }
+    put:
+      summary: Replace active profile's polar-alignment settings
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolarAlignSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolarAlignSettings' }
+
   /profile/safety:
     get:
       summary: Get active profile's safety policies
@@ -1209,6 +1236,19 @@ components:
         restore_position_on_failure:  { type: boolean }
         # §59.4/§59.13 — optional (defaults to `other`) so pre-§59.4 clients' PUTs stay valid.
         telescope_type:               { type: string, enum: [refractor, sct, mak, rc, newtonian, other], default: other }
+
+    PolarAlignSettings:
+      type: object
+      description: |
+        §45.12 polar-alignment profile section. Every field is optional with the playbook
+        default, so a partial PUT from an older client stays valid.
+      properties:
+        exposure_seconds:          { type: number, format: double, minimum: 0.01, default: 1.0 }
+        binning:                   { type: integer, minimum: 1, maximum: 4, default: 1 }
+        target_tolerance_arcmin:   { type: number, format: double, minimum: 0.1, default: 1.0 }
+        seed_rotation_deg:         { type: number, format: double, minimum: 5, maximum: 120, default: 30 }
+        loop_cadence_ms:           { type: integer, minimum: 200, default: 1000 }
+        settle_seconds:            { type: number, format: double, minimum: 0, default: 2.0 }
 
     SafetyPolicies:
       type: object

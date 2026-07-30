@@ -43,7 +43,8 @@ public static class ProfileStoreSnapshot {
         FilterWheelLabels: s.GetFilterWheelLabels(),
         CustomHorizon: s.GetCustomHorizon(),
         FocusCalibration: s.GetFocusCalibration(),
-        CalibrationState: s.GetCalibrationState());
+        CalibrationState: s.GetCalibrationState(),
+        PolarAlign: s.GetPolarAlignSettings());
 
     /// <summary>Push every section of <paramref name="snap"/> into the live store.
     /// Each Put raises <see cref="IProfileStore.Changed"/>, so callers that don't want
@@ -75,5 +76,7 @@ public static class ProfileStoreSnapshot {
         // §30.7.4 — same reasoning as focus calibration: a profile that never built darks must read
         // everything-invalid after select, not inherit the previous profile's validity stamps.
         s.PutCalibrationState(snap.CalibrationState ?? CalibrationStateDto.Empty);
+        // §45.12 — all fields carry their playbook defaults; a pre-§45 snapshot back-fills to them.
+        s.PutPolarAlignSettings(snap.PolarAlign ?? new PolarAlignSettingsDto());
     }
 }
