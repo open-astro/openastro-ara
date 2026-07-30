@@ -96,6 +96,19 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        // Start-sequence counter, bumped ONLY by StartAsync (unlike _generation, which Stop also
+        // bumps). The hand-back fence: a run restores tracking unless a NEWER RUN has started —
+        // a clean Stop must still restore (its generation is already stale by design), but a zombie
+        // unblocking after a successor Start turned tracking off must not stomp the successor's
+        // mount state (§45.8 depends on tracking staying off mid-adjust).
+        private int _startSeq;
+
+        private bool NoNewerRunStarted(int startSeq) {
+            lock (_gate) {
+                return _startSeq == startSeq;
+            }
+        }
+
         private CancellationTokenSource? _runCts;
         private Task? _runTask;
 
@@ -171,6 +184,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
+                int startSeq;
                 lock (_gate) {
                     _active = true;
                     _state = "seeding";
@@ -179,10 +193,11 @@ namespace OpenAstroAra.Server.Services {
                     _altErrorArcmin = null;
                     _azErrorArcmin = null;
                     gen = ++_generation;
+                    startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, gen, runToken), CancellationToken.None);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, gen, startSeq, runToken), CancellationToken.None);
                 LogStarted();
                 await PublishStateEventAsync(WsEventCatalog.PolarAlignStarted, "seeding").ConfigureAwait(false);
                 return Accepted("polar-align.start", idempotencyKey);
@@ -259,7 +274,7 @@ namespace OpenAstroAra.Server.Services {
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The run task is the routine's top-level boundary: any escaped exception must land in the 'failed' state + WS error event, never fault an unobserved background task.")]
-        private async Task RunRoutineAsync(PHD2Guider guiderClient, SiteSettingsDto site, int gen, CancellationToken ct) {
+        private async Task RunRoutineAsync(PHD2Guider guiderClient, SiteSettingsDto site, int gen, int startSeq, CancellationToken ct) {
             // Per-run unique dir: an abandoned (zombie) run and its successor must never share
             // files — this run's cleanup deletes only its own directory.
             var workDir = Path.Combine(Path.GetTempPath(), "ara-polar-align", Guid.NewGuid().ToString("N"));
@@ -307,7 +322,7 @@ namespace OpenAstroAra.Server.Services {
                 priorTracking = info.TrackingEnabled;
                 _mount.SetTrackingEnabled(false);
                 SetErrors(gen, altErr, azErr, "adjusting", "seed-b");
-                await PublishProgressAsync(0, altErr, azErr, solved: true).ConfigureAwait(false);
+                await PublishProgressAsync(gen, 0, altErr, azErr, solved: true).ConfigureAwait(false);
                 await AdjustLoopAsync(guiderClient, workDir, site, north, b, seedPointing, altErr, azErr, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 // Stop — the stopping path owns the state + events.
@@ -324,7 +339,13 @@ namespace OpenAstroAra.Server.Services {
                 // the successor run now owns — log and drain quietly.
                 LogRoutineFailed("superseded", ex);
             } finally {
-                RestoreTrackingBestEffort(priorTracking);
+                // Hand back tracking unless a NEWER RUN has started (it owns the mount now and has
+                // already turned tracking off for its own adjust loop — a zombie's late restore
+                // would silently break the successor's §45.8 stationary-camera assumption). A clean
+                // Stop still restores: Stop bumps the generation but not the start sequence.
+                if (NoNewerRunStarted(startSeq)) {
+                    RestoreTrackingBestEffort(priorTracking);
+                }
                 TryDeleteWorkDir(workDir);
             }
         }
@@ -363,7 +384,7 @@ namespace OpenAstroAra.Server.Services {
                     (lastGood.RaDegJnow, lastGood.DecDegJnow), gen, ct).ConfigureAwait(false);
                 if (!s.Success) {
                     consecutiveFailures++;
-                    await PublishFrameCompleteAsync(frameId, solved: false, consecutiveFailures).ConfigureAwait(false);
+                    await PublishFrameCompleteAsync(gen, frameId, solved: false, consecutiveFailures).ConfigureAwait(false);
                     if (consecutiveFailures == MaxConsecutiveSolveFailures) {
                         // Park in paused (§45.11: "no solve — check sky") but KEEP retrying at a
                         // slower cadence; the next good solve resumes adjusting automatically.
@@ -373,7 +394,9 @@ namespace OpenAstroAra.Server.Services {
                             }
                         }
                         LogLoopPaused(consecutiveFailures);
-                        await PublishStateEventAsync(WsEventCatalog.PolarAlignPaused, "paused").ConfigureAwait(false);
+                        if (IsCurrent(gen)) {
+                            await PublishStateEventAsync(WsEventCatalog.PolarAlignPaused, "paused").ConfigureAwait(false);
+                        }
                     }
                     await Task.Delay(consecutiveFailures >= MaxConsecutiveSolveFailures ? PausedRetryDelay : LoopCadence, ct).ConfigureAwait(false);
                     continue;
@@ -397,8 +420,8 @@ namespace OpenAstroAra.Server.Services {
                     * Math.Cos(axisAltDeg * Math.PI / 180.0) * 60.0 * (north ? 1.0 : -1.0);
 
                 SetErrors(gen, altErr, azErr, "adjusting", frameId);
-                await PublishFrameCompleteAsync(frameId, solved: true, consecutiveSolveFailures: 0).ConfigureAwait(false);
-                await PublishProgressAsync(iteration, altErr, azErr, solved: true).ConfigureAwait(false);
+                await PublishFrameCompleteAsync(gen, frameId, solved: true, consecutiveSolveFailures: 0).ConfigureAwait(false);
+                await PublishProgressAsync(gen, iteration, altErr, azErr, solved: true).ConfigureAwait(false);
 
                 var elapsed = DateTimeOffset.UtcNow - iterationStart;
                 if (elapsed < LoopCadence) {
@@ -417,7 +440,7 @@ namespace OpenAstroAra.Server.Services {
                 (double RaDeg, double DecDeg)? hint, int gen, CancellationToken ct) {
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
                 var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture), hint, gen, ct).ConfigureAwait(false);
-                await PublishFrameCompleteAsync(frameId, s.Success, s.Success ? 0 : attempt).ConfigureAwait(false);
+                await PublishFrameCompleteAsync(gen, frameId, s.Success, s.Success ? 0 : attempt).ConfigureAwait(false);
                 if (s.Success) {
                     return s;
                 }
@@ -617,7 +640,13 @@ namespace OpenAstroAra.Server.Services {
         private Task PublishStateEventAsync(string eventType, string state) =>
             PublishAsync(eventType, new JsonObject { ["state"] = state });
 
-        private Task PublishProgressAsync(int iteration, double altErrArcmin, double azErrArcmin, bool solved) {
+        // The in-loop publishes are generation-fenced like the state writes: a superseded run's
+        // last iteration completing must not emit a stray progress/frame event after the client
+        // was already told the routine stopped.
+        private Task PublishProgressAsync(int gen, int iteration, double altErrArcmin, double azErrArcmin, bool solved) {
+            if (!IsCurrent(gen)) {
+                return Task.CompletedTask;
+            }
             var total = Math.Sqrt(altErrArcmin * altErrArcmin + azErrArcmin * azErrArcmin);
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["iteration"] = iteration,
@@ -629,7 +658,8 @@ namespace OpenAstroAra.Server.Services {
             });
         }
 
-        private Task PublishFrameCompleteAsync(string frameId, bool solved, int consecutiveSolveFailures) =>
+        private Task PublishFrameCompleteAsync(int gen, string frameId, bool solved, int consecutiveSolveFailures) =>
+            !IsCurrent(gen) ? Task.CompletedTask :
             PublishAsync(WsEventCatalog.PolarAlignFrameComplete, new JsonObject {
                 ["frame_id"] = frameId,
                 ["solved"] = solved,
