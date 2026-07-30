@@ -50,6 +50,7 @@ namespace OpenAstroAra.Test {
         // pole, and the expected alt error is MINUS the refraction term at the pole altitude
         // (a geometrically-perfect axis appears ~1′ below the APPARENT pole) with ~0 az error.
         private static readonly bool[] AcquireThenRelease = { true, false };
+        private static readonly bool[] AcquireReleaseAcquire = { true, false, true };
         private const double SiteLatDeg = 45.0;
         private const double SiteLonDeg = -75.0;
         private static readonly PolarAlignSolveOutcome SolveA = new(true, 0.0, 85.0);
@@ -389,6 +390,58 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(25, cts.Token).ConfigureAwait(false);
             }
             Assert.That(paCalls.ToArray().Last(), Is.False, "a failed routine releases the lease itself");
+        }
+
+        [Test]
+        public async Task A_restart_after_a_self_terminated_failure_waits_for_the_old_lease_release() {
+            // FailRoutineAsync flips _active synchronously but releases the lease from the run task
+            // afterwards. A fast re-Start must drain that run first, or its acquire could race the
+            // old release on the wire and end up leaseless. We block the release RPC, fire Start,
+            // prove it waits, then release and assert the wire order acquire→release→acquire.
+            var paCalls = new ConcurrentQueue<bool>();
+            using var releaseGate = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            fake.OnRpc("set_pa_session", req => {
+                var active = req["params"]?["active"]?.GetValue<bool>() ?? false;
+                if (!active) {
+                    releaseGate.Wait(TimeSpan.FromSeconds(10));
+                }
+                paCalls.Enqueue(active);
+                return new JsonObject { ["active"] = active, ["expires_in_s"] = active ? 600 : null };
+            });
+            fake.OnRpc("capture_single_frame", req => {
+                var path = req["params"]?["path"]?.GetValue<string>();
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved }; // seed fails → FailRoutineAsync
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+
+            solver.Fallback = SolveB;
+            solver.Enqueue(SolveA, SolveB);
+            var restart = svc.StartAsync(null, CancellationToken.None);
+            await Task.Delay(200).ConfigureAwait(false);
+            Assert.That(restart.IsCompleted, Is.False,
+                "the re-Start must wait for the failed run's in-flight lease release");
+
+            releaseGate.Set();
+            await restart.ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(paCalls.ToArray(), Is.EqualTo(AcquireReleaseAcquire),
+                "wire order must be acquire → release → acquire, never interleaved");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
         [Test]

@@ -145,6 +145,20 @@ namespace OpenAstroAra.Server.Services {
                         return Accepted("polar-align.start", idempotencyKey);
                     }
                 }
+                // Drain any prior run FIRST (a self-terminated failure flips _active synchronously,
+                // but its task is still publishing the error event, releasing the lease, and
+                // restoring tracking). Acquiring the new lease before that release lands would race
+                // the two set_pa_session calls on the wire — the old release could drop the lease
+                // the new routine believes it holds. Awaiting here (under _opLock, like Stop does)
+                // guarantees release-then-acquire ordering; a wedged zombie still gets abandoned
+                // after the grace and is fenced by the generation bump below.
+                var (priorCts, priorRun) = (_runCts, _runTask);
+                _runCts = null;
+                _runTask = null;
+                if (priorRun is not null) {
+                    await AwaitRunUnwindAsync(priorRun).ConfigureAwait(false);
+                }
+                priorCts?.Dispose();
                 var guiderClient = _guider.RequireConnectedGuider();
                 var mountInfo = _mount.GetInfo();
                 if (mountInfo?.Connected != true) {
@@ -166,9 +180,6 @@ namespace OpenAstroAra.Server.Services {
                     _azErrorArcmin = null;
                     gen = ++_generation;
                 }
-                // A routine that self-terminated (FailRoutineAsync) leaves the old CTS behind —
-                // its task has completed, so disposing here is safe and closes the per-failed-run leak.
-                _runCts?.Dispose();
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
                 _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, gen, runToken), CancellationToken.None);
