@@ -165,6 +165,9 @@ namespace OpenAstroAra.Server.Services {
                     _azErrorArcmin = null;
                     gen = ++_generation;
                 }
+                // A routine that self-terminated (FailRoutineAsync) leaves the old CTS behind —
+                // its task has completed, so disposing here is safe and closes the per-failed-run leak.
+                _runCts?.Dispose();
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
                 _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, gen, runToken), CancellationToken.None);
@@ -195,13 +198,22 @@ namespace OpenAstroAra.Server.Services {
                     await AwaitRunUnwindAsync(run).ConfigureAwait(false);
                 }
                 cts?.Dispose();
+                bool becameStopped;
                 lock (_gate) {
                     _active = false;
-                    _state = "stopped";
+                    // A terminal "failed" is a real outcome a polling client must still see — a
+                    // late/stray Stop must not clobber it back to "stopped" (the failure already
+                    // published its error event and released the lease).
+                    becameStopped = _state != "failed";
+                    if (becameStopped) {
+                        _state = "stopped";
+                    }
                 }
                 await ReleaseLeaseBestEffortAsync(ct).ConfigureAwait(false);
                 LogStopped();
-                await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
+                if (becameStopped) {
+                    await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
+                }
                 return Accepted("polar-align.stop", idempotencyKey);
             } finally {
                 _opLock.Release();
@@ -282,11 +294,11 @@ namespace OpenAstroAra.Server.Services {
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
                 // Solver setup problems (guide optics unset, ASTAP path wrong) are user-fixable —
                 // surface the solver's own actionable message, not internal_error.
-                await FailRoutineAsync("solver_configuration", ex).ConfigureAwait(false);
+                await FailRoutineAsync("solver_configuration", ex, gen).ConfigureAwait(false);
             } catch (RoutineFailedException ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync(ex.Reason, ex).ConfigureAwait(false);
+                await FailRoutineAsync(ex.Reason, ex, gen).ConfigureAwait(false);
             } catch (Exception ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync("internal_error", ex).ConfigureAwait(false);
+                await FailRoutineAsync("internal_error", ex, gen).ConfigureAwait(false);
             } catch (Exception ex) {
                 // A superseded (zombie) run: its failure must not touch state, events, or the lease
                 // the successor run now owns — log and drain quietly.
@@ -469,9 +481,18 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // The current-generation failure path: state → failed, WS error event, lease released.
-        private async Task FailRoutineAsync(string reason, Exception ex) {
+        // The generation is re-checked ATOMICALLY with the write (the `when (IsCurrent(gen))`
+        // filter alone leaves a TOCTOU window against a Start that bumps the generation between
+        // the filter and this write — same discipline as SetErrors).
+        private async Task FailRoutineAsync(string reason, Exception ex, int gen) {
             LogRoutineFailed(reason, ex);
-            lock (_gate) { _state = "failed"; _active = false; }
+            lock (_gate) {
+                if (_generation != gen) {
+                    return; // superseded between the catch filter and here — the successor owns state
+                }
+                _state = "failed";
+                _active = false;
+            }
             await PublishErrorAsync(reason, ex.Message).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
         }

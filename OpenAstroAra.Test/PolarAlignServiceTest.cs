@@ -392,6 +392,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Stop_after_a_self_terminated_failure_keeps_the_failed_state() {
+            // A stray/cleanup Stop after the routine already failed must not clobber the terminal
+            // "failed" back to "stopped" (a polling client would lose the real outcome), and must
+            // not publish a spurious polar_align.stopped event.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved };
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"), "a late Stop must not clobber the terminal failed state");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.Zero,
+                "nothing was stopped — no polar_align.stopped event");
+
+            // And a fresh Start still works after the failure (the stale CTS is disposed, state resets).
+            solver.Fallback = SolveB;
+            solver.Enqueue(SolveA, SolveB);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var resumed = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(resumed.State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
         public async Task Inconsistent_seed_solves_fail_the_axis_fit_with_an_actionable_reason() {
             // Solved pointings further apart than the commanded rotation allows → the geometry's
             // inconsistent-chord rejection must surface as a failed routine, not an internal error.
