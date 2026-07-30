@@ -75,6 +75,7 @@ namespace OpenAstroAra.Server.Services {
         internal TimeSpan LoopCadence { get; set; } = TimeSpan.FromMilliseconds(1000);
         internal TimeSpan PausedRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
         internal TimeSpan CaptureCompleteTimeout { get; set; } = TimeSpan.FromSeconds(31);
+        internal TimeSpan RunUnwindGrace { get; set; } = TimeSpan.FromSeconds(15);
 
         private bool _active;
         private string _state = "idle";
@@ -191,6 +192,14 @@ namespace OpenAstroAra.Server.Services {
                 var (cts, run) = (_runCts, _runTask);
                 _runCts = null;
                 _runTask = null;
+                // Supersede the run BEFORE cancelling: if it outlives the 15s unwind grace (a
+                // guider/mount call that ignores cancellation for a while), its late catch blocks
+                // must see a stale generation — otherwise a delayed failure would clobber the
+                // terminal "stopped" state with "failed" + a spurious error event. The generation
+                // guard protects a deliberate Stop exactly like it protects a successor Start.
+                lock (_gate) {
+                    _generation++;
+                }
                 if (cts is not null) {
                     await cts.CancelAsync().ConfigureAwait(false);
                 }
@@ -506,7 +515,7 @@ namespace OpenAstroAra.Server.Services {
             Justification = "Stop must always complete; the run task's own boundary already logged any failure.")]
         private async Task AwaitRunUnwindAsync(Task run) {
             try {
-                await run.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                await run.WaitAsync(RunUnwindGrace).ConfigureAwait(false);
             } catch (TimeoutException) {
                 LogRunUnwindTimedOut();
             } catch (Exception) {

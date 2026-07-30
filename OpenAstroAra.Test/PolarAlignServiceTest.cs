@@ -136,7 +136,7 @@ namespace OpenAstroAra.Test {
             return store;
         }
 
-        private static PolarAlignService NewService(GuiderService guider, ScriptedSolver solver,
+        private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
                 Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null) {
             var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver,
                 (mount ?? NewMount()).Object, store ?? NewStore(), ws) {
@@ -389,6 +389,52 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(25, cts.Token).ConfigureAwait(false);
             }
             Assert.That(paCalls.ToArray().Last(), Is.False, "a failed routine releases the lease itself");
+        }
+
+        [Test]
+        public async Task A_zombie_run_outliving_the_stop_grace_cannot_clobber_the_stopped_state() {
+            // Stop bumps the run generation BEFORE cancelling: a run that ignores cancellation past
+            // the unwind grace and later fails must find its generation stale — no failed-state
+            // clobber, no spurious polar_align.error, after Stop already reported "stopped".
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var solverGate = new SemaphoreSlim(0);
+            var solver = new BlockingSolver(solverGate);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(100);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            // Wait until the run is parked inside the cancellation-ignoring solve.
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
+                while (!solver.Entered) {
+                    await Task.Delay(20, cts.Token).ConfigureAwait(false);
+                }
+            }
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var stopped = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(stopped.State, Is.EqualTo("stopped"), "Stop abandoned the wedged run and reported stopped");
+
+            // Release the zombie: it throws, but its generation is stale — state must stay stopped.
+            solverGate.Release(100);
+            await Task.Delay(300).ConfigureAwait(false);
+            var after = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(after.State, Is.EqualTo("stopped"), "the zombie's late failure must not clobber stopped");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "no spurious error event from the zombie");
+        }
+
+        /// <summary>A solver that IGNORES the cancellation token and blocks on a gate, then throws —
+        /// simulates an RPC that outlives Stop's unwind grace and fails late.</summary>
+        private sealed class BlockingSolver : IPolarAlignFrameSolver {
+            private readonly SemaphoreSlim _gate;
+            public volatile bool Entered;
+            public BlockingSolver(SemaphoreSlim gate) => _gate = gate;
+            public async Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, double? hintRa, double? hintDec, CancellationToken ct) {
+                Entered = true;
+                await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                throw new InvalidOperationException("late zombie failure");
+            }
         }
 
         [Test]
