@@ -291,12 +291,21 @@ public partial class Program {
                 // (profile select swaps the live store without touching the guider).
                 () => sp.GetService<IProfileRepository>()?.ActiveId));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
-        // §45 — the real polar-align service (skeleton): drives the routine over the connected GuiderService
-        // (PA-session lease lifecycle now; the capture→solve→slew loop lands in follow-up slices).
+        // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
+        // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +
+        // tracking hand-back, and the profile store supplies the site for the pole-error geometry.
+        builder.Services.AddSingleton<IPolarAlignFrameSolver>(sp =>
+            new PolarAlignFrameSolver(
+                sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>()));
         builder.Services.AddSingleton<IPolarAlignService>(sp =>
             new PolarAlignService(
                 sp.GetRequiredService<GuiderService>(),
                 sp.GetRequiredService<ILogger<PolarAlignService>>(),
+                sp.GetRequiredService<IPolarAlignFrameSolver>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>()));
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after

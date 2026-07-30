@@ -479,7 +479,10 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
 public sealed record PolarAlignStateDto(
-    string State,    // "idle" | "capturing" | "solving" | "solved" | "unsolved" | "stopped"
+    // §45 engine states: seeding (2-point axis measurement incl. the RA slew), adjusting (live
+    // knob-turning loop, error fields populated), paused (5 consecutive failed solves — still
+    // retrying), failed (fatal routine error; see the polar_align.error WS event).
+    string State,    // "idle" | "seeding" | "adjusting" | "paused" | "stopped" | "failed"
     double? CurrentErrorArcmin,
     double? AzimuthAdjustmentArcmin,
     double? AltitudeAdjustmentArcmin,
