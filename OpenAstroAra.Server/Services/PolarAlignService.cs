@@ -83,6 +83,18 @@ namespace OpenAstroAra.Server.Services {
         private double? _altErrorArcmin;
         private double? _azErrorArcmin;
 
+        // Run-generation token: Stop abandons a run task that won't unwind within the grace period
+        // (a hung guider RPC), and a new Start may then launch a fresh run while the zombie is still
+        // draining. Every state write / WS publish from a run checks its generation first, so a
+        // superseded run's late effects are no-ops (its unique work dir keeps the files apart too).
+        private int _generation;
+
+        private bool IsCurrent(int gen) {
+            lock (_gate) {
+                return _generation == gen;
+            }
+        }
+
         private CancellationTokenSource? _runCts;
         private Task? _runTask;
 
@@ -143,6 +155,7 @@ namespace OpenAstroAra.Server.Services {
                         "site latitude must be configured (non-zero) before polar alignment — the routine measures against your site's celestial pole");
                 }
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
+                int gen;
                 lock (_gate) {
                     _active = true;
                     _state = "seeding";
@@ -150,10 +163,11 @@ namespace OpenAstroAra.Server.Services {
                     _lastFrameId = null;
                     _altErrorArcmin = null;
                     _azErrorArcmin = null;
+                    gen = ++_generation;
                 }
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, runToken), CancellationToken.None);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, gen, runToken), CancellationToken.None);
                 LogStarted();
                 await PublishStateEventAsync(WsEventCatalog.PolarAlignStarted, "seeding").ConfigureAwait(false);
                 return Accepted("polar-align.start", idempotencyKey);
@@ -213,8 +227,10 @@ namespace OpenAstroAra.Server.Services {
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The run task is the routine's top-level boundary: any escaped exception must land in the 'failed' state + WS error event, never fault an unobserved background task.")]
-        private async Task RunRoutineAsync(PHD2Guider guiderClient, SiteSettingsDto site, CancellationToken ct) {
-            var workDir = Path.Combine(Path.GetTempPath(), "ara-polar-align");
+        private async Task RunRoutineAsync(PHD2Guider guiderClient, SiteSettingsDto site, int gen, CancellationToken ct) {
+            // Per-run unique dir: an abandoned (zombie) run and its successor must never share
+            // files — this run's cleanup deletes only its own directory.
+            var workDir = Path.Combine(Path.GetTempPath(), "ara-polar-align", Guid.NewGuid().ToString("N"));
             bool? priorTracking = null;
             try {
                 Directory.CreateDirectory(workDir);
@@ -222,7 +238,7 @@ namespace OpenAstroAra.Server.Services {
 
                 // ── seed: frame A at the current pointing ──
                 var hintA = CurrentMountPointingJnow();
-                var a = await SolveSeedFrameAsync(guiderClient, workDir, "seed-a", hintA, ct).ConfigureAwait(false);
+                var a = await SolveSeedFrameAsync(guiderClient, workDir, "seed-a", hintA, gen, ct).ConfigureAwait(false);
 
                 // ── RA slew Δ, away from the meridian so the arc cannot cross it (a crossing risks
                 // a meridian flip, which garbles the two-point fit — guider design §5 step 2). With
@@ -244,7 +260,7 @@ namespace OpenAstroAra.Server.Services {
 
                 // ── seed: frame B, then the two-point axis fit. The rotation passed to the fit is
                 // the SOLVED RA separation (what the mount actually did), not the commanded Δ.
-                var b = await SolveSeedFrameAsync(guiderClient, workDir, "seed-b", CurrentMountPointingJnow(), ct).ConfigureAwait(false);
+                var b = await SolveSeedFrameAsync(guiderClient, workDir, "seed-b", CurrentMountPointingJnow(), gen, ct).ConfigureAwait(false);
                 var bTime = DateTimeOffset.UtcNow;
                 var rotationDeg = Math.Abs(Wrap180(a.RaDegJnow - b.RaDegJnow));
                 var axis = FitAxis(a, b, rotationDeg, north);
@@ -258,21 +274,23 @@ namespace OpenAstroAra.Server.Services {
                 // knob adjustment (§45.8) — and the loop needs no further slews.
                 priorTracking = info.TrackingEnabled;
                 _mount.SetTrackingEnabled(false);
-                SetErrors(altErr, azErr, "adjusting", "seed-b");
+                SetErrors(gen, altErr, azErr, "adjusting", "seed-b");
                 await PublishProgressAsync(0, altErr, azErr, solved: true).ConfigureAwait(false);
-                await AdjustLoopAsync(guiderClient, workDir, site, north, b, bTime, seedPointing, altErr, azErr, ct).ConfigureAwait(false);
+                await AdjustLoopAsync(guiderClient, workDir, site, north, b, seedPointing, altErr, azErr, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 // Stop — the stopping path owns the state + events.
-            } catch (RoutineFailedException ex) {
-                LogRoutineFailed(ex.Reason, ex);
-                lock (_gate) { _state = "failed"; _active = false; }
-                await PublishErrorAsync(ex.Reason, ex.Message).ConfigureAwait(false);
-                await ReleaseLeaseBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
+            } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
+                // Solver setup problems (guide optics unset, ASTAP path wrong) are user-fixable —
+                // surface the solver's own actionable message, not internal_error.
+                await FailRoutineAsync("solver_configuration", ex).ConfigureAwait(false);
+            } catch (RoutineFailedException ex) when (IsCurrent(gen)) {
+                await FailRoutineAsync(ex.Reason, ex).ConfigureAwait(false);
+            } catch (Exception ex) when (IsCurrent(gen)) {
+                await FailRoutineAsync("internal_error", ex).ConfigureAwait(false);
             } catch (Exception ex) {
-                LogRoutineFailed("internal_error", ex);
-                lock (_gate) { _state = "failed"; _active = false; }
-                await PublishErrorAsync("internal_error", ex.Message).ConfigureAwait(false);
-                await ReleaseLeaseBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
+                // A superseded (zombie) run: its failure must not touch state, events, or the lease
+                // the successor run now owns — log and drain quietly.
+                LogRoutineFailed("superseded", ex);
             } finally {
                 RestoreTrackingBestEffort(priorTracking);
                 TryDeleteWorkDir(workDir);
@@ -281,9 +299,9 @@ namespace OpenAstroAra.Server.Services {
 
         private async Task AdjustLoopAsync(
                 PHD2Guider guiderClient, string workDir, SiteSettingsDto site, bool north,
-                PolarAlignSolveOutcome seedSolve, DateTimeOffset seedTime,
+                PolarAlignSolveOutcome seedSolve,
                 (double AltDeg, double AzDeg) seedPointing, double seedAltErr, double seedAzErr,
-                CancellationToken ct) {
+                int gen, CancellationToken ct) {
             var iteration = 0;
             var consecutiveFailures = 0;
             var lastRenew = DateTimeOffset.UtcNow;
@@ -297,14 +315,18 @@ namespace OpenAstroAra.Server.Services {
                 iteration++;
                 var frameId = "live-" + iteration.ToString(CultureInfo.InvariantCulture);
                 var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId,
-                    (lastGood.RaDegJnow, lastGood.DecDegJnow), ct).ConfigureAwait(false);
+                    (lastGood.RaDegJnow, lastGood.DecDegJnow), gen, ct).ConfigureAwait(false);
                 if (!s.Success) {
                     consecutiveFailures++;
                     await PublishFrameCompleteAsync(frameId, solved: false, consecutiveFailures).ConfigureAwait(false);
                     if (consecutiveFailures == MaxConsecutiveSolveFailures) {
                         // Park in paused (§45.11: "no solve — check sky") but KEEP retrying at a
                         // slower cadence; the next good solve resumes adjusting automatically.
-                        lock (_gate) { _state = "paused"; }
+                        lock (_gate) {
+                            if (_generation == gen) {
+                                _state = "paused";
+                            }
+                        }
                         LogLoopPaused(consecutiveFailures);
                         await PublishStateEventAsync(WsEventCatalog.PolarAlignPaused, "paused").ConfigureAwait(false);
                     }
@@ -329,7 +351,7 @@ namespace OpenAstroAra.Server.Services {
                 var azErr = seedAzErr + Wrap180(p.AzDeg - seedPointing.AzDeg)
                     * Math.Cos(axisAltDeg * Math.PI / 180.0) * 60.0 * (north ? 1.0 : -1.0);
 
-                SetErrors(altErr, azErr, "adjusting", frameId);
+                SetErrors(gen, altErr, azErr, "adjusting", frameId);
                 await PublishFrameCompleteAsync(frameId, solved: true, consecutiveSolveFailures: 0).ConfigureAwait(false);
                 await PublishProgressAsync(iteration, altErr, azErr, solved: true).ConfigureAwait(false);
 
@@ -347,9 +369,9 @@ namespace OpenAstroAra.Server.Services {
         /// can't solve means clouds/focus problems the live loop can't fix either).</summary>
         private async Task<PolarAlignSolveOutcome> SolveSeedFrameAsync(
                 PHD2Guider guiderClient, string workDir, string frameId,
-                (double RaDeg, double DecDeg)? hint, CancellationToken ct) {
+                (double RaDeg, double DecDeg)? hint, int gen, CancellationToken ct) {
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
-                var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture), hint, ct).ConfigureAwait(false);
+                var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture), hint, gen, ct).ConfigureAwait(false);
                 await PublishFrameCompleteAsync(frameId, s.Success, s.Success ? 0 : attempt).ConfigureAwait(false);
                 if (s.Success) {
                     return s;
@@ -364,12 +386,23 @@ namespace OpenAstroAra.Server.Services {
         /// event), then hand the file to the solver. The FITS is deleted afterwards (§45.5 — PA
         /// frames never pollute the catalogue). A failed capture or solve returns
         /// <c>Success=false</c>; only transport-level faults throw.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A corrupt/truncated guider FITS or solver fault is one failed solve, not a routine abort (§45.11); configuration exceptions are deliberately excluded and fail the routine with an actionable message.")]
         private async Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
                 PHD2Guider guiderClient, string workDir, string frameId,
-                (double RaDeg, double DecDeg)? hint, CancellationToken ct) {
+                (double RaDeg, double DecDeg)? hint, int gen, CancellationToken ct) {
             var path = Path.Combine(workDir, frameId + ".fits");
             var tcs = new TaskCompletionSource<SingleFrameCompleteEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
-            void OnComplete(object? sender, SingleFrameCompleteEventArgs e) => tcs.TrySetResult(e);
+            // Correlate the completion to THIS capture: a stale event for a previously timed-out
+            // capture carries the old path and must not resolve the new frame's wait (it would
+            // silently solve the wrong FITS). Failure events may carry no path — accept those; the
+            // captures are strictly serialized per run, so an uncorrelated failure can only belong
+            // to the immediately preceding abandoned capture and counts as a failed solve either way.
+            void OnComplete(object? sender, SingleFrameCompleteEventArgs e) {
+                if (e.Path == path || (!e.Success && string.IsNullOrEmpty(e.Path))) {
+                    tcs.TrySetResult(e);
+                }
+            }
             guiderClient.SingleFrameComplete += OnComplete;
             try {
                 await guiderClient.CaptureSolverFrameAsync(
@@ -377,14 +410,26 @@ namespace OpenAstroAra.Server.Services {
                     path: path, save: true, ct).ConfigureAwait(false);
                 var completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
                 lock (_gate) {
-                    _framesCaptured++;
-                    _lastFrameId = frameId;
+                    if (_generation == gen) {
+                        _framesCaptured++;
+                        _lastFrameId = frameId;
+                    }
                 }
                 if (!completed.Success || string.IsNullOrEmpty(completed.Path)) {
                     LogCaptureFailed(frameId, completed.Error ?? "no saved path");
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
-                return await _solver.SolveAsync(completed.Path, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                try {
+                    return await _solver.SolveAsync(completed.Path, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    throw;
+                } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
+                    throw; // user-fixable setup problem — fail the routine with the solver's message
+                } catch (Exception ex) {
+                    // A torn/partial FITS write or a solver crash on one frame is ONE failed solve.
+                    LogCaptureFailed(frameId, ex.Message);
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                }
             } catch (TimeoutException) {
                 LogCaptureFailed(frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
@@ -411,13 +456,24 @@ namespace OpenAstroAra.Server.Services {
             return pos is null ? null : (pos.RADegrees, pos.Dec);
         }
 
-        private void SetErrors(double altErrArcmin, double azErrArcmin, string state, string frameId) {
+        private void SetErrors(int gen, double altErrArcmin, double azErrArcmin, string state, string frameId) {
             lock (_gate) {
+                if (_generation != gen) {
+                    return; // a superseded run's late write is a no-op
+                }
                 _altErrorArcmin = altErrArcmin;
                 _azErrorArcmin = azErrArcmin;
                 _state = state;
                 _lastFrameId = frameId;
             }
+        }
+
+        // The current-generation failure path: state → failed, WS error event, lease released.
+        private async Task FailRoutineAsync(string reason, Exception ex) {
+            LogRoutineFailed(reason, ex);
+            lock (_gate) { _state = "failed"; _active = false; }
+            await PublishErrorAsync(reason, ex.Message).ConfigureAwait(false);
+            await ReleaseLeaseBestEffortAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
         private static double Wrap180(double deg) => ((deg + 540.0) % 360.0) - 180.0;

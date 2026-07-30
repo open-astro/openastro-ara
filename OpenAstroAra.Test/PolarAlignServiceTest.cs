@@ -234,6 +234,74 @@ namespace OpenAstroAra.Test {
             Assert.That(status.State, Is.EqualTo("stopped"));
         }
 
+        [Test]
+        public async Task Concurrent_starts_acquire_the_lease_and_publish_only_once() {
+            // The endpoint calls straight into the singleton with no request serialization, so two
+            // near-simultaneous Starts race. _opLock serializes them: exactly one acquires the lease +
+            // publishes, the other then sees _active and is a no-op accept (guards the double-acquire).
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new ScriptedSolver(), ws: ws);
+
+            await Task.WhenAll(
+                svc.StartAsync(null, CancellationToken.None),
+                svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
+
+            var acquisitions = 0;
+            while (paCalls.TryDequeue(out var active)) {
+                if (active) {
+                    acquisitions++;
+                }
+            }
+            Assert.That(acquisitions, Is.EqualTo(1), "concurrent Starts must acquire the lease exactly once");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.EqualTo(1));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Stop_waits_for_an_in_flight_start_and_leaves_the_lease_released() {
+            // The Start/Stop race: a Stop issued while a Start is mid-lease-RPC must serialize behind it
+            // (via _opLock), so the set_pa_session calls can't reorder on the wire and leave the daemon
+            // holding the lease while the service reports "stopped". We block Start inside its active:true
+            // RPC, fire Stop, and prove Stop waits — then the wire order is [true, false] and state=stopped.
+            var paCalls = new ConcurrentQueue<bool>();
+            using var startEnteredRpc = new ManualResetEventSlim(false);
+            using var releaseStartRpc = new ManualResetEventSlim(false);
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            fake.OnRpc("capture_single_frame", JsonValue.Create(0)); // ack, never complete
+            fake.OnRpc("set_pa_session", req => {
+                var active = req["params"]?["active"]?.GetValue<bool>() ?? false;
+                if (active) {
+                    startEnteredRpc.Set();
+                    releaseStartRpc.Wait(TimeSpan.FromSeconds(10));
+                }
+                paCalls.Enqueue(active);
+                return new JsonObject { ["active"] = active };
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver());
+
+            var startTask = svc.StartAsync(null, CancellationToken.None);
+            Assert.That(startEnteredRpc.Wait(TimeSpan.FromSeconds(10)), Is.True, "Start should reach its lease RPC");
+
+            // Start now holds _opLock inside the (blocked) lease RPC; a Stop must wait on the semaphore.
+            var stopTask = svc.StopAsync(null, CancellationToken.None);
+            await Task.Delay(200).ConfigureAwait(false);
+            Assert.That(stopTask.IsCompleted, Is.False, "Stop must wait for the in-flight Start (serialized by _opLock)");
+
+            releaseStartRpc.Set();
+            await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+
+            Assert.That(paCalls.ToArray(), Is.EqualTo(AcquireThenRelease),
+                "the lease RPCs must run in call order — acquire then release — not race on the wire");
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("stopped"), "final state matches the last op, with the lease released");
+        }
+
         // ── the engine ───────────────────────────────────────────────────────────────────────
 
         [Test]
