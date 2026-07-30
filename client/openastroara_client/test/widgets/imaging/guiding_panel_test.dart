@@ -1,0 +1,251 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_api.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/widgets/imaging/guiding_panel.dart';
+
+class _FakeSavedServerService implements SavedServerService {
+  _FakeSavedServerService(this._stored);
+  final List<AraServer> _stored;
+  @override
+  Future<List<AraServer>> loadAll() async => List.unmodifiable(_stored);
+  @override
+  Future<void> saveAll(List<AraServer> servers) async {}
+  @override
+  Future<void> add(AraServer server) async {}
+}
+
+class _FakeGuiderApi implements GuiderClient {
+  GuiderStatus? status;
+  @override
+  Future<GuiderStatus?> getStatus() async => status;
+  @override
+  void close() {}
+  @override
+  Future<void> connect(
+      {String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {}
+  @override
+  Future<void> disconnect() async {}
+}
+
+const _server = AraServer(hostname: 'h', port: 5555);
+
+/// Pure [ProfileApi] fake — the hydrate/apply round-trip without Dio. The
+/// default loader resolves immediately with the client defaults.
+class _FakeProfileApi extends ProfileApi {
+  _FakeProfileApi([this._load]) : super(_server);
+  final Future<Phd2Settings> Function()? _load;
+  @override
+  Future<Phd2Settings> getPhd2Settings() =>
+      _load != null ? _load() : Future.value(const Phd2Settings());
+  @override
+  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async => value;
+}
+
+Future<ProviderContainer> _pump(WidgetTester tester,
+    {GuiderStatus? status,
+    bool withServer = true,
+    ProfileApi? profileApi}) async {
+  final api = _FakeGuiderApi()..status = status;
+  final container = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(withServer ? const [_server] : const [])),
+    guiderApiFactoryProvider.overrideWithValue((_) => api),
+    // A deterministic hydrate by default — the real ProfileApi would hit the
+    // test env's blocked HttpClient and leave the Apply gate in flux.
+    profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
+  ]);
+  addTearDown(container.dispose);
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(
+      home: Scaffold(body: GuidingPanel()),
+    ),
+  ));
+  // Let saved servers load + the initial status read land.
+  await tester.pump();
+  await tester.pump();
+  return container;
+}
+
+/// Tears down the panel AND its container so the autoDispose live-RMS poller
+/// (a periodic timer) is cancelled before the binding's pending-timer check —
+/// riverpod's deferred autoDispose doesn't run early enough under testWidgets.
+Future<void> _teardownPanel(WidgetTester tester, ProviderContainer c) async {
+  await tester.pumpWidget(const SizedBox());
+  c.dispose();
+  await tester.pump();
+}
+
+void main() {
+  testWidgets('collapsed header shows the guider state and em-dash RMS '
+      'when not guiding', (tester) async {
+    await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.stopped,
+        ));
+    expect(find.text('Guiding'), findsOneWidget);
+    expect(find.text('stopped'), findsOneWidget);
+    expect(find.text('RMS —'), findsOneWidget);
+    // Collapsed: no controls visible.
+    expect(find.text('RA aggressiveness'), findsNothing);
+  });
+
+  testWidgets('guiding: header shows live RMS; expanding shows arcsec + px '
+      'cells and the runtime-safe controls', (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+          rmsRa: 0.3,
+          rmsDec: 0.4,
+        ));
+    expect(find.text('guiding'), findsOneWidget);
+    expect(find.text('RMS 0.50″'), findsOneWidget);
+
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+
+    expect(find.text('0.50″'), findsOneWidget);
+    expect(find.text('0.30″'), findsOneWidget);
+    expect(find.text('0.40″'), findsOneWidget);
+    // No guide focal length / pixel size configured → px unavailable.
+    expect(find.text('— px'), findsNothing);
+    expect(find.text('—'), findsNWidgets(3));
+
+    // With the §63.5 guide train set, px derives from the image scale:
+    // 206.265 * 3.75 / 200 ≈ 3.867 ″/px → 0.5″ ≈ 0.13 px.
+    final phd2N = container.read(phd2SettingsProvider.notifier);
+    phd2N.setGuideFocalLength(200);
+    phd2N.setGuidePixelSize(3.75);
+    await tester.pump();
+    expect(find.text('0.13 px'), findsOneWidget);
+
+    // Runtime-safe controls only — no equipment/optics pickers here.
+    expect(find.text('RA aggressiveness'), findsOneWidget);
+    expect(find.text('Dec aggressiveness'), findsOneWidget);
+    expect(find.text('Minimum move (px)'), findsOneWidget);
+    expect(find.text('Dec guide mode'), findsOneWidget);
+    expect(find.text('Dither pixels'), findsOneWidget);
+    expect(find.text('Guide camera'), findsNothing);
+    expect(find.text('Applies live, guiding is not interrupted.'),
+        findsOneWidget);
+    // Default aggressiveness 0.7 renders as a percent.
+    expect(find.text('70%'), findsNWidgets(2));
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('RA aggressiveness slider drives the §63 settings state',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ));
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+
+    // Drag the first (RA) slider hard right → clamps at 1.0.
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+    await tester.pump();
+    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0);
+    expect(container.read(phd2SettingsProvider).decAggressiveness, 0.7,
+        reason: 'the RA slider must not touch Dec');
+
+    await _teardownPanel(tester, container);
+  });
+
+  FilledButton applyButton(WidgetTester tester) =>
+      tester.widget<FilledButton>(find
+          .ancestor(
+              of: find.text('Apply'),
+              matching: find.bySubtype<FilledButton>())
+          .first);
+
+  testWidgets('Apply is disabled until the initial hydrate succeeds — a '
+      'full-object PUT must never run from client defaults', (tester) async {
+    final gate = Completer<Phd2Settings>();
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ),
+        profileApi: _FakeProfileApi(() => gate.future));
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+    expect(applyButton(tester).onPressed, isNull,
+        reason: 'hydrate has not resolved yet');
+
+    gate.complete(const Phd2Settings(host: 'daemon.local'));
+    await tester.pump();
+    expect(applyButton(tester).onPressed, isNotNull);
+    expect(container.read(phd2SettingsProvider).host, 'daemon.local',
+        reason: 'the controls now reflect the daemon-saved values');
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('hydrate failure: error surfaced and Apply stays disabled',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ),
+        profileApi: _FakeProfileApi(
+            () async => throw StateError('daemon unreachable')));
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+
+    expect(find.textContaining('Could not load saved values'), findsOneWidget);
+    expect(applyButton(tester).onPressed, isNull,
+        reason: 'applying defaults would clobber the daemon-side profile');
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('disconnected: hint shown and the controls are inert',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.disconnected,
+          runtimeState: GuiderRuntimeState.stopped,
+        ));
+    expect(find.text('disconnected'), findsOneWidget);
+
+    await tester.tap(find.text('Guiding'));
+    await tester.pump();
+
+    expect(
+        find.textContaining('Guider disconnected — connect the guider'),
+        findsOneWidget);
+    // Controls render (saved values stay visible) but are inert.
+    final ignore = tester.widget<IgnorePointer>(find.ancestor(
+        of: find.text('Apply'), matching: find.byType(IgnorePointer)).first);
+    expect(ignore.ignoring, isTrue);
+
+    await _teardownPanel(tester, container);
+  });
+}
