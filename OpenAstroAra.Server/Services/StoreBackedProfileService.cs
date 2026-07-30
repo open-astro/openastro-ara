@@ -197,6 +197,10 @@ internal static class ProfileStoreMapper {
         guider.GuiderRotator = (phd2.GuiderRotator ?? string.Empty).Trim();
         guider.GuiderAlpacaHost = (phd2.GuiderAlpacaHost ?? string.Empty).Trim();
         guider.GuiderAlpacaPort = Math.Clamp(phd2.GuiderAlpacaPort, 0, 65535);
+        // §63.19 GuiderSetupType is deliberately NOT mapped onto IGuiderSettings: it only shapes the
+        // CLIENT's editing/derivation UX (OAG derives the guide focal length from the main optics), while
+        // the daemon push consumes the resulting guide_focal_length either way. It round-trips through the
+        // store verbatim; the client treats an unknown token as "guide_scope".
         // DitherEnabled / DitherEveryNFrames are per-sequence concerns in NINA (the Dither
         // instruction + trigger carry them), and Phd2Profile selection is a §63 connect-time
         // concern — store-only here.

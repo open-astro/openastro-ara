@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import 'package:openastroara/screens/wizard/wizard_save.dart';
+import 'package:openastroara/util/guide_optics.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
@@ -132,6 +133,106 @@ void main() {
       expect(out.settlePixels, 1.2);
       expect(out.settleTimeSec, 12);
       expect(out.forceCalibrationEachSession, isFalse);
+    });
+
+    test('applyDraftToPhd2 §63.19 guide-scope maps FL + pixel size, null keeps base', () {
+      final d = ProfileDraft();
+      d.guider
+        ..setupType = 'guide_scope'
+        ..guideFocalLengthMm = 240
+        ..guidePixelSizeUm = 2.9;
+      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      expect(out.guiderSetupType, 'guide_scope');
+      expect(out.guideFocalLength, 240);
+      expect(out.guidePixelSize, 2.9);
+
+      // Untouched draft keeps the base values.
+      final base = const Phd2Settings(
+          guiderSetupType: 'oag', guideFocalLength: 999, guidePixelSize: 3.8);
+      final kept = applyDraftToPhd2(base, ProfileDraft());
+      expect(kept.guiderSetupType, 'oag');
+      expect(kept.guidePixelSize, 3.8);
+    });
+
+    test('applyDraftToPhd2 §63.19 OAG derives FL × the base optics reducer', () {
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 1480;
+      d.guider
+        ..setupType = 'oag'
+        ..guideFocalLengthMm = 240 // ignored for OAG
+        ..guidePixelSizeUm = 2.9;
+      final out = applyDraftToPhd2(
+        const Phd2Settings(guideFocalLength: 111),
+        d,
+        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+      );
+      expect(out.guiderSetupType, 'oag');
+      expect(out.guideFocalLength, 1184); // 1480 × 0.8
+      expect(out.guidePixelSize, 2.9);
+    });
+
+    test('applyDraftToPhd2 §63.19 OAG falls back to reducer 1.0 when unset', () {
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 1480;
+      d.guider.setupType = 'oag';
+      // Invalid/unset reducer (≤ 0) → 1.0; missing baseOptics entirely → 1.0.
+      final invalid = applyDraftToPhd2(const Phd2Settings(), d,
+          baseOptics: const OpticsSettings(reducerFactor: 0));
+      expect(invalid.guideFocalLength, 1480);
+      final absent = applyDraftToPhd2(const Phd2Settings(), d);
+      expect(absent.guideFocalLength, 1480);
+    });
+
+    test('§63.19 resolveGuiderSetupType — untouched dropdown follows the base', () {
+      // Display and save both resolve through this helper, so an oag base
+      // profile with an untouched dropdown stays OAG in both places.
+      expect(resolveGuiderSetupType(null, 'oag'), 'oag');
+      expect(resolveGuiderSetupType(null, 'guide_scope'), 'guide_scope');
+      // An explicit pick wins over the base.
+      expect(resolveGuiderSetupType('guide_scope', 'oag'), 'guide_scope');
+      expect(resolveGuiderSetupType('oag', 'guide_scope'), 'oag');
+      // Unknown tokens coerce to guide_scope, same as everywhere else.
+      expect(resolveGuiderSetupType(null, 'bogus'), 'guide_scope');
+    });
+
+    test('applyDraftToPhd2 §63.19 untouched dropdown on an oag base stays OAG', () {
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 1480;
+      d.guider.guideFocalLengthMm = 240; // typed but mode is OAG via the base
+      final out = applyDraftToPhd2(
+        const Phd2Settings(guiderSetupType: 'oag'),
+        d,
+        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+      );
+      expect(out.guiderSetupType, 'oag'); // null draft keeps the base
+      expect(out.guideFocalLength, 1184); // derived, matching the UI branch
+    });
+
+    test('§63.19 preview and save derive the same value (0.8 base reducer)', () {
+      // The wizard preview computes derivedOagGuideFocalLength(fl,
+      // effectiveOagReducerFactor(baseReducer)) — assert it equals what
+      // applyDraftToPhd2 persists for the same inputs.
+      const baseOptics = OpticsSettings(reducerFactor: 0.8);
+      final preview = derivedOagGuideFocalLength(
+          1480, effectiveOagReducerFactor(baseOptics.reducerFactor));
+      final d = ProfileDraft();
+      d.telescope.focalLengthMm = 1480;
+      d.guider.setupType = 'oag';
+      final saved =
+          applyDraftToPhd2(const Phd2Settings(), d, baseOptics: baseOptics);
+      expect(preview, 1184);
+      expect(saved.guideFocalLength, preview);
+      // Unavailable base reducer → both fall back to 1.0.
+      expect(effectiveOagReducerFactor(null), 1.0);
+      expect(effectiveOagReducerFactor(0), 1.0);
+    });
+
+    test('applyDraftToPhd2 §63.19 OAG without telescope FL keeps the base FL', () {
+      final d = ProfileDraft();
+      d.guider.setupType = 'oag';
+      final out = applyDraftToPhd2(const Phd2Settings(guideFocalLength: 350), d);
+      expect(out.guiderSetupType, 'oag');
+      expect(out.guideFocalLength, 350);
     });
 
     test('applyDraftToPlateSolve maps ASTAP paths + search tuning', () {
