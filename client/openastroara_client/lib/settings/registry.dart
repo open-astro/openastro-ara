@@ -1565,6 +1565,18 @@ const List<Setting> settingsRegistry = [
     defaultValue: false,
     profilePath: 'phd2.force_calibration_each_session',
   ),
+  // §63.19 guide setup type — guide scope (focal length user-entered) vs
+  // off-axis guider (focal length derived from the main optics).
+  Setting(
+    id: 'eq.guider.setup_type',
+    label: 'Guide setup',
+    description: 'Whether guiding uses a separate guide scope (enter its focal length yourself) or an off-axis guider behind the main optics (the guide focal length is derived: telescope focal length × reducer factor).',
+    keywords: ['guide scope', 'oag', 'off-axis guider', 'guide focal length', 'setup', 'guider', 'phd2'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.enumValue(['Guide scope', 'Off-axis guider (OAG)']),
+    defaultValue: 'Guide scope',
+    profilePath: 'phd2.guider_setup_type',
+  ),
   // §63.5 guider-engine config — pushed to the guider daemon on connect.
   Setting(
     id: 'eq.guider.guide_focal_length',

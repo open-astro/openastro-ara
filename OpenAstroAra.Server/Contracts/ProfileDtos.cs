@@ -375,7 +375,13 @@ public sealed record Phd2SettingsDto(
     string GuiderAuxMount = "",
     string GuiderRotator = "",
     string GuiderAlpacaHost = "",
-    int GuiderAlpacaPort = 0);
+    int GuiderAlpacaPort = 0,
+    // §63.19 guide setup type: "guide_scope" (user enters the guide scope's focal length + guide-camera
+    // pixel size) or "oag" (off-axis guider — the guide focal length is DERIVED client-side from the main
+    // optics: focal_length_mm × reducer_factor, per the planning-compute-lives-in-client rule; the server
+    // just round-trips the choice and the derived guide_focal_length it receives). Default guide_scope
+    // matches the historical behavior of the manual field.
+    string GuiderSetupType = "guide_scope");
 
 /// <summary>
 /// §36 imaging-train optics + sensor geometry — the inputs the Planning

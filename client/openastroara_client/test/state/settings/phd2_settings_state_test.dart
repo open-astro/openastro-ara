@@ -20,6 +20,8 @@ void main() {
       expect(s.settleTimeSec, 10);
       expect(s.settleTimeoutSec, 60);
       expect(s.forceCalibrationEachSession, isFalse);
+      // §63.19 — guide-scope setup by default (focal length user-entered).
+      expect(s.guiderSetupType, 'guide_scope');
       // §63.17 guider equipment selection — "" / 0 = unset.
       expect(s.guiderCamera, '');
       expect(s.guiderCameraId, '');
@@ -28,6 +30,29 @@ void main() {
       expect(s.guiderRotator, '');
       expect(s.guiderAlpacaHost, '');
       expect(s.guiderAlpacaPort, 0);
+    });
+
+    test('§63.19 setGuiderSetupType accepts known tokens, normalizes case', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuiderSetupType('oag');
+      expect(container.read(phd2SettingsProvider).guiderSetupType, 'oag');
+      n.setGuiderSetupType('guide_scope');
+      expect(
+          container.read(phd2SettingsProvider).guiderSetupType, 'guide_scope');
+      n.setGuiderSetupType('  OAG  ');
+      expect(container.read(phd2SettingsProvider).guiderSetupType, 'oag');
+    });
+
+    test('§63.19 unknown setup-type tokens coerce to guide_scope', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuiderSetupType('oag');
+      n.setGuiderSetupType('newtonian_oag_v2');
+      expect(
+          container.read(phd2SettingsProvider).guiderSetupType, 'guide_scope');
+      expect(Phd2SettingsNotifier.normalizeGuiderSetupType(''), 'guide_scope');
+      expect(Phd2SettingsNotifier.normalizeGuiderSetupType('bogus'),
+          'guide_scope');
+      expect(Phd2SettingsNotifier.normalizeGuiderSetupType('OAG'), 'oag');
     });
 
     test('§63.17 equipment setters trim and accept empty (= unset)', () {

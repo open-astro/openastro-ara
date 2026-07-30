@@ -26,6 +26,11 @@ class Phd2Settings {
   // Calibration.
   final bool forceCalibrationEachSession;
 
+  // §63.19 guide setup type: 'guide_scope' (separate guide scope, focal
+  // length user-entered) or 'oag' (off-axis guider — the guide focal length
+  // is DERIVED from the main optics: focal_length_mm × reducer_factor).
+  final String guiderSetupType;
+
   // §63.5 guider-engine config (pushed to the guider daemon on connect).
   final int guideFocalLength; // mm, 0 = unset
   final double guidePixelSize; // µm, 0 = unset
@@ -57,6 +62,7 @@ class Phd2Settings {
     this.settleTimeSec = 10,
     this.settleTimeoutSec = 60,
     this.forceCalibrationEachSession = false,
+    this.guiderSetupType = 'guide_scope',
     this.guideFocalLength = 0,
     this.guidePixelSize = 0,
     this.raAggressiveness = 0.7,
@@ -83,6 +89,7 @@ class Phd2Settings {
     int? settleTimeSec,
     int? settleTimeoutSec,
     bool? forceCalibrationEachSession,
+    String? guiderSetupType,
     int? guideFocalLength,
     double? guidePixelSize,
     double? raAggressiveness,
@@ -109,6 +116,7 @@ class Phd2Settings {
         settleTimeoutSec: settleTimeoutSec ?? this.settleTimeoutSec,
         forceCalibrationEachSession:
             forceCalibrationEachSession ?? this.forceCalibrationEachSession,
+        guiderSetupType: guiderSetupType ?? this.guiderSetupType,
         guideFocalLength: guideFocalLength ?? this.guideFocalLength,
         guidePixelSize: guidePixelSize ?? this.guidePixelSize,
         raAggressiveness: raAggressiveness ?? this.raAggressiveness,
@@ -183,6 +191,19 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   // §63.5 — guider-engine config. Ranges mirror the server's ApplyPhd2 normalization
   // (aggressiveness ∈ [0,1], non-negative focal/pixel/min-move, dec-mode in the known set).
   static const decGuideModes = ['auto', 'north', 'south', 'off'];
+
+  // §63.19 guide setup type. Unknown tokens (older daemons, hand-edited
+  // profiles) coerce to 'guide_scope' — the historical behavior where the
+  // guide focal length is user-entered.
+  static const guiderSetupTypes = ['guide_scope', 'oag'];
+
+  static String normalizeGuiderSetupType(String s) {
+    final v = s.trim().toLowerCase();
+    return guiderSetupTypes.contains(v) ? v : 'guide_scope';
+  }
+
+  void setGuiderSetupType(String v) =>
+      state = state.copyWith(guiderSetupType: normalizeGuiderSetupType(v));
 
   void setGuideFocalLength(int v) {
     if (v < 0) return;

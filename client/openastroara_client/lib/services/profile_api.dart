@@ -724,6 +724,9 @@ class ProfileApi {
     settleTimeoutSec: (j['settle_timeout_sec'] as num?)?.toInt() ?? 60,
     forceCalibrationEachSession:
         (j['force_calibration_each_session'] as bool?) ?? false,
+    // §63.19 guide setup type — unknown tokens coerce to 'guide_scope'.
+    guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
+        (j['guider_setup_type'] as String?) ?? 'guide_scope'),
     // §63.5 guider-engine config (defaults match the server's optional-field defaults).
     guideFocalLength: (j['guide_focal_length'] as num?)?.toInt() ?? 0,
     guidePixelSize: (j['guide_pixel_size'] as num?)?.toDouble() ?? 0,
@@ -752,6 +755,7 @@ class ProfileApi {
     'settle_time_sec': v.settleTimeSec,
     'settle_timeout_sec': v.settleTimeoutSec,
     'force_calibration_each_session': v.forceCalibrationEachSession,
+    'guider_setup_type': v.guiderSetupType,
     'guide_focal_length': v.guideFocalLength,
     'guide_pixel_size': v.guidePixelSize,
     'ra_aggressiveness': v.raAggressiveness,
