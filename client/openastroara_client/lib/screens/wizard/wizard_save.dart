@@ -141,6 +141,16 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
   );
 }
 
+/// §63.19 — the guide-setup type the wizard should ACT on: the draft's pick
+/// when the user touched the dropdown, else the base profile's value (new
+/// wizard profiles clone the active profile, so an untouched dropdown means
+/// "keep what the base says", not "guide scope"). Shared by ScreenGuider's
+/// display branch and [applyDraftToPhd2] so the UI and the save can never
+/// resolve to different modes.
+String resolveGuiderSetupType(String? draftSetupType, String baseSetupType) =>
+    Phd2SettingsNotifier.normalizeGuiderSetupType(
+        draftSetupType ?? baseSetupType);
+
 Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
     {OpticsSettings? baseOptics}) {
   final g = d.guider;
@@ -152,11 +162,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
   final setupType = g.setupType == null
       ? null
       : Phd2SettingsNotifier.normalizeGuiderSetupType(g.setupType!);
-  final effectiveType = setupType ?? base.guiderSetupType;
+  final effectiveType = resolveGuiderSetupType(g.setupType, base.guiderSetupType);
   int? focalLength;
   if (effectiveType == 'oag') {
-    final baseReducer = baseOptics?.reducerFactor ?? 0;
-    final reducer = baseReducer > 0 ? baseReducer : 1.0;
+    final reducer = effectiveOagReducerFactor(baseOptics?.reducerFactor);
     final derived =
         derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, reducer);
     focalLength = derived == 0 ? null : derived;

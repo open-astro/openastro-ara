@@ -15,3 +15,12 @@ int derivedOagGuideFocalLength(double opticsFocalLengthMm, double reducerFactor)
   if (opticsFocalLengthMm <= 0 || reducerFactor <= 0) return 0;
   return (opticsFocalLengthMm * reducerFactor).round();
 }
+
+/// The reducer factor the OAG derivation should use given the base profile's
+/// optics section: the base value when it's a usable positive number, else
+/// 1.0. Shared by the wizard's preview AND its save mapper so the number the
+/// user sees is the number that gets persisted.
+double effectiveOagReducerFactor(double? baseReducerFactor) =>
+    (baseReducerFactor != null && baseReducerFactor > 0)
+        ? baseReducerFactor
+        : 1.0;
