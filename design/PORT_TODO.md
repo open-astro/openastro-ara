@@ -788,11 +788,18 @@ refraction, alt/az error decomposition against the APPARENT refracted pole, meri
 end-to-end 25'-misalignment round-trip). Coordinates are APPARENT-of-date degrees — precess solver
 J2000 output first (arcmin-scale since J2000).
 
-**Remaining phases (per the guider doc §12):** the daemon spike (verify capture_single_frame emits a
-solver-ready FITS — needs the guider running; measure the per-solve error budget to pick 2-pt vs
-3-pt), then the PolarAlignService state machine (replace PlaceholderPolarAlignService: preflight/
-lease → 2-frame seed with Alpaca RA slews avoiding the meridian → live adjust loop → verify +
-hand-back restore), endpoints (§45.9 paths), WS events, and the WILMA bullseye/arrows screen.
+**Engine + client SHIPPED (2026-07-30, #888 + settings/log/client PRs):** the full `PolarAlignService`
+state machine (preflight → PA lease w/ renew → 2-point seed with a meridian-avoiding RA slew → the
+tracking-off live adjust loop via §45.8 reverse-projection → tracking/lease hand-back on every exit,
+zombie-run generation guard, path-correlated capture completions, per-frame FITS-fault tolerance);
+`PolarAlignFrameSolver` (guide-optics ASTAP, near-solve only, J2000→JNOW); WS events
+`polar_align.{progress,frame_complete,paused,error}`; §45.12 profile section + GET/PUT
+`/api/v1/profile/polar-align`; §45.13 `polar_alignments` log + `/equipment/polaralign/complete`;
+the WILMA bullseye panel (zooming rings, decoupled Az/Alt knob hints, tolerance-gated Done) in the
+Imaging tab. **Still open:** the on-hardware daemon spike (real solve-error budget, 2-pt vs 3-pt
+call), §45.4 auto-binning from camera caps, the §3 bolt-direction calibration nudge, near-pole
+reticle mode, §45.14 dedicated PA cams. Endpoint paths stayed under `/equipment/polaralign/*`
+(shipped in #703) rather than the doc's `/polar-align/*` — deliberate contract continuity.
 
 ## §63.6 guider-e-4 — dark-library push (2026-06-12)
 **Shipped:** e-4a — named-object RPC request classes (`PHD2Methods.DarkLibrary.cs`): `build_dark_library`
