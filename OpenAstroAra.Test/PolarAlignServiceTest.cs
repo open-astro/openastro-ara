@@ -445,6 +445,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_transient_capture_rpc_fault_counts_as_one_failed_solve_not_an_abort() {
+            // The first two capture_single_frame RPCs are rejected daemon-side (→ GuiderRpcException
+            // client-side); the seed's 3-attempt retry loop must absorb them and the routine must
+            // still reach adjusting — not hard-fail with internal_error.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            var captureAttempts = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                if (Interlocked.Increment(ref captureAttempts) <= 2) {
+                    throw new InvalidOperationException("camera busy"); // → JSON-RPC error → GuiderRpcException
+                }
+                var path = req["params"]?["path"]?.GetValue<string>();
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"),
+                "transient capture RPC faults must be absorbed by the seed retry loop");
+            Assert.That(Volatile.Read(ref captureAttempts), Is.GreaterThan(2));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
         public async Task A_failed_lease_renewal_does_not_abort_the_adjust_loop() {
             // Renewal is best-effort per iteration: the first set_pa_session (the acquire) succeeds,
             // every later one (the renewals) returns a malformed response → GuiderRpcException.

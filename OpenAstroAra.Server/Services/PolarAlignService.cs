@@ -450,9 +450,21 @@ namespace OpenAstroAra.Server.Services {
             }
             guiderClient.SingleFrameComplete += OnComplete;
             try {
-                await guiderClient.CaptureSolverFrameAsync(
-                    exposureMs: ExposureMs, binning: null, gain: null, subframe: null,
-                    path: path, save: true, ct).ConfigureAwait(false);
+                // The capture RPC gets the same one-failed-solve treatment as the solver call
+                // below: a daemon-side rejection (camera busy, guiding running) or a dropped
+                // guider is transient — it must feed the consecutive-failure/pause path (and the
+                // seed retry loop), not hard-fail the routine (§45.11).
+                try {
+                    await guiderClient.CaptureSolverFrameAsync(
+                        exposureMs: ExposureMs, binning: null, gain: null, subframe: null,
+                        path: path, save: true, ct).ConfigureAwait(false);
+                } catch (GuiderRpcException ex) {
+                    LogCaptureFailed(frameId, ex.Message);
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                } catch (InvalidOperationException ex) {
+                    LogCaptureFailed(frameId, ex.Message);
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                }
                 var completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
                 lock (_gate) {
                     if (_generation == gen) {
