@@ -132,13 +132,30 @@ class LiveGuidingNotifier extends Notifier<List<RmsSample>> {
     if (status != null) _fold(status);
   }
 
+  // Strictly-monotonic sample clock: on coarse-resolution clocks (Windows'
+  // ~15 ms granularity) two rapid poll ticks can share a DateTime.now() value,
+  // and the buffer's timestamp-keyed duplicate rejection would silently drop
+  // the second point (the CI-observed flake). Bump equal/backward readings by
+  // 1 ms past the last stamp so every tick appends.
+  DateTime? _lastStamp;
+
+  DateTime _nextStamp() {
+    var t = now();
+    final last = _lastStamp;
+    if (last != null && !t.isAfter(last)) {
+      t = last.add(const Duration(milliseconds: 1));
+    }
+    _lastStamp = t;
+    return t;
+  }
+
   void _fold(GuiderStatus status) {
     final actively = status.runtimeState == GuiderRuntimeState.guiding ||
         status.runtimeState == GuiderRuntimeState.dithering;
     final total = status.rmsTotal;
     if (!actively || total == null) return;
     _buffer.add(RmsSample(
-      time: now(),
+      time: _nextStamp(),
       total: total,
       ra: status.rmsRa,
       dec: status.rmsDec,

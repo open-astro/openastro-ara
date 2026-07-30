@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
+import '../../services/profile_api.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/guider/live_guiding_state.dart';
@@ -44,6 +45,12 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
 
   static const _emDash = '—';
 
+  // listenManual subscriptions are NOT auto-cancelled with the widget — kept
+  // so dispose() can close it, or a server switch after the user navigates
+  // away would fire _hydrate() on a disposed WidgetRef (same pattern as
+  // stellarium_view.dart's kept subscriptions).
+  ProviderSubscription<ProfileApi?>? _profileApiSub;
+
   @override
   void initState() {
     super.initState();
@@ -51,10 +58,17 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
     // daemon's saved values, not the client defaults. The active server loads
     // asynchronously, so also retry when the profile API (re)appears — a panel
     // mounted before saved servers resolve must not stay unhydrated forever.
-    ref.listenManual(profileApiProvider, (prev, next) {
+    _profileApiSub = ref.listenManual(profileApiProvider, (prev, next) {
       if (next != null && !_hydrated && !_hydrating) _hydrate();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+  }
+
+  @override
+  void dispose() {
+    _profileApiSub?.close();
+    _profileApiSub = null;
+    super.dispose();
   }
 
   Future<void> _hydrate() async {
