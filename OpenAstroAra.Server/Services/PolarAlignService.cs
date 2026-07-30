@@ -330,8 +330,21 @@ namespace OpenAstroAra.Server.Services {
             while (!ct.IsCancellationRequested) {
                 var iterationStart = DateTimeOffset.UtcNow;
                 if (iterationStart - lastRenew > LeaseRenewInterval) {
-                    await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
-                    lastRenew = iterationStart;
+                    // Renewal is best-effort per iteration: a transient RPC fault must not abort a
+                    // long adjust session (the interval leaves ~2.5 renew windows inside the 600s
+                    // lease, and an expired lease just makes captures fail → the paused path).
+                    try {
+                        await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
+                        lastRenew = iterationStart;
+                    } catch (OperationCanceledException) {
+                        throw;
+                    } catch (GuiderRpcException ex) {
+                        LogLeaseRenewFailed(ex);
+                    } catch (InvalidOperationException ex) {
+                        // Guider dropped mid-session — captures will fail the same way; let the
+                        // solve-failure path (pause + retry) own the outcome.
+                        LogLeaseRenewFailed(ex);
+                    }
                 }
                 iteration++;
                 var frameId = "live-" + iteration.ToString(CultureInfo.InvariantCulture);
@@ -652,5 +665,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4518, Level = LogLevel.Warning, Message = "§45 polar-align run task did not unwind within the stop grace period; abandoning (its cleanup still runs on return)")]
         private partial void LogRunUnwindTimedOut();
+
+        [LoggerMessage(EventId = 4520, Level = LogLevel.Warning, Message = "§45 PA-session lease renewal failed (best-effort; retrying next iteration — the lease has margin)")]
+        private partial void LogLeaseRenewFailed(Exception exception);
     }
 }

@@ -392,6 +392,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_lease_renewal_does_not_abort_the_adjust_loop() {
+            // Renewal is best-effort per iteration: the first set_pa_session (the acquire) succeeds,
+            // every later one (the renewals) returns a malformed response → GuiderRpcException.
+            // The loop must keep adjusting, not land in failed.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            var leaseCalls = 0;
+            fake.OnRpc("set_pa_session", req => {
+                var active = req["params"]?["active"]?.GetValue<bool>() ?? false;
+                paCalls.Enqueue(active);
+                return Interlocked.Increment(ref leaseCalls) == 1
+                    ? new JsonObject { ["active"] = active, ["expires_in_s"] = 600 }
+                    : null; // missing result → GuiderRpcException at the renewal site
+            });
+            fake.OnRpc("capture_single_frame", req => {
+                var path = req["params"]?["path"]?.GetValue<string>();
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver);
+            svc.LeaseRenewInterval = TimeSpan.FromMilliseconds(30);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            // Let several renew windows elapse (and fail) while the loop keeps solving.
+            await Task.Delay(300).ConfigureAwait(false);
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"), "failed renewals must not abort the session");
+            Assert.That(Volatile.Read(ref leaseCalls), Is.GreaterThan(1), "renewals were actually attempted");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
         public async Task A_zombie_run_outliving_the_stop_grace_cannot_clobber_the_stopped_state() {
             // Stop bumps the run generation BEFORE cancelling: a run that ignores cancellation past
             // the unwind grace and later fails must find its generation stale — no failed-state

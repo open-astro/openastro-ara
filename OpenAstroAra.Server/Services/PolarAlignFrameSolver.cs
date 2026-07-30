@@ -105,6 +105,11 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             MaxObjects = settings.MaxObjects,
             Binning = 1, // the guider saves the frame at its native (already-binned) scale
             Coordinates = hint,
+            // No blind fallback — it defaults to TRUE and would turn every cloudy frame into a
+            // whole-sky solve that stalls the ~1s loop (and the lease-renew cadence) for its full
+            // duration. The §45 loop's contract is fail-fast-and-retry; a failed near solve is one
+            // failed iteration, not a cue to search the entire sky near the sparse pole field.
+            BlindFailoverEnabled = false,
         };
 
         var result = await imageSolver.Solve(image, parameter, progress: null, ct).ConfigureAwait(false);

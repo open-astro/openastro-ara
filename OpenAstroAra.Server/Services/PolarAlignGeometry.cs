@@ -224,7 +224,11 @@ public static class PolarAlignGeometry {
             double raDeg, double decDeg, double latitudeDeg, double longitudeDeg, DateTimeOffset atUtc) {
         RequireFinite(raDeg, nameof(raDeg));
         RequireFinite(decDeg, nameof(decDeg));
-        RequireFinite(latitudeDeg, nameof(latitudeDeg));
+        // Same latitude contract as AxisError — the two are always used together in §45.
+        if (!(double.IsFinite(latitudeDeg) && Math.Abs(latitudeDeg) is > 0 and <= 90)) {
+            throw new ArgumentOutOfRangeException(nameof(latitudeDeg),
+                "site latitude must be non-zero and within ±90°");
+        }
         RequireFinite(longitudeDeg, nameof(longitudeDeg));
         var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, longitudeDeg);
         return AltAz(decDeg, latitudeDeg, lst - raDeg);
