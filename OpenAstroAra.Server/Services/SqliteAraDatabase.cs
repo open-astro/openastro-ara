@@ -234,6 +234,25 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_faults_session_id ON faults(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_faults_unresolved ON faults(resolved_at) WHERE resolved_at IS NULL;", ct);
 
+        // §45.13 — one row per polar-alignment routine (complete / aborted / failed), so the
+        // dashboard can show "PA quality: 0.7′, 2 nights ago". session_id nullable — PA typically
+        // runs before any imaging session exists.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS polar_alignments (
+                id                     TEXT PRIMARY KEY NOT NULL,
+                session_id             TEXT REFERENCES sessions(id),
+                started_at             TEXT NOT NULL,
+                ended_at               TEXT NOT NULL,
+                final_error_arcmin     REAL,
+                final_alt_error_arcmin REAL,
+                final_az_error_arcmin  REAL,
+                iterations             INTEGER NOT NULL,
+                outcome                TEXT NOT NULL,
+                notes                  TEXT
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_polar_alignments_started_at ON polar_alignments(started_at);", ct);
+
         LogCatalogInitialized(DatabasePath);
     }
 

@@ -209,6 +209,21 @@ public static class ProfileEndpoints {
             .WithName("PutAutofocusSettings")
             .WithSummary("Replace the active profile's autofocus settings.");
 
+        profile.MapGet("/polar-align", (IProfileStore store) =>
+                Results.Ok(store.GetPolarAlignSettings()))
+            .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetPolarAlignSettings")
+            .WithSummary("Get the active profile's §45 polar-alignment settings.");
+
+        profile.MapPut("/polar-align", (PolarAlignSettingsDto body, IProfileStore store) => {
+            store.PutPolarAlignSettings(body);
+            return Results.Ok(body);
+        })
+            .Accepts<PolarAlignSettingsDto>("application/json")
+            .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutPolarAlignSettings")
+            .WithSummary("Replace the active profile's §45 polar-alignment settings.");
+
         profile.MapGet("/plate-solve", (IProfileStore store) =>
                 Results.Ok(store.GetPlateSolveSettings()))
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)

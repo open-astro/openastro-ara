@@ -448,6 +448,10 @@ public static class EquipmentEndpoints {
             await PolarAlignStartAsync(svc, key, ct));
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
+        // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
+        // with the achieved error so the dashboard can surface PA quality.
+        polar.MapPost("/complete", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.CompleteAsync(key, ct)));
 
         // ─── Manual reconnect (§52.1) ───
         // Reconnect the remembered device(s) for the type without re-running discovery (the same

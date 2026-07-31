@@ -384,6 +384,21 @@ public sealed record Phd2SettingsDto(
     string GuiderSetupType = "guide_scope");
 
 /// <summary>
+/// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default
+/// so a profile.json written before this section deserializes to the documented behavior.
+/// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
+/// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew;
+/// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
+/// </summary>
+public sealed record PolarAlignSettingsDto(
+    double ExposureSeconds = 1.0,
+    int Binning = 1,
+    double TargetToleranceArcmin = 1.0,
+    double SeedRotationDeg = 30.0,
+    int LoopCadenceMs = 1000,
+    double SettleSeconds = 2.0);
+
+/// <summary>
 /// §36 imaging-train optics + sensor geometry — the inputs the Planning
 /// tab's Frame mode needs to draw the field-of-view box. The framing math
 /// is: pixel scale = 206.265 × <c>PixelSizeUm</c> ÷ (<c>FocalLengthMm</c> ×
