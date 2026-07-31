@@ -53,9 +53,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       // §63.19 — optics first: the OAG-derived guide focal length reads the
       // main optics section, which is hydrated by a different panel.
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
-      // hydrateFromServer is memoized per server session inside the notifier
-      // (shared with the §63.18 tune dialog and the sequencer's planning
-      // hydrate) — a repeat call here is a no-op, never a clobber.
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
     } catch (e) {

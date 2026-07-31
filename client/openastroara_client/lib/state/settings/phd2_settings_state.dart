@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
-import '../saved_server_state.dart';
 
 /// §63 PHD2 / guider settings. Phase 12h.6k wires the daemon round-trip
 /// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
@@ -137,15 +136,7 @@ class Phd2Settings {
 class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     with SettingsSyncMixin<Phd2Settings> {
   @override
-  Phd2Settings build() {
-    // The hydrate memo is per-SERVER, not per-process: switching the active
-    // server must force the next transient surface (tune dialog) to re-hydrate,
-    // or Apply could full-object-PUT server A's stale settings onto server B.
-    ref.listen(activeServerProvider, (prev, next) {
-      if (prev != next) _hydratedOnce = false;
-    });
-    return const Phd2Settings();
-  }
+  Phd2Settings build() => const Phd2Settings();
 
   void setHost(String s) {
     final v = s.trim();
@@ -272,28 +263,13 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     state = state.copyWith(guiderAlpacaPort: v);
   }
 
-  // Session-scoped hydrate memo: the tune dialog is a fresh widget per open,
-  // and an unconditional re-hydrate there would discard unapplied local edits
-  // (hydrateGuarded replaces state by design). The notifier is the object that
-  // actually lives for the app session, so it remembers.
-  bool _hydratedOnce = false;
-
-  /// True once any successful [hydrateFromServer] has landed this session —
-  /// transient surfaces (the tune dialog) use this to skip their hydrate wait
-  /// and enable Apply immediately. Cleared on a server switch.
-  bool get hydratedOnce => _hydratedOnce;
-
-  /// Hydrate at most once per server session. The memo lives INSIDE the
-  /// hydrate (not at call sites) because several surfaces share this provider
-  /// — the tune dialog, Settings → Guider, the sequencer's planning hydrate —
-  /// and any ungated caller would silently clobber unapplied dialog edits
-  /// with the daemon's saved copy. A server switch clears the memo (see
-  /// [build]), which restores hydrate-on-next-use for the new server.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    if (_hydratedOnce) return;
-    await hydrateGuarded(() => api.getPhd2Settings());
-    _hydratedOnce = true;
-  }
+  // No hydrate memo here: shared state must always be safe to re-hydrate.
+  // Transient surfaces (the §63.18 tune dialog) keep their in-progress edits
+  // in a LOCAL draft and only write here on Apply, so a hydrate from any
+  // caller (Settings → Guider, the sequencer's planning hydrate) can never
+  // clobber an unapplied edit — there are none in this provider by design.
+  Future<void> hydrateFromServer(ProfileApi api) =>
+      hydrateGuarded(() => api.getPhd2Settings());
 
   Future<Phd2Settings> persistToServer(ProfileApi api) =>
       persistGuarded((sent) => api.putPhd2Settings(sent));

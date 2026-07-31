@@ -186,28 +186,6 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
-  testWidgets('RA aggressiveness slider drives the §63 settings state',
-      (tester) async {
-    final container = await _pump(tester,
-        status: const GuiderStatus(
-          name: 'PHD2',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.guiding,
-          rmsTotal: 0.5,
-        ));
-    await tester.tap(find.byTooltip('Tune guiding…'));
-    await tester.pumpAndSettle();
-
-    // Drag the first (RA) slider hard right → clamps at 1.0.
-    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
-    await tester.pump();
-    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0);
-    expect(container.read(phd2SettingsProvider).decAggressiveness, 0.7,
-        reason: 'the RA slider must not touch Dec');
-
-    await _teardownPanel(tester, container);
-  });
-
   FilledButton applyButton(WidgetTester tester) =>
       tester.widget<FilledButton>(find
           .ancestor(
@@ -282,8 +260,8 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
-  testWidgets('reopening the dialog keeps unapplied edits (hydrate-once)',
-      (tester) async {
+  testWidgets('edits are a local draft: Done discards, provider untouched '
+      'until Apply', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
           name: 'PHD2',
@@ -294,27 +272,27 @@ void main() {
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pumpAndSettle();
 
-    // Edit without applying, then close.
+    // Drag the RA slider: the DRAFT changes (dialog shows 100%), the shared
+    // provider does not — unapplied edits never sit in shared state, so no
+    // other surface's hydrate/save can leak or clobber them.
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
-    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0);
+    expect(find.text('100%'), findsOneWidget);
+    expect(container.read(phd2SettingsProvider).raAggressiveness, 0.7,
+        reason: 'provider unchanged until Apply');
+
+    // Done discards the draft; reopening shows the provider values again.
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
-
-    // Reopen: the edit must survive (no re-hydrate clobber) and Apply is
-    // enabled immediately (the session already hydrated).
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pumpAndSettle();
-    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
-        reason: 'reopening must not overwrite the unapplied edit');
-    expect(find.text('100%'), findsOneWidget);
-    expect(applyButton(tester).onPressed, isNotNull);
+    expect(find.text('70%'), findsNWidgets(2),
+        reason: 'the discarded draft must not survive a reopen');
 
     await _teardownPanel(tester, container);
   });
 
-  testWidgets('a server switch resets the hydrate memo — the dialog '
-      're-hydrates for the new server', (tester) async {
+  testWidgets('Apply commits the draft to the provider', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
           name: 'PHD2',
@@ -324,18 +302,12 @@ void main() {
         ));
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pumpAndSettle();
-    expect(container.read(phd2SettingsProvider.notifier).hydratedOnce, isTrue);
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-
-    // Switch the active server: the memo must clear, so the next dialog open
-    // re-hydrates instead of offering server A's stale values to server B.
-    await container
-        .read(savedServersProvider.notifier)
-        .add(const AraServer(hostname: 'other', port: 5556));
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
-    expect(container.read(phd2SettingsProvider.notifier).hydratedOnce, isFalse,
-        reason: 'a full-object PUT must never carry another server\'s settings');
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
+        reason: 'Apply commits the draft, then persists');
 
     await _teardownPanel(tester, container);
   });

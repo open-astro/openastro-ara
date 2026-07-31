@@ -43,6 +43,14 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   bool _hydrating = false;
   String? _hydrateError;
 
+  // The dialog edits a LOCAL draft, not the shared provider: unapplied edits
+  // must never sit in phd2SettingsProvider, where any other surface's hydrate
+  // (Settings → Guider, the sequencer's planning hydrate) could clobber them
+  // — or worse, where Settings' Save could persist a never-confirmed edit.
+  // Apply commits the tuning fields to the provider and persists; Done
+  // discards the draft. Null until the hydrate seeds it.
+  Phd2Settings? _draft;
+
   // listenManual subscriptions are NOT auto-cancelled with the widget — kept
   // so dispose() can close it. The retry matters even for an on-demand dialog:
   // the profile API can still be null at open (saved servers resolve
@@ -53,13 +61,6 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   @override
   void initState() {
     super.initState();
-    // Hydrate at most ONCE per app session (the notifier remembers): the
-    // dialog is a fresh widget per open, and re-hydrating on reopen would
-    // overwrite unapplied local edits with the daemon's saved copy.
-    if (ref.read(phd2SettingsProvider.notifier).hydratedOnce) {
-      _hydrated = true;
-      return;
-    }
     _profileApiSub = ref.listenManual(profileApiProvider, (prev, next) {
       if (next != null && !_hydrated && !_hydrating) _hydrate();
     });
@@ -83,6 +84,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
         setState(() {
           _hydrated = true;
           _hydrateError = null;
+          _draft = ref.read(phd2SettingsProvider);
         });
       }
     } catch (e) {
@@ -103,12 +105,23 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       setState(() => _status = 'No active server — connect to a daemon first.');
       return;
     }
+    final draft = _draft;
+    if (draft == null) return;
     setState(() {
       _applying = true;
       _status = null;
     });
     try {
-      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
+      // Commit ONLY the runtime-safe tuning fields from the draft, then
+      // persist. Everything else in the shared object stays exactly as the
+      // provider holds it (the daemon-hydrated values).
+      final n = ref.read(phd2SettingsProvider.notifier);
+      n.setRaAggressiveness(draft.raAggressiveness);
+      n.setDecAggressiveness(draft.decAggressiveness);
+      n.setMinimumMove(draft.minimumMove);
+      n.setDecGuideMode(draft.decGuideMode);
+      n.setDitherPixels(draft.ditherPixels);
+      await n.persistToServer(api);
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
       if (!mounted) return;
       setState(() => _status = 'Applied — guiding continues uninterrupted.');
@@ -125,14 +138,17 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   Widget build(BuildContext context) {
     final connected =
         ref.watch(guiderStatusProvider).asData?.value?.isConnected ?? false;
-    final phd2 = ref.watch(phd2SettingsProvider);
-    final phd2N = ref.read(phd2SettingsProvider.notifier);
+    // Fall back to the provider's values for display while the draft is
+    // unseeded (pre-hydrate); edits are only possible once the draft exists.
+    final Phd2Settings phd2 = _draft ?? ref.watch(phd2SettingsProvider);
 
     return Dialog(
       backgroundColor: AraColors.bgPanel,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
-        child: Padding(
+        // Scroll-safe on short windows: the dialog grows with status/error
+        // lines and must never overflow its route's height budget.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -185,22 +201,21 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                         context,
                         label: 'RA aggressiveness',
                         value: phd2.raAggressiveness,
-                        onChanged: phd2N.setRaAggressiveness,
+                        onChanged: (v) => _edit((d) => d.copyWith(raAggressiveness: v)),
                       ),
                       _slider(
                         context,
                         label: 'Dec aggressiveness',
                         value: phd2.decAggressiveness,
-                        onChanged: phd2N.setDecAggressiveness,
+                        onChanged: (v) => _edit((d) => d.copyWith(decAggressiveness: v)),
                       ),
                       EditableNumberRow(
                         label: 'Minimum move (px)',
                         currentValue: phd2.minimumMove.toString(),
-                        getCanonical: () =>
-                            ref.read(phd2SettingsProvider).minimumMove.toString(),
+                        getCanonical: () => _current.minimumMove.toString(),
                         parse: (s) {
                           final v = double.tryParse(s);
-                          if (v != null) phd2N.setMinimumMove(v);
+                          if (v != null) _edit((d) => d.copyWith(minimumMove: v));
                         },
                       ),
                       SettingsDropdownRow<String>(
@@ -213,17 +228,16 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                           'off': 'Off',
                         },
                         onChanged: (v) {
-                          if (v != null) phd2N.setDecGuideMode(v);
+                          if (v != null) _edit((d) => d.copyWith(decGuideMode: v));
                         },
                       ),
                       EditableNumberRow(
                         label: 'Dither pixels',
                         currentValue: phd2.ditherPixels.toString(),
-                        getCanonical: () =>
-                            ref.read(phd2SettingsProvider).ditherPixels.toString(),
+                        getCanonical: () => _current.ditherPixels.toString(),
                         parse: (s) {
                           final v = double.tryParse(s);
-                          if (v != null) phd2N.setDitherPixels(v);
+                          if (v != null) _edit((d) => d.copyWith(ditherPixels: v));
                         },
                       ),
                     ],
@@ -276,6 +290,16 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
         ),
       ),
     );
+  }
+
+  /// The values the controls show: the draft once seeded, else the provider.
+  Phd2Settings get _current => _draft ?? ref.read(phd2SettingsProvider);
+
+  /// Apply an edit to the local draft (no-op until the hydrate seeds it).
+  void _edit(Phd2Settings Function(Phd2Settings) change) {
+    final draft = _draft;
+    if (draft == null) return;
+    setState(() => _draft = change(draft));
   }
 
   Widget _slider(
