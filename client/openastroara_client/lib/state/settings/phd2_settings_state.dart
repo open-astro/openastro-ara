@@ -263,6 +263,11 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     state = state.copyWith(guiderAlpacaPort: v);
   }
 
+  // No hydrate memo here: shared state must always be safe to re-hydrate.
+  // Transient surfaces (the §63.18 tune dialog) keep their in-progress edits
+  // in a LOCAL draft and only write here on Apply, so a hydrate from any
+  // caller (Settings → Guider, the sequencer's planning hydrate) can never
+  // clobber an unapplied edit — there are none in this provider by design.
   Future<void> hydrateFromServer(ProfileApi api) =>
       hydrateGuarded(() => api.getPhd2Settings());
 

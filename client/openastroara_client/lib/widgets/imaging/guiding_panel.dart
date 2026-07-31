@@ -2,22 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
-import '../../services/profile_api.dart';
-import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/guider/live_guiding_state.dart';
-import '../../state/profile_management_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
-import '../profile/profile_import_flow.dart' show friendlyDaemonError;
-import '../settings/editable_field.dart';
+import 'guiding_tune_dialog.dart';
 
 /// §63.18 live guiding panel — collapsible Imaging-tab section showing the
-/// guider's live state + rolling RMS, with quick-adjust controls for the
-/// RUNTIME-SAFE §63.5 params only (aggressiveness, minimum move, dec guide
-/// mode, dither pixels). Those map to PHD2 `set_algo_param` /
-/// `set_dec_guide_mode`, which apply while guiding continues — equipment and
-/// optics changes (which force a disconnect window) stay in Settings → Guider.
+/// guider's live state + rolling RMS. The quick-adjust tuning controls live in
+/// [GuidingTuneDialog], opened from the header's Tune button — the main view
+/// keeps live telemetry only (the macOS quick-settings idiom: adjustments
+/// happen in a transient surface, not inline in the dashboard).
 ///
 /// Follows the [DiagnosticPanel] collapse idiom; the live history comes from
 /// [liveGuidingRmsProvider] (a poll-fed local ring buffer — see that file for
@@ -31,105 +26,13 @@ class GuidingPanel extends ConsumerStatefulWidget {
 
 class _GuidingPanelState extends ConsumerState<GuidingPanel> {
   bool _expanded = false;
-  bool _applying = false;
-  String? _status;
-
-  // Hydrate gate for Apply. persistToServer PUTs the WHOLE Phd2Settings object
-  // (host/port/profile and the §63.17 equipment slots included), so applying
-  // before the daemon's saved values have been loaded would clobber the
-  // daemon-side profile with client defaults. Apply stays disabled until the
-  // initial hydrate has succeeded; a failure is surfaced, not swallowed.
-  bool _hydrated = false;
-  bool _hydrating = false;
-  String? _hydrateError;
 
   static const _emDash = '—';
-
-  // listenManual subscriptions are NOT auto-cancelled with the widget — kept
-  // so dispose() can close it, or a server switch after the user navigates
-  // away would fire _hydrate() on a disposed WidgetRef (same pattern as
-  // stellarium_view.dart's kept subscriptions).
-  ProviderSubscription<ProfileApi?>? _profileApiSub;
-
-  @override
-  void initState() {
-    super.initState();
-    // Hydrate the §63 settings so the quick-adjust controls start from the
-    // daemon's saved values, not the client defaults. The active server loads
-    // asynchronously, so also retry when the profile API (re)appears — a panel
-    // mounted before saved servers resolve must not stay unhydrated forever.
-    _profileApiSub = ref.listenManual(profileApiProvider, (prev, next) {
-      if (next != null && !_hydrated && !_hydrating) _hydrate();
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  @override
-  void dispose() {
-    _profileApiSub?.close();
-    _profileApiSub = null;
-    super.dispose();
-  }
-
-  Future<void> _hydrate() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null || _hydrating || _hydrated) return;
-    _hydrating = true;
-    try {
-      await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-      if (mounted) {
-        setState(() {
-          _hydrated = true;
-          _hydrateError = null;
-        });
-      }
-    } catch (e) {
-      // Same surfacing as equipment_guider_panel — a visible message, and
-      // Apply stays gated so a full-object PUT can't overwrite the daemon's
-      // profile with the client defaults.
-      if (mounted) {
-        setState(() => _hydrateError = 'Could not load saved values: $e');
-      }
-    } finally {
-      _hydrating = false;
-    }
-  }
-
-  /// Persist the edited §63 settings, then ask the daemon to re-push the
-  /// profile to the guider (set_algo_param / set_dec_guide_mode — runtime-safe,
-  /// guiding is not interrupted).
-  Future<void> _apply() async {
-    final api = ref.read(profileApiProvider);
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('No active server — connect to a daemon first.')));
-      return;
-    }
-    setState(() {
-      _applying = true;
-      _status = null;
-    });
-    try {
-      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
-      await ref.read(guiderEquipmentProvider.notifier).pushProfile();
-      if (!mounted) return;
-      setState(() => _status = 'Applied — guiding continues uninterrupted.');
-    } catch (e) {
-      if (!mounted) return;
-      final msg = friendlyDaemonError(e, fallback: 'Apply failed');
-      setState(() => _status = msg);
-      messenger.showSnackBar(SnackBar(content: Text(msg)));
-    } finally {
-      if (mounted) setState(() => _applying = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final statusAsync = ref.watch(guiderStatusProvider);
     final status = statusAsync.asData?.value;
-    final connected = status?.isConnected ?? false;
     // Only keep the poller/buffer alive while the section is expanded — the
     // provider is autoDispose, so collapsing stops the status polling.
     final samples =
@@ -171,6 +74,14 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
                           color: AraColors.textSecondary,
                         ),
                   ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'Tune guiding…',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.tune,
+                        size: 16, color: AraColors.textSecondary),
+                    onPressed: () => showGuidingTuneDialog(context),
+                  ),
                 ],
               ),
             ),
@@ -178,28 +89,6 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
           if (_expanded) ...[
             _rmsSection(context, status),
             _SparklineSection(samples: samples),
-            const Divider(height: 1, color: AraColors.border),
-            if (!connected)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  'Guider disconnected — connect the guider (equipment chip) '
-                  'to tune guiding.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AraColors.textDisabled),
-                ),
-              ),
-            // Controls stay visible when disconnected (values are still the
-            // saved profile) but inert, matching the settings panel's gating.
-            IgnorePointer(
-              ignoring: !connected,
-              child: Opacity(
-                opacity: connected ? 1 : 0.45,
-                child: _controls(context),
-              ),
-            ),
           ],
         ],
       ),
@@ -305,142 +194,6 @@ class _GuidingPanelState extends ConsumerState<GuidingPanel> {
     );
   }
 
-  Widget _controls(BuildContext context) {
-    final phd2 = ref.watch(phd2SettingsProvider);
-    final phd2N = ref.read(phd2SettingsProvider.notifier);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _aggressivenessSlider(
-            context,
-            label: 'RA aggressiveness',
-            value: phd2.raAggressiveness,
-            onChanged: phd2N.setRaAggressiveness,
-          ),
-          _aggressivenessSlider(
-            context,
-            label: 'Dec aggressiveness',
-            value: phd2.decAggressiveness,
-            onChanged: phd2N.setDecAggressiveness,
-          ),
-          EditableNumberRow(
-            label: 'Minimum move (px)',
-            currentValue: phd2.minimumMove.toString(),
-            getCanonical: () =>
-                ref.read(phd2SettingsProvider).minimumMove.toString(),
-            parse: (s) {
-              final v = double.tryParse(s);
-              if (v != null) phd2N.setMinimumMove(v);
-            },
-          ),
-          SettingsDropdownRow<String>(
-            label: 'Dec guide mode',
-            value: phd2.decGuideMode,
-            items: const {
-              'auto': 'Auto',
-              'north': 'North',
-              'south': 'South',
-              'off': 'Off',
-            },
-            onChanged: (v) {
-              if (v != null) phd2N.setDecGuideMode(v);
-            },
-          ),
-          EditableNumberRow(
-            label: 'Dither pixels',
-            currentValue: phd2.ditherPixels.toString(),
-            getCanonical: () =>
-                ref.read(phd2SettingsProvider).ditherPixels.toString(),
-            parse: (s) {
-              final v = double.tryParse(s);
-              if (v != null) phd2N.setDitherPixels(v);
-            },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              FilledButton.icon(
-                // Gated on the hydrate (see the field comment): Apply PUTs the
-                // full settings object, so it must never run from defaults.
-                onPressed: (_applying || !_hydrated) ? null : _apply,
-                icon: _applying
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.send, size: 18),
-                label: const Text('Apply'),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Applies live, guiding is not interrupted.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(color: AraColors.textDisabled),
-                ),
-              ),
-            ],
-          ),
-          if (_hydrateError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _hydrateError!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          if (_status != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _status!,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _aggressivenessSlider(
-    BuildContext context, {
-    required String label,
-    required double value,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 150,
-          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
-        ),
-        Expanded(
-          child: Slider(
-            value: value.clamp(0.0, 1.0),
-            min: 0,
-            max: 1,
-            divisions: 20,
-            onChanged: onChanged,
-          ),
-        ),
-        SizedBox(
-          width: 44,
-          child: Text(
-            '${(value * 100).round()}%',
-            textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 /// Compact rolling sparkline of total RMS over the buffer window (~5 min).
