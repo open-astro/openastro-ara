@@ -41,6 +41,16 @@ class _FakeGuiderApi implements GuiderClient {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
+/// Swappable profile-API source for the late-appearing-API test.
+class _ApiSwitchNotifier extends Notifier<ProfileApi?> {
+  @override
+  ProfileApi? build() => null;
+  void set(ProfileApi? value) => state = value;
+}
+
+final _apiSwitchProvider =
+    NotifierProvider<_ApiSwitchNotifier, ProfileApi?>(_ApiSwitchNotifier.new);
+
 /// Pure [ProfileApi] fake — the hydrate/apply round-trip without Dio. The
 /// default loader resolves immediately with the client defaults.
 class _FakeProfileApi extends ProfileApi {
@@ -220,6 +230,47 @@ void main() {
     expect(applyButton(tester).onPressed, isNotNull);
     expect(container.read(phd2SettingsProvider).host, 'daemon.local',
         reason: 'the controls now reflect the daemon-saved values');
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('a late-appearing profile API still hydrates an open dialog',
+      (tester) async {
+    // The dialog can open before saved servers resolve (profile API null).
+    // The listenManual retry must hydrate once the API appears — otherwise
+    // Apply stays silently disabled for the whole dialog session.
+    final api = _FakeGuiderApi()
+      ..status = const GuiderStatus(
+        name: 'PHD2',
+        connectionState: GuiderConnectionState.connected,
+        runtimeState: GuiderRuntimeState.guiding,
+        rmsTotal: 0.5,
+      );
+    final container = ProviderContainer(overrides: [
+      savedServerServiceProvider
+          .overrideWithValue(_FakeSavedServerService(const [_server])),
+      guiderApiFactoryProvider.overrideWithValue((_) => api),
+      profileApiProvider.overrideWith((ref) => ref.watch(_apiSwitchProvider)),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: GuidingPanel())),
+    ));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pump();
+    await tester.pump();
+    expect(applyButton(tester).onPressed, isNull,
+        reason: 'no profile API yet — hydrate could not run');
+
+    container.read(_apiSwitchProvider.notifier).set(_FakeProfileApi());
+    await tester.pump();
+    await tester.pump();
+    expect(applyButton(tester).onPressed, isNotNull,
+        reason: 'the late-appearing API must trigger the hydrate retry');
 
     await _teardownPanel(tester, container);
   });

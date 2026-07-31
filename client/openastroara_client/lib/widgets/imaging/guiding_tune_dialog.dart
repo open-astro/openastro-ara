@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/profile_management_state.dart';
@@ -42,10 +43,27 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   bool _hydrating = false;
   String? _hydrateError;
 
+  // listenManual subscriptions are NOT auto-cancelled with the widget — kept
+  // so dispose() can close it. The retry matters even for an on-demand dialog:
+  // the profile API can still be null at open (saved servers resolve
+  // asynchronously), and without it Apply would stay silently disabled for the
+  // whole dialog session.
+  ProviderSubscription<ProfileApi?>? _profileApiSub;
+
   @override
   void initState() {
     super.initState();
+    _profileApiSub = ref.listenManual(profileApiProvider, (prev, next) {
+      if (next != null && !_hydrated && !_hydrating) _hydrate();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+  }
+
+  @override
+  void dispose() {
+    _profileApiSub?.close();
+    _profileApiSub = null;
+    super.dispose();
   }
 
   Future<void> _hydrate() async {
