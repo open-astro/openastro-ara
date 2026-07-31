@@ -154,14 +154,21 @@ class PolarAlignLiveNotifier extends Notifier<PolarAlignLive> {
   /// Hydrate [state] from a REST status snapshot (on panel open / reconnect,
   /// where the WS resume may have skipped past routine events).
   void hydrateFromStatus(PolarAlignStatus status) {
-    state = state.copyWith(
+    state = liveFromStatus(status);
+  }
+}
+
+/// Rebuild the live view from a REST snapshot — a full replacement, NOT a
+/// copyWith: the resync exists precisely because the WS stream missed events,
+/// so every field the snapshot doesn't carry (zone, error reason, retry
+/// streak, iteration) must reset rather than survive from a previous run.
+/// Pure — unit-tested.
+PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       phase: status.state,
       altErrorArcmin: status.altitudeAdjustmentArcmin,
       azErrorArcmin: status.azimuthAdjustmentArcmin,
       totalErrorArcmin: status.currentErrorArcmin,
     );
-  }
-}
 
 final polarAlignLiveProvider =
     NotifierProvider<PolarAlignLiveNotifier, PolarAlignLive>(

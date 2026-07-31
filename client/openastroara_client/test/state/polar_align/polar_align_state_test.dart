@@ -105,6 +105,32 @@ void main() {
     });
   });
 
+  group('liveFromStatus', () {
+    test('fully rebuilds the view — stale fields from a previous run are cleared', () {
+      // A failed run's leftovers must not survive a REST resync into a new run
+      // (the resync exists because the WS stream missed the started event).
+      final fresh = liveFromStatus(PolarAlignStatus.fromJson(const {
+        'state': 'adjusting',
+        'current_error_arcmin': 5.0,
+        'azimuth_adjustment_arcmin': 3.0,
+        'altitude_adjustment_arcmin': 4.0,
+      }));
+      expect(fresh.phase, PolarAlignStates.adjusting);
+      expect(fresh.totalErrorArcmin, 5.0);
+      expect(fresh.errorReason, isNull);
+      expect(fresh.zone, isNull);
+      expect(fresh.consecutiveSolveFailures, 0);
+      expect(fresh.iteration, 0);
+    });
+
+    test('a null-error snapshot clears previous error values', () {
+      final idle = liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'idle'}));
+      expect(idle.totalErrorArcmin, isNull);
+      expect(idle.altErrorArcmin, isNull);
+      expect(idle.azErrorArcmin, isNull);
+    });
+  });
+
   group('PolarAlignStatus', () {
     test('parses a full status payload', () {
       final status = PolarAlignStatus.fromJson(const {
