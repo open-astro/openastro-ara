@@ -275,6 +275,37 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  testWidgets('reopening the dialog keeps unapplied edits (hydrate-once)',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+
+    // Edit without applying, then close.
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+    await tester.pump();
+    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // Reopen: the edit must survive (no re-hydrate clobber) and Apply is
+    // enabled immediately (the session already hydrated).
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
+        reason: 'reopening must not overwrite the unapplied edit');
+    expect(find.text('100%'), findsOneWidget);
+    expect(applyButton(tester).onPressed, isNotNull);
+
+    await _teardownPanel(tester, container);
+  });
+
   testWidgets('hydrate failure: error surfaced and Apply stays disabled',
       (tester) async {
     final container = await _pump(tester,

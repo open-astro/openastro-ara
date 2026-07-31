@@ -263,8 +263,21 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     state = state.copyWith(guiderAlpacaPort: v);
   }
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getPhd2Settings());
+  // Session-scoped hydrate memo: the tune dialog is a fresh widget per open,
+  // and an unconditional re-hydrate there would discard unapplied local edits
+  // (hydrateGuarded replaces state by design). The notifier is the object that
+  // actually lives for the app session, so it remembers.
+  bool _hydratedOnce = false;
+
+  /// True once any successful [hydrateFromServer] has landed this session —
+  /// transient surfaces (the tune dialog) use this to hydrate at most once, so
+  /// reopening never overwrites pending unapplied edits.
+  bool get hydratedOnce => _hydratedOnce;
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    await hydrateGuarded(() => api.getPhd2Settings());
+    _hydratedOnce = true;
+  }
 
   Future<Phd2Settings> persistToServer(ProfileApi api) =>
       persistGuarded((sent) => api.putPhd2Settings(sent));

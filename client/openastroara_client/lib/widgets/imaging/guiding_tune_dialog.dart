@@ -53,6 +53,13 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   @override
   void initState() {
     super.initState();
+    // Hydrate at most ONCE per app session (the notifier remembers): the
+    // dialog is a fresh widget per open, and re-hydrating on reopen would
+    // overwrite unapplied local edits with the daemon's saved copy.
+    if (ref.read(phd2SettingsProvider.notifier).hydratedOnce) {
+      _hydrated = true;
+      return;
+    }
     _profileApiSub = ref.listenManual(profileApiProvider, (prev, next) {
       if (next != null && !_hydrated && !_hydrating) _hydrate();
     });
