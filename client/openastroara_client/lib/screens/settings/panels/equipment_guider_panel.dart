@@ -53,13 +53,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       // §63.19 — optics first: the OAG-derived guide focal length reads the
       // main optics section, which is hydrated by a different panel.
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
-      // Hydrate at most once per server session (the notifier's memo): the
-      // §63.18 tune dialog shares this provider, and an unconditional
-      // re-hydrate here would silently clobber unapplied dialog edits with
-      // the daemon's saved copy. A server switch clears the memo.
-      if (!ref.read(phd2SettingsProvider.notifier).hydratedOnce) {
-        await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-      }
+      // hydrateFromServer is memoized per server session inside the notifier
+      // (shared with the §63.18 tune dialog and the sequencer's planning
+      // hydrate) — a repeat call here is a no-op, never a clobber.
+      await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       _syncDerivedFocalLength();
     } catch (e) {
       if (mounted) setState(() => _lastError = 'Could not load saved values: $e');

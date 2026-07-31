@@ -279,11 +279,18 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   bool _hydratedOnce = false;
 
   /// True once any successful [hydrateFromServer] has landed this session —
-  /// transient surfaces (the tune dialog) use this to hydrate at most once, so
-  /// reopening never overwrites pending unapplied edits.
+  /// transient surfaces (the tune dialog) use this to skip their hydrate wait
+  /// and enable Apply immediately. Cleared on a server switch.
   bool get hydratedOnce => _hydratedOnce;
 
+  /// Hydrate at most once per server session. The memo lives INSIDE the
+  /// hydrate (not at call sites) because several surfaces share this provider
+  /// — the tune dialog, Settings → Guider, the sequencer's planning hydrate —
+  /// and any ungated caller would silently clobber unapplied dialog edits
+  /// with the daemon's saved copy. A server switch clears the memo (see
+  /// [build]), which restores hydrate-on-next-use for the new server.
   Future<void> hydrateFromServer(ProfileApi api) async {
+    if (_hydratedOnce) return;
     await hydrateGuarded(() => api.getPhd2Settings());
     _hydratedOnce = true;
   }
