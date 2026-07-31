@@ -214,8 +214,14 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                         currentValue: phd2.minimumMove.toString(),
                         getCanonical: () => _current.minimumMove.toString(),
                         parse: (s) {
+                          // Mirror setMinimumMove's bound (>= 0): an invalid
+                          // entry never enters the draft, so the canonical
+                          // resync snaps the field back — and Apply can never
+                          // silently drop it.
                           final v = double.tryParse(s);
-                          if (v != null) _edit((d) => d.copyWith(minimumMove: v));
+                          if (v != null && v >= 0) {
+                            _edit((d) => d.copyWith(minimumMove: v));
+                          }
                         },
                       ),
                       SettingsDropdownRow<String>(
@@ -236,8 +242,11 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                         currentValue: phd2.ditherPixels.toString(),
                         getCanonical: () => _current.ditherPixels.toString(),
                         parse: (s) {
+                          // Mirror setDitherPixels's bound (>= 0) — see above.
                           final v = double.tryParse(s);
-                          if (v != null) _edit((d) => d.copyWith(ditherPixels: v));
+                          if (v != null && v >= 0) {
+                            _edit((d) => d.copyWith(ditherPixels: v));
+                          }
                         },
                       ),
                     ],

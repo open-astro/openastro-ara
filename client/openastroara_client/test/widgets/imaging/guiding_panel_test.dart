@@ -292,6 +292,31 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  testWidgets('invalid numeric input never enters the draft', (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+
+    // A negative minimum move is rejected at parse time (the notifier bound,
+    // mirrored) — the field snaps back to the canonical draft value instead
+    // of sitting invalid until an Apply silently drops it.
+    final field = find.widgetWithText(TextField, '0.15');
+    await tester.enterText(field, '-3');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '0.15'), findsOneWidget,
+        reason: 'invalid input snaps back to the last good value');
+    expect(container.read(phd2SettingsProvider).minimumMove, 0.15);
+
+    await _teardownPanel(tester, container);
+  });
+
   testWidgets('Apply commits the draft to the provider', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
