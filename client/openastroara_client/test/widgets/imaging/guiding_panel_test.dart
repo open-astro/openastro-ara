@@ -13,6 +13,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/widgets/imaging/guiding_panel.dart';
+import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -104,7 +105,7 @@ void main() {
   });
 
   testWidgets('guiding: header shows live RMS; expanding shows arcsec + px '
-      'cells and the runtime-safe controls', (tester) async {
+      'cells', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(
           name: 'PHD2',
@@ -135,14 +136,32 @@ void main() {
     await tester.pump();
     expect(find.text('0.13 px'), findsOneWidget);
 
-    // Runtime-safe controls only — no equipment/optics pickers here.
+    // The tuning controls no longer live inline — they open in the dialog.
+    expect(find.text('RA aggressiveness'), findsNothing);
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('the Tune dialog shows the runtime-safe controls only',
+      (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GuidingTuneDialog), findsOneWidget);
     expect(find.text('RA aggressiveness'), findsOneWidget);
     expect(find.text('Dec aggressiveness'), findsOneWidget);
     expect(find.text('Minimum move (px)'), findsOneWidget);
     expect(find.text('Dec guide mode'), findsOneWidget);
     expect(find.text('Dither pixels'), findsOneWidget);
     expect(find.text('Guide camera'), findsNothing);
-    expect(find.text('Applies live, guiding is not interrupted.'),
+    expect(find.text('Applies live — guiding is not interrupted.'),
         findsOneWidget);
     // Default aggressiveness 0.7 renders as a percent.
     expect(find.text('70%'), findsNWidgets(2));
@@ -159,8 +178,8 @@ void main() {
           runtimeState: GuiderRuntimeState.guiding,
           rmsTotal: 0.5,
         ));
-    await tester.tap(find.text('Guiding'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
 
     // Drag the first (RA) slider hard right → clamps at 1.0.
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
@@ -190,7 +209,8 @@ void main() {
           rmsTotal: 0.5,
         ),
         profileApi: _FakeProfileApi(() => gate.future));
-    await tester.tap(find.text('Guiding'));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pump();
     await tester.pump();
     expect(applyButton(tester).onPressed, isNull,
         reason: 'hydrate has not resolved yet');
@@ -215,7 +235,8 @@ void main() {
         ),
         profileApi: _FakeProfileApi(
             () async => throw StateError('daemon unreachable')));
-    await tester.tap(find.text('Guiding'));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pump();
     await tester.pump();
 
     expect(find.textContaining('Could not load saved values'), findsOneWidget);
@@ -235,16 +256,21 @@ void main() {
         ));
     expect(find.text('disconnected'), findsOneWidget);
 
-    await tester.tap(find.text('Guiding'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
 
     expect(
         find.textContaining('Guider disconnected — connect the guider'),
         findsOneWidget);
-    // Controls render (saved values stay visible) but are inert.
-    final ignore = tester.widget<IgnorePointer>(find.ancestor(
-        of: find.text('Apply'), matching: find.byType(IgnorePointer)).first);
+    // Controls render (saved values stay visible) but are inert, and Apply
+    // is hard-disabled while disconnected.
+    final ignore = tester.widget<IgnorePointer>(find
+        .ancestor(
+            of: find.text('RA aggressiveness'),
+            matching: find.byType(IgnorePointer))
+        .first);
     expect(ignore.ignoring, isTrue);
+    expect(applyButton(tester).onPressed, isNull);
 
     await _teardownPanel(tester, container);
   });
