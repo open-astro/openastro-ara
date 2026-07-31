@@ -37,9 +37,9 @@ public interface IPolarAlignmentLog {
 
 /// <summary>SQLite-backed <see cref="IPolarAlignmentLog"/> over the <c>polar_alignments</c> table.</summary>
 public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
-    private readonly SqliteAraDatabase _db;
+    private readonly IAraDatabase _db;
 
-    public SqlitePolarAlignmentLog(SqliteAraDatabase db) => _db = db;
+    public SqlitePolarAlignmentLog(IAraDatabase db) => _db = db;
 
     public async Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(record);

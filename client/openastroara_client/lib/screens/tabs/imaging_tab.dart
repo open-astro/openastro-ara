@@ -38,16 +38,31 @@ class ImagingTab extends ConsumerWidget {
           child: Row(
             children: [
               Expanded(
-                child: Column(
-                  children: const [
-                    Expanded(child: FrameViewer()),
-                    HistogramStrip(),
-                    SolvePanel(),
-                    DiagnosticPanel(),
-                    GuidingPanel(),
-                    PolarAlignPanel(),
-                    FaultPanel(),
-                  ],
+                // The panel stack scrolls inside a bounded box (≤60% of the column) instead of
+                // overflowing: any expanded tall panel (Guiding, Polar Align, …) previously blew
+                // the RenderFlex at non-fullscreen window sizes. The frame viewer keeps the rest.
+                child: LayoutBuilder(
+                  builder: (context, box) => Column(
+                    children: [
+                      const Expanded(child: FrameViewer()),
+                      const HistogramStrip(),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: box.maxHeight * 0.6),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              SolvePanel(),
+                              DiagnosticPanel(),
+                              GuidingPanel(),
+                              PolarAlignPanel(),
+                              FaultPanel(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               ExposureControlsPanel(
