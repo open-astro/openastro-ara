@@ -213,8 +213,8 @@ void main() {
     gate.complete(const Phd2Settings(host: 'daemon.local'));
     await tester.pump();
     expect(applyButton(tester).onPressed, isNotNull);
-    expect(container.read(phd2SettingsProvider).host, 'daemon.local',
-        reason: 'the controls now reflect the daemon-saved values');
+    expect(container.read(phd2SettingsProvider).host, 'localhost',
+        reason: 'the dialog seeds its own draft — the shared provider is untouched');
 
     await _teardownPanel(tester, container);
   });
@@ -288,6 +288,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('70%'), findsNWidgets(2),
         reason: 'the discarded draft must not survive a reopen');
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('opening the dialog never clobbers staged Settings edits '
+      'in the shared provider', (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ));
+    // Simulate an unsaved Settings → Guider edit staged in the shared provider.
+    container.read(phd2SettingsProvider.notifier).setHost('edited.local');
+
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+    expect(container.read(phd2SettingsProvider).host, 'edited.local',
+        reason: 'the dialog hydrates its own draft, never the shared provider');
+
+    // Apply persists daemon-copy + tuning fields and touches only the five
+    // tuning fields in the provider — the staged host edit survives.
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+    await tester.pump();
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(container.read(phd2SettingsProvider).host, 'edited.local');
+    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0);
 
     await _teardownPanel(tester, container);
   });

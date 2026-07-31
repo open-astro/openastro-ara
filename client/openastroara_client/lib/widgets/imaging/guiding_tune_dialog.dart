@@ -47,9 +47,16 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   // must never sit in phd2SettingsProvider, where any other surface's hydrate
   // (Settings → Guider, the sequencer's planning hydrate) could clobber them
   // — or worse, where Settings' Save could persist a never-confirmed edit.
-  // Apply commits the tuning fields to the provider and persists; Done
-  // discards the draft. Null until the hydrate seeds it.
+  // Apply commits the tuning fields; Done discards the draft. Null until the
+  // hydrate seeds it.
   Phd2Settings? _draft;
+
+  // The daemon's copy as fetched at open. The dialog's hydrate deliberately
+  // does NOT go through the shared notifier: Settings → Guider stages its own
+  // unsaved edits in the shared provider (pre-Save), and a provider hydrate
+  // here would silently revert them. Apply PUTs _serverCopy + the five tuning
+  // fields, so nothing unconfirmed is persisted and nothing staged is lost.
+  Phd2Settings? _serverCopy;
 
   // listenManual subscriptions are NOT auto-cancelled with the widget — kept
   // so dispose() can close it. The retry matters even for an on-demand dialog:
@@ -79,12 +86,13 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     if (api == null || _hydrating || _hydrated) return;
     _hydrating = true;
     try {
-      await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+      final fresh = await api.getPhd2Settings();
       if (mounted) {
         setState(() {
           _hydrated = true;
           _hydrateError = null;
-          _draft = ref.read(phd2SettingsProvider);
+          _serverCopy = fresh;
+          _draft = fresh;
         });
       }
     } catch (e) {
@@ -106,22 +114,33 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       return;
     }
     final draft = _draft;
-    if (draft == null) return;
+    final serverCopy = _serverCopy;
+    if (draft == null || serverCopy == null) return;
     setState(() {
       _applying = true;
       _status = null;
     });
     try {
-      // Commit ONLY the runtime-safe tuning fields from the draft, then
-      // persist. Everything else in the shared object stays exactly as the
-      // provider holds it (the daemon-hydrated values).
+      // PUT the daemon's own copy + ONLY the five runtime-safe tuning fields
+      // from the draft — never the shared provider's object, which may hold
+      // Settings → Guider edits the user hasn't confirmed with Save.
+      final toSave = serverCopy.copyWith(
+        raAggressiveness: draft.raAggressiveness,
+        decAggressiveness: draft.decAggressiveness,
+        minimumMove: draft.minimumMove,
+        decGuideMode: draft.decGuideMode,
+        ditherPixels: draft.ditherPixels,
+      );
+      final echoed = await api.putPhd2Settings(toSave);
+      _serverCopy = echoed;
+      // Reflect the now-persisted tuning values in the shared provider (the
+      // setters touch only these five fields — staged Settings edits survive).
       final n = ref.read(phd2SettingsProvider.notifier);
       n.setRaAggressiveness(draft.raAggressiveness);
       n.setDecAggressiveness(draft.decAggressiveness);
       n.setMinimumMove(draft.minimumMove);
       n.setDecGuideMode(draft.decGuideMode);
       n.setDitherPixels(draft.ditherPixels);
-      await n.persistToServer(api);
       await ref.read(guiderEquipmentProvider.notifier).pushProfile();
       if (!mounted) return;
       setState(() => _status = 'Applied — guiding continues uninterrupted.');
