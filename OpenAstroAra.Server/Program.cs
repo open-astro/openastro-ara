@@ -300,7 +300,7 @@ public partial class Program {
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>()));
         builder.Services.AddSingleton<IPolarAlignmentLog>(sp =>
-            new SqlitePolarAlignmentLog(sp.GetRequiredService<SqliteAraDatabase>()));
+            new SqlitePolarAlignmentLog(sp.GetRequiredService<IAraDatabase>()));
         builder.Services.AddSingleton<IPolarAlignService>(sp =>
             new PolarAlignService(
                 sp.GetRequiredService<GuiderService>(),
