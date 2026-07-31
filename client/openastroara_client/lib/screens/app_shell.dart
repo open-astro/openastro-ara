@@ -269,6 +269,16 @@ class _BottomStatusBar extends StatelessWidget {
           // §44 — the backup stream's live pulse (hidden while disabled).
           const BackupStreamChip(),
           const Spacer(),
+          // The launcher group scrolls horizontally when the window is too
+          // narrow for all buttons (reverse: true keeps the right-most entries
+          // — help, wizard — anchored and visible) instead of overflowing the
+          // RenderFlex with the striped error banner.
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                children: [
           // Image Library entry (§40). Full-screen route — captured frames
           // grouped by session per 12f.1's in-memory demo; real backend in
           // 12f.2.
@@ -343,6 +353,10 @@ class _BottomStatusBar extends StatelessWidget {
             onPressed: () => showHelpDialog(context),
           ),
           const SizedBox(width: 4),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
