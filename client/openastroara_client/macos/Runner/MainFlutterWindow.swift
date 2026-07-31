@@ -25,11 +25,26 @@ class MainFlutterWindow: NSWindow {
       case "workstation":
         // Floor stops resizes below what the shell can lay out.
         self.minSize = NSSize(width: 1100, height: 700)
-        if let screen = self.screen ?? NSScreen.main {
-          self.setFrame(screen.visibleFrame, display: true, animate: true)
+        // Normal-app behavior (not forced-maximized): restore the user's last
+        // workstation frame when one was saved; first run opens at a
+        // comfortable default clamped to the screen. The autosave name keeps
+        // macOS persisting subsequent moves/resizes automatically.
+        if !self.setFrameUsingName("AraWorkstationWindow") {
+          if let screen = self.screen ?? NSScreen.main {
+            let vis = screen.visibleFrame
+            let w = min(1440, vis.width)
+            let h = min(900, vis.height)
+            let frame = NSRect(
+              x: vis.midX - w / 2, y: vis.midY - h / 2, width: w, height: h)
+            self.setFrame(frame, display: true, animate: true)
+          }
         }
+        self.setFrameAutosaveName("AraWorkstationWindow")
         result(nil)
       case "launchpad":
+        // The compact launchpad frame must not overwrite the saved
+        // workstation frame — detach the autosave name first.
+        self.setFrameAutosaveName("")
         self.applyLaunchpadFrame()
         result(nil)
       default:
