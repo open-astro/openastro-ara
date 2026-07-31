@@ -274,8 +274,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ),
         SizedBox(
-          width: 220,
-          height: 220,
+          width: 180,
+          height: 180,
           child: CustomPaint(
             painter: BullseyePainter(
               dotFraction: bullseyeDotFraction(
