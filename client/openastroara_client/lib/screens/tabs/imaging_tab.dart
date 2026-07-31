@@ -15,6 +15,7 @@ import '../../widgets/imaging/fault_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_panel.dart';
 import '../../widgets/imaging/histogram_strip.dart';
+import '../../widgets/imaging/polar_align_panel.dart';
 import '../../widgets/imaging/solve_panel.dart';
 import '../../widgets/status_indicator.dart';
 import '../../theme/ara_colors.dart';
@@ -44,6 +45,7 @@ class ImagingTab extends ConsumerWidget {
                     SolvePanel(),
                     DiagnosticPanel(),
                     GuidingPanel(),
+                    PolarAlignPanel(),
                     FaultPanel(),
                   ],
                 ),
