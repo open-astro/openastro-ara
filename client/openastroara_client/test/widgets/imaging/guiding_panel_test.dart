@@ -16,14 +16,21 @@ import 'package:openastroara/widgets/imaging/guiding_panel.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
 
 class _FakeSavedServerService implements SavedServerService {
-  _FakeSavedServerService(this._stored);
+  _FakeSavedServerService(List<AraServer> stored)
+      : _stored = List.of(stored); // growable — add() switches the active server
   final List<AraServer> _stored;
   @override
   Future<List<AraServer>> loadAll() async => List.unmodifiable(_stored);
   @override
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
-  Future<void> add(AraServer server) async {}
+  Future<void> add(AraServer server) async {
+    // Mirror the real service's move-to-end so add() actually switches the
+    // active server (the server-switch memo test depends on it).
+    _stored
+      ..removeWhere((s) => s == server)
+      ..add(server);
+  }
 }
 
 class _FakeGuiderApi implements GuiderClient {
@@ -302,6 +309,33 @@ void main() {
         reason: 'reopening must not overwrite the unapplied edit');
     expect(find.text('100%'), findsOneWidget);
     expect(applyButton(tester).onPressed, isNotNull);
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('a server switch resets the hydrate memo — the dialog '
+      're-hydrates for the new server', (tester) async {
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ));
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+    expect(container.read(phd2SettingsProvider.notifier).hydratedOnce, isTrue);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    // Switch the active server: the memo must clear, so the next dialog open
+    // re-hydrates instead of offering server A's stale values to server B.
+    await container
+        .read(savedServersProvider.notifier)
+        .add(const AraServer(hostname: 'other', port: 5556));
+    await tester.pump();
+    expect(container.read(phd2SettingsProvider.notifier).hydratedOnce, isFalse,
+        reason: 'a full-object PUT must never carry another server\'s settings');
 
     await _teardownPanel(tester, container);
   });

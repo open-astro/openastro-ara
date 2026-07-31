@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
+import '../saved_server_state.dart';
 
 /// §63 PHD2 / guider settings. Phase 12h.6k wires the daemon round-trip
 /// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
@@ -136,7 +137,15 @@ class Phd2Settings {
 class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     with SettingsSyncMixin<Phd2Settings> {
   @override
-  Phd2Settings build() => const Phd2Settings();
+  Phd2Settings build() {
+    // The hydrate memo is per-SERVER, not per-process: switching the active
+    // server must force the next transient surface (tune dialog) to re-hydrate,
+    // or Apply could full-object-PUT server A's stale settings onto server B.
+    ref.listen(activeServerProvider, (prev, next) {
+      if (prev != next) _hydratedOnce = false;
+    });
+    return const Phd2Settings();
+  }
 
   void setHost(String s) {
     final v = s.trim();
