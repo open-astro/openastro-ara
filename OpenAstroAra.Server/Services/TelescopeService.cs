@@ -22,6 +22,7 @@ using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -208,6 +209,30 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         // already cancelled, which would silently skip the write — the same hazard as the abort path.
         NoteMountCommand(w => w.NoteTrackingCommanded(enabled));
         await Task.Run(() => client.Tracking = enabled, CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    public async Task SetGuideRatesAsync(double rightAscensionDegreesPerSecond,
+        double declinationDegreesPerSecond, CancellationToken ct) {
+        ct.ThrowIfCancellationRequested();
+        if (!double.IsFinite(rightAscensionDegreesPerSecond) || rightAscensionDegreesPerSecond <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rightAscensionDegreesPerSecond));
+        if (!double.IsFinite(declinationDegreesPerSecond) || declinationDegreesPerSecond <= 0)
+            throw new ArgumentOutOfRangeException(nameof(declinationDegreesPerSecond));
+        var client = RequireConnectedClient();
+        TelescopeCapabilitiesDto? capabilities;
+        lock (_gate) capabilities = _capabilities;
+        if (capabilities?.CanSetGuideRates != true)
+            throw new InvalidOperationException("mount does not support adjustable guide rates");
+        await Task.Run(() => {
+            client.GuideRateRightAscension = rightAscensionDegreesPerSecond;
+            client.GuideRateDeclination = declinationDegreesPerSecond;
+            var ra = client.GuideRateRightAscension;
+            var dec = client.GuideRateDeclination;
+            if (Math.Abs(ra - rightAscensionDegreesPerSecond) > 1e-9
+                || Math.Abs(dec - declinationDegreesPerSecond) > 1e-9)
+                throw new InvalidOperationException("mount guide-rate readback mismatch");
+        }, CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
 
@@ -526,6 +551,12 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { dec = c.Declination; } catch (Exception) { dec = null; }
         bool tracking;
         try { tracking = c.Tracking; } catch (Exception) { tracking = false; }
+        string? trackingRate;
+        try { trackingRate = c.TrackingRate.ToString(); } catch (Exception) { trackingRate = null; }
+        string? sideOfPier;
+        try { sideOfPier = c.SideOfPier.ToString(); } catch (Exception) { sideOfPier = null; }
+        double? azimuth;
+        try { azimuth = c.Azimuth; } catch (Exception) { azimuth = null; }
         bool parked;
         try { parked = c.AtPark; } catch (Exception) { parked = false; }
         bool atHome;
@@ -537,7 +568,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             : parked ? "parked"
             : tracking ? "tracking"
             : "idle";
-        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome);
+        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, trackingRate, sideOfPier, azimuth);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -563,6 +594,22 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try { canPulseGuide = c.CanPulseGuide; } catch (Exception) { canPulseGuide = false; }
         bool canFindHome;
         try { canFindHome = c.CanFindHome; } catch (Exception) { canFindHome = false; }
+        bool canSetGuideRates;
+        try { canSetGuideRates = c.CanSetGuideRates; } catch (Exception) { canSetGuideRates = false; }
+        double? guideRateRa = null;
+        try { guideRateRa = c.GuideRateRightAscension; } catch (Exception) { }
+        double? guideRateDec = null;
+        try { guideRateDec = c.GuideRateDeclination; } catch (Exception) { }
+        string? description;
+        try { description = c.Description; } catch (Exception) { description = null; }
+        string? driverInfo;
+        try { driverInfo = c.DriverInfo; } catch (Exception) { driverInfo = null; }
+        string? driverVersion;
+        try { driverVersion = c.DriverVersion; } catch (Exception) { driverVersion = null; }
+        string? interfaceVersion;
+        try { interfaceVersion = c.InterfaceVersion.ToString(); } catch (Exception) { interfaceVersion = null; }
+        IReadOnlyList<string>? supportedActions;
+        try { supportedActions = c.SupportedActions?.ToArray(); } catch (Exception) { supportedActions = null; }
         // Optics: ASCOM reports these in METRES; convert via OpticsMmFromMetres
         // (×1000, non-positive → null). Each in its own try (most mounts
         // NotImplement them → null).
@@ -586,7 +633,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             SupportedSiderealRates: ReadSiderealRates(c),
             FocalLengthMm: focalLengthMm, ApertureDiameterMm: apertureMm,
             CanMoveAxis: canMoveAxis,
-            MoveAxisRatesDegPerSec: ReadAxisRates(c));
+            MoveAxisRatesDegPerSec: ReadAxisRates(c),
+            CanSetGuideRates: canSetGuideRates,
+            GuideRateRightAscensionDegreesPerSecond: guideRateRa,
+            GuideRateDeclinationDegreesPerSecond: guideRateDec,
+            Description: description,
+            DriverInfo: driverInfo,
+            DriverVersion: driverVersion,
+            InterfaceVersion: interfaceVersion,
+            SupportedActions: supportedActions);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

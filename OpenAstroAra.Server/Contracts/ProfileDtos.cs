@@ -381,7 +381,21 @@ public sealed record Phd2SettingsDto(
     // optics: focal_length_mm × reducer_factor, per the planning-compute-lives-in-client rule; the server
     // just round-trips the choice and the derived guide_focal_length it receives). Default guide_scope
     // matches the historical behavior of the manual field.
-    string GuiderSetupType = "guide_scope");
+    string GuiderSetupType = "guide_scope",
+    // Auto-tune's selected guider cadence. 0 means the daemon has no persisted value yet.
+    int GuideExposureMilliseconds = 0,
+    // §63 auto-tune policy. Optional defaults preserve older profile.json files.
+    bool AutoTuneEnabled = true,
+    string AutoTuneDefaultDepth = "standard",
+    bool AutoTuneAllowGuideRateChanges = true,
+    bool AutoTuneAllowAlgorithmChanges = false,
+    bool AutoTuneRequireApplyConfirmation = true,
+    double AutoTuneMinimumAltitudeDegrees = 45,
+    int AutoTuneMaximumSessionMinutes = 30,
+    int AutoTuneMaximumCandidates = 8,
+    double AutoTuneMinimumAutomaticImprovementPercent = 8,
+    bool AutoTuneUseMainCameraValidation = false,
+    bool AutoTunePersistTelemetry = true);
 
 /// <summary>
 /// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default

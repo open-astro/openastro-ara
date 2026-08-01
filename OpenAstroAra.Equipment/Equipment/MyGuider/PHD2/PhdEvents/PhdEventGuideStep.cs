@@ -110,6 +110,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         [JsonProperty]
         private double errorCode;
 
+        [DataMember]
+        [JsonProperty]
+        private int? multiStarCount;
+
+        [DataMember]
+        [JsonProperty]
+        private int? rejectedStarCount;
+
         public PhdEventGuideStep() {
         }
 
@@ -140,9 +148,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         public double Time {
             get => time;
 
-            set => time = DateTime.UtcNow
-               .Subtract(new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc))
-               .TotalSeconds;
+            // Keep the daemon timestamp. The old setter discarded the wire value and replaced it with
+            // local wall-clock time, making actual cadence and irregular-frame analysis impossible.
+            set => time = value;
         }
 
         [DataMember]
@@ -305,6 +313,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
             get => errorCode;
 
             set => errorCode = value;
+        }
+
+        [DataMember]
+        [JsonProperty]
+        public int? MultiStarCount {
+            get => multiStarCount;
+            set => multiStarCount = value;
+        }
+
+        [DataMember]
+        [JsonProperty]
+        public int? RejectedStarCount {
+            get => rejectedStarCount;
+            set => rejectedStarCount = value;
         }
 
         public IGuideStep Clone() {

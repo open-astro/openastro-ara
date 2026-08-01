@@ -103,6 +103,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 CanFindHome = connected && caps?.CanFindHome == true,
                 CanPark = connected && caps?.CanPark == true,
                 CanSetTrackingEnabled = connected && caps?.CanSetTracking == true,
+                CanPulseGuide = connected && caps?.CanPulseGuide == true,
+                GuideRateRightAscensionArcsecPerSec = connected
+                    ? (caps?.GuideRateRightAscensionDegreesPerSecond ?? 0) * 3600 : 0,
+                GuideRateDeclinationArcsecPerSec = connected
+                    ? (caps?.GuideRateDeclinationDegreesPerSecond ?? 0) * 3600 : 0,
             };
             if (connected && runtime.RightAscensionHours is double ra && runtime.DeclinationDegrees is double dec) {
                 info.Coordinates = new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), epoch);

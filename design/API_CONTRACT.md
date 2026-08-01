@@ -65,3 +65,57 @@ The source-of-truth contract itself lives in `OpenAstroAra.Server/openapi.yaml` 
 **Spec ref:** `OpenAstroAra.Server/Services/SequencerService.ResumeRefinement.cs`, `SequenceEndpoints.cs` resume route
 
 **Related:** §35 (SafetyReactionService recenter), §59 (autofocus executor), design/RUN_REDESIGN.md
+
+### 2026-07-31 — guiding auto-tune proposal and transaction endpoints
+
+**Endpoint(s) or area:** `/api/v1/guiding/autotune/*`; WS `guiding.autotune.*`
+
+**Decision:** expose capabilities, latest in-memory session, start-analysis, cancel, explicit apply, and
+rollback. Start analyzes accepted live `GuideStep` telemetry already held by ARA; it does not silently begin
+a long hardware experiment. Apply is explicit and uses PHD2's existing exposure, algorithm, DEC-mode, and
+guide-output RPCs inside a snapshot/restore boundary. Mount guide-rate writes remain locked until a safe
+Alpaca adapter exists.
+
+**Reasoning:** the current server has no persisted auto-tune store, interleaved experiment worker, or telescope
+guide-rate transaction seam. Exposing those as supported would create unsafe false capability. The first wire
+slice therefore makes measured planning inspectable and keeps unsupported operations visible in the capability
+payload. The next slice can add persistent experiments without breaking this route shape.
+
+**Spec ref:** `design/GUIDER_AUTO_TUNING.md`, `OpenAstroAra.Server/Endpoints/GuidingAutoTuneEndpoints.cs`
+
+**Related:** `OpenAstroAra.Core/Guiding`, `GuidingTelemetryCollector`, `PHD2Guider.AutoTune.cs`
+
+### 2026-07-31 — guiding auto-tune bounded experiments and persisted report
+
+**Endpoint(s) or area:** `/api/v1/guiding/autotune/*`; WS `guiding.autotune.*`; SQLite auto-tune tables
+
+**Decision:** `POST /guiding/autotune/sessions` accepts `dry_run`, evaluation, stabilization, and
+characterization limits. A live request runs in a server-owned background task. It captures native mount motion
+with guide output disabled, restores output in `finally`, evaluates bounded coordinate candidates with interleaved
+baseline windows, persists session/telemetry windows, calculates deterministic moving-block bootstrap confidence,
+and leaves a tested winner in `Proposed` until explicit apply. Guide-rate candidates use Alpaca readback and force
+calibration invalidation. `GET /sessions/latest/report` returns a Markdown report. Cancel, failure, device loss, and
+apply errors enter rollback and verify the restored values through existing readback methods.
+
+**Reasoning:** long hardware work cannot run in the request thread or client process. Persisted windows make failure
+analysis and replay possible. A candidate cannot be applied from a planner-only result; it must have live metrics,
+an improvement threshold, no critical regression, and at least 80% bootstrap confidence.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/GuidingAutoTuneEndpoints.cs`, `design/GUIDER_AUTO_TUNING.md`
+
+**Related:** `OpenAstroAra.Core/Guiding/GuidingResponseAnalyzer.cs`, `GuidingAutoTuneRepository`,
+`TelescopeService.SetGuideRatesAsync`
+
+### 2026-07-31 — optional main-camera validation
+
+**Endpoint:** `POST /api/v1/guiding/autotune/sessions`
+
+**Decision:** add `use_main_camera_validation` plus bounded exposure, binning, and frame-count fields. The
+server captures analysis frames through the existing camera gate, measures median star eccentricity, includes
+it in candidate scoring, and rejects a live request when the camera, stars, or main image scale are unavailable.
+Dry-run requests never capture or mutate the camera.
+
+**Reasoning:** guide RMS alone can select settings that worsen science-camera star shape. Reusing the existing
+analysis capture path keeps camera ownership and cancellation rules centralized.
+
+**Related:** `MainCameraGuidingValidator`, `IAnalysisFrameSource`, `GuidingScorer.CalculateScore`

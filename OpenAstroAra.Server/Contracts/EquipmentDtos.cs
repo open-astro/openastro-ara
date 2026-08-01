@@ -205,7 +205,15 @@ public sealed record TelescopeCapabilitiesDto(
     // the discrete primary-axis slew rates it offers (deg/sec, ascending) for the
     // direction pad's speed selector. Empty when the mount reports no axis rates.
     bool CanMoveAxis = false,
-    IReadOnlyList<double>? MoveAxisRatesDegPerSec = null);
+    IReadOnlyList<double>? MoveAxisRatesDegPerSec = null,
+    bool CanSetGuideRates = false,
+    double? GuideRateRightAscensionDegreesPerSecond = null,
+    double? GuideRateDeclinationDegreesPerSecond = null,
+    string? Description = null,
+    string? DriverInfo = null,
+    string? DriverVersion = null,
+    string? InterfaceVersion = null,
+    IReadOnlyList<string>? SupportedActions = null);
 
 public sealed record TelescopeStateDto(
     string State,    // "idle" | "slewing" | "tracking" | "parked" | "unparking" | "error"
@@ -213,7 +221,10 @@ public sealed record TelescopeStateDto(
     double? DeclinationDegrees,
     bool Tracking,
     bool Parked,
-    bool AtHome);
+    bool AtHome,
+    string? TrackingRate = null,
+    string? SideOfPier = null,
+    double? AzimuthDegrees = null);
 
 public sealed record SlewRequestDto(
     double RightAscensionHours,

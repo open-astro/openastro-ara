@@ -81,6 +81,18 @@ public static class WsEventCatalog {
     // §63.17 — a profile push changed the guide-camera selection while a dark library exists: the stored
     // darks belong to the previous camera and should be rebuilt. Payload: {reason: "guide_camera_changed"}.
     public const string GuiderDarkLibraryInvalidated = "guider.dark_library.invalidated";
+    public const string GuidingAutoTuneStarted = "guiding.autotune.started";
+    public const string GuidingAutoTunePhaseChanged = "guiding.autotune.phase_changed";
+    public const string GuidingAutoTuneCharacterizationComplete = "guiding.autotune.characterization_complete";
+    public const string GuidingAutoTuneCandidateStarted = "guiding.autotune.candidate_started";
+    public const string GuidingAutoTuneCandidateComplete = "guiding.autotune.candidate_complete";
+    public const string GuidingAutoTuneProposalReady = "guiding.autotune.proposal_ready";
+    public const string GuidingAutoTuneApplied = "guiding.autotune.applied";
+    public const string GuidingAutoTuneRolledBack = "guiding.autotune.rolled_back";
+    public const string GuidingAutoTuneFailed = "guiding.autotune.failed";
+    public const string GuidingAutoTuneWarning = "guiding.autotune.warning";
+    public const string GuidingAutoTuneTelemetrySummary = "guiding.autotune.telemetry_summary";
+    public const string GuidingAutoTuneCancelled = "guiding.autotune.cancelled";
     // §45 polar alignment — the routine lifecycle (started/stopped) plus the engine's live stream:
     // progress per solved iteration ({iteration, altitude/azimuth/total_error_arcmin, zone, solved}),
     // frame_complete per capture ({frame_id, solved, consecutive_solve_failures}), paused when
@@ -236,6 +248,11 @@ public static class WsEventCatalog {
         CameraExposureStarted, CameraExposureComplete, CameraExposureFailed,
         TelescopeSlewStarted, TelescopeSlewComplete, TelescopeParkChanged,
         GuiderState, GuiderDitherComplete, GuiderFaultActionTaken,
+        GuidingAutoTuneStarted, GuidingAutoTunePhaseChanged, GuidingAutoTuneCharacterizationComplete,
+        GuidingAutoTuneCandidateStarted, GuidingAutoTuneCandidateComplete,
+        GuidingAutoTuneProposalReady, GuidingAutoTuneApplied,
+        GuidingAutoTuneRolledBack, GuidingAutoTuneFailed, GuidingAutoTuneWarning,
+        GuidingAutoTuneTelemetrySummary, GuidingAutoTuneCancelled,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

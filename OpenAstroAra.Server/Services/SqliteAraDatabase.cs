@@ -188,6 +188,34 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
             );
             """, ct);
 
+        // Guiding auto-tune history. Each row contains the complete immutable
+        // session snapshot plus optional telemetry JSON. The latest row is also
+        // mirrored into app_config for backward-compatible startup reads.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS guiding_autotune_sessions (
+                id                         TEXT PRIMARY KEY NOT NULL,
+                state                      TEXT NOT NULL,
+                started_at_utc             TEXT NOT NULL,
+                updated_at_utc             TEXT NOT NULL,
+                session_json               TEXT NOT NULL,
+                characterization_json      TEXT
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_guiding_autotune_updated ON guiding_autotune_sessions(updated_at_utc);", ct);
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS guiding_autotune_telemetry_windows (
+                session_id       TEXT NOT NULL,
+                phase            TEXT NOT NULL,
+                started_at_utc   TEXT NOT NULL,
+                ended_at_utc     TEXT NOT NULL,
+                sample_count     INTEGER NOT NULL,
+                telemetry_json   TEXT NOT NULL,
+                PRIMARY KEY (session_id, phase),
+                FOREIGN KEY (session_id) REFERENCES guiding_autotune_sessions(id)
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_guiding_autotune_telemetry_session ON guiding_autotune_telemetry_windows(session_id);", ct);
+
         // §51 diagnostics log. Same table holds open issues + historical
         // events: cleared_utc IS NULL means open. Issue-specific fields
         // (recommended_action, auto_correctible) are nullable for non-
