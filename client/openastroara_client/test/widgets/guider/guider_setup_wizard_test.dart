@@ -116,7 +116,7 @@ class _FakeAlpacaNames implements AlpacaDeviceNamesClient {
     calls.add('$host:$port');
     if (host == 'bridge.local') {
       // The AlpacaBridge server — only reachable once discovery names it.
-      return {'camera/2': 'QHY5III-200M'};
+      return {'camera/2': 'QHY5III-200M', 'telescope/5': 'Bridge Mount'};
     }
     return {
       'camera/0': 'ZWO ASI290MM Mini',
@@ -440,5 +440,27 @@ void main() {
     await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
     expect(find.byType(GuiderSetupWizard), findsNothing); // dialog closed
+  });
+
+  testWidgets(
+      'mount picker only offers devices on the camera\'s Alpaca server',
+      (tester) async {
+    await _pump(tester);
+    await _next(tester); // camera
+    await tester.tap(find.text('Search network for Alpaca servers'));
+    await tester.pumpAndSettle();
+    // Camera stays on rc91 (the daemon's server) — pick it explicitly.
+    await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
+    await tester.pumpAndSettle();
+    await _next(tester); // optics
+    await _next(tester); // mount
+    await tester.tap(find.byKey(const ValueKey('wiz-Mount')));
+    await tester.pumpAndSettle();
+    // The bridge's mount must NOT be offered: PHD2 has one Alpaca server
+    // (the camera's), so a cross-server mount would be silently dropped.
+    expect(find.textContaining('Bridge Mount'), findsNothing);
+    expect(find.textContaining('iOptron HAE29C EQ'), findsWidgets);
   });
 }

@@ -163,16 +163,22 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       final e = parseAlpacaChoiceEndpoint(choice);
       if (e != null) endpoints['${e.host}:${e.port}'] = (host: e.host, port: e.port);
     }
-    for (final entry in endpoints.entries) {
-      final names = await namesApi.fetchNames(entry.value.host, entry.value.port);
-      if (!mounted) return;
-      if (names.isEmpty) continue;
-      setState(() {
-        names.forEach((typeSlot, name) {
-          _alpacaNames['${entry.key}|$typeSlot'] = name;
+    // Parallel: an unreachable server costs its own timeout, not everyone's
+    // (review r1 — serial awaits added up across servers).
+    final fetched = await Future.wait([
+      for (final entry in endpoints.entries)
+        namesApi
+            .fetchNames(entry.value.host, entry.value.port)
+            .then((names) => (endpoint: entry.key, names: names)),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      for (final result in fetched) {
+        result.names.forEach((typeSlot, name) {
+          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
         });
-      });
-    }
+      }
+    });
   }
 
   /// Label map for a picker slot: every option labeled with its real Alpaca
@@ -189,20 +195,45 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   /// known Alpaca server — the daemon-format `Alpaca <Slot> [host:port/N]`,
   /// which the server push parses to retarget the daemon's Alpaca config on
   /// Apply. Daemon-offered strings stay first; duplicates collapse.
+  ///
+  /// [onlyEndpoint] ("host:port") limits synthesis to one server: PHD2 has a
+  /// SINGLE Alpaca server per profile and the push derives it from the
+  /// CAMERA's endpoint, so a mount/rotator picked on any other server would
+  /// be silently dropped on Apply — those slots must only offer the camera's
+  /// server (review r1 on this PR).
   List<String> _mergedOptions(
-      List<String> daemonChoices, String alpacaType, String slotWord) {
+      List<String> daemonChoices, String alpacaType, String slotWord,
+      {String? onlyEndpoint}) {
     final merged = <String>[...daemonChoices];
     for (final key in _alpacaNames.keys) {
       // key = "host:port|type/N"
       final bar = key.indexOf('|');
       if (bar < 0) continue;
+      final endpoint = key.substring(0, bar);
+      if (onlyEndpoint != null && endpoint != onlyEndpoint) continue;
       final typeSlot = key.substring(bar + 1);
       if (!typeSlot.startsWith('$alpacaType/')) continue;
       final synthesized =
-          'Alpaca $slotWord [${key.substring(0, bar)}/${typeSlot.substring(alpacaType.length + 1)}]';
+          'Alpaca $slotWord [$endpoint/${typeSlot.substring(alpacaType.length + 1)}]';
       if (!merged.contains(synthesized)) merged.add(synthesized);
     }
     return merged;
+  }
+
+  /// The selected guide camera's Alpaca server ("host:port"), or null for
+  /// non-Alpaca / unset camera selections.
+  String? get _cameraEndpoint {
+    final e = parseAlpacaChoiceEndpoint(_draft?.guiderCamera ?? '');
+    return e == null ? null : '${e.host}:${e.port}';
+  }
+
+  /// True when [selection] names a device on a DIFFERENT Alpaca server than
+  /// the camera — the push would silently drop its device number (PHD2 has
+  /// one Alpaca server, derived from the camera).
+  bool _isCrossServerPick(String selection) {
+    final cam = _cameraEndpoint;
+    final e = parseAlpacaChoiceEndpoint(selection);
+    return cam != null && e != null && '${e.host}:${e.port}' != cam;
   }
 
   /// §63.20 — sweep the network for Alpaca servers (daemon-side UDP
@@ -218,23 +249,32 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     });
     try {
       final servers = await api.discoverAlpaca();
-      var found = 0;
+      final targets = <({String host, int port})>[];
       for (final server in servers) {
         final sep = server.lastIndexOf(':');
         if (sep <= 0) continue;
         final host = server.substring(0, sep);
         final port = int.tryParse(server.substring(sep + 1));
         if (port == null) continue;
-        final names = await namesApi.fetchNames(host, port);
-        if (!mounted) return;
-        if (names.isEmpty) continue;
-        found += names.length;
-        setState(() {
-          names.forEach((typeSlot, name) {
-            _alpacaNames['$host:$port|$typeSlot'] = name;
-          });
-        });
+        targets.add((host: host, port: port));
       }
+      // Parallel fetch — an unreachable server costs its own timeout only.
+      final fetched = await Future.wait([
+        for (final t in targets)
+          namesApi
+              .fetchNames(t.host, t.port)
+              .then((names) => (endpoint: '${t.host}:${t.port}', names: names)),
+      ]);
+      if (!mounted) return;
+      var found = 0;
+      setState(() {
+        for (final result in fetched) {
+          found += result.names.length;
+          result.names.forEach((typeSlot, name) {
+            _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+          });
+        }
+      });
       if (mounted && found == 0) {
         setState(() => _error =
             'Discovery found no Alpaca devices — check the servers are running.');
@@ -658,16 +698,32 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               'is only needed when the guiding connection can\'t report '
               'pointing (leave it on daemon default otherwise).'),
           const SizedBox(height: 12),
+          // Mount/rotator synthesis is limited to the CAMERA's Alpaca server:
+          // PHD2 has one Alpaca server per profile (derived from the camera on
+          // Apply), so a pick on any other server would be silently dropped.
           _choiceDropdown(
             label: 'Mount',
             value: draft.guiderMount,
-            options:
-                _mergedOptions(_choices?.mounts ?? const [], 'telescope', 'Mount'),
+            options: _mergedOptions(_choices?.mounts ?? const [], 'telescope',
+                'Mount',
+                onlyEndpoint: _cameraEndpoint),
             labels: _labelsFor(
-                _mergedOptions(_choices?.mounts ?? const [], 'telescope', 'Mount'),
+                _mergedOptions(_choices?.mounts ?? const [], 'telescope',
+                    'Mount',
+                    onlyEndpoint: _cameraEndpoint),
                 'telescope'),
             onChanged: (v) => _edit((d) => d.copyWith(guiderMount: v)),
           ),
+          if (_isCrossServerPick(draft.guiderMount))
+            Text(
+              'This mount lives on a different Alpaca server than the guide '
+              'camera — the daemon supports one server, so this selection '
+              'won\'t take effect. Pick a mount on the camera\'s server.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.accentBusy),
+            ),
           _choiceDropdown(
             label: 'Aux mount',
             value: draft.guiderAuxMount,
@@ -683,13 +739,25 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             label: 'Rotator',
             value: draft.guiderRotator,
             options: _mergedOptions(
-                _choices?.rotators ?? const [], 'rotator', 'Rotator'),
+                _choices?.rotators ?? const [], 'rotator', 'Rotator',
+                onlyEndpoint: _cameraEndpoint),
             labels: _labelsFor(
-                _mergedOptions(_choices?.rotators ?? const [], 'rotator', 'Rotator'),
+                _mergedOptions(_choices?.rotators ?? const [], 'rotator',
+                    'Rotator',
+                    onlyEndpoint: _cameraEndpoint),
                 'rotator'),
             allowUnset: true,
             onChanged: (v) => _edit((d) => d.copyWith(guiderRotator: v)),
           ),
+          if (_isCrossServerPick(draft.guiderRotator))
+            Text(
+              'This rotator lives on a different Alpaca server than the guide '
+              'camera — it won\'t take effect on Apply.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.accentBusy),
+            ),
           _refreshChoicesButton(),
         ];
       case _WizStep.apply:
@@ -731,6 +799,23 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                   ? '(daemon default)'
                   : friendlyAlpacaChoiceLabel(
                       draft.guiderRotator, 'rotator', _alpacaNames)),
+          // Belt for a stale draft: the mount step restricts new picks to the
+          // camera's server, but a selection made before a camera change can
+          // still be cross-server — say so rather than implying it will land.
+          if (_isCrossServerPick(draft.guiderMount) ||
+              _isCrossServerPick(draft.guiderRotator))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'A mount/rotator selection is on a different Alpaca server '
+                'than the guide camera and will NOT take effect — the daemon '
+                'supports one Alpaca server (the camera\'s). Go Back to fix it.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AraColors.accentBusy),
+              ),
+            ),
           const SizedBox(height: 12),
           if (_applied)
             const Row(children: [
