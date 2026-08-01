@@ -32,15 +32,34 @@ namespace OpenAstroAra.Server.Services;
 public class PlateSolveService : IPlateSolveService {
     private readonly IProfileService profileService;
     private readonly IPlateSolverFactory plateSolverFactory;
+    private readonly IProfileStore? profileStore;
 
-    public PlateSolveService(IProfileService profileService, IPlateSolverFactory plateSolverFactory) {
+    public PlateSolveService(IProfileService profileService, IPlateSolverFactory plateSolverFactory,
+            IProfileStore? profileStore = null) {
         this.profileService = profileService;
         this.plateSolverFactory = plateSolverFactory;
+        this.profileStore = profileStore;
+    }
+
+    /// <summary>The solve geometry, ARA profile first: the user configures optics in the ARA store's
+    /// §36 section (Options → Imaging → Optics) — the Equipment layer's legacy profile never learns it
+    /// (its focal length stays NaN), which used to fail every solve with an "unconfigured" message on a
+    /// fully configured rig. Effective focal length folds the reducer in; legacy values remain the
+    /// fallback for benches without a store. Static-testable via <see cref="ResolveSolveGeometry"/>.</summary>
+    internal static (double FocalLength, double PixelSize) ResolveSolveGeometry(
+            OpenAstroAra.Server.Contracts.OpticsSettingsDto? optics, double legacyFocalLength, double legacyPixelSize) {
+        var focal = optics is { FocalLengthMm: > 0 }
+            ? optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1.0)
+            : legacyFocalLength;
+        var pixel = optics is { PixelSizeUm: > 0 } ? optics.PixelSizeUm : legacyPixelSize;
+        return (focal, pixel);
     }
 
     public Task<PlateSolveResult> SolveImage(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(image);
 
+        // ARA store → legacy settings first: the solver stack below reads the legacy profile.
+        LegacyProfileBridge.SyncPlateSolve(profileService, profileStore);
         var profile = profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException("Cannot plate-solve: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
@@ -49,11 +68,11 @@ public class PlateSolveService : IPlateSolveService {
         // unset (focal length defaults to NaN), which yields a degenerate FOV and an opaque solver failure.
         // Fail fast with an actionable message instead. PlateSolverConfigurationException (a setup error the
         // user fixes) lets the API layer return a narrow 422 without catching unrelated InvalidOperationExceptions.
-        double focalLength = profile.TelescopeSettings.FocalLength;
-        double pixelSize = profile.CameraSettings.PixelSize;
+        var (focalLength, pixelSize) = ResolveSolveGeometry(
+            profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
         if (!(focalLength > 0) || !(pixelSize > 0)) {
             throw new PlateSolverConfigurationException(
-                $"Cannot plate-solve: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) in the profile.");
+                $"Cannot plate-solve: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
         }
 
         var plateSolver = plateSolverFactory.GetPlateSolver(settings);
