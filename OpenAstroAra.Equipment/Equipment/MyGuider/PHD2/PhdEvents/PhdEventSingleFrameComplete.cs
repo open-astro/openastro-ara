@@ -33,5 +33,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [JsonProperty(PropertyName = "Path")]
         public string? Path { get; set; }
+
+        // §45 capture-fetch: the bare saved filename (daemon ≥ the guider#77
+        // build). Remote callers retrieve the frame from the daemon's HTTP
+        // server by THIS name — the Path above is daemon-local and unusable
+        // across machines.
+        [JsonProperty(PropertyName = "Filename")]
+        public string? Filename { get; set; }
     }
 }

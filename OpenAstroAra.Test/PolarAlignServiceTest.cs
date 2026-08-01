@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
@@ -25,7 +26,9 @@ using OpenAstroAra.TestHarness.Guider;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -88,6 +91,11 @@ namespace OpenAstroAra.Test {
         /// <summary>A FakeGuider that answers the connect handshake, records PA-session lease calls,
         /// and (when <paramref name="answerCaptures"/>) completes every <c>capture_single_frame</c>
         /// with a successful <c>SingleFrameComplete</c> event carrying the requested path.</summary>
+        // The path each capture_single_frame request carried (null = daemon-side default
+        // save, the §45 capture-fetch contract). Asserted from TEST bodies — never inside
+        // the fake's handler, which runs on a socket thread with no NUnit context.
+        private static readonly ConcurrentQueue<string?> CaptureRequestPaths = new();
+
         private static FakeGuider StartFake(ConcurrentQueue<bool> paSessionActiveCalls, bool answerCaptures = true) {
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
@@ -99,12 +107,16 @@ namespace OpenAstroAra.Test {
             });
             if (answerCaptures) {
                 fake.OnRpc("capture_single_frame", req => {
-                    var path = req["params"]?["path"]?.GetValue<string>();
+                    // §45 capture-fetch: the request must carry NO path (daemon-side default
+                    // save) — recorded here, asserted from test bodies.
+                    CaptureRequestPaths.Enqueue(req["params"]?["path"]?.GetValue<string>());
                     _ = Task.Run(async () => {
                         await Task.Delay(20).ConfigureAwait(false);
                         await fake.BroadcastAsync(new JsonObject {
                             ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
-                            ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                            ["Inst"] = 1, ["Success"] = true,
+                            ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_test",
+                            ["Filename"] = "save_image_test",
                         }).ConfigureAwait(false);
                     });
                     return JsonValue.Create(0);
@@ -148,11 +160,27 @@ namespace OpenAstroAra.Test {
             return store;
         }
 
+        /// <summary>§45 capture-fetch bench fetcher — "downloads" by writing a placeholder file
+        /// (the scripted solvers never read the bytes) and records the fetched URIs.</summary>
+        private sealed class FakeFrameFetcher : IPolarAlignFrameFetcher {
+            public ConcurrentQueue<(string Host, int RpcPort, string Filename)> Fetched { get; } = new();
+            public bool Fail { get; set; }
+
+            public async Task FetchAsync(string host, int rpcPort, string filename, string destinationPath, CancellationToken ct) {
+                if (Fail) {
+                    throw new HttpRequestException($"404 for {filename}");
+                }
+                Fetched.Enqueue((host, rpcPort, filename));
+                await File.WriteAllTextAsync(destinationPath, "FAKE-FITS", ct).ConfigureAwait(false);
+            }
+        }
+
         private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
                 Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null,
-                IPolarAlignmentLog? log = null) {
+                IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null) {
             var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver,
-                (mount ?? NewMount()).Object, store ?? NewStore(), ws, log) {
+                (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
+                fetcher ?? new FakeFrameFetcher()) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
             };
             return svc;
@@ -422,12 +450,13 @@ namespace OpenAstroAra.Test {
                 return new JsonObject { ["active"] = active, ["expires_in_s"] = active ? 600 : null };
             });
             fake.OnRpc("capture_single_frame", req => {
-                var path = req["params"]?["path"]?.GetValue<string>();
                 _ = Task.Run(async () => {
                     await Task.Delay(20).ConfigureAwait(false);
                     await fake.BroadcastAsync(new JsonObject {
                         ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
-                        ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_test",
+                        ["Filename"] = "save_image_test",
                     }).ConfigureAwait(false);
                 });
                 return JsonValue.Create(0);
@@ -466,12 +495,13 @@ namespace OpenAstroAra.Test {
                 if (Interlocked.Increment(ref captureAttempts) <= 2) {
                     throw new InvalidOperationException("camera busy"); // → JSON-RPC error → GuiderRpcException
                 }
-                var path = req["params"]?["path"]?.GetValue<string>();
                 _ = Task.Run(async () => {
                     await Task.Delay(20).ConfigureAwait(false);
                     await fake.BroadcastAsync(new JsonObject {
                         ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
-                        ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_test",
+                        ["Filename"] = "save_image_test",
                     }).ConfigureAwait(false);
                 });
                 return JsonValue.Create(0);
@@ -487,6 +517,84 @@ namespace OpenAstroAra.Test {
                 "transient capture RPC faults must be absorbed by the seed retry loop");
             Assert.That(Volatile.Read(ref captureAttempts), Is.GreaterThan(2));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Every_capture_rejected_fails_the_routine_with_capture_rejected_not_seed_solve_failed() {
+            // §45 capture-fetch: when the daemon refuses EVERY capture (the pre-guider#77 sandbox
+            // rejection, a busy camera that never frees) no frame ever reaches the solver — the
+            // routine must say capture_rejected with the daemon's message, not blame focus/sky.
+            var paCalls = new ConcurrentQueue<bool>();
+            var ws = new WsRecorder();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            fake.OnRpc("capture_single_frame",
+                _ => throw new InvalidOperationException("path must be in an existing directory"));
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver { Fallback = SolveA }, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("capture_rejected"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("existing directory"),
+                "the daemon's own rejection text must reach the user");
+        }
+
+        [Test]
+        public async Task Frames_are_fetched_from_the_daemon_http_capture_endpoint() {
+            // §45 capture-fetch: the saved frame is retrieved over the guider#77 HTTP endpoint —
+            // host = the dialed guider, port = rpc + HttpPortOffsetFromRpc, path = the reported
+            // filename. The bench fetcher records the URIs the engine built.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var fetcher = new FakeFrameFetcher();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, fetcher: fetcher);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(fetcher.Fetched, Is.Not.Empty, "the engine must download the daemon-saved frame");
+            var fetched = fetcher.Fetched.First();
+            Assert.That(fetched.RpcPort, Is.EqualTo(fake.Port),
+                "the fetch is addressed to the DIALED guider endpoint (HTTP port derives from it)");
+            Assert.That(fetched.Filename, Is.EqualTo("save_image_test"));
+            Assert.That(CaptureRequestPaths, Is.All.Null,
+                "captures must not pass a foreign path — the daemon sandbox rejects it");
+            // The real HTTP derivation, pinned with REALISTIC daemon ports (instance 1 and 2).
+            Assert.That(PHD2Guider.CaptureFrameUri("rc91.lan", 4400, "f.fits").ToString(),
+                Is.EqualTo("http://rc91.lan:8080/api/capture/f.fits"));
+            Assert.That(PHD2Guider.CaptureFrameUri("rc91.lan", 4401, "f.fits").Port, Is.EqualTo(8081));
+        }
+
+        [Test]
+        public async Task A_failed_frame_fetch_fails_the_seed_as_capture_rejected() {
+            // The daemon saved the frame but the HTTP download fails (pre-#77 daemon, network) —
+            // still a capture-layer fault: capture_rejected, with the fetch error surfaced.
+            var paCalls = new ConcurrentQueue<bool>();
+            var ws = new WsRecorder();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver { Fallback = SolveA },
+                ws: ws, fetcher: new FakeFrameFetcher { Fail = true });
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("capture_rejected"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("fetching the saved frame"));
         }
 
         [Test]
@@ -507,12 +615,13 @@ namespace OpenAstroAra.Test {
                     : null; // missing result → GuiderRpcException at the renewal site
             });
             fake.OnRpc("capture_single_frame", req => {
-                var path = req["params"]?["path"]?.GetValue<string>();
                 _ = Task.Run(async () => {
                     await Task.Delay(20).ConfigureAwait(false);
                     await fake.BroadcastAsync(new JsonObject {
                         ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
-                        ["Inst"] = 1, ["Success"] = true, ["Path"] = path,
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_test",
+                        ["Filename"] = "save_image_test",
                     }).ConfigureAwait(false);
                 });
                 return JsonValue.Create(0);

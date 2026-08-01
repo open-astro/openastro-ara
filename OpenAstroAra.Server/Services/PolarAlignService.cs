@@ -121,7 +121,8 @@ namespace OpenAstroAra.Server.Services {
                 ITelescopeMediator mount,
                 IProfileStore profileStore,
                 IWsBroadcaster? ws = null,
-                IPolarAlignmentLog? log = null) {
+                IPolarAlignmentLog? log = null,
+                IPolarAlignFrameFetcher? frameFetcher = null) {
             _guider = guider;
             _logger = logger;
             _solver = solver;
@@ -129,6 +130,8 @@ namespace OpenAstroAra.Server.Services {
             _profileStore = profileStore;
             _ws = ws;
             _log = log;
+            _ownsFetcher = frameFetcher is null; // the DI-provided fetcher is container-owned
+            _frameFetcher = frameFetcher ?? new HttpPolarAlignFrameFetcher();
         }
 
         public Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct) {
@@ -200,6 +203,7 @@ namespace OpenAstroAra.Server.Services {
                     _liveIterations = 0;
                     _startedAt = DateTimeOffset.UtcNow;
                     gen = ++_generation;
+                    _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
                     startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
@@ -285,6 +289,9 @@ namespace OpenAstroAra.Server.Services {
             _runCts?.Cancel();
             _runCts?.Dispose();
             _opLock.Dispose();
+            if (_ownsFetcher && _frameFetcher is IDisposable d) {
+                d.Dispose(); // only the self-constructed default — a DI-injected fetcher is container-owned
+            }
         }
 
         // ── the routine ──────────────────────────────────────────────────────────────────────
@@ -478,6 +485,16 @@ namespace OpenAstroAra.Server.Services {
                     return s;
                 }
             }
+            string? captureFault;
+            lock (_gate) {
+                captureFault = _generation == gen ? _lastCaptureFault : null;
+            }
+            // A capture-layer fault (daemon rejected the capture, no frame ever reached the solver)
+            // is NOT a sky/focus problem — blame the right layer, with the daemon's own message.
+            if (captureFault is not null) {
+                throw new RoutineFailedException("capture_rejected",
+                    $"the {frameId} seed frame could not be captured after {SeedSolveAttempts} attempts: {captureFault}");
+            }
             throw new RoutineFailedException("seed_solve_failed",
                 $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the guide optics configuration");
         }
@@ -492,34 +509,35 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
                 PHD2Guider guiderClient, string workDir, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            var path = Path.Combine(workDir, frameId + ".fits");
+            var localPath = Path.Combine(workDir, frameId + ".fits");
             var tcs = new TaskCompletionSource<SingleFrameCompleteEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
-            // Correlate the completion to THIS capture: a stale event for a previously timed-out
-            // capture carries the old path and must not resolve the new frame's wait (it would
-            // silently solve the wrong FITS). Failure events may carry no path — accept those; the
-            // captures are strictly serialized per run, so an uncorrelated failure can only belong
-            // to the immediately preceding abandoned capture and counts as a failed solve either way.
-            void OnComplete(object? sender, SingleFrameCompleteEventArgs e) {
-                if (e.Path == path || (!e.Success && string.IsNullOrEmpty(e.Path))) {
-                    tcs.TrySetResult(e);
-                }
-            }
+            // §45 capture-fetch: the capture saves DAEMON-SIDE (save:true, no path — the daemon
+            // sandboxes saves to its own directory and rejects foreign paths, the first-real-rig
+            // failure), so completions can no longer be correlated by requested path. Captures are
+            // strictly serialized per run (the PA lease is single-client and this method is the only
+            // capture site), so the first completion after our RPC is ours; the one stale case — a
+            // completion from the immediately preceding TIMED-OUT capture landing after we
+            // subscribed — costs one failed/duplicate solve of a frame taken seconds earlier, which
+            // the §45.11 failure path absorbs.
+            void OnComplete(object? sender, SingleFrameCompleteEventArgs e) => tcs.TrySetResult(e);
             guiderClient.SingleFrameComplete += OnComplete;
             try {
                 // The capture RPC gets the same one-failed-solve treatment as the solver call
                 // below: a daemon-side rejection (camera busy, guiding running) or a dropped
                 // guider is transient — it must feed the consecutive-failure/pause path (and the
-                // seed retry loop), not hard-fail the routine (§45.11).
+                // seed retry loop), not hard-fail the routine (§45.11). The rejection text is kept
+                // so an exhausted seed loop can say "the daemon refused the capture" instead of
+                // blaming focus/sky (capture_rejected).
                 try {
                     var exposureMs = Math.Max(1, (int)Math.Round(settings.ExposureSeconds * 1000.0));
                     await guiderClient.CaptureSolverFrameAsync(
                         exposureMs: exposureMs, binning: settings.Binning > 1 ? settings.Binning : null,
-                        gain: null, subframe: null, path: path, save: true, ct).ConfigureAwait(false);
+                        gain: null, subframe: null, path: null, save: true, ct).ConfigureAwait(false);
                 } catch (GuiderRpcException ex) {
-                    LogCaptureFailed(frameId, ex.Message);
+                    RecordCaptureFault(gen, frameId, ex.Message);
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 } catch (InvalidOperationException ex) {
-                    LogCaptureFailed(frameId, ex.Message);
+                    RecordCaptureFault(gen, frameId, ex.Message);
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
                 var completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
@@ -529,12 +547,37 @@ namespace OpenAstroAra.Server.Services {
                         _lastFrameId = frameId;
                     }
                 }
-                if (!completed.Success || string.IsNullOrEmpty(completed.Path)) {
-                    LogCaptureFailed(frameId, completed.Error ?? "no saved path");
+                var filename = completed.Filename ?? (completed.Path is { Length: > 0 } p ? Path.GetFileName(p) : null);
+                if (!completed.Success || string.IsNullOrEmpty(filename)) {
+                    RecordCaptureFault(gen, frameId, completed.Error ?? "no saved filename on SingleFrameComplete");
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                }
+                // Fetch the daemon-saved FITS over the guider#77 HTTP capture endpoint into the run's
+                // work dir — the only frame transport that works when the daemon runs on another
+                // machine (and equally fine same-host). A failed download is one failed solve.
+                var host = guiderClient.ConnectedHost;
+                if (string.IsNullOrEmpty(host)) {
+                    RecordCaptureFault(gen, frameId, "guider connection endpoint unknown — cannot fetch the saved frame");
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
                 try {
-                    return await _solver.SolveAsync(completed.Path, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                    await _frameFetcher.FetchAsync(
+                        host, guiderClient.ConnectedRpcPort, filename, localPath, ct).ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    throw;
+                } catch (Exception ex) {
+                    RecordCaptureFault(gen, frameId,
+                        $"fetching the saved frame '{filename}' from the guider failed: {ex.Message} " +
+                        "(daemon builds before openastro-guider#77 have no capture endpoint)");
+                    return new PolarAlignSolveOutcome(false, 0, 0);
+                }
+                lock (_gate) {
+                    if (_generation == gen) {
+                        _lastCaptureFault = null; // the capture layer delivered — any failure now is a solve failure
+                    }
+                }
+                try {
+                    return await _solver.SolveAsync(localPath, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
@@ -545,11 +588,30 @@ namespace OpenAstroAra.Server.Services {
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
             } catch (TimeoutException) {
-                LogCaptureFailed(frameId, "SingleFrameComplete timed out");
+                RecordCaptureFault(gen, frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
                 guiderClient.SingleFrameComplete -= OnComplete;
-                TryDeleteFile(path);
+                TryDeleteFile(localPath);
+            }
+        }
+
+        // §45 capture-fetch — downloads daemon-saved frames over the guider's HTTP capture endpoint.
+        private readonly IPolarAlignFrameFetcher _frameFetcher;
+        private readonly bool _ownsFetcher;
+
+        // §45 — the most recent CAPTURE-layer fault (RPC rejection, missing filename, failed fetch,
+        // completion timeout) for the current run; null once a capture gets as far as the solver.
+        // Lets an exhausted seed loop report capture_rejected with the daemon's actual message
+        // instead of blaming focus/sky for a frame that was never taken.
+        private string? _lastCaptureFault;
+
+        private void RecordCaptureFault(int gen, string frameId, string message) {
+            LogCaptureFailed(frameId, message);
+            lock (_gate) {
+                if (_generation == gen) {
+                    _lastCaptureFault = message;
+                }
             }
         }
 
