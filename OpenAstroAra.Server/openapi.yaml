@@ -843,6 +843,121 @@ paths:
 #     wire had no external consumers. A true exposure counter can arrive later as a
 #     separate frames_* pair without a second rename.
 
+# ─── Guiding auto-tune ────────────────────────────────────────────────────────
+
+  /guiding/autotune/capabilities:
+    get:
+      tags: [Guiding Auto-Tune]
+      summary: Auto-tune capability and safety status
+      responses:
+        '200':
+          description: Capability status
+          content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneCapabilities' } } }
+
+  /guiding/autotune/sessions/latest:
+    get:
+      tags: [Guiding Auto-Tune]
+      summary: Latest auto-tune session
+      responses:
+        '200':
+          description: Session status
+          content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneStatus' } } }
+
+  /guiding/autotune/sessions/latest/report:
+    get:
+      tags: [Guiding Auto-Tune]
+      summary: Get the latest auto-tune Markdown report
+      responses:
+        '200':
+          description: Markdown report
+          content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneReport' } } }
+
+  /guiding/autotune/sessions/{sessionId}:
+    get:
+      tags: [Guiding Auto-Tune]
+      summary: Get one persisted auto-tune session
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Session status
+          content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneStatus' } } }
+        '404': { description: Session not found }
+
+  /guiding/autotune/sessions/{sessionId}/report:
+    get:
+      tags: [Guiding Auto-Tune]
+      summary: Get one persisted auto-tune Markdown report
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Markdown report
+          content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneReport' } } }
+        '404': { description: Session not found }
+
+  /guiding/autotune/sessions:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Analyze telemetry and optionally run bounded auto-tune experiments
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneStartRequest' } } }
+      responses:
+        '200':
+          description: Proposal
+          content: { application/json: { schema: { $ref: '#/components/schemas/GuidingAutoTuneStatus' } } }
+        '400': { description: Invalid tuning bounds }
+        '409': { description: Missing guider, telemetry, mount, or image scale }
+
+  /guiding/autotune/sessions/latest/cancel:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Cancel and restore the snapshot
+      responses: { '200': { description: Restored status } }
+
+  /guiding/autotune/sessions/latest/apply:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Explicitly apply the proposed PHD2 settings
+      responses: { '200': { description: Applied status } }
+
+  /guiding/autotune/sessions/latest/rollback:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Restore the captured PHD2 snapshot
+      responses: { '200': { description: Restored status } }
+
+  /guiding/autotune/sessions/{sessionId}/cancel:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Cancel the current auto-tune session by ID
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Restored status }
+        '404': { description: Session not found or not current }
+
+  /guiding/autotune/sessions/{sessionId}/apply:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Apply the current proposed settings by session ID
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Applied status }
+        '404': { description: Session not found or not current }
+
+  /guiding/autotune/sessions/{sessionId}/rollback:
+    post:
+      tags: [Guiding Auto-Tune]
+      summary: Restore the current session snapshot by ID
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Restored status }
+        '404': { description: Session not found or not current }
+
 # ─── Reusable parameters + schemas ────────────────────────────────────────────
 
 components:
@@ -877,6 +992,69 @@ components:
       description: Required for this endpoint per §60.5. Same semantics as the optional `IdempotencyKey` parameter.
 
   schemas:
+    GuidingAutoTuneStartRequest:
+      type: object
+      properties:
+        depth: { type: string, enum: [quick, standard, deep], default: standard }
+        guide_pixel_scale_arcsec_per_pixel: { type: number, minimum: 0 }
+        main_pixel_scale_arcsec_per_pixel: { type: number, minimum: 0 }
+        guide_rate_arcsec_per_second: { type: number, exclusiveMinimum: 0, default: 7.5205 }
+        allow_guide_rate_changes: { type: boolean, default: false }
+        allow_algorithm_changes: { type: boolean, default: false }
+        apply_automatically: { type: boolean, default: false }
+        dry_run: { type: boolean, default: true }
+        maximum_samples: { type: integer, minimum: 8, maximum: 12000, default: 4000 }
+        maximum_characterization_seconds: { type: integer, minimum: 10, maximum: 2400, default: 0 }
+        evaluation_seconds: { type: integer, minimum: 10, maximum: 1800, default: 180 }
+        stabilization_seconds: { type: integer, minimum: 1, maximum: 300, default: 15 }
+        use_main_camera_validation: { type: boolean, default: false }
+        main_camera_validation_exposure_seconds: { type: number, exclusiveMinimum: 0, default: 1 }
+        main_camera_validation_binning: { type: integer, minimum: 1, default: 1 }
+        main_camera_validation_frames: { type: integer, minimum: 1, maximum: 8, default: 3 }
+        maximum_candidates: { type: integer, minimum: 1, maximum: 12, default: 8 }
+        maximum_session_minutes: { type: integer, minimum: 1, maximum: 180, default: 30 }
+        minimum_altitude_degrees: { type: number, minimum: -90, maximum: 90, default: 45 }
+    GuidingAutoTuneCapabilities:
+      type: object
+      required: [enabled, connected, has_telemetry, can_analyze, can_apply, guide_rate_changes_supported, locked_reasons]
+      properties:
+        enabled: { type: boolean }
+        connected: { type: boolean }
+        has_telemetry: { type: boolean }
+        can_analyze: { type: boolean }
+        can_apply: { type: boolean }
+        guide_rate_changes_supported: { type: boolean }
+        locked_reasons: { type: array, items: { type: string } }
+    GuidingAutoTuneStatus:
+      type: object
+      required: [session_id, state, progress, current_step, telemetry_samples, can_apply, can_rollback, warnings, started_at_utc, updated_at_utc]
+      properties:
+        session_id: { type: string, format: uuid }
+        state: { type: string }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        current_step: { type: string }
+        behavior_class: { type: string, nullable: true }
+        behavior_confidence: { type: number, nullable: true }
+        telemetry_samples: { type: integer }
+        baseline_score: { type: number, nullable: true }
+        best_score: { type: number, nullable: true }
+        can_apply: { type: boolean }
+        can_rollback: { type: boolean }
+        warnings: { type: array, items: { type: string } }
+        plan: { type: object, nullable: true }
+        best_candidate: { type: object, nullable: true }
+        baseline_result: { type: object, nullable: true }
+        candidate_results: { type: array, items: { type: object }, nullable: true }
+        started_at_utc: { type: string, format: date-time }
+        updated_at_utc: { type: string, format: date-time }
+    GuidingAutoTuneReport:
+      type: object
+      required: [session_id, content_type, markdown, generated_at_utc]
+      properties:
+        session_id: { type: string, format: uuid }
+        content_type: { type: string, example: text/markdown }
+        markdown: { type: string }
+        generated_at_utc: { type: string, format: date-time }
 
     ServerInfo:
       type: object
@@ -1125,6 +1303,18 @@ components:
         # §63.19 guide setup type — "oag" derives guide_focal_length client-side from the main optics
         # (focal_length_mm × reducer_factor); "guide_scope" uses the manually entered value.
         guider_setup_type:              { type: string, enum: [guide_scope, oag] }
+        guide_exposure_milliseconds:    { type: integer, minimum: 0 }
+        auto_tune_enabled:              { type: boolean }
+        auto_tune_default_depth:        { type: string, enum: [quick, standard, deep] }
+        auto_tune_allow_guide_rate_changes: { type: boolean }
+        auto_tune_allow_algorithm_changes:  { type: boolean }
+        auto_tune_require_apply_confirmation: { type: boolean }
+        auto_tune_minimum_altitude_degrees: { type: number, format: double, minimum: -90, maximum: 90 }
+        auto_tune_maximum_session_minutes: { type: integer, minimum: 1, maximum: 180 }
+        auto_tune_maximum_candidates:    { type: integer, minimum: 1, maximum: 12 }
+        auto_tune_minimum_automatic_improvement_percent: { type: number, format: double, minimum: 0, maximum: 100 }
+        auto_tune_use_main_camera_validation: { type: boolean }
+        auto_tune_persist_telemetry:      { type: boolean }
 
     DiagnosticsMode:
       type: object

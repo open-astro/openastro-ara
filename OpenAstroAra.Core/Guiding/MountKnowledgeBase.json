@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "manufacturerPatterns": ["ZWO"],
+      "modelPatterns": ["AM5", "AM5N"],
+      "declaredDriveType": "strain-wave",
+      "expectedPeriodicPeriodsSeconds": [288, 432],
+      "priorBehaviorClass": "HarmonicLike",
+      "priorConfidence": 0.75
+    }
+  ]
+}

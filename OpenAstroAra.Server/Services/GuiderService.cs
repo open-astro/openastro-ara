@@ -375,6 +375,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (step is null) {
             return;
         }
+        var accepted = false;
         lock (_gate) {
             if (!ReferenceEquals(sender, _guider)) {
                 return;
@@ -383,7 +384,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             while (_guideSteps.Count > MaxGuideStepWindow) {
                 _guideSteps.Dequeue();
             }
+            accepted = true;
         }
+        // Forward only after releasing the service gate. Consumer callbacks may call back into
+        // GuiderService, and event delivery must not deadlock the guider listener.
+        if (accepted) GuideEvent?.Invoke(this, step);
     }
 
     // RMS (root-mean-square) of the windowed guide errors, in raw pixels. Total is the combined

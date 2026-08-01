@@ -53,4 +53,10 @@ public sealed class ActiveRunSessionRegistry {
             }
         }
     }
+
+    public bool HasActive {
+        get {
+            lock (_gate) return _active.Count > 0;
+        }
+    }
 }

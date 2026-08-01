@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.AspNetCore.Mvc;
+using OpenAstroAra.Core.Guiding;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Endpoints;
@@ -218,6 +219,15 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(EmergencyStopResultDto))]
 [JsonSerializable(typeof(SequenceUpdateRequestDto))]
 [JsonSerializable(typeof(ServerInfoDto))]
+[JsonSerializable(typeof(GuidingAutoTuneStartRequestDto))]
+[JsonSerializable(typeof(GuidingAutoTuneCapabilitiesDto))]
+[JsonSerializable(typeof(GuidingAutoTuneStatusDto))]
+[JsonSerializable(typeof(GuidingAutoTuneReportDto))]
+[JsonSerializable(typeof(GuidingTunePlan))]
+[JsonSerializable(typeof(GuidingCandidateResult))]
+[JsonSerializable(typeof(GuidingRunMetrics))]
+[JsonSerializable(typeof(GuidingScoreBreakdown))]
+[JsonSerializable(typeof(GuidingParameterSet))]
 [JsonSerializable(typeof(ServerStateDto))]
 [JsonSerializable(typeof(SessionDto))]
 [JsonSerializable(typeof(SessionRestretchRequestDto))]

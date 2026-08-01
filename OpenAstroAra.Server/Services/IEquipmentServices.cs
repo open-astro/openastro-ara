@@ -59,6 +59,8 @@ public interface ITelescopeService {
     Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct);
     Task SetTrackingAsync(bool enabled, CancellationToken ct);
+    Task SetGuideRatesAsync(double rightAscensionDegreesPerSecond,
+        double declinationDegreesPerSecond, CancellationToken ct);
 
     /// <summary>Start (rate != 0) or stop (rate 0) constant-rate motion on one mount axis
     /// (0 = primary/RA-Az, 1 = secondary/Dec-Alt). CONTRACT: the underlying device call MUST run

@@ -291,6 +291,23 @@ public partial class Program {
                 // (profile select swaps the live store without touching the guider).
                 () => sp.GetService<IProfileRepository>()?.ActiveId));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Guiding.GuidingTelemetryCollector>();
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Guiding.MainCameraGuidingValidator>(sp =>
+            new OpenAstroAra.Server.Services.Guiding.MainCameraGuidingValidator(
+                sp.GetRequiredService<IAnalysisFrameSource>()));
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Guiding.GuidingAutoTuneRepository>();
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Guiding.IGuidingAutoTuneService>(sp =>
+            new OpenAstroAra.Server.Services.Guiding.GuidingAutoTuneService(
+                sp.GetRequiredService<GuiderService>(),
+                sp.GetRequiredService<OpenAstroAra.Server.Services.Guiding.GuidingTelemetryCollector>(),
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetRequiredService<OpenAstroAra.Server.Services.Guiding.GuidingAutoTuneRepository>(),
+                sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Guiding.GuidingAutoTuneService>>(),
+                sp.GetService<IWsBroadcaster>(),
+                sp.GetService<ITelescopeService>(),
+                sp.GetService<ISafetyMonitorService>(),
+                sp.GetService<ActiveRunSessionRegistry>(),
+                sp.GetService<OpenAstroAra.Server.Services.Guiding.MainCameraGuidingValidator>()));
         // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
         // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +
         // tracking hand-back, and the profile store supplies the site for the pole-error geometry.
@@ -733,8 +750,11 @@ public partial class Program {
         // SlewScopeToRaDec drive the live Alpaca mount.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(
             sp => sp.GetRequiredService<TelescopeService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
+        // The real GuiderService already implements IGuiderMediator and forwards live PHD2
+        // GuideStep events. Auto-tune and the sequencer must share that singleton; the headless
+        // stub would permanently report disconnected and drop telemetry.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(
+            sp => sp.GetRequiredService<GuiderService>());
         // §14e — the real FocuserService backs IFocuserMediator too (replaces HeadlessFocuserMediator),
         // so the MoveFocuser* sequence instructions drive the live Alpaca focuser.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(
@@ -856,6 +876,7 @@ public partial class Program {
 
         // §59.15 — Smart Focus calibration read + recalibrate (profile-state, not device ops).
         app.MapAutofocusEndpoints();
+        app.MapGuidingAutoTuneEndpoints();
 
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();
