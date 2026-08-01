@@ -204,6 +204,7 @@ namespace OpenAstroAra.Server.Services {
                     _startedAt = DateTimeOffset.UtcNow;
                     gen = ++_generation;
                     _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
+                    _abandonedCaptures = 0;   // fresh run — prior timed-out captures can't owe events anymore
                     startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
@@ -515,11 +516,22 @@ namespace OpenAstroAra.Server.Services {
             // sandboxes saves to its own directory and rejects foreign paths, the first-real-rig
             // failure), so completions can no longer be correlated by requested path. Captures are
             // strictly serialized per run (the PA lease is single-client and this method is the only
-            // capture site), so the first completion after our RPC is ours; the one stale case — a
-            // completion from the immediately preceding TIMED-OUT capture landing after we
-            // subscribed — costs one failed/duplicate solve of a frame taken seconds earlier, which
-            // the §45.11 failure path absorbs.
-            void OnComplete(object? sender, SingleFrameCompleteEventArgs e) => tcs.TrySetResult(e);
+            // capture site), so the first completion after our RPC is ours — EXCEPT the event a
+            // previously TIMED-OUT capture still owes. Accepting that stale event would silently
+            // fetch/solve the PREVIOUS frame and feed seconds-old RA/Dec into the seed/adjust
+            // geometry (review r1). The timeout path below records the debt (_abandonedCaptures);
+            // this handler pays it by SWALLOWING exactly that many events — the stale capture then
+            // surfaces as a clean timed-out/failed solve, never as misattributed data.
+            void OnComplete(object? sender, SingleFrameCompleteEventArgs e) {
+                lock (_gate) {
+                    if (_abandonedCaptures > 0) {
+                        _abandonedCaptures--;
+                        LogCaptureFailed(frameId, "swallowed a stale SingleFrameComplete owed by a timed-out capture");
+                        return; // keep waiting for THIS capture's own event
+                    }
+                }
+                tcs.TrySetResult(e);
+            }
             guiderClient.SingleFrameComplete += OnComplete;
             try {
                 // The capture RPC gets the same one-failed-solve treatment as the solver call
@@ -588,6 +600,11 @@ namespace OpenAstroAra.Server.Services {
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
             } catch (TimeoutException) {
+                lock (_gate) {
+                    // The daemon may still deliver this capture's event later — the next capture's
+                    // handler must swallow it rather than adopt its (stale) frame.
+                    _abandonedCaptures++;
+                }
                 RecordCaptureFault(gen, frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
@@ -599,6 +616,10 @@ namespace OpenAstroAra.Server.Services {
         // §45 capture-fetch — downloads daemon-saved frames over the guider's HTTP capture endpoint.
         private readonly IPolarAlignFrameFetcher _frameFetcher;
         private readonly bool _ownsFetcher;
+
+        // §45 capture-fetch — how many timed-out captures still owe a SingleFrameComplete event.
+        // Guarded by _gate; reset at run start. See CaptureAndSolveAsync's OnComplete.
+        private int _abandonedCaptures;
 
         // §45 — the most recent CAPTURE-layer fault (RPC rejection, missing filename, failed fetch,
         // completion timeout) for the current run; null once a capture gets as far as the solver.

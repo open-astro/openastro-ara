@@ -29,6 +29,12 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public static class LegacyProfileBridge {
 
+    // Serializes the sync: three entry points (solve-frame / centering / polar align) can run
+    // concurrently and all write the same legacy profile object. The writes are idempotent
+    // snapshots of the ARA store, so interleaving is harmless TODAY — the lock exists so a future
+    // field with side effects (or a torn read-modify-write) can't reintroduce a real race.
+    private static readonly object SyncGate = new();
+
     /// <summary>Copy the ARA store's plate-solve + optics sections onto the legacy profile's
     /// settings. No-op when either side is missing (benches without a store).</summary>
     public static void SyncPlateSolve(IProfileService? legacy, IProfileStore? store) {
@@ -36,6 +42,12 @@ public static class LegacyProfileBridge {
         if (profile is null || store is null) {
             return;
         }
+        lock (SyncGate) {
+            SyncLocked(profile, store);
+        }
+    }
+
+    private static void SyncLocked(IProfile profile, IProfileStore store) {
 
         var ps = store.GetPlateSolveSettings();
         var s = profile.PlateSolveSettings;

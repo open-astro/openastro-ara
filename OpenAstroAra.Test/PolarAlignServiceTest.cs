@@ -575,6 +575,61 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_stale_completion_from_a_timed_out_capture_is_swallowed_not_adopted() {
+            // Review r1 on the capture-fetch PR: with path correlation gone, the event a TIMED-OUT
+            // capture still owes must not resolve the NEXT capture's wait — adopting it would
+            // silently solve the previous (seconds-old) frame. The first capture acks and never
+            // completes (times out); from then on every capture first delivers the STALE completion
+            // (filename save_image_stale) and then its own fresh one. The engine must fetch ONLY
+            // fresh frames.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var captureCount = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                var n = Interlocked.Increment(ref captureCount);
+                if (n == 1) {
+                    return JsonValue.Create(0); // ack, never complete → the wait times out
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    if (n == 2) {
+                        // Capture 1's debt, delivered late — exactly once.
+                        await fake.BroadcastAsync(new JsonObject {
+                            ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                            ["Inst"] = 1, ["Success"] = true,
+                            ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_stale",
+                            ["Filename"] = "save_image_stale",
+                        }).ConfigureAwait(false);
+                        await Task.Delay(30).ConfigureAwait(false);
+                    }
+                    // This capture's own completion.
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_fresh",
+                        ["Filename"] = "save_image_fresh",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var fetcher = new FakeFrameFetcher();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, fetcher: fetcher);
+            svc.CaptureCompleteTimeout = TimeSpan.FromMilliseconds(300); // fast first-capture timeout
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"),
+                "the seed retry loop absorbs the timed-out first capture");
+            Assert.That(fetcher.Fetched, Is.Not.Empty);
+            Assert.That(fetcher.Fetched.Select(f => f.Filename), Is.All.EqualTo("save_image_fresh"),
+                "the stale event owed by the timed-out capture must be swallowed, never fetched");
+        }
+
+        [Test]
         public async Task A_failed_frame_fetch_fails_the_seed_as_capture_rejected() {
             // The daemon saved the frame but the HTTP download fails (pre-#77 daemon, network) —
             // still a capture-layer fault: capture_rejected, with the fetch error surfaced.
