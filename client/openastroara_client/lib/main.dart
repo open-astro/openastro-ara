@@ -63,12 +63,16 @@ class _RootRouter extends ConsumerWidget {
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);
+    // §30 — the shell's Launchpad action asks for the SERVER chooser, not just
+    // the profile box: with servers saved the flow would otherwise resume one
+    // step in, and "back to the launchpad" should mean screen one.
+    final serverChooserRequested = ref.watch(serverChooserRequestedProvider);
     final Widget routed = saved.when(
       data: (servers) => offline
           // Offline still gets a profile step: pick which CACHED profile to
           // plan with (seeding the settings notifiers) before the shell.
           ? (gatePassed ? const AppShell() : const OfflineLaunchScreen())
-          : servers.isEmpty
+          : servers.isEmpty || serverChooserRequested
               ? const FirstRunScreen()
               : gatePassed
                   ? const AppShell()

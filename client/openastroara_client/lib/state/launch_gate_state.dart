@@ -38,3 +38,23 @@ class OfflineModeNotifier extends Notifier<bool> {
 
   void exit() => state = false;
 }
+
+/// §30 — true while the user has asked to go ALL the way back to the server
+/// chooser (the shell's "Launchpad" action). With servers already saved the
+/// root router normally skips straight to the profile box; this flag forces
+/// the FirstRunScreen instead, so Launchpad genuinely restarts the flow at
+/// screen one (switch server, re-discover, plan offline). Cleared when the
+/// user confirms a server there (or a cold start — session-scoped like the
+/// other gates).
+final serverChooserRequestedProvider =
+    NotifierProvider<ServerChooserRequestNotifier, bool>(
+        ServerChooserRequestNotifier.new);
+
+class ServerChooserRequestNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void request() => state = true;
+
+  void clear() => state = false;
+}
