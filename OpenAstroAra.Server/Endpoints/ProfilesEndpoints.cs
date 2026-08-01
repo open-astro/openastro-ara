@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
@@ -91,12 +92,36 @@ public static class ProfilesEndpoints {
             .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
                 "remaining one; deleting the last profile returns to the zero-profile state.");
 
-        profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo) =>
-                repo.SelectProfile(id) ? Results.Ok(repo.List()) : Results.NotFound())
+        profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo, IGuiderService guider) => {
+                if (!repo.SelectProfile(id)) {
+                    return Results.NotFound();
+                }
+                // §63.4 lifecycle hook — a CONNECTED guider follows the profile switch: the
+                // push re-runs the twin-profile ensure first (select-or-create-or-migrate the
+                // NEW profile's twin on the daemon, dark library and all), then lands the new
+                // profile's guider settings. Fire-and-forget with a best-effort swallow: a
+                // disconnected guider (InvalidOperationException) just means there is nothing
+                // to flip — the next guider connect maps the twin anyway — and the select
+                // response must not wait on daemon RPCs.
+                _ = Task.Run(async () => {
+                    try {
+                        await guider.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None)
+                            .ConfigureAwait(false);
+                    } catch (InvalidOperationException) {
+                        // Guider not connected — nothing to flip; the §63.4 connect-path
+                        // ensure maps the twin on the next connect.
+                    } catch (GuiderRpcException) {
+                        // Daemon rejected part of the push — best-effort by design; a
+                        // profile switch must never surface a guider error.
+                    }
+                });
+                return Results.Ok(repo.List());
+            })
             .Produces<ProfileListDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("SelectProfile")
-            .WithSummary("Make a profile active (loads its settings into the live store).");
+            .WithSummary("Make a profile active (loads its settings into the live store). A " +
+                "connected guider follows: its twin profile is selected/created to match.");
 
         return app;
     }
