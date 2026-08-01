@@ -1041,7 +1041,14 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         // Long friendly labels ("ZWO ASI290MM Mini (192.168.1.118:6800/1)")
         // must ellipsize inside the field, not overflow it.
         isExpanded: true,
-        initialValue: items.contains(value) ? value : (items.isEmpty ? null : items.first),
+        // A value the items don't carry (an unset '' on a non-allowUnset
+        // slot — the unconfigured first run) renders as a REAL placeholder,
+        // never as items.first: initialValue is only honored on first build,
+        // so falling back to the first device would display a selection the
+        // draft doesn't hold and Apply would then push '' while the dialog
+        // implied a device was chosen (review r2).
+        initialValue: items.contains(value) ? value : null,
+        hint: const Text('Select a device…'),
         decoration: InputDecoration(
           labelText: label,
           isDense: true,

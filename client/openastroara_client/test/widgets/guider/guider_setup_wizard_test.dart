@@ -48,6 +48,9 @@ class _FakeSavedServerService implements SavedServerService {
 class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi() : super(_server);
   Phd2Settings stored = _daemonSettings;
+  // Unconfigured first-run shape: no camera/mount ever selected.
+  void makeUnconfigured() =>
+      stored = const Phd2Settings(host: 'rc91.lan', port: 4400);
   Phd2Settings? lastPut;
   @override
   Future<Phd2Settings> getPhd2Settings() async => stored;
@@ -462,5 +465,43 @@ void main() {
     // (the camera's), so a cross-server mount would be silently dropped.
     expect(find.textContaining('Bridge Mount'), findsNothing);
     expect(find.textContaining('iOptron HAE29C EQ'), findsWidgets);
+  });
+
+  testWidgets(
+      'unconfigured guider shows a placeholder, never a phantom selection',
+      (tester) async {
+    final profile = _FakeProfileApi()..makeUnconfigured();
+    final guider = _FakeGuiderApi()
+      ..status = const GuiderStatus(
+        name: 'PHD2',
+        connectionState: GuiderConnectionState.connected,
+        runtimeState: GuiderRuntimeState.stopped,
+      );
+    final container = ProviderContainer(overrides: [
+      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      profileApiProvider.overrideWithValue(profile),
+      guiderApiFactoryProvider.overrideWithValue((_) => guider),
+      guiderEquipmentApiFactoryProvider
+          .overrideWithValue((_) => _FakeEquipmentApi()),
+      guiderCalibrationApiFactoryProvider
+          .overrideWithValue((_) => _FakeCalibrationApi()),
+      alpacaDeviceNamesApiProvider.overrideWithValue(_FakeAlpacaNames()),
+      wsEventStreamProvider.overrideWithValue(null),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: GuiderSetupWizard())),
+    ));
+    await tester.pumpAndSettle();
+    await _next(tester); // camera
+    // The draft holds no camera — the field must SAY so, not display the
+    // first discovered device as if it were picked (review r2).
+    expect(find.text('Select a device…'), findsWidgets);
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('wiz-Guide camera')),
+            matching: find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)')),
+        findsNothing);
   });
 }
