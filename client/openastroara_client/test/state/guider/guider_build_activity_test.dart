@@ -39,7 +39,7 @@ void main() {
     test('non-build events and unknown subtypes return null (no state churn)', () {
       expect(foldGuiderBuildEvent(const {}, _ev('guider.state')), isNull);
       expect(foldGuiderBuildEvent(const {}, _ev('diagnostics.cleared')), isNull);
-      expect(foldGuiderBuildEvent(const {}, _ev('guider.dark_library.progress')), isNull,
+      expect(foldGuiderBuildEvent(const {}, _ev('guider.dark_library.someday')), isNull,
           reason: 'a future subtype this build does not know is skipped, not misfiled');
     });
 
@@ -66,6 +66,32 @@ void main() {
           reason: 'a failed rebuild does not vouch for the stale library');
       expect(foldDarkLibraryInvalidation(_ev('guider.defect_map.complete')), isNull);
       expect(foldDarkLibraryInvalidation(_ev('guider.state')), isNull);
+    });
+  });
+
+  group('§63.8 progress ticks', () {
+    test('progress folds into building with the granular fields', () {
+      final folded = foldGuiderBuildEvent(const {}, _ev(
+        'guider.dark_library.progress',
+        {
+          'exposure_index': 2,
+          'exposure_count': 4,
+          'exposure_ms': 1500,
+          'frame': 3,
+          'frame_count': 5,
+        },
+      ))![CalibrationArtifact.darkLibrary]!;
+      expect(folded.phase, CalibrationBuildPhase.building);
+      expect(folded.exposureIndex, 2);
+      expect(folded.exposureMs, 1500);
+      // 1 full exposure (5 frames) + 3 frames of the second = 8/20.
+      expect(folded.fraction, closeTo(0.4, 1e-9));
+    });
+
+    test('fraction is null before the first tick (indeterminate bar)', () {
+      const started = CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.building);
+      expect(started.fraction, isNull);
     });
   });
 }

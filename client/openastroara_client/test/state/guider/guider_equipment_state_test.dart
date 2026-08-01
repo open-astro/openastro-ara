@@ -51,6 +51,11 @@ class _FakeEquipmentClient implements GuiderEquipmentClient {
   }
 
   @override
+  Future<double?> getAlpacaCameraPixelSize(
+          {String? host, int? port, int? device}) async =>
+      null;
+
+  @override
   Future<void> pushProfile() async {
     pushes++;
     if (throwOnPush) throw StateError('push failed');
