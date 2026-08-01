@@ -75,4 +75,35 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2DiscoverAlpacaServersResponse : PhdMethodResponse {
         public IReadOnlyList<string>? result { get; set; }
     }
+
+    /// <summary><c>get_alpaca_camera_pixelsize {host?, port?, device_number?}</c> — read a camera's sensor
+    /// pixel size (µm) straight from its Alpaca driver (<c>camera/N/pixelsizex</c>, falling back to
+    /// <c>pixelsizey</c>). Omitted params default to the daemon profile's stored Alpaca camera. Result:
+    /// <c>{pixel_size, host, port, device_number}</c>; an app error when the camera is unreachable or the
+    /// driver reports no usable size. Feeds the setup wizard's pixel-size autofill (§63.20).</summary>
+    public class Phd2GetAlpacaCameraPixelSize : Phd2Method<Phd2GetAlpacaCameraPixelSizeParameter> {
+        public override string Method => "get_alpaca_camera_pixelsize";
+    }
+
+    public class Phd2GetAlpacaCameraPixelSizeParameter {
+
+        [JsonProperty(PropertyName = "host", NullValueHandling = NullValueHandling.Ignore)]
+        public string? Host { get; set; }
+
+        [JsonProperty(PropertyName = "port", NullValueHandling = NullValueHandling.Ignore)]
+        public int? Port { get; set; }
+
+        [JsonProperty(PropertyName = "device_number", NullValueHandling = NullValueHandling.Ignore)]
+        public int? DeviceNumber { get; set; }
+    }
+
+    public class Phd2GetAlpacaCameraPixelSizeResponse : PhdMethodResponse {
+        public Phd2AlpacaCameraPixelSize? result { get; set; }
+    }
+
+    public class Phd2AlpacaCameraPixelSize {
+
+        [JsonProperty(PropertyName = "pixel_size")]
+        public double PixelSize { get; set; }
+    }
 }

@@ -29,10 +29,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         None,
         /// <summary>Honor the user's explicit <c>PHD2ProfileId</c> override via the inherited id-based switch.</summary>
         SelectById,
-        /// <summary>The <c>ara-&lt;slug&gt;</c> profile exists — select it by name.</summary>
+        /// <summary>The ARA profile's twin exists under its display name — select it by name.</summary>
         SelectByName,
-        /// <summary>The <c>ara-&lt;slug&gt;</c> profile does not exist yet — create + select it.</summary>
+        /// <summary>No twin exists yet — create + select it under the ARA profile's display name.</summary>
         Create,
+        /// <summary>A legacy <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin exists — rename it in place to the
+        /// display name (dark library and tuning ride along), then select it.</summary>
+        RenameLegacy,
     }
 
     /// <summary>Resolved §63.4 selection: which action, plus the id (for <see cref="AraProfileActionKind.SelectById"/>)
@@ -48,6 +51,22 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     /// drives the RPCs is guider-e-3b.
     /// </summary>
     public sealed partial class PHD2Guider {
+
+        /// <summary>
+        /// §63.4 — resolves the ACTIVE ARA profile's identity (id + display name) from the server's
+        /// multi-profile repository. The Equipment layer's own <c>IProfileService.ActiveProfile</c> is the
+        /// legacy single-profile store whose name is a constant "Default" — mapping the guider twin from it
+        /// produced a daemon profile named "Default" regardless of what the user called their rig. Null (or
+        /// a null result) falls back to the legacy store, which keeps benches and tests working unwired.
+        /// Set by the owning service right after construction; not part of the constructor because the
+        /// repository lives in the Server layer.
+        /// </summary>
+        public Func<(System.Guid Id, string? Name)?>? AraProfileResolver { get; set; }
+
+        private (System.Guid Id, string? Name) ResolveAraProfileIdentity() {
+            var resolved = AraProfileResolver?.Invoke();
+            return resolved ?? (profileService.ActiveProfile.Id, profileService.ActiveProfile.Name);
+        }
 
         /// <summary>
         /// Derive the PHD2 profile name for an ARA profile per §63.4 (<c>ara-&lt;slug&gt;</c>). The slug is a
@@ -99,6 +118,36 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             AraGuiderProfileName(araProfileName) + "-" + araProfileId.ToString("N")[..8];
 
         /// <summary>
+        /// The guider-side profile name for an ARA profile: the ARA profile's DISPLAY NAME, verbatim
+        /// (trimmed). The slugged <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> form read as machine noise in the
+        /// guider's own UI, so the twin now carries the exact name the user gave the rig ("Backyard RC8",
+        /// not "ara-backyard-rc8-a3f8e1c2"). A name that trims to empty falls back to <c>"Ara Default"</c>.
+        /// PHD2 profile names are arbitrary strings, so no character sanitizing is needed.
+        /// </summary>
+        /// <remarks>
+        /// ARA profile names are NOT a unique key, so two identically-named ARA profiles now share one
+        /// guider twin (shared tuning + dark library) — the same-name case is exactly when a user would
+        /// expect that, and the legacy id-suffix scheme bought its uniqueness at the cost of unreadable
+        /// names. Legacy twins are migrated by rename on connect (see
+        /// <see cref="ResolveAraProfileSelection"/>'s <see cref="AraProfileActionKind.RenameLegacy"/>).
+        /// </remarks>
+        public static string AraGuiderDisplayProfileName(string? araProfileName) {
+            var trimmed = (araProfileName ?? string.Empty).Trim();
+            return trimmed.Length == 0 ? "Ara Default" : trimmed;
+        }
+
+        /// <summary>
+        /// Does <paramref name="daemonProfileName"/> look like this ARA profile's LEGACY
+        /// <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> twin? Matched by the <c>ara-</c> prefix plus the id suffix
+        /// (not the slug), so a twin created under an older ARA profile NAME still matches after renames —
+        /// the id8 is derived from the ARA profile's stable Id.
+        /// </summary>
+        public static bool IsLegacyAraGuiderProfileName(string? daemonProfileName, System.Guid araProfileId) =>
+            daemonProfileName is not null &&
+            daemonProfileName.StartsWith("ara-", StringComparison.Ordinal) &&
+            daemonProfileName.EndsWith("-" + araProfileId.ToString("N")[..8], StringComparison.Ordinal);
+
+        /// <summary>
         /// Decide what profile action a guider connect should take (§63.4), pure + socket-free so the connect
         /// path's choice is unit-testable. Precedence: an explicit <paramref name="overrideProfileId"/> (the
         /// inherited <c>GuiderSettings.PHD2ProfileId</c> — the user's manual override) wins and selects by id;
@@ -120,13 +169,24 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     : new AraProfileSelection(AraProfileActionKind.SelectById, overrideProfileId.Value, string.Empty);
             }
 
-            // Id-suffixed name (guider-e-3c) so two ARA profiles with the same slug don't share one PHD2 profile.
-            var araName = AraGuiderProfileName(activeAraProfileName, activeAraProfileId);
-            var existing = availableProfiles.FirstOrDefault(p => string.Equals(p.Name, araName, StringComparison.Ordinal));
+            // The twin carries the ARA profile's display name verbatim. The exists-check is
+            // case-insensitive because the daemon's own name checks are (rename_profile /
+            // create_profile compare CmpNoCase) — an Ordinal match here could decide to create a
+            // name the daemon would then reject as "already exists".
+            var araName = AraGuiderDisplayProfileName(activeAraProfileName);
+            var existing = availableProfiles.FirstOrDefault(
+                p => string.Equals(p.Name, araName, StringComparison.OrdinalIgnoreCase));
             if (existing != null) {
                 return selectedProfileId == existing.Id
                     ? new AraProfileSelection(AraProfileActionKind.None, existing.Id, araName)
                     : new AraProfileSelection(AraProfileActionKind.SelectByName, existing.Id, araName);
+            }
+            // No display-name twin — migrate a legacy ara-<slug>-<id8> twin by rename (its dark
+            // library and tuning ride along) rather than creating a fresh, empty profile beside it.
+            var legacy = availableProfiles.FirstOrDefault(
+                p => IsLegacyAraGuiderProfileName(p.Name, activeAraProfileId));
+            if (legacy != null) {
+                return new AraProfileSelection(AraProfileActionKind.RenameLegacy, legacy.Id, araName);
             }
             return new AraProfileSelection(AraProfileActionKind.Create, 0, araName);
         }
@@ -142,11 +202,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             Justification = "Best-effort §63.4 profile-select boundary: a disconnect/select/create RPC may throw (socket drop, a daemon that rejects the name) — it's logged and skipped so profile mapping can never fail or block the guider connect.")]
         private async Task EnsureAraGuiderProfileAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
+            var (araProfileId, araProfileName) = ResolveAraProfileIdentity();
             var selection = ResolveAraProfileSelection(
                 guider.PHD2ProfileId,
                 SelectedProfile?.Id,
-                profileService.ActiveProfile.Name,
-                profileService.ActiveProfile.Id,
+                araProfileName,
+                araProfileId,
                 AvailableProfiles.ToList());
 
             switch (selection.Kind) {
@@ -182,6 +243,29 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - equipment disconnect before profile select failed: {ex.Message}");
             }
 
+            // Legacy-twin migration: rename ara-<slug>-<id8> to the display name in place (needs the
+            // equipment disconnected — done above), then fall through to select it by its new name.
+            // A failed rename skips the select: creating/selecting would either duplicate the twin or
+            // pick a name that doesn't exist; the next connect retries the migration.
+            if (selection.Kind == AraProfileActionKind.RenameLegacy) {
+                try {
+                    ct.ThrowIfCancellationRequested();
+                    var renameResp = await SendMessage(new Phd2RenameProfile {
+                        Parameters = new Phd2RenameProfileParameter { Id = selection.Id, NewName = selection.Name }
+                    });
+                    if (renameResp?.error != null) {
+                        Logger.Warning($"PHD2 §63.4 - rename_profile {selection.Id} → '{selection.Name}' not applied: {renameResp.error}");
+                        return;
+                    }
+                    Logger.Info($"PHD2 §63.4 - migrated legacy guider profile {selection.Id} to '{selection.Name}' (dark library preserved).");
+                } catch (OperationCanceledException) {
+                    throw;
+                } catch (Exception ex) {
+                    Logger.Warning($"PHD2 §63.4 - rename_profile {selection.Id} → '{selection.Name}' failed: {ex.Message}");
+                    return;
+                }
+            }
+
             var create = selection.Kind == AraProfileActionKind.Create;
             Phd2Method msg = create
                 ? new Phd2CreateProfile { Parameters = new Phd2CreateProfileParameter { Name = selection.Name } }
@@ -192,7 +276,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 if (resp?.error != null) {
                     Logger.Warning($"PHD2 §63.4 - {msg.Method} for '{selection.Name}' not applied: {resp.error}");
                 } else {
-                    Logger.Info($"PHD2 §63.4 - {(create ? "created" : "selected")} guider profile '{selection.Name}' for ARA profile '{profileService.ActiveProfile.Name}'.");
+                    Logger.Info($"PHD2 §63.4 - {(create ? "created" : "selected")} guider profile '{selection.Name}' for ARA profile '{araProfileName ?? "(unnamed)"}'.");
                 }
             } catch (OperationCanceledException) {
                 throw;

@@ -454,6 +454,14 @@ public sealed record GuiderEquipmentChoicesResponseDto(
     bool Connected,
     GuiderEquipmentChoicesDto? Choices);
 
+/// <summary>§63.20 — the Alpaca-camera pixel-size read's envelope, same 200-always contract as the choices
+/// read: <c>Connected</c> false when no guider is connected; <c>PixelSize</c> (µm) null when the daemon
+/// couldn't reach the camera or the driver reports no usable size (a best-effort picker assist, never an
+/// error status).</summary>
+public sealed record GuiderCameraPixelSizeResponseDto(
+    bool Connected,
+    double? PixelSize);
+
 /// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
 /// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for
 /// that slot (e.g. no rotator support compiled in).</summary>

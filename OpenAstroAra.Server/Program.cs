@@ -289,7 +289,19 @@ public partial class Program {
                 sp.GetService<IFaultLogService>(),
                 // §30.7.4 — lets the calibration-state stamp detect a profile switch mid-build
                 // (profile select swaps the live store without touching the guider).
-                () => sp.GetService<IProfileRepository>()?.ActiveId));
+                () => sp.GetService<IProfileRepository>()?.ActiveId,
+                // §63.4 — the ARA profile identity (id + user-visible name) the guider twin is
+                // named after. The Equipment layer's legacy store is always "Default"; the
+                // repository holds the real name ("RC91 - Backyard").
+                () => {
+                    var repo = sp.GetService<IProfileRepository>();
+                    var id = repo?.ActiveId;
+                    if (repo is null || id is null) {
+                        return null;
+                    }
+                    var name = repo.List().Profiles.FirstOrDefault(p => p.Id == id.Value)?.Name;
+                    return (id.Value, name);
+                }));
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
         // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +

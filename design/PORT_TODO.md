@@ -801,6 +801,19 @@ call), §45.4 auto-binning from camera caps, the §3 bolt-direction calibration 
 reticle mode, §45.14 dedicated PA cams. Endpoint paths stayed under `/equipment/polaralign/*`
 (shipped in #703) rather than the doc's `/polar-align/*` — deliberate contract continuity.
 
+**On-hardware blocker found 2026-07-31 (first real-rig run):** the solver-frame capture passes
+the ARA server's work dir (`$TMPDIR/ara-polar-align/<run>/…`) as `capture_single_frame {path}`,
+but the daemon sandboxes saves to `/server/capture_frame_dir`
+(`/var/lib/openastro-guider/.openastro-guider/`) — every capture is rejected `-32602` before an
+exposure starts, and the routine mis-reports it as `seed_solve_failed` ("check focus, sky…").
+Fails in EVERY deployment (even same-host, `/tmp` is outside the sandbox); FakeGuider accepts any
+path, so the bench never caught it. Fix (pairs with open-astro/openastro-guider#77, which adds
+`GET /api/capture/<filename>` to the daemon's HTTP server): capture with `save:true` and NO path,
+take the daemon-local filename from `SingleFrameComplete`, download the FITS over the daemon's
+HTTP port into the work dir, then solve as today. Keep failed-download = one failed solve; add a
+distinct `capture_rejected` error reason so capture faults stop masquerading as sky problems; and
+teach FakeGuider to serve capture files so the bench covers the retrieval path.
+
 ## §63.6 guider-e-4 — dark-library push (2026-06-12)
 **Shipped:** e-4a — named-object RPC request classes (`PHD2Methods.DarkLibrary.cs`): `build_dark_library`
 (`frame_count` 1..50 def 5, optional `min/max_exposure_ms`, `clear_existing`, optional `notes`, `load_after`

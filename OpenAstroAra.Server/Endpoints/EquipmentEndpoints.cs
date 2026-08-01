@@ -410,6 +410,12 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetEquipmentChoicesAsync(ct);
             return Results.Ok(new GuiderEquipmentChoicesResponseDto(Connected: dto is not null, Choices: dto));
         });
+        // §63.20 pixel-size autofill for the setup wizard: read the guide camera's sensor pixel size
+        // straight from its Alpaca driver via the daemon. Always 200 with a {connected, pixel_size}
+        // envelope (same polling contract as /choices); pixel_size null = couldn't read it — the client
+        // falls back to manual entry, never an error state.
+        guider.MapGet("/camerapixelsize", async (string? host, int? port, int? device, IGuiderService svc, CancellationToken ct) =>
+            Results.Ok(await svc.GetAlpacaCameraPixelSizeAsync(host, port, device, ct)));
         // §63.17 daemon-side Alpaca discovery — deliberately synchronous (a picker-button action, not a §60.5
         // 202 background job): the combined sweep is capped server-side at 60 s (PHD2Guider.
         // DiscoverMaxSweepSeconds), so the request always answers well inside common client HTTP timeouts.

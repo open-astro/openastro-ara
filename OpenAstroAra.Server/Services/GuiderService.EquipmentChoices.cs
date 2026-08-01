@@ -55,6 +55,30 @@ public sealed partial class GuiderService {
             Rotators: choices.Rotator ?? []);
     }
 
+    /// <summary>§63.20 — read a camera's sensor pixel size from its Alpaca driver via the daemon. Same
+    /// disconnected contract as the choices read: null when no guider is connected AND null when the daemon
+    /// can't reach the camera / reports no usable size — this is a best-effort picker assist (the wizard's
+    /// pixel-size autofill), never worth a 4xx/5xx that would break the camera step.</summary>
+    public async Task<GuiderCameraPixelSizeResponseDto> GetAlpacaCameraPixelSizeAsync(
+            string? host, int? port, int? deviceNumber, CancellationToken ct) {
+        PHD2Guider? guider;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            guider = _state == EquipmentConnectionState.Connected ? _guider : null;
+        }
+        if (guider is null) {
+            return new GuiderCameraPixelSizeResponseDto(Connected: false, PixelSize: null);
+        }
+        try {
+            var size = await guider.GetAlpacaCameraPixelSizeAsync(host, port, deviceNumber, ct).ConfigureAwait(false);
+            return new GuiderCameraPixelSizeResponseDto(Connected: true, PixelSize: size);
+        } catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or GuiderRpcException) {
+            // Connected but the driver couldn't say (or a disconnect raced the read) — the wizard falls
+            // back to manual entry; never an error status.
+            return new GuiderCameraPixelSizeResponseDto(Connected: true, PixelSize: null);
+        }
+    }
+
     /// <summary>§63.17 — daemon-side Alpaca discovery. Unlike the choices read this is an explicit user action,
     /// so a disconnected guider is an error (409 via InvalidOperationException), a bad range is a 400
     /// (ArgumentOutOfRangeException, validated before the socket), and a daemon rejection is a 422

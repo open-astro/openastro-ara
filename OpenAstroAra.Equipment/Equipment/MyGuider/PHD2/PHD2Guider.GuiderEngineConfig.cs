@@ -109,6 +109,23 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        /// <summary>§63.20 — the <c>[host:port/N]</c> endpoint a daemon Alpaca choice string embeds
+        /// (e.g. <c>"Alpaca Camera [rc91.lan:6800/1]"</c>), or null for non-Alpaca / unset selections.
+        /// Pure — unit-testable; mirrors the client wizard's parser.</summary>
+        public static (string Host, int Port, int Device)? ParseAlpacaSelectionEndpoint(string? selection) {
+            if (string.IsNullOrWhiteSpace(selection)) {
+                return null;
+            }
+            var m = System.Text.RegularExpressions.Regex.Match(
+                selection, @"\[([^\[\]:]+):(\d+)/(\d+)\]\s*$");
+            if (!m.Success
+                || !int.TryParse(m.Groups[2].Value, out var port) || port is < 1 or > 65535
+                || !int.TryParse(m.Groups[3].Value, out var device)) {
+                return null;
+            }
+            return (m.Groups[1].Value, port, device);
+        }
+
         /// <summary>
         /// Pure mapping from <see cref="IGuiderSettings"/> to the ordered PHD2 setter messages. Focal length /
         /// pixel size are only pushed when configured (&gt; 0). Aggressiveness is sent as the 0..1 fraction
@@ -123,11 +140,32 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // (same sentinel convention as the numeric 0s below); values are the daemon's choice strings
             // verbatim. All of these are blocked while equipment is connected, so they ride the same
             // disconnected window as set_profile_setup (see RequiresDisconnectedEquipment).
-            if (!string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost) || guider.GuiderAlpacaPort > 0) {
+            //
+            // §63.20 — the daemon offers exactly ONE Alpaca choice per slot, generated from ITS stored
+            // /alpaca/{host,port,*_device} config. So a selection naming a different server or device
+            // number (the wizard's cross-server pickers, e.g. a guide camera on AlpacaBridge) can only
+            // land if set_alpaca_server retargets that config FIRST — then the daemon's regenerated
+            // choice string matches the selection exactly. The [host:port/N] suffix embedded in the
+            // selection strings carries everything needed: the camera's endpoint wins for host/port
+            // (guiding is camera-centric; the daemon has a single Alpaca server), and each slot
+            // contributes its own device number when it lives on that same server.
+            var cameraEp = ParseAlpacaSelectionEndpoint(guider.GuiderCamera);
+            var mountEp = ParseAlpacaSelectionEndpoint(guider.GuiderMount);
+            var rotatorEp = ParseAlpacaSelectionEndpoint(guider.GuiderRotator);
+            var host = cameraEp?.Host
+                ?? (string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost) ? null : guider.GuiderAlpacaHost.Trim());
+            var port = cameraEp?.Port ?? (guider.GuiderAlpacaPort > 0 ? guider.GuiderAlpacaPort : (int?) null);
+            static int? DeviceOn((string Host, int Port, int Device)? ep, string? host, int? port) =>
+                ep is { } e && string.Equals(e.Host, host, StringComparison.OrdinalIgnoreCase) && e.Port == port
+                    ? e.Device : null;
+            if (host is not null || port is not null) {
                 messages.Add(new Phd2SetAlpacaServer {
                     Parameters = new Phd2SetAlpacaServerParameter {
-                        Host = string.IsNullOrWhiteSpace(guider.GuiderAlpacaHost) ? null : guider.GuiderAlpacaHost.Trim(),
-                        Port = guider.GuiderAlpacaPort > 0 ? guider.GuiderAlpacaPort : null,
+                        Host = host,
+                        Port = port,
+                        CameraDevice = DeviceOn(cameraEp, host, port),
+                        TelescopeDevice = DeviceOn(mountEp, host, port),
+                        RotatorDevice = DeviceOn(rotatorEp, host, port),
                     },
                 });
             }
@@ -210,6 +248,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
             }
+            // §63.4 — land the push in the ARA profile's TWIN, not whatever profile the daemon happens
+            // to be sitting on (a web-UI switch or a fresh daemon selects some other profile, and a push
+            // there silently configures the wrong rig). Same select-or-create-or-migrate as the connect
+            // path; best-effort like there — a profile RPC fault must not fail the push itself. The
+            // profile list is refreshed first so the ensure decides against current daemon state.
+            try {
+                await GetProfiles();
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Logger.Warning($"PHD2 §63.4 - profile refresh before push failed (ensure decides on a stale list): {ex.Message}");
+            }
+            await EnsureAraGuiderProfileAsync(ct);
             var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings)
                 .Select(m => m.Method).Distinct().ToList();
             await PushGuiderEngineConfigAsync(ct);
