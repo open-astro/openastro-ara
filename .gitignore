@@ -81,6 +81,10 @@ WiX/
 **/MGEN/
 **/nikoncswrapper/
 **/Setup/
+# The NINA-era **/Setup/ rule above (installer artifacts) also matches the
+# client's state/setup dirs on case-insensitive filesystems — un-ignore them.
+!client/openastroara_client/lib/state/setup/
+!client/openastroara_client/test/state/setup/
 
 # === Local-only reference docs (not tracked) ===
 design/AlpacaDeviceAPI_v1.yaml

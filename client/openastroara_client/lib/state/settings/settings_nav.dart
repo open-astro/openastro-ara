@@ -9,19 +9,21 @@ import '../app_shell_state.dart';
 /// The app-shell tab index of the **Options** (Settings) tab. Named rather
 /// than a bare literal so a tab reorder is a one-line change (the command
 /// palette uses the same index, app_shell.dart).
-const int kOptionsTabIndex = 3;
+const int kOptionsTabIndex = 4;
 
 /// The app-shell tab index of the **Run** (sequencer) tab — used by every
 /// "...and jump to the Run tab" flow (Planning's create-run, the calibration
 /// screen's generated sequences). Guarded by the same app_shell assert as
 /// [kOptionsTabIndex] so a rail reorder can't silently strand these jumps.
-const int kRunTabIndex = 1;
+const int kRunTabIndex = 2;
 
-/// The app-shell tab indices of the **Planning** and **Live** tabs — added
-/// with the §61.10 palette navigation entries and guarded by the same
-/// app_shell asserts, so every tab constant fails loudly on a rail reorder.
+/// The app-shell tab indices of the **Planning**, **Setup** and **Live** tabs
+/// — guarded by the same app_shell asserts, so every tab constant fails
+/// loudly on a rail reorder. Setup landed with the §25 flow redesign (the
+/// rail reads as the night: Plan → Setup → Run → Live → Options).
 const int kPlanningTabIndex = 0;
-const int kLiveTabIndex = 2;
+const int kSetupTabIndex = 1;
+const int kLiveTabIndex = 3;
 
 /// Jump straight to the settings panel [panelId] (a [settingsTree] id):
 /// selects it and brings the Options tab forward — the same navigation the

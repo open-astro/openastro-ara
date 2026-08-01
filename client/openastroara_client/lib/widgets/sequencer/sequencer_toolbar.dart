@@ -8,6 +8,9 @@ import '../../services/sequence_api.dart';
 import '../../state/sequencer/draft_sequences_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/app_shell_state.dart';
+import '../../state/settings/settings_nav.dart' show kSetupTabIndex;
+import '../../state/setup/setup_readiness.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_delete.dart';
 import 'sequence_export.dart';
@@ -191,8 +194,7 @@ class SequencerToolbar extends ConsumerWidget {
                           // §38.10 — resuming offers the pointing/focus
                           // refinement choice before imaging continues.
                           ? promptAndResumeSequence(context, ref)
-                          : runSequenceLifecycle(
-                              context, ref, (api, id) => api.start(id))
+                          : preflightAndRunSequence(context, ref)
                       : null,
                 ),
                 _LifecycleButton(
@@ -240,6 +242,57 @@ class SequencerToolbar extends ConsumerWidget {
     );
   }
 }
+
+/// Start the selected sequence, with the soft pre-flight gate (§25 flow
+/// redesign): when polar alignment hasn't reached the green zone this
+/// session, confirm before starting — the gate SUGGESTS, it never blocks
+/// (planning-only rigs, permanent piers and daytime tests all run fine
+/// unaligned). "Go to Setup" jumps to the checklist instead. Public: the
+/// tab's keyboard shortcuts drive the same path as the Run button.
+Future<void> preflightAndRunSequence(BuildContext context, WidgetRef ref) async {
+  final aligned =
+      ref.read(setupPolarAlignStateProvider) == SetupStepState.done;
+  if (!aligned) {
+    final choice = await showDialog<_PreflightChoice>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AraColors.bgPanel,
+        title: const Text('Not polar aligned — run anyway?'),
+        content: const Text(
+            'Polar alignment hasn\'t been completed this session. On a '
+            'freshly set up mount, unguided pointing and field rotation will '
+            'suffer. If the mount is already aligned (permanent pier), just '
+            'run.'),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_PreflightChoice.cancel),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_PreflightChoice.goToSetup),
+            child: const Text('Go to Setup'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_PreflightChoice.runAnyway),
+            child: const Text('Run anyway'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || choice == _PreflightChoice.cancel) return;
+    if (choice == _PreflightChoice.goToSetup) {
+      ref.read(selectedTabIndexProvider.notifier).select(kSetupTabIndex);
+      return;
+    }
+    if (!context.mounted) return;
+  }
+  await runSequenceLifecycle(context, ref, (api, id) => api.start(id));
+}
+
+enum _PreflightChoice { cancel, goToSetup, runAnyway }
 
 /// Run a lifecycle transition on the selected sequence, surface a transport
 /// failure as a SnackBar, then re-read the run state so the buttons re-gate.

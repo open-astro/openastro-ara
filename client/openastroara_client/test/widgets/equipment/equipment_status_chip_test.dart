@@ -144,6 +144,6 @@ void main() {
     await tester.pump();
 
     expect(container.read(selectedSettingsPanelProvider), 'eq.camera');
-    expect(container.read(selectedTabIndexProvider), 3); // Options tab
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
   });
 }

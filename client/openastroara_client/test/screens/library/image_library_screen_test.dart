@@ -9,6 +9,7 @@ import 'package:openastroara/widgets/library/bulk_action_bar.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
 
 class _FakeLibraryClient implements LibraryClient {
   final List<LibrarySession> sessions;
@@ -258,7 +259,7 @@ void main() {
 
     expect(fake.resumedSessionId, 'sess-1');
     expect(container.read(selectedSequenceIdProvider), 'seq-resume-1');
-    expect(container.read(selectedTabIndexProvider), 1);
+    expect(container.read(selectedTabIndexProvider), kRunTabIndex);
   });
 
   testWidgets('12f.3: the filter pill narrows frame strips; search hides sessions',
