@@ -15,7 +15,6 @@ import '../../widgets/imaging/fault_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_panel.dart';
 import '../../widgets/imaging/histogram_strip.dart';
-import '../../widgets/imaging/polar_align_panel.dart';
 import '../../widgets/imaging/solve_panel.dart';
 import '../../widgets/status_indicator.dart';
 import '../../theme/ara_colors.dart';
@@ -39,7 +38,7 @@ class ImagingTab extends ConsumerWidget {
             children: [
               Expanded(
                 // The panel stack scrolls inside a bounded box (≤60% of the column) instead of
-                // overflowing: any expanded tall panel (Guiding, Polar Align, …) previously blew
+                // overflowing: any expanded tall panel (Guiding, …) previously blew
                 // the RenderFlex at non-fullscreen window sizes. The frame viewer keeps the rest.
                 child: LayoutBuilder(
                   builder: (context, box) => Column(
@@ -55,7 +54,6 @@ class ImagingTab extends ConsumerWidget {
                               SolvePanel(),
                               DiagnosticPanel(),
                               GuidingPanel(),
-                              PolarAlignPanel(),
                               FaultPanel(),
                             ],
                           ),

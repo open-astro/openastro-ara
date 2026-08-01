@@ -297,7 +297,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     // the toolbar button (one path, one dialog).
     unawaited(isPaused
         ? promptAndResumeSequence(context, ref)
-        : runSequenceLifecycle(context, ref, (api, id) => api.start(id)));
+        : preflightAndRunSequence(context, ref));
   }
 
   /// Space — Pause while running, Resume while paused; anything else no-ops

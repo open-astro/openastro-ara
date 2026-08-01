@@ -205,6 +205,8 @@ public sealed class PlaceholderGuiderService : IGuiderService {
     // faulted-task not-connected contract (→ 409 at the endpoint), same as the enable toggles above.
     public Task<GuiderEquipmentChoicesDto?> GetEquipmentChoicesAsync(CancellationToken ct) =>
         Task.FromResult<GuiderEquipmentChoicesDto?>(null);
+    public Task<GuiderCameraPixelSizeResponseDto> GetAlpacaCameraPixelSizeAsync(string? host, int? port, int? deviceNumber, CancellationToken ct) =>
+        Task.FromResult(new GuiderCameraPixelSizeResponseDto(Connected: false, PixelSize: null));
     public Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct) =>
         Task.FromException<GuiderAlpacaDiscoveryDto>(new InvalidOperationException("guider is not connected"));
     // Restart never needs a connected guider — the placeholder just accepts (there is no unit to kick).

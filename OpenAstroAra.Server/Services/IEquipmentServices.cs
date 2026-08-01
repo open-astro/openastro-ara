@@ -172,6 +172,11 @@ public interface IGuiderService {
     /// rotator device names). Returns null when no guider is connected.</summary>
     Task<GuiderEquipmentChoicesDto?> GetEquipmentChoicesAsync(CancellationToken ct);
 
+    /// <summary>§63.20 — read a camera's sensor pixel size (µm) from its Alpaca driver via the daemon.
+    /// Null when no guider is connected OR the camera is unreachable / reports no usable size (best-effort
+    /// picker assist). Omitted params fall back to the daemon profile's stored Alpaca camera.</summary>
+    Task<GuiderCameraPixelSizeResponseDto> GetAlpacaCameraPixelSizeAsync(string? host, int? port, int? deviceNumber, CancellationToken ct);
+
     /// <summary>§63.17 — daemon-side Alpaca network discovery (blocking for roughly queries × timeout).
     /// Throws ArgumentOutOfRangeException on out-of-range parameters (→ 400), InvalidOperationException when
     /// disconnected (→ 409), and GuiderRpcException when the daemon rejects the sweep (→ 422, e.g. a build

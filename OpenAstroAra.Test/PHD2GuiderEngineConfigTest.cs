@@ -174,6 +174,64 @@ namespace OpenAstroAra.Test {
             Assert.That(setup.Parameters.PixelSize, Is.EqualTo(3.8));
         }
 
+        // ── §63.20: cross-server Alpaca retargeting from the selection strings ──
+
+        [Test]
+        public void ParseAlpacaSelectionEndpoint_reads_the_suffix_or_returns_null() {
+            Assert.That(PHD2Guider.ParseAlpacaSelectionEndpoint("Alpaca Camera [rc91.lan:6800/1]"),
+                Is.EqualTo(("rc91.lan", 6800, 1)));
+            Assert.That(PHD2Guider.ParseAlpacaSelectionEndpoint("Alpaca Mount [192.168.1.20:11111/0]  "),
+                Is.EqualTo(("192.168.1.20", 11111, 0)));
+            Assert.That(PHD2Guider.ParseAlpacaSelectionEndpoint("None"), Is.Null);
+            Assert.That(PHD2Guider.ParseAlpacaSelectionEndpoint(null), Is.Null);
+            Assert.That(PHD2Guider.ParseAlpacaSelectionEndpoint("Weird [h:0/0]"), Is.Null);
+        }
+
+        [Test]
+        public void Build_retargets_the_alpaca_server_from_the_camera_selection() {
+            // The camera lives on a DIFFERENT server (AlpacaBridge) than the stored alpaca host — the
+            // camera's endpoint wins, and only same-server slots contribute device numbers.
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [bridge.local:11111/2]");
+            s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount [rc91.lan:6800/0]");
+            s.SetupGet(x => x.GuiderRotator).Returns("Alpaca Rotator [bridge.local:11111/0]");
+            s.SetupGet(x => x.GuiderAlpacaHost).Returns("rc91.lan");
+            s.SetupGet(x => x.GuiderAlpacaPort).Returns(6800);
+            var alpaca = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object)
+                .OfType<Phd2SetAlpacaServer>().Single().Parameters!;
+            Assert.That(alpaca.Host, Is.EqualTo("bridge.local"));
+            Assert.That(alpaca.Port, Is.EqualTo(11111));
+            Assert.That(alpaca.CameraDevice, Is.EqualTo(2));
+            Assert.That(alpaca.RotatorDevice, Is.EqualTo(0), "same server as the camera → device rides along");
+            Assert.That(alpaca.TelescopeDevice, Is.Null, "mount is on a different server — its device must not be sent");
+        }
+
+        [Test]
+        public void Build_falls_back_to_the_stored_alpaca_host_for_generic_selections() {
+            // Pre-§63.20 selections have no [host:port/N] suffix — host/port come from the stored
+            // settings and no device numbers are pushed (the daemon keeps its own).
+            var alpaca = PHD2Guider.BuildGuiderEngineConfigMessages(SettingsWithSelections())
+                .OfType<Phd2SetAlpacaServer>().Single().Parameters!;
+            Assert.That(alpaca.Host, Is.EqualTo("192.168.1.20"));
+            Assert.That(alpaca.Port, Is.EqualTo(11111));
+            Assert.That(alpaca.CameraDevice, Is.Null);
+            Assert.That(alpaca.TelescopeDevice, Is.Null);
+            Assert.That(alpaca.RotatorDevice, Is.Null);
+        }
+
+        [Test]
+        public void Build_suffixed_selections_carry_devices_on_the_stored_server() {
+            var s = new Mock<IGuiderSettings>();
+            s.SetupGet(x => x.GuiderCamera).Returns("Alpaca Camera [rc91.lan:6800/1]");
+            s.SetupGet(x => x.GuiderMount).Returns("Alpaca Mount [rc91.lan:6800/0]");
+            var alpaca = PHD2Guider.BuildGuiderEngineConfigMessages(s.Object)
+                .OfType<Phd2SetAlpacaServer>().Single().Parameters!;
+            Assert.That(alpaca.Host, Is.EqualTo("rc91.lan"));
+            Assert.That(alpaca.Port, Is.EqualTo(6800));
+            Assert.That(alpaca.CameraDevice, Is.EqualTo(1));
+            Assert.That(alpaca.TelescopeDevice, Is.EqualTo(0));
+        }
+
         [Test]
         [TestCase("auto", "Auto")]
         [TestCase("north", "North")]

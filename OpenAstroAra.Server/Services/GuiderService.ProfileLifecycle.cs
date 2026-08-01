@@ -55,23 +55,34 @@ public sealed partial class GuiderService {
         lock (_gate) {
             guider = !_disposed && _state == EquipmentConnectionState.Connected ? _guider : null;
         }
-        var name = PHD2Guider.AraGuiderProfileName(araProfileName, araProfileId);
+        // The twin may exist under the display name (current scheme) or the legacy
+        // ara-<slug>-<id8> name (created before the rename migration, or never migrated
+        // because the guider hasn't reconnected since) — try both; either hit is success.
+        // Display names aren't unique across ARA profiles: identically-named profiles
+        // SHARE a twin by design (AraGuiderDisplayProfileName remarks), so deleting one
+        // of them takes the shared twin with it — the next connect of the survivor
+        // recreates it.
+        var name = PHD2Guider.AraGuiderDisplayProfileName(araProfileName);
+        var legacyName = PHD2Guider.AraGuiderProfileName(araProfileName, araProfileId);
         if (guider is null) {
             LogGuiderProfileDeleteSkipped(name);
             return false;
         }
-        if (IsTwinSelectedOnDaemon(name, guider.SelectedProfile?.Name)) {
-            // The daemon would reject this delete outright (see remarks) — skip with a
-            // distinct, diagnosable message instead of burning an RPC on a known refusal.
-            LogGuiderProfileDeleteRefusedSelected(name);
-            return false;
+        var deleted = false;
+        foreach (var candidate in new[] { name, legacyName }) {
+            if (IsTwinSelectedOnDaemon(candidate, guider.SelectedProfile?.Name)) {
+                // The daemon would reject this delete outright (see remarks) — skip with a
+                // distinct, diagnosable message instead of burning an RPC on a known refusal.
+                LogGuiderProfileDeleteRefusedSelected(candidate);
+                continue;
+            }
+            try {
+                deleted |= await guider.DeleteGuiderProfileAsync(candidate, ct).ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogGuiderProfileDeleteFailed(ex, candidate);
+            }
         }
-        try {
-            return await guider.DeleteGuiderProfileAsync(name, ct).ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogGuiderProfileDeleteFailed(ex, name);
-            return false;
-        }
+        return deleted;
     }
 
     /// <summary>The selected-twin guard, pure for tests: PHD2 profile names are exact

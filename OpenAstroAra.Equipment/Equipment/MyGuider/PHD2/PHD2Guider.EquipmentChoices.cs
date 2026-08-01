@@ -62,6 +62,33 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return response.result;
         }
 
+        /// <summary>§63.20 — read a camera's sensor pixel size (µm) from its Alpaca driver via the daemon
+        /// (<c>get_alpaca_camera_pixelsize</c>). Omitted params fall back to the daemon profile's stored
+        /// Alpaca camera. Requires a connected guider; throws <see cref="GuiderRpcException"/> when the
+        /// daemon can't reach the camera or the driver reports no usable size.</summary>
+        public async Task<double> GetAlpacaCameraPixelSizeAsync(
+                string? host, int? port, int? deviceNumber, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var response = await SendMessage<Phd2GetAlpacaCameraPixelSizeResponse>(
+                new Phd2GetAlpacaCameraPixelSize {
+                    Parameters = new Phd2GetAlpacaCameraPixelSizeParameter {
+                        Host = host,
+                        Port = port,
+                        DeviceNumber = deviceNumber,
+                    },
+                });
+            if (response.error != null) {
+                throw new GuiderRpcException("get_alpaca_camera_pixelsize", response.error.code, response.error.message);
+            }
+            if (response.result is null || response.result.PixelSize <= 0) {
+                throw new GuiderRpcException("get_alpaca_camera_pixelsize", 0, "missing or non-positive pixel_size");
+            }
+            return response.result.PixelSize;
+        }
+
         /// <summary>
         /// Validates the §63.17 discovery parameters at the send site and builds the wire request — surfaced
         /// before the socket so the caller gets a clear <see cref="ArgumentOutOfRangeException"/> rather than the

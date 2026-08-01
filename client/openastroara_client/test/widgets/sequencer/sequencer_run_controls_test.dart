@@ -5,6 +5,8 @@ import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/models/polar_align.dart';
+import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 
@@ -280,6 +282,32 @@ void main() {
       // and may be off the test viewport, so a hit-test tap is unreliable).
       btn(tester, 'Run').onPressed!();
       await tester.pumpAndSettle();
+      // §25 flow redesign: no polar alignment this session → the soft
+      // pre-flight confirm appears first. It suggests, never blocks.
+      expect(find.text('Not polar aligned — run anyway?'), findsOneWidget);
+      await tester.tap(find.text('Run anyway'));
+      await tester.pumpAndSettle();
+      final fake = container.read(sequenceApiProvider) as _FakeClient;
+      expect(fake.calls, contains('start'));
+    });
+
+    testWidgets('an aligned session starts without the pre-flight confirm',
+        (tester) async {
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      btn(tester, 'Run').onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.text('Not polar aligned — run anyway?'), findsNothing);
       final fake = container.read(sequenceApiProvider) as _FakeClient;
       expect(fake.calls, contains('start'));
     });
@@ -298,6 +326,8 @@ void main() {
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       btn(tester, 'Run').onPressed!(); // start() throws FormatException
+      await tester.pumpAndSettle(); // pre-flight confirm (unaligned session)
+      await tester.tap(find.text('Run anyway'));
       await tester.pump(); // flush the async handler's microtasks
       await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
       expect(find.text('Sequence command failed.'), findsOneWidget);
@@ -384,4 +414,11 @@ void main() {
       expect(client.calls, isNot(contains('resume')));
     });
   });
+}
+
+/// Green-zone live view — satisfies the pre-flight gate.
+class _AlignedLiveNotifier extends PolarAlignLiveNotifier {
+  @override
+  PolarAlignLive build() => const PolarAlignLive(
+      phase: PolarAlignStates.stopped, zone: 'green', totalErrorArcmin: 0.5);
 }

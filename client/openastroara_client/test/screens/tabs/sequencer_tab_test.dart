@@ -292,11 +292,17 @@ void main() {
       return (container, client);
     }
 
-    testWidgets('meta-R starts an idle sequence', (tester) async {
+    testWidgets('meta-R starts an idle sequence (through the pre-flight)',
+        (tester) async {
       final (_, client) = await pumpWithRun(tester, SequenceRunState.idle);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+      // §25 flow redesign: with no polar alignment this session, the soft
+      // pre-flight confirm intercepts the start — it suggests, never blocks.
+      expect(find.text('Not polar aligned — run anyway?'), findsOneWidget);
+      await tester.tap(find.text('Run anyway'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(client.calls, contains('start'));

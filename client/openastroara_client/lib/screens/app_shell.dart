@@ -24,13 +24,15 @@ import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
 import 'tabs/planning_tab.dart';
 import 'tabs/sequencer_tab.dart';
+import 'tabs/setup_tab.dart';
 import 'wizard/wizard_shell.dart';
 
 /// Main app shell — replaces the first-run screen once a server is saved
 /// (playbook §25 layout: nav rail on left, top equipment bar, center
-/// workspace, bottom status). Per-area content lives in the 4 tab widgets, in
-/// workflow order: Planning (find + frame the target) → Run (build + run the
-/// sequence) → Live (capture / live view) → Options. Support (§54 logs +
+/// workspace, bottom status). Per-area content lives in the 5 tab widgets, in
+/// workflow order — the rail reads as the night: Planning (find + frame the
+/// target) → Setup (the dusk ritual: connect, polar align, calibration) →
+/// Run (build + run the sequence) → Live (capture / live view) → Options. Support (§54 logs +
 /// bug report) folds into the Options settings tree rather than being its own
 /// destination. (Planning merges the old Sky Atlas + Framing tabs,
 /// PORT_DECISIONS §36/§25.5.)
@@ -46,6 +48,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   static const _tabs = <_TabSpec>[
     _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
+    _TabSpec(icon: Icons.checklist, label: 'Setup', body: SetupTab()),
     _TabSpec(
       icon: Icons.play_circle_outline,
       label: 'Run',
@@ -95,6 +98,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     assert(
       _tabs[kPlanningTabIndex].label == 'Planning',
       'kPlanningTabIndex must point at the Planning tab — update it if _tabs is reordered.',
+    );
+    assert(
+      _tabs[kSetupTabIndex].label == 'Setup',
+      'kSetupTabIndex must point at the Setup tab — update it if _tabs is reordered.',
     );
     assert(
       _tabs[kLiveTabIndex].label == 'Live',

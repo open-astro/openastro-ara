@@ -8,6 +8,7 @@ import 'package:openastroara/services/calibration_api.dart';
 import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/calibration/calibration_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
 
 class _FakeCalibrationClient implements CalibrationClient {
   final List<CalibrationSession> sessions;
@@ -119,7 +120,7 @@ void main() {
     expect(fake.flatsFrameCount, 20, reason: 'the dialog default');
     expect(container.read(selectedSequenceIdProvider), 'seq-flats-1',
         reason: 'the generated sequence is selected for the Run tab');
-    expect(container.read(selectedTabIndexProvider), 1,
+    expect(container.read(selectedTabIndexProvider), kRunTabIndex,
         reason: 'the shell switches to the Run tab');
   });
 
@@ -167,7 +168,7 @@ void main() {
     await tester.tap(find.text('Open build sequence'));
     await tester.pumpAndSettle();
     expect(container.read(selectedSequenceIdProvider), 'seq-darks-1');
-    expect(container.read(selectedTabIndexProvider), 1);
+    expect(container.read(selectedTabIndexProvider), kRunTabIndex);
   });
 
   testWidgets('the dark build form submits the parsed matrix', (tester) async {

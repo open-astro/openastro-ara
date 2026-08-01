@@ -5,13 +5,14 @@ import '../ws/ws_providers.dart';
 import 'guider_calibration_state.dart';
 
 /// §63.6 `guider.*` calibration-build WS event tokens (mirrors
-/// `GuiderService.DarkLibrary` on the server). The daemon's builds are blocking
-/// RPCs with NO granular progress — the stream is started/complete/failed only,
-/// so the UI shows an indeterminate "building" state, not a percentage.
+/// `GuiderService.DarkLibrary` on the server). §63.8 added granular
+/// `.progress` ticks (the server polls the daemon's get_dark_build_progress
+/// once a second during a build), so a build can drive a real progress bar.
 abstract final class GuiderBuildWsEvents {
   static const darkLibraryPrefix = 'guider.dark_library.';
   static const defectMapPrefix = 'guider.defect_map.';
   static const started = 'started';
+  static const progress = 'progress';
   static const complete = 'complete';
   static const failed = 'failed';
 
@@ -29,11 +30,40 @@ enum CalibrationArtifact { darkLibrary, defectMap }
 enum CalibrationBuildPhase { building, complete, failed }
 
 /// One artifact's most recent build activity. [error] is set only for
-/// [CalibrationBuildPhase.failed] (the daemon's `error` payload field).
+/// [CalibrationBuildPhase.failed]; the §63.8 progress fields are set while
+/// building once the first `.progress` tick arrives (null before — the bar
+/// shows indeterminate until then).
 class CalibrationBuildActivity {
   final CalibrationBuildPhase phase;
   final String? error;
-  const CalibrationBuildActivity({required this.phase, this.error});
+
+  // §63.8 progress (1-based exposure index; frame counts within the exposure).
+  final int? exposureIndex;
+  final int? exposureCount;
+  final int? exposureMs;
+  final int? frame;
+  final int? frameCount;
+
+  const CalibrationBuildActivity({
+    required this.phase,
+    this.error,
+    this.exposureIndex,
+    this.exposureCount,
+    this.exposureMs,
+    this.frame,
+    this.frameCount,
+  });
+
+  /// Overall build fraction 0..1 from the progress fields, or null when no
+  /// tick has arrived yet (drive an indeterminate bar). Completed exposures
+  /// count fully; the current exposure contributes its completed frames.
+  double? get fraction {
+    final ei = exposureIndex, ec = exposureCount, f = frame, fc = frameCount;
+    if (ei == null || ec == null || f == null || fc == null) return null;
+    if (ec <= 0 || fc <= 0) return null;
+    final done = (ei - 1) * fc + f;
+    return (done / (ec * fc)).clamp(0.0, 1.0);
+  }
 }
 
 /// Pure fold of one WS event into the per-artifact build-activity map.
@@ -54,10 +84,24 @@ Map<CalibrationArtifact, CalibrationBuildActivity>? foldGuiderBuildEvent(
   } else {
     return null;
   }
+  int? readInt(String key) => (event.payload[key] as num?)?.toInt();
   final CalibrationBuildPhase phase;
   switch (phaseToken) {
     case GuiderBuildWsEvents.started:
       phase = CalibrationBuildPhase.building;
+    case GuiderBuildWsEvents.progress:
+      // §63.8 tick — building, with the granular position for the bar.
+      return {
+        ...current,
+        artifact: CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.building,
+          exposureIndex: readInt('exposure_index'),
+          exposureCount: readInt('exposure_count'),
+          exposureMs: readInt('exposure_ms'),
+          frame: readInt('frame'),
+          frameCount: readInt('frame_count'),
+        ),
+      };
     case GuiderBuildWsEvents.complete:
       phase = CalibrationBuildPhase.complete;
     case GuiderBuildWsEvents.failed:

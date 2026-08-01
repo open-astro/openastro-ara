@@ -11,6 +11,7 @@ import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/phd2_settings_state.dart';
 import '../../../util/guide_optics.dart';
 import '../../../util/host_port.dart';
+import '../../../widgets/guider/guider_setup_wizard.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../widgets/settings/editable_field.dart';
@@ -538,19 +539,31 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       ),
       Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            onPressed:
-                (_applying || !connected) ? null : () => _applyToGuider(),
-            icon: _applying
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.send, size: 18),
-            label: const Text('Apply to guider'),
-          ),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilledButton.icon(
+              onPressed:
+                  (_applying || !connected) ? null : () => _applyToGuider(),
+              icon: _applying
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.send, size: 18),
+              label: const Text('Apply to guider'),
+            ),
+            // The step-by-step alternative to this panel — connection →
+            // camera → optics → mount → apply → darks, PHD2-wizard style.
+            TextButton.icon(
+              onPressed:
+                  _applying ? null : () => showGuiderSetupWizard(context),
+              icon: const Icon(Icons.auto_fix_high, size: 16),
+              label: const Text('Setup wizard…'),
+            ),
+          ],
         ),
       ),
       if (_equipmentStatus != null)

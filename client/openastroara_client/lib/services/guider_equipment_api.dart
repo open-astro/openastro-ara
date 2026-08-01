@@ -10,6 +10,16 @@ abstract interface class GuiderEquipmentClient {
   Future<GuiderEquipmentChoicesResponse> getChoices();
   Future<List<String>> discoverAlpaca({int? numQueries, int? timeoutSeconds});
   Future<void> pushProfile();
+
+  /// §63.20 — the camera's sensor pixel size (µm) read from its Alpaca driver
+  /// via the daemon, or null when it couldn't be read (disconnected guider,
+  /// unreachable camera, driver reports no size). Best-effort — callers fall
+  /// back to manual entry.
+  Future<double?> getAlpacaCameraPixelSize({
+    String? host,
+    int? port,
+    int? device,
+  });
   void close();
 }
 
@@ -69,6 +79,25 @@ class GuiderEquipmentApi implements GuiderEquipmentClient {
   @override
   Future<void> pushProfile() async {
     await _dio.post<void>('/api/v1/equipment/guider/profile/push');
+  }
+
+  @override
+  Future<double?> getAlpacaCameraPixelSize({
+    String? host,
+    int? port,
+    int? device,
+  }) async {
+    final res = await _dio.get<dynamic>(
+      '/api/v1/equipment/guider/camerapixelsize',
+      queryParameters: <String, dynamic>{
+        'host': ?host,
+        'port': ?port,
+        'device': ?device,
+      },
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) return null;
+    return (data['pixel_size'] as num?)?.toDouble();
   }
 
   @override

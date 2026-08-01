@@ -61,6 +61,26 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     /// <summary>
+    /// <c>rename_profile {id, new_name}</c> — rename an existing PHD2 profile in place (result <c>0</c>);
+    /// its tuning, calibration and dark library ride along. The daemon rejects the rename while any
+    /// equipment is connected and when <c>new_name</c> already exists (case-insensitive) — the §63.4
+    /// legacy-twin migration sends it inside the connect path's disconnected window, after resolving
+    /// that the target name is absent.
+    /// </summary>
+    public class Phd2RenameProfile : Phd2Method<Phd2RenameProfileParameter> {
+        public override string Method => "rename_profile";
+    }
+
+    public class Phd2RenameProfileParameter {
+
+        [JsonProperty(PropertyName = "id")]
+        public int Id { get; set; }
+
+        [JsonProperty(PropertyName = "new_name")]
+        public string NewName { get; set; } = string.Empty;
+    }
+
+    /// <summary>
     /// <c>delete_profile {name, delete_dark_files}</c> — remove a PHD2 profile by name (result <c>0</c>).
     /// The §63.4 delete hook fires this when its ARA profile is deleted, with
     /// <c>delete_dark_files=true</c> per the playbook table so the orphaned rig's dark library and defect

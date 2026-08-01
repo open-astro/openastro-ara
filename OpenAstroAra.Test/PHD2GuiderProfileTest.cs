@@ -69,8 +69,10 @@ namespace OpenAstroAra.Test {
         // ── §63.4 guider-e-3c: the id-suffixed, collision-free name + the connect-time selection decision ──
 
         private static readonly System.Guid RigId = System.Guid.Parse("a3f8e1c2-1111-2222-3333-444455556666");
-        // The name the resolver targets for "Rig" + RigId (derived, not hardcoded, so the test tracks the format).
-        private static string RigName => PHD2Guider.AraGuiderProfileName("Rig", RigId);
+        // The resolver now targets the ARA profile's DISPLAY name verbatim; the legacy
+        // id-suffixed form is kept only for migration matching.
+        private static string RigName => PHD2Guider.AraGuiderDisplayProfileName("Rig");
+        private static string RigLegacyName => PHD2Guider.AraGuiderProfileName("Rig", RigId);
 
         private static System.Collections.Generic.List<Phd2Profile> Profiles(params (int id, string name)[] ps) {
             var list = new System.Collections.Generic.List<Phd2Profile>();
@@ -134,9 +136,67 @@ namespace OpenAstroAra.Test {
         public void Resolve_creates_ara_profile_when_absent() {
             var r = PHD2Guider.ResolveAraProfileSelection(
                 overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "RedCat on HEQ5",
-                activeAraProfileId: RigId, availableProfiles: Profiles((1, "Default")));
+                activeAraProfileId: RigId, availableProfiles: Profiles((1, "Some other rig")));
             Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.Create));
-            Assert.That(r.Name, Is.EqualTo(PHD2Guider.AraGuiderProfileName("RedCat on HEQ5", RigId)));
+            // The twin carries the ARA profile name verbatim — what the user reads in the guider UI.
+            Assert.That(r.Name, Is.EqualTo("RedCat on HEQ5"));
+        }
+
+        // ── display-name mapping + legacy migration ──
+
+        [Test]
+        public void Display_name_is_verbatim_with_a_fallback_for_empty() {
+            Assert.That(PHD2Guider.AraGuiderDisplayProfileName("Backyard RC8"), Is.EqualTo("Backyard RC8"));
+            Assert.That(PHD2Guider.AraGuiderDisplayProfileName("  padded  "), Is.EqualTo("padded"));
+            Assert.That(PHD2Guider.AraGuiderDisplayProfileName(null), Is.EqualTo("Ara Default"));
+            Assert.That(PHD2Guider.AraGuiderDisplayProfileName("   "), Is.EqualTo("Ara Default"));
+        }
+
+        [Test]
+        public void Resolve_matches_the_display_twin_case_insensitively() {
+            // The daemon's own name checks are case-insensitive (rename/create CmpNoCase), so the
+            // resolver must treat "rig" as an existing "Rig" twin instead of trying to create it.
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "RIG",
+                activeAraProfileId: RigId, availableProfiles: Profiles((1, "Default"), (2, "rig")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectByName));
+            Assert.That(r.Id, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Resolve_migrates_a_legacy_twin_by_rename() {
+            // No display-name twin, but the id-suffixed legacy twin exists → rename it in place
+            // (dark library rides along) instead of creating an empty duplicate.
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "Rig",
+                activeAraProfileId: RigId, availableProfiles: Profiles((1, "Default"), (5, RigLegacyName)));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.RenameLegacy));
+            Assert.That(r.Id, Is.EqualTo(5), "the legacy twin's daemon id, for rename_profile {id}");
+            Assert.That(r.Name, Is.EqualTo("Rig"), "the new display name");
+        }
+
+        [Test]
+        public void Legacy_matching_follows_the_id_suffix_not_the_slug() {
+            // The twin was created when the ARA profile was named differently — the slug part no
+            // longer matches, but the id8 suffix does, so the migration still finds it.
+            var oldName = PHD2Guider.AraGuiderProfileName("Old Rig Name", RigId);
+            Assert.That(PHD2Guider.IsLegacyAraGuiderProfileName(oldName, RigId), Is.True);
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "Renamed Rig",
+                activeAraProfileId: RigId, availableProfiles: Profiles((1, "Default"), (9, oldName)));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.RenameLegacy));
+            Assert.That(r.Id, Is.EqualTo(9));
+            Assert.That(r.Name, Is.EqualTo("Renamed Rig"));
+        }
+
+        [Test]
+        public void Legacy_matching_rejects_other_profiles_twins_and_non_ara_names() {
+            var other = System.Guid.Parse("cccccccc-0000-0000-0000-000000000000");
+            Assert.That(PHD2Guider.IsLegacyAraGuiderProfileName(
+                PHD2Guider.AraGuiderProfileName("Rig", other), RigId), Is.False,
+                "a different ARA profile's twin must not be renamed away from it");
+            Assert.That(PHD2Guider.IsLegacyAraGuiderProfileName("My Handmade Profile", RigId), Is.False);
+            Assert.That(PHD2Guider.IsLegacyAraGuiderProfileName(null, RigId), Is.False);
         }
     }
 }

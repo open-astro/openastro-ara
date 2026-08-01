@@ -20,6 +20,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Guider;
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -182,17 +183,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Deleting_an_ara_profile_deletes_its_guider_twin_with_dark_files() {
-            // §63.4 delete hook — the service maps the deleted ARA profile to its
-            // ara-<slug>-<id8> twin and fires delete_profile with delete_dark_files=true.
+        public async Task Twin_profile_is_named_after_the_repository_profile_not_the_legacy_store() {
+            // §63.4 — the Equipment layer's legacy store is always named "Default"; the twin must
+            // carry the MULTI-PROFILE repository's active name (what the user called their rig).
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
-            string? deletedName = null;
+            string? createdName = null;
+            fake.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            fake.OnRpc("get_profiles", _ => new JsonArray(new JsonObject { ["id"] = 1, ["name"] = "My Equipment" }));
+            fake.OnRpc("create_profile", req => {
+                createdName = req["params"]?["name"]?.GetValue<string>();
+                return new JsonObject { ["id"] = 5, ["name"] = createdName, ["selected"] = true };
+            });
+            var araId = Guid.NewGuid();
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                araProfileResolver: () => (araId, "RC91 - Backyard"));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.Not.Null, "the guider never reached Connected against the fake");
+            Assert.That(await WaitUntilAsync(() => createdName != null).ConfigureAwait(false), Is.True,
+                "connect never created the twin profile");
+            Assert.That(createdName, Is.EqualTo("RC91 - Backyard"),
+                "the twin carries the repository profile's display name, not the legacy 'Default'");
+        }
+
+        [Test]
+        public async Task Deleting_an_ara_profile_deletes_its_guider_twin_with_dark_files() {
+            // §63.4 delete hook — the service tries the twin under BOTH the display name
+            // (current scheme) and the legacy ara-<slug>-<id8> name, dark files included.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            var deletedNames = new List<string?>();
             bool? darkFiles = null;
             // The factory receives the WHOLE JSON-RPC request; params sit under "params".
             fake.OnRpc("delete_profile", req => {
                 var p = req["params"]?.AsObject();
-                deletedName = p?["name"]?.GetValue<string>();
+                deletedNames.Add(p?["name"]?.GetValue<string>());
                 darkFiles = p?["delete_dark_files"]?.GetValue<bool>();
                 return JsonValue.Create(0);
             });
@@ -208,8 +236,10 @@ namespace OpenAstroAra.Test {
                 .ConfigureAwait(false);
 
             Assert.That(ok, Is.True, "the fake accepted the delete, so the hook reports success");
-            Assert.That(deletedName, Is.EqualTo(PHD2Guider.AraGuiderProfileName("Old Rig C8", profileId)),
-                "the twin's id-suffixed name — the same one the connect path creates");
+            Assert.That(deletedNames, Does.Contain("Old Rig C8"),
+                "the display-name twin — the same one the connect path now creates");
+            Assert.That(deletedNames, Does.Contain(PHD2Guider.AraGuiderProfileName("Old Rig C8", profileId)),
+                "the legacy id-suffixed twin is swept too (pre-migration daemons)");
             Assert.That(darkFiles, Is.True, "§63.4: the twin's dark library goes with it");
         }
 
@@ -312,6 +342,48 @@ namespace OpenAstroAra.Test {
                 .ConfigureAwait(false);
             Assert.That(discovery.Servers, Is.EqualTo(ExpectedDiscoveredServers));
             Assert.That(fake.ReceivedMethods, Does.Contain("discover_alpaca_servers"));
+        }
+
+        [Test]
+        public async Task Alpaca_camera_pixel_size_reads_through_the_fake_with_params() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            JsonNode? seenParams = null;
+            // §63.20 — the daemon reads pixelsizex/y from the Alpaca driver and answers {pixel_size, ...}.
+            fake.OnRpc("get_alpaca_camera_pixelsize", req => {
+                seenParams = req["params"]?.DeepClone();
+                return new JsonObject { ["pixel_size"] = 2.9 };
+            });
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            var dto = await svc.GetAlpacaCameraPixelSizeAsync("rc91.lan", 6800, 1, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(dto.Connected, Is.True);
+            Assert.That(dto.PixelSize, Is.EqualTo(2.9).Within(1e-9));
+            Assert.That(seenParams?["host"]?.GetValue<string>(), Is.EqualTo("rc91.lan"));
+            Assert.That(seenParams?["port"]?.GetValue<int>(), Is.EqualTo(6800));
+            Assert.That(seenParams?["device_number"]?.GetValue<int>(), Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task Alpaca_camera_pixel_size_read_failure_is_a_null_not_an_error() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_alpaca_camera_pixelsize", _ => throw new InvalidOperationException("simulated daemon rejection"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            var dto = await svc.GetAlpacaCameraPixelSizeAsync(null, null, null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(dto.Connected, Is.True, "the guider link is up even though the read failed");
+            Assert.That(dto.PixelSize, Is.Null, "best-effort assist: failure maps to null, never a throw");
         }
 
         [Test]

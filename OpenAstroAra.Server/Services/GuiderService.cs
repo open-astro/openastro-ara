@@ -83,7 +83,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null,
             IProfileStore? profileStore = null, Func<ISequencerService?>? sequencerResolver = null,
             INotificationService? notifications = null, IFaultLogService? faultLog = null,
-            Func<Guid?>? activeProfileIdResolver = null) {
+            Func<Guid?>? activeProfileIdResolver = null,
+            Func<(Guid Id, string? Name)?>? araProfileResolver = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -94,7 +95,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         _notifications = notifications;
         _faultLog = faultLog;
         _activeProfileIdResolver = activeProfileIdResolver;
+        _araProfileResolver = araProfileResolver;
     }
+
+    // §63.4 — active ARA profile identity (id + display name) from the multi-profile repository,
+    // consumed by PHD2Guider's twin-profile mapping. Null in benches/tests → legacy-store fallback.
+    private readonly Func<(Guid Id, string? Name)?>? _araProfileResolver;
 
     // §30.7.4 — resolves the multi-profile repository's ActiveId so the calibration-state stamp can
     // detect a profile switch during a long build (POST /profiles/{id}/select swaps the live store
@@ -167,6 +173,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (request.Port is { } port) settings.PHD2ServerPort = port;
             DisposeGuiderLocked();
             guider = new PHD2Guider(_profileService);
+            // §63.4 — the guider twin is named after the ARA profile from the MULTI-PROFILE repository
+            // (what the user sees as their profile, e.g. "RC91 - Backyard"), not the Equipment layer's
+            // legacy single-profile store (whose name is a constant "Default"). Null resolver (benches)
+            // → the guider falls back to the legacy store.
+            guider.AraProfileResolver = _araProfileResolver;
             // Observe a mid-session socket drop: PHD2Guider raises PHD2ConnectionLost from its
             // listener's finally when the link dies. Without this, _state would stay Connected
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
