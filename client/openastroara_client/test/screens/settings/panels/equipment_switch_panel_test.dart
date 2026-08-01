@@ -23,6 +23,7 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeSwitchApi implements SwitchClient {
+  final removed = <String>[];
   _FakeSwitchApi(this.devices);
   List<SwitchDevice> devices;
   final List<String> calls = [];
@@ -36,6 +37,9 @@ class _FakeSwitchApi implements SwitchClient {
 
   @override
   Future<void> disconnect(String deviceId) async => calls.add('disconnect:$deviceId');
+
+  @override
+  Future<void> remove(String deviceId) async => removed.add(deviceId);
   @override
   Future<void> setValue({required String deviceId, required int portId, required double value}) async =>
       calls.add('setValue:$deviceId:$portId=$value');
@@ -179,5 +183,39 @@ void main() {
     await tester.tap(find.byIcon(Icons.link_off));
     await tester.pumpAndSettle();
     expect(api.calls, contains('disconnect:sw-0'));
+  });
+
+  testWidgets('a disconnected switch shows Remove; confirm calls the API',
+      (tester) async {
+    final client = await _pump(tester, [
+      const SwitchDevice(
+        deviceId: 'dead-1',
+        alpacaDeviceNumber: 1,
+        name: 'ZWO Dew Heater',
+        connectionState: SwitchConnectionState.disconnected,
+        ports: [],
+      ),
+    ]);
+    expect(find.byTooltip('Remove this switch'), findsOneWidget);
+    await tester.tap(find.byTooltip('Remove this switch'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove ZWO Dew Heater?'), findsOneWidget);
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+    expect(client.removed, contains('dead-1'));
+  });
+
+  testWidgets('a connected switch offers no Remove (disconnect first)',
+      (tester) async {
+    await _pump(tester, [
+      const SwitchDevice(
+        deviceId: 'live-1',
+        alpacaDeviceNumber: 0,
+        name: 'Hub',
+        connectionState: SwitchConnectionState.connected,
+        ports: [],
+      ),
+    ]);
+    expect(find.byTooltip('Remove this switch'), findsNothing);
   });
 }

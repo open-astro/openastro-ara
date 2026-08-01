@@ -140,6 +140,10 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
   Future<bool> disconnect(String deviceId) =>
       _act((api) => api.disconnect(deviceId));
 
+  /// Remove a stuck (non-connected) switch from the server's known list and
+  /// its remembered auto-connect entry. Returns whether the call was performed.
+  Future<bool> remove(String deviceId) => _act((api) => api.remove(deviceId));
+
   /// Reconnect every switch the daemon remembers (no re-discovery). Throws a 404
   /// when nothing has been connected yet. Returns whether the call was performed.
   Future<bool> reconnectAll() => _act((api) => api.reconnect());

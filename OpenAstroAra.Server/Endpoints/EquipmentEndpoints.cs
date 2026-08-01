@@ -320,6 +320,21 @@ public static class EquipmentEndpoints {
         // device id is a no-op 202, not a 404.
         sw.MapPost("/{id}/disconnect", async (string id, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(id, key, ct)));
+        // Remove a stuck/dead switch from the known list AND its remembered auto-connect entry —
+        // the stuck-device escape hatch. A Connected switch is refused (409): disconnect first, so a
+        // removal on live hardware is always an explicit two-step. Unknown id → 404 (idempotent
+        // clients treat it as already-gone).
+        sw.MapDelete("/{id}", async (string id, ISwitchService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) => {
+            try {
+                if (!await svc.RemoveAsync(id, ct)) {
+                    return Results.NotFound();
+                }
+            } catch (System.InvalidOperationException ex) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+            await selectionStore.ForgetSwitchAsync(id, ct);
+            return Results.NoContent();
+        });
         // A write needs a live switch, so the errors map (per the file's convention): an out-of-range
         // PortId → 400; no connected switch at {id} (unknown id or not Connected) → 409 Conflict —
         // instead of an opaque 500.
