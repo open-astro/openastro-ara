@@ -12,7 +12,9 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Stretch;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -43,6 +45,145 @@ public sealed record FrameExportPrep(
     IReadOnlyList<(string Path, string EntryName)> Entries,
     string FileName);
 
+public enum PreviewChannelMode {
+    Rgb,
+    Luminance,
+    Red,
+    Green,
+    Blue,
+}
+
+public sealed record PreviewCacheOptions(
+    long MaxBytes = 512L * 1024 * 1024,
+    int MaxEntries = 2048,
+    int MaxVariantsPerFrame = 12,
+    int MaxDimension = 4096) {
+
+    public void Validate() {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxEntries);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxVariantsPerFrame);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxDimension);
+    }
+}
+
+public sealed record PreviewRenderRequest(
+    Guid FrameId,
+    string SourcePath,
+    string? SourceChecksumSha256,
+    StretchAlgorithm Algorithm,
+    StretchParams Parameters,
+    int MaxDimension,
+    bool ApplyDebayer,
+    PreviewChannelMode ChannelMode,
+    bool Invert,
+    double Saturation,
+    int? CropX,
+    int? CropY,
+    int? CropWidth,
+    int? CropHeight,
+    bool AnnotateStars = false,
+    StarAnnotationOptions? AnnotationOptions = null,
+    double StarSensitivity = 8.0,
+    int StarNoiseReduction = 0);
+
+public sealed record PreviewCacheMetadata(
+    int SchemaVersion,
+    Guid FrameId,
+    string SourceChecksumSha256,
+    string CacheKey,
+    int Width,
+    int Height,
+    string Algorithm,
+    StretchParams AppliedParameters,
+    string DebayerMode,
+    string ChannelMode,
+    bool Inverted,
+    double Saturation,
+    DateTimeOffset CreatedUtc,
+    bool Annotated = false,
+    int AnnotationCount = 0,
+    int RejectedAnnotationCount = 0,
+    string? AnnotationColor = null,
+    bool AnnotationLabels = false);
+
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1819:Properties should not return arrays",
+    Justification = "The encoded preview buffer transfers directly to the HTTP response without another full-image copy.")]
+public readonly record struct FramePreviewResult(
+    byte[] Bytes,
+    string ContentType,
+    PreviewCacheMetadata Metadata,
+    bool CacheHit);
+
+/// <summary>Versioned, durable star-analysis measurement for one source frame.</summary>
+public sealed record FrameAnalysisMeasurement(
+    double Hfr,
+    int StarCount,
+    double? Eccentricity,
+    double? SnrEstimate,
+    string AnalysisVersion);
+
+public interface IPreviewImageService {
+    Task<FramePreviewResult> RenderAsync(PreviewRenderRequest request, CancellationToken ct);
+
+    Task DeleteFrameEntriesAsync(Guid frameId, CancellationToken ct);
+}
+
+/// <summary>
+/// Durable capture/storage lifecycle. Terminal states are <see cref="Complete"/>,
+/// <see cref="Failed"/>, and <see cref="Partial"/>. Partial means recoverable
+/// bytes may remain on disk and require startup reconciliation or operator review.
+/// </summary>
+public enum FrameStorageState {
+    Accepted,
+    Exposing,
+    Downloading,
+    Persisting,
+    Complete,
+    Failed,
+    Partial,
+}
+
+/// <summary>Information known before camera work starts.</summary>
+public sealed record FrameStorageAttempt(
+    Guid FrameId,
+    Guid SessionId,
+    DateTimeOffset AcceptedUtc,
+    string TemporaryPath,
+    string FinalPath,
+    string ImageFormat);
+
+/// <summary>Integrity information measured from the committed source file.</summary>
+public sealed record FrameStorageCompletion(
+    long ByteCount,
+    string ChecksumSha256,
+    DateTimeOffset CompletedUtc,
+    string ImageFormat,
+    string? CfaPattern);
+
+/// <summary>Safe, persisted failure information. Do not put exception dumps in Message.</summary>
+public sealed record FrameStorageFailure(
+    string Code,
+    string Message,
+    DateTimeOffset FailedUtc);
+
+/// <summary>Durable storage ledger row used by recovery and diagnostics.</summary>
+public sealed record FrameStorageRecord(
+    Guid FrameId,
+    Guid SessionId,
+    DateTimeOffset AcceptedUtc,
+    DateTimeOffset? CompletedUtc,
+    string? TemporaryPath,
+    string FinalPath,
+    long? ByteCount,
+    string? ChecksumSha256,
+    string ImageFormat,
+    string? CfaPattern,
+    FrameStorageState State,
+    string? FailureCode,
+    string? FailureMessage,
+    DateTimeOffset UpdatedUtc);
+
 public interface IFrameRepository {
     /// <summary>
     /// §14e capture write-path: inserts a newly captured frame row (the camera service writes the
@@ -50,12 +191,33 @@ public interface IFrameRepository {
     /// </summary>
     Task InsertAsync(FrameDto frame, CancellationToken ct);
 
+    /// <summary>Create the durable ledger row before camera work starts.</summary>
+    Task BeginStorageAsync(FrameStorageAttempt attempt, CancellationToken ct);
+
     /// <summary>
-    /// §59.5 post-capture star-analysis write-back: stamps the frame's measured HFR + star
-    /// count (computed off the capture path, after registration) and broadcasts
+    /// Advance a non-terminal lifecycle state. Repeating the same state is idempotent;
+    /// backward transitions and transitions out of terminal states are rejected.
+    /// </summary>
+    Task AdvanceStorageAsync(Guid frameId, FrameStorageState state, CancellationToken ct);
+
+    /// <summary>
+    /// Insert the frame row and mark its lifecycle Complete in one SQLite transaction.
+    /// The source checksum is stored in both the frame catalog and lifecycle ledger.
+    /// </summary>
+    Task CompleteStorageAsync(FrameDto frame, FrameStorageCompletion completion, CancellationToken ct);
+
+    /// <summary>Persist a safe failure code/message without deleting recoverable bytes.</summary>
+    Task FailStorageAsync(Guid frameId, FrameStorageFailure failure, CancellationToken ct);
+
+    /// <summary>Read lifecycle state even when no completed frame row exists.</summary>
+    Task<FrameStorageRecord?> GetStorageAsync(Guid frameId, CancellationToken ct);
+
+    /// <summary>
+    /// §59.5 post-capture star-analysis write-back: stamps versioned HFR, star count,
+    /// eccentricity, and SNR measurements (computed off the capture path) and broadcasts
     /// <c>frame.analyzed</c>. A frame deleted between capture and analysis is a silent no-op.
     /// </summary>
-    Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, CancellationToken ct);
+    Task UpdateAnalysisAsync(Guid frameId, FrameAnalysisMeasurement measurement, CancellationToken ct);
 
     /// <summary>
     /// §14e — id of the lazily-created "manual capture" session that REST-initiated exposures
@@ -80,7 +242,7 @@ public interface IFrameRepository {
 
     Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct);
     Task<FrameDto?> GetAsync(Guid id, CancellationToken ct);
-    Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct);
+    Task<FramePreviewResult?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct);
     Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct);
     Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct);
 

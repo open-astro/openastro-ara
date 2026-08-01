@@ -102,6 +102,7 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 eccentricity       REAL,
                 guiding_rms_arcsec REAL,
                 snr_estimate       REAL,
+                analysis_version   TEXT,
                 quality_score_json TEXT,
                 rating             INTEGER NOT NULL DEFAULT 0,
                 tags_json          TEXT NOT NULL DEFAULT '[]',
@@ -115,10 +116,37 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // earlier build is brought forward with an idempotent ADD COLUMN. (v0.0.1
         // ships no migrations runner — this is the sanctioned additive-column path.)
         await AddColumnIfMissingAsync(conn, "frames", "focuser_position", "INTEGER", ct);
-        // §44.6 backup stream: sync bookkeeping + the lazily-cached content hash.
-        await AddColumnIfMissingAsync(conn, "frames", "sync_target", "TEXT", ct);
-        await AddColumnIfMissingAsync(conn, "frames", "synced_at", "TEXT", ct);
-        await AddColumnIfMissingAsync(conn, "frames", "sha256", "TEXT", ct);
+        // Rank 1 / storage-integrity slice: capture attempts must remain explainable
+        // even when no completed frame row exists. No FK to frames by design: failed
+        // and interrupted attempts have a frame id but never enter the completed catalog.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS frame_storage_lifecycle (
+                frame_id          TEXT PRIMARY KEY NOT NULL,
+                session_id        TEXT NOT NULL REFERENCES sessions(id),
+                accepted_utc      TEXT NOT NULL,
+                completed_utc     TEXT,
+                temporary_path    TEXT,
+                final_path        TEXT NOT NULL,
+                byte_count        INTEGER,
+                checksum_sha256   TEXT,
+                image_format      TEXT NOT NULL,
+                cfa_pattern       TEXT,
+                state             TEXT NOT NULL CHECK (state IN
+                    ('accepted', 'exposing', 'downloading', 'persisting',
+                     'complete', 'failed', 'partial')),
+                failure_code      TEXT,
+                failure_message   TEXT,
+                updated_utc       TEXT NOT NULL,
+                CHECK (byte_count IS NULL OR byte_count >= 0),
+                CHECK (checksum_sha256 IS NULL OR length(checksum_sha256) = 64),
+                CHECK (failure_code IS NULL OR length(failure_code) <= 64),
+                CHECK (failure_message IS NULL OR length(failure_message) <= 512)
+            );
+            """, ct);
+        await ExecAsync(conn,
+            "CREATE INDEX IF NOT EXISTS idx_frame_storage_state_updated ON frame_storage_lifecycle(state, updated_utc);", ct);
+        await ExecAsync(conn,
+            "CREATE INDEX IF NOT EXISTS idx_frame_storage_final_path ON frame_storage_lifecycle(final_path);", ct);
 
         // §28 widening pass (pre-§40): sub-second calibration exposures need
         // exposure_seconds REAL (they rounded up to 1s as INTEGER), and gain must
@@ -138,11 +166,34 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // introduces the schema_version table (the #670 review commitment) so
         // future passes key on a version, not a DDL sniff.
         await MigrateTemperatureNullableAsync(conn, ct);
+
+        // §44.6 backup stream: sync bookkeeping + source hash. These MUST run
+        // after both frames-table rebuild migrations; otherwise DROP/RENAME of
+        // the widened table removes columns added immediately before the rebuild.
+        await AddColumnIfMissingAsync(conn, "frames", "sync_target", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "synced_at", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "sha256", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_version", "TEXT", ct);
+
         await ExecAsync(conn, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);", ct);
         await ExecAsync(conn, """
             INSERT INTO schema_version (version)
-            SELECT 4 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
-            UPDATE schema_version SET version = 4 WHERE version < 4;
+            SELECT 6 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+            UPDATE schema_version SET version = 6 WHERE version < 6;
+            """, ct);
+
+        // Existing completed frames predate the lifecycle ledger. Backfill once,
+        // preserving the lazily-computed backup-stream checksum when present.
+        await ExecAsync(conn, """
+            INSERT OR IGNORE INTO frame_storage_lifecycle
+                (frame_id, session_id, accepted_utc, completed_utc,
+                 temporary_path, final_path, byte_count, checksum_sha256,
+                 image_format, cfa_pattern, state, failure_code,
+                 failure_message, updated_utc)
+            SELECT id, session_id, captured_utc, captured_utc,
+                   NULL, file_path, file_size_bytes, sha256,
+                   'fits', NULL, 'complete', NULL, NULL, captured_utc
+            FROM frames;
             """, ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);

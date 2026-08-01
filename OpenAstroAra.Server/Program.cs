@@ -99,11 +99,9 @@ public partial class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
-        // §28 SqliteFrameRepository — reads frames from the catalog with
-        // sample data seeded on first init. Bulk ops still return placeholder
-        // Accepted responses; next sub-PR makes them actually mutate. Preview
-        // + thumbnail still serve the 1×1 JPEG placeholder until §65 lands;
-        // OpenDownloadAsync returns null until §72 FITS storage lands.
+        // §28 SqliteFrameRepository — reads and mutates the catalog, exports
+        // original sources, and renders FITS previews/thumbnails. Rank 1
+        // lifecycle state guards capture registration.
         builder.Services.AddSingleton<IFrameRepository, SqliteFrameRepository>();
         // §28 SqliteSessionService — sessions from the catalog with derived
         // fields (target name, frame counts, filters) aggregated from the
@@ -800,6 +798,16 @@ public partial class Program {
             new StoreBackedProfileService(
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StoreBackedProfileService>>()));
+        // Rank 1 source pipeline — one headless, bounded, signature-detected FITS/XISF
+        // factory backs previews, thumbnails, and plate-solver image loading.
+        builder.Services.AddSingleton<SourceImageDataFactory>();
+        builder.Services.AddSingleton<ISourceImageDataFactory>(sp =>
+            sp.GetRequiredService<SourceImageDataFactory>());
+        builder.Services.AddSingleton<OpenAstroAra.Image.Interfaces.IImageDataFactory>(sp =>
+            sp.GetRequiredService<SourceImageDataFactory>());
+        builder.Services.AddSingleton<OpenAstroAra.Image.ImageAnalysis.IStarAnnotator,
+            OpenAstroAra.Image.ImageAnalysis.StarAnnotator>();
+        builder.Services.AddSingleton<IPreviewImageService, PreviewImageService>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
             HeadlessSequencerFactory.WithDefaults(
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(),

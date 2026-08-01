@@ -93,6 +93,56 @@ public class StretcherTests {
         Assert.InRange((int)output[1], 45, 90);
     }
 
+    [Fact]
+    public void Detailed_auto_stf_returns_exact_reusable_parameters() {
+        var pixels = new ushort[10000];
+        for (var i = 0; i < 9980; i++) pixels[i] = (ushort)(i % 2 == 0 ? 8000 : 12000);
+        for (var i = 9980; i < pixels.Length; i++) pixels[i] = 60000;
+
+        var detailed = Stretcher.ApplyDetailed(StretchAlgorithm.AutoStf, pixels);
+        var replay = Stretcher.ApplyResolved(StretchAlgorithm.AutoStf, pixels,
+            detailed.AppliedParameters);
+
+        Assert.Equal(detailed.Pixels, replay);
+        Assert.InRange(detailed.AppliedParameters.Blackpoint, 0, 12000 / 65535.0);
+        Assert.InRange(detailed.AppliedParameters.Midpoint,
+            detailed.AppliedParameters.Blackpoint, detailed.AppliedParameters.Whitepoint);
+        Assert.InRange(detailed.AppliedParameters.Whitepoint, 0.9, 1.0);
+    }
+
+    [Fact]
+    public void Detailed_linear_returns_measured_clip_points() {
+        var pixels = Gradient(101);
+        var detailed = Stretcher.ApplyDetailed(StretchAlgorithm.Linear, pixels,
+            new StretchParams(LinearClipLow: 0.1, LinearClipHigh: 0.9));
+
+        Assert.InRange(detailed.AppliedParameters.Blackpoint, 0.09, 0.11);
+        Assert.InRange(detailed.AppliedParameters.Whitepoint, 0.89, 0.91);
+        Assert.Equal((byte)0, detailed.Pixels[0]);
+        Assert.Equal((byte)255, detailed.Pixels[^1]);
+    }
+
+    [Fact]
+    public void Invalid_linear_percentile_order_is_rejected() {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            Stretcher.Apply(StretchAlgorithm.Linear, new ushort[] { 0, 1 },
+                new StretchParams(LinearClipLow: 0.9, LinearClipHigh: 0.1)));
+        Assert.Contains("low < high", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData((ushort)0)]
+    [InlineData(ushort.MaxValue)]
+    public void Detailed_auto_stf_handles_flat_extreme_frames(ushort value) {
+        var pixels = Enumerable.Repeat(value, 256).ToArray();
+        var result = Stretcher.ApplyDetailed(StretchAlgorithm.AutoStf, pixels);
+
+        Assert.Equal(pixels.Length, result.Pixels.Length);
+        Assert.InRange(result.AppliedParameters.Blackpoint, 0, 1);
+        Assert.InRange(result.AppliedParameters.Whitepoint, 0, 1);
+        Assert.True(result.AppliedParameters.Whitepoint > result.AppliedParameters.Blackpoint);
+    }
+
     [Theory]
     [InlineData(0.5, 110, 145)]  // brighter background target → median near mid-grey
     [InlineData(0.1, 15, 40)]    // dimmer target → median near 0.1·255 ≈ 26

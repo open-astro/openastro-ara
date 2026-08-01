@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Endpoints;
+using OpenAstroAra.Server.Services;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -130,6 +131,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FrameDto))]
 [JsonSerializable(typeof(FrameListItemDto))]
 [JsonSerializable(typeof(FramePreviewRequestDto))]
+[JsonSerializable(typeof(PreviewCacheMetadata))]
 [JsonSerializable(typeof(FrameQualityBucketDto))]
 [JsonSerializable(typeof(GeneratedFlatSequenceDto))]
 [JsonSerializable(typeof(GeneratedFlatStepDto))]

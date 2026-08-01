@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.Globalization;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -50,15 +51,19 @@ public static class ImageEndpoints {
               .ProducesProblem(StatusCodes.Status404NotFound)
               .WithName("GetFrame");
 
-        // Wired to IFrameRepository. SqliteFrameRepository returns a 1×1
-        // JPEG placeholder for now; §65 stretch pipeline replaces it with
-        // a real OpenCvSharp4 render from the captured FITS.
-        frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request, IFrameRepository repo, CancellationToken ct) => {
-            var result = await repo.GetPreviewAsync(id, request, ct);
-            return result is null
-                ? Results.NotFound()
-                : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
-        })
+        // Real FITS preview renderer with profile/default or request-specific
+        // stretch, debayer, dimension cap, and on-disk variant cache.
+        frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request,
+                HttpContext http, IFrameRepository repo, CancellationToken ct) => {
+                    try {
+                        var result = await repo.GetPreviewAsync(id, request, ct);
+                        if (result is null) return Results.NotFound();
+                        return PreviewResponse(http, result.Value);
+                    } catch (ArgumentException ex) {
+                        return Results.Problem(statusCode: StatusCodes.Status400BadRequest,
+                            title: "Invalid preview request", detail: ex.Message);
+                    }
+                })
             .Accepts<FramePreviewRequestDto>("application/json")
             .Produces<byte[]>(StatusCodes.Status200OK, "image/jpeg")
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -345,5 +350,47 @@ public static class ImageEndpoints {
               .WithName("AckBackupStreamFrame");
 
         return app;
+    }
+
+    private static IResult PreviewResponse(HttpContext http, FramePreviewResult preview) {
+        var etag = $"\"{preview.Metadata.CacheKey}\"";
+        if (http.Request.Headers.IfNoneMatch.Any(value =>
+                string.Equals(value, etag, StringComparison.Ordinal))) {
+            return Results.StatusCode(StatusCodes.Status304NotModified);
+        }
+        http.Response.Headers.ETag = etag;
+        http.Response.Headers.CacheControl = "private, no-cache";
+        http.Response.Headers["X-OpenAstro-Preview-Width"] =
+            preview.Metadata.Width.ToString(CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Preview-Height"] =
+            preview.Metadata.Height.ToString(CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Preview-Cache"] = preview.CacheHit ? "hit" : "miss";
+        http.Response.Headers["X-OpenAstro-Stretch"] = preview.Metadata.Algorithm;
+        http.Response.Headers["X-OpenAstro-Black-Point"] =
+            preview.Metadata.AppliedParameters.Blackpoint.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Mid-Point"] =
+            preview.Metadata.AppliedParameters.Midpoint.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-White-Point"] =
+            preview.Metadata.AppliedParameters.Whitepoint.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Asinh-Beta"] =
+            preview.Metadata.AppliedParameters.Beta.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Clip-Low"] =
+            preview.Metadata.AppliedParameters.LinearClipLow.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Clip-High"] =
+            preview.Metadata.AppliedParameters.LinearClipHigh.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Debayer"] = preview.Metadata.DebayerMode;
+        http.Response.Headers["X-OpenAstro-Channel"] = preview.Metadata.ChannelMode;
+        http.Response.Headers["X-OpenAstro-Inverted"] = preview.Metadata.Inverted ? "true" : "false";
+        http.Response.Headers["X-OpenAstro-Saturation"] =
+            preview.Metadata.Saturation.ToString("R", CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Annotated"] = preview.Metadata.Annotated ? "true" : "false";
+        http.Response.Headers["X-OpenAstro-Annotation-Count"] =
+            preview.Metadata.AnnotationCount.ToString(CultureInfo.InvariantCulture);
+        http.Response.Headers["X-OpenAstro-Annotation-Rejected"] =
+            preview.Metadata.RejectedAnnotationCount.ToString(CultureInfo.InvariantCulture);
+        if (preview.Metadata.AnnotationColor is { } annotationColor) {
+            http.Response.Headers["X-OpenAstro-Annotation-Color"] = annotationColor;
+        }
+        return Results.Bytes(preview.Bytes, preview.ContentType);
     }
 }

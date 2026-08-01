@@ -69,7 +69,8 @@ public sealed record FrameDto(
     IReadOnlyList<string> Tags,
     // §38: focuser step position at capture (for the §50.4 focus-vs-temperature
     // view). Optional + last so existing constructions stay source-compatible.
-    int? FocuserPosition = null);
+    int? FocuserPosition = null,
+    string? AnalysisVersion = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(
@@ -100,7 +101,26 @@ public sealed record FramePreviewRequestDto(
     double? MidtonePoint,
     double? WhitePoint,
     int? MaxDimensionPx,
-    bool ApplyDebayer);
+    bool ApplyDebayer,
+    string? ChannelMode = null,
+    bool Invert = false,
+    double? Saturation = null,
+    double? AsinhBeta = null,
+    double? LinearClipLow = null,
+    double? LinearClipHigh = null,
+    int? CropX = null,
+    int? CropY = null,
+    int? CropWidth = null,
+    int? CropHeight = null,
+    bool AnnotateStars = false,
+    string? AnnotationColor = null,
+    double? AnnotationStrokeWidth = null,
+    double? AnnotationFontSize = null,
+    string? AnnotationFontFamily = null,
+    bool ShowAnnotationLabels = false,
+    int? MaxAnnotatedStars = null,
+    double? StarSensitivity = null,
+    int? StarNoiseReduction = null);
 
 /// <summary>Session — full detail.</summary>
 public sealed record SessionDto(

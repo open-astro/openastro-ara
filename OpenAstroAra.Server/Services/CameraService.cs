@@ -24,12 +24,13 @@ using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
-using System.Threading.Channels;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
@@ -351,12 +352,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catch-classify-rethrow boundary: any device/driver exception during expose/download is published as the §42.2 op_error fault and rethrown unchanged to the caller's existing boundary; genuine cancellation is filtered first. CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadAsync(
-            AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+            AlpacaCamera client, Guid frameId, ExposureRequestDto request,
+            Func<CancellationToken, Task>? onDownloadStarting, CancellationToken ct) {
         // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
         // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
         ct.ThrowIfCancellationRequested();
         try {
-            return await ExposeAndDownloadCoreAsync(client, frameId, request, ct).ConfigureAwait(false);
+            return await ExposeAndDownloadCoreAsync(client, frameId, request, onDownloadStarting, ct).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine caller cancellation — not a device fault
         } catch (Exception ex) {
@@ -367,7 +369,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     }
 
     private async Task<(ushort[] Pixels, int Width, int Height, DateTimeOffset CapturedAt)?> ExposeAndDownloadCoreAsync(
-            AlpacaCamera client, Guid frameId, ExposureRequestDto request, CancellationToken ct) {
+            AlpacaCamera client, Guid frameId, ExposureRequestDto request,
+            Func<CancellationToken, Task>? onDownloadStarting, CancellationToken ct) {
         ApplyExposureSettings(client, request);
         // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
@@ -404,6 +407,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // finished image, nothing to stop. REST passes CancellationToken.None, so this is inert there.
         ct.ThrowIfCancellationRequested();
 
+        if (onDownloadStarting is not null) {
+            await onDownloadStarting(ct).ConfigureAwait(false);
+        }
+
         // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
         object? imageArray;
         Interlocked.Exchange(ref _downloading, 1);
@@ -424,8 +431,19 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// exposure best-effort and propagates. Returns true only when the frame landed in the catalog.
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
+        Justification = "Capture lifecycle boundary: arbitrary camera/disk/catalog failures are classified into a safe persisted code, while the original exception is logged/rethrown. Failure-ledger persistence is best effort and must not mask the original fault.")]
     private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+        var sessionId = CaptureSessionScope.Current
+            ?? await _frames!.EnsureManualCaptureSessionAsync(ct).ConfigureAwait(false);
+        var filePath = Path.Combine(ResolveFramesDir(), $"{frameId:D}.fits");
+        await _frames!.BeginStorageAsync(new FrameStorageAttempt(
+            FrameId: frameId,
+            SessionId: sessionId,
+            AcceptedUtc: DateTimeOffset.UtcNow,
+            TemporaryPath: filePath + ".tmp",
+            FinalPath: filePath,
+            ImageFormat: "fits"), ct).ConfigureAwait(false);
+
         // §29 — per-frame pre-capture free-space check: the disk monitor polls every 60 s, and a
         // burst of large frames can fill the volume between ticks. Blocks BEFORE the shutter
         // opens (an exposure that can't be saved is wasted sky time) — but only when the volume
@@ -433,50 +451,114 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // default never blocks (the monitor's own notification path owns telling the user).
         if (PreCaptureDiskBlocked(out var freeBytes)) {
             LogPreCaptureDiskBlocked(frameId, freeBytes);
+            await MarkStorageFailureBestEffortAsync(frameId, "storage_space_critical",
+                "Capture blocked before exposure because the save volume is below its critical free-space reserve.").ConfigureAwait(false);
             return false;
         }
-        var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
-        if (exposed is null) {
-            return false; // abandoned (disconnect/supersede) or not-ready — already logged
-        }
-        var (pixels, width, height, capturedAt) = exposed.Value;
 
-        // Read back what the driver ACTUALLY applied for the header write: a driver can
-        // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
-        // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
-        var applied = ReadAppliedSettings(client, request);
-        var focuserPos = ReadFocuserPosition();
-        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos);
         try {
-            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
+            await _frames.AdvanceStorageAsync(frameId, FrameStorageState.Exposing, ct).ConfigureAwait(false);
+            var exposed = await ExposeAndDownloadAsync(client, frameId, request,
+                _ => AdvanceStorageBestEffortAsync(frameId, FrameStorageState.Downloading), ct).ConfigureAwait(false);
+            if (exposed is null) {
+                await MarkStorageFailureBestEffortAsync(frameId, "camera_capture_incomplete",
+                    "Camera capture ended before a complete image was downloaded.").ConfigureAwait(false);
+                return false;
+            }
+            var (pixels, width, height, capturedAt) = exposed.Value;
+
+            await _frames.AdvanceStorageAsync(frameId, FrameStorageState.Persisting, CancellationToken.None).ConfigureAwait(false);
+
+            // Read back what the driver ACTUALLY applied for the header write: a driver can
+            // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
+            // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
+            var applied = ReadAppliedSettings(client, request);
+            var focuserPos = ReadFocuserPosition();
+            WriteFits(filePath, pixels, width, height, applied, imageType, capturedAt, focuserPos);
+            var artifact = await ValidateStoredFitsAsync(filePath, width, height, CancellationToken.None).ConfigureAwait(false);
+            var frame = CreateFrameDto(frameId, sessionId, request, frameType, targetName,
+                capturedAt, artifact.Path, width, height, artifact.ByteCount, focuserPos);
+            await _frames.CompleteStorageAsync(frame, new FrameStorageCompletion(
+                ByteCount: artifact.ByteCount,
+                ChecksumSha256: artifact.ChecksumSha256,
+                CompletedUtc: DateTimeOffset.UtcNow,
+                ImageFormat: "fits",
+                CfaPattern: artifact.CfaPattern), CancellationToken.None).ConfigureAwait(false);
+
+            LogCaptureComplete(frameId, width, height, filePath);
+            if (frameType == FrameType.Light) {
+                // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
+                // time, and delaying frame.complete (or the next exposure) for a statistic is the
+                // wrong trade. The pixels are already in hand; the write-back lands as
+                // frame.analyzed when done.
+                QueueFrameAnalysis(frameId, pixels, width, height,
+                    string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName,
+                    artifact.CfaPattern);
+            }
+            return true;
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            await MarkStorageFailureBestEffortAsync(frameId, "capture_cancelled",
+                "Capture was cancelled before durable storage completed.").ConfigureAwait(false);
+            throw;
         } catch (Exception ex) {
-            // The FITS is on disk but invisible to the catalog; name the path so an operator can
-            // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
-            LogCatalogRegistrationFailed(ex, frameId, filePath);
-            return false;
+            var (code, message) = ClassifyStorageFailure(ex, File.Exists(filePath));
+            await MarkStorageFailureBestEffortAsync(frameId, code, message).ConfigureAwait(false);
+            if (File.Exists(filePath)) {
+                // The committed FITS remains recoverable even when catalog completion fails.
+                LogCatalogRegistrationFailed(ex, frameId, filePath);
+            }
+            throw;
         }
-        LogCaptureComplete(frameId, width, height, filePath);
-        if (frameType == FrameType.Light) {
-            // §59.5 — off the capture path: HFR/star analysis of a full frame takes real CPU
-            // time, and delaying frame.complete (or the next exposure) for a statistic is the
-            // wrong trade. The pixels are already in hand; the write-back lands as
-            // frame.analyzed when done.
-            QueueFrameAnalysis(frameId, pixels, width, height,
-                string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName);
-        }
-        return true;
     }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort telemetry boundary: a lifecycle progress-write fault must not discard an image already exposed in the camera. Final transactional completion remains mandatory and will surface persistent database faults.")]
+    private async Task AdvanceStorageBestEffortAsync(Guid frameId, FrameStorageState state) {
+        try {
+            await _frames!.AdvanceStorageAsync(frameId, state, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogStorageLifecycleUpdateFailed(ex, frameId, state.ToString());
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Failure-reporting boundary: persistence errors must not mask the original camera, disk, cancellation, or catalog exception.")]
+    private async Task MarkStorageFailureBestEffortAsync(Guid frameId, string code, string message) {
+        try {
+            await _frames!.FailStorageAsync(frameId,
+                new FrameStorageFailure(code, message, DateTimeOffset.UtcNow), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogStorageLifecycleUpdateFailed(ex, frameId, "Failed");
+        }
+    }
+
+    private static (string Code, string Message) ClassifyStorageFailure(Exception ex, bool committedFileExists) => ex switch {
+        FitsException or InvalidDataException => (
+            "image_validation_failed",
+            "The committed FITS file failed structural or dimension validation."),
+        IOException or UnauthorizedAccessException => (
+            "storage_io_failed",
+            "The frame could not be written, flushed, hashed, or reopened from storage."),
+        Microsoft.Data.Sqlite.SqliteException => (
+            "catalog_write_failed",
+            committedFileExists
+                ? "The source file is durable, but catalog registration failed; startup recovery can re-index it."
+                : "Catalog registration failed before a durable source file was available."),
+        _ => ("capture_failed", "Capture failed before durable storage completed."),
+    };
 
     // Only a measurement with enough stars to be stable feeds the catalog + the §59.5
     // HFR-drift trigger — a 2-star HFR is noise that would swing the trend line. Deliberately
     // lower than the §59.6 autofocus bar (30): a statistic can tolerate more scatter than a
     // decision to refocus, and the trigger's least-squares smoothing absorbs the rest.
     internal const int MinStarsForAnalysis = 10;
+    internal const string ManagedAnalysisVersion = "managed-star-detector-v1";
 
     // Test seam: frame analysis without synthesizing a detectable star field.
     internal Func<ReadOnlyMemory<ushort>, int, int, (double Hfr, int Stars)>? AnalysisMetricOverride { get; set; }
 
-    private sealed record AnalysisJob(Guid FrameId, ushort[] Pixels, int Width, int Height, string? FilterName);
+    private sealed record AnalysisJob(Guid FrameId, ushort[] Pixels, int Width, int Height,
+        string? FilterName, string? CfaPattern);
 
     // Single-reader worker, NOT Task.Run-per-frame (#747 review): the HFR-drift trigger's
     // least-squares trend trusts ImageHistoryService's list order as capture chronology, and
@@ -499,14 +581,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     /// <summary>True when the frame's analysis was queued; false when the backlog was full
     /// and this frame's analysis is skipped (logged — its HFR stays unrecorded).</summary>
-    internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+    internal bool QueueFrameAnalysis(Guid frameId, ushort[] pixels, int width, int height,
+            string? filterName, string? cfaPattern = null) {
         lock (_gate) {
             if (_disposed) {
                 return false;
             }
             _analysisWorker ??= Task.Run(RunAnalysisWorkerAsync);
         }
-        if (!_analysisQueue.Writer.TryWrite(new AnalysisJob(frameId, pixels, width, height, filterName))) {
+        if (!_analysisQueue.Writer.TryWrite(
+                new AnalysisJob(frameId, pixels, width, height, filterName, cfaPattern))) {
             LogFrameAnalysisBacklogged(frameId);
             return false;
         }
@@ -517,29 +601,33 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // Per-job faults are absorbed inside AnalyzeFrameAsync; the loop ends only when
         // Dispose completes the writer, so the worker can never fault-and-strand the queue.
         await foreach (var job in _analysisQueue.Reader.ReadAllAsync().ConfigureAwait(false)) {
-            await AnalyzeFrameAsync(job.FrameId, job.Pixels, job.Width, job.Height, job.FilterName).ConfigureAwait(false);
+            await AnalyzeFrameAsync(job.FrameId, job.Pixels, job.Width, job.Height,
+                job.FilterName, job.CfaPattern).ConfigureAwait(false);
         }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget analysis boundary: detector/DB/WS faults must degrade to a logged skip — the frame is already captured, registered, and safe; analysis is enrichment. CA1031's log-and-recover boundary applies.")]
-    internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height, string? filterName) {
+    internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height,
+            string? filterName, string? cfaPattern = null) {
         try {
-            var (hfr, stars) = AnalysisMetricOverride is { } metric
-                ? metric(pixels, width, height)
-                : DefaultAnalysisMetric(pixels, width, height);
-            if (stars < MinStarsForAnalysis || double.IsNaN(hfr) || hfr <= 0) {
-                LogFrameAnalysisSkipped(frameId, stars);
+            var analysisPlane = PrepareAnalysisPlane(pixels, width, height, cfaPattern);
+            var measurement = AnalysisMetricOverride is { } metric
+                ? OverrideMeasurement(metric(analysisPlane.Pixels, analysisPlane.Width, analysisPlane.Height))
+                : DefaultAnalysisMetric(analysisPlane.Pixels, analysisPlane.Width, analysisPlane.Height);
+            if (measurement.StarCount < MinStarsForAnalysis
+                || !double.IsFinite(measurement.Hfr) || measurement.Hfr <= 0) {
+                LogFrameAnalysisSkipped(frameId, measurement.StarCount);
                 return;
             }
             if (_frames is not null) {
-                await _frames.UpdateAnalysisAsync(frameId, hfr, stars, CancellationToken.None).ConfigureAwait(false);
+                await _frames.UpdateAnalysisAsync(frameId, measurement, CancellationToken.None).ConfigureAwait(false);
             }
             // The §59.5 HFR-drift trigger's data feed. The filter is the REQUESTED name — the
             // same name SwitchFilter drives the wheel by, so it matches the trigger's
             // SelectedFilter comparison.
-            _imageHistory?.RecordImage("LIGHT", hfr, filterName);
-            LogFrameAnalyzed(frameId, hfr, stars);
+            _imageHistory?.RecordImage("LIGHT", measurement.Hfr, filterName);
+            LogFrameAnalyzed(frameId, measurement.Hfr, measurement.StarCount);
         } catch (Exception ex) {
             LogFrameAnalysisFailed(ex, frameId);
         }
@@ -553,10 +641,56 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private static StarDetectionParams AnalysisDetectionParams(int maxStars = 0) =>
         new() { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = maxStars };
 
-    private static (double Hfr, int Stars) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
+    private static FrameAnalysisMeasurement OverrideMeasurement((double Hfr, int Stars) metric) =>
+        new(metric.Hfr, metric.Stars, Eccentricity: null, SnrEstimate: null,
+            AnalysisVersion: "metric-override-v1");
+
+    private static FrameAnalysisMeasurement DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
         var result = StarDetector.Detect(
             pixels, width, height, AnalysisDetectionParams(), CancellationToken.None);
-        return (result.AverageHFR, result.DetectedStars);
+        return BuildAnalysisMeasurement(result);
+    }
+
+    private static (ushort[] Pixels, int Width, int Height) PrepareAnalysisPlane(
+            ushort[] pixels, int width, int height, string? cfaPattern) {
+        if (!OpenAstroAra.Stretch.Debayer.TryParse(cfaPattern, out var pattern)) {
+            return (pixels, width, height);
+        }
+        var (red, green, blue, outputWidth, outputHeight) =
+            OpenAstroAra.Stretch.Debayer.SuperPixel(pixels, width, height, pattern);
+        var luminance = new ushort[red.Length];
+        for (var index = 0; index < luminance.Length; index++) {
+            luminance[index] = (ushort)((red[index] + 2 * green[index] + blue[index] + 2) / 4);
+        }
+        return (luminance, outputWidth, outputHeight);
+    }
+
+    internal static FrameAnalysisMeasurement BuildAnalysisMeasurement(StarDetectionResult result) {
+        ArgumentNullException.ThrowIfNull(result);
+        var eccentricities = result.StarList
+            .Where(static star => double.IsFinite(star.Roundness) && star.Roundness is >= 0 and <= 1)
+            .Select(static star => Math.Sqrt(Math.Max(0, 1 - star.Roundness * star.Roundness)))
+            .OrderBy(static value => value)
+            .ToArray();
+        var snrEstimates = result.StarList
+            .Where(static star => double.IsFinite(star.PeakToBackground) && star.PeakToBackground >= 0)
+            .Select(static star => star.PeakToBackground)
+            .OrderBy(static value => value)
+            .ToArray();
+        return new FrameAnalysisMeasurement(
+            Hfr: result.AverageHFR,
+            StarCount: result.DetectedStars,
+            Eccentricity: MedianOrNull(eccentricities),
+            SnrEstimate: MedianOrNull(snrEstimates),
+            AnalysisVersion: ManagedAnalysisVersion);
+    }
+
+    private static double? MedianOrNull(double[] sorted) {
+        if (sorted.Length == 0) return null;
+        var middle = sorted.Length / 2;
+        return (sorted.Length & 1) == 1
+            ? sorted[middle]
+            : (sorted[middle - 1] + sorted[middle]) / 2;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -652,35 +786,35 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // log is diagnosable.
         switch (imageArray) {
             case int[,] ints: {
-                var width = ints.GetLength(0);
-                var height = ints.GetLength(1);
-                var pixels = new ushort[width * height];
-                for (var y = 0; y < height; y++) {
-                    var row = y * width;
-                    for (var x = 0; x < width; x++) {
-                        pixels[row + x] = (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                    var width = ints.GetLength(0);
+                    var height = ints.GetLength(1);
+                    var pixels = new ushort[width * height];
+                    for (var y = 0; y < height; y++) {
+                        var row = y * width;
+                        for (var x = 0; x < width; x++) {
+                            pixels[row + x] = (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                        }
                     }
+                    return (pixels, width, height);
                 }
-                return (pixels, width, height);
-            }
             case double[,] doubles: {
-                var width = doubles.GetLength(0);
-                var height = doubles.GetLength(1);
-                var pixels = new ushort[width * height];
-                for (var y = 0; y < height; y++) {
-                    var row = y * width;
-                    for (var x = 0; x < width; x++) {
-                        // Clamp in the double domain BEFORE casting: a saturated/+Inf pixel must
-                        // become white (65535), not wrap through the cast to black; NaN reads as 0.
-                        var v = doubles[x, y];
-                        pixels[row + x] = double.IsNaN(v) ? (ushort)0
-                            : v >= ushort.MaxValue ? ushort.MaxValue
-                            : v <= 0 ? (ushort)0
-                            : (ushort)Math.Round(v);
+                    var width = doubles.GetLength(0);
+                    var height = doubles.GetLength(1);
+                    var pixels = new ushort[width * height];
+                    for (var y = 0; y < height; y++) {
+                        var row = y * width;
+                        for (var x = 0; x < width; x++) {
+                            // Clamp in the double domain BEFORE casting: a saturated/+Inf pixel must
+                            // become white (65535), not wrap through the cast to black; NaN reads as 0.
+                            var v = doubles[x, y];
+                            pixels[row + x] = double.IsNaN(v) ? (ushort)0
+                                : v >= ushort.MaxValue ? ushort.MaxValue
+                                : v <= 0 ? (ushort)0
+                                : (ushort)Math.Round(v);
+                        }
                     }
+                    return (pixels, width, height);
                 }
-                return (pixels, width, height);
-            }
             default:
                 throw new InvalidOperationException(imageArray is Array { Rank: 3 }
                     ? "color (3-axis) ImageArray is not supported by the v1 capture path"
@@ -705,10 +839,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null) {
-        var dir = ResolveFramesDir();
+    private void WriteFits(string path, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null) {
+        var dir = Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException("FITS destination has no parent directory.");
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, $"{frameId}.fits");
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
         // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
@@ -744,7 +878,58 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
         fits.Complete(); // §28.7 atomic finish
-        return path;
+    }
+
+    internal sealed record StoredFitsArtifact(
+        string Path,
+        long ByteCount,
+        string ChecksumSha256,
+        string? CfaPattern);
+
+    /// <summary>
+    /// Reopen the atomically committed FITS, verify its dimensions/header, then hash the
+    /// exact durable bytes. Catalog completion must never trust only the in-memory buffer.
+    /// </summary>
+    internal static async Task<StoredFitsArtifact> ValidateStoredFitsAsync(
+            string path, int expectedWidth, int expectedHeight, CancellationToken ct) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(expectedWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(expectedHeight);
+        var fullPath = Path.GetFullPath(path);
+
+        IReadOnlyDictionary<string, string> headers;
+        using (var fits = FitsImage.Open(fullPath)) {
+            var (actualWidth, actualHeight) = fits.GetDimensions();
+            if (actualWidth != expectedWidth || actualHeight != expectedHeight) {
+                throw new InvalidDataException(
+                    $"Committed FITS dimensions {actualWidth}x{actualHeight} do not match downloaded image {expectedWidth}x{expectedHeight}.");
+            }
+            headers = fits.ReadHeaders();
+        }
+
+        var info = new FileInfo(fullPath);
+        info.Refresh();
+        if (!info.Exists || info.Length <= 0) {
+            throw new InvalidDataException("Committed FITS file is missing or empty.");
+        }
+        const long fitsBlockSize = 2880;
+        var pixelBytes = checked((long)expectedWidth * expectedHeight * sizeof(ushort));
+        var paddedPixelBytes = checked(pixelBytes + ((fitsBlockSize - (pixelBytes % fitsBlockSize)) % fitsBlockSize));
+        var minimumFileBytes = checked(fitsBlockSize + paddedPixelBytes);
+        if (info.Length % fitsBlockSize != 0 || info.Length < minimumFileBytes) {
+            throw new InvalidDataException(
+                $"Committed FITS length {info.Length} is not a complete {expectedWidth}x{expectedHeight} unsigned-16 image.");
+        }
+
+        string checksum;
+        await using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan)) {
+            checksum = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        }
+        var cfaPattern = headers.TryGetValue("BAYERPAT", out var rawCfa) && !string.IsNullOrWhiteSpace(rawCfa)
+            ? rawCfa.Trim().ToUpperInvariant()
+            : null;
+        return new StoredFitsArtifact(fullPath, info.Length, checksum, cfaPattern);
     }
 
     // §29 pre-capture gate — true only when the CONFIGURED save volume is critically low and the
@@ -804,21 +989,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
-    private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null) {
-        // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
-        // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
-        // the run worker); everything else — the REST snapshot path — falls back
-        // to the shared manual-capture bucket as before.
-        var sessionId = CaptureSessionScope.Current
-            ?? await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
-        var fileSize = new FileInfo(filePath).Length;
+    private FrameDto CreateFrameDto(Guid frameId, Guid sessionId, ExposureRequestDto request,
+            FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath,
+            int width, int height, long fileSize, int? focuserPosition = null) {
         double? ccdTemp;
         lock (_gate) {
             // Null when the camera reports no CCD temperature — recorded as NULL,
             // not a fabricated 0.0 (the same honesty rule as gain, #670).
             ccdTemp = _runtime.CcdTemperature; // _runtime is written under _gate; read it there too
         }
-        await _frames!.InsertAsync(new FrameDto(
+        return new FrameDto(
             Id: frameId,
             SessionId: sessionId,
             TargetName: targetName,
@@ -838,7 +1018,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             QualityScore: null,
             Rating: 0,
             Tags: Array.Empty<string>(),
-            FocuserPosition: focuserPosition), CancellationToken.None).ConfigureAwait(false);
+            FocuserPosition: focuserPosition);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
@@ -1423,6 +1603,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Capture {FrameId} wrote {Path} but catalog registration failed — the §28.8 startup scan will recover it on the next boot")]
     private partial void LogCatalogRegistrationFailed(Exception ex, Guid frameId, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Capture {FrameId} storage lifecycle update to {State} failed")]
+    private partial void LogStorageLifecycleUpdateFailed(Exception ex, Guid frameId, string state);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Capture {FrameId} never reported ImageReady within the {ExposureSec}s exposure + margin")]
     private partial void LogCaptureFailedNotReady(Guid frameId, double exposureSec);

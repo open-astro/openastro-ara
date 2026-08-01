@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright Â© 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,6 +12,8 @@
 
 #endregion "copyright"
 
+using System;
+
 namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
 
     internal sealed class UInt32Converter : IDataConverter {
@@ -19,7 +21,10 @@ namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
         public ushort[] Convert(byte[] rawData) {
             ushort[] data = new ushort[rawData.Length / 4];
             for (var i = 0; i < data.Length; i++) {
-                data[i] = (ushort)(((rawData[(i * 4) + 3] << 24) | (rawData[(i * 4) + 2] << 16) | (rawData[(i * 4) + 1] << 8) | (rawData[i * 4])) / (double)int.MaxValue * ushort.MaxValue);
+                var value = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
+                    rawData.AsSpan(i * sizeof(uint), sizeof(uint)));
+                data[i] = (ushort)Math.Round(value / (double)uint.MaxValue * ushort.MaxValue,
+                    MidpointRounding.AwayFromZero);
             }
             return data;
         }
