@@ -155,6 +155,29 @@ void main() {
       // Search radius is pointing-uncertainty-driven, never derived — the
       // §37.8 default survives untouched.
       expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
+
+      // Derive-branch proof (review r2): inputs whose derived value DIFFERS
+      // from the section default (2), through the full mapper — a regression
+      // that disconnects the derivation can't hide behind keep-the-base.
+      final longFl = ProfileDraft();
+      longFl.camera.pixelSizeMicrons = 2.4;
+      longFl.telescope.focalLengthMm = 2000; // 0.25″/px → 4
+      expect(
+          applyDraftToPlateSolve(const PlateSolveSettings(), longFl)
+              .downsampleFactor,
+          4);
+    });
+
+    test('§76 S5 — applyDraftToAutofocus derive branch runs when the base is '
+        'at default', () {
+      final d = ProfileDraft();
+      d.telescope
+        ..focalLengthMm = 530
+        ..apertureMm = 106; // f/5
+      d.focuser.stepSizeMicrons = 1.2; // → 23 steps, ≠ default 50
+      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      expect(out.stepSize, 23,
+          reason: 'the mapper wiring, not just the formula, must derive');
     });
 
     test('§76 S5 derivations respect a cloned profile\'s hand-tuned values',
