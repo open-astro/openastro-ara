@@ -6,7 +6,7 @@ void main() {
     test('parses a connected, guiding descriptor with RMS', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',
-        'name': 'PHD2',
+        'name': 'OpenAstro Guider',
         'state': 'connected',
         'runtime': <String, dynamic>{
           'state': 'guiding',
@@ -29,7 +29,7 @@ void main() {
     test('star_lost runtime token maps to the camelCase enum', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',
-        'name': 'PHD2',
+        'name': 'OpenAstro Guider',
         'state': 'connected',
         'runtime': <String, dynamic>{'state': 'star_lost'},
       });
@@ -40,7 +40,7 @@ void main() {
     test('a disconnected guider has null RMS and stopped/unknown runtime', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',
-        'name': 'PHD2',
+        'name': 'OpenAstro Guider',
         'state': 'disconnected',
         'runtime': <String, dynamic>{'state': 'stopped'},
       });
@@ -63,7 +63,7 @@ void main() {
     test('a missing runtime object degrades to unknown runtime, not a throw', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',
-        'name': 'PHD2',
+        'name': 'OpenAstro Guider',
         'state': 'connecting',
       });
       expect(s.connectionState, GuiderConnectionState.connecting);
@@ -120,7 +120,7 @@ void main() {
     test('value equality — equal-content parses compare equal (no rebuild churn)', () {
       Map<String, dynamic> frame() => <String, dynamic>{
             'device_id': 'phd2',
-            'name': 'PHD2',
+            'name': 'OpenAstro Guider',
             'state': 'connected',
             'runtime': <String, dynamic>{'state': 'guiding', 'rms_total': 0.4},
           };

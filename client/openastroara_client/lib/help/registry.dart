@@ -341,7 +341,7 @@ const Map<String, Help> helpRegistry = {
   'safety.policies.on_guider_lost': Help(
     key: 'safety.policies.on_guider_lost',
     title: 'On guider lost',
-    body: 'Action when PHD2 reports lost lock — typically caused by clouds rolling in, a star drifting off the guide chip, or a calibration glitch.\n\n'
+    body: 'Action when OpenAstro Guider reports lost lock — typically caused by clouds rolling in, a star drifting off the guide chip, or a calibration glitch.\n\n'
         '* **Pause + retry**: pause exposure, restart guider, retry until `Guider retry timeout` expires. Recommended for clear-but-occasional-cloud nights.\n'
         '* **Skip target**: skip this target immediately and move on.\n'
         '* **Abort sequence**: stop the whole session.',
@@ -672,7 +672,7 @@ const Map<String, Help> helpRegistry = {
         '* Flat panel (CoverCalibrator) — does not change cover position\n'
         '* Safety monitor — recommended on for unattended observatories\n\n'
         '*Manual-connect by default* (driver may actuate hardware on connect):\n'
-        '* Guider — starts the PHD2 / openastro-phd2 client process\n'
+        '* Guider — starts the OpenAstro Guider client process\n'
         '* Dome — some drivers move shutter or rotate to home on connect\n'
         '* Weather station — keeps the polling loop quiet until you opt in\n\n'
         'Override per device based on your hardware\'s behaviour.',
@@ -777,12 +777,12 @@ const Map<String, Help> helpRegistry = {
   'img.platesolve.convergence_tolerance_arcsec': Help(
     key: 'img.platesolve.convergence_tolerance_arcsec',
     title: 'Convergence tolerance',
-    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §63 PHD2 sub-frame guiding can correct, looser than the human eye can notice.\n\n'
+    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §63 OpenAstro Guider sub-frame guiding can correct, looser than the human eye can notice.\n\n'
         'Tighten to 30″ for narrowband mosaics where panel alignment matters; loosen to 120″ for wide-field RGB where 2′ is well within frame.',
     relatedSettings: ['img.platesolve.max_iterations'],
   ),
 
-  // §63 PHD2 — help on the genuinely non-obvious controls. Host/port/profile
+  // §63 OpenAstro Guider — help on the genuinely non-obvious controls. Host/port/profile
   // are self-explanatory; settle-time + force-calibration get help because
   // their behaviour interacts with §35 + §38 in non-obvious ways.
   'eq.guider.dither_pixels': Help(
@@ -797,7 +797,7 @@ const Map<String, Help> helpRegistry = {
   'eq.guider.settle_pixels': Help(
     key: 'eq.guider.settle_pixels',
     title: 'Settle threshold',
-    body: 'Once a dither completes, PHD2 considers the guider re-settled when guide-RMS error stays below this many pixels for `settle_time` seconds.\n\n'
+    body: 'Once a dither completes, OpenAstro Guider considers the guider re-settled when guide-RMS error stays below this many pixels for `settle_time` seconds.\n\n'
         'Tight thresholds (0.5-1.0 px) catch the last bit of motion but waste time on mounts that hover at 1 px RMS — they\'ll never converge.\n'
         '1.5 px (default) is a sensible middle ground. Loosen to 2-3 px for slower mounts; tighten only if your guide RMS routinely sits below 1 px.',
     relatedSettings: ['eq.guider.settle_time_sec', 'eq.guider.settle_timeout_sec'],
@@ -812,7 +812,7 @@ const Map<String, Help> helpRegistry = {
   'eq.guider.force_calibration_each_session': Help(
     key: 'eq.guider.force_calibration_each_session',
     title: 'Force calibration each session',
-    body: 'PHD2 caches calibration data (guide-pulse direction, ratio, backlash) and reuses it across sessions by default. Forcing a fresh calibration each session is safer if your guide-scope orientation can shift overnight (loose dovetail, scope swap, etc) but adds 2-5 min to every startup.\n\n'
+    body: 'OpenAstro Guider caches calibration data (guide-pulse direction, ratio, backlash) and reuses it across sessions by default. Forcing a fresh calibration each session is safer if your guide-scope orientation can shift overnight (loose dovetail, scope swap, etc) but adds 2-5 min to every startup.\n\n'
         'Recommended **off** for permanent setups (observatory rig); **on** for portable setups (grab-and-go scope, traveling kit).',
     relatedSettings: ['safety.policies.meridian_recal_guider'],
   ),
@@ -820,42 +820,42 @@ const Map<String, Help> helpRegistry = {
   'eq.guider.guide_focal_length': Help(
     key: 'eq.guider.guide_focal_length',
     title: 'Guide focal length',
-    body: 'Focal length of the guide scope (mm). Combined with the guide-camera pixel size it sets the guider\'s arcsec/pixel scale, which PHD2 uses for star-mass thresholds and the guiding graph.\n\n'
-        'Leave **0** to keep whatever the PHD2 guide profile already has. Set it to push your value on connect.',
+    body: 'Focal length of the guide scope (mm). Combined with the guide-camera pixel size it sets the guider\'s arcsec/pixel scale, which OpenAstro Guider uses for star-mass thresholds and the guiding graph.\n\n'
+        'Leave **0** to keep whatever the OpenAstro Guider guide profile already has. Set it to push your value on connect.',
     relatedSettings: ['eq.guider.guide_pixel_size'],
   ),
   'eq.guider.guide_pixel_size': Help(
     key: 'eq.guider.guide_pixel_size',
     title: 'Guide pixel size',
     body: 'Pixel size of the guide camera (µm). With the guide focal length this gives the guider\'s arcsec/pixel scale.\n\n'
-        'Leave **0** to keep the PHD2 guide profile default.',
+        'Leave **0** to keep the OpenAstro Guider guide profile default.',
     relatedSettings: ['eq.guider.guide_focal_length'],
   ),
   'eq.guider.ra_aggressiveness': Help(
     key: 'eq.guider.ra_aggressiveness',
     title: 'RA aggressiveness',
-    body: 'Fraction (0–1) of each measured RA error that PHD2 corrects per cycle. Lower values guide more gently (less prone to oscillation / chasing seeing); higher values track real drift faster.\n\n'
+    body: 'Fraction (0–1) of each measured RA error that OpenAstro Guider corrects per cycle. Lower values guide more gently (less prone to oscillation / chasing seeing); higher values track real drift faster.\n\n'
         '**0.7** is a good default. Drop toward 0.5 if guiding oscillates; raise toward 0.9 only on a stiff, well-behaved mount.',
     relatedSettings: ['eq.guider.dec_aggressiveness', 'eq.guider.minimum_move'],
   ),
   'eq.guider.dec_aggressiveness': Help(
     key: 'eq.guider.dec_aggressiveness',
     title: 'Dec aggressiveness',
-    body: 'Fraction (0–1) of each measured Dec error PHD2 corrects per cycle. Same idea as RA aggressiveness; Dec is often run a touch lower because of backlash near direction reversals.',
+    body: 'Fraction (0–1) of each measured Dec error OpenAstro Guider corrects per cycle. Same idea as RA aggressiveness; Dec is often run a touch lower because of backlash near direction reversals.',
     relatedSettings: ['eq.guider.ra_aggressiveness', 'eq.guider.dec_guide_mode'],
   ),
   'eq.guider.minimum_move': Help(
     key: 'eq.guider.minimum_move',
     title: 'Minimum move',
-    body: 'Smallest error (in guide pixels) PHD2 will react to. Errors below this are ignored, so the mount doesn\'t chase seeing noise.\n\n'
+    body: 'Smallest error (in guide pixels) OpenAstro Guider will react to. Errors below this are ignored, so the mount doesn\'t chase seeing noise.\n\n'
         '**~0.15 px** is typical. Raise it in poor seeing to calm the corrections; lower it only with a very stable mount + sky.',
     relatedSettings: ['eq.guider.ra_aggressiveness'],
   ),
   'eq.guider.dec_guide_mode': Help(
     key: 'eq.guider.dec_guide_mode',
     title: 'Dec guide mode',
-    body: 'How PHD2 corrects declination:\n\n'
-        '* **Auto**: correct in whichever direction the error appears (leaves PHD2\'s own setting alone — ARA won\'t push Auto).\n'
+    body: 'How OpenAstro Guider corrects declination:\n\n'
+        '* **Auto**: correct in whichever direction the error appears (leaves OpenAstro Guider\'s own setting alone — ARA won\'t push Auto).\n'
         '* **North / South**: only ever push that direction. Useful on mounts with bad Dec backlash — pick the uphill side so backlash is always taken up.\n'
         '* **Off**: no Dec guiding (RA only).',
     relatedSettings: ['eq.guider.dec_aggressiveness'],

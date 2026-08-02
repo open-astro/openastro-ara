@@ -56,7 +56,7 @@ GuiderRuntimeState _runtimeFromWire(String? token) {
 }
 
 /// Snapshot of the guider's link + runtime state, with the latest guiding RMS
-/// (total/RA/Dec, arcsec) and the active PHD2 profile name when connected.
+/// (total/RA/Dec, arcsec) and the active OpenAstro Guider profile name when connected.
 class GuiderStatus {
   /// Daemon device id; `null` when the descriptor omitted it (distinguishable
   /// from an explicitly-empty id).

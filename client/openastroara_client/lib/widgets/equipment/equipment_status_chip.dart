@@ -51,7 +51,7 @@ StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
 /// The §25.3 top-bar equipment chips, in device-type order: each shows live
 /// connection status (green dot when connected) and, on tap, jumps to that
 /// device's Settings panel to connect/control it. GUIDE keeps its bespoke
-/// [GuiderChip] (own status type + PHD2 dialog); SW is multi-instance.
+/// [GuiderChip] (own status type + OpenAstro Guider dialog); SW is multi-instance.
 class TopEquipmentChips extends StatelessWidget {
   const TopEquipmentChips({super.key});
 
@@ -127,7 +127,7 @@ class TopEquipmentChips extends StatelessWidget {
 /// provider (called in build, so the watch registers a dependency) and maps it
 /// to the dot; on tap it jumps to the device's Settings panel. One widget serves
 /// every single-instance device — mirroring [GuiderChip], which is bespoke only
-/// because the guider has its own status type + PHD2 dialog.
+/// because the guider has its own status type + OpenAstro Guider dialog.
 ///
 /// [faultTypes] are the device's `DeviceType` wire tokens in the §42 fault
 /// channel; a standing fault on any of them blends into the dot worst-of, so a

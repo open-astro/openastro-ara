@@ -13,7 +13,7 @@ import 'package:openastroara/widgets/status_indicator.dart';
 
 GuiderStatus _status(GuiderConnectionState c, GuiderRuntimeState r) => GuiderStatus(
       deviceId: 'phd2',
-      name: 'PHD2',
+      name: 'OpenAstro Guider',
       connectionState: c,
       runtimeState: r,
     );

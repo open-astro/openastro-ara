@@ -81,7 +81,7 @@ double? guiderArcsecPerPixel(int focalLengthMm, double pixelSizeUm) {
   return 206.265 * pixelSizeUm / focalLengthMm;
 }
 
-/// How often the mounted panel re-reads guider status. 2 s tracks PHD2's
+/// How often the mounted panel re-reads guider status. 2 s tracks OpenAstro Guider's
 /// typical guide-exposure cadence without hammering the daemon.
 const kLiveGuidingPollInterval = Duration(seconds: 2);
 

@@ -4,7 +4,7 @@ import 'settings_sync_mixin.dart';
 
 import '../../services/profile_api.dart';
 
-/// §63 PHD2 / guider settings. Phase 12h.6k wires the daemon round-trip
+/// §63 OpenAstro Guider settings. Phase 12h.6k wires the daemon round-trip
 /// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
 /// re-cal-guider policy lives in `safetyPoliciesProvider` (crosses the
 /// §35/§63 boundary, belongs with the rest of meridian behavior).
@@ -145,7 +145,7 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   }
 
   void setPort(int v) {
-    // Privileged ports (<1024) and dynamic (>65535) rejected. PHD2 default
+    // Privileged ports (<1024) and dynamic (>65535) rejected. OpenAstro Guider default
     // is 4400; non-default deployments may rebind to other unprivileged
     // ports.
     if (v < 1024 || v > 65535) return;

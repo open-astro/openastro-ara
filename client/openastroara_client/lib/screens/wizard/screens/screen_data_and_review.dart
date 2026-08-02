@@ -188,11 +188,11 @@ class ScreenReview extends ConsumerWidget {
           ('Step', _deg(r.stepDeg)),
           ('Reversed', reviewValue(r.reverse)),
         ]),
-        // PHD2 fields are non-nullable with sensible defaults, so they always
+        // OpenAstro Guider fields are non-nullable with sensible defaults, so they always
         // show a value (never "Not set"); routing them through the same
         // formatters as every other row keeps display consistent. The section's
         // skipped banner conveys when the user didn't customise them.
-        _ReviewSection(title: 'Guider (PHD2)', step: 10, onEdit: edit, rows: [
+        _ReviewSection(title: 'OpenAstro Guider', step: 10, onEdit: edit, rows: [
           ('Host:port', reviewValue(g.hostPort)),
           ('Dither', _unit(g.ditherPixels, 'px')),
           ('Settle threshold', _unit(g.settleThresholdPx, 'px')),

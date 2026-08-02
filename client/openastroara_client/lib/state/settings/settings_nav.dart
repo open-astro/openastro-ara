@@ -82,7 +82,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       ),
       SettingsPanelInfo(
         id: 'eq.guider',
-        label: 'Guider (PHD2)',
+        label: 'OpenAstro Guider',
         groupId: 'equipment',
       ),
       SettingsPanelInfo(

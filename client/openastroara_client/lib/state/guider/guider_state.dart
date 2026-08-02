@@ -63,7 +63,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     // No explicit target → the PROFILE's phd2 host/port, fetched fresh from
     // the daemon (the authoritative copy). Hardcoding kDefaultGuiderHost here
     // sent every chip-dialog connect to localhost:4400 and bypassed a remote
-    // PHD2 (e.g. the SBC at :8080) the user had configured in Settings.
+    // OpenAstro Guider (e.g. the SBC at :8080) the user had configured in Settings.
     if (host == null || port == null) {
       try {
         final phd2 = await ref.read(profileApiProvider)?.getPhd2Settings();

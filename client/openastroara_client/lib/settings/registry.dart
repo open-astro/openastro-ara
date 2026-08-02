@@ -169,7 +169,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.meridian_recal_guider',
     label: 'Re-calibrate guider after flip',
-    description: 'Re-run PHD2 calibration after a meridian flip. Necessary because guide directions reverse on the new pier side.',
+    description: 'Re-run OpenAstro Guider calibration after a meridian flip. Necessary because guide directions reverse on the new pier side.',
     keywords: ['meridian', 'flip', 'guider', 'calibration', 'phd2', 'recalibrate'],
     path: ['Settings', 'Safety', 'Policies'],
     type: SettingType.bool(),
@@ -1111,7 +1111,7 @@ const List<Setting> settingsRegistry = [
   // individual entries (vs one composite) so ⌘K "guider connect" /
   // "dome boot" / "weather auto" all resolve to the specific panel.
   // Defaults split between connect-by-default (core imaging chain) and
-  // manual-connect (devices with side effects: guider starts PHD2; dome
+  // manual-connect (devices with side effects: guider starts OpenAstro Guider; dome
   // moves the shutter; weather starts polling). State lives in
   // `equipmentConnectionProvider`.
   Setting(
@@ -1167,7 +1167,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.auto_connect',
     label: 'Guider auto-connect on boot',
-    description: 'Connect to the guider (PHD2 / openastro-phd2) when the daemon starts. Starts the PHD2 client process — defaults off because some users prefer manual PHD2 launch.',
+    description: 'Connect to the guider when the daemon starts. Starts the OpenAstro Guider client process — defaults off because some users prefer manual OpenAstro Guider launch.',
     keywords: ['guider', 'phd2', 'guide', 'auto-connect', 'connect', 'boot', 'startup'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
@@ -1461,14 +1461,14 @@ const List<Setting> settingsRegistry = [
     profilePath: 'platesolve.convergence_tolerance_arcsec',
   ),
 
-  // §63 PHD2 / guider — 10 fields covering connection + dithering + calibration.
+  // §63 OpenAstro Guider — 10 fields covering connection + dithering + calibration.
   // State lives in `phd2SettingsProvider`. The §35 meridian-flip re-cal guider
   // policy lives in `safetyPoliciesProvider` (already registered) since it's
-  // a meridian-flip behaviour, not a PHD2-internal one.
+  // a meridian-flip behaviour, not a OpenAstro Guider-internal one.
   Setting(
     id: 'eq.guider.host',
-    label: 'PHD2 host',
-    description: 'Hostname or IP where PHD2 (or openastro-phd2) is running. Default `localhost` for same-machine setups; use the daemon\'s LAN IP for remote PHD2.',
+    label: 'OpenAstro Guider host',
+    description: 'Hostname or IP where OpenAstro Guider is running. Default `localhost` for same-machine setups; use the daemon\'s LAN IP for remote OpenAstro Guider.',
     keywords: ['phd2', 'host', 'hostname', 'ip', 'guider', 'remote'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1477,8 +1477,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.port',
-    label: 'PHD2 port',
-    description: 'TCP port for the PHD2 server-mode socket. 4400 is the standard default; rebind only if PHD2 is configured non-standard.',
+    label: 'OpenAstro Guider port',
+    description: 'TCP port for the OpenAstro Guider server-mode socket. 4400 is the standard default; rebind only if OpenAstro Guider is configured non-standard.',
     keywords: ['phd2', 'port', 'tcp', 'guider', 'network'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1024, max: 65535),
@@ -1487,8 +1487,8 @@ const List<Setting> settingsRegistry = [
   ),
   Setting(
     id: 'eq.guider.profile',
-    label: 'PHD2 profile',
-    description: 'Which PHD2 equipment profile to use. PHD2 stores per-mount/camera profiles separate from ARA\'s profiles.',
+    label: 'OpenAstro Guider profile',
+    description: 'Which OpenAstro Guider equipment profile to use. OpenAstro Guider stores per-mount/camera profiles separate from ARA\'s profiles.',
     keywords: ['phd2', 'profile', 'equipment', 'guider'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
@@ -1528,7 +1528,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.settle_pixels',
     label: 'Settle threshold (pixels)',
-    description: 'PHD2 considers the guider settled once RMS error stays under this many pixels for `settle_time` seconds.',
+    description: 'OpenAstro Guider considers the guider settled once RMS error stays under this many pixels for `settle_time` seconds.',
     keywords: ['settle', 'threshold', 'pixels', 'rms', 'phd2', 'tolerance'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),
@@ -1558,7 +1558,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.force_calibration_each_session',
     label: 'Force calibration each session',
-    description: 'Re-run PHD2 calibration at every session start instead of reusing the previous calibration. Slower but safer for setups where guide-scope orientation may have shifted.',
+    description: 'Re-run OpenAstro Guider calibration at every session start instead of reusing the previous calibration. Slower but safer for setups where guide-scope orientation may have shifted.',
     keywords: ['calibration', 'force', 'session', 'phd2', 'recalibrate'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
@@ -1581,7 +1581,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.guide_focal_length',
     label: 'Guide focal length (mm)',
-    description: 'Focal length of the guide scope, pushed to PHD2 on connect. With the guide pixel size it sets the guider arcsec/pixel scale. 0 leaves the PHD2 profile default.',
+    description: 'Focal length of the guide scope, pushed to OpenAstro Guider on connect. With the guide pixel size it sets the guider arcsec/pixel scale. 0 leaves the OpenAstro Guider profile default.',
     keywords: ['guide', 'focal', 'length', 'scope', 'phd2', 'scale', 'mm'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 5000),
@@ -1591,7 +1591,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.guide_pixel_size',
     label: 'Guide pixel size (µm)',
-    description: 'Pixel size of the guide camera, pushed to PHD2 on connect. 0 leaves the PHD2 profile default.',
+    description: 'Pixel size of the guide camera, pushed to OpenAstro Guider on connect. 0 leaves the OpenAstro Guider profile default.',
     keywords: ['guide', 'pixel', 'size', 'camera', 'phd2', 'scale', 'micron'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
@@ -1601,7 +1601,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.ra_aggressiveness',
     label: 'RA aggressiveness',
-    description: 'Fraction (0–1) of each measured RA error PHD2 corrects per cycle. Lower = gentler guiding; higher = faster tracking of real drift.',
+    description: 'Fraction (0–1) of each measured RA error OpenAstro Guider corrects per cycle. Lower = gentler guiding; higher = faster tracking of real drift.',
     keywords: ['ra', 'aggressiveness', 'guiding', 'phd2', 'hysteresis', 'gain'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.05),
@@ -1611,7 +1611,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.dec_aggressiveness',
     label: 'Dec aggressiveness',
-    description: 'Fraction (0–1) of each measured Dec error PHD2 corrects per cycle. Often run slightly lower than RA because of Dec backlash.',
+    description: 'Fraction (0–1) of each measured Dec error OpenAstro Guider corrects per cycle. Often run slightly lower than RA because of Dec backlash.',
     keywords: ['dec', 'declination', 'aggressiveness', 'guiding', 'phd2', 'gain'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.05),
@@ -1621,7 +1621,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.minimum_move',
     label: 'Minimum move (px)',
-    description: 'Smallest guide error (in pixels) PHD2 reacts to. Errors below this are ignored so the mount doesn\'t chase seeing noise.',
+    description: 'Smallest guide error (in pixels) OpenAstro Guider reacts to. Errors below this are ignored so the mount doesn\'t chase seeing noise.',
     keywords: ['minimum', 'move', 'min', 'guiding', 'phd2', 'noise', 'seeing'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 5, step: 0.05),
@@ -1631,7 +1631,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.guider.dec_guide_mode',
     label: 'Dec guide mode',
-    description: 'How PHD2 corrects declination: Auto (either direction), North/South only (for backlash-prone mounts), or Off (RA-only). Auto leaves PHD2\'s own setting alone.',
+    description: 'How OpenAstro Guider corrects declination: Auto (either direction), North/South only (for backlash-prone mounts), or Off (RA-only). Auto leaves OpenAstro Guider\'s own setting alone.',
     keywords: ['dec', 'declination', 'guide', 'mode', 'north', 'south', 'backlash', 'phd2'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.enumValue(['Auto', 'North', 'South', 'Off']),

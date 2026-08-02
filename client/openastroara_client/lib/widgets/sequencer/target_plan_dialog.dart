@@ -279,7 +279,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                title: const Text('Guide with PHD2',
+                title: const Text('Guide with OpenAstro Guider',
                     style: TextStyle(
                         color: AraColors.textPrimary, fontSize: 13)),
                 subtitle: Text(

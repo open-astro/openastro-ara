@@ -20,7 +20,7 @@ Future<void> showGuidingTuneDialog(BuildContext context) => showDialog<void>(
     );
 
 /// The RUNTIME-SAFE §63.5 tuning params only (aggressiveness, minimum move,
-/// dec guide mode, dither pixels) — they map to PHD2 `set_algo_param` /
+/// dec guide mode, dither pixels) — they map to OpenAstro Guider `set_algo_param` /
 /// `set_dec_guide_mode`, which apply while guiding continues. Equipment and
 /// optics changes (which force a disconnect window) stay in Settings → Guider.
 class GuidingTuneDialog extends ConsumerStatefulWidget {

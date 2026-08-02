@@ -331,7 +331,7 @@ const List<_Slot> _slots = <_Slot>[
   _Slot('Observing Conditions', EquipmentDeviceType.weather, _gOc, _sOc),
   _Slot('Safety Monitor', EquipmentDeviceType.safetyMonitor, _gSafe, _sSafe),
   _Slot('Flat Panel', EquipmentDeviceType.flatPanel, _gFlat, _sFlat),
-  // Guider (PHD2) is NOT a slot: it isn't an Alpaca device, so discovery has
+  // OpenAstro Guider is NOT a slot: it isn't an Alpaca device, so discovery has
   // nothing to scan (the daemon 400s the attempt) — it's configured by
   // host:port on the wizard's Guider step (with a Test connection button).
   // Switch is NOT a slot either: a rig can carry several switch hubs (§6.4
@@ -417,7 +417,7 @@ class _ScreenEquipmentAssignState extends ConsumerState<ScreenEquipmentAssign> {
     return WizardScreenScaffold(
       step: 3,
       intro: 'Scan for Alpaca devices and assign each slot. Leave a slot as '
-          '"— None" if you don\'t use it. The guider connects to PHD2\'s '
+          '"— None" if you don\'t use it. The guider connects to OpenAstro Guider\'s '
           'JSON-RPC, not Alpaca.',
       children: [
         for (final slot in _slots) _slotRow(context, slot),
