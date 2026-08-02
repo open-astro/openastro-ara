@@ -630,6 +630,68 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_capture_abandoned_by_stop_cannot_leak_its_frame_into_the_next_run() {
+            // Review r2: Stop/restart cancels the capture wait via ct (OperationCanceledException,
+            // not TimeoutException) — the daemon still owes that capture's event, and the debt must
+            // survive the run boundary so the NEXT run swallows the late event instead of adopting
+            // a stale frame into fresh geometry. Run 1's first capture acks and never completes;
+            // Stop lands while it waits. Run 2's captures each deliver the OLD run's stale event
+            // once, then their own — only fresh frames may be fetched.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var captureCount = 0;
+            var staleDelivered = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                var n = Interlocked.Increment(ref captureCount);
+                if (n == 1) {
+                    return JsonValue.Create(0); // run 1: ack, never complete — Stop abandons the wait
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    if (Interlocked.Exchange(ref staleDelivered, 1) == 0) {
+                        // Run 1's debt, delivered late into run 2 — exactly once.
+                        await fake.BroadcastAsync(new JsonObject {
+                            ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                            ["Inst"] = 1, ["Success"] = true,
+                            ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_stale",
+                            ["Filename"] = "save_image_stale",
+                        }).ConfigureAwait(false);
+                        await Task.Delay(30).ConfigureAwait(false);
+                    }
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_fresh",
+                        ["Filename"] = "save_image_fresh",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var fetcher = new FakeFrameFetcher();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, fetcher: fetcher);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            // Give run 1 time to ack its first capture and park on the completion wait.
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
+                while (Volatile.Read(ref captureCount) < 1) {
+                    await Task.Delay(25, cts.Token).ConfigureAwait(false);
+                }
+            }
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(fetcher.Fetched, Is.Not.Empty);
+            Assert.That(fetcher.Fetched.Select(f => f.Filename), Is.All.EqualTo("save_image_fresh"),
+                "run 1's abandoned capture must never leak its frame into run 2");
+        }
+
+        [Test]
         public async Task A_failed_frame_fetch_fails_the_seed_as_capture_rejected() {
             // The daemon saved the frame but the HTTP download fails (pre-#77 daemon, network) —
             // still a capture-layer fault: capture_rejected, with the fetch error surfaced.

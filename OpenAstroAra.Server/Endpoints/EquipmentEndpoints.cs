@@ -32,7 +32,7 @@ namespace OpenAstroAra.Server.Endpoints;
 /// Idempotency-Key header is read where §60.5 requires it. Long-running
 /// ops return 202 with operation accepted; progress arrives via WS.
 /// </summary>
-public static class EquipmentEndpoints {
+public static partial class EquipmentEndpoints {
 
     public static IEndpointRouteBuilder MapEquipmentEndpoints(this IEndpointRouteBuilder app) {
         var equipment = app.MapGroup("/api/v1/equipment").WithTags("Equipment");
@@ -324,7 +324,8 @@ public static class EquipmentEndpoints {
         // the stuck-device escape hatch. A Connected switch is refused (409): disconnect first, so a
         // removal on live hardware is always an explicit two-step. Unknown id → 404 (idempotent
         // clients treat it as already-gone).
-        sw.MapDelete("/{id}", async (string id, ISwitchService svc, IEquipmentSelectionStore selectionStore, CancellationToken ct) => {
+        sw.MapDelete("/{id}", async (string id, ISwitchService svc, IEquipmentSelectionStore selectionStore,
+                Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) => {
             try {
                 if (!await svc.RemoveAsync(id, ct)) {
                     return Results.NotFound();
@@ -332,7 +333,15 @@ public static class EquipmentEndpoints {
             } catch (System.InvalidOperationException ex) {
                 return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
             }
-            await selectionStore.ForgetSwitchAsync(id, ct);
+            // Best-effort: the switch is ALREADY removed from the live registry — a selection-store
+            // I/O failure must not turn the removal into a 500 (the caller would retry into a 404
+            // and the stale remembered entry could resurrect the device on boot unnoticed). Log it
+            // so the operator knows to expect one auto-connect ghost until the next forget.
+            try {
+                await selectionStore.ForgetSwitchAsync(id, ct);
+            } catch (System.IO.IOException ex) {
+                LogSwitchForgetFailed(logger, ex, id);
+            }
             return Results.NoContent();
         });
         // A write needs a live switch, so the errors map (per the file's convention): an out-of-range
@@ -671,4 +680,10 @@ public static class EquipmentEndpoints {
         await selectionStore.RememberAsync(request.Device, CancellationToken.None);
         return Results.Accepted(value: accepted);
     }
+
+    [global::Microsoft.Extensions.Logging.LoggerMessage(EventId = 3720,
+        Level = global::Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "Switch {DeviceId} was removed from the live registry, but forgetting its remembered auto-connect entry failed — it may reappear on the next boot; remove it again to retry the forget.")]
+    private static partial void LogSwitchForgetFailed(
+        global::Microsoft.Extensions.Logging.ILogger logger, global::System.Exception ex, string deviceId);
 }

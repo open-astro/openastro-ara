@@ -19,6 +19,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
@@ -204,7 +205,8 @@ namespace OpenAstroAra.Server.Services {
                     _startedAt = DateTimeOffset.UtcNow;
                     gen = ++_generation;
                     _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
-                    _abandonedCaptures = 0;   // fresh run — prior timed-out captures can't owe events anymore
+                    // _abandonedCaptureDebts is deliberately NOT reset: a capture abandoned by the
+                    // JUST-STOPPED run may still deliver its event into this run (review r2).
                     startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
@@ -523,12 +525,9 @@ namespace OpenAstroAra.Server.Services {
             // this handler pays it by SWALLOWING exactly that many events — the stale capture then
             // surfaces as a clean timed-out/failed solve, never as misattributed data.
             void OnComplete(object? sender, SingleFrameCompleteEventArgs e) {
-                lock (_gate) {
-                    if (_abandonedCaptures > 0) {
-                        _abandonedCaptures--;
-                        LogCaptureFailed(frameId, "swallowed a stale SingleFrameComplete owed by a timed-out capture");
-                        return; // keep waiting for THIS capture's own event
-                    }
+                if (TryConsumeStaleDebt()) {
+                    LogCaptureFailed(frameId, "swallowed a stale SingleFrameComplete owed by an abandoned capture");
+                    return; // keep waiting for THIS capture's own event
                 }
                 tcs.TrySetResult(e);
             }
@@ -552,7 +551,16 @@ namespace OpenAstroAra.Server.Services {
                     RecordCaptureFault(gen, frameId, ex.Message);
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
-                var completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
+                SingleFrameCompleteEventArgs completed;
+                try {
+                    completed = await tcs.Task.WaitAsync(CaptureCompleteTimeout, ct).ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    // Stop/restart cancelled the wait AFTER the RPC ack — the daemon still owes this
+                    // capture's event, and without the debt the NEXT run would adopt it as fresh
+                    // data (review r2: the common abandonment path, not just the timeout).
+                    RecordAbandonedCapture();
+                    throw;
+                }
                 lock (_gate) {
                     if (_generation == gen) {
                         _framesCaptured++;
@@ -600,11 +608,9 @@ namespace OpenAstroAra.Server.Services {
                     return new PolarAlignSolveOutcome(false, 0, 0);
                 }
             } catch (TimeoutException) {
-                lock (_gate) {
-                    // The daemon may still deliver this capture's event later — the next capture's
-                    // handler must swallow it rather than adopt its (stale) frame.
-                    _abandonedCaptures++;
-                }
+                // The daemon may still deliver this capture's event later — the next capture's
+                // handler must swallow it rather than adopt its (stale) frame.
+                RecordAbandonedCapture();
                 RecordCaptureFault(gen, frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
@@ -617,9 +623,34 @@ namespace OpenAstroAra.Server.Services {
         private readonly IPolarAlignFrameFetcher _frameFetcher;
         private readonly bool _ownsFetcher;
 
-        // §45 capture-fetch — how many timed-out captures still owe a SingleFrameComplete event.
-        // Guarded by _gate; reset at run start. See CaptureAndSolveAsync's OnComplete.
-        private int _abandonedCaptures;
+        // §45 capture-fetch — timestamps of ABANDONED captures (timed out OR cancelled by a
+        // Stop/restart after the RPC ack) that still owe a SingleFrameComplete. Guarded by _gate.
+        // Debts survive run boundaries by design (review r2: a Stop→Start abandons a capture whose
+        // late event would otherwise be adopted by the NEW run as fresh data) and EXPIRE after
+        // StaleDebtTtl so a daemon that never delivers can't starve future captures — worst case
+        // one swallowed-then-retried capture per anomaly.
+        private readonly Queue<DateTimeOffset> _abandonedCaptureDebts = new();
+        internal TimeSpan StaleDebtTtl { get; set; } = TimeSpan.FromSeconds(60);
+
+        private void RecordAbandonedCapture() {
+            lock (_gate) {
+                _abandonedCaptureDebts.Enqueue(DateTimeOffset.UtcNow);
+            }
+        }
+
+        private bool TryConsumeStaleDebt() {
+            lock (_gate) {
+                var cutoff = DateTimeOffset.UtcNow - StaleDebtTtl;
+                while (_abandonedCaptureDebts.Count > 0 && _abandonedCaptureDebts.Peek() < cutoff) {
+                    _abandonedCaptureDebts.Dequeue(); // expired — the daemon evidently never delivered
+                }
+                if (_abandonedCaptureDebts.Count == 0) {
+                    return false;
+                }
+                _abandonedCaptureDebts.Dequeue();
+                return true;
+            }
+        }
 
         // §45 — the most recent CAPTURE-layer fault (RPC rejection, missing filename, failed fetch,
         // completion timeout) for the current run; null once a capture gets as far as the solver.
