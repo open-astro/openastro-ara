@@ -152,6 +152,27 @@ void main() {
       final out =
           applyDraftToPlateSolve(const PlateSolveSettings(), d);
       expect(out.downsampleFactor, 2);
+      // Search radius is pointing-uncertainty-driven, never derived — the
+      // §37.8 default survives untouched.
+      expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
+    });
+
+    test('§76 S5 derivations respect a cloned profile\'s hand-tuned values',
+        () {
+      final d = ProfileDraft();
+      d.camera.pixelSizeMicrons = 3.76;
+      d.telescope
+        ..focalLengthMm = 530
+        ..apertureMm = 106;
+      d.focuser.stepSizeMicrons = 1.2;
+      // Base carries explicit non-default customizations (cloned profile) —
+      // the derivations must not clobber them.
+      final ps = applyDraftToPlateSolve(
+          const PlateSolveSettings().copyWith(downsampleFactor: 3), d);
+      expect(ps.downsampleFactor, 3);
+      final af = applyDraftToAutofocus(
+          const AutofocusSettings().copyWith(stepSize: 80), d);
+      expect(af.stepSize, 80);
     });
 
     test('§76 S5 derivations — AF step size from CFZ + focuser step', () {

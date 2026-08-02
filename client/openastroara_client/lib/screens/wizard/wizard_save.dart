@@ -215,13 +215,20 @@ PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft 
     indexDownloadPath: d.clearedFields.contains(ClearableField.starDatabasePath)
         ? defaults.indexDownloadPath
         : ps.starDatabasePath,
+    // Search radius is deliberately NOT derived (§76.1): it reflects mount
+    // pointing uncertainty, not optics — image scale says nothing about how
+    // far off a goto lands, so the §37.8 default stands.
     searchRadiusDeg: ps.searchRadiusDeg,
     // §76.1 derived-never-asked: the wizard no longer has a plate-solve
-    // screen, so an unset downsample is seeded from the rig's image scale
-    // (the §76 S5 derivation) rather than always keeping the base.
+    // screen, so an unset downsample is seeded from the rig's image scale —
+    // but only when the base is still at the section default: a cloned
+    // profile where the user hand-tuned the value keeps that tuning (null →
+    // copyWith keeps base).
     downsampleFactor: ps.downsampleFactor ??
-        derivedAstapDownsample(
-            d.camera.pixelSizeMicrons, d.telescope.focalLengthMm),
+        (base.downsampleFactor == defaults.downsampleFactor
+            ? derivedAstapDownsample(
+                d.camera.pixelSizeMicrons, d.telescope.focalLengthMm)
+            : null),
   );
 }
 
@@ -249,12 +256,15 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
     steps: af.steps,
     // §76 S5 — with no autofocus screen, an unset step size is seeded from
     // the focuser's read step size + the optics' focal ratio when both are
-    // known (null keeps the base, as before).
+    // known — but only when the base is still at the section default: a
+    // cloned profile's hand-tuned step size survives (null keeps the base).
     stepSize: af.stepSize ??
-        derivedAutofocusStepSize(
-            focuserStepUm: d.focuser.stepSizeMicrons,
-            focalLengthMm: d.telescope.focalLengthMm,
-            apertureMm: d.telescope.apertureMm),
+        (base.stepSize == const AutofocusSettings().stepSize
+            ? derivedAutofocusStepSize(
+                focuserStepUm: d.focuser.stepSizeMicrons,
+                focalLengthMm: d.telescope.focalLengthMm,
+                apertureMm: d.telescope.apertureMm)
+            : null),
     runAfterFilterChange: af.runAfterFilterChange,
     // §59.4 — the draft carries the wire string (null = untouched, keep base).
     telescopeType: af.telescopeType == null

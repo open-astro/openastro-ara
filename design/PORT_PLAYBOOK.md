@@ -12763,9 +12763,11 @@ users reach everything through disclosures, not extra steps.
   guide exposure range, save location. Nothing else is asked.
 - **Fallback, visually secondary:** non-Bridge servers that don't report optics get an inline
   "enter it here" field on the ⚠️ card so third-party gear is never bricked.
-- **Derived, never asked:** ASTAP search radius + downsample from image scale; autofocus step
-  size seeded from focuser step size; OAG guide focal length = main focal length; guide-camera
-  pixel size from its Alpaca camera. Autofocus, imaging defaults, safety thresholds, and site
+- **Derived, never asked:** ASTAP downsample from image scale (search radius deliberately
+  stays at its §37.8 default — it reflects MOUNT POINTING uncertainty, not optics, so deriving
+  it from image scale would be false precision); autofocus step size seeded from focuser step
+  size; OAG guide focal length = main focal length; guide-camera pixel size from its Alpaca
+  camera. Autofocus, imaging defaults, safety thresholds, and site
   preferences take thoughtful defaults and live in Options — the wizard never mentions them.
 
 ### 76.2 The five screens
@@ -12806,7 +12808,8 @@ checklist that is already green, with re-run entry points for hardware changes.
 - **S2** — screens 1–3 (Welcome, Connect, equipment cards + deep link + disclosures)
 - **S3** — Guiding screen (decisions, exposure range picker shared with the §63.6 dark-library semantics)
 - **S4** — Save/Done + guider provisioning + darks kickoff with live progress
-- **S5** — defaults derivation (ASTAP/AF), retire old screens, migrate tests/help/§61 search
+- **S5** — defaults derivation (ASTAP downsample + AF step; solve radius stays default, see
+  §76.1), retire old screens, migrate tests/help/§61 search
 
 ### 76.6 Cross-references
 
