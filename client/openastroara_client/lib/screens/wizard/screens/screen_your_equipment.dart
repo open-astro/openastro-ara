@@ -119,9 +119,6 @@ class ScreenYourEquipment extends ConsumerStatefulWidget {
 class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
   late final ProfileDraft _draft;
 
-  /// Names for slot-only assignments (the readiness map covers fact types).
-  final Map<EquipmentDeviceType, String> _otherNames = {};
-  final Map<String, String> _switchNames = {};
 
   bool _preparing = false;
   String? _prepareError;
@@ -200,9 +197,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       final devices = await api.discover(type);
       if (devices.length == 1) {
         _slotSet(_draft.equipment, type, devices.single.uniqueId);
-        if (_otherTypes.contains(type)) {
-          _otherNames[type] = devices.single.name;
-        }
+        _draft.deviceNames[devices.single.uniqueId] = devices.single.name;
       }
       // Deliberately broad: this screen's contract is never-crash — any
       // throwable (incl. an Error from a malformed response) leaves the slot
@@ -229,12 +224,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
     if (picked == null || !mounted) return;
     setState(() {
       _slotSet(_draft.equipment, type, picked.device?.uniqueId);
-      if (_otherTypes.contains(type)) {
-        if (picked.device != null) {
-          _otherNames[type] = picked.device!.name;
-        } else {
-          _otherNames.remove(type);
-        }
+      if (picked.device != null) {
+        _draft.deviceNames[picked.device!.uniqueId] = picked.device!.name;
       }
     });
     // Re-verify the changed slot (fact types only — slot-only types carry no
@@ -271,7 +262,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       if (!_draft.equipment.switchDeviceIds.contains(device.uniqueId)) {
         _draft.equipment.switchDeviceIds.add(device.uniqueId);
       }
-      _switchNames[device.uniqueId] = device.name;
+      _draft.deviceNames[device.uniqueId] = device.name;
     });
   }
 
@@ -335,7 +326,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
             label: _typeLabel(type),
             assigned: _slotGet(_draft.equipment, type) == null
                 ? null
-                : (_otherNames[type] ?? _slotGet(_draft.equipment, type)!),
+                : (_draft.deviceNames[_slotGet(_draft.equipment, type)!] ??
+                    _slotGet(_draft.equipment, type)!),
             onChoose: () => unawaited(_choose(type)),
           ),
         _switchSection(context),
@@ -378,10 +370,10 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
                 children: [
                   for (final id in ids)
                     InputChip(
-                      label: Text(_switchNames[id] ?? id),
+                      label: Text(_draft.deviceNames[id] ?? id),
                       onDeleted: () => setState(() {
                         ids.remove(id);
-                        _switchNames.remove(id);
+                        _draft.deviceNames.remove(id);
                       }),
                     ),
                 ],
@@ -655,6 +647,12 @@ class _DetailsDisclosure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Gated until the read lands (review r2): the gap-conditional fallback
+    // fields would otherwise insert/remove around text the user is already
+    // typing mid-read; post-landing the field list is stable.
+    if (readiness.state == ReadinessState.reading) {
+      return const SizedBox.shrink();
+    }
     final children = switch (readiness.type) {
       EquipmentDeviceType.camera => _camera(),
       EquipmentDeviceType.mount => _mount(),
@@ -692,6 +690,7 @@ class _DetailsDisclosure extends StatelessWidget {
     return [
       if (_gapFor('Pixel size'))
         WizardTextField(
+          key: const ValueKey('details-camera-pixel-size'),
           label: 'Pixel size (µm) — manual fallback',
           initialValue: c.pixelSizeMicrons?.toString(),
           helperText: 'Only needed because the camera didn\'t report it.',
@@ -700,6 +699,7 @@ class _DetailsDisclosure extends StatelessWidget {
           onChanged: (v) => _assignDouble(v, (d) => c.pixelSizeMicrons = d),
         ),
       WizardTextField(
+        key: const ValueKey('details-camera-cooling'),
         label: 'Cooling target (°C)',
         initialValue: c.coolingTargetC?.toString(),
         hint: 'e.g. -10',
@@ -709,6 +709,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => _assignDouble(v, (d) => c.coolingTargetC = d),
       ),
       WizardTextField(
+        key: const ValueKey('details-camera-gain'),
         label: 'Default gain',
         initialValue: c.defaultGain?.toString(),
         keyboardType: TextInputType.number,
@@ -716,6 +717,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => c.defaultGain = _toInt(v),
       ),
       WizardTextField(
+        key: const ValueKey('details-camera-offset'),
         label: 'Default offset',
         initialValue: c.defaultOffset?.toString(),
         keyboardType: TextInputType.number,
@@ -723,6 +725,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => c.defaultOffset = _toInt(v),
       ),
       WizardTextField(
+        key: const ValueKey('details-camera-readnoise'),
         label: 'Read noise (e⁻)',
         initialValue: c.readNoiseE?.toString(),
         helperText: 'Spec-sheet value — Alpaca doesn\'t report it. Feeds '
@@ -732,6 +735,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => _assignDouble(v, (d) => c.readNoiseE = d),
       ),
       WizardTextField(
+        key: const ValueKey('details-camera-qe'),
         label: 'Peak QE (%)',
         initialValue: c.qePeakPct?.toString(),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -747,6 +751,7 @@ class _DetailsDisclosure extends StatelessWidget {
     return [
       if (_gapFor('Focal length'))
         WizardTextField(
+          key: const ValueKey('details-mount-fl'),
           label: 'Focal length (mm) — manual fallback',
           initialValue: t.focalLengthMm?.toString(),
           helperText: 'Only needed because the driver didn\'t report it.',
@@ -756,6 +761,7 @@ class _DetailsDisclosure extends StatelessWidget {
         ),
       if (_gapFor('Aperture'))
         WizardTextField(
+          key: const ValueKey('details-mount-aperture'),
           label: 'Aperture (mm) — manual fallback',
           initialValue: t.apertureMm?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -785,6 +791,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => m.parkMode = v ?? ParkPositionMode.syncCurrent,
       ),
       WizardTextField(
+        key: const ValueKey('details-mount-settle'),
         label: 'Settle time after slew (s)',
         initialValue: m.settleTimeAfterSlew?.inSeconds.toString(),
         keyboardType: TextInputType.number,
@@ -805,6 +812,7 @@ class _DetailsDisclosure extends StatelessWidget {
     if (!_gapFor('Filter names')) return const [];
     return [
       WizardTextField(
+        key: const ValueKey('details-fw-names'),
         label: 'Filter names — manual fallback',
         initialValue: draft.filterWheel.filters
             .map((f) => f.name)
@@ -834,6 +842,7 @@ class _DetailsDisclosure extends StatelessWidget {
     return [
       if (_gapFor('Step size'))
         WizardTextField(
+          key: const ValueKey('details-focuser-step'),
           label: 'Step size (µm/step) — optional',
           initialValue: f.stepSizeMicrons?.toString(),
           helperText: 'Refines autofocus seeding; fine to leave blank.',
@@ -842,6 +851,7 @@ class _DetailsDisclosure extends StatelessWidget {
           onChanged: (v) => _assignDouble(v, (d) => f.stepSizeMicrons = d),
         ),
       WizardTextField(
+        key: const ValueKey('details-focuser-backlash-in'),
         label: 'Backlash in (steps)',
         initialValue: f.backlashInSteps?.toString(),
         keyboardType: TextInputType.number,
@@ -849,6 +859,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => f.backlashInSteps = _toInt(v),
       ),
       WizardTextField(
+        key: const ValueKey('details-focuser-backlash-out'),
         label: 'Backlash out (steps)',
         initialValue: f.backlashOutSteps?.toString(),
         keyboardType: TextInputType.number,
@@ -862,6 +873,7 @@ class _DetailsDisclosure extends StatelessWidget {
     final r = draft.rotator;
     return [
       WizardTextField(
+        key: const ValueKey('details-rotator-min'),
         label: 'Minimum angle (°)',
         initialValue: r.minAngleDeg?.toString(),
         helperText: 'Your mechanical cable-wrap limits — not an Alpaca '
@@ -872,6 +884,7 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) => _assignDouble(v, (d) => r.minAngleDeg = d),
       ),
       WizardTextField(
+        key: const ValueKey('details-rotator-max'),
         label: 'Maximum angle (°)',
         initialValue: r.maxAngleDeg?.toString(),
         keyboardType:
