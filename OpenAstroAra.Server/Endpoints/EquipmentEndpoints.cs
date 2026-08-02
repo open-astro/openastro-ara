@@ -341,6 +341,10 @@ public static partial class EquipmentEndpoints {
                 await selectionStore.ForgetSwitchAsync(id, ct);
             } catch (System.IO.IOException ex) {
                 LogSwitchForgetFailed(logger, ex, id);
+            } catch (System.UnauthorizedAccessException ex) {
+                // Not an IOException subclass — a read-only profile dir would otherwise 500 the
+                // removal despite the guarantee above (review r5).
+                LogSwitchForgetFailed(logger, ex, id);
             }
             return Results.NoContent();
         });

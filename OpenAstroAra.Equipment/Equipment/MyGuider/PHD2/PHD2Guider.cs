@@ -179,9 +179,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private bool initialized;
 
-        /// <summary>§45 capture-fetch — the resolved host/RPC port of the LAST connect attempt (set just
-        /// before dialing; meaningful while Connected). The daemon's HTTP capture endpoint lives on the
-        /// same host at rpc+<see cref="HttpPortOffsetFromRpc"/>.</summary>
+        /// <summary>§45 capture-fetch — the resolved host/RPC port of the last SUCCESSFUL connect
+        /// (set only after the socket handshake; reset to null/0 by a failed attempt). The daemon's
+        /// HTTP capture endpoint lives on the same host at rpc+<see cref="HttpPortOffsetFromRpc"/>.</summary>
         public string? ConnectedHost { get; private set; }
         public int ConnectedRpcPort { get; private set; }
 
@@ -214,10 +214,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
 
             Logger.Info($"Connecting to PHD2 server at {phd2Ip}:{serverPort}");
-            // §45 capture-fetch: remember what we dialed so the capture-frame HTTP URL can be
-            // built against the same endpoint (the resolved IP survives mDNS names going stale).
-            ConnectedHost = phd2Ip.ToString();
-            ConnectedRpcPort = serverPort;
 
             // §63: the guider (openastro-guider / PHD2) runs as its own systemd/docker
             // service and is already listening before ARA connects (the Pi boots PHD2,
@@ -230,6 +226,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             _ = Task.Run(RunListener, token);
 
             connected = await _tcs.Task;
+
+            // §45 capture-fetch invariant (review r5): these fields describe a LIVE connection only.
+            // Set after the socket handshake succeeds — never before — so a failed attempt can't
+            // leave a never-live (or stale prior) endpoint for the capture-frame URL builder; on
+            // failure they reset to the never-connected state.
+            ConnectedHost = connected ? phd2Ip.ToString() : null;
+            ConnectedRpcPort = connected ? serverPort : 0;
 
             try {
                 if (connected) {
