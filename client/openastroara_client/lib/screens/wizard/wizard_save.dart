@@ -291,7 +291,10 @@ int? derivedAutofocusStepSize({
   final fRatio = focalLengthMm / apertureMm;
   final cfzUm = 2.2 * fRatio * fRatio;
   final steps = (cfzUm / 2 / focuserStepUm).round();
-  return steps.clamp(5, 500);
+  // .toInt() for explicitness: int.clamp(int, int) IS statically int since
+  // Dart 2.17 (the SDK special-cases it), but spelling it out spares every
+  // future reader the num-vs-int double-take (review r3).
+  return steps.clamp(5, 500).toInt();
 }
 
 /// §37.4 screen 13 — map the draft's file-saving choices onto the profile's
