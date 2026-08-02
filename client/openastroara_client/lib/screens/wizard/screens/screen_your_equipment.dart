@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/discovered_device.dart';
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
+import '../wizard_facts_apply.dart' show inferFilterType;
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
@@ -167,10 +168,19 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       }
       if (!mounted) return;
       setState(() {}); // show the assigned slots before the reads land
+      // Deliberately re-read on EVERY entry (not just the first): the cards
+      // display live hardware truth, and the user's fix-in-AlpacaBridge →
+      // come-back loop depends on re-entry re-verifying. Cheap in practice —
+      // already-connected devices answer the first ~750 ms status poll; the
+      // ~15 s worst case only applies to a device that is actually
+      // connecting, during which its card shows the reading spinner.
       await ref
           .read(wizardEquipmentReadinessProvider.notifier)
           .readAll(server, _draft.equipment);
-    } on Exception catch (e) {
+      // Deliberately broad (same never-crash contract as _autoAssign): any
+      // throwable lands in the retryable banner, not an unhandled async error.
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
       if (mounted) {
         setState(() => _prepareError =
             'Discovery failed (${describeReadinessError(e)}). '
@@ -185,18 +195,21 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
   /// zero or several leave it for the user (ambiguity gets a question, per
   /// §76.2 — never a guess between two cameras). Discovery errors leave the
   /// slot unassigned; the card's Choose path retries interactively.
-  Future<void> _autoAssign(dynamic api, EquipmentDeviceType type) async {
+  Future<void> _autoAssign(
+      EquipmentDiscoveryApi api, EquipmentDeviceType type) async {
     try {
-      final devices = await api.discover(type) as List<DiscoveredDevice>;
+      final devices = await api.discover(type);
       if (devices.length == 1) {
         _slotSet(_draft.equipment, type, devices.single.uniqueId);
         if (_otherTypes.contains(type)) {
           _otherNames[type] = devices.single.name;
         }
       }
-    } on Exception {
-      // Leave unassigned — the row's Choose affordance surfaces errors.
-    }
+      // Deliberately broad: this screen's contract is never-crash — any
+      // throwable (incl. an Error from a malformed response) leaves the slot
+      // unassigned; the row's Choose affordance surfaces errors interactively.
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {}
   }
 
   Future<void> _choose(EquipmentDeviceType type) async {
@@ -646,6 +659,7 @@ class _DetailsDisclosure extends StatelessWidget {
     final children = switch (readiness.type) {
       EquipmentDeviceType.camera => _camera(),
       EquipmentDeviceType.mount => _mount(),
+      EquipmentDeviceType.filterWheel => _filterWheel(),
       EquipmentDeviceType.focuser => _focuser(),
       EquipmentDeviceType.rotator => _rotator(),
       _ => const <Widget>[],
@@ -779,6 +793,38 @@ class _DetailsDisclosure extends StatelessWidget {
         onChanged: (v) {
           final s = _toInt(v);
           m.settleTimeAfterSlew = s == null ? null : Duration(seconds: s);
+        },
+      ),
+    ];
+  }
+
+  List<Widget> _filterWheel() {
+    // The manual escape hatch for a wheel whose driver reports no slot names
+    // (review r1) — same secondary posture as the other fallback fields. A
+    // comma-separated list keeps it one field; types are inferred like the
+    // Alpaca-read path so both entry routes agree.
+    if (!_gapFor('Filter names')) return const [];
+    return [
+      WizardTextField(
+        label: 'Filter names — manual fallback',
+        initialValue: draft.filterWheel.filters
+            .map((f) => f.name)
+            .whereType<String>()
+            .join(', '),
+        hint: 'L, R, G, B, Hα, OIII, SII',
+        helperText: 'Only needed because the wheel didn\'t report its slots. '
+            'Comma-separated, in slot order.',
+        onChanged: (v) {
+          final names = v
+              .split(',')
+              .map((n) => n.trim())
+              .where((n) => n.isNotEmpty)
+              .toList();
+          draft.filterWheel.filters
+            ..clear()
+            ..addAll(names.map((n) => FilterDef()
+              ..name = n
+              ..type = inferFilterType(n)));
         },
       ),
     ];
