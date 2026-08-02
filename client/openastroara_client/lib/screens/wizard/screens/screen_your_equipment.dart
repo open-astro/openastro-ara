@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../models/discovered_device.dart';
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../services/equipment_discovery_api.dart';
