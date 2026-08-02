@@ -91,6 +91,15 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   @override
   void initState() {
     super.initState();
+    // Re-derive the range gate from the persisted draft on every mount
+    // (review r1): the controller resets step validity to true on ANY
+    // navigation and Back is unguarded, so without this a Back → Next hop
+    // would carry an inverted range straight past Next. Post-frame because
+    // providers can't be written mid-build (same pattern as the §68.2
+    // connect screen).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _setRange();
+    });
     unawaited(_loadBaseGuideSetup());
     // A guide camera may already be chosen (draft re-entry / base profile) —
     // try the pixel-size read for it on entry.
