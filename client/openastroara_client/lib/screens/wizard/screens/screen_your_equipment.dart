@@ -8,7 +8,6 @@ import '../../../models/discovered_device.dart';
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../services/equipment_discovery_api.dart';
-import '../wizard_facts_apply.dart' show inferFilterType;
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
