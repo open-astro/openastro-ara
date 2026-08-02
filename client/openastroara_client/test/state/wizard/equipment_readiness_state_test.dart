@@ -223,6 +223,49 @@ void main() {
     expect(fixed.closes, 1);
   });
 
+  test('a recheck started DURING an in-flight readAll owns the card — the '
+      'readAll landing for that type defers to it', () async {
+    // readAll's source parks (would eventually report the device missing);
+    // the recheck fired mid-flight answers immediately with a ready wheel.
+    final slow = _SlowSource();
+    final c = ProviderContainer(overrides: [
+      deviceFactsSourceFactoryProvider.overrideWithValue((_) => slow),
+    ]);
+    addTearDown(c.dispose);
+    final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
+    final slots = EquipmentSlots()..filterWheelDeviceId = 'fw-1';
+
+    final readAll = notifier.readAll(_server, slots);
+    c.updateOverrides([
+      deviceFactsSourceFactoryProvider.overrideWithValue((_) => _FakeSource(
+            devices: {
+              'fw-1':
+                  _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+            },
+            wheel: const FilterWheelSlots(
+                [FilterWheelSlot(name: 'L', focusOffset: 0)]),
+          )),
+    ]);
+    await notifier.recheck(_server, EquipmentDeviceType.filterWheel, 'fw-1');
+    expect(
+        c
+            .read(wizardEquipmentReadinessProvider)[
+                EquipmentDeviceType.filterWheel]!
+            .state,
+        ReadinessState.ready);
+
+    // The parked readAll now finishes with its stale unreachable result —
+    // the recheck's newer card must survive.
+    slow.release.complete();
+    await readAll;
+    expect(
+        c
+            .read(wizardEquipmentReadinessProvider)[
+                EquipmentDeviceType.filterWheel]!
+            .state,
+        ReadinessState.ready);
+  });
+
   test('a double-tapped recheck resolves by START order — the slow first '
       'request cannot overwrite the newer result', () async {
     // First recheck's source parks until released and would report a gap;

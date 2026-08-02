@@ -74,8 +74,14 @@ class AraDeviceFactsSource implements DeviceFactsSource {
       await api.connect(device);
       for (var i = 0; i < pollAttempts; i++) {
         await Future<void>.delayed(pollInterval);
-        final status = await api.getStatus();
-        if (status != null && status['state'] == 'connected') return true;
+        try {
+          final status = await api.getStatus();
+          if (status != null && status['state'] == 'connected') return true;
+        } on Exception {
+          // A transient blip mid-window (review r2) must not turn a device
+          // that connects on the next poll into an "unreachable" card —
+          // keep polling; only exhausting the window reports failure.
+        }
       }
       return false;
     } finally {

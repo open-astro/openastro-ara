@@ -156,7 +156,12 @@ class WizardEquipmentReadiness
           return DeviceReadiness(
               type: type, label: label, state: ReadinessState.ready);
       }
-    } on Exception catch (e) {
+      // Deliberately broad (review r2): an Error escaping a fact read would
+      // otherwise reject out of readAll's Future.wait after the other cards
+      // landed, leaving this card stuck on "reading" forever. Any throwable
+      // maps to the retryable unreachable card instead.
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
       return DeviceReadiness(
         type: type,
         label: _genericLabel(type),
@@ -200,7 +205,7 @@ class WizardEquipmentReadiness
 /// Short user-facing gist of a read failure — never a raw DioException dump
 /// (request URL / internal addresses). Mirrors describeEquipmentError but kept
 /// local so this state file doesn't import the API layer for one string.
-String describeReadinessError(Exception e) {
+String describeReadinessError(Object e) {
   final s = e.toString();
   // DioException.toString() leads with "DioException [<type>]: <message>".
   final m = RegExp(r'^DioException \[[^\]]*\]:?\s*(.*)$').firstMatch(s);
