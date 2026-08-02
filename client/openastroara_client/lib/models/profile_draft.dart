@@ -61,6 +61,12 @@ class ProfileDraft {
   // review Edit) must not re-assign over a slot the user explicitly cleared.
   bool equipmentAutoAssigned = false;
 
+  // §76.2 — friendly display names for assigned devices, keyed by uniqueId.
+  // Lives on the draft (not screen-local state) so re-entering the screen
+  // shows "Pegasus UPB" rather than the raw id (review r2): the screen widget
+  // is recreated on every visit, the draft persists for the session.
+  final Map<String, String> deviceNames = <String, String>{};
+
   // Server id of the profile this draft was persisted as, set on the first
   // successful create during Save. A retry after a mid-save failure re-uses it
   // (re-applying the sections) instead of orphaning a new profile each attempt.
