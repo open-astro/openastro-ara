@@ -216,8 +216,27 @@ PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft 
         ? defaults.indexDownloadPath
         : ps.starDatabasePath,
     searchRadiusDeg: ps.searchRadiusDeg,
-    downsampleFactor: ps.downsampleFactor,
+    // §76.1 derived-never-asked: the wizard no longer has a plate-solve
+    // screen, so an unset downsample is seeded from the rig's image scale
+    // (the §76 S5 derivation) rather than always keeping the base.
+    downsampleFactor: ps.downsampleFactor ??
+        derivedAstapDownsample(
+            d.camera.pixelSizeMicrons, d.telescope.focalLengthMm),
   );
+}
+
+/// §76 S5 — seed ASTAP's downsample from the imaging train's pixel scale
+/// (206.265 × µm ÷ mm arcsec/px): solvers want ~1.5–3″/px, so oversampled
+/// rigs bin down (scale < 0.75″ → 4, < 1.5″ → 2) and everything else runs
+/// full-res. Null when the scale isn't computable (either fact missing) —
+/// copyWith then keeps the base value, same as every unset field.
+int? derivedAstapDownsample(double? pixelSizeUm, double? focalLengthMm) {
+  if (pixelSizeUm == null || pixelSizeUm <= 0) return null;
+  if (focalLengthMm == null || focalLengthMm <= 0) return null;
+  final scale = 206.265 * pixelSizeUm / focalLengthMm;
+  if (scale >= 1.5) return 1;
+  if (scale >= 0.75) return 2;
+  return 4;
 }
 
 /// §37.4 screen 12 — map the draft's autofocus subset onto the profile's
@@ -228,13 +247,41 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
   return base.copyWith(
     exposureSeconds: af.exposureSeconds,
     steps: af.steps,
-    stepSize: af.stepSize,
+    // §76 S5 — with no autofocus screen, an unset step size is seeded from
+    // the focuser's read step size + the optics' focal ratio when both are
+    // known (null keeps the base, as before).
+    stepSize: af.stepSize ??
+        derivedAutofocusStepSize(
+            focuserStepUm: d.focuser.stepSizeMicrons,
+            focalLengthMm: d.telescope.focalLengthMm,
+            apertureMm: d.telescope.apertureMm),
     runAfterFilterChange: af.runAfterFilterChange,
     // §59.4 — the draft carries the wire string (null = untouched, keep base).
     telescopeType: af.telescopeType == null
         ? null
         : telescopeTypeFromWire(af.telescopeType),
   );
+}
+
+/// §76 S5 — seed the autofocus step size (focuser steps per AF point) from
+/// the critical-focus zone: CFZ ≈ 2.2 µm × f-ratio² (the standard visual
+/// approximation), one AF step ≈ half the CFZ so the V-curve samples it.
+/// Needs the focuser's µm/step (often unreported — e.g. ZWO EAF) and the
+/// optics; null (keep base default) when either is missing. Clamped to
+/// [5, 500] so a degenerate train can't produce a useless 1-step or a
+/// hardware-grinding multi-thousand-step seed.
+int? derivedAutofocusStepSize({
+  double? focuserStepUm,
+  double? focalLengthMm,
+  double? apertureMm,
+}) {
+  if (focuserStepUm == null || focuserStepUm <= 0) return null;
+  if (focalLengthMm == null || focalLengthMm <= 0) return null;
+  if (apertureMm == null || apertureMm <= 0) return null;
+  final fRatio = focalLengthMm / apertureMm;
+  final cfzUm = 2.2 * fRatio * fRatio;
+  final steps = (cfzUm / 2 / focuserStepUm).round();
+  return steps.clamp(5, 500);
 }
 
 /// §37.4 screen 13 — map the draft's file-saving choices onto the profile's

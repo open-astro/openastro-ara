@@ -135,6 +135,43 @@ void main() {
       expect(out.forceCalibrationEachSession, isFalse);
     });
 
+    test('§76 S5 derivations — ASTAP downsample from image scale', () {
+      // 3.76 µm on 530 mm → 1.46″/px → downsample 2.
+      expect(derivedAstapDownsample(3.76, 530), 2);
+      // 3.76 µm on 400 mm → 1.94″/px → full-res.
+      expect(derivedAstapDownsample(3.76, 400), 1);
+      // 2.4 µm on 2000 mm → 0.25″/px → 4.
+      expect(derivedAstapDownsample(2.4, 2000), 4);
+      // Either fact missing → null (keep base).
+      expect(derivedAstapDownsample(null, 530), isNull);
+      expect(derivedAstapDownsample(3.76, 0), isNull);
+
+      final d = ProfileDraft();
+      d.camera.pixelSizeMicrons = 3.76;
+      d.telescope.focalLengthMm = 530;
+      final out =
+          applyDraftToPlateSolve(const PlateSolveSettings(), d);
+      expect(out.downsampleFactor, 2);
+    });
+
+    test('§76 S5 derivations — AF step size from CFZ + focuser step', () {
+      // f/5 → CFZ ≈ 55 µm; half-CFZ over 1.2 µm/step → 23 steps.
+      expect(
+          derivedAutofocusStepSize(
+              focuserStepUm: 1.2, focalLengthMm: 530, apertureMm: 106),
+          23);
+      // Unreported focuser step (the EAF case) → null, base default stands.
+      expect(
+          derivedAutofocusStepSize(
+              focuserStepUm: null, focalLengthMm: 530, apertureMm: 106),
+          isNull);
+      // Degenerate fast train clamps to the 5-step floor.
+      expect(
+          derivedAutofocusStepSize(
+              focuserStepUm: 50, focalLengthMm: 400, apertureMm: 200),
+          5);
+    });
+
     test('applyDraftToPhd2 §76.2 persists the guide exposure range', () {
       final d = ProfileDraft();
       d.guider
