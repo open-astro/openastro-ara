@@ -40,22 +40,38 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         internal const int CaptureGainMin = 0;
         internal const int CaptureGainMax = 100;
 
+        /// <summary>The offset between the daemon's JSON-RPC port and its embedded HTTP server:
+        /// both derive from the instance id (event_server.cpp: rpc = 4400+i-1, http = 8080+i-1),
+        /// so http = rpc + 3680 for every instance. The daemon does not report the HTTP port over
+        /// RPC — this derivation is the contract.</summary>
+        public const int HttpPortOffsetFromRpc = 8080 - 4400;
+
+        /// <summary>The §45 capture-fetch URL for a daemon-saved solver frame: the guider#77 HTTP
+        /// endpoint on the connected daemon's host, port derived per <see cref="HttpPortOffsetFromRpc"/>.
+        /// Pure — unit-testable.</summary>
+        public static Uri CaptureFrameUri(string host, int rpcPort, string filename) =>
+            new($"http://{host}:{rpcPort + HttpPortOffsetFromRpc}/api/capture/{Uri.EscapeDataString(filename)}");
+
         /// <summary>Raised when the daemon finishes a <c>capture_single_frame</c> (the RPC itself acks
-        /// immediately). <see cref="SingleFrameCompleteEventArgs.Path"/> is the saved-FITS location ARA
-        /// hands to its plate solver, present only when the capture requested a save.</summary>
+        /// immediately). <see cref="SingleFrameCompleteEventArgs.Path"/> is the DAEMON-LOCAL saved-FITS
+        /// location; <see cref="SingleFrameCompleteEventArgs.Filename"/> (guider#77 builds) is the bare
+        /// name a remote caller fetches from the daemon's HTTP capture endpoint. Both present only when
+        /// the capture requested a save.</summary>
         public event EventHandler<SingleFrameCompleteEventArgs>? SingleFrameComplete;
 
-        private void RaiseSingleFrameComplete(bool success, string? error, string? path) =>
-            SingleFrameComplete?.Invoke(this, new SingleFrameCompleteEventArgs(success, error, path));
+        private void RaiseSingleFrameComplete(bool success, string? error, string? path, string? filename) =>
+            SingleFrameComplete?.Invoke(this, new SingleFrameCompleteEventArgs(success, error, path, filename));
 
         /// <summary>
         /// Validates the §45 solver-frame parameters at the send site and builds the wire request. A saved
         /// frame (<paramref name="save"/> true, or any <paramref name="path"/> given) requires a non-empty
         /// ABSOLUTE path — the daemon rejects a relative path, and the solver needs a known location to read.
         /// Throws <see cref="ArgumentOutOfRangeException"/> for a non-positive exposure/binning or an
-        /// out-of-range gain, and <see cref="ArgumentException"/> for a save without an absolute path or a
+        /// out-of-range gain, and <see cref="ArgumentException"/> for a non-absolute explicit path or a
         /// malformed subframe — surfaced before the socket so the caller gets a clear error rather than the
-        /// daemon's opaque <c>-32602</c>.
+        /// daemon's opaque <c>-32602</c>. A save WITHOUT a path is valid (§45 capture-fetch): the daemon
+        /// saves inside its own sandbox and reports the filename on SingleFrameComplete — the only shape
+        /// that works when the daemon runs on another machine (its sandbox rejects foreign paths).
         /// </summary>
         public static Phd2CaptureSolverFrame BuildCaptureSolverFrameRequest(
             int? exposureMs, int? binning, int? gain, IReadOnlyList<int>? subframe, string? path, bool save) {
@@ -71,11 +87,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (subframe is not null && subframe.Count != 4) {
                 throw new ArgumentException("subframe must be [x, y, width, height].", nameof(subframe));
             }
-            // A path implies a save; a save needs an absolute path the daemon can write and ARA can read.
+            // A path implies a save. A save without a path is the daemon-side default-save (the daemon
+            // picks a name inside its sandbox and reports it on SingleFrameComplete); an EXPLICIT path
+            // must be absolute — the daemon rejects relative ones with an opaque -32602.
             var effectiveSave = save || path is not null;
-            if (effectiveSave) {
+            if (path is not null) {
                 if (string.IsNullOrWhiteSpace(path)) {
-                    throw new ArgumentException("a saved frame requires a path.", nameof(path));
+                    throw new ArgumentException("an explicit save path must be non-empty.", nameof(path));
                 }
                 // IsPathFullyQualified — not IsPathRooted — so Windows drive-relative ("C:a.fits") and
                 // root-relative ("\a.fits") paths (which IsPathRooted accepts but the daemon rejects) are
@@ -194,9 +212,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     /// <summary>The daemon finished a <c>capture_single_frame</c>. <see cref="Success"/> is always set;
     /// <see cref="Error"/> carries the failure reason on a failed capture; <see cref="Path"/> is the
     /// saved-FITS location when the capture requested a save (the file ARA's plate solver reads).</summary>
-    public sealed class SingleFrameCompleteEventArgs(bool success, string? error, string? path) : EventArgs {
+    public sealed class SingleFrameCompleteEventArgs(bool success, string? error, string? path, string? filename = null) : EventArgs {
         public bool Success { get; } = success;
         public string? Error { get; } = error;
+
+        /// <summary>Daemon-LOCAL saved-FITS path — readable only when ARA shares the daemon's filesystem.</summary>
         public string? Path { get; } = path;
+
+        /// <summary>Bare saved filename (guider#77 builds) — the token for the daemon's HTTP capture
+        /// endpoint (<c>GET /api/capture/&lt;filename&gt;</c>); null on older daemons.</summary>
+        public string? Filename { get; } = filename;
     }
 }

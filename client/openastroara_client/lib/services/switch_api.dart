@@ -19,6 +19,11 @@ abstract interface class SwitchClient {
   /// Disconnect the switch with [deviceId] (idempotent). 202-Accepted.
   Future<void> disconnect(String deviceId);
 
+  /// Remove a NON-connected switch from the server's known list and its
+  /// remembered auto-connect entry — the stuck-device escape hatch. The
+  /// server refuses (409) while the switch is connected.
+  Future<void> remove(String deviceId);
+
   /// Reconnect every switch the daemon remembers (no re-discovery), e.g. after a
   /// gear power-cycle (`POST /api/v1/equipment/switch/reconnect`). 202-Accepted;
   /// throws a 404 when no switch has ever been connected.
@@ -79,6 +84,11 @@ class SwitchApi implements SwitchClient {
   @override
   Future<void> disconnect(String deviceId) async {
     await _dio.post<void>('$_base/${Uri.encodeComponent(deviceId)}/disconnect');
+  }
+
+  @override
+  Future<void> remove(String deviceId) async {
+    await _dio.delete<void>('$_base/${Uri.encodeComponent(deviceId)}');
   }
 
   @override

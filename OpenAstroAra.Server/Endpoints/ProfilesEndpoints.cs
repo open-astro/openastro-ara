@@ -14,9 +14,11 @@
 
 using System;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
@@ -27,7 +29,7 @@ namespace OpenAstroAra.Server.Endpoints;
 /// <c>/api/v1/profile</c> endpoints, which read/write the <em>active</em>
 /// profile's settings.
 /// </summary>
-public static class ProfilesEndpoints {
+public static partial class ProfilesEndpoints {
     public static IEndpointRouteBuilder MapProfilesEndpoints(this IEndpointRouteBuilder app) {
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("Profiles");
 
@@ -91,13 +93,56 @@ public static class ProfilesEndpoints {
             .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
                 "remaining one; deleting the last profile returns to the zero-profile state.");
 
-        profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo) =>
-                repo.SelectProfile(id) ? Results.Ok(repo.List()) : Results.NotFound())
+        profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo, IGuiderService guider,
+                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
+                if (!repo.SelectProfile(id)) {
+                    return Results.NotFound();
+                }
+                // §63.4 lifecycle hook — a CONNECTED guider follows the profile switch: the
+                // push re-runs the twin-profile ensure first (select-or-create-or-migrate the
+                // NEW profile's twin on the daemon, dark library and all), then lands the new
+                // profile's guider settings. Fire-and-forget with a best-effort swallow: a
+                // disconnected guider (InvalidOperationException) just means there is nothing
+                // to flip — the next guider connect maps the twin anyway — and the select
+                // response must not wait on daemon RPCs.
+                _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"));
+                return Results.Ok(repo.List());
+            })
             .Produces<ProfileListDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("SelectProfile")
-            .WithSummary("Make a profile active (loads its settings into the live store).");
+            .WithSummary("Make a profile active (loads its settings into the live store). A " +
+                "connected guider follows: its twin profile is selected/created to match.");
 
         return app;
     }
+
+    /// <summary>The §63.4 profile-switch follow: push the (new) active profile to a connected guider,
+    /// best-effort. Every failure is LOGGED (review r1 — a silent unobserved-task swallow hid "the twin
+    /// didn't follow" from operators): disconnected guider at Debug (expected — the next connect maps
+    /// the twin), everything else at Warning.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Fire-and-forget boundary: any escape would be an unobserved task exception with no log — the catch-all exists precisely to record unexpected faults.")]
+    private static async Task PushGuiderAfterProfileSwitchAsync(IGuiderService guider, ILogger logger) {
+        try {
+            await guider.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+        } catch (InvalidOperationException) {
+            // Guider not connected — nothing to flip; the §63.4 connect-path ensure maps the twin
+            // on the next connect.
+            LogProfileSwitchPushSkipped(logger);
+        } catch (Exception ex) {
+            // Daemon rejection, transport fault, shutdown race — best-effort by design, but the
+            // operator must be able to see the twin did NOT follow the switch.
+            LogProfileSwitchPushFailed(logger, ex);
+        }
+    }
+
+    [LoggerMessage(EventId = 3710, Level = LogLevel.Debug,
+        Message = "§63.4 profile-switch guider push skipped: guider not connected (twin maps on next connect).")]
+    private static partial void LogProfileSwitchPushSkipped(ILogger logger);
+
+    [LoggerMessage(EventId = 3711, Level = LogLevel.Warning,
+        Message = "§63.4 profile-switch guider push failed — the daemon twin did not follow the ARA profile switch.")]
+    private static partial void LogProfileSwitchPushFailed(ILogger logger, Exception ex);
 }

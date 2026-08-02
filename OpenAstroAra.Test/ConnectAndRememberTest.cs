@@ -105,6 +105,8 @@ namespace OpenAstroAra.Test {
 
             public Task<int> ForgetAsync(DeviceType type, CancellationToken ct) =>
                 Task.FromResult(Remembered.RemoveAll(d => d.Type == type));
+
+        public Task<int> ForgetSwitchAsync(string uniqueId, CancellationToken ct) => Task.FromResult(0);
         }
     }
 }

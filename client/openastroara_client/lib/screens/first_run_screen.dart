@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../services/server_api.dart';
+import '../state/launch_gate_state.dart';
 import '../state/saved_server_state.dart';
 import '../state/server_state.dart';
 import '../widgets/plan_offline_button.dart';
@@ -152,6 +153,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                   await ref
                       .read(savedServersProvider.notifier)
                       .add(selected);
+                  // A Launchpad-forced visit ends here: the server is chosen,
+                  // so the router may resume the normal flow (profile box).
+                  ref.read(serverChooserRequestedProvider.notifier).clear();
                   // The _RootRouter watching savedServersProvider rebuilds
                   // and swaps in AppShell automatically once the list is
                   // non-empty.

@@ -34,6 +34,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
     // recenter racing a REST caller) must not run at once. A second caller waits for the first to finish.
     private readonly SemaphoreSlim _centeringGate = new(1, 1);
     private readonly IProfileService profileService;
+    private readonly IProfileStore? profileStore;
     private readonly IPlateSolverFactory plateSolverFactory;
     private readonly IImagingMediator imagingMediator;
     private readonly ITelescopeMediator telescopeMediator;
@@ -50,7 +51,8 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
             IFilterWheelMediator filterWheelMediator,
             IDomeMediator domeMediator,
             IDomeFollower domeFollower,
-            IRotatorMediator? rotatorMediator = null) {
+            IRotatorMediator? rotatorMediator = null,
+            IProfileStore? profileStore = null) {
         this.profileService = profileService;
         this.plateSolverFactory = plateSolverFactory;
         this.imagingMediator = imagingMediator;
@@ -59,6 +61,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
         this.domeMediator = domeMediator;
         this.domeFollower = domeFollower;
         this.rotatorMediator = rotatorMediator;
+            this.profileStore = profileStore;
     }
 
     public async Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
@@ -75,15 +78,18 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
 
     private Task<PlateSolveResult> CenterCoreAsync(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
             IProgress<ApplicationStatus>? progress, CancellationToken token) {
+        // ARA store → legacy settings first (same rule and reason as PlateSolveService).
+        LegacyProfileBridge.SyncPlateSolve(profileService, profileStore);
         var profile = profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException("Cannot centre: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
 
-        double focalLength = profile.TelescopeSettings.FocalLength;
-        double pixelSize = profile.CameraSettings.PixelSize;
+        // ARA-store optics first, legacy fallback — same rule (and reason) as PlateSolveService.
+        var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
+            profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
         if (!(focalLength > 0) || !(pixelSize > 0)) {
             throw new PlateSolverConfigurationException(
-                $"Cannot centre: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) in the profile.");
+                $"Cannot centre: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
         }
 
         var plateSolver = plateSolverFactory.GetPlateSolver(settings);
