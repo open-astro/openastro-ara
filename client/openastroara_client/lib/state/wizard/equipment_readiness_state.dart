@@ -69,8 +69,10 @@ class WizardEquipmentReadiness
       await Future.wait(assigned.entries.map((e) async {
         final result = await _readOne(source, e.key, e.value);
         // A recheck started after this readAll owns the card now (it holds a
-        // _typeRun entry) — defer to it.
-        if (_run == run && !_typeRun.containsKey(e.key)) {
+        // _typeRun entry) — defer to it. ref.mounted: an autoDispose teardown
+        // during the (up to ~15 s) connect+read makes writing state throw
+        // (review r3; same idiom as live_library_state).
+        if (ref.mounted && _run == run && !_typeRun.containsKey(e.key)) {
           state = {...state, e.key: result};
         }
       }));
@@ -97,7 +99,7 @@ class WizardEquipmentReadiness
     final source = ref.read(deviceFactsSourceFactoryProvider)(server);
     try {
       final result = await _readOne(source, type, assignedId);
-      if (_run == run && _typeRun[type] == typeRun) {
+      if (ref.mounted && _run == run && _typeRun[type] == typeRun) {
         state = {...state, type: result};
       }
     } finally {
@@ -139,8 +141,11 @@ class WizardEquipmentReadiness
           return ReadinessRules.camera(
               label, setupUri, await source.cameraGeometry());
         case EquipmentDeviceType.mount:
-          return ReadinessRules.mount(label, setupUri,
-              await source.telescopeOptics(), await source.mountProps());
+          // Both reads hit the same status endpoint — overlap them (r3 nit).
+          final optics = source.telescopeOptics();
+          final props = source.mountProps();
+          return ReadinessRules.mount(
+              label, setupUri, await optics, await props);
         case EquipmentDeviceType.filterWheel:
           return ReadinessRules.filterWheel(
               label, setupUri, await source.filterWheelSlots());
