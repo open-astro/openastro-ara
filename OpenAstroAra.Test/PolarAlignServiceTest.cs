@@ -692,6 +692,52 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_never_delivered_completion_costs_one_capture_not_the_whole_seed_budget() {
+            // Review r3: a timed-out capture whose event NEVER arrives (daemon-side hang — the
+            // common cause) leaves a debt that the next capture's OWN completion pays by mistake.
+            // That mis-swallow must be terminal: the wronged capture's timeout must NOT enqueue a
+            // fresh debt, or one lost event cascades (swallow → timeout → new debt → swallow …)
+            // through the entire seed budget. Capture 1 acks and never completes; every later
+            // capture delivers only its own fresh event. Capture 2's event is swallowed against
+            // capture 1's debt and capture 2 times out — capture 3 must then succeed.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var captureCount = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                var n = Interlocked.Increment(ref captureCount);
+                if (n == 1) {
+                    return JsonValue.Create(0); // ack, never complete — and never deliver, ever
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_fresh",
+                        ["Filename"] = "save_image_fresh",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var fetcher = new FakeFrameFetcher();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, fetcher: fetcher);
+            svc.CaptureCompleteTimeout = TimeSpan.FromMilliseconds(300);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"),
+                "the mis-swallowed capture must not re-arm the debt — capture 3 has to get through");
+            Assert.That(fetcher.Fetched.Select(f => f.Filename), Is.All.EqualTo("save_image_fresh"));
+            // No capture-count assertion: the adjust loop keeps capturing after the seed, so the
+            // count isn't pinnable — the "adjusting" state IS the proof (the cascade exhausts all
+            // three seed attempts and lands in "failed").
+        }
+
+        [Test]
         public async Task A_failed_frame_fetch_fails_the_seed_as_capture_rejected() {
             // The daemon saved the frame but the HTTP download fails (pre-#77 daemon, network) —
             // still a capture-layer fault: capture_rejected, with the fetch error surfaced.

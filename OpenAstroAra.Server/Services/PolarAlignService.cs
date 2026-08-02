@@ -524,8 +524,18 @@ namespace OpenAstroAra.Server.Services {
             // geometry (review r1). The timeout path below records the debt (_abandonedCaptures);
             // this handler pays it by SWALLOWING exactly that many events — the stale capture then
             // surfaces as a clean timed-out/failed solve, never as misattributed data.
+            // Set when this wait swallowed an event against a debt. Events can't be correlated to
+            // captures (the daemon broadcast carries no request id), so the swallow is a guess: if
+            // the abandoned capture never delivers (daemon hung — the common timeout cause), the
+            // swallowed event was actually THIS capture's own completion. When that happens this
+            // capture times out too — and it must NOT enqueue a fresh debt (review r3: doing so
+            // re-arms the mistake against the NEXT capture, cascading one lost event through the
+            // whole seed budget with each misfire refreshing the TTL). One swallow pays one debt,
+            // rightly or wrongly; the cost of a wrong guess is capped at one retried capture.
+            int swallowedThisWait = 0;
             void OnComplete(object? sender, SingleFrameCompleteEventArgs e) {
                 if (TryConsumeStaleDebt()) {
+                    Interlocked.Exchange(ref swallowedThisWait, 1);
                     LogCaptureFailed(frameId, "swallowed a stale SingleFrameComplete owed by an abandoned capture");
                     return; // keep waiting for THIS capture's own event
                 }
@@ -557,8 +567,12 @@ namespace OpenAstroAra.Server.Services {
                 } catch (OperationCanceledException) {
                     // Stop/restart cancelled the wait AFTER the RPC ack — the daemon still owes this
                     // capture's event, and without the debt the NEXT run would adopt it as fresh
-                    // data (review r2: the common abandonment path, not just the timeout).
-                    RecordAbandonedCapture();
+                    // data (review r2: the common abandonment path, not just the timeout). Unless
+                    // this wait already swallowed one (see swallowedThisWait) — then the books are
+                    // square and a second debt would cascade (review r3).
+                    if (Volatile.Read(ref swallowedThisWait) == 0) {
+                        RecordAbandonedCapture();
+                    }
                     throw;
                 }
                 lock (_gate) {
@@ -609,8 +623,14 @@ namespace OpenAstroAra.Server.Services {
                 }
             } catch (TimeoutException) {
                 // The daemon may still deliver this capture's event later — the next capture's
-                // handler must swallow it rather than adopt its (stale) frame.
-                RecordAbandonedCapture();
+                // handler must swallow it rather than adopt its (stale) frame. But if THIS wait
+                // already swallowed an event, the likeliest story is that the swallow ate our own
+                // completion (the earlier abandoned capture never delivered): the old debt is paid,
+                // and enqueueing a new one would hand the mistake to the next capture in a chain
+                // (review r3). No swallow → genuinely lost event → record the debt.
+                if (Volatile.Read(ref swallowedThisWait) == 0) {
+                    RecordAbandonedCapture();
+                }
                 RecordCaptureFault(gen, frameId, "SingleFrameComplete timed out");
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {

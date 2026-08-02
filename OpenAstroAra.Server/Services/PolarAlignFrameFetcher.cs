@@ -48,10 +48,20 @@ public sealed class HttpPolarAlignFrameFetcher : IPolarAlignFrameFetcher, IDispo
         // complete FITS (the solver treats a corrupt file as one failed solve, but a clean rename
         // makes the failure mode deterministic).
         var tmp = destinationPath + ".part";
-        await using (var file = File.Create(tmp)) {
-            await response.Content.CopyToAsync(file, ct).ConfigureAwait(false);
+        var moved = false;
+        try {
+            await using (var file = File.Create(tmp)) {
+                await response.Content.CopyToAsync(file, ct).ConfigureAwait(false);
+            }
+            File.Move(tmp, destinationPath, overwrite: true);
+            moved = true;
+        } finally {
+            // A cancelled/failed download must not litter the work dir with .part files
+            // across the adjust loop's many retries.
+            if (!moved) {
+                try { File.Delete(tmp); } catch (IOException) { }
+            }
         }
-        File.Move(tmp, destinationPath, overwrite: true);
     }
 
     public void Dispose() => _http.Dispose();
