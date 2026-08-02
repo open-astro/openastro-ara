@@ -73,7 +73,7 @@ class _FakeGuiderApi implements GuiderClient {
       int port = kDefaultGuiderPort}) async {
     calls.add('connect:$host:$port');
     status = const GuiderStatus(
-      name: 'PHD2',
+      name: 'OpenAstro Guider',
       connectionState: GuiderConnectionState.connected,
       runtimeState: GuiderRuntimeState.stopped,
     );
@@ -179,7 +179,7 @@ Future<_Harness> _pump(WidgetTester tester, {bool connected = true}) async {
   final guider = _FakeGuiderApi();
   if (connected) {
     guider.status = const GuiderStatus(
-      name: 'PHD2',
+      name: 'OpenAstro Guider',
       connectionState: GuiderConnectionState.connected,
       runtimeState: GuiderRuntimeState.stopped,
     );
@@ -461,7 +461,7 @@ void main() {
     await _next(tester); // mount
     await tester.tap(find.byKey(const ValueKey('wiz-Mount')));
     await tester.pumpAndSettle();
-    // The bridge's mount must NOT be offered: PHD2 has one Alpaca server
+    // The bridge's mount must NOT be offered: OpenAstro Guider has one Alpaca server
     // (the camera's), so a cross-server mount would be silently dropped.
     expect(find.textContaining('Bridge Mount'), findsNothing);
     expect(find.textContaining('iOptron HAE29C EQ'), findsWidgets);
@@ -473,7 +473,7 @@ void main() {
     final profile = _FakeProfileApi()..makeUnconfigured();
     final guider = _FakeGuiderApi()
       ..status = const GuiderStatus(
-        name: 'PHD2',
+        name: 'OpenAstro Guider',
         connectionState: GuiderConnectionState.connected,
         runtimeState: GuiderRuntimeState.stopped,
       );

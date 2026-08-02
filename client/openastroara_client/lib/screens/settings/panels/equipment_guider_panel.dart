@@ -17,8 +17,8 @@ import '../../../widgets/profile/profile_import_flow.dart'
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §63 PHD2 / Guider panel — editable. Phase 12h.6k added the daemon
-/// round-trip for the §63 PHD2 fields (host/port/profile + dithering +
+/// §63 OpenAstro Guider panel — editable. Phase 12h.6k added the daemon
+/// round-trip for the §63 OpenAstro Guider fields (host/port/profile + dithering +
 /// per-session calibration). The §52.2 auto-connect-on-boot toggle uses
 /// `equipmentConnectionProvider` and round-trips with the bulk
 /// equipment-connection sub-PR; the §35 meridian-flip re-cal toggle is
@@ -91,7 +91,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
       await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('PHD2 settings saved to daemon.')),
+        const SnackBar(content: Text('OpenAstro Guider settings saved to daemon.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -127,7 +127,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     }
   }
 
-  /// Save the panel's PHD2 settings (so the daemon-side profile carries the
+  /// Save the panel's OpenAstro Guider settings (so the daemon-side profile carries the
   /// current selections), then ask the daemon to re-push them to the guider.
   Future<void> _applyToGuider() async {
     final api = _api();
@@ -174,7 +174,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const SettingsSectionHeader('PHD2 connection'),
+        const SettingsSectionHeader('OpenAstro Guider connection'),
         EditableTextRow(
           label: 'Host',
           currentValue: phd2.host,
@@ -195,14 +195,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           currentValue: phd2.phd2Profile,
           getCanonical: () => ref.read(phd2SettingsProvider).phd2Profile,
           parse: phd2N.setPhd2Profile,
-          hint: 'PHD2 equipment profile, not OpenAstroAra profile',
+          hint: 'OpenAstro Guider equipment profile, not OpenAstroAra profile',
         ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
           helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.guider),
           onChanged: (v) => connN.setAutoConnect(EquipmentDeviceType.guider, v),
-          hint: 'Off by default — guider connect starts PHD2 client',
+          hint: 'Off by default — guider connect starts the OpenAstro Guider client',
         ),
         const SettingsSectionHeader('Dithering'),
         SettingsSwitchRow(
@@ -556,7 +556,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
               label: const Text('Apply to guider'),
             ),
             // The step-by-step alternative to this panel — connection →
-            // camera → optics → mount → apply → darks, PHD2-wizard style.
+            // camera → optics → mount → apply → darks, OpenAstro Guider-wizard style.
             TextButton.icon(
               onPressed:
                   _applying ? null : () => showGuiderSetupWizard(context),

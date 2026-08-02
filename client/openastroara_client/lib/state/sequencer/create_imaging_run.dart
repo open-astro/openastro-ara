@@ -325,7 +325,7 @@ Future<ImagingRunResult?> createImagingRun(
 
 /// Best-effort hydration of the planning-relevant settings sections from the
 /// active server's profile (imaging defaults + autofocus + the filter set and
-/// PHD2 settings the plan chooser reads). No server → no-op; a transport
+/// OpenAstro Guider settings the plan chooser reads). No server → no-op; a transport
 /// failure keeps the notifiers' current state.
 Future<void> _hydratePlanningSettings(ProviderContainer container) async {
   final server = container.read(activeServerProvider);
@@ -368,7 +368,7 @@ Future<TargetPlanChoice?> _choosePlan(
   );
 }
 
-/// The dither cadence for the run's imaging loops: the PHD2 settings' every-N
+/// The dither cadence for the run's imaging loops: the OpenAstro Guider settings' every-N
 /// frames when the user chose to guide and dithering is on; null = no dither
 /// trigger (also whenever guiding was declined — dithering without a guider
 /// nudges nothing).

@@ -39,7 +39,7 @@ import 'trigger_catalog.dart';
 /// autofocus (through that filter) → optional Start Guiding → one
 /// `<Filter> Imaging` loop per plan step (each preceded by its Switch
 /// Filter), every loop carrying the dither / autofocus triggers. §63 made
-/// the guider mediator real (GuiderService drives PHD2), so guiding steps
+/// the guider mediator real (GuiderService drives OpenAstro Guider), so guiding steps
 /// execute for real now.
 ///
 /// A dialed framing position angle ([positionAngleDeg]) upgrades the slew to

@@ -85,7 +85,7 @@ void main() {
         expect(find.textContaining('Broadband ·'), findsOneWidget);
         expect(find.text('Ha only'), findsOneWidget);
         expect(find.text('Basic'), findsOneWidget);
-        expect(find.text('Guide with PHD2'), findsOneWidget);
+        expect(find.text('Guide with OpenAstro Guider'), findsOneWidget);
         await t.tap(find.text('Cancel'));
       });
     });
@@ -97,7 +97,7 @@ void main() {
         await t.tap(find.text('Create run'));
       });
       expect(choice, isNotNull);
-      expect(choice!.guide, isTrue); // PHD2 dither default is on
+      expect(choice!.guide, isTrue); // OpenAstro Guider dither default is on
       expect(choice.filterPlan!.map((s) => s.filterName), ['Ha', 'OIII', 'SII']);
       for (final step in choice.filterPlan!) {
         expect(step.exposureSeconds, greaterThan(0));

@@ -1129,7 +1129,7 @@ class _ScreenRotatorState extends ConsumerState<ScreenRotator> {
   }
 }
 
-// ── Screen 10 — Guider (PHD2) ───────────────────────────────────────────────
+// ── Screen 10 — OpenAstro Guider ───────────────────────────────────────────────
 
 class ScreenGuider extends ConsumerStatefulWidget {
   const ScreenGuider({super.key});
@@ -1185,7 +1185,7 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     }
   }
 
-  /// Merge the draft's guide-camera pick into the daemon-side PHD2 settings,
+  /// Merge the draft's guide-camera pick into the daemon-side OpenAstro Guider settings,
   /// then ask the daemon to re-push the profile to the guider — so the wizard
   /// selection takes effect without waiting for the final wizard Save.
   Future<void> _applyCameraToGuider() async {
@@ -1220,14 +1220,14 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   }
 
   /// Ask the DAEMON to reach the guider at the entered host:port — the
-  /// connection under test is server→PHD2 (the SBC's network), not this
+  /// connection under test is server→OpenAstro Guider (the SBC's network), not this
   /// client's. POST /equipment/guider/connect is 202-accepted; poll the
   /// status until the link resolves.
   Future<void> _testConnection() async {
     final api = ref.read(guiderApiProvider);
     if (api == null) {
       setState(() => _testStatus =
-          'Not connected to a server — the server is what talks to PHD2.');
+          'Not connected to a server — the server is what talks to OpenAstro Guider.');
       return;
     }
     // Same parser as the save mapper (applyDraftToPhd2) so the tested target
@@ -1257,13 +1257,13 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
       }
       if (!mounted) return;
       setState(() => _testStatus =
-          'No PHD2 answered at $host:$port within 10 s. Check that PHD2 is '
+          'No OpenAstro Guider answered at $host:$port within 10 s. Check that OpenAstro Guider is '
           'running on that machine and its server is enabled '
           '(Tools → Enable Server).');
     } catch (e) {
       if (!mounted) return;
       setState(() => _testStatus =
-          friendlyDaemonError(e, fallback: "Couldn't reach PHD2 at $host:$port"));
+          friendlyDaemonError(e, fallback: "Couldn't reach OpenAstro Guider at $host:$port"));
     } finally {
       if (mounted) setState(() => _testing = false);
     }
@@ -1273,10 +1273,10 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   Widget build(BuildContext context) {
     return WizardScreenScaffold(
       step: 10,
-      intro: 'ARA connects to PHD2 over its JSON-RPC interface (not Alpaca).',
+      intro: 'ARA connects to OpenAstro Guider over its JSON-RPC interface (not Alpaca).',
       children: [
         WizardTextField(
-          label: 'PHD2 host:port',
+          label: 'OpenAstro Guider host:port',
           initialValue: _g.hostPort,
           hint: 'localhost:4400',
           onChanged: (v) =>

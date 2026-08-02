@@ -162,7 +162,7 @@ void main() {
         'import_token': 'tok-1',
         'profile_name': 'Imported profile',
         'warnings': ['This is a template, not a complete profile'],
-        'dropped_fields': ['Site location', 'PHD2 host / port / profile'],
+        'dropped_fields': ['Site location', 'OpenAstro Guider host / port / profile'],
         'expires_utc': '2026-06-18T04:00:00Z',
       });
       final manifest = {'schema_version': 'profile-share-v1', 'settings': {}};

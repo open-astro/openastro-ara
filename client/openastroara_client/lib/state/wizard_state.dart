@@ -105,7 +105,7 @@ class ProfileWizard {
     7: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Focuser'),
     8: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Mount'),
     9: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Rotator'),
-    10: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'Guider (PHD2)'),
+    10: WizardStepInfo(stage: 3, stageLabel: 'Per-device setup', title: 'OpenAstro Guider'),
     11: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'Plate solving (ASTAP)'),
     12: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'Autofocus'),
     13: WizardStepInfo(stage: 4, stageLabel: 'Imaging tools', title: 'File saving + naming'),

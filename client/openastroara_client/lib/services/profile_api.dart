@@ -451,13 +451,13 @@ class ProfileApi {
     );
   }
 
-  /// GET the active profile's PHD2 settings.
+  /// GET the active profile's OpenAstro Guider settings.
   Future<Phd2Settings> getPhd2Settings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/phd2');
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's PHD2 settings.
+  /// PUT the active profile's OpenAstro Guider settings.
   Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/phd2',
@@ -708,7 +708,7 @@ class ProfileApi {
     'switch': v.autoConnect(EquipmentDeviceType.switchDevice),
   };
 
-  // ── PHD2 settings JSON mapping ─────────────────────────────────────────
+  // ── OpenAstro Guider settings JSON mapping ─────────────────────────────────────────
 
   static Phd2Settings _phd2SettingsFromJson(
     Map<String, dynamic> j,

@@ -8,7 +8,7 @@
 ///  - "localhost:4400" → split on the colon
 ///
 /// Empty parts come back null so callers can layer their own fallbacks
-/// (profile base value, protocol default). Shared by the wizard's PHD2 save
+/// (profile base value, protocol default). Shared by the wizard's OpenAstro Guider save
 /// mapper and its "Test connection" button so the two can't drift.
 ({String? host, int? port}) parseHostPort(String raw) {
   final hp = raw.trim();

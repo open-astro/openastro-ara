@@ -142,7 +142,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                 'Tell me when you can image and I\'ll allocate the window to '
                 'the best target(s) from tonight\'s list. Sub counts use the '
                 'optimal-exposure criterion and charge your real overheads — '
-                'slew, plate solve, focus, dither settles from your PHD2 '
+                'slew, plate solve, focus, dither settles from your OpenAstro Guider '
                 'settings, and periodic autofocus.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: AraColors.textSecondary),

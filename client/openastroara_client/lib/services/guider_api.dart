@@ -19,7 +19,7 @@ abstract interface class GuiderClient {
 }
 
 /// Client wrapper around the §63 guider equipment surface
-/// (`/api/v1/equipment/guider`). Drives the daemon's PHD2 client: read status,
+/// (`/api/v1/equipment/guider`). Drives the daemon's OpenAstro Guider client: read status,
 /// connect/disconnect, and (start/stop/dither for a later slice). The daemon's
 /// connect/disconnect are 202-Accepted (the work runs in the background and the
 /// state transition surfaces via `GET` / WS), so these return when the request
@@ -52,7 +52,7 @@ class GuiderApi implements GuiderClient {
     }
   }
 
-  /// Ask the daemon to connect its PHD2 client to the guider at [host]:[port]
+  /// Ask the daemon to connect its OpenAstro Guider client to the guider at [host]:[port]
   /// (defaults match the daemon's `GuiderConnectRequestDto`). 202-Accepted;
   /// poll [getStatus] for the resulting link state.
   @override

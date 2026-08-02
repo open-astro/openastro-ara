@@ -40,7 +40,7 @@ class SessionPlanTarget {
 
 /// Real-night overheads charged against each slice so the sub counts describe
 /// a night that actually happens, not an idealized one. Defaults are typical;
-/// the dialog feeds the user's own PHD2/autofocus settings in.
+/// the dialog feeds the user's own OpenAstro Guider/autofocus settings in.
 class SessionOverheads {
   /// Per-target startup: slew + PLATE SOLVE + centering + initial focus +
   /// guider settle before the first sub.
