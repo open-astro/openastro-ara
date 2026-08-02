@@ -191,6 +191,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
     guiderSetupType: setupType,
     guideFocalLength: focalLength,
     guidePixelSize: g.guidePixelSizeUm,
+    // §76.2 — the wizard's chosen exposure range persists in the profile so a
+    // later darks rebuild covers the same range guiding runs in.
+    guideExposureMinMs: g.darkMinExposureMs,
+    guideExposureMaxMs: g.darkMaxExposureMs,
   );
 }
 

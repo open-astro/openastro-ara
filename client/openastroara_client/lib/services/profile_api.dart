@@ -742,6 +742,9 @@ class ProfileApi {
     guiderRotator: (j['guider_rotator'] as String?) ?? '',
     guiderAlpacaHost: (j['guider_alpaca_host'] as String?) ?? '',
     guiderAlpacaPort: (j['guider_alpaca_port'] as num?)?.toInt() ?? 0,
+    // §76.2 guide exposure range (defaults match the server's optional fields).
+    guideExposureMinMs: (j['guide_exposure_min_ms'] as num?)?.toInt() ?? 1000,
+    guideExposureMaxMs: (j['guide_exposure_max_ms'] as num?)?.toInt() ?? 6000,
   );
 
   static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
@@ -769,6 +772,8 @@ class ProfileApi {
     'guider_rotator': v.guiderRotator,
     'guider_alpaca_host': v.guiderAlpacaHost,
     'guider_alpaca_port': v.guiderAlpacaPort,
+    'guide_exposure_min_ms': v.guideExposureMinMs,
+    'guide_exposure_max_ms': v.guideExposureMaxMs,
   };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────

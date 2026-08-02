@@ -265,6 +265,10 @@ public static class ProfileEndpoints {
             // arbitrary token (#885 review): unknown → the guide_scope default, matching the client's read-side
             // coercion. Other fields keep the store's existing store-verbatim posture.
             var normalized = body with { GuiderSetupType = NormalizeGuiderSetupType(body.GuiderSetupType) };
+            var rangeError = ValidateGuideExposureRange(normalized);
+            if (rangeError is not null) {
+                return Results.Problem(detail: rangeError, statusCode: StatusCodes.Status400BadRequest);
+            }
             store.PutPhd2Settings(normalized);
             return Results.Ok(normalized);
         })
@@ -477,4 +481,14 @@ public static class ProfileEndpoints {
     /// read-side coercion) becomes the <c>guide_scope</c> default. Extracted for unit tests.</summary>
     internal static string NormalizeGuiderSetupType(string? setupType) =>
         setupType?.Trim().ToLowerInvariant() == "oag" ? "oag" : "guide_scope";
+
+    /// <summary>§76.2 — write-boundary validation of the guide exposure range. The range feeds BOTH
+    /// the dark-library build and the guiding bounds, so an inverted or non-positive range would
+    /// silently corrupt both consumers; the wizard gates it client-side, but out-of-band PUTs must
+    /// not slip by. Returns the 400 detail, or null when valid. Extracted for unit tests.</summary>
+    internal static string? ValidateGuideExposureRange(Phd2SettingsDto body) =>
+        body.GuideExposureMinMs <= 0 || body.GuideExposureMaxMs <= 0 ||
+        body.GuideExposureMinMs > body.GuideExposureMaxMs
+            ? "guide_exposure_min_ms/guide_exposure_max_ms must be > 0 with min <= max."
+            : null;
 }
