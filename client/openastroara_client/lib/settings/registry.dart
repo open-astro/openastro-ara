@@ -1464,7 +1464,7 @@ const List<Setting> settingsRegistry = [
   // §63 OpenAstro Guider — 10 fields covering connection + dithering + calibration.
   // State lives in `phd2SettingsProvider`. The §35 meridian-flip re-cal guider
   // policy lives in `safetyPoliciesProvider` (already registered) since it's
-  // a meridian-flip behaviour, not a OpenAstro Guider-internal one.
+  // a meridian-flip behaviour, not an OpenAstro Guider-internal one.
   Setting(
     id: 'eq.guider.host',
     label: 'OpenAstro Guider host',
