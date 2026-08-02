@@ -12,12 +12,14 @@ import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/guide_optics.dart';
 import '../../../util/host_port.dart';
+import '../../../widgets/guider/guider_setup_wizard.dart'
+    show parseAlpacaChoiceEndpoint;
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../wizard_form_kit.dart';
 import '../wizard_save.dart' show resolveGuiderSetupType;
 
-// ── shared parse helpers (carried over from the retired §37 device screens) ─
+// ── shared parse helpers (same guards as the other wizard screens) ──────────
 
 int? _toInt(String raw) {
   final t = raw.trim();
@@ -26,8 +28,7 @@ int? _toInt(String raw) {
 
 /// Assign a parsed double to the draft: clear on empty, but KEEP the prior
 /// value on partial/invalid input (a lone "-" or "1." mid-keystroke) instead
-/// of nulling it — otherwise typing a negative number transiently wipes the
-/// field. Mirrors the guard in screen_profile_basics.dart.
+/// of nulling it. Mirrors the guard in screen_profile_basics.dart.
 void _assignDouble(String raw, void Function(double?) set) {
   final t = raw.trim();
   if (t.isEmpty) {
@@ -41,8 +42,25 @@ void _assignDouble(String raw, void Function(double?) set) {
 ProfileDraft _draftOf(WidgetRef ref) =>
     ref.read(wizardControllerProvider).draft;
 
-/// §76.2 Screen 4 — Guiding (interim S2 form; the §76.5 S3 slice replaces
-/// this with the decisions-plus-darks screen).
+/// The daemon's standard dark-exposure duration list (10 ms … 15 s), shared
+/// with the §63.17 Setup-tab darks pane so the wizard's range picker and the
+/// rebuild UI can never drift on the allowed steps.
+const List<int> kGuideExposuresMs = [
+  10, 20, 50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, //
+  3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000, 10000, 15000,
+];
+
+/// OpenAstro Guider's exposure label format: "0.05 s", "1.0 s", "15.0 s".
+String guideExposureLabel(int ms) => ms < 1000
+    ? '${(ms / 1000).toStringAsFixed(2)} s'
+    : '${(ms / 1000).toStringAsFixed(1)} s';
+
+/// §76.2 Screen 4 — Guiding: the wizard's only REAL guiding decisions (guide
+/// scope vs OAG, the guide exposure range, build-darks-now), with everything
+/// tunable-but-defaultable in an Advanced disclosure. The exposure range is
+/// one choice with two consumers — dark-library coverage AND the guider's
+/// exposure bounds — so they cannot disagree (fast mounts want 0.5–2 s,
+/// slower mounts want longer; the wizard must not guess).
 class ScreenGuider extends ConsumerStatefulWidget {
   const ScreenGuider({super.key});
   @override
@@ -65,21 +83,21 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   String? _testStatus;
   bool _testOk = false;
 
-  // §63.17 — guide-camera picker + on-demand profile push.
-  bool _applying = false;
-  String? _applyStatus;
-  bool _applyOk = false;
+  // §76.1 pixel-size autofill bookkeeping: true when the shown value came off
+  // the Alpaca driver (displayed as a read fact; the Advanced manual field
+  // hides).
+  bool _pixelSizeFromDriver = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadBaseGuideSetup());
+    // A guide camera may already be chosen (draft re-entry / base profile) —
+    // try the pixel-size read for it on entry.
+    final cam = _g.guiderCamera;
+    if (cam != null && cam.isNotEmpty) unawaited(_autofillPixelSize(cam));
   }
 
-  /// Fetch the base profile's guide setup type + optics reducer so the
-  /// display branch and the OAG preview resolve exactly like wizard-save
-  /// does. Errors are swallowed: offline keeps the guide_scope / 1.0
-  /// fallbacks, which is also what the save mapper falls back to.
   Future<void> _loadBaseGuideSetup() async {
     final server = ref.read(activeServerProvider);
     if (server == null) return;
@@ -93,41 +111,31 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         _baseReducerFactor = optics.reducerFactor;
       });
     } catch (_) {
-      // Offline / no daemon — keep the fallbacks.
+      // Offline / no daemon — keep the guide_scope / 1.0 fallbacks.
     }
   }
 
-  /// Merge the draft's guide-camera pick into the daemon-side OpenAstro Guider settings,
-  /// then ask the daemon to re-push the profile to the guider — so the wizard
-  /// selection takes effect without waiting for the final wizard Save.
-  Future<void> _applyCameraToGuider() async {
-    final server = ref.read(activeServerProvider);
-    if (server == null) {
-      setState(() => _applyStatus =
-          'Not connected to a server — the server is what talks to the guider.');
-      return;
-    }
-    setState(() {
-      _applying = true;
-      _applyOk = false;
-      _applyStatus = null;
-    });
-    final api = ProfileApi(server);
+  /// §76.1 — the guide camera's pixel size is a DEVICE fact: read it off the
+  /// camera's Alpaca driver (daemon-relayed, §63.20 endpoint) instead of
+  /// asking. Best-effort; a failure leaves the Advanced manual field in play.
+  Future<void> _autofillPixelSize(String cameraChoice) async {
+    final endpoint = parseAlpacaChoiceEndpoint(cameraChoice);
+    if (endpoint == null) return;
+    final api = ref.read(guiderEquipmentApiProvider);
+    if (api == null) return;
     try {
-      final base = await api.getPhd2Settings();
-      await api.putPhd2Settings(base.copyWith(guiderCamera: _g.guiderCamera));
-      await ref.read(guiderEquipmentProvider.notifier).pushProfile();
-      if (!mounted) return;
+      final size = await api.getAlpacaCameraPixelSize(
+        host: endpoint.host,
+        port: endpoint.port,
+        device: endpoint.device,
+      );
+      if (!mounted || size == null || size <= 0) return;
       setState(() {
-        _applyOk = true;
-        _applyStatus = 'Camera selection pushed to the guider.';
+        _g.guidePixelSizeUm = size;
+        _pixelSizeFromDriver = true;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _applyStatus =
-          friendlyDaemonError(e, fallback: "Couldn't apply the selection"));
-    } finally {
-      if (mounted) setState(() => _applying = false);
+    } catch (_) {
+      // Manual entry remains — the field never blocks on the driver.
     }
   }
 
@@ -181,11 +189,28 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     }
   }
 
+  /// Publish range sanity to the shell's Next gate. Dropdown steps make an
+  /// inverted range user-reachable (pick shortest > longest), and it would
+  /// silently corrupt BOTH consumers (darks coverage + guider bounds).
+  void _setRange({int? minMs, int? maxMs}) {
+    setState(() {
+      if (minMs != null) _g.darkMinExposureMs = minMs;
+      if (maxMs != null) _g.darkMaxExposureMs = maxMs;
+    });
+    ref
+        .read(wizardStepValidProvider.notifier)
+        .setValid(_g.darkMinExposureMs <= _g.darkMaxExposureMs);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final rangeInvalid = _g.darkMinExposureMs > _g.darkMaxExposureMs;
     return WizardScreenScaffold(
       step: 4,
-      intro: 'ARA connects to OpenAstro Guider over its JSON-RPC interface (not Alpaca).',
+      intro: 'Three decisions: how you guide, your exposure range, and '
+          'whether to shoot the dark library now (the scope is covered '
+          'anyway — perfect darks weather). Everything else is defaulted '
+          'under Advanced.',
       children: [
         WizardTextField(
           label: 'OpenAstro Guider host:port',
@@ -223,13 +248,12 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             ],
           ),
         ),
-        // §63.17 — guide-camera pick from the daemon's own choice strings.
-        // The current draft value stays representable even when the guider is
-        // disconnected (empty choices) or the pick isn't in the daemon's list.
+        // §63.17 — guide-camera pick from the daemon's own choice strings,
+        // with the §76.1 pixel-size read on every pick. The current draft
+        // value stays representable even when the guider is disconnected.
         Builder(builder: (context) {
           final equipment = ref.watch(guiderEquipmentProvider);
           final envelope = equipment.value;
-          final connected = envelope?.connected ?? false;
           final cameras = <String>{
             '',
             ...?envelope?.choices?.cameras,
@@ -249,12 +273,19 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                     DropdownMenuEntry(
                         value: c, label: c.isEmpty ? '(daemon default)' : c),
                 ],
-                onChanged: (v) => setState(
-                    () => _g.guiderCamera = (v == null || v.isEmpty) ? null : v),
+                onChanged: (v) {
+                  setState(() {
+                    _g.guiderCamera = (v == null || v.isEmpty) ? null : v;
+                    _pixelSizeFromDriver = false;
+                  });
+                  if (v != null && v.isNotEmpty) {
+                    unawaited(_autofillPixelSize(v));
+                  }
+                },
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Wrap(spacing: 12, runSpacing: 8, children: [
+                child: Row(children: [
                   OutlinedButton.icon(
                     onPressed: equipment.isLoading
                         ? null
@@ -264,47 +295,31 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Refresh choices'),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: (_applying || !connected)
-                        ? null
-                        : () => unawaited(_applyCameraToGuider()),
-                    icon: _applying
-                        ? const SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.send, size: 18),
-                    label: const Text('Apply to guider'),
-                  ),
+                  if (_pixelSizeFromDriver) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Pixel size: ${_g.guidePixelSizeUm} µm — read from '
+                        'the camera driver.',
+                        style: const TextStyle(
+                            fontSize: 12, color: AraColors.accentConnected),
+                      ),
+                    ),
+                  ],
                 ]),
               ),
-              if (_applyStatus != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    _applyStatus!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _applyOk
-                          ? AraColors.accentConnected
-                          : AraColors.textSecondary,
-                    ),
-                  ),
-                ),
             ],
           );
         }),
-        // §63.19 — guide setup type: separate guide scope (focal length
-        // user-entered) or off-axis guider (focal length derived from the
-        // telescope screen's optics). Null draft = keep the base profile, so
-        // the DISPLAY resolves through the same helper as wizard-save.
+        // §63.19 — guide scope vs OAG (OAG derives the focal length from the
+        // main optics; the wizard already read those from Alpaca).
         WizardDropdown<String>(
           label: 'Guide setup',
           value: resolveGuiderSetupType(
               _g.setupType, _baseSetupType ?? 'guide_scope'),
           entries: const [
             DropdownMenuEntry(value: 'guide_scope', label: 'Guide scope'),
-            DropdownMenuEntry(
-                value: 'oag', label: 'Off-axis guider (OAG)'),
+            DropdownMenuEntry(value: 'oag', label: 'Off-axis guider (OAG)'),
           ],
           onChanged: (v) => setState(() => _g.setupType = v),
         ),
@@ -322,7 +337,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
               child: Text(
                 derived == 0
                     ? 'Guide focal length: derived from the main optics — '
-                        'enter the telescope focal length first.'
+                        'fix the telescope focal length on the equipment '
+                        'screen first.'
                     : 'Guide focal length: $derived mm '
                         '(derived from the main optics).',
                 style: const TextStyle(
@@ -332,62 +348,156 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
           })
         else
           WizardTextField(
-            label: 'Guide focal length (mm)',
+            label: 'Guide scope focal length (mm)',
             initialValue: _g.guideFocalLengthMm?.toString(),
             keyboardType: TextInputType.number,
             inputFormatters: WizardInput.unsignedInt,
             onChanged: (v) => _g.guideFocalLengthMm = _toInt(v),
           ),
-        WizardTextField(
-          label: 'Guide pixel size (µm)',
-          initialValue: _g.guidePixelSizeUm?.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _assignDouble(v, (d) => _g.guidePixelSizeUm = d),
+        const WizardSectionHeader('Guide exposure range'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(children: [
+            Expanded(
+              child: WizardDropdown<int>(
+                label: 'Shortest',
+                value: kGuideExposuresMs.contains(_g.darkMinExposureMs)
+                    ? _g.darkMinExposureMs
+                    : 1000,
+                entries: [
+                  for (final ms in kGuideExposuresMs)
+                    DropdownMenuEntry(value: ms, label: guideExposureLabel(ms)),
+                ],
+                onChanged: (v) => _setRange(minMs: v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: WizardDropdown<int>(
+                label: 'Longest',
+                value: kGuideExposuresMs.contains(_g.darkMaxExposureMs)
+                    ? _g.darkMaxExposureMs
+                    : 6000,
+                entries: [
+                  for (final ms in kGuideExposuresMs)
+                    DropdownMenuEntry(value: ms, label: guideExposureLabel(ms)),
+                ],
+                onChanged: (v) => _setRange(maxMs: v),
+              ),
+            ),
+          ]),
         ),
-        WizardTextField(
-          label: 'Dither (pixels)',
-          initialValue: _g.ditherPixels.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _assignDouble(v, (d) {
-            if (d != null) _g.ditherPixels = d;
-          }),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            rangeInvalid
+                ? 'Shortest exposure must not exceed the longest.'
+                : 'One choice, two consumers: the dark library covers exactly '
+                    'this range, and guiding stays within it — they can never '
+                    'disagree. Fast mounts (iOptron-class) often guide best '
+                    'short (0.5–2 s); slower mounts may want 2–4 s.',
+            style: TextStyle(
+              fontSize: 12,
+              color: rangeInvalid
+                  ? AraColors.accentError
+                  : AraColors.textSecondary,
+            ),
+          ),
         ),
-        WizardTextField(
-          label: 'Settle threshold (px)',
-          initialValue: _g.settleThresholdPx.toString(),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _assignDouble(v, (d) {
-            if (d != null) _g.settleThresholdPx = d;
-          }),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Build dark library now'),
+            subtitle: const Text(
+                'Cover the guide scope first. Runs in the background after '
+                'Save — you can walk away.'),
+            value: _g.buildDarksOnFinish,
+            onChanged: (v) =>
+                setState(() => _g.buildDarksOnFinish = v),
+          ),
         ),
-        WizardTextField(
-          label: 'Settle time (s)',
-          initialValue: _g.settleDuration.inSeconds.toString(),
-          keyboardType: TextInputType.number,
-          inputFormatters: WizardInput.unsignedInt,
-          onChanged: (v) {
-            final s = _toInt(v);
-            if (s != null) _g.settleDuration = Duration(seconds: s);
-          },
-        ),
-        WizardDropdown<CalibrationCadence>(
-          label: 'Calibration cadence',
-          value: _g.calibrationCadence,
-          entries: const [
-            DropdownMenuEntry(
-                value: CalibrationCadence.eachSession, label: 'Each session'),
-            DropdownMenuEntry(
-                value: CalibrationCadence.onceReuse,
-                label: 'Once, then reuse'),
-            DropdownMenuEntry(
-                value: CalibrationCadence.neverRecalibrate,
-                label: 'Never recalibrate'),
+        // Advanced: tunables with good defaults — a disclosure, not a step
+        // (§76.1).
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(top: 8),
+          title: Text('Advanced',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary)),
+          children: [
+            if (!_pixelSizeFromDriver)
+              WizardTextField(
+                label: 'Guide pixel size (µm)',
+                initialValue: _g.guidePixelSizeUm?.toString(),
+                helperText: 'Normally read from the camera driver — only '
+                    'needed for a non-Alpaca guide camera.',
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: WizardInput.unsignedDecimal,
+                onChanged: (v) =>
+                    _assignDouble(v, (d) => _g.guidePixelSizeUm = d),
+              ),
+            WizardDropdown<int>(
+              label: 'Dark frames per exposure',
+              value: _g.darkFrameCount,
+              entries: [
+                for (var n = 1; n <= 20; n++)
+                  DropdownMenuEntry(value: n, label: '$n'),
+              ],
+              onChanged: (v) =>
+                  setState(() => _g.darkFrameCount = v ?? 5),
+            ),
+            WizardTextField(
+              label: 'Dither (pixels)',
+              initialValue: _g.ditherPixels.toString(),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: WizardInput.unsignedDecimal,
+              onChanged: (v) => _assignDouble(v, (d) {
+                if (d != null) _g.ditherPixels = d;
+              }),
+            ),
+            WizardTextField(
+              label: 'Settle threshold (px)',
+              initialValue: _g.settleThresholdPx.toString(),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: WizardInput.unsignedDecimal,
+              onChanged: (v) => _assignDouble(v, (d) {
+                if (d != null) _g.settleThresholdPx = d;
+              }),
+            ),
+            WizardTextField(
+              label: 'Settle time (s)',
+              initialValue: _g.settleDuration.inSeconds.toString(),
+              keyboardType: TextInputType.number,
+              inputFormatters: WizardInput.unsignedInt,
+              onChanged: (v) {
+                final s = _toInt(v);
+                if (s != null) _g.settleDuration = Duration(seconds: s);
+              },
+            ),
+            WizardDropdown<CalibrationCadence>(
+              label: 'Calibration cadence',
+              value: _g.calibrationCadence,
+              entries: const [
+                DropdownMenuEntry(
+                    value: CalibrationCadence.eachSession,
+                    label: 'Each session'),
+                DropdownMenuEntry(
+                    value: CalibrationCadence.onceReuse,
+                    label: 'Once, then reuse'),
+                DropdownMenuEntry(
+                    value: CalibrationCadence.neverRecalibrate,
+                    label: 'Never recalibrate'),
+              ],
+              onChanged: (v) => setState(() =>
+                  _g.calibrationCadence = v ?? CalibrationCadence.eachSession),
+            ),
           ],
-          onChanged: (v) => setState(() =>
-              _g.calibrationCadence = v ?? CalibrationCadence.eachSession),
         ),
       ],
     );
