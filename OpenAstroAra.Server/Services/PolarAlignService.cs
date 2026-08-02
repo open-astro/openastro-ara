@@ -481,20 +481,32 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignSolveOutcome> SolveSeedFrameAsync(
                 PHD2Guider guiderClient, string workDir, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+            var anyFrameReachedSolver = false;
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
                 var s = await CaptureAndSolveAsync(guiderClient, workDir, frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture), hint, settings, gen, ct).ConfigureAwait(false);
                 await PublishFrameCompleteAsync(gen, frameId, s.Success, s.Success ? 0 : attempt).ConfigureAwait(false);
                 if (s.Success) {
                     return s;
                 }
+                // _lastCaptureFault reflects THIS attempt (set on any capture-layer fault, cleared
+                // when the fetch delivers a frame to the solver) — a null here means the attempt
+                // failed in the SOLVER, i.e. a real focus/sky problem exists regardless of what the
+                // capture layer does on later attempts (review r4: classifying by the LAST attempt
+                // alone let one trailing transient RPC fault relabel a genuine solve problem as
+                // capture_rejected, pointing the operator at the wrong layer).
+                lock (_gate) {
+                    if (_generation == gen && _lastCaptureFault is null) {
+                        anyFrameReachedSolver = true;
+                    }
+                }
             }
             string? captureFault;
             lock (_gate) {
                 captureFault = _generation == gen ? _lastCaptureFault : null;
             }
-            // A capture-layer fault (daemon rejected the capture, no frame ever reached the solver)
+            // A capture-layer fault (daemon rejected the capture, NO frame ever reached the solver)
             // is NOT a sky/focus problem — blame the right layer, with the daemon's own message.
-            if (captureFault is not null) {
+            if (captureFault is not null && !anyFrameReachedSolver) {
                 throw new RoutineFailedException("capture_rejected",
                     $"the {frameId} seed frame could not be captured after {SeedSolveAttempts} attempts: {captureFault}");
             }

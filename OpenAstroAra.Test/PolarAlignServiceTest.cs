@@ -692,6 +692,47 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_trailing_capture_fault_cannot_relabel_a_real_solve_problem_as_capture_rejected() {
+            // Review r4: attempts 1–2 deliver frames that FAIL TO SOLVE (a real focus/sky problem);
+            // only attempt 3 hits a transient capture rejection. Classifying by the last attempt's
+            // fault alone would report capture_rejected ("could not be captured") — false, and it
+            // points the operator at the daemon instead of the sky. Any attempt that reached the
+            // solver pins the exhausted seed on seed_solve_failed.
+            var paCalls = new ConcurrentQueue<bool>();
+            var ws = new WsRecorder();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var captureCount = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                if (Interlocked.Increment(ref captureCount) >= 3) {
+                    throw new InvalidOperationException("camera busy"); // transient, LAST attempt only
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_test",
+                        ["Filename"] = "save_image_test",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver { Fallback = Unsolved }, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("seed_solve_failed"),
+                "frames DID reach the solver — the trailing capture fault must not steal the blame");
+        }
+
+        [Test]
         public async Task A_never_delivered_completion_costs_one_capture_not_the_whole_seed_budget() {
             // Review r3: a timed-out capture whose event NEVER arrives (daemon-side hang — the
             // common cause) leaves a debt that the next capture's OWN completion pays by mistake.
