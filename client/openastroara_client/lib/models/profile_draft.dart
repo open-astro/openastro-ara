@@ -188,6 +188,21 @@ class GuiderSettings {
   double settleThresholdPx = 1.5;
   Duration settleDuration = const Duration(seconds: 10);
   CalibrationCadence calibrationCadence = CalibrationCadence.eachSession;
+
+  // §76.2 screen 4 — the user's guide exposure range (Joey: mount-dependent —
+  // an iOptron guides best at 0.5–2 s, slower mounts want longer). ONE choice,
+  // TWO consumers: the dark-library build coverage AND the guider's exposure
+  // bounds, so they can never disagree. Defaults = OpenAstro Guider's own
+  // (1.0–6.0 s).
+  int darkMinExposureMs = 1000;
+  int darkMaxExposureMs = 6000;
+
+  /// "Build dark library now" toggle — on Finish, S4 kicks the build over the
+  /// range above. Default ON (wizard time = capped-scope time).
+  bool buildDarksOnFinish = true;
+
+  /// Frames per exposure step for the darks build (advanced; guider default).
+  int darkFrameCount = 5;
 }
 
 enum CalibrationCadence { eachSession, onceReuse, neverRecalibrate }
