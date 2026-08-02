@@ -32,11 +32,20 @@ class WizardEquipmentReadiness
   /// server's polar-align loop).
   int _run = 0;
 
+  /// Per-type recheck generations (review r1): two rechecks on the SAME card
+  /// must resolve by START order, not completion order — a double-tap whose
+  /// first (stale) request finishes last must not overwrite the newer result.
+  /// Kept per-type (not folded into [_run]) so a recheck never cancels an
+  /// in-flight readAll's OTHER cards. Cleared by readAll, whose own landing
+  /// for a type defers to any recheck started after it.
+  final Map<EquipmentDeviceType, int> _typeRun = {};
+
   /// Read every assigned fact-bearing device in parallel. Cards flip to
   /// [ReadinessState.reading] immediately, then land individually as their
   /// device finishes — no barrier, the fastest card goes green first.
   Future<void> readAll(AraServer server, EquipmentSlots slots) async {
     final run = ++_run;
+    _typeRun.clear();
     final assigned = <EquipmentDeviceType, String>{
       if (slots.cameraDeviceId != null)
         EquipmentDeviceType.camera: slots.cameraDeviceId!,
@@ -59,7 +68,11 @@ class WizardEquipmentReadiness
     try {
       await Future.wait(assigned.entries.map((e) async {
         final result = await _readOne(source, e.key, e.value);
-        if (_run == run) state = {...state, e.key: result};
+        // A recheck started after this readAll owns the card now (it holds a
+        // _typeRun entry) — defer to it.
+        if (_run == run && !_typeRun.containsKey(e.key)) {
+          state = {...state, e.key: result};
+        }
       }));
     } finally {
       source.close();
@@ -70,6 +83,8 @@ class WizardEquipmentReadiness
   Future<void> recheck(
       AraServer server, EquipmentDeviceType type, String assignedId) async {
     final run = _run; // a full readAll supersedes any in-flight recheck
+    final typeRun = (_typeRun[type] ?? 0) + 1; // newer recheck wins the card
+    _typeRun[type] = typeRun;
     state = {
       ...state,
       type: (state[type] ??
@@ -82,7 +97,9 @@ class WizardEquipmentReadiness
     final source = ref.read(deviceFactsSourceFactoryProvider)(server);
     try {
       final result = await _readOne(source, type, assignedId);
-      if (_run == run) state = {...state, type: result};
+      if (_run == run && _typeRun[type] == typeRun) {
+        state = {...state, type: result};
+      }
     } finally {
       source.close();
     }

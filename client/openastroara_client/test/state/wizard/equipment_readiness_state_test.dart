@@ -223,6 +223,49 @@ void main() {
     expect(fixed.closes, 1);
   });
 
+  test('a double-tapped recheck resolves by START order — the slow first '
+      'request cannot overwrite the newer result', () async {
+    // First recheck's source parks until released and would report a gap;
+    // second recheck's source answers immediately with a ready wheel.
+    final slowGap = _SlowSource();
+    final c = ProviderContainer(overrides: [
+      deviceFactsSourceFactoryProvider.overrideWithValue((_) => slowGap),
+    ]);
+    addTearDown(c.dispose);
+    final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
+
+    final first =
+        notifier.recheck(_server, EquipmentDeviceType.filterWheel, 'fw-1');
+    c.updateOverrides([
+      deviceFactsSourceFactoryProvider.overrideWithValue((_) => _FakeSource(
+            devices: {
+              'fw-1':
+                  _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+            },
+            wheel: const FilterWheelSlots(
+                [FilterWheelSlot(name: 'L', focusOffset: 0)]),
+          )),
+    ]);
+    await notifier.recheck(_server, EquipmentDeviceType.filterWheel, 'fw-1');
+    expect(
+        c
+            .read(wizardEquipmentReadinessProvider)[
+                EquipmentDeviceType.filterWheel]!
+            .state,
+        ReadinessState.ready);
+
+    // The stale first tap finishes last — its unreachable result must be
+    // dropped, not regress the card.
+    slowGap.release.complete();
+    await first;
+    expect(
+        c
+            .read(wizardEquipmentReadinessProvider)[
+                EquipmentDeviceType.filterWheel]!
+            .state,
+        ReadinessState.ready);
+  });
+
   test('a second readAll supersedes a stale in-flight one (generation guard)',
       () async {
     final slow = _SlowSource();
