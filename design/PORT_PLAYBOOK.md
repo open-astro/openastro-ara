@@ -12736,3 +12736,82 @@ If a future release adds an in-app updater for the client, register the related 
 - CONTRIBUTING.md (§74) — local build commands match the release workflow's
 
 ---
+
+## 76. Wizard 2.0 — five screens, Alpaca as the source of truth
+
+**Intent** (Joey, 2026-08-02): the 17-step profile wizard is over-asking. When the user connects
+to AlpacaBridge we can *see* the hardware — pixel size, sensor geometry, filter names, focuser
+step size, rotator reverse, mount props. The wizard's job is not to collect those facts into a
+duplicate form; it is to **verify** them, and when one is wrong or missing, send the user to the
+place that owns it (AlpacaBridge) rather than growing a second copy that can drift. Design it
+"like Apple would": a first-time user taps through five screens with near-zero typing; power
+users reach everything through disclosures, not extra steps.
+
+### 76.1 Philosophy
+
+- **Device facts live in Alpaca.** Pixel size, sensor dims, max bin, filter names + focus
+  offsets, focuser step size / temp-comp capability, rotator step size / reverse, mount name /
+  axis rates, telescope focal length + aperture (Alpaca `FocalLength`/`ApertureDiameter`) are
+  READ, displayed, and never asked. A missing/implausible fact gets a ⚠️ card state with a
+  deep link to the Alpaca **standard** browser setup page
+  (`http://host:port/setup/v1/{type}/{n}/setup` — spec-mandated, so it works on AlpacaBridge
+  and any conformant server) plus a **Recheck** button that re-reads.
+- **Ara-only tunables get defaults + disclosures.** Values with no Alpaca home (meridian-flip
+  policy, park mode, dither/settle, rotator min/max travel, gain/offset/read-noise/QE) are
+  defaulted and editable inline inside a per-card "Details" expander — a disclosure, not a step.
+- **Policy the user must decide stays a question.** Profile name/site, guide scope vs OAG,
+  guide exposure range, save location. Nothing else is asked.
+- **Fallback, visually secondary:** non-Bridge servers that don't report optics get an inline
+  "enter it here" field on the ⚠️ card so third-party gear is never bricked.
+- **Derived, never asked:** ASTAP search radius + downsample from image scale; autofocus step
+  size seeded from focuser step size; OAG guide focal length = main focal length; guide-camera
+  pixel size from its Alpaca camera. Autofocus, imaging defaults, safety thresholds, and site
+  preferences take thoughtful defaults and live in Options — the wizard never mentions them.
+
+### 76.2 The five screens
+
+| # | Screen | User does |
+|---|--------|-----------|
+| 1 | Welcome | Profile name; one-tap location (GPS, or mount site lat/long once connected) |
+| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged) |
+| 3 | Your equipment | Confirm auto-assigned device cards (real names via `/management/v1/configureddevices`); fix gaps in AlpacaBridge via deep link + Recheck; per-card Details disclosure for Ara-only tunables |
+| 4 | Guiding | Guide scope (enter FL) vs OAG (inherits main FL); guide exposure min/max range (drives BOTH dark-library coverage and guider exposure bounds — one choice, two consumers, cannot disagree); "Build dark library now" toggle (default on, "cover the guide scope" prompt); Advanced disclosure: dither, settle, calibration cadence |
+| 5 | Save + Done | Save location (sensible default); Finish saves the profile, provisions the guider twin profile named after the wizard profile, pushes guider config, kicks off the darks build (§63.6) over the chosen range with live progress streamed via §63.8 ("Building dark library… 12/40 — you're all set, this finishes in the background") |
+
+Auto-assignment slots discovered devices; a question is asked only on genuine ambiguity (two
+cameras → main vs guide, guessed by sensor size with a swap affordance).
+
+### 76.3 Readiness model
+
+Per assigned device: `needed` (facts Ara requires to image), `got` (read from Alpaca), and
+`missing` → card state ✅/⚠️. All assigned devices are connected and read **in parallel** on
+entering Screen 3. Finish is allowed with amber cards ("finish anyway") — the Setup tab
+checklist carries the ⚠️ forward. Darks-build failure (camera unreachable, saturated frames
+suggesting an uncovered scope) degrades to an amber "build darks later from the Guider panel"
+note; it never fails the wizard.
+
+### 76.4 Guider provisioning + idempotence
+
+Finishing the wizard creates/updates the guider twin profile named after the wizard profile
+(existing `PHD2Guider.AraProfileResolver` machinery), wired to the assigned guide camera +
+mount. The guider daemon speaks to ONE Alpaca server per profile, so when camera and mount
+live on different servers the CAMERA's server wins (the guide-setup-wizard rule shipped with
+PR #897; not yet paginated as a §63 subsection). Re-running the wizard on an existing profile updates
+the twin and offers a darks rebuild — never duplicates. The Setup tab's guiding step becomes a
+checklist that is already green, with re-run entry points for hardware changes.
+
+### 76.5 Slice plan (each a gated PR)
+
+- **S1** — readiness model + parallel fact-fetch layer (plumbing, no visual redesign)
+- **S2** — screens 1–3 (Welcome, Connect, equipment cards + deep link + disclosures)
+- **S3** — Guiding screen (decisions, exposure range picker shared with the §63.6 dark-library semantics)
+- **S4** — Save/Done + guider provisioning + darks kickoff with live progress
+- **S5** — defaults derivation (ASTAP/AF), retire old screens, migrate tests/help/§61 search
+
+### 76.6 Cross-references
+
+- §37 — original 17-step wizard spec (superseded by this section; screens map noted in S5)
+- §63.6 dark library (progress streamed via §63.8) · §63.17 guider equipment management
+  (later guider panels/wizard shipped in PRs #883–#885/#897 without new § numbers) · §68
+  AlpacaBridge contract
+- §45 polar align (consumes the profile this wizard produces)
