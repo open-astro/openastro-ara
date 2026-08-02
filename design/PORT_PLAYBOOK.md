@@ -12770,7 +12770,7 @@ users reach everything through disclosures, not extra steps.
 | 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged) |
 | 3 | Your equipment | Confirm auto-assigned device cards (real names via `/management/v1/configureddevices`); fix gaps in AlpacaBridge via deep link + Recheck; per-card Details disclosure for Ara-only tunables |
 | 4 | Guiding | Guide scope (enter FL) vs OAG (inherits main FL); guide exposure min/max range (drives BOTH dark-library coverage and guider exposure bounds — one choice, two consumers, cannot disagree); "Build dark library now" toggle (default on, "cover the guide scope" prompt); Advanced disclosure: dither, settle, calibration cadence |
-| 5 | Save + Done | Save location (sensible default); Finish saves the profile, provisions the guider twin profile named after the wizard profile, pushes guider config, kicks off the darks build over the chosen range with §63.8 live progress ("Building dark library… 12/40 — you're all set, this finishes in the background") |
+| 5 | Save + Done | Save location (sensible default); Finish saves the profile, provisions the guider twin profile named after the wizard profile, pushes guider config, kicks off the darks build (§63.6) over the chosen range with live progress streamed via §63.8 ("Building dark library… 12/40 — you're all set, this finishes in the background") |
 
 Auto-assignment slots discovered devices; a question is asked only on genuine ambiguity (two
 cameras → main vs guide, guessed by sensor size with a swap affordance).
@@ -12788,7 +12788,9 @@ note; it never fails the wizard.
 
 Finishing the wizard creates/updates the guider twin profile named after the wizard profile
 (existing `PHD2Guider.AraProfileResolver` machinery), wired to the assigned guide camera +
-mount (camera's server wins, per §63.20). Re-running the wizard on an existing profile updates
+mount. The guider daemon speaks to ONE Alpaca server per profile, so when camera and mount
+live on different servers the CAMERA's server wins (the guide-setup-wizard rule shipped with
+PR #897; not yet paginated as a §63 subsection). Re-running the wizard on an existing profile updates
 the twin and offers a darks rebuild — never duplicates. The Setup tab's guiding step becomes a
 checklist that is already green, with re-run entry points for hardware changes.
 
@@ -12796,12 +12798,14 @@ checklist that is already green, with re-run entry points for hardware changes.
 
 - **S1** — readiness model + parallel fact-fetch layer (plumbing, no visual redesign)
 - **S2** — screens 1–3 (Welcome, Connect, equipment cards + deep link + disclosures)
-- **S3** — Guiding screen (decisions, exposure range picker shared with §63.8 darks semantics)
+- **S3** — Guiding screen (decisions, exposure range picker shared with the §63.6 dark-library semantics)
 - **S4** — Save/Done + guider provisioning + darks kickoff with live progress
 - **S5** — defaults derivation (ASTAP/AF), retire old screens, migrate tests/help/§61 search
 
 ### 76.6 Cross-references
 
 - §37 — original 17-step wizard spec (superseded by this section; screens map noted in S5)
-- §63.8 darks progress · §63.18–63.20 guider panels/wizard · §68 AlpacaBridge contract
+- §63.6 dark library (progress streamed via §63.8) · §63.17 guider equipment management
+  (later guider panels/wizard shipped in PRs #883–#885/#897 without new § numbers) · §68
+  AlpacaBridge contract
 - §45 polar align (consumes the profile this wizard produces)
