@@ -56,6 +56,11 @@ class ProfileDraft {
   /// again removes the key (the typed value wins).
   final Set<String> clearedFields = <String>{};
 
+  // §76.2 — whether the "Your equipment" screen has already auto-assigned
+  // discovered devices THIS wizard session: re-entering the screen (Back /
+  // review Edit) must not re-assign over a slot the user explicitly cleared.
+  bool equipmentAutoAssigned = false;
+
   // Server id of the profile this draft was persisted as, set on the first
   // successful create during Save. A retry after a mid-save failure re-uses it
   // (re-applying the sections) instead of orphaning a new profile each attempt.

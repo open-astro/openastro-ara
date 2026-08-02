@@ -49,6 +49,27 @@ class DeviceGap {
   const DeviceGap(this.label, this.need, this.hint);
 }
 
+/// The raw typed read results behind a card, so the screen can write the
+/// facts into the ProfileDraft (the save mappers consume the draft, not the
+/// display strings). Only the fields for the card's own type are set.
+class DeviceFactsPayload {
+  final CameraGeometry? camera;
+  final TelescopeOptics? optics;
+  final MountProps? mountProps;
+  final FilterWheelSlots? filterWheelSlots;
+  final FocuserProps? focuserProps;
+  final RotatorProps? rotatorProps;
+
+  const DeviceFactsPayload({
+    this.camera,
+    this.optics,
+    this.mountProps,
+    this.filterWheelSlots,
+    this.focuserProps,
+    this.rotatorProps,
+  });
+}
+
 /// The full readiness picture for one assigned device slot.
 class DeviceReadiness {
   final EquipmentDeviceType type;
@@ -65,6 +86,10 @@ class DeviceReadiness {
   /// discovery record is known ([alpacaDeviceSetupUri]).
   final Uri? setupUri;
 
+  /// The raw read results behind [facts], for draft application. Null until a
+  /// read completes (and on unreachable cards).
+  final DeviceFactsPayload? payload;
+
   const DeviceReadiness({
     required this.type,
     required this.label,
@@ -72,6 +97,7 @@ class DeviceReadiness {
     this.facts = const [],
     this.gaps = const [],
     this.setupUri,
+    this.payload,
   });
 
   /// True when a REQUIRED fact is missing — the ⚠️ that gates green.
@@ -93,6 +119,7 @@ class DeviceReadiness {
         facts: facts ?? this.facts,
         gaps: gaps ?? this.gaps,
         setupUri: setupUri ?? this.setupUri,
+        payload: payload,
       );
 }
 
@@ -128,6 +155,7 @@ abstract final class ReadinessRules {
         label: label,
         state: ReadinessState.gaps,
         setupUri: setupUri,
+        payload: const DeviceFactsPayload(),
         gaps: const [
           DeviceGap('Pixel size + sensor geometry', FactNeed.required,
               'The camera did not report a usable sensor. $_fixInBridge'),
@@ -139,6 +167,7 @@ abstract final class ReadinessRules {
       label: label,
       state: ReadinessState.ready,
       setupUri: setupUri,
+      payload: DeviceFactsPayload(camera: g),
       facts: [
         DeviceFact('Pixel size', '${_num(g.pixelSizeUm)} µm'),
         DeviceFact('Sensor', '${g.sensorWidthPx}×${g.sensorHeightPx}'),
@@ -174,6 +203,7 @@ abstract final class ReadinessRules {
       label: props?.name ?? label,
       state: gaps.isEmpty ? ReadinessState.ready : ReadinessState.gaps,
       setupUri: setupUri,
+      payload: DeviceFactsPayload(optics: optics, mountProps: props),
       facts: facts,
       gaps: gaps,
     );
@@ -189,6 +219,7 @@ abstract final class ReadinessRules {
         label: label,
         state: ReadinessState.gaps,
         setupUri: setupUri,
+        payload: DeviceFactsPayload(filterWheelSlots: slots),
         gaps: [
           DeviceGap(
               'Filter names',
@@ -205,6 +236,7 @@ abstract final class ReadinessRules {
       label: label,
       state: ReadinessState.ready,
       setupUri: setupUri,
+      payload: DeviceFactsPayload(filterWheelSlots: slots),
       facts: [
         DeviceFact('Filters', named.map((s) => s.name.trim()).join(' · ')),
         if (anyOffset) const DeviceFact('Focus offsets', 'read from the wheel'),
@@ -232,6 +264,7 @@ abstract final class ReadinessRules {
       label: label,
       state: ReadinessState.ready,
       setupUri: setupUri,
+      payload: DeviceFactsPayload(focuserProps: props),
       facts: facts,
       gaps: gaps,
     );
@@ -257,6 +290,7 @@ abstract final class ReadinessRules {
       label: label,
       state: ReadinessState.ready,
       setupUri: setupUri,
+      payload: DeviceFactsPayload(rotatorProps: props),
       facts: facts,
       gaps: gaps,
     );

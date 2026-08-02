@@ -44,7 +44,7 @@ void main() {
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-          home: Scaffold(body: Builder(builder: (c) => wizardScreenBuilders[10]!(c)))),
+          home: Scaffold(body: Builder(builder: (c) => wizardScreenBuilders[4]!(c)))),
     ));
     await tester.pump();
   }
