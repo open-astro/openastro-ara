@@ -47,8 +47,8 @@ void main() {
       notifier.jumpTo(ProfileWizard.totalSteps + 100);
       expect(container.read(wizardControllerProvider).step,
           ProfileWizard.totalSteps);
-      notifier.jumpTo(7);
-      expect(container.read(wizardControllerProvider).step, 7);
+      notifier.jumpTo(3);
+      expect(container.read(wizardControllerProvider).step, 3);
     });
 
     test('skipCurrent adds to skippedScreens + advances', () {

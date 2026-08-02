@@ -83,7 +83,7 @@ String assignedEquipment(EquipmentSlots e) {
   return labels.isEmpty ? 'None assigned' : labels.join(', ');
 }
 
-/// §37.7 — final review. A read-only, section-grouped summary of everything the
+/// §76.2 Screen 5 — final review. A read-only, section-grouped summary of everything the
 /// wizard collected, each section with an "Edit" affordance that jumps back to
 /// the relevant screen. The Save itself is the shell's bottom-nav "Save Profile"
 /// button on this last step — this screen doesn't own persistence.
@@ -115,7 +115,7 @@ class ScreenReview extends ConsumerWidget {
     final si = draft.site;
 
     return WizardScreenScaffold(
-      step: 17,
+      step: 5,
       intro: 'Review your profile. Tap Edit on any section to jump back and '
           'change it, then choose Save Profile below to finish. Anything left '
           '"Not set" keeps the built-in default — you can adjust it later in '
@@ -138,13 +138,13 @@ class ScreenReview extends ConsumerWidget {
         _ReviewSection(title: 'Equipment', step: 3, onEdit: edit, rows: [
           ('Assigned', assignedEquipment(draft.equipment)),
         ]),
-        _ReviewSection(title: 'Telescope', step: 4, onEdit: edit, rows: [
+        _ReviewSection(title: 'Telescope', step: 3, onEdit: edit, rows: [
           ('Name', reviewValue(t.name)),
           ('Focal length', _unit(t.focalLengthMm, 'mm')),
           ('Aperture', _unit(t.apertureMm, 'mm')),
           ('Focal ratio', fr),
         ]),
-        _ReviewSection(title: 'Camera', step: 5, onEdit: edit, rows: [
+        _ReviewSection(title: 'Camera', step: 3, onEdit: edit, rows: [
           ('Cooling target', _unit(c.coolingTargetC, '°C')),
           ('Warmup', switch (c.warmupMode) {
             CoolerWarmupMode.off => 'Off',
@@ -158,18 +158,18 @@ class ScreenReview extends ConsumerWidget {
           ('Read noise', _unit(c.readNoiseE, 'e⁻')),
           ('Peak QE', _unit(c.qePeakPct, '%')),
         ]),
-        _ReviewSection(title: 'Filter wheel', step: 6, onEdit: edit, rows: [
+        _ReviewSection(title: 'Filter wheel', step: 3, onEdit: edit, rows: [
           ('Filters', draft.filterWheel.filters.isEmpty
               ? 'None defined'
               : '${draft.filterWheel.filters.length} defined'),
         ]),
-        _ReviewSection(title: 'Focuser', step: 7, onEdit: edit, rows: [
+        _ReviewSection(title: 'Focuser', step: 3, onEdit: edit, rows: [
           ('Step size', _unit(f.stepSizeMicrons, 'µm')),
           ('Backlash in/out',
               '${reviewValue(f.backlashInSteps)} / ${reviewValue(f.backlashOutSteps)}'),
           ('Temp. compensation', reviewValue(f.temperatureCompensationEnabled)),
         ]),
-        _ReviewSection(title: 'Mount', step: 8, onEdit: edit, rows: [
+        _ReviewSection(title: 'Mount', step: 3, onEdit: edit, rows: [
           ('Name', reviewValue(m.name)),
           ('Slew rate', _unit(m.slewRateDegPerSec, '°/s')),
           ('Meridian flip', switch (m.meridianFlip) {
@@ -179,7 +179,7 @@ class ScreenReview extends ConsumerWidget {
           }),
           ('Settle time', formatDuration(m.settleTimeAfterSlew)),
         ]),
-        _ReviewSection(title: 'Rotator', step: 9, onEdit: edit, rows: [
+        _ReviewSection(title: 'Rotator', step: 3, onEdit: edit, rows: [
           // A range needs both ends — if either is unset, fall back to "Not set"
           // rather than rendering a half-filled "Not set – 45.0°".
           ('Range', (r.minAngleDeg == null || r.maxAngleDeg == null)
@@ -192,7 +192,7 @@ class ScreenReview extends ConsumerWidget {
         // show a value (never "Not set"); routing them through the same
         // formatters as every other row keeps display consistent. The section's
         // skipped banner conveys when the user didn't customise them.
-        _ReviewSection(title: 'OpenAstro Guider', step: 10, onEdit: edit, rows: [
+        _ReviewSection(title: 'OpenAstro Guider', step: 4, onEdit: edit, rows: [
           ('Host:port', reviewValue(g.hostPort)),
           ('Dither', _unit(g.ditherPixels, 'px')),
           ('Settle threshold', _unit(g.settleThresholdPx, 'px')),
@@ -202,13 +202,13 @@ class ScreenReview extends ConsumerWidget {
             CalibrationCadence.neverRecalibrate => 'Never recalibrate',
           }),
         ]),
-        _ReviewSection(title: 'Plate solving', step: 11, onEdit: edit, rows: [
+        _ReviewSection(title: 'Plate solving', step: null, onEdit: edit, rows: [
           ('ASTAP binary', reviewValue(ps.astapBinaryPath)),
           ('Star database', reviewValue(ps.starDatabasePath)),
           ('Search radius', _deg(ps.searchRadiusDeg)),
           ('Downsample', reviewValue(ps.downsampleFactor)),
         ]),
-        _ReviewSection(title: 'Autofocus', step: 12, onEdit: edit, rows: [
+        _ReviewSection(title: 'Autofocus', step: null, onEdit: edit, rows: [
           ('Exposure', af.exposureSeconds == null
               ? _notSet
               : '${af.exposureSeconds} s'),
@@ -216,7 +216,7 @@ class ScreenReview extends ConsumerWidget {
           ('Step size', reviewValue(af.stepSize)),
           ('After filter change', reviewValue(af.runAfterFilterChange)),
         ]),
-        _ReviewSection(title: 'File saving', step: 13, onEdit: edit, rows: [
+        _ReviewSection(title: 'File saving', step: null, onEdit: edit, rows: [
           ('Directory', reviewValue(fs.saveDirectory)),
           ('Format', switch (fs.format) {
             ImageFormat.fits => 'FITS',
@@ -226,7 +226,7 @@ class ScreenReview extends ConsumerWidget {
           ('Compress', reviewValue(fs.compress)),
           ('Filename template', reviewValue(fs.filenameTemplate)),
         ]),
-        _ReviewSection(title: 'Imaging defaults', step: 14, onEdit: edit, rows: [
+        _ReviewSection(title: 'Imaging defaults', step: null, onEdit: edit, rows: [
           ('Exposure', formatDuration(id.exposure)),
           ('Frame type', switch (id.frameType) {
             FrameType.light => 'Light',
@@ -236,7 +236,7 @@ class ScreenReview extends ConsumerWidget {
             null => _notSet,
           }),
         ]),
-        _ReviewSection(title: 'Safety', step: 15, onEdit: edit, rows: [
+        _ReviewSection(title: 'Safety', step: null, onEdit: edit, rows: [
           ('When unsafe', switch (sf.onUnsafe) {
             UnsafeConditionAction.pauseAndPark => 'Pause & park',
             UnsafeConditionAction.parkOnly => 'Park only',
@@ -249,7 +249,7 @@ class ScreenReview extends ConsumerWidget {
               ? _notSet
               : '${sf.resumeDelayMin} min'),
         ]),
-        _ReviewSection(title: 'Site preferences', step: 16, onEdit: edit, rows: [
+        _ReviewSection(title: 'Site preferences', step: null, onEdit: edit, rows: [
           ('Horizon floor', _deg(si.hardMinAltitudeDeg)),
           ('Twilight', switch (si.twilight) {
             TwilightOption.civil => 'Civil',
@@ -265,6 +265,8 @@ class ScreenReview extends ConsumerWidget {
 
 /// One titled block in the review list: a header with an Edit-jump button, a
 /// "skipped" hint when the matching screen was skipped, then label/value rows.
+/// [step] is null for §76 sections with no wizard screen anymore (defaults
+/// apply; the values are edited post-save in Options) — no Edit button.
 class _ReviewSection extends ConsumerWidget {
   const _ReviewSection({
     required this.title,
@@ -274,7 +276,7 @@ class _ReviewSection extends ConsumerWidget {
   });
 
   final String title;
-  final int step;
+  final int? step;
   final List<(String, String)> rows;
   final void Function(int step) onEdit;
 
@@ -293,11 +295,18 @@ class _ReviewSection extends ConsumerWidget {
                 child: Text(title,
                     style: Theme.of(context).textTheme.titleMedium),
               ),
-              TextButton.icon(
-                onPressed: () => onEdit(step),
-                icon: const Icon(Icons.edit, size: 16),
-                label: const Text('Edit'),
-              ),
+              if (step != null)
+                TextButton.icon(
+                  onPressed: () => onEdit(step!),
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edit'),
+                )
+              else
+                Text('Defaults · edit later in Options',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AraColors.textSecondary)),
             ],
           ),
           if (wasSkipped)
