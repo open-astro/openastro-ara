@@ -86,6 +86,27 @@ void main() {
     expect(g.darkMaxExposureMs, 4000);
   });
 
+  testWidgets('remounting with an inverted range persisted in the draft '
+      're-locks Next (Back → Next cannot bypass the gate)', (tester) async {
+    final container = await _pump(tester, seedDraft: (c) {
+      c.read(wizardControllerProvider).draft.guider
+        ..darkMinExposureMs = 2500
+        ..darkMaxExposureMs = 1000;
+      // Simulate the controller's unconditional reset on navigation.
+      c.read(wizardStepValidProvider.notifier).setValid(true);
+    });
+    await tester.pump();
+    expect(container.read(wizardStepValidProvider), isFalse,
+        reason: 'mount re-derives the gate from the persisted draft');
+    expect(find.text('Shortest exposure must not exceed the longest.'),
+        findsOneWidget);
+    // Tear the tree down and elapse any straggler one-shot timers (the
+    // screen's providers arm short-lived ones) so the binding's
+    // pending-timer teardown assert stays quiet.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 1));
+  });
+
   testWidgets('a chosen Alpaca guide camera fills the pixel size from the '
       'driver and shows it as a read fact', (tester) async {
     final fake = _FakeGuiderEquipment(pixelSize: 2.9);
