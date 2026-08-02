@@ -33,5 +33,21 @@ namespace OpenAstroAra.Test {
         [TestCase(null, ExpectedResult = "guide_scope")]
         public string Normalize_coerces_to_the_known_enum(string? raw) =>
             ProfileEndpoints.NormalizeGuiderSetupType(raw);
+
+        // §76.2 — the guide exposure range gate at the same write boundary: min/max must be
+        // positive and ordered, because the range drives BOTH darks coverage and guiding bounds.
+        [TestCase(1000, 6000, ExpectedResult = true)]
+        [TestCase(500, 500, ExpectedResult = true)]
+        [TestCase(2500, 1000, ExpectedResult = false)]
+        [TestCase(0, 6000, ExpectedResult = false)]
+        [TestCase(1000, 0, ExpectedResult = false)]
+        [TestCase(-500, 2000, ExpectedResult = false)]
+        public bool Guide_exposure_range_gate(int minMs, int maxMs) =>
+            ProfileEndpoints.ValidateGuideExposureRange(new OpenAstroAra.Server.Contracts.Phd2SettingsDto(
+                Host: "localhost", Port: 4400, Phd2Profile: "Default",
+                DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5.0,
+                SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
+                ForceCalibrationEachSession: false,
+                GuideExposureMinMs: minMs, GuideExposureMaxMs: maxMs)) is null;
     }
 }

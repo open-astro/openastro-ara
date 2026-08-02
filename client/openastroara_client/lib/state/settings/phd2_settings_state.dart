@@ -51,6 +51,12 @@ class Phd2Settings {
   final String guiderAlpacaHost;
   final int guiderAlpacaPort; // 0 = unset
 
+  // §76.2 — the user's guide exposure RANGE (ms): one choice, two consumers
+  // (dark-library coverage + guiding bounds). Defaults match the guider
+  // daemon's own 1.0–6.0 s.
+  final int guideExposureMinMs;
+  final int guideExposureMaxMs;
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -76,6 +82,8 @@ class Phd2Settings {
     this.guiderRotator = '',
     this.guiderAlpacaHost = '',
     this.guiderAlpacaPort = 0,
+    this.guideExposureMinMs = 1000,
+    this.guideExposureMaxMs = 6000,
   });
 
   Phd2Settings copyWith({
@@ -103,6 +111,8 @@ class Phd2Settings {
     String? guiderRotator,
     String? guiderAlpacaHost,
     int? guiderAlpacaPort,
+    int? guideExposureMinMs,
+    int? guideExposureMaxMs,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -130,6 +140,8 @@ class Phd2Settings {
         guiderRotator: guiderRotator ?? this.guiderRotator,
         guiderAlpacaHost: guiderAlpacaHost ?? this.guiderAlpacaHost,
         guiderAlpacaPort: guiderAlpacaPort ?? this.guiderAlpacaPort,
+        guideExposureMinMs: guideExposureMinMs ?? this.guideExposureMinMs,
+        guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
       );
 }
 

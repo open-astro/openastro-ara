@@ -135,6 +135,16 @@ void main() {
       expect(out.forceCalibrationEachSession, isFalse);
     });
 
+    test('applyDraftToPhd2 §76.2 persists the guide exposure range', () {
+      final d = ProfileDraft();
+      d.guider
+        ..darkMinExposureMs = 500
+        ..darkMaxExposureMs = 2000;
+      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      expect(out.guideExposureMinMs, 500);
+      expect(out.guideExposureMaxMs, 2000);
+    });
+
     test('applyDraftToPhd2 §63.19 guide-scope maps FL + pixel size, null keeps base', () {
       final d = ProfileDraft();
       d.guider

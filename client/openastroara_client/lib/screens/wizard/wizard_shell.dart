@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/server.dart';
 import '../../services/profile_api.dart';
+import '../../state/guider/guider_build_activity_state.dart';
+import '../../state/guider/guider_calibration_state.dart';
+import '../../state/guider/guider_equipment_state.dart';
 import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/wizard_state.dart';
@@ -36,8 +39,24 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // race-write all four sections. Stays true until the save settles.
   bool _isSaving = false;
 
+  // §76.2 S4 — when a darks build was kicked off at Finish, the wizard stays
+  // open on a Done view with the §63.8 live progress instead of popping (the
+  // user can still leave any time; the build runs daemon-side).
+  bool _showDone = false;
+  List<String> _finishNotes = const [];
+
   @override
   Widget build(BuildContext context) {
+    if (_showDone) {
+      return WizardDoneView(
+        notes: _finishNotes,
+        onFinish: () {
+          final draft = ref.read(wizardControllerProvider).draft;
+          Navigator.of(context).pop();
+          widget.onComplete?.call(ProfileDraftSnapshot(draft));
+        },
+      );
+    }
     final state = ref.watch(wizardControllerProvider);
     final controller = ref.read(wizardControllerProvider.notifier);
     // Gate Next / Save Profile on the current screen's inline validation (set by
@@ -74,7 +93,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
             onSkip: controller.skipCurrent,
             onNext: state.step < ProfileWizard.totalSteps
                 ? controller.next
-                : () => _saveAndExit(controller),
+                : () => _saveAndExit(controller, finalSave: true),
             isLast: state.step == ProfileWizard.totalSteps,
             canAdvance: stepValid,
           ),
@@ -88,7 +107,8 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
   
-  Future<void> _saveAndExit(WizardController controller) async {
+  Future<void> _saveAndExit(WizardController controller,
+      {bool finalSave = false}) async {
     if (_isSaving) return; // double-tap guard until the spinner blocks input
     // liveDraft() returns the live draft object: saveWizardProfile stamps
     // draft.savedProfileId on the first attempt so a retry re-uses the same
@@ -168,6 +188,47 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       equipmentNotes = await applyWizardEquipment(server, draft.equipment);
     }
 
+    // §76.2 S4 — guider provisioning + darks kickoff, both best-effort (a
+    // failure degrades to an amber note, never fails the wizard). The push
+    // re-sends the just-saved profile (incl. the exposure range + camera
+    // pick) so the guider twin named after this profile carries the final
+    // config even if the daemon's own profile-switch follow raced the
+    // section PUTs.
+    // Only a FINAL-step Save provisions the guider + shoots darks — a mid-
+    // wizard "Save & Exit" persists a partial draft the user intends to
+    // resume, and half-configured guiding must not push or expose frames.
+    var darksStarted = false;
+    final finishNotes = <String>[...equipmentNotes];
+    if (error == null && finalSave) {
+      try {
+        await ref.read(guiderEquipmentProvider.notifier).pushProfile();
+      } catch (e) {
+        debugPrint('[wizard] guider profile push failed: $e');
+        finishNotes.add('The guider profile push didn\'t complete — push it '
+            'from the Setup tab\'s Guider panel when the guider is reachable.');
+      }
+      if (draft.guider.buildDarksOnFinish) {
+        final calApi = ref.read(guiderCalibrationApiProvider);
+        if (calApi == null) {
+          finishNotes.add('Dark-library build skipped (no server connection) '
+              '— build it later from the Guider panel.');
+        } else {
+          try {
+            await calApi.buildDarkLibrary(
+              frameCount: draft.guider.darkFrameCount,
+              minExposureMs: draft.guider.darkMinExposureMs,
+              maxExposureMs: draft.guider.darkMaxExposureMs,
+            );
+            darksStarted = true;
+          } catch (e) {
+            debugPrint('[wizard] darks kickoff failed: $e');
+            finishNotes.add('The dark-library build couldn\'t start — cover '
+                'the guide scope and build it from the Guider panel.');
+          }
+        }
+      }
+    }
+
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
     // Clear the guard inside setState when still mounted (Flutter contract for
     // state mutations); fall back to a bare assignment if the widget is gone.
@@ -182,6 +243,17 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       return; // keep the wizard open so the user can retry
     }
 
+    // §76.2 S4 — darks running: swap to the Done view with live progress
+    // instead of popping. Notes (equipment/guider degrades) show there.
+    if (darksStarted && mounted) {
+      ref.invalidate(profileManagementProvider);
+      setState(() {
+        _showDone = true;
+        _finishNotes = finishNotes;
+      });
+      return;
+    }
+
     // The new profile is now persisted + active on the daemon. Invalidate the
     // cached profile list so it shows up immediately — the wizard is launched
     // from entry points that pass no onComplete (the app-shell + Settings
@@ -192,13 +264,11 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // Exit the wizard first, THEN notify — so if onComplete routes/pops, it can't
     // race our pop into popping an unintended route.
     if (nav.mounted) nav.pop(); // exit the wizard
-    // Profile saved fine, but some assigned devices couldn't be handed off —
-    // tell the user which, so they know to reconnect from the equipment panel.
-    if (equipmentNotes.isNotEmpty) {
+    // Profile saved fine, but some follow-ups degraded (device connects,
+    // guider push, darks) — tell the user which, with where to finish them.
+    if (finishNotes.isNotEmpty) {
       messenger.showSnackBar(SnackBar(
-        content: Text(
-            'Profile saved, but some devices didn\'t connect — '
-            '${equipmentNotes.join(' ')}'),
+        content: Text('Profile saved. ${finishNotes.join(' ')}'),
         duration: const Duration(seconds: 8),
       ));
     }
@@ -298,6 +368,116 @@ class _BottomNavBar extends StatelessWidget {
               child: nextButton,
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// §76.2 S4 — the post-Finish Done view: the profile is saved and the dark
+/// library is building daemon-side; show the §63.8 live progress plus any
+/// amber follow-up notes. Leaving is always safe — the build continues on
+/// the server.
+class WizardDoneView extends ConsumerWidget {
+  const WizardDoneView({super.key, required this.notes, required this.onFinish});
+
+  final List<String> notes;
+  final VoidCallback onFinish;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activity = ref
+        .watch(guiderBuildActivityProvider)[CalibrationArtifact.darkLibrary];
+    final phase = activity?.phase;
+    final fraction = activity?.fraction;
+    final String progressLine;
+    if (phase == CalibrationBuildPhase.complete) {
+      progressLine = 'Dark library complete.';
+    } else if (phase == CalibrationBuildPhase.failed) {
+      progressLine = 'Dark-library build failed'
+          '${activity?.error != null ? ' (${activity!.error})' : ''} — '
+          'rebuild it from the Guider panel.';
+    } else if (activity?.exposureIndex != null) {
+      progressLine = 'Building dark library — exposure '
+          '${activity!.exposureIndex}/${activity.exposureCount} '
+          '(frame ${activity.frame}/${activity.frameCount})…';
+    } else {
+      progressLine = 'Building dark library…';
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile saved')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.check_circle,
+                    size: 44, color: AraColors.accentConnected),
+                const SizedBox(height: 12),
+                Text('You\'re all set',
+                    style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 8),
+                Text(
+                  'Your profile is saved and active. The dark library is '
+                  'shooting in the background — it finishes on the server '
+                  'even if you leave now.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AraColors.textSecondary),
+                ),
+                const SizedBox(height: 20),
+                if (phase != CalibrationBuildPhase.failed) ...[
+                  LinearProgressIndicator(
+                    value: phase == CalibrationBuildPhase.complete
+                        ? 1.0
+                        : fraction,
+                    backgroundColor: AraColors.bgPanel,
+                    valueColor:
+                        const AlwaysStoppedAnimation(AraColors.accentInfo),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(progressLine,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: phase == CalibrationBuildPhase.failed
+                              ? AraColors.accentBusy
+                              : AraColors.textSecondary,
+                        )),
+                for (final note in notes) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded,
+                          size: 16, color: AraColors.accentBusy),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(note,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AraColors.textSecondary)),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: onFinish,
+                    icon: const Icon(Icons.check),
+                    label: const Text('Finish'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
