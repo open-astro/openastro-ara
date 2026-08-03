@@ -74,6 +74,12 @@ namespace OpenAstroAra.Server.Services.Video {
                 ZwoNative.ThrowOnError(
                     ZwoNative.SetControlValue(cameraId, ZwoNative.AsiControlType.Exposure, request.ExposureMs * 1000L, 0),
                     "ASISetControlValue(Exposure)");
+                // Video-rate throttles (found on-hardware: 280 vs the ASI290 Mini's
+                // spec 355.9 fps at 320x240): the SDK's USB bandwidth limiter defaults
+                // to ~50% and high-speed readout defaults off — every planetary app
+                // maxes both for video. Best-effort: not all cameras expose them.
+                _ = ZwoNative.SetControlValue(cameraId, ZwoNative.AsiControlType.BandwidthOverload, 100, 0);
+                _ = ZwoNative.SetControlValue(cameraId, ZwoNative.AsiControlType.HighSpeedMode, 1, 0);
                 ZwoNative.ThrowOnError(ZwoNative.StartVideoCapture(cameraId), "ASIStartVideoCapture");
                 started = true;
             } catch {
