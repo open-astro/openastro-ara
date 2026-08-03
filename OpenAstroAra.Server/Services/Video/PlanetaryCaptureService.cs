@@ -100,14 +100,15 @@ namespace OpenAstroAra.Server.Services.Video {
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try {
                 ObjectDisposedException.ThrowIf(disposed, this);
-                if (request.Vendor is not ("zwo" or "playerone")) {
+                var requestedVendor = request.Vendor?.ToLowerInvariant();
+                if (requestedVendor is not ("zwo" or "playerone")) {
                     var shownVendor = string.IsNullOrEmpty(request.Vendor) ? "<empty>" : request.Vendor;
                     throw new ArgumentException($"unknown vendor '{shownVendor}' (zwo|playerone)", nameof(request));
                 }
                 if (inPlanetaryMode) {
                     // Idempotent only for a true repeat: same camera AND same vendor —
                     // a differing vendor must not be silently ignored (review #914 r2).
-                    if (cameraId == request.CameraId && vendor == request.Vendor) {
+                    if (cameraId == request.CameraId && vendor == requestedVendor) {
                         return Accepted("planetary.enter", idempotencyKey);
                     }
                     throw new InvalidOperationException(
@@ -148,7 +149,7 @@ namespace OpenAstroAra.Server.Services.Video {
 
                 inPlanetaryMode = true;
                 cameraId = request.CameraId;
-                vendor = request.Vendor;
+                vendor = requestedVendor;
                 PublishState();
                 await PublishAsync(WsEventCatalog.PlanetaryModeEntered, new JsonObject {
                     ["camera_id"] = request.CameraId,
