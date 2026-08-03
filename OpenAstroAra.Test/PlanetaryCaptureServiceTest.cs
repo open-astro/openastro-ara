@@ -374,6 +374,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Enter_ReentrySameCameraDifferentVendor_IsRefused() {
+            // r2: idempotent re-entry only for camera AND vendor match; a differing
+            // vendor (or garbage vendor) on the repeat call must not silently pass.
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "zwo"), null, CancellationToken.None);
+            var differentVendor = () => service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "playerone"), null, CancellationToken.None);
+            await differentVendor.Should().ThrowAsync<InvalidOperationException>().WithMessage("*leave first*");
+            var garbageVendor = () => service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "junk"), null, CancellationToken.None);
+            await garbageVendor.Should().ThrowAsync<ArgumentException>().WithMessage("*unknown vendor*");
+            await service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "zwo"), null, CancellationToken.None);   // true repeat OK
+        }
+
+        [Test]
         public void UsbfsTargetMb_ScalesWithRamAndClamps() {
             const long GiB = 1024L * 1024 * 1024;
             UsbfsTuner.TargetMb(2 * GiB).Should().Be(256);     // iMate class

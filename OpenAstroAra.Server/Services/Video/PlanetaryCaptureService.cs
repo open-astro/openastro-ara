@@ -100,20 +100,22 @@ namespace OpenAstroAra.Server.Services.Video {
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try {
                 ObjectDisposedException.ThrowIf(disposed, this);
+                if (request.Vendor is not ("zwo" or "playerone")) {
+                    var shownVendor = string.IsNullOrEmpty(request.Vendor) ? "<empty>" : request.Vendor;
+                    throw new ArgumentException($"unknown vendor '{shownVendor}' (zwo|playerone)", nameof(request));
+                }
                 if (inPlanetaryMode) {
-                    if (cameraId == request.CameraId) {
+                    // Idempotent only for a true repeat: same camera AND same vendor —
+                    // a differing vendor must not be silently ignored (review #914 r2).
+                    if (cameraId == request.CameraId && vendor == request.Vendor) {
                         return Accepted("planetary.enter", idempotencyKey);
                     }
                     throw new InvalidOperationException(
-                        $"already in planetary mode with camera {cameraId}; leave first");
+                        $"already in planetary mode with camera {cameraId} (vendor '{vendor}'); leave first");
                 }
                 if (runs.HasAny) {
                     throw new InvalidOperationException(
                         "a sequence run is active — it holds the camera (§77.2); stop it before entering planetary mode");
-                }
-                if (request.Vendor is not ("zwo" or "playerone")) {
-                    var shown = string.IsNullOrEmpty(request.Vendor) ? "<empty>" : request.Vendor;
-                    throw new ArgumentException($"unknown vendor '{shown}' (zwo|playerone)", nameof(request));
                 }
 
                 // Detach from the Alpaca surface (bridge closes the SDK handle in-call
