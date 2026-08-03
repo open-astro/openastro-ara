@@ -217,7 +217,9 @@ namespace OpenAstroAra.Server.Services.Video {
 
         public RecorderStats Stats() {
             var captured = Interlocked.Read(ref framesCaptured);
-            var elapsed = Interlocked.Read(ref captureElapsedTicks);
+            // Live readout (§77.4 achieved-fps): while the capture thread runs, the
+            // frozen end-of-capture value isn't written yet — read the running clock.
+            var elapsed = running ? captureClock.Elapsed.Ticks : Interlocked.Read(ref captureElapsedTicks);
             string currentError;
             lock (errorGate) {
                 currentError = error;

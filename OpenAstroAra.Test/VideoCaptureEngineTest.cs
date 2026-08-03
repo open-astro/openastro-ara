@@ -320,6 +320,9 @@ namespace OpenAstroAra.Test {
                     Ser = new SerWriterOptions { Path = path, Observer = "Bench" },
                     RingBytes = 1024 * 1024
                 });
+                WaitForProduced(source, 50);
+                // Live readout (review #910 r3): fps must be non-zero mid-recording.
+                recorder.Stats().AchievedFps.Should().BeGreaterThan(0);
                 WaitForProduced(source, frameCount);
                 recorder.Stop();
 
