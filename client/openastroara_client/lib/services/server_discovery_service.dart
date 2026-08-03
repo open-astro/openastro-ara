@@ -6,16 +6,18 @@ import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
 
-/// Scans the local network for Ara daemons two ways at once:
+/// Scans the local network for Ara daemons, multicast-independent:
 ///
 /// 1. mDNS (`_openastroara._tcp.local`) per playbook §30 first-run flow +
 ///    §60.1 service-type registration — instant when multicast works.
-/// 2. A direct subnet sweep probing `GET /api/v1/server/info` on port 5555
-///    across every local /24. The raw-socket mDNS package is unreliable on
-///    macOS (the OS's own mDNSResponder owns port 5353 — `dns-sd` sees the
-///    daemon while the in-app browse stays empty; site outage 2026-08-03),
-///    so discovery must not DEPEND on multicast. The info endpoint verifies
-///    the responder really is an Ara daemon before it's listed.
+/// 2. A subnet sweep probing `GET /api/v1/server/info` on port 5555 across
+///    every local /24 — but ONLY as a fallback, when the mDNS browse turns
+///    up nothing (finished empty, or silent past a grace period). The
+///    raw-socket mDNS package is unreliable on macOS (the OS's mDNSResponder
+///    owns port 5353 — `dns-sd` sees the daemon while the in-app browse
+///    stays empty; site outage 2026-08-03), so discovery must not DEPEND on
+///    multicast — yet scan-like probe traffic shouldn't hit every network
+///    the laptop joins (hotel Wi-Fi) when mDNS is answering fine (review r2).
 ///
 /// Both paths yield numeric-IP hostnames, so the saved server never carries
 /// a `.local` name that only resolves while multicast is healthy.
@@ -23,15 +25,32 @@ class ServerDiscoveryService {
   static const String serviceType = '_openastroara._tcp.local';
   static const int defaultPort = 5555;
 
-  /// Run a single discovery pass: both strategies race, results dedupe by
-  /// endpoint. The stream closes when both finish (the sweep bounds itself
-  /// with per-probe timeouts; the mDNS lookups end on their own timeout).
+  /// How long the mDNS browse gets to produce a first result before the
+  /// sweep fallback starts alongside it.
+  static const Duration mdnsGracePeriod = Duration(milliseconds: 2500);
+
+  /// Test seams: the real strategies are network-bound, so tests inject
+  /// deterministic streams here. Production callers use the default ctor.
+  ServerDiscoveryService({this.mdnsSource, this.sweepSource});
+
+  final Stream<AraServer> Function()? mdnsSource;
+  final Stream<AraServer> Function()? sweepSource;
+
+  /// Run a single discovery pass. mDNS starts immediately; the sweep joins
+  /// only if mDNS stays empty (grace timer) or finishes empty. Results
+  /// dedupe by endpoint; the stream closes when every started strategy is
+  /// done.
   Stream<AraServer> discover() {
     final controller = StreamController<AraServer>();
     final seen = <String>{};
-    var pending = 2;
+    var pending = 1; // the mDNS strand; the sweep adds itself if started
+    var sawMdnsResult = false;
+    var sweepStarted = false;
+    Timer? grace;
+
     void done() {
       if (--pending == 0 && !controller.isClosed) {
+        grace?.cancel();
         unawaited(controller.close());
       }
     }
@@ -42,8 +61,30 @@ class ServerDiscoveryService {
       }
     }
 
-    _mdnsDiscover().listen(emit, onError: (Object _) {}, onDone: done);
-    _sweepDiscover().listen(emit, onError: (Object _) {}, onDone: done);
+    void maybeStartSweep() {
+      if (sweepStarted || controller.isClosed) return;
+      sweepStarted = true;
+      pending++;
+      (sweepSource ?? _sweepDiscover)()
+          .listen(emit, onError: (Object _) {}, onDone: done);
+    }
+
+    (mdnsSource ?? _mdnsDiscover)().listen(
+      (s) {
+        sawMdnsResult = true;
+        emit(s);
+      },
+      onError: (Object _) {},
+      onDone: () {
+        // mDNS finished with nothing — the sweep is the only hope; start it
+        // BEFORE done() so pending can't hit zero and close the stream first.
+        if (!sawMdnsResult) maybeStartSweep();
+        done();
+      },
+    );
+    grace = Timer(mdnsGracePeriod, () {
+      if (!sawMdnsResult) maybeStartSweep();
+    });
     return controller.stream;
   }
 
@@ -60,9 +101,8 @@ class ServerDiscoveryService {
           // channel is provably working (we just heard the record). Saving
           // the .local hostname instead locks the saved server to mDNS
           // resolution forever — on a flaky-multicast network the daemon
-          // then reads as "down" even though it answers by IP. The name is
-          // kept for display via [AraServer.mdnsName].
-          var host = srv.target;
+          // then reads as "down" even though it answers by IP.
+          final String host;
           try {
             final a = await mdns
                 .lookup<IPAddressResourceRecord>(
@@ -70,15 +110,18 @@ class ServerDiscoveryService {
                 .first
                 .timeout(const Duration(milliseconds: 800));
             host = a.address.address;
-            // Broad on purpose (review r1): a dropped A-record reply is the
-            // exact flaky-multicast mode this file survives — without the
-            // timeout this nested await wedged EVERY later PTR/SRV record
-            // and kept the merged stream from ever closing. `.first` throws
-            // StateError (an Error, not Exception) on an empty stream, so
-            // the catch must not be narrowed to `on Exception`.
+            // Broad on purpose: `.first` throws StateError (an Error, not
+            // Exception) on an empty stream, and a dropped A-record reply is
+            // the exact flaky-multicast mode this file survives — without
+            // the timeout this nested await wedged EVERY later PTR/SRV
+            // record and kept the merged stream from ever closing (r1).
             // ignore: avoid_catches_without_on_clauses
           } catch (_) {
-            // Unresolved in time — keep the .local name for this entry.
+            // Unresolved: do NOT emit the .local name — a saved entry keyed
+            // on it reintroduces the outage this PR fixes, and it would
+            // duplicate the sweep's IP entry for the same daemon (r2). The
+            // sweep surfaces this host by IP instead.
+            continue;
           }
           yield AraServer(
             hostname: host,
@@ -98,9 +141,11 @@ class ServerDiscoveryService {
     }
   }
 
-  /// Probe every host of every local /24 for an Ara daemon on [defaultPort].
-  /// ~254 parallel probes per interface with sub-second timeouts: completes
-  /// in ~1-2 s on a LAN and finds the daemon with zero multicast dependency.
+  /// Probe every host of every local /24 for an Ara daemon on [defaultPort],
+  /// in bounded batches. Worst case (silent-drop hosts) a batch rides its
+  /// slowest probe's timeouts, so the sweep can take several seconds on
+  /// hostile networks — acceptable for a fallback that only runs when mDNS
+  /// found nothing.
   Stream<AraServer> _sweepDiscover() async* {
     final List<NetworkInterface> interfaces;
     try {
@@ -132,8 +177,7 @@ class ServerDiscoveryService {
       ];
       // Batches of 64 (review r1): several interfaces (Wi-Fi + VPN) multiply
       // the /24s, and an unbounded fan-out could hit fd limits on constrained
-      // stacks. Four batches per /24 adds well under a second at these
-      // per-probe timeouts.
+      // stacks.
       const batch = 64;
       for (var i = 0; i < hosts.length; i += batch) {
         final probes = [
@@ -148,7 +192,7 @@ class ServerDiscoveryService {
     }
   }
 
-  /// GET /api/v1/server/info with a tight timeout; a parseable payload with
+  /// GET /api/v1/server/info with tight timeouts; a parseable payload with
   /// a server_uuid is the "this really is an Ara daemon" check. Any failure
   /// (refused, timeout, non-JSON) means "not a daemon" — never an error.
   Future<AraServer?> _probe(HttpClient client, String host) async {
@@ -156,12 +200,13 @@ class ServerDiscoveryService {
       final req = await client
           .getUrl(Uri.parse('http://$host:$defaultPort/api/v1/server/info'))
           .timeout(const Duration(milliseconds: 900));
-      final res = await req.close().timeout(const Duration(seconds: 2));
+      final res =
+          await req.close().timeout(const Duration(milliseconds: 1200));
       if (res.statusCode != 200) return null;
       final body = await res
           .transform(utf8.decoder)
           .join()
-          .timeout(const Duration(seconds: 2));
+          .timeout(const Duration(milliseconds: 1200));
       final json = jsonDecode(body);
       if (json is! Map<String, dynamic> || json['server_uuid'] is! String) {
         return null;
