@@ -222,8 +222,16 @@ namespace OpenAstroAra.Server.Services.Video {
                     Gain = request.Gain,
                     ExposureMs = request.ExposureMs,
                 };
-                if (VideoFormats.FrameBytes(videoRequest) <= 0) {
+                var frameBytes = VideoFormats.FrameBytes(videoRequest);
+                if (frameBytes <= 0) {
                     throw new ArgumentException("invalid frame geometry", nameof(request));
+                }
+                // DoS guard (review #911 r5): a crafted geometry could otherwise demand
+                // a multi-GB pinned ring arena over the network surface. 128 MB/frame
+                // comfortably covers any real planetary sensor (a 61 MP full-frame at
+                // 16-bit is ~122 MB; planetary ROIs are a fraction of that).
+                if (frameBytes > 128L * 1024 * 1024) {
+                    throw new ArgumentException("frame geometry exceeds the 128 MB/frame limit", nameof(request));
                 }
 
                 // Client-supplied names are confined to the planetary output directory
@@ -347,23 +355,20 @@ namespace OpenAstroAra.Server.Services.Video {
         }
 
         private static bool TryParseFormat(string token, out VideoPixelFormat format) {
-            format = token switch {
-                "mono8" => VideoPixelFormat.Mono8,
-                "mono16" => VideoPixelFormat.Mono16,
-                "bayer_rggb8" => VideoPixelFormat.BayerRggb8,
-                "bayer_grbg8" => VideoPixelFormat.BayerGrbg8,
-                "bayer_gbrg8" => VideoPixelFormat.BayerGbrg8,
-                "bayer_bggr8" => VideoPixelFormat.BayerBggr8,
-                "bayer_rggb16" => VideoPixelFormat.BayerRggb16,
-                "bayer_grbg16" => VideoPixelFormat.BayerGrbg16,
-                "bayer_gbrg16" => VideoPixelFormat.BayerGbrg16,
-                "bayer_bggr16" => VideoPixelFormat.BayerBggr16,
-                "rgb24" => VideoPixelFormat.Rgb24,
-                _ => VideoPixelFormat.Mono8,
-            };
-            return token is "mono8" or "mono16" or "rgb24"
-                or "bayer_rggb8" or "bayer_grbg8" or "bayer_gbrg8" or "bayer_bggr8"
-                or "bayer_rggb16" or "bayer_grbg16" or "bayer_gbrg16" or "bayer_bggr16";
+            switch (token) {
+                case "mono8": format = VideoPixelFormat.Mono8; return true;
+                case "mono16": format = VideoPixelFormat.Mono16; return true;
+                case "bayer_rggb8": format = VideoPixelFormat.BayerRggb8; return true;
+                case "bayer_grbg8": format = VideoPixelFormat.BayerGrbg8; return true;
+                case "bayer_gbrg8": format = VideoPixelFormat.BayerGbrg8; return true;
+                case "bayer_bggr8": format = VideoPixelFormat.BayerBggr8; return true;
+                case "bayer_rggb16": format = VideoPixelFormat.BayerRggb16; return true;
+                case "bayer_grbg16": format = VideoPixelFormat.BayerGrbg16; return true;
+                case "bayer_gbrg16": format = VideoPixelFormat.BayerGbrg16; return true;
+                case "bayer_bggr16": format = VideoPixelFormat.BayerBggr16; return true;
+                case "rgb24": format = VideoPixelFormat.Rgb24; return true;
+                default: format = VideoPixelFormat.Mono8; return false;
+            }
         }
 
         private static PlanetaryRecordingStatsDto ToDto(RecorderStats stats) => new(

@@ -316,6 +316,11 @@ namespace OpenAstroAra.Test {
             var zeroBin = () => service.StartRecordingAsync(
                 new PlanetaryRecordRequestDto(0, 0, 32, 16, 0, "mono8", 100, 5, null), null, CancellationToken.None);
             await zeroBin.Should().ThrowAsync<ArgumentException>().WithMessage("*bin*");
+            // r5 DoS guard: a crafted near-int.MaxValue geometry must be refused before
+            // any ring allocation, not OOM the daemon with a multi-GB pinned arena.
+            var hugeFrame = () => service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 46341, 46341, 1, "mono8", 100, 5, null), null, CancellationToken.None);
+            await hugeFrame.Should().ThrowAsync<ArgumentException>().WithMessage("*128 MB*");
         }
 
         [Test]
