@@ -334,7 +334,12 @@ public sealed record ObservingConditionsDto(
     double? WindDirectionDeg,
     double? RainRate,
     bool Safe,
-    string CapturedAt);
+    string CapturedAt,
+    // Sky quality (SQM) in mag/arcsec² — optional ctor default so pre-slice
+    // serialized shapes still deserialize (§25.5.5 pattern).
+    double? SkyQualityMagArcsec2 = null,
+    // SQM sensor temperature (°C) — Alpaca SkyTemperature.
+    double? SkyTemperatureC = null);
 
 // ─── SafetyMonitor (§10.6 row 9) ──────────────────────────────────────────────
 

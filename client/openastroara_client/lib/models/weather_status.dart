@@ -21,6 +21,13 @@ class WeatherStatus extends EquipmentDeviceStatus {
   final double? windDirectionDeg;
   final double? rainRate;
 
+  /// Sky quality (SQM) in mag/arcsec² — from an SQM meter or a WeeWX-fed
+  /// bridge sensor; null when the station doesn't report it.
+  final double? skyQualityMagArcsec2;
+
+  /// SQM sensor temperature (°C) — Alpaca SkyTemperature.
+  final double? skyTemperatureC;
+
   /// When the daemon last refreshed these readings (UTC), or `null` if unparseable.
   final DateTime? capturedAt;
 
@@ -37,6 +44,8 @@ class WeatherStatus extends EquipmentDeviceStatus {
     required this.windGustMs,
     required this.windDirectionDeg,
     required this.rainRate,
+    this.skyQualityMagArcsec2,
+    this.skyTemperatureC,
     required this.capturedAt,
   });
 
@@ -56,6 +65,8 @@ class WeatherStatus extends EquipmentDeviceStatus {
       windGustMs: d('wind_gust_ms'),
       windDirectionDeg: d('wind_direction_deg'),
       rainRate: d('rain_rate'),
+      skyQualityMagArcsec2: d('sky_quality_mag_arcsec2'),
+      skyTemperatureC: d('sky_temperature_c'),
       capturedAt:
           rawCaptured is String ? DateTime.tryParse(rawCaptured)?.toUtc() : null,
     );
@@ -77,6 +88,8 @@ class WeatherStatus extends EquipmentDeviceStatus {
           other.windGustMs == windGustMs &&
           other.windDirectionDeg == windDirectionDeg &&
           other.rainRate == rainRate &&
+          other.skyQualityMagArcsec2 == skyQualityMagArcsec2 &&
+          other.skyTemperatureC == skyTemperatureC &&
           other.capturedAt == capturedAt);
 
   @override
@@ -93,6 +106,8 @@ class WeatherStatus extends EquipmentDeviceStatus {
         windGustMs,
         windDirectionDeg,
         rainRate,
+        skyQualityMagArcsec2,
+        skyTemperatureC,
         capturedAt,
       );
 }
