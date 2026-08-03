@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
                 ws: null,
                 profileStore: null,
                 new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
-                captureFactory: (_, _) => capture,
+                captureFactory: _ => capture,
                 lastDeviceProvider: () => lastDevice);
 
         // The service takes ownership via captureFactory and disposes it — but the
@@ -232,7 +232,7 @@ namespace OpenAstroAra.Test {
                 ws: null,
                 profileStore: null,
                 new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
-                captureFactory: (_, _) => ++factoryCalls == 1 ? captureA : captureB,
+                captureFactory: _ => ++factoryCalls == 1 ? captureA : captureB,
                 lastDeviceProvider: () => null);
             var pathA = $"planetary_a_{Guid.NewGuid():N}.ser";
             var pathB = $"planetary_b_{Guid.NewGuid():N}.ser";
@@ -339,53 +339,6 @@ namespace OpenAstroAra.Test {
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*camera returned*");
             camera.Verify(c => c.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Once);
             service.Status().Mode.Should().Be("idle");
-        }
-
-        [Test]
-        public async Task Enter_RejectsUnknownVendor_BeforeDetachingTheCamera() {
-            var camera = NewCamera();
-            using var capture = NewCapture();
-            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
-            var act = () => service.EnterAsync(new PlanetaryEnterRequestDto(0, null, "toupTek"), null, CancellationToken.None);
-            await act.Should().ThrowAsync<ArgumentException>().WithMessage("*unknown vendor*");
-            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
-        }
-
-        [Test]
-        public async Task Enter_VendorIsPassedToTheCaptureFactory() {
-            string? seenVendor = null;
-            var camera = NewCamera();
-            using var capture = NewCapture();
-            using var service = new PlanetaryCaptureService(
-                NullLogger<PlanetaryCaptureService>.Instance,
-                NullLogger<VideoRecorder>.Instance,
-                camera.Object,
-                new ActiveRunSessionRegistry(),
-                ws: null,
-                profileStore: null,
-                new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
-                captureFactory: (v, _) => { seenVendor = v; return capture; },
-                lastDeviceProvider: () => null);
-            await service.EnterAsync(new PlanetaryEnterRequestDto(0, null, "playerone"), null, CancellationToken.None);
-            await service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, null), null, CancellationToken.None);
-            await service.StopRecordingAsync(null, CancellationToken.None);
-            seenVendor.Should().Be("playerone");
-        }
-
-        [Test]
-        public async Task Enter_ReentrySameCameraDifferentVendor_IsRefused() {
-            // r2: idempotent re-entry only for camera AND vendor match; a differing
-            // vendor (or garbage vendor) on the repeat call must not silently pass.
-            var camera = NewCamera();
-            using var capture = NewCapture();
-            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
-            await service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "zwo"), null, CancellationToken.None);
-            var differentVendor = () => service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "playerone"), null, CancellationToken.None);
-            await differentVendor.Should().ThrowAsync<InvalidOperationException>().WithMessage("*leave first*");
-            var garbageVendor = () => service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "junk"), null, CancellationToken.None);
-            await garbageVendor.Should().ThrowAsync<ArgumentException>().WithMessage("*unknown vendor*");
-            await service.EnterAsync(new PlanetaryEnterRequestDto(1, null, "zwo"), null, CancellationToken.None);   // true repeat OK
         }
 
         [Test]

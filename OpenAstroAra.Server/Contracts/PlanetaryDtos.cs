@@ -16,9 +16,8 @@ using System;
 
 namespace OpenAstroAra.Server.Contracts;
 
-/// <summary>§77.2 enter-planetary-mode request: which SDK camera to take over.
-/// Vendor selects the SDK glue: "zwo" (default) or "playerone".</summary>
-public sealed record PlanetaryEnterRequestDto(int CameraId, int? UsbfsOverrideMb, string Vendor = "zwo");
+/// <summary>§77.2 enter-planetary-mode request: which SDK camera to take over.</summary>
+public sealed record PlanetaryEnterRequestDto(int CameraId, int? UsbfsOverrideMb);
 
 /// <summary>§77.4 start-recording request. Geometry is SDK-ready (ZWO: width % 8,
 /// height % 2 after binning). Output path is derived server-side when omitted.</summary>

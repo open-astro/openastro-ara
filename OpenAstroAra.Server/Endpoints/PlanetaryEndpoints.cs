@@ -68,8 +68,6 @@ public static class PlanetaryEndpoints {
         try {
             var accepted = await service.EnterAsync(request, IdempotencyKey(http), ct).ConfigureAwait(false);
             return Results.Accepted(value: accepted);
-        } catch (ArgumentException ex) {
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
