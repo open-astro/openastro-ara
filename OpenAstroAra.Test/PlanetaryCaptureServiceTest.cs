@@ -207,6 +207,69 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task LeaveThenEnterDifferentCamera_GetsAFreshCapture() {
+            // Review #911 r1: the capture instance is constructor-bound to a camera id;
+            // reusing it across a Leave -> Enter(other camera) would record the wrong
+            // physical camera. The factory must be re-invoked after leave.
+            var factoryCalls = 0;
+            var camera = NewCamera();
+            using var captureA = NewCapture();
+            using var captureB = NewCapture();
+            using var service = new PlanetaryCaptureService(
+                NullLogger<PlanetaryCaptureService>.Instance,
+                NullLogger<VideoRecorder>.Instance,
+                camera.Object,
+                new ActiveRunSessionRegistry(),
+                ws: null,
+                profileStore: null,
+                new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
+                captureFactory: _ => ++factoryCalls == 1 ? captureA : captureB,
+                lastDeviceProvider: () => null);
+            var pathA = Path.Combine(Path.GetTempPath(), $"planetary_a_{Guid.NewGuid():N}.ser");
+            var pathB = Path.Combine(Path.GetTempPath(), $"planetary_b_{Guid.NewGuid():N}.ser");
+            try {
+                await service.EnterAsync(new PlanetaryEnterRequestDto(1, null), null, CancellationToken.None);
+                await service.StartRecordingAsync(
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, pathA), null, CancellationToken.None);
+                await service.StopRecordingAsync(null, CancellationToken.None);
+                await service.LeaveAsync(null, CancellationToken.None);
+                captureA.StopCalls.Should().BeGreaterThan(0);
+
+                await service.EnterAsync(new PlanetaryEnterRequestDto(2, null), null, CancellationToken.None);
+                await service.StartRecordingAsync(
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, pathB), null, CancellationToken.None);
+                await service.StopRecordingAsync(null, CancellationToken.None);
+                factoryCalls.Should().Be(2);
+                captureB.StartCalls.Should().Be(1);
+            } finally {
+                File.Delete(pathA);
+                File.Delete(pathB);
+            }
+        }
+
+        [Test]
+        public async Task Status_ReportsRealDirectIoState() {
+            // Review #911 r1: uses_direct_io must reflect the writer's actual mode —
+            // on this dev host (non-Linux or O_DIRECT-refusing fs) that is honest, not
+            // a hardcoded true.
+            using var capture = NewCapture();
+            using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
+            var path = Path.Combine(Path.GetTempPath(), $"planetary_dio_{Guid.NewGuid():N}.ser");
+            try {
+                await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+                await service.StartRecordingAsync(
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, path), null, CancellationToken.None);
+                var expected = OperatingSystem.IsLinux();   // GitHub runners: ext4 accepts O_DIRECT
+                if (!expected) {
+                    service.Status().UsesDirectIo.Should().BeFalse();
+                }
+                await service.StopRecordingAsync(null, CancellationToken.None);
+            } finally {
+                File.Delete(path);
+            }
+        }
+
+        [Test]
         public void UsbfsTargetMb_ScalesWithRamAndClamps() {
             const long GiB = 1024L * 1024 * 1024;
             UsbfsTuner.TargetMb(2 * GiB).Should().Be(256);     // iMate class

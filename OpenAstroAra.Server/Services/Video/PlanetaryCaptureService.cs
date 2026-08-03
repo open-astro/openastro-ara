@@ -52,7 +52,6 @@ namespace OpenAstroAra.Server.Services.Video {
         private IVideoCapture? capture;
         private VideoRecorder? recorder;
         private string? outputPath;
-        private bool usesDirectIo;
         private bool disposed;
 
         public PlanetaryCaptureService(
@@ -132,6 +131,10 @@ namespace OpenAstroAra.Server.Services.Video {
                     return Accepted("planetary.leave", idempotencyKey);
                 }
                 StopRecordingLocked(publish: true);
+                // The capture instance is constructor-bound to this camera id — a later
+                // Enter with a different camera must get a fresh one (review #911 r1).
+                capture?.Dispose();
+                capture = null;
                 inPlanetaryMode = false;
                 var leftCamera = cameraId;
                 cameraId = null;
@@ -202,7 +205,6 @@ namespace OpenAstroAra.Server.Services.Video {
                     },
                 });
                 outputPath = path;
-                usesDirectIo = true;   // refreshed by Status from writer stats via recorder
                 await PublishAsync(WsEventCatalog.PlanetaryRecordingStarted, new JsonObject {
                     ["camera_id"] = cameraId.Value,
                     ["output_path"] = path,
@@ -241,7 +243,7 @@ namespace OpenAstroAra.Server.Services.Video {
                 OutputPath: outputPath,
                 DiskFreeBytes: diskFree,
                 UsbfsMemoryMb: usbfsMb ?? UsbfsTuner.ReadCurrentMb(),
-                UsesDirectIo: usesDirectIo,
+                UsesDirectIo: stats?.UsesDirectIo ?? false,
                 Recording: stats is null ? null : ToDto(stats));
         }
 
@@ -323,12 +325,21 @@ namespace OpenAstroAra.Server.Services.Video {
         }
 
         public void Dispose() {
-            if (disposed) {
-                return;
+            // Serialize with in-flight mutators so a shutdown-time Dispose can't yank
+            // fields out from under an active Enter/Start (review #911 r1 minor).
+            gate.Wait();
+            try {
+                if (disposed) {
+                    return;
+                }
+                disposed = true;
+                recorder?.Dispose();
+                recorder = null;
+                capture?.Dispose();
+                capture = null;
+            } finally {
+                gate.Release();
             }
-            disposed = true;
-            recorder?.Dispose();
-            capture?.Dispose();
             gate.Dispose();
         }
 
