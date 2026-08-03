@@ -1729,8 +1729,8 @@ Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Ha
 ### 18.H — Branding assets
 Placeholders during port. Every icon/splash/logo reference carries `TODO(branding): replace with ARA asset before public release`. User supplies real assets.
 
-### 18.J — Imaging scope: **DSO + COMETS ONLY**
-ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) capture workflow where Alpaca's image-grab API is the right primitive. **Planetary and lunar lucky-imaging are out of scope, permanently, not deferred.** The architectural reason: ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca), so high-frame-rate (5–30 fps) capture isn't possible through the protocol ARA has committed to (§52). NINA has the same limitation; this isn't an ARA-specific gap. Users who want planetary capture use FireCapture, SharpCap, or AstroDMx with vendor-native drivers — different tool category. ARA's sky atlas (§36) still browses planets and moon for educational purposes, but capture is DSO + comets. This decision propagates: no `lunar.json` / `planetary.json` sequence templates (§38.7), no SER file format support, no ROI capture, no high-frame-rate workflows. Anything reading "future planetary support" in older revisions of this doc is wrong — corrected by this section.
+### 18.J — Imaging scope: DSO + comets via Alpaca; planetary via §77 native capture
+**SUPERSEDED IN PART (2026-08-02, §77):** this section originally declared planetary/lunar lucky-imaging "out of scope, permanently" because ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca) and §52 commits ARA's *Alpaca* path to still imaging. The Alpaca-side reasoning stands unchanged — high-frame-rate capture will never go through Alpaca, and the still-imaging pipeline stays DSO + comets (30 s – 900 s exposures, where the image-grab API is the right primitive; NINA has the same protocol limitation). What changed: §77 adds planetary/SER capture as a first-class mode **outside** the Alpaca path — the daemon P/Invokes the vendor SDK `.so` directly (the one documented §52 exception), so SER output, ROI capture, and 100–500 fps workflows are now IN scope via §77's engine, mode-gated behind the §77.2 Alpaca disconnected-window. Statements elsewhere in this doc that cite §18.J for "planetary permanently out of scope" are corrected to "out of scope *for the Alpaca imaging path*; handled by §77."
 
 ### 18.I — Plate solving
 - **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
@@ -4236,10 +4236,16 @@ sudo apt install openastroara-server
 - Drops `/usr/lib/tmpfiles.d/openastroara.conf` for `/var/run/openastroara/` (per §34.7 sequence lock)
 - Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
 - Installs `/opt/openastroara/scripts/configure-storage.sh` (mode 0750, owned by root:openastroara) — per §29.1.4
+- Installs `/opt/openastroara/scripts/set-usbfs-memory.sh` (mode 0750, owned by root:openastroara) — per §77.1
+  capture tuning. Validates its single argument is an integer in [16, 1000], writes it to
+  `/sys/module/usbcore/parameters/usbfs_memory_mb` (live), and persists it for boot via
+  `/etc/modprobe.d/openastroara-usbfs.conf` (`options usbcore usbfs_memory_mb=N`). The script is the
+  entire privilege surface — the daemon never gets general sysfs write access.
 - Installs sudoers drop-in `/etc/sudoers.d/openastroara` (mode 0440, validated with `visudo -cf`):
   ```
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
+  openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/set-usbfs-memory.sh
   ```
 - Creates data + log + config dirs at proper permissions
 - Installs `/etc/logrotate.d/openastroara` per §29.9
@@ -5284,7 +5290,7 @@ Ship 3 templates with the `openastroara-server` .deb at `/opt/openastroara/templ
 | `narrowband-shoo.json` | SHO narrowband — Hα, OIII, SII filters with longer exposures |
 | `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion yet (deferred — see design/ROADMAP.md). User points at a comet from the §36.9 catalog. |
 
-No lunar / planetary templates — per §18.J, ARA's scope is DSO + comets only because Alpaca lacks a video API. Lunar/planetary lucky-imaging is permanently out of scope, not deferred. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
+No lunar / planetary templates here — the still-imaging template set is DSO + comets (§18.J); planetary capture is a different engine entirely (§77), and its sequencer clip plans arrive with §77 P5, not as templates in this set. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
 
 ### 38.8 Schema evolution policy
 
@@ -7773,6 +7779,8 @@ ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not bec
 | INDIGO | Limited (some validation but no equivalent ConformU-style certification) | Better than INDI but still inconsistent |
 
 Supporting INDI/INDIGO natively means accumulating brand-quirk workarounds forever — exactly the maintenance burden ARA exists to avoid. NINA learned this the hard way; we don't repeat it.
+
+**One documented exception (2026-08-02):** §77 planetary capture P/Invokes the vendor camera SDK's video subset directly (Alpaca has no video API), and only while the camera is detached from the Alpaca surface via the §77.2 disconnected-window. Device *control* remains Alpaca-only; this exception never extends to mounts, INDI/INDIGO, or any second feature without its own decision-log entry.
 
 ### 52.2 Bridge path for INDI / INDIGO users
 
@@ -10505,7 +10513,7 @@ ARA is Alpaca-only forever (§52). Standard Alpaca `ICamera` has no streaming mo
 
 So ARA implements Live View as a server-side loop of short normal captures with previews routed straight to WebSocket and no FITS save. This works with every Alpaca camera — AlpacaBridge-driven (ZWO, QHY, SVBONY, ToupTek, PlayerOne), third-party ASCOM-Alpaca drivers, simulators for CI/dev. Cadence is bounded but adequate for the framing/focus-check use case.
 
-Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (planetary / lucky-imaging) are permanently out of scope, not deferred. The loop-of-captures approach is therefore not a temporary workaround; it's the right primitive for the workloads ARA targets.
+Per §18.J, the Alpaca imaging path serves DSO + comets — high-frame-rate workflows never go through it (planetary is §77's native-capture engine, a separate path). The loop-of-captures approach is therefore not a temporary workaround; it's the right primitive for the still-imaging workloads this section covers.
 
 ### 64.3 Scope — framing + focus-check, not stacking
 
@@ -10521,10 +10529,10 @@ Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (plan
 - Running-average / live stacking (covered by the live-stacking commitment in design/ROADMAP.md)
 - Multi-frame averaging for visible noise reduction during display
 
-**Permanently out of scope (per §18.J):**
-- Native SDK video mode / high-frame-rate capture — Alpaca has no video API; not coming
-- ROI (region-of-interest) live capture for lucky-imaging — same architectural reason
-- SER file format support (planetary stack input format) — no workflow needs it
+**Out of scope for THIS surface (Live View is the Alpaca still-imaging preview):**
+- Native SDK video mode / high-frame-rate capture, ROI live capture, SER output — these are
+  §77's planetary engine (native SDK path, separate Live-tab planetary mode per §77.4), not
+  Live View features. Alpaca itself still has no video API (§18.J).
 
 ### 64.4 The loop — how it actually works
 
@@ -10771,7 +10779,7 @@ All searchable from the §61 omnibar.
 - **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
 - **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
 
-**Permanently out of scope** (per §18.J): native SDK video mode, ROI capture, SER file format output — all are lucky-imaging features that require a video API Alpaca doesn't provide.
+**Not this surface** (per §18.J as amended): native SDK video mode, ROI capture, and SER output live in §77's planetary engine (native SDK path with its own Live-tab mode, §77.4) — Alpaca itself provides no video API, so they never join this Alpaca-side surface.
 
 ---
 
@@ -11071,7 +11079,7 @@ Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure
 - Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in the initial release
 - Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
 - Hot-reload of executor config without server restart
-- High-frame-rate / planetary concurrency model — permanently out of scope per §18.J (no video API in Alpaca)
+- High-frame-rate / planetary concurrency model — not part of this executor design; §77's capture engine owns its own two-thread ring/drain model (Alpaca still has no video API, §18.J)
 
 ### 66.9 §61 search registry entries
 
@@ -12819,27 +12827,62 @@ checklist that is already green, with re-run entry points for hardware changes.
   AlpacaBridge contract
 - §45 polar align (consumes the profile this wizard produces)
 
-## 77. Planetary / SER capture — high-speed video through AlpacaBridge
+## 77. Planetary / SER capture — high-speed video in Ara Server (native SDK P/Invoke)
 
 **Intent** (Joey, 2026-08-02): planetary (lucky) imaging as a first-class mode. The Alpaca HTTP
-imaging path tops out at a few fps; planetary wants 100–500 fps ROI video. So the capture loop
-lives **inside AlpacaBridge** — the process that already links every vendor's SDK `.so` — writing
-SER files straight to local USB storage at full camera speed, while Ara acts as remote control
-and throttled preview. Precedent: the ASIAIR (Pi CM4-class) ships exactly this architecture —
-native SDK on the box, local recording, throttled app preview — proving the hardware tier works,
-with a known fps ceiling versus a USB3-connected PC that we accept and surface honestly.
+imaging path tops out at a few fps; planetary wants 100–500 fps ROI video, so the capture loop
+runs natively against the vendor SDK, writing SER files straight to local USB storage at full
+camera speed, while the Ara client acts as remote control and throttled preview. Precedent: the
+ASIAIR (Pi CM4-class) ships exactly this architecture — native SDK on the box, local recording,
+throttled app preview — proving the hardware tier works, with a known fps ceiling versus a
+USB3-connected PC that we accept and surface honestly.
 
-### 77.1 AlpacaBridge video mode
+**PLACEMENT AMENDED (Joey, 2026-08-02, same day — supersedes the first draft of this section):
+the capture engine lives in `OpenAstroAra.Server`, NOT in AlpacaBridge.** The original draft
+put it in the bridge on the premise that the vendor `.so` files exist only inside that process.
+That premise was wrong: the AlpacaBridge deb installs every camera SDK to
+`/usr/lib/alpacabridge/` and registers it with `ldconfig` as a deliberate system-level contract
+for companion processes (SmartGuider already drives `libASICamera2.so` this way via Python
+ctypes). Ara Server P/Invokes those same libraries directly. Ruling principle: **AlpacaBridge
+is a pure standard Alpaca bridge, forever — no ARA-specific planetary/SER/video logic goes in
+it.** (AlpacaBridge PR #168 — the C++ engine built to the first draft — was closed unmerged and
+serves as the reference implementation for the C# port; its design and test matrix carry over
+1:1.) This is the one narrow, documented exception to §52's "equipment via Alpaca only": the
+video-mode subset of each camera SDK (open/init/ROI/gain/exposure/start-video/get-frame/stop,
+~10 functions per vendor), used only while a camera is detached from the Alpaca surface per
+§77.2.
 
-- **`IVideoCapture` seam** (ours, ~30 lines): `StartVideo(roi, bin, gain, exposureMs)`,
-  frames-available callback, `Stop()`, dropped-frame counter. One implementation per vendor SDK
-  behind it; the SER writer / ring buffer / preview tap sit on top, vendor-agnostic.
+**Fault-domain tradeoff — ACCEPTED, with a documented escape hatch.** In-process P/Invoke means
+a native crash inside a closed-source vendor `.so` (segfault during a 100–500 fps USB stream —
+the workload most likely to find one) is not catchable by managed `try/catch` and takes down
+the whole daemon, including any concurrent DSO sequence, guiding session, or WS clients — a
+blast radius the bridge-side draft confined to AlpacaBridge's process. Accepted for P1 because:
+(a) planetary sessions are operator-attended and in practice exclusive — nobody runs a DSO
+sequence on the same rig while recording Jupiter (the §77.2 gate already refuses to enter while
+a sequence holds the camera, and §77.4's sequencer clip plans make planetary a run *mode*, not
+a background task); (b) systemd restarts the daemon and §28 checkpointing recovers state; and
+(c) the same ASI video loop runs inside ASIAIR's single app process at fleet scale, so the
+empirical crash rate is low. **Escape hatch if field crashes show:** promote the engine to a
+spawned `openastroara-capture` worker process (same repo, same code, thin pipe IPC for
+stats/control) — the `IVideoCapture` seam is process-location-agnostic by design, so this is a
+hosting change, not a redesign. It stays an ARA-owned process either way; nothing moves back
+into AlpacaBridge.
+
+### 77.1 Ara Server video capture engine
+
+- **`IVideoCapture` seam** (ours, ~30 lines): `Start(request)`, blocking `GetFrame(buffer,
+  timeoutMs)` pull, `Stop()`, SDK-side dropped-frame counter. One P/Invoke implementation per
+  vendor SDK behind it; the SER writer / ring buffer / preview tap sit on top, vendor-agnostic.
+  Pull matches ZWO/SVB/Player One; callback-push SDKs (ToupTek) adapt inside their glue.
 - **Vendor sequencing**: ZWO first (`ASIStartVideoCapture`/`ASIGetVideoData`, best documented),
   then QHY (`BeginQHYCCDLive`), ToupTek/Player One (callback-push models), **Svbony once its
-  `.so` lands in AlpacaBridge** (Joey is arranging it; SVB API is ASI-like). Every bundled
-  vendor is in scope — the seam exists so each is a glue module, not an architecture change.
-  NOT used: Spinnaker (closed, FLIR-only, no source, can't drive our cameras); Aravis (LGPL
-  GenICam) noted as a possible future backend if industrial cameras ever matter.
+  `.so` ships in the AlpacaBridge deb** (Joey is arranging it; SVB API is ASI-like). Every
+  deb-shipped vendor is in scope — the seam exists so each is a glue module, not an
+  architecture change. The `.so` inventory in `/usr/lib/alpacabridge/` (ldconfig-registered by
+  the bridge deb) is the load-bearing contract; AlpacaBridge keeps shipping them for exactly
+  this kind of companion use. NOT used: Spinnaker (closed, FLIR-only, no source, can't drive
+  our cameras); Aravis (LGPL GenICam) noted as a possible future backend if industrial cameras
+  ever matter.
 - **RAM ring buffer, adaptively sized**: `clamp(25% of MemAvailable at capture start, 64 MB,
   512 MB)` — 512 MB on a Pi 5, ~128–256 MB on a 2 GB iOptron iMate; pre-allocated, no
   allocation in the hot path. At 90 MB/s that is ~1.5–5 s of stall absorption.
@@ -12851,10 +12894,11 @@ with a known fps ceiling versus a USB3-connected PC that we accept and surface h
 - **Honest accounting**: measured sustained disk rate at capture start, live achieved-vs-
   requested fps, dropped-frame counter, disk-space remaining. No silent loss, ever.
 - **usbfs tuning**: Linux defaults `usbcore.usbfs_memory_mb` to 16 MB — far too small for
-  100+ MB/s bulk transfers. The bridge auto-tunes it by box RAM (≈256 MB on 2 GB, up to
+  100+ MB/s bulk transfers. The daemon auto-tunes it by box RAM (≈256 MB on 2 GB, up to
   1000 MB on 8 GB; it is PINNED kernel memory, so it scales down with the ring), applied live
-  via `/sys/module/usbcore/parameters/usbfs_memory_mb` and persisted for boot by the deb. The
-  privilege is a deb-installed rule scoped to exactly that path — no general root in the API.
+  via `/sys/module/usbcore/parameters/usbfs_memory_mb` and persisted for boot by the **Ara**
+  deb (§34 owns the packaging; the privilege is a deb-installed rule scoped to exactly that
+  path — no general root in the API).
   Ara Options surfaces "Capture tuning — usbfs N MB (auto) · ring M MB (auto)" with override.
 - **Bandwidth reality**: Pi 4/CM4 shares one PCIe Gen2 x1 for both USB3 ports (~350–400 MB/s
   combined) — planetary ROIs (~90 MB/s in + out) fit comfortably; full-sensor 16-bit high-fps
@@ -12863,10 +12907,25 @@ with a known fps ceiling versus a USB3-connected PC that we accept and surface h
 
 ### 77.2 Mode arbitration
 
-A camera cannot be in Alpaca still-imaging and SDK video mode at once. The bridge gets an
-explicit enter/leave-planetary-mode gate per camera (same spirit as the §63.5 guider
-disconnected-window): entering detaches the camera from the Alpaca surface (Alpaca calls 409
-while held), leaving restores it. Ara refuses to enter while a sequence holds the camera.
+A camera cannot be in Alpaca still-imaging and SDK video mode at once — and with the engine in
+Ara Server the gate needs **no new bridge API at all** (the point of the placement amendment):
+entering planetary mode is Ara PUTting `Connected=false` to the bridge for that camera
+(standard Alpaca), then opening it natively via the SDK; leaving is SDK close → Alpaca
+reconnect. Same spirit as the §63.5 guider disconnected-window, owned entirely Ara-side. Ara
+refuses to enter while a sequence holds the camera. Residual risk accepted: another Alpaca
+client could reconnect the camera mid-video-session (single-operator boxes; the SDK's exclusive
+USB open makes the bridge's reconnect fail loudly rather than corrupt the stream). No 409-hold
+gate goes into the bridge — AlpacaBridge stays pure Alpaca.
+
+**Documented assumption — the bridge releases the SDK handle synchronously on disconnect.**
+The handoff relies on `Connected=false` closing the vendor SDK handle before the PUT returns.
+This holds by AlpacaBridge's own driver contract (its AGENTS.md concurrency rules:
+`set_connected(false)` clears driver state then performs the SDK close inside the call, and
+camera drivers stop-and-join their exposure worker first), but SDK closes can be slow (QHY's
+bounded-join-then-detach path defers the physical close until in-flight calls finish). So the
+video-mode open is written defensively regardless: retry the SDK open for a few seconds before
+failing, and surface a clear "camera still held by the bridge" error rather than a raw vendor
+error code.
 
 ### 77.3 Pointing — solve where you can, capture where you can't
 
@@ -12879,7 +12938,7 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.4 Ara integration
 
-- **Live-tab planetary mode** (§64 surface, different engine): preview from the bridge's ring
+- **Live-tab planetary mode** (§64 surface, different engine): preview from the daemon's ring
   tap at 5–10 fps JPEG (full-rate frames never leave the box), ROI drawn on the preview,
   gain/exposure controls, big Record SER button, achieved-fps/drops/disk readouts, capture
   file list on the USB store (SER grows ~5 GB/min — surface it).
@@ -12892,9 +12951,11 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.5 Slice plan (each a gated PR)
 
-- **P1** — AlpacaBridge: `IVideoCapture` seam + ZWO glue + ring buffer + SER writer + drop
-  accounting (bench-tested with a synthetic frame source)
-- **P2** — mode arbitration + usbfs auto-tune + capture-tuning endpoint
+- **P1** — Server: `IVideoCapture` seam + ZWO P/Invoke glue + ring buffer + SER writer + drop
+  accounting (bench-tested with a synthetic frame source; reference implementation = closed
+  AlpacaBridge PR #168, C++ → C# port)
+- **P2** — mode arbitration (Alpaca disconnected-window) + usbfs auto-tune + capture REST/WS
+  surface on the daemon
 - **P3** — Ara Live-tab planetary mode (preview tap, record control, readouts)
 - **P4** — pointing: ephemeris goto + guide-cam solve-and-center loop
 - **P5** — sequencer clip plans + RGB cycling + inter-clip re-centering
@@ -12902,7 +12963,8 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.6 Cross-references
 
-- §45 (capture-fetch + centering loop) · §59 (focus offsets, temp refocus) · §63.5
-  (disconnected-window precedent) · §64/§65 (Live surface + preview pipeline) · §68
-  (AlpacaBridge contract; this section extends it with the video-mode API) · §34 (deb owns
-  the usbfs persistence + sudoers scope)
+- §45 (capture-fetch + centering loop) · §52 (the Alpaca-only commitment — §77 is its one
+  documented exception, video-subset P/Invoke only) · §59 (focus offsets, temp refocus) ·
+  §63.5 (disconnected-window precedent) · §64/§65 (Live surface + preview pipeline) · §68
+  (AlpacaBridge version contract — unchanged; the bridge gains no video API) · §34 (Ara deb
+  owns the usbfs persistence + sudoers scope)
