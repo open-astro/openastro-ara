@@ -199,6 +199,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SerWriter_OnLinux_UsesRealODirectPath() {
+            // Review #910 r4: the staging/alignment arithmetic runs in every test, but
+            // only a real O_DIRECT fd proves the kernel accepts our alignment. GitHub's
+            // ubuntu runners put the workspace on ext4, so this asserts the direct path
+            // end-to-end there; filesystems that refuse O_DIRECT (tmpfs) skip honestly.
+            if (!OperatingSystem.IsLinux()) {
+                Assert.Ignore("O_DIRECT is Linux-only; buffered fallback covered elsewhere.");
+            }
+            var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"odirect_{Guid.NewGuid():N}.ser");
+            try {
+                using var writer = new SerWriter(new SerWriterOptions {
+                    Path = path, Width = 64, Height = 64, Format = VideoPixelFormat.Mono16,
+                    StagingBytes = 64 * 1024
+                });
+                if (!writer.UsesDirectIo) {
+                    Assert.Ignore("Filesystem refused O_DIRECT (tmpfs/overlay); honest fallback engaged.");
+                }
+                var frame = new byte[writer.FrameSize];
+                for (var i = 0; i < frame.Length; i++) {
+                    frame[i] = (byte)(i % 251);
+                }
+                for (var n = 0; n < 5; n++) {   // > staging capacity, forces aligned flushes
+                    writer.WriteFrame(frame, n);
+                }
+                writer.Complete();
+
+                var bytes = File.ReadAllBytes(path);
+                bytes.Length.Should().Be(SerHeaderBytes + 5 * frame.Length + 5 * 8);
+                for (var i = 0; i < frame.Length; i += 997) {
+                    bytes[SerHeaderBytes + i].Should().Be((byte)(i % 251));
+                    bytes[SerHeaderBytes + 4 * frame.Length + i].Should().Be((byte)(i % 251));
+                }
+            } finally {
+                File.Delete(path);
+            }
+        }
+
+        [Test]
         public void SerWriter_HeaderFramesAndTrailer_RoundTrip() {
             var path = TempPath("roundtrip");
             const int width = 8, height = 6;
