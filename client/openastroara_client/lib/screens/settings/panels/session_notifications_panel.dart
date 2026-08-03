@@ -6,6 +6,7 @@ import '../../../state/saved_server_state.dart';
 import '../../../state/alarm/safety_alarm_state.dart';
 import '../../../state/settings/notifications_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
+import '../../../state/settings/storage_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -205,7 +206,10 @@ class _SessionNotificationsPanelState
           onChanged: n.setOnPlateSolveFailed,
         ),
         SettingsSwitchRow(
-          label: 'Disk space low (<10 GB)',
+          // The threshold itself lives in Storage → "Warn below (GB free)";
+          // quoting it live keeps the two panels from contradicting each other.
+          label: 'Disk space low (below '
+              '${ref.watch(storageSettingsProvider).minFreeDiskWarnGb} GB free)',
           helpKey: 'session.notifications.on_disk_space_low',
           value: s.onDiskSpaceLow,
           onChanged: n.setOnDiskSpaceLow,

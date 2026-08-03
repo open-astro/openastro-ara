@@ -50,3 +50,10 @@ public sealed record BatchJobDto(
     DateTimeOffset StartedUtc,
     DateTimeOffset? FinishedUtc,
     string? ErrorMessage);
+/// <summary>§29 — real numbers for the storage panel: the volume behind the save
+/// directory. Nulls when the volume is unreachable (unmounted USB store).</summary>
+public sealed record StorageSpaceDto(
+    string SaveDirectory,
+    bool IsFallback,
+    long? FreeBytes,
+    long? TotalBytes);

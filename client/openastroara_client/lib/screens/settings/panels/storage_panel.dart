@@ -5,7 +5,9 @@ import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
+import '../../../services/storage_space_api.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/storage/server_folder_picker.dart';
 import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../state/backup/backup_stream_state.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -114,22 +116,32 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           parse: n.setSaveDirectory,
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('Free space',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              const Expanded(
-                child: Text('12.3 GB / 32 GB  (real probe in 12h.2b)'),
-              ),
-            ],
+          padding: const EdgeInsets.only(left: 280, bottom: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final server = ref.read(activeServerProvider);
+                if (server == null) {
+                  return;
+                }
+                final picked = await showServerFolderPicker(
+                  context,
+                  ref,
+                  server: server,
+                  startPath: s.saveDirectory.isEmpty ? null : s.saveDirectory,
+                );
+                if (picked != null) {
+                  n.setSaveDirectory(picked);
+                  ref.invalidate(storageSpaceProvider);
+                }
+              },
+              icon: const Icon(Icons.folder_open, size: 16),
+              label: const Text('Browse the server…'),
+            ),
           ),
         ),
+        const _FreeSpaceRow(),
         SettingsDropdownRow<StorageFileFormat>(
           label: 'File format',
           helpKey: 'session.storage.file_format',
@@ -297,6 +309,58 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// §29 — the real volume behind the save directory. Renders "unavailable" (not
+/// a number) when the daemon can't read it, e.g. an unmounted USB store.
+class _FreeSpaceRow extends ConsumerWidget {
+  const _FreeSpaceRow();
+
+  static String _gb(int bytes) => (bytes / (1000 * 1000 * 1000)).toStringAsFixed(1);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(storageSpaceProvider);
+    final text = async.when(
+      loading: () => 'Reading…',
+      error: (_, _) => 'Unavailable (the daemon could not read the volume)',
+      data: (space) {
+        if (space == null) {
+          return 'Not connected to a server';
+        }
+        final free = space.freeBytes;
+        final total = space.totalBytes;
+        if (free == null || total == null) {
+          return 'Unavailable — is ${space.saveDirectory} mounted?';
+        }
+        final pct = total > 0 ? (100 * free / total).round() : 0;
+        final where = space.isFallback ? ' (daemon fallback directory)' : '';
+        return '${_gb(free)} GB free of ${_gb(total)} GB ($pct%)$where';
+      },
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Text('Free space',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AraColors.textSecondary,
+                    )),
+          ),
+          Expanded(child: Text(text)),
+          IconButton(
+            tooltip: 'Re-check',
+            iconSize: 18,
+            onPressed: () => ref.invalidate(storageSpaceProvider),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
     );
   }
 }

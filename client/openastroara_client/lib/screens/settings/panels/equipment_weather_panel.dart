@@ -5,6 +5,7 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/weather_status.dart';
 import '../../../state/equipment/weather_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/safety_policies_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../util/tonight_sky_local.dart'
@@ -25,6 +26,7 @@ class EquipmentWeatherPanel extends ConsumerWidget {
     final connection = ref.watch(equipmentConnectionProvider);
     final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(weatherProvider);
+    final policies = ref.watch(safetyPoliciesProvider);
     final notifier = ref.read(weatherProvider.notifier);
 
     return ListView(
@@ -49,16 +51,29 @@ class EquipmentWeatherPanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.weather, v),
         ),
         const SettingsSectionHeader('Thresholds'),
-        const SettingsRow(
-          label: 'Cloud cover max (%)',
-          value: '40',
-          hint: '§35 safety policies — overrideable per profile',
+        // Live values from the §35 safety policies — the ONE place they are
+        // configured. Shown read-only here so this panel can never disagree
+        // with what actually parks the rig.
+        SettingsRow(
+          label: 'Weather triggers safety',
+          value: policies.weatherTriggersEnabled ? 'On' : 'Off',
+          hint: 'Edit in Settings → Safety → Policies',
         ),
-        const SettingsRow(label: 'Wind speed max (km/h)', value: '30'),
-        const SettingsRow(label: 'Wind gust max (km/h)', value: '50'),
-        const SettingsRow(label: 'Humidity max (%)', value: '85'),
-        const SettingsRow(label: 'Dew-point margin (°C)', value: '2'),
-        const SettingsRow(label: 'Rain → trigger safety', value: 'On'),
+        SettingsRow(
+          label: 'Wind speed max (km/h)',
+          value: policies.maxWindKmh.toString(),
+          hint: 'Edit in Settings → Safety → Policies',
+        ),
+        SettingsRow(
+          label: 'Humidity max (%)',
+          value: policies.maxHumidityPct.toString(),
+          hint: 'Edit in Settings → Safety → Policies',
+        ),
+        SettingsRow(
+          label: 'Dew-point margin (°C)',
+          value: policies.minDewDeltaC.toString(),
+          hint: 'Edit in Settings → Safety → Policies',
+        ),
       ],
     );
   }
