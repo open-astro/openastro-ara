@@ -113,6 +113,17 @@ namespace OpenAstroAra.Server.Services.Video {
                 // close). 202 fire-and-forget is fine — the retry-open is the sync point.
                 await camera.DisconnectAsync(idempotencyKey: null, ct).ConfigureAwait(false);
 
+                // TOCTOU re-check (r6): a run that registered between the gate check
+                // above and the disconnect must win — roll the detach back rather than
+                // pull the camera out from under a just-started sequence. The registry
+                // Enter happens before the sequencer touches equipment, so post-
+                // disconnect is late enough to see it.
+                if (runs.HasAny) {
+                    await TryReconnectAsync().ConfigureAwait(false);
+                    throw new InvalidOperationException(
+                        "a sequence run started while entering planetary mode — camera returned to it (§77.2)");
+                }
+
                 try {
                     usbfsMb = await tuner.AutoTuneAsync(request.UsbfsOverrideMb, ct).ConfigureAwait(false)
                               ?? UsbfsTuner.ReadCurrentMb();
@@ -168,14 +179,12 @@ namespace OpenAstroAra.Server.Services.Video {
                 PublishState();
 
                 var device = lastDeviceProvider();
+                // CancellationToken.None deliberately (r6): a cancelled HTTP request
+                // must not abandon the reconnect after state already flipped to idle —
+                // same rule as the Enter failure path. TryReconnectAsync is best-effort
+                // and never throws; leaving planetary mode always succeeds.
                 if (device is not null) {
-                    try {
-                        await camera.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, ct).ConfigureAwait(false);
-                    } catch (InvalidOperationException ex) {
-                        // Best-effort restore: the user can reconnect via the normal
-                        // equipment flow; leaving planetary mode must still succeed.
-                        LogReconnectFailed(logger, ex);
-                    }
+                    await TryReconnectAsync().ConfigureAwait(false);
                 }
                 await PublishAsync(WsEventCatalog.PlanetaryModeLeft, new JsonObject {
                     ["camera_id"] = leftCamera,

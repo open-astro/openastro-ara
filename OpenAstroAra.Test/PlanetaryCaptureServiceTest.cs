@@ -324,6 +324,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Enter_RunStartingDuringDisconnect_RollsBackAndReconnects() {
+            // Review #911 r6 TOCTOU: a run registering between the gate check and the
+            // Alpaca disconnect must win — enter fails and the camera is reconnected.
+            var registry = new ActiveRunSessionRegistry();
+            var camera = NewCamera();
+            camera.Setup(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => registry.Enter(Guid.NewGuid()))   // run slips in mid-disconnect
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "camera.disconnect", DateTimeOffset.UtcNow, null));
+            using var capture = NewCapture();
+            using var service = NewService(camera, registry, capture, SampleDevice);
+
+            var act = () => service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*camera returned*");
+            camera.Verify(c => c.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Once);
+            service.Status().Mode.Should().Be("idle");
+        }
+
+        [Test]
         public void UsbfsTargetMb_ScalesWithRamAndClamps() {
             const long GiB = 1024L * 1024 * 1024;
             UsbfsTuner.TargetMb(2 * GiB).Should().Be(256);     // iMate class
