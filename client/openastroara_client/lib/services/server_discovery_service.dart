@@ -63,11 +63,22 @@ class ServerDiscoveryService {
           // then reads as "down" even though it answers by IP. The name is
           // kept for display via [AraServer.mdnsName].
           var host = srv.target;
-          await for (final IPAddressResourceRecord a
-              in mdns.lookup<IPAddressResourceRecord>(
-                  ResourceRecordQuery.addressIPv4(srv.target))) {
+          try {
+            final a = await mdns
+                .lookup<IPAddressResourceRecord>(
+                    ResourceRecordQuery.addressIPv4(srv.target))
+                .first
+                .timeout(const Duration(milliseconds: 800));
             host = a.address.address;
-            break;
+            // Broad on purpose (review r1): a dropped A-record reply is the
+            // exact flaky-multicast mode this file survives — without the
+            // timeout this nested await wedged EVERY later PTR/SRV record
+            // and kept the merged stream from ever closing. `.first` throws
+            // StateError (an Error, not Exception) on an empty stream, so
+            // the catch must not be narrowed to `on Exception`.
+            // ignore: avoid_catches_without_on_clauses
+          } catch (_) {
+            // Unresolved in time — keep the .local name for this entry.
           }
           yield AraServer(
             hostname: host,
@@ -114,14 +125,23 @@ class ServerDiscoveryService {
     final client = HttpClient()
       ..connectionTimeout = const Duration(milliseconds: 800);
     try {
-      final probes = <Future<AraServer?>>[
+      final hosts = <String>[
         for (final base in bases)
           for (var n = 1; n < 255; n++)
-            if (!own.contains('$base.$n')) _probe(client, '$base.$n'),
+            if (!own.contains('$base.$n')) '$base.$n',
       ];
-      for (final p in probes) {
-        final s = await p; // all started in parallel; awaiting collects them
-        if (s != null) yield s;
+      // Batches of 64 (review r1): several interfaces (Wi-Fi + VPN) multiply
+      // the /24s, and an unbounded fan-out could hit fd limits on constrained
+      // stacks. Four batches per /24 adds well under a second at these
+      // per-probe timeouts.
+      const batch = 64;
+      for (var i = 0; i < hosts.length; i += batch) {
+        final probes = [
+          for (final h in hosts.skip(i).take(batch)) _probe(client, h),
+        ];
+        for (final s in await Future.wait(probes)) {
+          if (s != null) yield s;
+        }
       }
     } finally {
       client.close(force: true);
