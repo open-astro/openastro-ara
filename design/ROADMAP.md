@@ -202,6 +202,7 @@ The former version-bucketed roadmap, regrouped. Source §s preserved; nothing dr
 | **Adaptive / runtime Glover exposure** | NEXTGEN §5 fork B | Measure actual sky background from live frames and set sub length during the run (tracks moon/transparency/twilight). ARA-only execution behavior — no NINA round-trip; sits naturally after the native sequence model. |
 | **Native ARA sequence model + NINA-as-importer** | NEXTGEN §6 | Canonical `schemaVersion`'d ARA format; NINA JSON demotes to one import adapter. Three recorded sub-decisions open (engine-vs-format — strong lean keep NINA's engine; export policy; schema shape). Incremental: native model behind the existing editor, NINA import green throughout. |
 | **Imaging campaigns / adaptive scheduling** | former §55.2 | Multi-target survey programs; "image whichever target is best right now" scheduler, beyond manual sequences. |
+| **Planetary / lunar lucky-imaging (§77)** | playbook §77, design merged + amended 2026-08-02 | IN PROGRESS: native-SDK SER capture in the daemon (P/Invoke of the AlpacaBridge-deb `.so`s — the one §52 exception), 100–500 fps ROI video, ring buffer + O_DIRECT SER writer, ephemeris-goto pointing, Live-tab planetary mode, sequencer clip plans. Slices P1–P6 in §77.5; P1 under way. |
 
 ### 7.2 Ecosystem & extensibility
 | Feature | Source | Notes |
@@ -500,11 +501,9 @@ Deliberately on no path (guard against scope-creep pull):
 - **Mount homing mechanical-knob automation** — requires hardware; ARA guides the human.
 - **Astrometric measurement tools** (MPC astrometry submission, supernova-search workflows) —
   research-grade, out of scope for the imaging tool.
-- ~~**Planetary / lunar lucky-imaging** — architecturally blocked: Alpaca has no video API~~
-  **UNBLOCKED 2026-08-02 (§77):** in scope via the daemon's native-SDK capture engine
-  (P/Invoke of the AlpacaBridge-deb-installed vendor `.so`, the one documented §52 exception;
-  §18.J amended accordingly). The Alpaca path itself still has no video API — capture bypasses
-  it behind the §77.2 disconnected-window. Slices P1–P6 in playbook §77.5.
+- **Planetary / lunar lucky-imaging** — REMOVED from this list 2026-08-02: in scope via
+  playbook §77's native-SDK capture engine (see §7.1); kept here only as a tombstone so old
+  cross-references resolve. The Alpaca path itself still has no video API — §77 bypasses it.
 
 ### What's NOT on this list (and why)
 

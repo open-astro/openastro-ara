@@ -4236,10 +4236,16 @@ sudo apt install openastroara-server
 - Drops `/usr/lib/tmpfiles.d/openastroara.conf` for `/var/run/openastroara/` (per §34.7 sequence lock)
 - Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
 - Installs `/opt/openastroara/scripts/configure-storage.sh` (mode 0750, owned by root:openastroara) — per §29.1.4
+- Installs `/opt/openastroara/scripts/set-usbfs-memory.sh` (mode 0750, owned by root:openastroara) — per §77.1
+  capture tuning. Validates its single argument is an integer in [16, 1000], writes it to
+  `/sys/module/usbcore/parameters/usbfs_memory_mb` (live), and persists it for boot via
+  `/etc/modprobe.d/openastroara-usbfs.conf` (`options usbcore usbfs_memory_mb=N`). The script is the
+  entire privilege surface — the daemon never gets general sysfs write access.
 - Installs sudoers drop-in `/etc/sudoers.d/openastroara` (mode 0440, validated with `visudo -cf`):
   ```
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
+  openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/set-usbfs-memory.sh
   ```
 - Creates data + log + config dirs at proper permissions
 - Installs `/etc/logrotate.d/openastroara` per §29.9
