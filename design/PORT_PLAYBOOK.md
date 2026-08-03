@@ -12846,6 +12846,22 @@ video-mode subset of each camera SDK (open/init/ROI/gain/exposure/start-video/ge
 ~10 functions per vendor), used only while a camera is detached from the Alpaca surface per
 §77.2.
 
+**Fault-domain tradeoff — ACCEPTED, with a documented escape hatch.** In-process P/Invoke means
+a native crash inside a closed-source vendor `.so` (segfault during a 100–500 fps USB stream —
+the workload most likely to find one) is not catchable by managed `try/catch` and takes down
+the whole daemon, including any concurrent DSO sequence, guiding session, or WS clients — a
+blast radius the bridge-side draft confined to AlpacaBridge's process. Accepted for P1 because:
+(a) planetary sessions are operator-attended and in practice exclusive — nobody runs a DSO
+sequence on the same rig while recording Jupiter (the §77.2 gate already refuses to enter while
+a sequence holds the camera, and §77.4's sequencer clip plans make planetary a run *mode*, not
+a background task); (b) systemd restarts the daemon and §28 checkpointing recovers state; and
+(c) the same ASI video loop runs inside ASIAIR's single app process at fleet scale, so the
+empirical crash rate is low. **Escape hatch if field crashes show:** promote the engine to a
+spawned `openastroara-capture` worker process (same repo, same code, thin pipe IPC for
+stats/control) — the `IVideoCapture` seam is process-location-agnostic by design, so this is a
+hosting change, not a redesign. It stays an ARA-owned process either way; nothing moves back
+into AlpacaBridge.
+
 ### 77.1 Ara Server video capture engine
 
 - **`IVideoCapture` seam** (ours, ~30 lines): `Start(request)`, blocking `GetFrame(buffer,
@@ -12894,6 +12910,16 @@ refuses to enter while a sequence holds the camera. Residual risk accepted: anot
 client could reconnect the camera mid-video-session (single-operator boxes; the SDK's exclusive
 USB open makes the bridge's reconnect fail loudly rather than corrupt the stream). No 409-hold
 gate goes into the bridge — AlpacaBridge stays pure Alpaca.
+
+**Documented assumption — the bridge releases the SDK handle synchronously on disconnect.**
+The handoff relies on `Connected=false` closing the vendor SDK handle before the PUT returns.
+This holds by AlpacaBridge's own driver contract (its AGENTS.md concurrency rules:
+`set_connected(false)` clears driver state then performs the SDK close inside the call, and
+camera drivers stop-and-join their exposure worker first), but SDK closes can be slow (QHY's
+bounded-join-then-detach path defers the physical close until in-flight calls finish). So the
+video-mode open is written defensively regardless: retry the SDK open for a few seconds before
+failing, and surface a clear "camera still held by the bridge" error rather than a raw vendor
+error code.
 
 ### 77.3 Pointing — solve where you can, capture where you can't
 
