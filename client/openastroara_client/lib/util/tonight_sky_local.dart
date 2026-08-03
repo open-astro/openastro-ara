@@ -714,10 +714,14 @@ double _julianDate(DateTime utc) =>
 /// 21.60 mag/arcsec² reference sky.
 ({double nelm, double luminanceCdM2, double nsu}) sqmDerived(
     double sqmMagArcsec2) {
-  final nelm = 7.93 -
-      5.0 * (math.log(math.pow(10, 4.316 - sqmMagArcsec2 / 5.0) + 1) / math.ln10);
-  final lum = 10.8e4 * math.pow(10, -0.4 * sqmMagArcsec2);
-  final nsu = math.pow(10, (21.60 - sqmMagArcsec2) / 2.5);
+  // Clamp to the physically plausible meter range (review r2): a garbage
+  // reading (e.g. 0) would overflow 10^(4.316 - sqm/5) to Infinity and
+  // propagate; real skies span ~16 (city) to ~22 (pristine) mag/arcsec².
+  final sqm = sqmMagArcsec2.clamp(5.0, 30.0);
+  final nelm =
+      7.93 - 5.0 * (math.log(math.pow(10, 4.316 - sqm / 5.0) + 1) / math.ln10);
+  final lum = 10.8e4 * math.pow(10, -0.4 * sqm);
+  final nsu = math.pow(10, (21.60 - sqm) / 2.5);
   return (nelm: nelm, luminanceCdM2: lum.toDouble(), nsu: nsu.toDouble());
 }
 
