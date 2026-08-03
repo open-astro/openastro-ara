@@ -478,22 +478,44 @@ Future<ImagingRunResult?> _tryLiveAppend(
     // Multi-block (mosaic): each add recomputes the index against the body the
     // previous add returned, so panels land in order before the end steps.
     var serverBody = (await api.getSequenceDetail(id)).body;
-    late SequenceDetail detail;
-    for (final block in targetBlocks) {
-      detail = await api.addRunItem(
-        id,
-        parentPath: const [],
-        index: liveAppendIndex(serverBody),
-        item: block,
-      );
-      serverBody = detail.body;
+    SequenceDetail? detail;
+    var added = 0;
+    try {
+      for (final block in targetBlocks) {
+        detail = await api.addRunItem(
+          id,
+          parentPath: const [],
+          index: liveAppendIndex(serverBody),
+          item: block,
+        );
+        serverBody = detail.body;
+        added++;
+      }
+    } on DioException catch (e) {
+      // Partial multi-block failure (review r2): once ANY block has landed in
+      // the live run, neither rethrow nor the 409/422 fall-through is safe —
+      // both routes end in a compose/create that would DUPLICATE the landed
+      // blocks. Sync what actually joined and report the append; the missing
+      // panels are visible in the Run tree and can be re-added from Planning.
+      if (added > 0) {
+        debugPrint(
+            '[planning] live append landed $added/${targetBlocks.length} '
+            'blocks before failing: $e');
+        _syncAfterBodyChange(container, id, detail!);
+        return ImagingRunResult(id, appended: true);
+      }
+      // Nothing landed — the original single-block contract applies. 409: the
+      // run ended/wound down — compose path. 422: the slot is locked (the
+      // session-end steps already started, so nothing can join this run) —
+      // fall through, where the still-active run makes it a fresh sequence.
+      final code = e.response?.statusCode;
+      if (code == 409 || code == 422) return null;
+      rethrow;
     }
-    _syncAfterBodyChange(container, id, detail);
+    _syncAfterBodyChange(container, id, detail!);
     return ImagingRunResult(id, appended: true);
   } on DioException catch (e) {
-    // 409: the run ended/wound down — compose path. 422: the slot is locked
-    // (the session-end steps already started, so nothing can join this run) —
-    // fall through, where the still-active run makes it a fresh sequence.
+    // The pre-loop getSequenceDetail probe only — the loop has its own handler.
     final code = e.response?.statusCode;
     if (code == 409 || code == 422) return null;
     rethrow;
