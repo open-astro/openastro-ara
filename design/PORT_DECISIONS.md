@@ -280,3 +280,20 @@ Implications:
   the server endpoints are thin conveniences, not the source of the math.
 - This is about architecture/offline-first, not Pi load — the rankings are milliseconds of
   trig; the Pi's real loads (plate solving, image handling) are execution-time and stay.
+
+## 2026-08-02 — AlpacaBridge is a pure standard Alpaca bridge, forever
+
+Maintainer call (during §77 planetary/SER P1): the first §77 draft put the high-speed video
+capture engine inside AlpacaBridge (premise: the vendor SDK `.so` files live only in that
+process). Joey overruled and the premise was wrong anyway — the bridge's deb installs every
+camera SDK to `/usr/lib/alpacabridge/` and registers it with `ldconfig` as a system-level
+contract for companion processes (SmartGuider already consumes `libASICamera2.so` this way).
+
+Ruling: **no ARA-specific feature logic ever goes into AlpacaBridge** — it stays a clean,
+standard Alpaca bridge that outside contributors can reason about. ARA-side native needs
+(planetary video is the first) are met by P/Invoking the deb-installed `.so` from
+`OpenAstroAra.Server`, as the one narrow documented exception to §52's Alpaca-only rule
+(video-subset SDK calls only, and only while the camera is detached from the Alpaca surface
+via the §77.2 disconnected-window). AlpacaBridge PR #168 (the C++ engine built to the first
+draft) was closed unmerged and is the reference implementation for the C# port. Section
+rewritten in place: playbook §77.

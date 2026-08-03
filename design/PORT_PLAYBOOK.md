@@ -12819,27 +12819,46 @@ checklist that is already green, with re-run entry points for hardware changes.
   AlpacaBridge contract
 - §45 polar align (consumes the profile this wizard produces)
 
-## 77. Planetary / SER capture — high-speed video through AlpacaBridge
+## 77. Planetary / SER capture — high-speed video in Ara Server (native SDK P/Invoke)
 
 **Intent** (Joey, 2026-08-02): planetary (lucky) imaging as a first-class mode. The Alpaca HTTP
-imaging path tops out at a few fps; planetary wants 100–500 fps ROI video. So the capture loop
-lives **inside AlpacaBridge** — the process that already links every vendor's SDK `.so` — writing
-SER files straight to local USB storage at full camera speed, while Ara acts as remote control
-and throttled preview. Precedent: the ASIAIR (Pi CM4-class) ships exactly this architecture —
-native SDK on the box, local recording, throttled app preview — proving the hardware tier works,
-with a known fps ceiling versus a USB3-connected PC that we accept and surface honestly.
+imaging path tops out at a few fps; planetary wants 100–500 fps ROI video, so the capture loop
+runs natively against the vendor SDK, writing SER files straight to local USB storage at full
+camera speed, while the Ara client acts as remote control and throttled preview. Precedent: the
+ASIAIR (Pi CM4-class) ships exactly this architecture — native SDK on the box, local recording,
+throttled app preview — proving the hardware tier works, with a known fps ceiling versus a
+USB3-connected PC that we accept and surface honestly.
 
-### 77.1 AlpacaBridge video mode
+**PLACEMENT AMENDED (Joey, 2026-08-02, same day — supersedes the first draft of this section):
+the capture engine lives in `OpenAstroAra.Server`, NOT in AlpacaBridge.** The original draft
+put it in the bridge on the premise that the vendor `.so` files exist only inside that process.
+That premise was wrong: the AlpacaBridge deb installs every camera SDK to
+`/usr/lib/alpacabridge/` and registers it with `ldconfig` as a deliberate system-level contract
+for companion processes (SmartGuider already drives `libASICamera2.so` this way via Python
+ctypes). Ara Server P/Invokes those same libraries directly. Ruling principle: **AlpacaBridge
+is a pure standard Alpaca bridge, forever — no ARA-specific planetary/SER/video logic goes in
+it.** (AlpacaBridge PR #168 — the C++ engine built to the first draft — was closed unmerged and
+serves as the reference implementation for the C# port; its design and test matrix carry over
+1:1.) This is the one narrow, documented exception to §52's "equipment via Alpaca only": the
+video-mode subset of each camera SDK (open/init/ROI/gain/exposure/start-video/get-frame/stop,
+~10 functions per vendor), used only while a camera is detached from the Alpaca surface per
+§77.2.
 
-- **`IVideoCapture` seam** (ours, ~30 lines): `StartVideo(roi, bin, gain, exposureMs)`,
-  frames-available callback, `Stop()`, dropped-frame counter. One implementation per vendor SDK
-  behind it; the SER writer / ring buffer / preview tap sit on top, vendor-agnostic.
+### 77.1 Ara Server video capture engine
+
+- **`IVideoCapture` seam** (ours, ~30 lines): `Start(request)`, blocking `GetFrame(buffer,
+  timeoutMs)` pull, `Stop()`, SDK-side dropped-frame counter. One P/Invoke implementation per
+  vendor SDK behind it; the SER writer / ring buffer / preview tap sit on top, vendor-agnostic.
+  Pull matches ZWO/SVB/Player One; callback-push SDKs (ToupTek) adapt inside their glue.
 - **Vendor sequencing**: ZWO first (`ASIStartVideoCapture`/`ASIGetVideoData`, best documented),
   then QHY (`BeginQHYCCDLive`), ToupTek/Player One (callback-push models), **Svbony once its
-  `.so` lands in AlpacaBridge** (Joey is arranging it; SVB API is ASI-like). Every bundled
-  vendor is in scope — the seam exists so each is a glue module, not an architecture change.
-  NOT used: Spinnaker (closed, FLIR-only, no source, can't drive our cameras); Aravis (LGPL
-  GenICam) noted as a possible future backend if industrial cameras ever matter.
+  `.so` ships in the AlpacaBridge deb** (Joey is arranging it; SVB API is ASI-like). Every
+  deb-shipped vendor is in scope — the seam exists so each is a glue module, not an
+  architecture change. The `.so` inventory in `/usr/lib/alpacabridge/` (ldconfig-registered by
+  the bridge deb) is the load-bearing contract; AlpacaBridge keeps shipping them for exactly
+  this kind of companion use. NOT used: Spinnaker (closed, FLIR-only, no source, can't drive
+  our cameras); Aravis (LGPL GenICam) noted as a possible future backend if industrial cameras
+  ever matter.
 - **RAM ring buffer, adaptively sized**: `clamp(25% of MemAvailable at capture start, 64 MB,
   512 MB)` — 512 MB on a Pi 5, ~128–256 MB on a 2 GB iOptron iMate; pre-allocated, no
   allocation in the hot path. At 90 MB/s that is ~1.5–5 s of stall absorption.
@@ -12851,10 +12870,11 @@ with a known fps ceiling versus a USB3-connected PC that we accept and surface h
 - **Honest accounting**: measured sustained disk rate at capture start, live achieved-vs-
   requested fps, dropped-frame counter, disk-space remaining. No silent loss, ever.
 - **usbfs tuning**: Linux defaults `usbcore.usbfs_memory_mb` to 16 MB — far too small for
-  100+ MB/s bulk transfers. The bridge auto-tunes it by box RAM (≈256 MB on 2 GB, up to
+  100+ MB/s bulk transfers. The daemon auto-tunes it by box RAM (≈256 MB on 2 GB, up to
   1000 MB on 8 GB; it is PINNED kernel memory, so it scales down with the ring), applied live
-  via `/sys/module/usbcore/parameters/usbfs_memory_mb` and persisted for boot by the deb. The
-  privilege is a deb-installed rule scoped to exactly that path — no general root in the API.
+  via `/sys/module/usbcore/parameters/usbfs_memory_mb` and persisted for boot by the **Ara**
+  deb (§34 owns the packaging; the privilege is a deb-installed rule scoped to exactly that
+  path — no general root in the API).
   Ara Options surfaces "Capture tuning — usbfs N MB (auto) · ring M MB (auto)" with override.
 - **Bandwidth reality**: Pi 4/CM4 shares one PCIe Gen2 x1 for both USB3 ports (~350–400 MB/s
   combined) — planetary ROIs (~90 MB/s in + out) fit comfortably; full-sensor 16-bit high-fps
@@ -12863,10 +12883,15 @@ with a known fps ceiling versus a USB3-connected PC that we accept and surface h
 
 ### 77.2 Mode arbitration
 
-A camera cannot be in Alpaca still-imaging and SDK video mode at once. The bridge gets an
-explicit enter/leave-planetary-mode gate per camera (same spirit as the §63.5 guider
-disconnected-window): entering detaches the camera from the Alpaca surface (Alpaca calls 409
-while held), leaving restores it. Ara refuses to enter while a sequence holds the camera.
+A camera cannot be in Alpaca still-imaging and SDK video mode at once — and with the engine in
+Ara Server the gate needs **no new bridge API at all** (the point of the placement amendment):
+entering planetary mode is Ara PUTting `Connected=false` to the bridge for that camera
+(standard Alpaca), then opening it natively via the SDK; leaving is SDK close → Alpaca
+reconnect. Same spirit as the §63.5 guider disconnected-window, owned entirely Ara-side. Ara
+refuses to enter while a sequence holds the camera. Residual risk accepted: another Alpaca
+client could reconnect the camera mid-video-session (single-operator boxes; the SDK's exclusive
+USB open makes the bridge's reconnect fail loudly rather than corrupt the stream). No 409-hold
+gate goes into the bridge — AlpacaBridge stays pure Alpaca.
 
 ### 77.3 Pointing — solve where you can, capture where you can't
 
@@ -12879,7 +12904,7 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.4 Ara integration
 
-- **Live-tab planetary mode** (§64 surface, different engine): preview from the bridge's ring
+- **Live-tab planetary mode** (§64 surface, different engine): preview from the daemon's ring
   tap at 5–10 fps JPEG (full-rate frames never leave the box), ROI drawn on the preview,
   gain/exposure controls, big Record SER button, achieved-fps/drops/disk readouts, capture
   file list on the USB store (SER grows ~5 GB/min — surface it).
@@ -12892,9 +12917,11 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.5 Slice plan (each a gated PR)
 
-- **P1** — AlpacaBridge: `IVideoCapture` seam + ZWO glue + ring buffer + SER writer + drop
-  accounting (bench-tested with a synthetic frame source)
-- **P2** — mode arbitration + usbfs auto-tune + capture-tuning endpoint
+- **P1** — Server: `IVideoCapture` seam + ZWO P/Invoke glue + ring buffer + SER writer + drop
+  accounting (bench-tested with a synthetic frame source; reference implementation = closed
+  AlpacaBridge PR #168, C++ → C# port)
+- **P2** — mode arbitration (Alpaca disconnected-window) + usbfs auto-tune + capture REST/WS
+  surface on the daemon
 - **P3** — Ara Live-tab planetary mode (preview tap, record control, readouts)
 - **P4** — pointing: ephemeris goto + guide-cam solve-and-center loop
 - **P5** — sequencer clip plans + RGB cycling + inter-clip re-centering
@@ -12902,7 +12929,8 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.6 Cross-references
 
-- §45 (capture-fetch + centering loop) · §59 (focus offsets, temp refocus) · §63.5
-  (disconnected-window precedent) · §64/§65 (Live surface + preview pipeline) · §68
-  (AlpacaBridge contract; this section extends it with the video-mode API) · §34 (deb owns
-  the usbfs persistence + sudoers scope)
+- §45 (capture-fetch + centering loop) · §52 (Alpaca-only equipment rule — §77 is its one
+  documented exception, video-subset P/Invoke only) · §59 (focus offsets, temp refocus) ·
+  §63.5 (disconnected-window precedent) · §64/§65 (Live surface + preview pipeline) · §68
+  (AlpacaBridge version contract — unchanged; the bridge gains no video API) · §34 (Ara deb
+  owns the usbfs persistence + sudoers scope)
