@@ -65,6 +65,21 @@ namespace OpenAstroAra.Server.Services.Video {
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         internal static partial int GetNumOfConnectedCameras();
 
+        // ASI_CAMERA_INFO is a large struct (Name[64] then CameraID at byte offset 64,
+        // then geometry/caps). The video path only needs CameraID, so the binding takes
+        // a raw 512-byte buffer instead of mirroring the full layout.
+        [LibraryImport(Dll, EntryPoint = "ASIGetCameraProperty")]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        internal static partial AsiErrorCode GetCameraProperty(ref byte info, int cameraIndex);
+
+        internal static int? GetCameraIdAtIndex(int index) {
+            Span<byte> info = stackalloc byte[512];
+            if (GetCameraProperty(ref System.Runtime.InteropServices.MemoryMarshal.GetReference(info), index) != AsiErrorCode.Success) {
+                return null;
+            }
+            return System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(info.Slice(64, 4));
+        }
+
         [LibraryImport(Dll, EntryPoint = "ASIOpenCamera")]
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         internal static partial AsiErrorCode OpenCamera(int cameraId);

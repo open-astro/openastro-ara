@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
                 ws: null,
                 profileStore: null,
                 new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
-                captureFactory: _ => capture,
+                captureFactory: (_, _) => capture,
                 lastDeviceProvider: () => lastDevice);
 
         // The service takes ownership via captureFactory and disposes it — but the
@@ -232,7 +232,7 @@ namespace OpenAstroAra.Test {
                 ws: null,
                 profileStore: null,
                 new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
-                captureFactory: _ => ++factoryCalls == 1 ? captureA : captureB,
+                captureFactory: (_, _) => ++factoryCalls == 1 ? captureA : captureB,
                 lastDeviceProvider: () => null);
             var pathA = $"planetary_a_{Guid.NewGuid():N}.ser";
             var pathB = $"planetary_b_{Guid.NewGuid():N}.ser";

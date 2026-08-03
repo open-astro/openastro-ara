@@ -42,7 +42,8 @@ namespace OpenAstroAra.Server.Services.Video {
         private readonly IWsBroadcaster? ws;
         private readonly IProfileStore? profileStore;
         private readonly UsbfsTuner tuner;
-        private readonly Func<int, IVideoCapture> captureFactory;
+        private readonly Func<string, int, IVideoCapture> captureFactory;
+        private string vendor = "zwo";
         private readonly Func<DiscoveredDeviceDto?> lastDeviceProvider;
         private readonly SemaphoreSlim gate = new(1, 1);
 
@@ -73,7 +74,7 @@ namespace OpenAstroAra.Server.Services.Video {
             IWsBroadcaster? ws,
             IProfileStore? profileStore,
             UsbfsTuner tuner,
-            Func<int, IVideoCapture>? captureFactory = null,
+            Func<string, int, IVideoCapture>? captureFactory = null,
             Func<DiscoveredDeviceDto?>? lastDeviceProvider = null) {
             this.logger = logger;
             this.recorderLogger = recorderLogger;
@@ -82,7 +83,10 @@ namespace OpenAstroAra.Server.Services.Video {
             this.ws = ws;
             this.profileStore = profileStore;
             this.tuner = tuner;
-            this.captureFactory = captureFactory ?? (id => new ZwoVideoCapture(id));
+            this.captureFactory = captureFactory ?? (static (vendorName, id) => vendorName switch {
+                "playerone" => new PlayerOneVideoCapture(id),
+                _ => (IVideoCapture)new ZwoVideoCapture(id),
+            });
             this.lastDeviceProvider = lastDeviceProvider ?? (() => (camera as CameraService)?.LastKnownDevice);
         }
 
@@ -106,6 +110,9 @@ namespace OpenAstroAra.Server.Services.Video {
                 if (runs.HasAny) {
                     throw new InvalidOperationException(
                         "a sequence run is active — it holds the camera (§77.2); stop it before entering planetary mode");
+                }
+                if (request.Vendor is not ("zwo" or "playerone")) {
+                    throw new ArgumentException($"unknown vendor '{request.Vendor}' (zwo|playerone)", nameof(request));
                 }
 
                 // Detach from the Alpaca surface (bridge closes the SDK handle in-call
@@ -138,6 +145,7 @@ namespace OpenAstroAra.Server.Services.Video {
 
                 inPlanetaryMode = true;
                 cameraId = request.CameraId;
+                vendor = request.Vendor;
                 PublishState();
                 await PublishAsync(WsEventCatalog.PlanetaryModeEntered, new JsonObject {
                     ["camera_id"] = request.CameraId,
@@ -260,7 +268,7 @@ namespace OpenAstroAra.Server.Services.Video {
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
                 recorder?.Dispose();
-                capture ??= captureFactory(cameraId.Value);
+                capture ??= captureFactory(vendor, cameraId.Value);
                 recorder = new VideoRecorder(capture, recorderLogger);
                 recorder.Start(videoRequest, new VideoRecorderOptions {
                     Ser = new SerWriterOptions {
