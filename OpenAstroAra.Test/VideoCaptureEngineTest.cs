@@ -408,6 +408,54 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        /// <summary>A source whose dropped-frame counter throws (dead USB camera at capture end).</summary>
+        private sealed class DroppedFramesThrowsCapture : IVideoCapture {
+            private readonly SyntheticVideoCapture inner;
+
+            public DroppedFramesThrowsCapture(ulong frameLimit) {
+                inner = new SyntheticVideoCapture(frameLimit, TimeSpan.Zero);
+            }
+
+            public ulong Produced => inner.Produced;
+            public ulong DroppedFrames => throw new VideoCaptureException("ASIGetDroppedFrames: ASI_ERROR_CameraClosed");
+
+            public void Start(in VideoRequest request) => inner.Start(request);
+
+            public bool GetFrame(Span<byte> buffer, int timeoutMs) => inner.GetFrame(buffer, timeoutMs);
+
+            public void StopCapture() => inner.StopCapture();
+
+            public void Dispose() => inner.Dispose();
+        }
+
+        [Test]
+        public void Recorder_ThrowingDroppedFramesCounter_StillStopsCleanly() {
+            // Review #910 r2: a dead camera can throw from the DroppedFrames read at
+            // capture end — the recorder must still close the ring (no hung Stop) and
+            // never let the throw escape the background thread.
+            var path = TempPath("deadcam");
+            using var source = new DroppedFramesThrowsCapture(10);
+            try {
+                using var recorder = new VideoRecorder(source, NullLogger<VideoRecorder>.Instance);
+                recorder.Start(SmallRequest(), new VideoRecorderOptions {
+                    Ser = new SerWriterOptions { Path = path },
+                    RingBytes = 1024 * 1024
+                });
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+                while (source.Produced < 10 && DateTime.UtcNow < deadline) {
+                    Thread.Sleep(5);
+                }
+                recorder.Stop();   // must not hang on the drain join
+
+                var stats = recorder.Stats();
+                stats.Running.Should().BeFalse();
+                stats.SdkDroppedFrames.Should().Be(0);   // last-known value kept
+                (stats.FramesWritten + stats.RingDroppedFrames).Should().Be(stats.FramesCaptured);
+            } finally {
+                File.Delete(path);
+            }
+        }
+
         [Test]
         public void Recorder_StartStopStorm_Survives() {
             var path = TempPath("storm");

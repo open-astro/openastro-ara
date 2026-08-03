@@ -150,10 +150,18 @@ namespace OpenAstroAra.Server.Services.Video {
             } catch (Exception ex) when (ex is VideoCaptureException or InvalidOperationException) {
                 RecordError(ex.Message);
                 LogCaptureFailed(logger, ex);
+            } finally {
+                Interlocked.Exchange(ref captureElapsedTicks, captureClock.Elapsed.Ticks);
+                try {
+                    // A dead/removed camera throws here too (e.g. ZWO CameraClosed);
+                    // an unhandled throw on this background thread would kill the
+                    // whole daemon and skip the Close below, hanging Stop's join.
+                    Interlocked.Exchange(ref sdkDropped, (long)source.DroppedFrames);
+                } catch (Exception ex) when (ex is VideoCaptureException or InvalidOperationException) {
+                    LogSdkDropReadFailed(logger, ex);   // keep the last-known value
+                }
+                ring.Close();
             }
-            Interlocked.Exchange(ref captureElapsedTicks, captureClock.Elapsed.Ticks);
-            Interlocked.Exchange(ref sdkDropped, (long)source.DroppedFrames);
-            ring.Close();
         }
 
         private void DrainLoop() {
@@ -244,6 +252,9 @@ namespace OpenAstroAra.Server.Services.Video {
 
         [LoggerMessage(Level = LogLevel.Error, Message = "Video capture loop failed.")]
         private static partial void LogCaptureFailed(ILogger logger, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "SDK dropped-frame counter unreadable at capture end; keeping last-known value.")]
+        private static partial void LogSdkDropReadFailed(ILogger logger, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Error, Message = "SER drain loop failed.")]
         private static partial void LogDrainFailed(ILogger logger, Exception ex);
