@@ -143,6 +143,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void RingBuffer_WriteProceedsWhileAReadIsOpen() {
+            // Review #910 r1: the slot the consumer holds open is the tail slot,
+            // already counted in queued — with SlotCount > 2 the producer must NOT
+            // see "full" one slot early during the drain window.
+            var ring = new FrameRingBuffer(16, 64);   // 4 slots
+            for (var i = 0; i < 3; i++) {
+                ring.BeginWrite().IsEmpty.Should().BeFalse();
+                ring.CommitWrite(16, i);
+            }
+            ring.TryPop(100, out _, out _).Should().BeTrue();   // readOpen, queued still 3
+            ring.BeginWrite().IsEmpty.Should().BeFalse();       // head slot is genuinely free
+            ring.CommitWrite(16, 3);                            // queued now 4 == SlotCount
+            ring.BeginWrite().IsEmpty.Should().BeTrue();        // truly full
+            ring.ReleaseRead();
+            ring.BeginWrite().IsEmpty.Should().BeFalse();
+        }
+
+        [Test]
         public void RingBuffer_CancelWrite_ReleasesTheClaim() {
             var ring = new FrameRingBuffer(8, 32);
             ring.BeginWrite().IsEmpty.Should().BeFalse();

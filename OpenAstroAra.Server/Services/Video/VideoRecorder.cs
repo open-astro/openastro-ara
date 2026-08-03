@@ -171,6 +171,9 @@ namespace OpenAstroAra.Server.Services.Video {
                     ring.ReleaseRead();
                 }
             } catch (Exception ex) when (ex is VideoCaptureException or System.IO.IOException) {
+                // Deliberately no ReleaseRead here: the recording is already dead
+                // (error surfaced via Stats().Error) and this ring is discarded with
+                // it — a fresh Start() allocates a fresh ring.
                 RecordError(ex.Message);
                 LogDrainFailed(logger, ex);
             }

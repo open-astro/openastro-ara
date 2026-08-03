@@ -83,8 +83,8 @@ namespace OpenAstroAra.Server.Services.Video {
                         return long.TryParse(digits, out var kib) ? kib * 1024 : 0;
                     }
                 }
-            } catch (IOException) {
-                // Unreadable meminfo — fall through to "unknown".
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // Unreadable meminfo — best-effort; fall through to "unknown".
             }
             return 0;
         }
@@ -98,9 +98,11 @@ namespace OpenAstroAra.Server.Services.Video {
                 if (closed || writeOpen) {
                     return Span<byte>.Empty;
                 }
-                // Full when every slot is either committed or handed to the reader.
-                var inUse = queued + (readOpen ? 1 : 0);
-                if (inUse >= SlotCount) {
+                // Full when every slot is committed-but-unreleased. The slot the
+                // consumer currently holds open (readOpen) is the tail slot and is
+                // already counted inside queued — head ≡ tail + queued (mod SlotCount)
+                // holds at all times, so queued < SlotCount guarantees head is free.
+                if (queued >= SlotCount) {
                     return Span<byte>.Empty;
                 }
                 writeOpen = true;
