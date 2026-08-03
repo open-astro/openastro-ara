@@ -342,6 +342,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Enter_RejectsUnknownVendor_BeforeDetachingTheCamera() {
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
+            var act = () => service.EnterAsync(new PlanetaryEnterRequestDto(0, null, "toupTek"), null, CancellationToken.None);
+            await act.Should().ThrowAsync<ArgumentException>().WithMessage("*unknown vendor*");
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Enter_VendorIsPassedToTheCaptureFactory() {
+            string? seenVendor = null;
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = new PlanetaryCaptureService(
+                NullLogger<PlanetaryCaptureService>.Instance,
+                NullLogger<VideoRecorder>.Instance,
+                camera.Object,
+                new ActiveRunSessionRegistry(),
+                ws: null,
+                profileStore: null,
+                new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
+                captureFactory: (v, _) => { seenVendor = v; return capture; },
+                lastDeviceProvider: () => null);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(0, null, "playerone"), null, CancellationToken.None);
+            await service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, null), null, CancellationToken.None);
+            await service.StopRecordingAsync(null, CancellationToken.None);
+            seenVendor.Should().Be("playerone");
+        }
+
+        [Test]
         public void UsbfsTargetMb_ScalesWithRamAndClamps() {
             const long GiB = 1024L * 1024 * 1024;
             UsbfsTuner.TargetMb(2 * GiB).Should().Be(256);     // iMate class

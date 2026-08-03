@@ -64,9 +64,11 @@ namespace OpenAstroAra.Server.Services.Video {
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         internal static partial int GetCameraCount();
 
-        // POACameraProperties: cameraModelName[256] + userCustomID[16], then cameraID
-        // at byte offset 272. Only cameraID is needed, so the binding takes a raw
-        // buffer instead of mirroring the full ~1 KB layout.
+        // POACameraProperties: cameraModelName[256] + userCustomID[16], then cameraID.
+        // Only cameraID is needed, so the binding takes a raw buffer instead of the
+        // full layout. Sizes verified empirically on linux-arm64 against the shipped
+        // SDK header (rc91 spike, SDK 3.10.0): sizeof(POACameraProperties) = 992,
+        // offsetof(cameraID) = 272 — the 1024-byte buffer covers it with margin.
         [LibraryImport(Dll, EntryPoint = "POAGetCameraProperties")]
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         internal static partial PoaErrorCode GetCameraProperties(int index, ref byte properties);

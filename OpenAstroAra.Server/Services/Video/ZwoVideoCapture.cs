@@ -90,6 +90,9 @@ namespace OpenAstroAra.Server.Services.Video {
                 // The ASI SDK only accepts ASIOpenCamera for ids surfaced by a prior
                 // enumeration pass in THIS process — an un-enumerated id returns
                 // InvalidId even for a present camera (found on-hardware, rc91 spike).
+                // Re-enumerating on every retry tick is deliberate: the retry window
+                // exists for a camera the bridge is still releasing, and it only shows
+                // up in a FRESH enumeration. Session-start cadence; cost irrelevant.
                 var count = ZwoNative.GetNumOfConnectedCameras();
                 if (count <= 0) {
                     ThrowOrRetry(ZwoNative.AsiErrorCode.CameraRemoved, deadline,

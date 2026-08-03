@@ -112,7 +112,8 @@ namespace OpenAstroAra.Server.Services.Video {
                         "a sequence run is active — it holds the camera (§77.2); stop it before entering planetary mode");
                 }
                 if (request.Vendor is not ("zwo" or "playerone")) {
-                    throw new ArgumentException($"unknown vendor '{request.Vendor}' (zwo|playerone)", nameof(request));
+                    var shown = string.IsNullOrEmpty(request.Vendor) ? "<empty>" : request.Vendor;
+                    throw new ArgumentException($"unknown vendor '{shown}' (zwo|playerone)", nameof(request));
                 }
 
                 // Detach from the Alpaca surface (bridge closes the SDK handle in-call
