@@ -42,7 +42,8 @@ namespace OpenAstroAra.Server.Services.Video {
         private readonly IWsBroadcaster? ws;
         private readonly IProfileStore? profileStore;
         private readonly UsbfsTuner tuner;
-        private readonly Func<int, IVideoCapture> captureFactory;
+        private readonly Func<string, int, IVideoCapture> captureFactory;
+        private string vendor = "zwo";
         private readonly Func<DiscoveredDeviceDto?> lastDeviceProvider;
         private readonly SemaphoreSlim gate = new(1, 1);
 
@@ -73,7 +74,7 @@ namespace OpenAstroAra.Server.Services.Video {
             IWsBroadcaster? ws,
             IProfileStore? profileStore,
             UsbfsTuner tuner,
-            Func<int, IVideoCapture>? captureFactory = null,
+            Func<string, int, IVideoCapture>? captureFactory = null,
             Func<DiscoveredDeviceDto?>? lastDeviceProvider = null) {
             this.logger = logger;
             this.recorderLogger = recorderLogger;
@@ -82,7 +83,10 @@ namespace OpenAstroAra.Server.Services.Video {
             this.ws = ws;
             this.profileStore = profileStore;
             this.tuner = tuner;
-            this.captureFactory = captureFactory ?? (id => new ZwoVideoCapture(id));
+            this.captureFactory = captureFactory ?? (static (vendorName, id) => vendorName switch {
+                "playerone" => new PlayerOneVideoCapture(id),
+                _ => (IVideoCapture)new ZwoVideoCapture(id),
+            });
             this.lastDeviceProvider = lastDeviceProvider ?? (() => (camera as CameraService)?.LastKnownDevice);
         }
 
@@ -96,12 +100,19 @@ namespace OpenAstroAra.Server.Services.Video {
             await gate.WaitAsync(ct).ConfigureAwait(false);
             try {
                 ObjectDisposedException.ThrowIf(disposed, this);
+                var requestedVendor = request.Vendor?.ToLowerInvariant();
+                if (requestedVendor is not ("zwo" or "playerone")) {
+                    var shownVendor = string.IsNullOrEmpty(request.Vendor) ? "<empty>" : request.Vendor;
+                    throw new ArgumentException($"unknown vendor '{shownVendor}' (zwo|playerone)", nameof(request));
+                }
                 if (inPlanetaryMode) {
-                    if (cameraId == request.CameraId) {
+                    // Idempotent only for a true repeat: same camera AND same vendor —
+                    // a differing vendor must not be silently ignored (review #914 r2).
+                    if (cameraId == request.CameraId && vendor == requestedVendor) {
                         return Accepted("planetary.enter", idempotencyKey);
                     }
                     throw new InvalidOperationException(
-                        $"already in planetary mode with camera {cameraId}; leave first");
+                        $"already in planetary mode with camera {cameraId} (vendor '{vendor}'); leave first");
                 }
                 if (runs.HasAny) {
                     throw new InvalidOperationException(
@@ -138,6 +149,7 @@ namespace OpenAstroAra.Server.Services.Video {
 
                 inPlanetaryMode = true;
                 cameraId = request.CameraId;
+                vendor = requestedVendor;
                 PublishState();
                 await PublishAsync(WsEventCatalog.PlanetaryModeEntered, new JsonObject {
                     ["camera_id"] = request.CameraId,
@@ -260,13 +272,16 @@ namespace OpenAstroAra.Server.Services.Video {
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
                 recorder?.Dispose();
-                capture ??= captureFactory(cameraId.Value);
+                capture ??= captureFactory(vendor, cameraId.Value);
                 recorder = new VideoRecorder(capture, recorderLogger);
                 recorder.Start(videoRequest, new VideoRecorderOptions {
                     Ser = new SerWriterOptions {
                         Path = path,
                         Observer = "OpenAstro Ara",
-                        Instrument = $"ZWO camera {cameraId.Value}",
+                        Instrument = vendor switch {
+                            "playerone" => $"Player One camera {cameraId.Value}",
+                            _ => $"ZWO camera {cameraId.Value}",
+                        },
                     },
                 });
                 outputPath = path;

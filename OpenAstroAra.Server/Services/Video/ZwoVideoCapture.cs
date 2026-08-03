@@ -87,6 +87,18 @@ namespace OpenAstroAra.Server.Services.Video {
         private void OpenWithRetry() {
             var deadline = DateTime.UtcNow + OpenRetryWindow;
             while (true) {
+                // The ASI SDK only accepts ASIOpenCamera for ids surfaced by a prior
+                // enumeration pass in THIS process — an un-enumerated id returns
+                // InvalidId even for a present camera (found on-hardware, rc91 spike).
+                // Re-enumerating on every retry tick is deliberate: the retry window
+                // exists for a camera the bridge is still releasing, and it only shows
+                // up in a FRESH enumeration. Session-start cadence; cost irrelevant.
+                var count = ZwoNative.GetNumOfConnectedCameras();
+                if (count <= 0) {
+                    ThrowOrRetry(ZwoNative.AsiErrorCode.CameraRemoved, deadline,
+                        "no ZWO cameras enumerated — is the camera connected and free?");
+                    continue;
+                }
                 var code = ZwoNative.OpenCamera(cameraId);
                 if (code == ZwoNative.AsiErrorCode.Success) {
                     opened = true;
@@ -101,16 +113,32 @@ namespace OpenAstroAra.Server.Services.Video {
                     or ZwoNative.AsiErrorCode.Timeout;
                 if (!retryable) {
                     throw new VideoCaptureException(
-                        $"ZWO camera {cameraId} failed to open for video mode: ASI_ERROR_{code}");
+                        $"ZWO camera {cameraId} failed to open for video mode: ASI_ERROR_{code}. " +
+                        $"Enumerated ids: [{EnumerateIds(count)}]");
                 }
-                if (DateTime.UtcNow >= deadline) {
-                    throw new VideoCaptureException(
-                        $"ZWO camera {cameraId} could not be opened for video mode after " +
-                        $"{OpenRetryWindow.TotalSeconds:0}s — it is likely still held by AlpacaBridge. " +
-                        $"Disconnect it from the Alpaca surface first (§77.2). Last SDK error: ASI_ERROR_{code}");
-                }
-                Thread.Sleep(OpenRetryInterval);
+                ThrowOrRetry(code, deadline,
+                    $"it is likely still held by AlpacaBridge — disconnect it from the Alpaca surface first (§77.2)");
             }
+        }
+
+        private void ThrowOrRetry(ZwoNative.AsiErrorCode code, DateTime deadline, string hint) {
+            if (DateTime.UtcNow >= deadline) {
+                throw new VideoCaptureException(
+                    $"ZWO camera {cameraId} could not be opened for video mode after " +
+                    $"{OpenRetryWindow.TotalSeconds:0}s — {hint}. Last SDK error: ASI_ERROR_{code}");
+            }
+            Thread.Sleep(OpenRetryInterval);
+        }
+
+        private static string EnumerateIds(int count) {
+            var ids = new System.Collections.Generic.List<string>();
+            for (var i = 0; i < count; i++) {
+                var id = ZwoNative.GetCameraIdAtIndex(i);
+                if (id is not null) {
+                    ids.Add(id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+            return string.Join(", ", ids);
         }
 
         public bool GetFrame(Span<byte> buffer, int timeoutMs) {
