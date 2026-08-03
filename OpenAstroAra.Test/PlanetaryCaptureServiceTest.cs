@@ -161,11 +161,15 @@ namespace OpenAstroAra.Test {
             using var capture = new SyntheticCapture();
             var camera = NewCamera();
             using var service = NewService(camera, new ActiveRunSessionRegistry(), capture, SampleDevice);
-            var path = Path.Combine(Path.GetTempPath(), $"planetary_svc_{Guid.NewGuid():N}.ser");
+            var name = $"planetary_svc_{Guid.NewGuid():N}.ser";
+            string? path = null;
             try {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, path), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, name), null, CancellationToken.None);
+                path = service.Status().OutputPath;
+                path.Should().NotBeNull();
+                Path.GetFileName(path).Should().Be(name);
 
                 var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
                 while (capture.Produced < 20 && DateTime.UtcNow < deadline) {
@@ -174,7 +178,6 @@ namespace OpenAstroAra.Test {
                 var live = service.Status();
                 live.Recording.Should().NotBeNull();
                 live.Recording!.Recording.Should().BeTrue();
-                live.OutputPath.Should().Be(path);
 
                 await service.StopRecordingAsync(null, CancellationToken.None);
                 var stats = service.Status().Recording!;
@@ -190,9 +193,15 @@ namespace OpenAstroAra.Test {
                 camera.Verify(c => c.ConnectAsync(
                     It.Is<ConnectRequestDto>(r => r.Device.UniqueId == SampleDevice.UniqueId),
                     null, It.IsAny<CancellationToken>()), Times.Once);
-                service.Status().Mode.Should().Be("idle");
+                var after = service.Status();
+                after.Mode.Should().Be("idle");
+                // r2: no stale session data after leave.
+                after.Recording.Should().BeNull();
+                after.OutputPath.Should().BeNull();
             } finally {
-                File.Delete(path);
+                if (path is not null) {
+                    File.Delete(path);
+                }
             }
         }
 
@@ -225,12 +234,15 @@ namespace OpenAstroAra.Test {
                 new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
                 captureFactory: _ => ++factoryCalls == 1 ? captureA : captureB,
                 lastDeviceProvider: () => null);
-            var pathA = Path.Combine(Path.GetTempPath(), $"planetary_a_{Guid.NewGuid():N}.ser");
-            var pathB = Path.Combine(Path.GetTempPath(), $"planetary_b_{Guid.NewGuid():N}.ser");
+            var pathA = $"planetary_a_{Guid.NewGuid():N}.ser";
+            var pathB = $"planetary_b_{Guid.NewGuid():N}.ser";
+            string? fullA = null;
+            string? fullB = null;
             try {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(1, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
                     new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, pathA), null, CancellationToken.None);
+                fullA = service.Status().OutputPath;
                 await service.StopRecordingAsync(null, CancellationToken.None);
                 await service.LeaveAsync(null, CancellationToken.None);
                 captureA.StopCalls.Should().BeGreaterThan(0);
@@ -238,12 +250,13 @@ namespace OpenAstroAra.Test {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(2, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
                     new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, pathB), null, CancellationToken.None);
+                fullB = service.Status().OutputPath;
                 await service.StopRecordingAsync(null, CancellationToken.None);
                 factoryCalls.Should().Be(2);
                 captureB.StartCalls.Should().Be(1);
             } finally {
-                File.Delete(pathA);
-                File.Delete(pathB);
+                if (fullA is not null) { File.Delete(fullA); }
+                if (fullB is not null) { File.Delete(fullB); }
             }
         }
 
@@ -254,18 +267,36 @@ namespace OpenAstroAra.Test {
             // a hardcoded true.
             using var capture = NewCapture();
             using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
-            var path = Path.Combine(Path.GetTempPath(), $"planetary_dio_{Guid.NewGuid():N}.ser");
+            var name = $"planetary_dio_{Guid.NewGuid():N}.ser";
+            string? path = null;
             try {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, path), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, name), null, CancellationToken.None);
+                path = service.Status().OutputPath;
                 var expected = OperatingSystem.IsLinux();   // GitHub runners: ext4 accepts O_DIRECT
                 if (!expected) {
                     service.Status().UsesDirectIo.Should().BeFalse();
                 }
                 await service.StopRecordingAsync(null, CancellationToken.None);
             } finally {
-                File.Delete(path);
+                if (path is not null) {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        [Test]
+        public async Task RecordStart_RejectsPathsOutsideThePlanetaryDirectory() {
+            // r2: output_path is a bare filename confined to the planetary output
+            // directory — separators, traversal, and absolute paths are refused.
+            using var capture = NewCapture();
+            using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+            foreach (var bad in new[] { "/tmp/evil.ser", "../evil.ser", "sub/dir.ser", "a..b/evil.ser" }) {
+                var act = () => service.StartRecordingAsync(
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, bad), null, CancellationToken.None);
+                await act.Should().ThrowAsync<ArgumentException>($"'{bad}' must be refused");
             }
         }
 

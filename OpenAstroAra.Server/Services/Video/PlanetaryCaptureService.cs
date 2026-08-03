@@ -102,8 +102,15 @@ namespace OpenAstroAra.Server.Services.Video {
                 // close). 202 fire-and-forget is fine — the retry-open is the sync point.
                 await camera.DisconnectAsync(idempotencyKey: null, ct).ConfigureAwait(false);
 
-                usbfsMb = await tuner.AutoTuneAsync(request.UsbfsOverrideMb, ct).ConfigureAwait(false)
-                          ?? UsbfsTuner.ReadCurrentMb();
+                try {
+                    usbfsMb = await tuner.AutoTuneAsync(request.UsbfsOverrideMb, ct).ConfigureAwait(false)
+                              ?? UsbfsTuner.ReadCurrentMb();
+                } catch (OperationCanceledException) {
+                    // Don't strand a silently-detached camera (r2 minor): restore the
+                    // Alpaca connection best-effort before propagating the cancel.
+                    await TryReconnectAsync().ConfigureAwait(false);
+                    throw;
+                }
 
                 inPlanetaryMode = true;
                 cameraId = request.CameraId;
@@ -135,6 +142,11 @@ namespace OpenAstroAra.Server.Services.Video {
                 // Enter with a different camera must get a fresh one (review #911 r1).
                 capture?.Dispose();
                 capture = null;
+                // Clear the finished session's stats/path so a Status() poll after the
+                // next Enter can't show camera A's recording against camera B (r2).
+                recorder?.Dispose();
+                recorder = null;
+                outputPath = null;
                 inPlanetaryMode = false;
                 var leftCamera = cameraId;
                 cameraId = null;
@@ -189,9 +201,21 @@ namespace OpenAstroAra.Server.Services.Video {
                     throw new ArgumentException("invalid frame geometry", nameof(request));
                 }
 
-                var path = string.IsNullOrWhiteSpace(request.OutputPath)
-                    ? DefaultOutputPath()
-                    : request.OutputPath!;
+                // Client-supplied names are confined to the planetary output directory
+                // (r2): a bare filename only — no separators, no traversal, no absolute
+                // paths — so the endpoint can never write outside the save tree.
+                string path;
+                if (string.IsNullOrWhiteSpace(request.OutputPath)) {
+                    path = DefaultOutputPath();
+                } else {
+                    var name = request.OutputPath!;
+                    if (Path.GetFileName(name) != name || name.Contains("..", StringComparison.Ordinal)) {
+                        throw new ArgumentException(
+                            "output_path must be a bare .ser filename; it is placed in the planetary output directory",
+                            nameof(request));
+                    }
+                    path = Path.Combine(PlanetaryOutputDir(), name);
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
                 recorder?.Dispose();
@@ -269,13 +293,28 @@ namespace OpenAstroAra.Server.Services.Video {
             }
         }
 
-        private string DefaultOutputPath() {
+        private string PlanetaryOutputDir() {
             var configured = profileStore?.GetStorageSettings().SaveDirectory;
-            var baseDir = !string.IsNullOrWhiteSpace(configured)
+            return !string.IsNullOrWhiteSpace(configured)
                 ? Path.Combine(configured, "planetary")
                 : Path.Combine(AppContext.BaseDirectory, "frames", "planetary");
+        }
+
+        private string DefaultOutputPath() {
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
-            return Path.Combine(baseDir, $"planetary_{stamp}.ser");
+            return Path.Combine(PlanetaryOutputDir(), $"planetary_{stamp}.ser");
+        }
+
+        private async Task TryReconnectAsync() {
+            var device = lastDeviceProvider();
+            if (device is null) {
+                return;
+            }
+            try {
+                await camera.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            } catch (InvalidOperationException ex) {
+                LogReconnectFailed(logger, ex);
+            }
         }
 
         private static bool TryParseFormat(string token, out VideoPixelFormat format) {

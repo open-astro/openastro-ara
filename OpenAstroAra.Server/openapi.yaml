@@ -807,9 +807,10 @@ paths:
       summary: Start a SER recording (§77.1 engine)
       description: |
         Requires planetary mode. Geometry must be SDK-ready (ZWO — width % 8,
-        height % 2 after binning). Output path defaults to
-        `{save_directory}/planetary/planetary_<utc>.ser` when omitted. Final
-        honest-accounting stats arrive on `planetary.recording_stopped`.
+        height % 2 after binning). Output is always confined to
+        `{save_directory}/planetary/`; `output_path` is a bare filename and
+        defaults to `planetary_<utc>.ser`. Final honest-accounting stats arrive
+        on `planetary.recording_stopped`.
       tags: [Planetary]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1368,7 +1369,9 @@ components:
         exposure_ms: { type: integer }
         output_path:
           type: [string, 'null']
-          description: Absolute SER path; null derives `{save_directory}/planetary/planetary_<utc>.ser`
+          description: |
+            Bare .ser filename placed in `{save_directory}/planetary/` (separators
+            and traversal are refused with 400); null derives `planetary_<utc>.ser`
 
     PlanetaryRecordingStats:
       type: object
