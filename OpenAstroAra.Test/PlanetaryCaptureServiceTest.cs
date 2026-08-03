@@ -1,0 +1,232 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
+using OpenAstroAra.Server.Services.Video;
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>§77.2/§77.4 P2 — planetary-mode arbitration + capture surface.</summary>
+    [TestFixture]
+    public class PlanetaryCaptureServiceTest {
+
+        private sealed class SyntheticCapture : IVideoCapture {
+            private int frameSize;
+            private long produced;
+            private volatile bool started;
+
+            public ulong Produced => (ulong)Interlocked.Read(ref produced);
+            public ulong DroppedFrames => 0;
+            public int StartCalls { get; private set; }
+            public int StopCalls { get; private set; }
+
+            public void Start(in VideoRequest request) {
+                StartCalls++;
+                frameSize = (int)VideoFormats.FrameBytes(request);
+                started = true;
+            }
+
+            public bool GetFrame(Span<byte> buffer, int timeoutMs) {
+                if (!started) {
+                    return false;
+                }
+                buffer[..frameSize].Fill(0x42);
+                Interlocked.Increment(ref produced);
+                return true;
+            }
+
+            public void StopCapture() {
+                StopCalls++;
+                started = false;
+            }
+
+            public void Dispose() => StopCapture();
+        }
+
+        private static readonly DiscoveredDeviceDto SampleDevice = new(
+            UniqueId: "zwo-sim-1", Name: "ZWO ASI662MC", Type: DeviceType.Camera,
+            HostName: "localhost", IpAddress: "127.0.0.1", IpPort: 6800,
+            AlpacaDeviceNumber: 0, UseHttps: false);
+
+        private static PlanetaryCaptureService NewService(
+            Mock<ICameraService> camera,
+            ActiveRunSessionRegistry registry,
+            SyntheticCapture capture,
+            DiscoveredDeviceDto? lastDevice = null) =>
+            new(NullLogger<PlanetaryCaptureService>.Instance,
+                NullLogger<VideoRecorder>.Instance,
+                camera.Object,
+                registry,
+                ws: null,
+                profileStore: null,
+                new UsbfsTuner(NullLogger<UsbfsTuner>.Instance),
+                captureFactory: _ => capture,
+                lastDeviceProvider: () => lastDevice);
+
+        // The service takes ownership via captureFactory and disposes it — but the
+        // analyzer can't see through the factory lambda, so tests hold a using ref.
+        private static SyntheticCapture NewCapture() => new();
+
+        private static Mock<ICameraService> NewCamera() {
+            var camera = new Mock<ICameraService>(MockBehavior.Loose);
+            camera.Setup(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "camera.disconnect", DateTimeOffset.UtcNow, null));
+            camera.Setup(c => c.ConnectAsync(It.IsAny<ConnectRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "camera.connect", DateTimeOffset.UtcNow, null));
+            return camera;
+        }
+
+        [Test]
+        public async Task Enter_DetachesCameraAndReportsPlanetaryMode() {
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
+
+            var accepted = await service.EnterAsync(new PlanetaryEnterRequestDto(3, null), "k1", CancellationToken.None);
+            accepted.OperationType.Should().Be("planetary.enter");
+            camera.Verify(c => c.DisconnectAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+
+            var status = service.Status();
+            status.Mode.Should().Be("planetary");
+            status.CameraId.Should().Be(3);
+        }
+
+        [Test]
+        public async Task Enter_RefusedWhileASequenceRunIsActive() {
+            var registry = new ActiveRunSessionRegistry();
+            registry.Enter(Guid.NewGuid());
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = NewService(camera, registry, capture);
+
+            var act = () => service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*sequence run is active*");
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Enter_IdempotentForSameCamera_RefusedForAnother() {
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(1, null), null, CancellationToken.None);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(1, null), null, CancellationToken.None);
+            camera.Verify(c => c.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+
+            var other = () => service.EnterAsync(new PlanetaryEnterRequestDto(2, null), null, CancellationToken.None);
+            await other.Should().ThrowAsync<InvalidOperationException>().WithMessage("*leave first*");
+        }
+
+        [Test]
+        public async Task RecordStart_RequiresPlanetaryMode() {
+            using var capture = NewCapture();
+            using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
+            var act = () => service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 5, null), null, CancellationToken.None);
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*not in planetary mode*");
+        }
+
+        [Test]
+        public async Task RecordStart_RejectsUnknownFormat() {
+            using var capture = NewCapture();
+            using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+            var act = () => service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "png", 100, 5, null), null, CancellationToken.None);
+            await act.Should().ThrowAsync<ArgumentException>().WithMessage("*unknown pixel format*");
+        }
+
+        [Test]
+        public async Task RecordLifecycle_WritesSerAndReportsHonestCounters() {
+            using var capture = new SyntheticCapture();
+            var camera = NewCamera();
+            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture, SampleDevice);
+            var path = Path.Combine(Path.GetTempPath(), $"planetary_svc_{Guid.NewGuid():N}.ser");
+            try {
+                await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+                await service.StartRecordingAsync(
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, path), null, CancellationToken.None);
+
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+                while (capture.Produced < 20 && DateTime.UtcNow < deadline) {
+                    await Task.Delay(5);
+                }
+                var live = service.Status();
+                live.Recording.Should().NotBeNull();
+                live.Recording!.Recording.Should().BeTrue();
+                live.OutputPath.Should().Be(path);
+
+                await service.StopRecordingAsync(null, CancellationToken.None);
+                var stats = service.Status().Recording!;
+                stats.Recording.Should().BeFalse();
+                stats.Error.Should().BeEmpty();
+                (stats.FramesWritten + stats.RingDroppedFrames + stats.AbandonedFrames)
+                    .Should().Be(stats.FramesCaptured);
+                File.Exists(path).Should().BeTrue();
+
+                // Leave: SDK stopped, Alpaca reconnect attempted with the last device.
+                await service.LeaveAsync(null, CancellationToken.None);
+                capture.StopCalls.Should().BeGreaterThan(0);
+                camera.Verify(c => c.ConnectAsync(
+                    It.Is<ConnectRequestDto>(r => r.Device.UniqueId == SampleDevice.UniqueId),
+                    null, It.IsAny<CancellationToken>()), Times.Once);
+                service.Status().Mode.Should().Be("idle");
+            } finally {
+                File.Delete(path);
+            }
+        }
+
+        [Test]
+        public async Task Leave_IsIdempotentWhenIdle() {
+            var camera = NewCamera();
+            using var capture = NewCapture();
+            using var service = NewService(camera, new ActiveRunSessionRegistry(), capture);
+            var accepted = await service.LeaveAsync(null, CancellationToken.None);
+            accepted.OperationType.Should().Be("planetary.leave");
+            camera.Verify(c => c.ConnectAsync(It.IsAny<ConnectRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public void UsbfsTargetMb_ScalesWithRamAndClamps() {
+            const long GiB = 1024L * 1024 * 1024;
+            UsbfsTuner.TargetMb(2 * GiB).Should().Be(256);     // iMate class
+            UsbfsTuner.TargetMb(8 * GiB).Should().Be(1000);    // ceiling
+            UsbfsTuner.TargetMb(256 * 1024 * 1024).Should().Be(64);   // floor
+        }
+
+        [Test]
+        public void ActiveRunRegistry_HasAny_TracksMultipleRuns() {
+            var registry = new ActiveRunSessionRegistry();
+            registry.HasAny.Should().BeFalse();
+            var a = Guid.NewGuid();
+            var b = Guid.NewGuid();
+            registry.Enter(a);
+            registry.Enter(b);
+            registry.HasAny.Should().BeTrue();
+            registry.Current.Should().BeNull();   // ≥2 runs: Current deliberately null
+            registry.Exit(a);
+            registry.Exit(b);
+            registry.HasAny.Should().BeFalse();
+        }
+    }
+}
