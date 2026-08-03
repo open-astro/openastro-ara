@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' show BytesBuilder;
 
 import 'package:multicast_dns/multicast_dns.dart';
 
@@ -158,6 +159,13 @@ class ServerDiscoveryService {
     final bases = <String>{};
     final own = <String>{};
     for (final i in interfaces) {
+      // Physical LANs only (review r3): sweeping a VPN/tunnel interface fires
+      // ~254 unsolicited probes into a corporate network — exactly the kind
+      // of traffic that trips internal scanning alerts. Name prefixes cover
+      // the common tunnel drivers across macOS/Linux/Windows.
+      final name = i.name.toLowerCase();
+      const tunnelPrefixes = ['utun', 'tun', 'tap', 'ppp', 'wg', 'zt', 'ipsec', 'gpd'];
+      if (tunnelPrefixes.any(name.startsWith)) continue;
       for (final a in i.addresses) {
         final parts = a.address.split('.');
         if (parts.length == 4) {
@@ -203,11 +211,19 @@ class ServerDiscoveryService {
       final res =
           await req.close().timeout(const Duration(milliseconds: 1200));
       if (res.statusCode != 200) return null;
-      final body = await res
-          .transform(utf8.decoder)
-          .join()
-          .timeout(const Duration(milliseconds: 1200));
-      final json = jsonDecode(body);
+      // Byte-capped read (review r3): probes hit arbitrary subnet hosts, and
+      // a device that trickles a large body just under the time cap would
+      // hold its slot ~3 s. /server/info is a few hundred bytes; anything
+      // past 8 KiB is not an Ara daemon.
+      const maxBodyBytes = 8192;
+      final bytes = await res.fold<BytesBuilder>(BytesBuilder(copy: false),
+          (b, chunk) {
+        if (b.length + chunk.length > maxBodyBytes) {
+          throw const FormatException('body too large for /server/info');
+        }
+        return b..add(chunk);
+      }).timeout(const Duration(milliseconds: 1200));
+      final json = jsonDecode(utf8.decode(bytes.takeBytes()));
       if (json is! Map<String, dynamic> || json['server_uuid'] is! String) {
         return null;
       }
