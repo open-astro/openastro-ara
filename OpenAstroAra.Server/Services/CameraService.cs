@@ -70,6 +70,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private readonly string? _fallbackFramesDir;
     private AlpacaCamera? _client;
     private DiscoveredDeviceDto? _device;
+
+    /// <summary>Last device this service connected (survives disconnect) — the §77.2
+    /// planetary-mode leave path uses it to restore the Alpaca connection.</summary>
+    internal DiscoveredDeviceDto? LastKnownDevice {
+        get {
+            lock (_gate) {
+                return _device;
+            }
+        }
+    }
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private CameraCapabilitiesDto? _capabilities;
     private CameraStateDto _runtime = IdleRuntime;

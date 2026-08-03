@@ -43,6 +43,7 @@ namespace OpenAstroAra.Server.Services.Video {
         public ulong SdkDroppedFrames { get; init; }      // vendor SDK / USB side
         public ulong BytesWritten { get; init; }
         public double AchievedFps { get; init; }          // measured over the whole recording
+        public bool UsesDirectIo { get; init; }           // false = buffered fallback (tmpfs etc.)
         public string Error { get; init; } = "";          // non-empty when a worker died
     }
 
@@ -249,6 +250,7 @@ namespace OpenAstroAra.Server.Services.Video {
                 AbandonedFrames = (ulong)Interlocked.Read(ref abandoned),
                 SdkDroppedFrames = (ulong)Interlocked.Read(ref sdkDropped),
                 BytesWritten = (ulong)Interlocked.Read(ref bytesWritten),
+                UsesDirectIo = writer?.UsesDirectIo ?? false,
                 AchievedFps = elapsed > 0 ? captured / TimeSpan.FromTicks(elapsed).TotalSeconds : 0,
                 Error = currentError
             };
