@@ -1308,11 +1308,31 @@ function addFrameToSequence() {
   if (frameRaDeg == null) return;
   var btn = document.getElementById('f-add');
   btn.disabled = true; btn.textContent = 'Creating…';
+  // Per-panel J2000 centres (row-major), same grid + gnomonic deprojection as
+  // the drawn overlay (`mosaicData`) — so the run's panels are EXACTLY the
+  // rectangles on screen. A 1×1 frame sends a single panel; Flutter treats
+  // that as the ordinary single-target run.
+  var panels = [];
+  if (optics && optics.ok) {
+    var th = frameRotDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
+    var ov = Math.max(0, Math.min(90, frameOverlap)) / 100;
+    var stepW = optics.fovWDeg * (1 - ov), stepH = optics.fovHDeg * (1 - ov);
+    for (var iy = 0; iy < frameRows; iy++) {
+      for (var ix = 0; ix < frameCols; ix++) {
+        var gx = (ix - (frameCols - 1) / 2) * stepW;
+        var gy = (iy - (frameRows - 1) / 2) * stepH;
+        var dx = gx * cosT - gy * sinT, dy = gx * sinT + gy * cosT;
+        var c = tanToRaDec(dx, dy, frameRaDeg, frameDecDeg);
+        panels.push({ raDeg: c[0], decDeg: c[1] });
+      }
+    }
+  }
   fetch('/araevent', {
     method: 'POST', headers: araHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       type: 'addToSequence', raDeg: frameRaDeg, decDeg: frameDecDeg,
       rotationDeg: frameRotDeg, name: cleanName(frameTargetName) || 'Target',
+      panels: panels,
     }),
   }).then(function (r) {
     btn.textContent = r.ok ? 'Created ✓' : "Couldn't create";

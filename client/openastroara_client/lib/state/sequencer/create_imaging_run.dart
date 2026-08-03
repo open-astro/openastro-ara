@@ -121,6 +121,11 @@ Future<ImagingRunResult?> createImagingRun(
   // §36/§38 — a framing position angle to carry into the run: the target's
   // slew becomes a Center and Rotate at this angle. Null = plain slew.
   double? positionAngleDeg,
+  // Framing-overlay mosaic: the per-panel J2000 centres (row-major). With
+  // more than one entry the run gets ONE target block per panel, named
+  // "<target> 1/N".."<target> N/N", all sharing [positionAngleDeg]. Empty or
+  // single-entry = the ordinary single-target run at [raDeg]/[decDeg].
+  List<({double raDeg, double decDeg})> mosaicPanels = const [],
   // Planning-redesign S8: false = stay on the CALLING tab after a create
   // (the Tonight's Sky panel shows its own confirmation card with a
   // "View in Run" action instead of yanking the user away mid-planning).
@@ -128,6 +133,20 @@ Future<ImagingRunResult?> createImagingRun(
 }) async {
   final api = ref.read(sequenceApiProvider);
   final container = ProviderScope.containerOf(ref.context, listen: false);
+
+  // Resolve the target list once: a mosaic becomes N named panels, anything
+  // else a single panel at the given coordinates — every path below (offline
+  // draft, append, fresh create) then just iterates.
+  final panels = mosaicPanels.length > 1
+      ? [
+          for (var i = 0; i < mosaicPanels.length; i++)
+            (
+              raDeg: mosaicPanels[i].raDeg,
+              decDeg: mosaicPanels[i].decDeg,
+              name: '$targetName ${i + 1}/${mosaicPanels.length}',
+            ),
+        ]
+      : [(raDeg: raDeg, decDeg: decDeg, name: targetName)];
 
   // §2 offline planning — no server: build the same run body from whatever the
   // settings notifiers currently hold (no daemon to hydrate from) and save it
@@ -151,10 +170,10 @@ Future<ImagingRunResult?> createImagingRun(
     final afEvery = af.everyNHours > 0 && exposureSeconds > 0
         ? math.max(1, ((af.everyNHours * 3600.0) / exposureSeconds).ceil())
         : null;
-    final body = buildImagingRunBody(
-      raDeg: raDeg,
-      decDeg: decDeg,
-      targetName: targetName,
+    var body = buildImagingRunBody(
+      raDeg: panels.first.raDeg,
+      decDeg: panels.first.decDeg,
+      targetName: panels.first.name,
       exposureSeconds: exposureSeconds,
       gain: defaults.defaultGain,
       offset: defaults.defaultOffset,
@@ -170,6 +189,30 @@ Future<ImagingRunResult?> createImagingRun(
       ditherEveryNExposures: _ditherCadence(container, choice),
       manualFilterSwap: choice.manualFilterSwap,
     );
+    // Mosaic: one further target block per remaining panel, grafted before
+    // the session-end steps (same shape a manual multi-target append builds).
+    for (final p in panels.skip(1)) {
+      body = appendTargetToRunBody(
+        body,
+        buildTargetBlock(
+          raDeg: p.raDeg,
+          decDeg: p.decDeg,
+          targetName: p.name,
+          exposureSeconds: exposureSeconds,
+          gain: defaults.defaultGain,
+          offset: defaults.defaultOffset,
+          binning: defaults.defaultBin,
+          frameCount: defaultFrameCount(exposureSeconds,
+              remainingDarkHours: remainingDarkHours),
+          autofocusEveryNExposures: afEvery,
+          positionAngleDeg: positionAngleDeg,
+          filterPlan: choice.filterPlan,
+          startGuiding: choice.guide,
+          ditherEveryNExposures: _ditherCadence(container, choice),
+          manualFilterSwap: choice.manualFilterSwap,
+        ),
+      );
+    }
     final draftId = await container
         .read(draftSequencesProvider.notifier)
         .create(targetName, body);
@@ -220,22 +263,25 @@ Future<ImagingRunResult?> createImagingRun(
   // A selected local draft can't take a daemon-side append — fall through to
   // creating a fresh sequence on the daemon instead.
   if (selectedId != null && !isDraftSequenceId(selectedId)) {
-    final block = buildTargetBlock(
-      raDeg: raDeg,
-      decDeg: decDeg,
-      targetName: targetName,
-      exposureSeconds: exposureSeconds,
-      gain: defaults.defaultGain,
-      offset: defaults.defaultOffset,
-      binning: defaults.defaultBin,
-      frameCount: frameCount,
-      autofocusEveryNExposures: afEveryExposures,
-      positionAngleDeg: positionAngleDeg,
-      filterPlan: choice.filterPlan,
-      startGuiding: choice.guide,
-      ditherEveryNExposures: ditherEvery,
-      manualFilterSwap: choice.manualFilterSwap,
-    );
+    final blocks = [
+      for (final p in panels)
+        buildTargetBlock(
+          raDeg: p.raDeg,
+          decDeg: p.decDeg,
+          targetName: p.name,
+          exposureSeconds: exposureSeconds,
+          gain: defaults.defaultGain,
+          offset: defaults.defaultOffset,
+          binning: defaults.defaultBin,
+          frameCount: frameCount,
+          autofocusEveryNExposures: afEveryExposures,
+          positionAngleDeg: positionAngleDeg,
+          filterPlan: choice.filterPlan,
+          startGuiding: choice.guide,
+          ditherEveryNExposures: ditherEvery,
+          manualFilterSwap: choice.manualFilterSwap,
+        ),
+    ];
     // §38.9 — a RUNNING selected sequence now takes the append LIVE: the
     // daemon grafts the target into the executing plan (and the stored body)
     // in one operation, so the new object images tonight instead of forking a
@@ -243,7 +289,7 @@ Future<ImagingRunResult?> createImagingRun(
     // the probe and the call) falls through to the ordinary paths below; any
     // other failure rethrows — the daemon may have applied the edit, and
     // creating a fresh run then would duplicate the target.
-    final liveResult = await _tryLiveAppend(container, api, selectedId, block);
+    final liveResult = await _tryLiveAppend(container, api, selectedId, blocks);
     if (liveResult != null) {
       if (jumpToRun) {
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
@@ -255,7 +301,7 @@ Future<ImagingRunResult?> createImagingRun(
     // failed updateSequence rethrows instead: the daemon may have applied the
     // append before the response was lost, and creating then would duplicate
     // the target across two sequences.
-    final newBody = await _prepareAppend(container, api, selectedId, block);
+    final newBody = await _prepareAppend(container, api, selectedId, blocks);
     if (newBody != null) {
       final detail = await api.updateSequence(selectedId, body: newBody);
       _syncAfterBodyChange(container, selectedId, detail);
@@ -266,10 +312,10 @@ Future<ImagingRunResult?> createImagingRun(
     }
   }
 
-  final body = buildImagingRunBody(
-    raDeg: raDeg,
-    decDeg: decDeg,
-    targetName: targetName,
+  var body = buildImagingRunBody(
+    raDeg: panels.first.raDeg,
+    decDeg: panels.first.decDeg,
+    targetName: panels.first.name,
     exposureSeconds: exposureSeconds,
     gain: defaults.defaultGain,
     offset: defaults.defaultOffset,
@@ -284,6 +330,28 @@ Future<ImagingRunResult?> createImagingRun(
     ditherEveryNExposures: ditherEvery,
     manualFilterSwap: choice.manualFilterSwap,
   );
+  // Mosaic: a target block per remaining panel, before the session-end steps.
+  for (final p in panels.skip(1)) {
+    body = appendTargetToRunBody(
+      body,
+      buildTargetBlock(
+        raDeg: p.raDeg,
+        decDeg: p.decDeg,
+        targetName: p.name,
+        exposureSeconds: exposureSeconds,
+        gain: defaults.defaultGain,
+        offset: defaults.defaultOffset,
+        binning: defaults.defaultBin,
+        frameCount: frameCount,
+        autofocusEveryNExposures: afEveryExposures,
+        positionAngleDeg: positionAngleDeg,
+        filterPlan: choice.filterPlan,
+        startGuiding: choice.guide,
+        ditherEveryNExposures: ditherEvery,
+        manualFilterSwap: choice.manualFilterSwap,
+      ),
+    );
+  }
 
   // One key per LOGICAL create: if the request dies in transit the daemon may
   // still have applied it — the degraded draft below carries this same key so
@@ -390,7 +458,7 @@ Future<ImagingRunResult?> _tryLiveAppend(
   ProviderContainer container,
   SequenceClient api,
   String id,
-  Map<String, dynamic> targetBlock,
+  List<Map<String, dynamic>> targetBlocks,
 ) async {
   bool active;
   try {
@@ -407,13 +475,19 @@ Future<ImagingRunResult?> _tryLiveAppend(
     // prefers for whole-body PATCHes) can hold unsaved edits that diverge from
     // the running plan, which would land the index in the wrong slot without
     // tripping the daemon's range checks (review #872).
-    final serverBody = (await api.getSequenceDetail(id)).body;
-    final detail = await api.addRunItem(
-      id,
-      parentPath: const [],
-      index: liveAppendIndex(serverBody),
-      item: targetBlock,
-    );
+    // Multi-block (mosaic): each add recomputes the index against the body the
+    // previous add returned, so panels land in order before the end steps.
+    var serverBody = (await api.getSequenceDetail(id)).body;
+    late SequenceDetail detail;
+    for (final block in targetBlocks) {
+      detail = await api.addRunItem(
+        id,
+        parentPath: const [],
+        index: liveAppendIndex(serverBody),
+        item: block,
+      );
+      serverBody = detail.body;
+    }
     _syncAfterBodyChange(container, id, detail);
     return ImagingRunResult(id, appended: true);
   } on DioException catch (e) {
@@ -436,13 +510,16 @@ Future<Map<String, dynamic>?> _prepareAppend(
   ProviderContainer container,
   SequenceClient api,
   String id,
-  Map<String, dynamic> targetBlock,
+  List<Map<String, dynamic>> targetBlocks,
 ) async {
   try {
     final runState = await api.getRunState(id);
     if (runState?.state?.isActive ?? false) return null;
-    final baseBody = await _openSequenceBaseBody(container, api, id);
-    return appendTargetToRunBody(baseBody, targetBlock);
+    var body = await _openSequenceBaseBody(container, api, id);
+    for (final block in targetBlocks) {
+      body = appendTargetToRunBody(body, block);
+    }
+    return body;
   } on ArgumentError {
     return null; // non-container root (e.g. an exotic import) — create fresh
   } catch (e) {

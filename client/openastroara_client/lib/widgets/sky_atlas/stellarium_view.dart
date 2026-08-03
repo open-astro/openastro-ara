@@ -190,8 +190,29 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // 0° almost always means "I didn't rotate", not "hold exactly 0°" — a
     // deliberate 0° framing can still add centring in the sequence editor.
     final rotationDeg = (event['rotationDeg'] as num?)?.toDouble();
-    final positionAngleDeg =
-        (rotationDeg != null && rotationDeg != 0) ? rotationDeg : null;
+    // Mosaic framing: the page sends the per-panel J2000 centres it drew
+    // (row-major) — one target block per panel rides into the run.
+    final mosaicPanels = <({double raDeg, double decDeg})>[
+      if (event['panels'] case final List<Object?> rawPanels)
+        for (final p in rawPanels)
+          if (p is Map &&
+              p['raDeg'] is num &&
+              p['decDeg'] is num)
+            (
+              raDeg: (p['raDeg'] as num).toDouble(),
+              decDeg: (p['decDeg'] as num).toDouble(),
+            ),
+    ];
+    final isMosaic = mosaicPanels.length > 1;
+    // A mosaic's panels only tile correctly when each slew is plate-solved to
+    // the drawn grid, so mosaics ALWAYS carry the position angle (0° included)
+    // and get Center and Rotate; a single frame keeps the old rule — a dialed
+    // angle upgrades the slew, the untouched 0° default stays a blind slew.
+    final positionAngleDeg = isMosaic
+        ? (rotationDeg ?? 0)
+        : (rotationDeg != null && rotationDeg != 0)
+            ? rotationDeg
+            : null;
 
     final messenger = ScaffoldMessenger.of(context);
     ImagingRunResult? result;
@@ -205,6 +226,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         decDeg: decDeg,
         targetName: targetName,
         positionAngleDeg: positionAngleDeg,
+        mosaicPanels: mosaicPanels,
       );
     } catch (e, st) {
       debugPrint('[planning] framing create-run failed: $e\n$st');

@@ -70,6 +70,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
         // NAME stays valid through DST-policy changes (the OS tz database
         // carries the rules); only boundary redraws would need a package bump.
         _draft.timezone = tz_map.latLngToTimezoneString(loc.lat, loc.lng);
+        _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
         _gpsFill++; // remount the fields so the fill is visible
         _gpsStatus =
             'Filled from the server\'s GPS fix (source: ${state.source}).';
@@ -84,6 +85,31 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   }
 
   static double _round2(double v) => (v * 100).roundToDouble() / 100;
+
+  /// Bumped when a coordinate edit re-derives the timezone, so ONLY the tz
+  /// field remounts with the new value (remounting via _gpsFill would reset
+  /// the lat/lng field mid-typing).
+  int _tzFill = 0;
+
+  /// True once the user types in the timezone field themselves — manual
+  /// coordinate edits then stop overwriting their choice (a remote-hosted rig
+  /// deliberately shown in home time). A GPS fill re-arms the derivation.
+  bool _tzUserEdited = false;
+
+  /// #2 of the timezone plan: the zone is knowable from typed coordinates —
+  /// same offline lat/lng → IANA lookup the GPS fill uses.
+  void _deriveTimezoneFromCoords() {
+    if (_tzUserEdited) return;
+    final lat = _draft.latitudeDeg;
+    final lng = _draft.longitudeDeg;
+    if (lat == null || lng == null || lat < -90 || lat > 90) return;
+    final zone = tz_map.latLngToTimezoneString(lat, lng);
+    if (zone == _draft.timezone) return;
+    setState(() {
+      _draft.timezone = zone;
+      _tzFill++;
+    });
+  }
 
   // Parse a possibly-empty/partial numeric field to a nullable double without
   // clobbering the stored value on transient input like "-" or "".
@@ -183,7 +209,10 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
               signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
           helperText: 'North positive.',
-          onChanged: (v) => _setDouble(v, (d) => _draft.latitudeDeg = d),
+          onChanged: (v) => _setDouble(v, (d) {
+            _draft.latitudeDeg = d;
+            _deriveTimezoneFromCoords();
+          }),
         ),
         WizardTextField(
           key: ValueKey('wiz-lng-$_gpsFill'),
@@ -193,7 +222,10 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
               signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
           helperText: 'East positive.',
-          onChanged: (v) => _setDouble(v, (d) => _draft.longitudeDeg = d),
+          onChanged: (v) => _setDouble(v, (d) {
+            _draft.longitudeDeg = d;
+            _deriveTimezoneFromCoords();
+          }),
         ),
         WizardTextField(
           key: ValueKey('wiz-alt-$_gpsFill'),
@@ -205,11 +237,18 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           onChanged: (v) => _setDouble(v, (d) => _draft.altitudeMeters = d),
         ),
         WizardTextField(
-          key: ValueKey('wiz-tz-$_gpsFill'),
+          key: ValueKey('wiz-tz-$_gpsFill-$_tzFill'),
           label: 'Timezone',
           initialValue: _draft.timezone,
           hint: 'e.g. America/Denver',
-          onChanged: (v) => _draft.timezone = v.trim().isEmpty ? null : v.trim(),
+          helperText: 'Filled in automatically from the coordinates — only '
+              'change it to view a remote rig in another zone.',
+          onChanged: (v) {
+            final t = v.trim();
+            // Clearing the field re-arms derivation; typing a zone pins it.
+            _tzUserEdited = t.isNotEmpty;
+            _draft.timezone = t.isEmpty ? null : t;
+          },
         ),
       ],
     );
