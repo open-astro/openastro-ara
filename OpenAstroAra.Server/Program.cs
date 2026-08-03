@@ -227,7 +227,7 @@ public partial class Program {
             new OpenAstroAra.Server.Services.Video.PlanetaryPointingService(
                 sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Video.PlanetaryPointingService>>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
-                sp.GetRequiredService<PolarAlignService>(),
+                (PolarAlignService)sp.GetRequiredService<IPolarAlignService>(),
                 sp.GetRequiredService<IProfileStore>()));
         builder.Services.AddSingleton<IFaultLogService, SqliteFaultLogService>();
         builder.Services.AddSingleton<EquipmentFaultHub>();
