@@ -191,12 +191,18 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
 
   /// Shared picker over daemon choice strings + synthesized Alpaca devices,
   /// labeled with real device names. Blank = keep the guider's current pick.
+  ///
+  /// [onPick] receives the RAW selection — '' for the blank entry — because
+  /// the draft fields distinguish '' (explicit "keep guider's current",
+  /// clears a stored override on Save) from null (untouched, keeps the base
+  /// profile's value). Collapsing '' to null here made the blank entry a
+  /// no-op for mount/aux/rotator (review r3); each call site owns the map.
   Widget _choicePicker({
     required String label,
     required String? current,
     required List<String> options,
     required String alpacaType,
-    required void Function(String?) onPick,
+    required void Function(String) onPick,
   }) {
     final values = <String>{
       '',
@@ -214,7 +220,9 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                   ? "(keep guider's current)"
                   : friendlyAlpacaChoiceLabel(v, alpacaType, _alpacaNames)),
       ],
-      onChanged: (v) => onPick((v == null || v.isEmpty) ? null : v),
+      onChanged: (v) {
+        if (v != null) onPick(v);
+      },
     );
   }
 
@@ -385,11 +393,13 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                     _alpacaNames),
                 alpacaType: 'camera',
                 onPick: (v) {
+                  // Camera has no ''-vs-null distinction: blank = untouched.
+                  final sel = v.isEmpty ? null : v;
                   setState(() {
-                    _g.guiderCamera = v;
+                    _g.guiderCamera = sel;
                     _pixelSizeFromDriver = false;
                   });
-                  if (v != null) unawaited(_autofillPixelSize(v));
+                  if (sel != null) unawaited(_autofillPixelSize(sel));
                 },
               ),
               _choicePicker(
