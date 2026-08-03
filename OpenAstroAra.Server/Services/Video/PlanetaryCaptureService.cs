@@ -113,17 +113,6 @@ namespace OpenAstroAra.Server.Services.Video {
                 // close). 202 fire-and-forget is fine — the retry-open is the sync point.
                 await camera.DisconnectAsync(idempotencyKey: null, ct).ConfigureAwait(false);
 
-                // TOCTOU re-check (r6): a run that registered between the gate check
-                // above and the disconnect must win — roll the detach back rather than
-                // pull the camera out from under a just-started sequence. The registry
-                // Enter happens before the sequencer touches equipment, so post-
-                // disconnect is late enough to see it.
-                if (runs.HasAny) {
-                    await TryReconnectAsync().ConfigureAwait(false);
-                    throw new InvalidOperationException(
-                        "a sequence run started while entering planetary mode — camera returned to it (§77.2)");
-                }
-
                 try {
                     usbfsMb = await tuner.AutoTuneAsync(request.UsbfsOverrideMb, ct).ConfigureAwait(false)
                               ?? UsbfsTuner.ReadCurrentMb();
@@ -135,6 +124,16 @@ namespace OpenAstroAra.Server.Services.Video {
                     // invariant "detached implies planetary mode or reconnected" holds.
                     await TryReconnectAsync().ConfigureAwait(false);
                     throw;
+                }
+
+                // TOCTOU re-check (r6/r8): a run that registered any time between the
+                // gate check and this point — during the Alpaca disconnect OR the usbfs
+                // tune — must win. This is the last instant before the mode flips, so
+                // the whole detached-but-not-yet-planetary window is covered.
+                if (runs.HasAny) {
+                    await TryReconnectAsync().ConfigureAwait(false);
+                    throw new InvalidOperationException(
+                        "a sequence run started while entering planetary mode — camera returned to it (§77.2)");
                 }
 
                 inPlanetaryMode = true;
@@ -351,6 +350,10 @@ namespace OpenAstroAra.Server.Services.Video {
             return Path.Combine(PlanetaryOutputDir(), $"planetary_{stamp}.ser");
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort rollback/restore path: both call sites (Enter rollback rethrowing the " +
+                            "original failure, Leave's documented always-succeeds contract) require that a reconnect " +
+                            "failure never replaces or adds to the primary outcome. Log-and-recover boundary.")]
         private async Task TryReconnectAsync() {
             var device = lastDeviceProvider();
             if (device is null) {
@@ -358,7 +361,7 @@ namespace OpenAstroAra.Server.Services.Video {
             }
             try {
                 await camera.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-            } catch (InvalidOperationException ex) {
+            } catch (Exception ex) {
                 LogReconnectFailed(logger, ex);
             }
         }
