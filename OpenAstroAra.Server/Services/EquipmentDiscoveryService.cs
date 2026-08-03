@@ -54,24 +54,8 @@ public sealed class AlpacaEquipmentDiscoveryService : IEquipmentDiscoveryService
             logger: null,
             cancellationToken: ct).ConfigureAwait(false);
 
-        // A device hosted on the same machine as an Alpaca server answers the
-        // discovery broadcast once per interface (loopback + LAN), producing
-        // duplicate rows for the same physical device. Keep one entry per
-        // UniqueId, preferring the non-loopback address.
-        var byUniqueId = new Dictionary<string, ASCOM.Alpaca.Discovery.AscomDevice>(StringComparer.Ordinal);
+        var results = new List<DiscoveredDeviceDto>(discovered.Count);
         foreach (var d in discovered) {
-            // Misbehaving devices may omit UniqueId; key those by endpoint so
-            // distinct devices are never merged.
-            var key = string.IsNullOrEmpty(d.UniqueId)
-                ? $"{d.IpAddress}:{d.IpPort}/{d.AlpacaDeviceNumber}"
-                : d.UniqueId;
-            if (!byUniqueId.TryGetValue(key, out var existing) || IsLoopback(existing)) {
-                byUniqueId[key] = d;
-            }
-        }
-
-        var results = new List<DiscoveredDeviceDto>(byUniqueId.Count);
-        foreach (var d in byUniqueId.Values) {
             results.Add(new DiscoveredDeviceDto(
                 UniqueId: d.UniqueId,
                 Name: d.AscomDeviceName,
@@ -84,11 +68,6 @@ public sealed class AlpacaEquipmentDiscoveryService : IEquipmentDiscoveryService
         }
         return results;
     }
-
-    private static bool IsLoopback(ASCOM.Alpaca.Discovery.AscomDevice d) =>
-        System.Net.IPAddress.TryParse(d.IpAddress, out var ip)
-            ? System.Net.IPAddress.IsLoopback(ip)
-            : string.Equals(d.HostName, "localhost", StringComparison.OrdinalIgnoreCase);
 
     private static DeviceTypes MapDeviceType(Contracts.DeviceType t) => t switch {
         Contracts.DeviceType.Camera => DeviceTypes.Camera,
