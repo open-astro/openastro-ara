@@ -53,15 +53,4 @@ public sealed class ActiveRunSessionRegistry {
             }
         }
     }
-
-    /// <summary>Whether ANY run is in flight — unlike <see cref="Current"/>, which is
-    /// deliberately null for several concurrent runs. The §77.2 planetary-mode gate
-    /// needs "is anything running", not "which one".</summary>
-    public bool HasAny {
-        get {
-            lock (_gate) {
-                return _active.Count > 0;
-            }
-        }
-    }
 }
