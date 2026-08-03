@@ -176,6 +176,12 @@ class GuiderSettings {
   // GET /equipment/guider/choices). Null = untouched, keeps the base profile's
   // value on Save (like the other nullable draft fields).
   String? guiderCamera;
+  // §63.17 — mount / aux-mount / rotator selections (daemon choice strings,
+  // same format as guiderCamera). Null = untouched, keeps the base profile's
+  // value on Save; empty string = explicit "keep the guider's current pick".
+  String? guiderMount;
+  String? guiderAuxMount;
+  String? guiderRotator;
   // §63.19 — guide setup type ('guide_scope' | 'oag') + the guide-scope
   // optics. Null = untouched, keeps the base profile's value on Save. With
   // 'oag' the guide focal length is DERIVED from the telescope screen's
