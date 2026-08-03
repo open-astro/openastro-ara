@@ -111,7 +111,9 @@ class GuiderStatus {
 
   static String _brandName(String? raw) {
     if (raw == null || raw.isEmpty) return 'Guider';
-    return raw.replaceAll(RegExp('phd2', caseSensitive: false), 'OpenAstro Guider');
+    // Word-boundary so a fork name embedding "phd2" mid-token isn't spliced.
+    return raw.replaceAll(
+        RegExp(r'\bphd2\b', caseSensitive: false), 'OpenAstro Guider');
   }
 
   static double? _asDouble(dynamic v) {
