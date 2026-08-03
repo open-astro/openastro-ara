@@ -73,6 +73,12 @@ namespace OpenAstroAra.Server.Services.Video {
                     PlayerOneNative.SetConfig(cameraId, PlayerOneNative.PoaConfig.Exposure,
                         new PlayerOneNative.PoaConfigValue { IntValue = request.ExposureMs * 1000L }, 0),
                     "POASetConfig(Exposure)");
+                // Video-rate throttles, same rationale as the ZWO glue: max the USB
+                // bandwidth and ensure no frame-rate limit. Best-effort.
+                _ = PlayerOneNative.SetConfig(cameraId, PlayerOneNative.PoaConfig.UsbBandwidthLimit,
+                    new PlayerOneNative.PoaConfigValue { IntValue = 100 }, 0);
+                _ = PlayerOneNative.SetConfig(cameraId, PlayerOneNative.PoaConfig.FrameLimit,
+                    new PlayerOneNative.PoaConfigValue { IntValue = 0 }, 0);
                 // singleFrame = 0 → continuous video mode.
                 PlayerOneNative.ThrowOnError(PlayerOneNative.StartExposure(cameraId, 0), "POAStartExposure");
                 started = true;
