@@ -135,6 +135,87 @@ void main() {
       expect(out.forceCalibrationEachSession, isFalse);
     });
 
+    test('§76 S5 derivations — ASTAP downsample from image scale', () {
+      // 3.76 µm on 530 mm → 1.46″/px → downsample 2.
+      expect(derivedAstapDownsample(3.76, 530), 2);
+      // 3.76 µm on 400 mm → 1.94″/px → full-res.
+      expect(derivedAstapDownsample(3.76, 400), 1);
+      // 2.4 µm on 2000 mm → 0.25″/px → 4.
+      expect(derivedAstapDownsample(2.4, 2000), 4);
+      // Either fact missing → null (keep base).
+      expect(derivedAstapDownsample(null, 530), isNull);
+      expect(derivedAstapDownsample(3.76, 0), isNull);
+
+      final d = ProfileDraft();
+      d.camera.pixelSizeMicrons = 3.76;
+      d.telescope.focalLengthMm = 530;
+      final out =
+          applyDraftToPlateSolve(const PlateSolveSettings(), d);
+      expect(out.downsampleFactor, 2);
+      // Search radius is pointing-uncertainty-driven, never derived — the
+      // §37.8 default survives untouched.
+      expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
+
+      // Derive-branch proof (review r2): inputs whose derived value DIFFERS
+      // from the section default (2), through the full mapper — a regression
+      // that disconnects the derivation can't hide behind keep-the-base.
+      final longFl = ProfileDraft();
+      longFl.camera.pixelSizeMicrons = 2.4;
+      longFl.telescope.focalLengthMm = 2000; // 0.25″/px → 4
+      expect(
+          applyDraftToPlateSolve(const PlateSolveSettings(), longFl)
+              .downsampleFactor,
+          4);
+    });
+
+    test('§76 S5 — applyDraftToAutofocus derive branch runs when the base is '
+        'at default', () {
+      final d = ProfileDraft();
+      d.telescope
+        ..focalLengthMm = 530
+        ..apertureMm = 106; // f/5
+      d.focuser.stepSizeMicrons = 1.2; // → 23 steps, ≠ default 50
+      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      expect(out.stepSize, 23,
+          reason: 'the mapper wiring, not just the formula, must derive');
+    });
+
+    test('§76 S5 derivations respect a cloned profile\'s hand-tuned values',
+        () {
+      final d = ProfileDraft();
+      d.camera.pixelSizeMicrons = 3.76;
+      d.telescope
+        ..focalLengthMm = 530
+        ..apertureMm = 106;
+      d.focuser.stepSizeMicrons = 1.2;
+      // Base carries explicit non-default customizations (cloned profile) —
+      // the derivations must not clobber them.
+      final ps = applyDraftToPlateSolve(
+          const PlateSolveSettings().copyWith(downsampleFactor: 3), d);
+      expect(ps.downsampleFactor, 3);
+      final af = applyDraftToAutofocus(
+          const AutofocusSettings().copyWith(stepSize: 80), d);
+      expect(af.stepSize, 80);
+    });
+
+    test('§76 S5 derivations — AF step size from CFZ + focuser step', () {
+      // f/5 → CFZ ≈ 55 µm; half-CFZ over 1.2 µm/step → 23 steps.
+      expect(
+          derivedAutofocusStepSize(
+              focuserStepUm: 1.2, focalLengthMm: 530, apertureMm: 106),
+          23);
+      // Unreported focuser step (the EAF case) → null, base default stands.
+      expect(
+          derivedAutofocusStepSize(
+              focuserStepUm: null, focalLengthMm: 530, apertureMm: 106),
+          isNull);
+      // Degenerate fast train clamps to the 5-step floor.
+      expect(
+          derivedAutofocusStepSize(
+              focuserStepUm: 50, focalLengthMm: 400, apertureMm: 200),
+          5);
+    });
+
     test('applyDraftToPhd2 §76.2 persists the guide exposure range', () {
       final d = ProfileDraft();
       d.guider

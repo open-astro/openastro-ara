@@ -4890,6 +4890,12 @@ lands on the right surface:
 
 ## 37. Profile setup wizard
 
+> **SUPERSEDED by §76 (Wizard 2.0, 2026-08-02):** the 17-step structure below is historical.
+> The shipped wizard is the §76.2 five-screen flow — device facts are read from Alpaca on the
+> "Your equipment" screen, and the former per-device / imaging-tools / safety+site screens
+> default per §37.8 and are edited in Options. §37.8 (defaults) and the §37 field semantics
+> referenced by the save mappers remain authoritative.
+
 The wizard is **mandatory and the only profile-creation path**. Users cannot use ARA without at least one profile, and the wizard is the only mechanism for creating one — there is no quick "Add a Profile" modal. Every [+ Add a Profile] action (from §30) and every "Run Wizard Again" action launches the full wizard flow described below. The wizard walks the user through every essential configuration with sensible defaults and per-screen [Skip — use defaults]. Each screen also has [< Back] and [Next >]. Progress bar at top: "Step X of N." User can [Save & Exit Wizard] at any point — profile saves with what's been configured, defaults for the rest. The "save partial state and exit" path still counts as wizard completion for the purpose of the no-bypass policy; defaults fill anything the user skipped.
 
 This design enforces ARA's §0.5 pillar 3 (discoverable + safe by default): every user-facing setting flows through one canonical setup path, so recommended downloads (§36.12), equipment signatures (§30.7.1), safety policies (§35), and site location all get captured consistently for every profile.
@@ -12757,9 +12763,11 @@ users reach everything through disclosures, not extra steps.
   guide exposure range, save location. Nothing else is asked.
 - **Fallback, visually secondary:** non-Bridge servers that don't report optics get an inline
   "enter it here" field on the ⚠️ card so third-party gear is never bricked.
-- **Derived, never asked:** ASTAP search radius + downsample from image scale; autofocus step
-  size seeded from focuser step size; OAG guide focal length = main focal length; guide-camera
-  pixel size from its Alpaca camera. Autofocus, imaging defaults, safety thresholds, and site
+- **Derived, never asked:** ASTAP downsample from image scale (search radius deliberately
+  stays at its §37.8 default — it reflects MOUNT POINTING uncertainty, not optics, so deriving
+  it from image scale would be false precision); autofocus step size seeded from focuser step
+  size; OAG guide focal length = main focal length; guide-camera pixel size from its Alpaca
+  camera. Autofocus, imaging defaults, safety thresholds, and site
   preferences take thoughtful defaults and live in Options — the wizard never mentions them.
 
 ### 76.2 The five screens
@@ -12800,7 +12808,8 @@ checklist that is already green, with re-run entry points for hardware changes.
 - **S2** — screens 1–3 (Welcome, Connect, equipment cards + deep link + disclosures)
 - **S3** — Guiding screen (decisions, exposure range picker shared with the §63.6 dark-library semantics)
 - **S4** — Save/Done + guider provisioning + darks kickoff with live progress
-- **S5** — defaults derivation (ASTAP/AF), retire old screens, migrate tests/help/§61 search
+- **S5** — defaults derivation (ASTAP downsample + AF step; solve radius stays default, see
+  §76.1), retire old screens, migrate tests/help/§61 search
 
 ### 76.6 Cross-references
 
