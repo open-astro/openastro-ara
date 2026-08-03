@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../services/server_maintenance_api.dart';
 import '../../../theme/ara_colors.dart';
 
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
@@ -57,6 +58,10 @@ class AboutPanel extends ConsumerWidget {
           'Version ${version.when(data: (v) => v, loading: () => '…', error: (_, _) => '(unknown)')}',
           style: dim,
         ),
+        const SizedBox(height: 12),
+        // The daemon is the half that actually runs the rig — its build is what
+        // matters in a bug report, and it was previously invisible in the app.
+        const _DaemonIdentity(),
         const SizedBox(height: 12),
         Text(
           'Forked from N.I.N.A. — Nighttime Imaging \'N\' Astronomy. '
@@ -114,5 +119,37 @@ class AboutPanel extends ConsumerWidget {
       messenger.showSnackBar(
           const SnackBar(content: Text('Could not open the browser — $_kRepoUrl')));
     }
+  }
+}
+
+/// Settings → System → About — the daemon half of "what am I running?".
+class _DaemonIdentity extends ConsumerWidget {
+  const _DaemonIdentity();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dim = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: AraColors.textSecondary);
+    final async = ref.watch(daemonVersionsProvider);
+    final text = async.when(
+      loading: () => 'Server: reading…',
+      error: (_, _) => 'Server: unavailable (not connected?)',
+      data: (v) {
+        if (v == null) {
+          return 'Server: not connected';
+        }
+        final sha = v.daemonGitSha.isEmpty
+            ? ''
+            : ' (${v.daemonGitSha.substring(0, v.daemonGitSha.length.clamp(0, 7))})';
+        final platform = [v.osRelease, v.osArch]
+            .where((p) => p.isNotEmpty)
+            .join(' · ');
+        return 'Server: ${v.daemonVersion}$sha'
+            '${platform.isEmpty ? '' : '\n$platform'}';
+      },
+    );
+    return Text(text, style: dim);
   }
 }

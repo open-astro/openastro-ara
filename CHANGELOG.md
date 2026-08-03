@@ -35,7 +35,13 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added
+- **Restart the server from the app.** Support tab gains **Restart now…** (confirmed — it interrupts running work) and **Restart when idle** (waits until nothing is running), so recovering a wedged daemon no longer means finding a laptop and an SSH session at the rig. About now also shows the *server's* build, git sha and platform alongside the app version — the half that actually runs your gear was previously invisible.
+
 ### Fixed
+- **The health chip in the Imaging header is tappable again** — it opens the §51 diagnostics detail, so "why is it amber?" is one tap away instead of a dead affordance.
+- **Long sequence lists load completely.** The list stopped at the first page and only whispered about it in a debug log; it now follows the daemon's cursor to the end (bounded, and says so if a runaway cursor is hit).
+- Removed a Settings → System → **Monitoring** entry that only ever routed to a "lands in a later sub-PR" placeholder, plus a dead placeholder-tab file.
 - **Settings now tells you the truth about your rig.** The Storage panel showed a hardcoded "12.3 GB / 32 GB" on every machine — it now reads the real free/total space of the volume behind your save directory (with a re-check button, and an honest "unavailable — is it mounted?" when a USB store is disconnected). The Save-directory field gained the **Browse the server…** button that walks the daemon's filesystem (the picker existed but nothing opened it). The Profile panel showed a fabricated name/ID/dates and five dead buttons — it now shows the live active profile and opens the real profile manager (add/select/rename/delete/import/export). The Weather, Safety-monitor and Flat panels displayed invented threshold numbers that could contradict your actual safety policies — they now show the live values with a pointer to where they're edited, and the Dome/Rotator panels say plainly which behaviour follows the safety policies instead of implying settings that don't exist. The "Disk space low" notification row quotes your configured warn threshold instead of always saying 10 GB.
 
 ### Added

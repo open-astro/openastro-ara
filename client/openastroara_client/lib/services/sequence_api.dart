@@ -19,7 +19,7 @@ abstract interface class SequenceClient {
   /// full [SequencePage] (items + hasMore + nextCursor) so a long list isn't
   /// silently truncated; [limit] caps the page size. Paging further with
   /// nextCursor is a later slice.
-  Future<SequencePage> list({int limit});
+  Future<SequencePage> list({int limit, String? cursor});
 
   /// List the daemon's starting-point sequence templates (§38.6/§38.7). Throws
   /// on transport failure / unexpected body.
@@ -155,10 +155,13 @@ class SequenceApi implements SequenceClient {
             ));
 
   @override
-  Future<SequencePage> list({int limit = 50}) async {
+  Future<SequencePage> list({int limit = 50, String? cursor}) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/sequences',
-      queryParameters: <String, dynamic>{'limit': limit},
+      queryParameters: <String, dynamic>{
+        'limit': limit,
+        'cursor': ?cursor,
+      },
     );
     final data = res.data;
     // The endpoint returns a CursorPage envelope: { items: [...], next_cursor,
