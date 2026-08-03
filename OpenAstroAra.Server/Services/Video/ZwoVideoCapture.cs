@@ -92,6 +92,17 @@ namespace OpenAstroAra.Server.Services.Video {
                     opened = true;
                     return;
                 }
+                // Only the codes a bridge-still-holding-the-camera or a settling USB
+                // stack can produce are worth waiting out; a bad camera id or a
+                // physically absent camera fails fast with the real SDK error.
+                var retryable = code is ZwoNative.AsiErrorCode.CameraClosed
+                    or ZwoNative.AsiErrorCode.CameraRemoved
+                    or ZwoNative.AsiErrorCode.GeneralError
+                    or ZwoNative.AsiErrorCode.Timeout;
+                if (!retryable) {
+                    throw new VideoCaptureException(
+                        $"ZWO camera {cameraId} failed to open for video mode: ASI_ERROR_{code}");
+                }
                 if (DateTime.UtcNow >= deadline) {
                     throw new VideoCaptureException(
                         $"ZWO camera {cameraId} could not be opened for video mode after " +

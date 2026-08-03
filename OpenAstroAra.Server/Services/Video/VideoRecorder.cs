@@ -29,13 +29,17 @@ namespace OpenAstroAra.Server.Services.Video {
 
     /// <summary>
     /// Snapshot of a recording's live counters (§77.1 honest accounting: no silent loss,
-    /// ever). Once the recording has stopped, FramesCaptured == FramesWritten + RingDroppedFrames.
+    /// ever). Once the recording has stopped, FramesCaptured == FramesWritten +
+    /// RingDroppedFrames + AbandonedFrames — the last bucket is frames still queued in
+    /// the ring when a drain-side failure killed the recording (captured, never written,
+    /// not drops in the disk-couldn't-keep-up sense; 0 on a clean stop).
     /// </summary>
     public sealed record RecorderStats {
         public bool Running { get; init; }
         public ulong FramesCaptured { get; init; }
         public ulong FramesWritten { get; init; }
         public ulong RingDroppedFrames { get; init; }     // ring full — disk couldn't keep up
+        public ulong AbandonedFrames { get; init; }       // queued but unwritten when a failure ended the recording
         public ulong SdkDroppedFrames { get; init; }      // vendor SDK / USB side
         public ulong BytesWritten { get; init; }
         public double AchievedFps { get; init; }          // measured over the whole recording
@@ -68,6 +72,7 @@ namespace OpenAstroAra.Server.Services.Video {
         private long framesWritten;
         private long ringDropped;
         private long bytesWritten;
+        private long abandoned;
         private long sdkDropped;
         private long captureElapsedTicks;
         private string error = "";
@@ -96,6 +101,7 @@ namespace OpenAstroAra.Server.Services.Video {
                 Interlocked.Exchange(ref framesWritten, 0);
                 Interlocked.Exchange(ref ringDropped, 0);
                 Interlocked.Exchange(ref bytesWritten, 0);
+                Interlocked.Exchange(ref abandoned, 0);
                 Interlocked.Exchange(ref sdkDropped, 0);
                 Interlocked.Exchange(ref captureElapsedTicks, 0);
                 lock (errorGate) {
@@ -200,6 +206,10 @@ namespace OpenAstroAra.Server.Services.Video {
                 captureThread?.Join();
                 source.StopCapture();
                 drainThread?.Join();
+                // Honest accounting for the failure path: frames still queued after
+                // the drain thread exited were captured but never written (a drain
+                // failure abandoned them) — 0 after a clean drain.
+                Interlocked.Exchange(ref abandoned, ring?.FramesQueued ?? 0);
                 if (writer is not null) {
                     try {
                         writer.Complete();
@@ -207,6 +217,10 @@ namespace OpenAstroAra.Server.Services.Video {
                     } catch (Exception ex) when (ex is VideoCaptureException or System.IO.IOException) {
                         RecordError(ex.Message);
                         LogFinalizeFailed(logger, ex);
+                    } finally {
+                        // A failed Complete() must not strand the file handle until
+                        // the SafeHandle finalizer runs — Dispose is idempotent.
+                        writer.Dispose();
                     }
                 }
                 running = false;
@@ -232,6 +246,7 @@ namespace OpenAstroAra.Server.Services.Video {
                 FramesCaptured = (ulong)captured,
                 FramesWritten = (ulong)Interlocked.Read(ref framesWritten),
                 RingDroppedFrames = (ulong)Interlocked.Read(ref ringDropped),
+                AbandonedFrames = (ulong)Interlocked.Read(ref abandoned),
                 SdkDroppedFrames = (ulong)Interlocked.Read(ref sdkDropped),
                 BytesWritten = (ulong)Interlocked.Read(ref bytesWritten),
                 AchievedFps = elapsed > 0 ? captured / TimeSpan.FromTicks(elapsed).TotalSeconds : 0,

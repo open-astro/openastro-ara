@@ -188,12 +188,23 @@ namespace OpenAstroAra.Server.Services.Video {
                 return;
             }
             finalized = true;
+            try {
+                CompleteCore();
+            } catch {
+                // A partial finalize (disk full mid-trailer) must not strand the fd
+                // until the SafeHandle finalizer runs — close it deterministically.
+                handle?.Dispose();
+                handle = null;
+                throw;
+            }
+        }
 
+        private void CompleteCore() {
             FlushFullBlocks();
             // Unaligned tail + trailer + header patch need buffered semantics.
-            DirectIo.ClearDirect(handle);
+            DirectIo.ClearDirect(handle!);
             if (stagingUsed > 0) {
-                RandomAccess.Write(handle, AlignedStaging(0, stagingUsed), filePosition);
+                RandomAccess.Write(handle!, AlignedStaging(0, stagingUsed), filePosition);
                 filePosition += stagingUsed;
                 BytesWritten += (ulong)stagingUsed;
                 stagingUsed = 0;
@@ -204,16 +215,16 @@ namespace OpenAstroAra.Server.Services.Video {
                 for (var i = 0; i < timestamps.Count; i++) {
                     BinaryPrimitives.WriteInt64LittleEndian(trailer.AsSpan(i * 8), timestamps[i]);
                 }
-                RandomAccess.Write(handle, trailer, filePosition);
+                RandomAccess.Write(handle!, trailer, filePosition);
                 filePosition += trailer.Length;
                 BytesWritten += (ulong)trailer.Length;
             }
 
             var count = new byte[4];
             BinaryPrimitives.WriteInt32LittleEndian(count, (int)Math.Min(FramesWritten, int.MaxValue));
-            RandomAccess.Write(handle, count, FrameCountOffset);
-            RandomAccess.FlushToDisk(handle);
-            handle.Dispose();
+            RandomAccess.Write(handle!, count, FrameCountOffset);
+            RandomAccess.FlushToDisk(handle!);
+            handle!.Dispose();
             handle = null;
         }
 
