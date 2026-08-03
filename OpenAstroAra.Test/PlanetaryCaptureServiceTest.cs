@@ -142,7 +142,7 @@ namespace OpenAstroAra.Test {
             using var capture = NewCapture();
             using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
             var act = () => service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 5, null), null, CancellationToken.None);
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 5, null, Bin: 1), null, CancellationToken.None);
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*not in planetary mode*");
         }
 
@@ -152,7 +152,7 @@ namespace OpenAstroAra.Test {
             using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
             await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
             var act = () => service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "png", 100, 5, null), null, CancellationToken.None);
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, "png", 100, 5, null, Bin: 1), null, CancellationToken.None);
             await act.Should().ThrowAsync<ArgumentException>().WithMessage("*unknown pixel format*");
         }
 
@@ -166,7 +166,7 @@ namespace OpenAstroAra.Test {
             try {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, name), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, name, Bin: 1), null, CancellationToken.None);
                 path = service.Status().OutputPath;
                 path.Should().NotBeNull();
                 Path.GetFileName(path).Should().Be(name);
@@ -241,7 +241,7 @@ namespace OpenAstroAra.Test {
             try {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(1, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, pathA), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, pathA, Bin: 1), null, CancellationToken.None);
                 fullA = service.Status().OutputPath;
                 await service.StopRecordingAsync(null, CancellationToken.None);
                 await service.LeaveAsync(null, CancellationToken.None);
@@ -249,7 +249,7 @@ namespace OpenAstroAra.Test {
 
                 await service.EnterAsync(new PlanetaryEnterRequestDto(2, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, pathB), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, pathB, Bin: 1), null, CancellationToken.None);
                 fullB = service.Status().OutputPath;
                 await service.StopRecordingAsync(null, CancellationToken.None);
                 factoryCalls.Should().Be(2);
@@ -272,7 +272,7 @@ namespace OpenAstroAra.Test {
             try {
                 await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
                 await service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, name), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, name, Bin: 1), null, CancellationToken.None);
                 path = service.Status().OutputPath;
                 var expected = OperatingSystem.IsLinux();   // GitHub runners: ext4 accepts O_DIRECT
                 if (!expected) {
@@ -295,7 +295,7 @@ namespace OpenAstroAra.Test {
             await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
             foreach (var bad in new[] { "/tmp/evil.ser", "../evil.ser", "sub/dir.ser", "a..b/evil.ser" }) {
                 var act = () => service.StartRecordingAsync(
-                    new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 1, bad), null, CancellationToken.None);
+                    new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 1, bad, Bin: 1), null, CancellationToken.None);
                 await act.Should().ThrowAsync<ArgumentException>($"'{bad}' must be refused");
             }
         }
@@ -308,18 +308,18 @@ namespace OpenAstroAra.Test {
             using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
             await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
             var zeroExposure = () => service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 0, null), null, CancellationToken.None);
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 0, null, Bin: 1), null, CancellationToken.None);
             await zeroExposure.Should().ThrowAsync<ArgumentException>().WithMessage("*exposure_ms*");
             var negativeGain = () => service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", -1, 5, null), null, CancellationToken.None);
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", -1, 5, null, Bin: 1), null, CancellationToken.None);
             await negativeGain.Should().ThrowAsync<ArgumentException>().WithMessage("*gain*");
             var zeroBin = () => service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 32, 16, 0, "mono8", 100, 5, null), null, CancellationToken.None);
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, "mono8", 100, 5, null, Bin: 0), null, CancellationToken.None);
             await zeroBin.Should().ThrowAsync<ArgumentException>().WithMessage("*bin*");
             // r5 DoS guard: a crafted near-int.MaxValue geometry must be refused before
             // any ring allocation, not OOM the daemon with a multi-GB pinned arena.
             var hugeFrame = () => service.StartRecordingAsync(
-                new PlanetaryRecordRequestDto(0, 0, 46341, 46341, 1, "mono8", 100, 5, null), null, CancellationToken.None);
+                new PlanetaryRecordRequestDto(0, 0, 46341, 46341, "mono8", 100, 5, null, Bin: 1), null, CancellationToken.None);
             await hugeFrame.Should().ThrowAsync<ArgumentException>().WithMessage("*128 MB*");
         }
 

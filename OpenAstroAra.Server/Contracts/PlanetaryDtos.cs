@@ -26,11 +26,11 @@ public sealed record PlanetaryRecordRequestDto(
     int StartY,
     int Width,
     int Height,
-    int Bin,
     string Format,          // mono8|mono16|bayer_rggb8|... (VideoPixelFormat, snake_case)
     long Gain,
     int ExposureMs,
-    string? OutputPath);
+    string? OutputPath,
+    int Bin = 1);           // JSON-omitted bin gets the documented default, not 0
 
 /// <summary>Live §77.1 honest-accounting counters, WS + REST shared shape.</summary>
 public sealed record PlanetaryRecordingStatsDto(
