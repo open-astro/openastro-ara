@@ -46,6 +46,14 @@ namespace OpenAstroAra.Server.Services.Video {
         private readonly Func<DiscoveredDeviceDto?> lastDeviceProvider;
         private readonly SemaphoreSlim gate = new(1, 1);
 
+        // Immutable session snapshot swapped atomically at the END of each gated
+        // transition, so a live-polled Status() never observes a torn mid-mutation
+        // combination (review #911 r3). Mutators serialize on the gate and call
+        // PublishState() as their last step; Status() reads only the snapshot.
+        private sealed record SessionState(bool InPlanetaryMode, int? CameraId, int? UsbfsMb, string? OutputPath, VideoRecorder? Recorder);
+
+        private volatile SessionState session = new(false, null, null, null, null);
+
         private bool inPlanetaryMode;
         private int? cameraId;
         private int? usbfsMb;
@@ -53,6 +61,9 @@ namespace OpenAstroAra.Server.Services.Video {
         private VideoRecorder? recorder;
         private string? outputPath;
         private bool disposed;
+
+        private void PublishState() =>
+            session = new SessionState(inPlanetaryMode, cameraId, usbfsMb, outputPath, recorder);
 
         public PlanetaryCaptureService(
             ILogger<PlanetaryCaptureService> logger,
@@ -114,6 +125,7 @@ namespace OpenAstroAra.Server.Services.Video {
 
                 inPlanetaryMode = true;
                 cameraId = request.CameraId;
+                PublishState();
                 await PublishAsync(WsEventCatalog.PlanetaryModeEntered, new JsonObject {
                     ["camera_id"] = request.CameraId,
                     ["usbfs_memory_mb"] = usbfsMb,
@@ -150,6 +162,7 @@ namespace OpenAstroAra.Server.Services.Video {
                 inPlanetaryMode = false;
                 var leftCamera = cameraId;
                 cameraId = null;
+                PublishState();
 
                 var device = lastDeviceProvider();
                 if (device is not null) {
@@ -183,6 +196,12 @@ namespace OpenAstroAra.Server.Services.Video {
                 }
                 if (recorder is not null && recorder.Stats().Running) {
                     throw new InvalidOperationException("a recording is already in progress");
+                }
+                if (request.ExposureMs <= 0 || request.ExposureMs > 60_000) {
+                    throw new ArgumentException("exposure_ms must be in [1, 60000]", nameof(request));
+                }
+                if (request.Gain < 0) {
+                    throw new ArgumentException("gain must be >= 0", nameof(request));
                 }
                 if (!TryParseFormat(request.Format, out var format)) {
                     throw new ArgumentException($"unknown pixel format '{request.Format}'", nameof(request));
@@ -229,6 +248,7 @@ namespace OpenAstroAra.Server.Services.Video {
                     },
                 });
                 outputPath = path;
+                PublishState();
                 await PublishAsync(WsEventCatalog.PlanetaryRecordingStarted, new JsonObject {
                     ["camera_id"] = cameraId.Value,
                     ["output_path"] = path,
@@ -249,6 +269,7 @@ namespace OpenAstroAra.Server.Services.Video {
             try {
                 ObjectDisposedException.ThrowIf(disposed, this);
                 StopRecordingLocked(publish: true);
+                PublishState();
                 return Accepted("planetary.record_stop", idempotencyKey);
             } finally {
                 gate.Release();
@@ -256,17 +277,19 @@ namespace OpenAstroAra.Server.Services.Video {
         }
 
         public PlanetaryStatusDto Status() {
-            var stats = recorder?.Stats();
+            var snapshot = session;   // one volatile read: internally consistent view
+            var stats = snapshot.Recorder?.Stats();
             long? diskFree = null;
-            if (outputPath is not null) {
-                diskFree = DiskSpaceMonitor.TryGetFreeBytes(Path.GetDirectoryName(outputPath) ?? outputPath);
+            if (snapshot.OutputPath is not null) {
+                diskFree = DiskSpaceMonitor.TryGetFreeBytes(
+                    Path.GetDirectoryName(snapshot.OutputPath) ?? snapshot.OutputPath);
             }
             return new PlanetaryStatusDto(
-                Mode: inPlanetaryMode ? "planetary" : "idle",
-                CameraId: cameraId,
-                OutputPath: outputPath,
+                Mode: snapshot.InPlanetaryMode ? "planetary" : "idle",
+                CameraId: snapshot.CameraId,
+                OutputPath: snapshot.OutputPath,
                 DiskFreeBytes: diskFree,
-                UsbfsMemoryMb: usbfsMb ?? UsbfsTuner.ReadCurrentMb(),
+                UsbfsMemoryMb: snapshot.UsbfsMb ?? UsbfsTuner.ReadCurrentMb(),
                 UsesDirectIo: stats?.UsesDirectIo ?? false,
                 Recording: stats is null ? null : ToDto(stats));
         }
@@ -376,6 +399,10 @@ namespace OpenAstroAra.Server.Services.Video {
                 recorder = null;
                 capture?.Dispose();
                 capture = null;
+                inPlanetaryMode = false;
+                cameraId = null;
+                outputPath = null;
+                PublishState();
             } finally {
                 gate.Release();
             }

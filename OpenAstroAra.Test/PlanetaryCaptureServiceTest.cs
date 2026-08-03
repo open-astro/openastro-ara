@@ -301,6 +301,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task RecordStart_RejectsDegenerateExposureAndGain() {
+            // r3: exposure_ms/gain are validated at the boundary — a zero/negative
+            // exposure would otherwise produce a degenerate GetFrame timeout.
+            using var capture = NewCapture();
+            using var service = NewService(NewCamera(), new ActiveRunSessionRegistry(), capture);
+            await service.EnterAsync(new PlanetaryEnterRequestDto(0, null), null, CancellationToken.None);
+            var zeroExposure = () => service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", 100, 0, null), null, CancellationToken.None);
+            await zeroExposure.Should().ThrowAsync<ArgumentException>().WithMessage("*exposure_ms*");
+            var negativeGain = () => service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", -1, 5, null), null, CancellationToken.None);
+            await negativeGain.Should().ThrowAsync<ArgumentException>().WithMessage("*gain*");
+        }
+
+        [Test]
         public void UsbfsTargetMb_ScalesWithRamAndClamps() {
             const long GiB = 1024L * 1024 * 1024;
             UsbfsTuner.TargetMb(2 * GiB).Should().Be(256);     // iMate class

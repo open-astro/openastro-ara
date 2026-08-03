@@ -212,16 +212,17 @@ public partial class Program {
         // reaction service stamps its outcome onto the same row. Constructor
         // activation injects both optional deps.
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
-builder.Services.AddSingleton<OpenAstroAra.Server.Services.Video.UsbfsTuner>();
-builder.Services.AddSingleton<OpenAstroAra.Server.Services.Video.PlanetaryCaptureService>(sp =>
-    new OpenAstroAra.Server.Services.Video.PlanetaryCaptureService(
-        sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Video.PlanetaryCaptureService>>(),
-        sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Video.VideoRecorder>>(),
-        sp.GetRequiredService<ICameraService>(),
-        sp.GetRequiredService<ActiveRunSessionRegistry>(),
-        sp.GetRequiredService<IWsBroadcaster>(),
-        sp.GetService<IProfileStore>(),
-        sp.GetRequiredService<OpenAstroAra.Server.Services.Video.UsbfsTuner>()));
+        // §77.2/§77.4 — planetary mode arbitration + SER capture surface.
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Video.UsbfsTuner>();
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Video.PlanetaryCaptureService>(sp =>
+            new OpenAstroAra.Server.Services.Video.PlanetaryCaptureService(
+                sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Video.PlanetaryCaptureService>>(),
+                sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Video.VideoRecorder>>(),
+                sp.GetRequiredService<ICameraService>(),
+                sp.GetRequiredService<ActiveRunSessionRegistry>(),
+                sp.GetRequiredService<IWsBroadcaster>(),
+                sp.GetService<IProfileStore>(),
+                sp.GetRequiredService<OpenAstroAra.Server.Services.Video.UsbfsTuner>()));
         builder.Services.AddSingleton<IFaultLogService, SqliteFaultLogService>();
         builder.Services.AddSingleton<EquipmentFaultHub>();
         builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());
@@ -886,8 +887,8 @@ builder.Services.AddSingleton<OpenAstroAra.Server.Services.Video.PlanetaryCaptur
         app.MapSequenceEndpoints();
         app.MapCalibrationEndpoints();
         app.MapMosaicEndpoints();
-        app.MapPlateSolveEndpoints();
-app.MapPlanetaryEndpoints(); // §77.2/§77.4 — planetary mode + SER capture surface // §18.I — solve a catalogued frame
+        app.MapPlateSolveEndpoints(); // §18.I — solve a catalogued frame
+        app.MapPlanetaryEndpoints(); // §77.2/§77.4 — planetary mode + SER capture surface
 
         // Phase 8 endpoint groups (501 stubs until service implementations land).
         app.MapImageEndpoints();
