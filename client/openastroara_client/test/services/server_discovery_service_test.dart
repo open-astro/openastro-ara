@@ -68,6 +68,34 @@ void main() {
           ['192.168.1.10:5555', '192.168.1.10:5556']);
     });
 
+    test('cancelling discover() cancels the underlying strategies', () async {
+      // The connect screen invalidates its provider every ~4 s; without
+      // propagation each tick stacked a fresh sweep on the running ones.
+      var mdnsCancelled = false;
+      var sweepCancelled = false;
+      final mdnsCtl = StreamController<AraServer>(
+          onCancel: () => mdnsCancelled = true);
+      final sweepCtl = StreamController<AraServer>(
+          onCancel: () => sweepCancelled = true);
+      addTearDown(mdnsCtl.close);
+      addTearDown(sweepCtl.close);
+      final svc = ServerDiscoveryService(
+        mdnsSource: () {
+          // Close mdns empty immediately so the sweep starts.
+          unawaited(mdnsCtl.close());
+          return mdnsCtl.stream;
+        },
+        sweepSource: () => sweepCtl.stream,
+      );
+      final sub = svc.discover().listen((_) {});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(mdnsCancelled || mdnsCtl.isClosed, isTrue);
+      expect(sweepCancelled, isTrue,
+          reason: 'an in-flight sweep must stop when the listener goes away');
+    });
+
     test('stream closes once all started strategies finish', () async {
       final svc = ServerDiscoveryService(
         mdnsSource: () => const Stream.empty(),

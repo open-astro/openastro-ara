@@ -47,6 +47,9 @@ class ServerDiscoveryService {
     var pending = 1; // the mDNS strand; the sweep adds itself if started
     var sawMdnsResult = false;
     var sweepStarted = false;
+    var cancelled = false;
+    StreamSubscription<AraServer>? mdnsSub;
+    StreamSubscription<AraServer>? sweepSub;
     Timer? grace;
 
     void done() {
@@ -63,14 +66,16 @@ class ServerDiscoveryService {
     }
 
     void maybeStartSweep() {
-      if (sweepStarted || controller.isClosed) return;
+      if (sweepStarted || cancelled || controller.isClosed) return;
       sweepStarted = true;
       pending++;
-      (sweepSource ?? _sweepDiscover)()
+      sweepSub = (sweepSource != null
+              ? sweepSource!()
+              : _sweepDiscover(isCancelled: () => cancelled))
           .listen(emit, onError: (Object _) {}, onDone: done);
     }
 
-    (mdnsSource ?? _mdnsDiscover)().listen(
+    mdnsSub = (mdnsSource ?? _mdnsDiscover)().listen(
       (s) {
         sawMdnsResult = true;
         emit(s);
@@ -86,6 +91,18 @@ class ServerDiscoveryService {
     grace = Timer(mdnsGracePeriod, () {
       if (!sawMdnsResult) maybeStartSweep();
     });
+    // Cancellation MUST propagate (review r4): the connect screen invalidates
+    // its discovery provider every ~4 s, and without this each tick stacked a
+    // fresh full sweep on top of the still-running previous ones — multiple
+    // HttpClients, multiplied scan traffic, defeated batching. Cancelling the
+    // inner subscriptions ends the async* generators at their next yield /
+    // batch boundary and runs their finally blocks (closing the HttpClient).
+    controller.onCancel = () {
+      cancelled = true;
+      grace?.cancel();
+      unawaited(mdnsSub?.cancel());
+      unawaited(sweepSub?.cancel());
+    };
     return controller.stream;
   }
 
@@ -147,7 +164,8 @@ class ServerDiscoveryService {
   /// slowest probe's timeouts, so the sweep can take several seconds on
   /// hostile networks — acceptable for a fallback that only runs when mDNS
   /// found nothing.
-  Stream<AraServer> _sweepDiscover() async* {
+  Stream<AraServer> _sweepDiscover({bool Function()? isCancelled}) async* {
+    final cancelledNow = isCancelled ?? () => false;
     final List<NetworkInterface> interfaces;
     try {
       interfaces = await NetworkInterface.list(
@@ -188,6 +206,10 @@ class ServerDiscoveryService {
       // stacks.
       const batch = 64;
       for (var i = 0; i < hosts.length; i += batch) {
+        // A batch that finds nothing has no yield (= no generator suspension
+        // point), so cancellation must be checked explicitly or a cancelled
+        // pass would keep probing every remaining batch (review r4).
+        if (cancelledNow()) return;
         final probes = [
           for (final h in hosts.skip(i).take(batch)) _probe(client, h),
         ];
