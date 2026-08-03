@@ -58,9 +58,7 @@ namespace OpenAstroAra.Server.Services.Video {
 
         internal enum AsiControlType {
             Gain = 0,
-            Exposure = 1,
-            BandwidthOverload = 6,
-            HighSpeedMode = 14
+            Exposure = 1
         }
 
         [LibraryImport(Dll, EntryPoint = "ASIGetNumOfConnectedCameras")]

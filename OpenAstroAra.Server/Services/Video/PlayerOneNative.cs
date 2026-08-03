@@ -50,10 +50,8 @@ namespace OpenAstroAra.Server.Services.Video {
         }
 
         internal enum PoaConfig {
-            Exposure = 0,           // microseconds
-            Gain = 1,
-            FrameLimit = 26,        // [0, 2000]; 0 = no limit
-            UsbBandwidthLimit = 28  // percent
+            Exposure = 0,   // microseconds
+            Gain = 1
         }
 
         // POAConfigValue is an 8-byte union (long | double | POABool).
