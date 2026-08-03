@@ -118,6 +118,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       // GPS transmits UTC + position, never a timezone — derive the IANA
       // zone from the coordinates (offline polygon lookup).
       n.setTimeZone(tz_map.latLngToTimezoneString(loc.lat, loc.lng));
+      _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
       setState(() => _gpsStatus =
           'Filled from the server\'s GPS fix (source: ${state.source}). '
           'Press Save to persist.');
@@ -131,6 +132,24 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   }
 
   static double _round2(double v) => (v * 100).roundToDouble() / 100;
+
+  /// True once the user edits the time-zone row themselves this session —
+  /// coordinate edits then stop overwriting their choice (a remote rig
+  /// deliberately viewed in another zone). A GPS fill re-arms derivation.
+  bool _tzUserEdited = false;
+
+  /// Same rule as the wizard's profile-basics screen: the zone is knowable
+  /// from the coordinates (offline lat/lng → IANA lookup), so a committed
+  /// lat/lng edit refreshes it. Values still go through Save to persist.
+  void _deriveTimezoneFromCoords() {
+    if (_tzUserEdited) return;
+    final s = ref.read(siteSettingsProvider);
+    if (s.latitudeDeg < -90 || s.latitudeDeg > 90) return;
+    final zone = tz_map.latLngToTimezoneString(s.latitudeDeg, s.longitudeDeg);
+    if (zone != s.timeZone) {
+      ref.read(siteSettingsProvider.notifier).setTimeZone(zone);
+    }
+  }
 
   ProfileApi? _api() {
     final server = ref.read(activeServerProvider);
@@ -186,7 +205,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
               ref.read(siteSettingsProvider).latitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
-            if (v != null) n.setLatitudeDeg(v);
+            if (v != null) {
+              n.setLatitudeDeg(v);
+              _deriveTimezoneFromCoords();
+            }
           },
         ),
         EditableNumberRow(
@@ -196,7 +218,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
               ref.read(siteSettingsProvider).longitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
-            if (v != null) n.setLongitudeDeg(v);
+            if (v != null) {
+              n.setLongitudeDeg(v);
+              _deriveTimezoneFromCoords();
+            }
           },
         ),
         EditableNumberRow(
@@ -213,8 +238,12 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           label: 'Time zone',
           currentValue: s.timeZone,
           getCanonical: () => ref.read(siteSettingsProvider).timeZone,
-          parse: n.setTimeZone,
-          hint: 'IANA name (e.g. America/Los_Angeles)',
+          parse: (v) {
+            _tzUserEdited = true; // pin: lat/lng edits stop overwriting it
+            n.setTimeZone(v);
+          },
+          hint: 'IANA name (e.g. America/Los_Angeles) — auto-filled from '
+              'the coordinates',
         ),
         const SettingsSectionHeader('Time sync'),
         const TimeSyncSection(),

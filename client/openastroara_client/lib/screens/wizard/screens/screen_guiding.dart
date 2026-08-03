@@ -13,7 +13,11 @@ import '../../../theme/ara_colors.dart';
 import '../../../util/guide_optics.dart';
 import '../../../util/host_port.dart';
 import '../../../widgets/guider/guider_setup_wizard.dart'
-    show parseAlpacaChoiceEndpoint;
+    show
+        alpacaDeviceNamesApiProvider,
+        friendlyAlpacaChoiceLabel,
+        mergedAlpacaOptions,
+        parseAlpacaChoiceEndpoint;
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../wizard_form_kit.dart';
@@ -78,6 +82,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   // same fallbacks applyDraftToPhd2 applies when the base is unavailable.
   String? _baseSetupType;
   double? _baseReducerFactor;
+  // The base profile's guide-camera choice string: [_cameraEndpoint] falls
+  // back to it when the picker is untouched this session (null draft), so the
+  // mount/rotator server restriction holds without re-picking the camera
+  // (review r4 — a cross-server pick would silently no-op on Save).
+  String? _baseGuiderCamera;
 
   bool _testing = false;
   String? _testStatus;
@@ -105,6 +114,127 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     // try the pixel-size read for it on entry.
     final cam = _g.guiderCamera;
     if (cam != null && cam.isNotEmpty) unawaited(_autofillPixelSize(cam));
+    // Populate the real Alpaca device names on entry so the pickers open with
+    // actual cameras/mounts instead of the guider's generic driver labels.
+    unawaited(_sweepAlpaca());
+  }
+
+  // Real device names from the Alpaca management API, keyed
+  // "host:port|type/N" — same overlay the §63.17 setup wizard uses.
+  final Map<String, String> _alpacaNames = {};
+  bool _sweeping = false;
+
+  /// Resolve real device names behind every Alpaca server we know about: the
+  /// endpoints named in the daemon's choice strings PLUS a daemon-side UDP
+  /// discovery sweep (§63.20) so cameras on servers the guider isn't pointed
+  /// at yet are still pickable. Best-effort — failures leave generic labels.
+  Future<void> _sweepAlpaca() async {
+    final namesApi = ref.read(alpacaDeviceNamesApiProvider);
+    final endpoints = <String, ({String host, int port})>{};
+    final c = ref.read(guiderEquipmentProvider).value?.choices;
+    for (final choice in [
+      ...?c?.cameras,
+      ...?c?.mounts,
+      ...?c?.auxMounts,
+      ...?c?.rotators,
+    ]) {
+      final e = parseAlpacaChoiceEndpoint(choice);
+      if (e != null) {
+        endpoints['${e.host}:${e.port}'] = (host: e.host, port: e.port);
+      }
+    }
+    try {
+      final servers =
+          await ref.read(guiderEquipmentProvider.notifier).discoverAlpaca();
+      for (final server in servers) {
+        final sep = server.lastIndexOf(':');
+        if (sep <= 0) continue;
+        final port = int.tryParse(server.substring(sep + 1));
+        if (port == null) continue;
+        endpoints[server] = (host: server.substring(0, sep), port: port);
+      }
+    } catch (_) {
+      // No daemon / discovery unavailable — choice-string endpoints remain.
+    }
+    if (endpoints.isEmpty) return;
+    // Parallel: an unreachable server costs its own timeout, not everyone's.
+    final fetched = await Future.wait([
+      for (final entry in endpoints.entries)
+        namesApi
+            .fetchNames(entry.value.host, entry.value.port)
+            .then((names) => (endpoint: entry.key, names: names)),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      for (final result in fetched) {
+        result.names.forEach((typeSlot, name) {
+          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
+        });
+      }
+    });
+  }
+
+  /// Refresh-choices button action: re-read the daemon's lists AND re-sweep
+  /// the network for Alpaca devices, so the tap always has a visible effect.
+  Future<void> _refreshAll() async {
+    setState(() => _sweeping = true);
+    try {
+      await ref.read(guiderEquipmentProvider.notifier).refresh();
+      await _sweepAlpaca();
+    } finally {
+      if (mounted) setState(() => _sweeping = false);
+    }
+  }
+
+  /// The selected guide camera's Alpaca server ("host:port"), or null — the
+  /// guider has ONE Alpaca server per profile, derived from the camera, so
+  /// mount/rotator pickers only offer devices on that server. Falls back to
+  /// the BASE profile's camera when the picker is untouched this session
+  /// (review r4): the restriction must hold for a user who only came to add
+  /// a mount/rotator.
+  String? get _cameraEndpoint {
+    final choice = (_g.guiderCamera?.isNotEmpty ?? false)
+        ? _g.guiderCamera!
+        : (_baseGuiderCamera ?? '');
+    final e = parseAlpacaChoiceEndpoint(choice);
+    return e == null ? null : '${e.host}:${e.port}';
+  }
+
+  /// Shared picker over daemon choice strings + synthesized Alpaca devices,
+  /// labeled with real device names. Blank = keep the guider's current pick.
+  ///
+  /// [onPick] receives the RAW selection — '' for the blank entry — because
+  /// the draft fields distinguish '' (explicit "keep guider's current",
+  /// clears a stored override on Save) from null (untouched, keeps the base
+  /// profile's value). Collapsing '' to null here made the blank entry a
+  /// no-op for mount/aux/rotator (review r3); each call site owns the map.
+  Widget _choicePicker({
+    required String label,
+    required String? current,
+    required List<String> options,
+    required String alpacaType,
+    required void Function(String) onPick,
+  }) {
+    final values = <String>{
+      '',
+      ...options,
+      if (current != null && current.isNotEmpty) current,
+    };
+    return WizardDropdown<String>(
+      label: label,
+      value: values.contains(current ?? '') ? (current ?? '') : '',
+      entries: [
+        for (final v in values)
+          DropdownMenuEntry(
+              value: v,
+              label: v.isEmpty
+                  ? "(keep guider's current)"
+                  : friendlyAlpacaChoiceLabel(v, alpacaType, _alpacaNames)),
+      ],
+      onChanged: (v) {
+        if (v != null) onPick(v);
+      },
+    );
   }
 
   Future<void> _loadBaseGuideSetup() async {
@@ -118,6 +248,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
       setState(() {
         _baseSetupType = phd2.guiderSetupType;
         _baseReducerFactor = optics.reducerFactor;
+        _baseGuiderCamera =
+            phd2.guiderCamera.isEmpty ? null : phd2.guiderCamera;
       });
     } catch (_) {
       // Offline / no daemon — keep the guide_scope / 1.0 fallbacks.
@@ -262,46 +394,66 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         // value stays representable even when the guider is disconnected.
         Builder(builder: (context) {
           final equipment = ref.watch(guiderEquipmentProvider);
-          final envelope = equipment.value;
-          final cameras = <String>{
-            '',
-            ...?envelope?.choices?.cameras,
-            if (_g.guiderCamera != null && _g.guiderCamera!.isNotEmpty)
-              _g.guiderCamera!,
-          };
+          final choices = equipment.value?.choices;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              WizardDropdown<String>(
+              _choicePicker(
                 label: 'Guide camera',
-                value: cameras.contains(_g.guiderCamera ?? '')
-                    ? (_g.guiderCamera ?? '')
-                    : '',
-                entries: [
-                  for (final c in cameras)
-                    DropdownMenuEntry(
-                        value: c, label: c.isEmpty ? '(daemon default)' : c),
-                ],
-                onChanged: (v) {
+                current: _g.guiderCamera,
+                options: mergedAlpacaOptions(
+                    choices?.cameras ?? const [], 'camera', 'Camera',
+                    _alpacaNames),
+                alpacaType: 'camera',
+                onPick: (v) {
+                  // Camera has no ''-vs-null distinction: blank = untouched.
+                  final sel = v.isEmpty ? null : v;
                   setState(() {
-                    _g.guiderCamera = (v == null || v.isEmpty) ? null : v;
+                    _g.guiderCamera = sel;
                     _pixelSizeFromDriver = false;
                   });
-                  if (v != null && v.isNotEmpty) {
-                    unawaited(_autofillPixelSize(v));
-                  }
+                  if (sel != null) unawaited(_autofillPixelSize(sel));
                 },
+              ),
+              _choicePicker(
+                label: 'Guide mount (pulse target)',
+                current: _g.guiderMount,
+                options: mergedAlpacaOptions(
+                    choices?.mounts ?? const [], 'telescope', 'Mount',
+                    _alpacaNames,
+                    onlyEndpoint: _cameraEndpoint),
+                alpacaType: 'telescope',
+                onPick: (v) => setState(() => _g.guiderMount = v),
+              ),
+              _choicePicker(
+                label: 'Aux mount (optional)',
+                current: _g.guiderAuxMount,
+                options: choices?.auxMounts ?? const [],
+                alpacaType: 'telescope',
+                onPick: (v) => setState(() => _g.guiderAuxMount = v),
+              ),
+              _choicePicker(
+                label: 'Rotator (optional)',
+                current: _g.guiderRotator,
+                options: mergedAlpacaOptions(
+                    choices?.rotators ?? const [], 'rotator', 'Rotator',
+                    _alpacaNames,
+                    onlyEndpoint: _cameraEndpoint),
+                alpacaType: 'rotator',
+                onPick: (v) => setState(() => _g.guiderRotator = v),
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Row(children: [
                   OutlinedButton.icon(
-                    onPressed: equipment.isLoading
+                    onPressed: equipment.isLoading || _sweeping
                         ? null
-                        : () => unawaited(ref
-                            .read(guiderEquipmentProvider.notifier)
-                            .refresh()),
-                    icon: const Icon(Icons.refresh, size: 18),
+                        : () => unawaited(_refreshAll()),
+                    icon: _sweeping
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.refresh, size: 18),
                     label: const Text('Refresh choices'),
                   ),
                   if (_pixelSizeFromDriver) ...[

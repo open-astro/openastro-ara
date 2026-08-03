@@ -156,6 +156,10 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
           await Future.wait([
             for (final t in [..._factTypes, ..._otherTypes])
               if (_slotGet(_draft.equipment, t) == null) _autoAssign(api, t),
+            // Switches are multi-instance so "assign them all" is unambiguous
+            // (unlike two cameras) — a rig's power/dew hubs are all wanted.
+            if (_draft.equipment.switchDeviceIds.isEmpty)
+              _autoAssignSwitches(api),
           ]);
         } finally {
           api.close();
@@ -202,6 +206,22 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       // Deliberately broad: this screen's contract is never-crash — any
       // throwable (incl. an Error from a malformed response) leaves the slot
       // unassigned; the row's Choose affordance surfaces errors interactively.
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {}
+  }
+
+  /// Auto-add EVERY discovered switch hub (first entry only — the guard in
+  /// [_prepare] keeps re-entry from resurrecting hubs the user removed).
+  /// Same never-crash contract as [_autoAssign].
+  Future<void> _autoAssignSwitches(EquipmentDiscoveryApi api) async {
+    try {
+      final devices = await api.discover(EquipmentDeviceType.switchDevice);
+      for (final d in devices) {
+        if (!_draft.equipment.switchDeviceIds.contains(d.uniqueId)) {
+          _draft.equipment.switchDeviceIds.add(d.uniqueId);
+          _draft.deviceNames[d.uniqueId] = d.name;
+        }
+      }
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {}
   }
