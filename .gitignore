@@ -93,3 +93,6 @@ design/AlpacaDeviceAPI_v1.yaml
 core
 *.core
 qemu_*.core
+
+# JPL DE421 ephemeris fetched by scripts/get-jpleph.sh (16 MB binary, public domain)
+/External/JPLEPH

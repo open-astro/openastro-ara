@@ -161,6 +161,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(ObservingConditionsDto))]
 [JsonSerializable(typeof(OperationAcceptedDto))]
 [JsonSerializable(typeof(PlanetaryEnterRequestDto))]
+[JsonSerializable(typeof(PlanetaryPointRequestDto))]
 [JsonSerializable(typeof(PlanetaryRecordRequestDto))]
 [JsonSerializable(typeof(PlanetaryRecordingStatsDto))]
 [JsonSerializable(typeof(PlanetaryStatusDto))]

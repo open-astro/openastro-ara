@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 using OpenAstroAra.Server.Services.Video;
 using System;
 using System.Threading;
@@ -54,6 +55,13 @@ public static class PlanetaryEndpoints {
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .WithName("StopPlanetaryRecording")
             .WithSummary("Stop the current SER recording; final honest-accounting stats arrive on planetary.recording_stopped.");
+
+        planetary.MapPost("/point", PointAsync)
+            .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("PointAtPlanet")
+            .WithSummary("§77.3 — ephemeris goto + guide-cam solve-and-center loop; returns a §65.5 background job.");
 
         planetary.MapGet("/status", (PlanetaryCaptureService service) => Results.Ok(service.Status()))
             .Produces<PlanetaryStatusDto>(StatusCodes.Status200OK)
@@ -99,6 +107,22 @@ public static class PlanetaryEndpoints {
         PlanetaryCaptureService service, HttpContext http, CancellationToken ct) {
         var accepted = await service.StopRecordingAsync(IdempotencyKey(http), ct).ConfigureAwait(false);
         return Results.Accepted(value: accepted);
+    }
+
+    private static IResult PointAsync(
+        PlanetaryPointRequestDto? request, PlanetaryPointingService pointing, IBatchJobService jobs) {
+        if (request is null) {
+            return Results.Problem("a JSON body is required", statusCode: StatusCodes.Status400BadRequest);
+        }
+        try {
+            // Validate up front so a bad target 400s here, not inside the job.
+            _ = pointing.ResolveTarget(request);
+        } catch (ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+        var job = jobs.Enqueue("planetary-point", totalSteps: 5,
+            (tick, ct) => pointing.PointAsync(request, tick, ct));
+        return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
     }
 
     private static string? IdempotencyKey(HttpContext http) =>

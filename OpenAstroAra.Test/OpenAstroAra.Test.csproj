@@ -77,4 +77,12 @@
     </None>
   </ItemGroup>
 
+
+  <!-- §77.3 planetary ephemeris: repo-root External/JPLEPH (fetched by
+       scripts/get-jpleph.sh — JPL DE421, public domain) rides into the output's
+       External/ dir when present. Absent = NOVAS logs an error and solar-system
+       body positions return NaN; nothing else breaks. -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)../External/JPLEPH')">
+    <None Include="$(MSBuildThisFileDirectory)../External/JPLEPH" Link="External\JPLEPH" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
