@@ -55,10 +55,12 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         double? WindSpeedMs,
         double? WindGustMs,
         double? WindDirectionDeg,
-        double? RainRate);
+        double? RainRate,
+        double? SkyQualityMagArcsec2,
+        double? SkyTemperatureC);
 
     private static readonly Readings EmptyReadings =
-        new(null, null, null, null, null, null, null, null, null);
+        new(null, null, null, null, null, null, null, null, null, null, null);
 
     private readonly ILogger<ObservingConditionsService> _logger;
     private readonly EquipmentEventPublisher? _events;
@@ -111,6 +113,8 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
                 WindGustMs: r.WindGustMs,
                 WindDirectionDeg: r.WindDirectionDeg,
                 RainRate: r.RainRate,
+                SkyQualityMagArcsec2: r.SkyQualityMagArcsec2,
+                SkyTemperatureC: r.SkyTemperatureC,
                 // ObservingConditions has no intrinsic safe/unsafe state (that is SafetyMonitor's
                 // role); kept false here. WILMA can derive safety from thresholds if desired.
                 Safe: false,
@@ -205,7 +209,7 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         }
     }
 
-    // Reads all nine sensors, each independently: an ObservingConditions device implements only
+    // Reads all eleven sensors, each independently: an ObservingConditions device implements only
     // the sensors it has, and an unimplemented (or transiently failing) sensor yields null rather
     // than failing the whole snapshot. Per-sensor failures do NOT demote the connection — weather
     // sensors are independently optional, unlike SafetyMonitor's single IsSafe.
@@ -218,7 +222,10 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         WindSpeedMs: ReadSensor("WindSpeed", () => c.WindSpeed),
         WindGustMs: ReadSensor("WindGust", () => c.WindGust),
         WindDirectionDeg: ReadSensor("WindDirection", () => c.WindDirection),
-        RainRate: ReadSensor("RainRate", () => c.RainRate));
+        RainRate: ReadSensor("RainRate", () => c.RainRate),
+        // SQM meter (or a WeeWX-fed bridge sensor): sky brightness in mag/arcsec².
+        SkyQualityMagArcsec2: ReadSensor("SkyQuality", () => c.SkyQuality),
+        SkyTemperatureC: ReadSensor("SkyTemperature", () => c.SkyTemperature));
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-sensor read boundary: an ObservingConditions sensor that is not implemented throws (ASCOM NotImplementedException) and a transient driver/HTTP error can too; either way the sensor is reported absent (null), never propagated. CA1031's log-and-recover boundary applies.")]
