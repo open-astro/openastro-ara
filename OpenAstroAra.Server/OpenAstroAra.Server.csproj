@@ -3,6 +3,9 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- §77.1 video capture: the SER writer's O_DIRECT staging buffer needs a raw
+         address for its page-alignment computation (same precedent as Core/Image). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>OpenAstroAra.Server</RootNamespace>
     <AssemblyName>OpenAstroAra.Server</AssemblyName>
