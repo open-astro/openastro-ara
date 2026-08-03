@@ -277,7 +277,10 @@ namespace OpenAstroAra.Server.Services.Video {
                     Ser = new SerWriterOptions {
                         Path = path,
                         Observer = "OpenAstro Ara",
-                        Instrument = $"ZWO camera {cameraId.Value}",
+                        Instrument = vendor switch {
+                            "playerone" => $"Player One camera {cameraId.Value}",
+                            _ => $"ZWO camera {cameraId.Value}",
+                        },
                     },
                 });
                 outputPath = path;

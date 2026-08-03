@@ -32,8 +32,12 @@ namespace OpenAstroAra.Server.Services.Video {
         private const int O_CREAT_LINUX = 0x0040;
         private const int O_TRUNC_LINUX = 0x0200;
         // O_DIRECT is architecture-specific on Linux: 0x4000 on x86-64 but 0x10000 on
-        // arm/arm64 (where 0x4000 is O_DIRECTORY — passing it silently degraded to the
-        // buffered fallback; found on-hardware in the rc91 spike).
+        // arm AND arm64 (glibc's AArch64 sysdeps bits/fcntl.h keeps ARM's swapped
+        // values: O_DIRECTORY 0x4000 / O_DIRECT 0x10000 — mainline asm-generic does
+        // NOT apply here). Verified empirically on the rc91 target (aarch64, Debian
+        // 13): a C program printing the macros gives O_DIRECT=0x10000, and
+        // open(regular file, 0x4000) fails EINVAL while 0x10000 succeeds. Passing
+        // the x86 value silently degraded to the buffered fallback.
         private static readonly int O_DIRECT_LINUX =
             System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture
                 is System.Runtime.InteropServices.Architecture.Arm64
