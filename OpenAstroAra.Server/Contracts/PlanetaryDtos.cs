@@ -54,3 +54,11 @@ public sealed record PlanetaryStatusDto(
     int? UsbfsMemoryMb,
     bool UsesDirectIo,
     PlanetaryRecordingStatsDto? Recording);
+
+/// <summary>§77.3 pointing request: a named solar-system body (ephemeris-resolved
+/// server-side) OR explicit J2000 coordinates. tolerance_arcmin defaults to 2.</summary>
+public sealed record PlanetaryPointRequestDto(
+    string? Target,
+    double? RaHours,
+    double? DecDegrees,
+    double? ToleranceArcmin);

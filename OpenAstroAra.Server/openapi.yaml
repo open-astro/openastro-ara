@@ -849,6 +849,36 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OperationAccepted' }
 
+  /planetary/point:
+    post:
+      summary: Point at a solar-system body (§77.3 ephemeris goto + guide-cam solve-and-center)
+      description: |
+        Resolves a named body (NOVAS topocentric apparent place from the profile
+        site; requires External/JPLEPH — see scripts/get-jpleph.sh) or explicit
+        J2000 coordinates, slews, then iterates guide-camera capture → plate
+        solve → sync → re-slew until the offset is within tolerance, finally
+        setting the tracking rate (lunar for the Moon, sidereal otherwise).
+        Returns a §65.5 background job (one tick per solve attempt, max 5).
+        Requires a connected guider + solver config; refused while polar
+        alignment is running. The Sun is refused (no solar-filter interlock).
+      tags: [Planetary]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanetaryPointRequest' }
+      responses:
+        '202':
+          description: Pointing job started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchJob' }
+        '400':
+          description: Unknown/refused target, bad coordinates, or no site location
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /planetary/status:
     get:
       summary: Planetary mode + live recording counters
@@ -1388,6 +1418,20 @@ components:
         bytes_written: { type: integer }
         achieved_fps: { type: number }
         error: { type: string }
+
+    PlanetaryPointRequest:
+      type: object
+      description: §77.3 — a named solar-system body OR explicit J2000 coordinates.
+      properties:
+        target:
+          type: [string, 'null']
+          enum: [mercury, venus, mars, jupiter, saturn, uranus, neptune, pluto, moon, null]
+          description: Ephemeris-resolved server-side; the Sun is refused
+        ra_hours: { type: [number, 'null'] }
+        dec_degrees: { type: [number, 'null'] }
+        tolerance_arcmin:
+          type: [number, 'null']
+          description: Convergence tolerance; default 2, max 60
 
     PlanetaryStatus:
       type: object

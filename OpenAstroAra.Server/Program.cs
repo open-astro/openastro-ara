@@ -223,6 +223,12 @@ public partial class Program {
                 sp.GetRequiredService<IWsBroadcaster>(),
                 sp.GetService<IProfileStore>(),
                 sp.GetRequiredService<OpenAstroAra.Server.Services.Video.UsbfsTuner>()));
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.Video.PlanetaryPointingService>(sp =>
+            new OpenAstroAra.Server.Services.Video.PlanetaryPointingService(
+                sp.GetRequiredService<ILogger<OpenAstroAra.Server.Services.Video.PlanetaryPointingService>>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                (PolarAlignService)sp.GetRequiredService<IPolarAlignService>(),
+                sp.GetRequiredService<IProfileStore>()));
         builder.Services.AddSingleton<IFaultLogService, SqliteFaultLogService>();
         builder.Services.AddSingleton<EquipmentFaultHub>();
         builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());

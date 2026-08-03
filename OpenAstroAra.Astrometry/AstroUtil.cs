@@ -556,6 +556,69 @@ namespace OpenAstroAra.Astrometry {
             return Regex.IsMatch(value, pattern);
         }
 
+        /// <summary>
+        /// Solar-system bodies addressable by <see cref="GetBodyPosition"/>. Values are
+        /// the NOVAS body numbers (Earth omitted — no topocentric self-position).
+        /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1008:Enums should have zero value",
+            Justification = "Values ARE the NOVAS body numbers (1-based protocol constants); a synthetic None=0 would be an invalid body the native layer rejects.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1027:Mark enums with FlagsAttribute",
+            Justification = "Not a flags set — discrete NOVAS body identifiers whose gaps (Earth=3 omitted) trip the power-of-two heuristic.")]
+        public enum SolarSystemBody {
+            Mercury = 1,
+            Venus = 2,
+            Mars = 4,
+            Jupiter = 5,
+            Saturn = 6,
+            Uranus = 7,
+            Neptune = 8,
+            Pluto = 9,
+            Sun = 10,
+            Moon = 11
+        }
+
+        /// <summary>
+        /// Topocentric apparent place (equinox of date) of a solar-system body — the
+        /// §77.3 planetary-pointing ephemeris. Generalizes <see cref="GetMoonPosition"/>
+        /// to every NOVAS major body; RA returns in hours, Dec in degrees, Dis in AU.
+        /// </summary>
+        public static SkyPosition GetBodyPosition(SolarSystemBody body, DateTime date, double jd, ObserverInfo observerInfo) {
+            var deltaT = DeltaT(date);
+
+            var onSurface = new NOVAS.OnSurface() {
+                Latitude = observerInfo.Latitude,
+                Longitude = observerInfo.Longitude,
+                Height = observerInfo.Elevation,
+                Temperature = observerInfo.Temperature,
+                Pressure = observerInfo.Pressure
+            };
+
+            var obs = new NOVAS.Observer() {
+                OnSurf = onSurface,
+                Where = (short)NOVAS.ObserverLocation.EarthSurface
+            };
+
+            var celestialObject = new NOVAS.CelestialObject() {
+                Name = body.ToString(),
+                Number = (short)body,
+                Star = new NOVAS.CatalogueEntry(),
+                Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
+            };
+
+            var skyPosition = new SkyPosition();
+
+            var jdTt = jd + SecondsToDays(deltaT);
+            var status = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
+            if (status != 0) {
+                Logger.Error($"NOVAS place failed for {body}. Result={status}");
+                skyPosition.RA = double.NaN;
+                skyPosition.Dec = double.NaN;
+                skyPosition.Dis = double.NaN;
+            }
+
+            return skyPosition;
+        }
+
         public static SkyPosition GetMoonPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
             var deltaT = DeltaT(date);
 
