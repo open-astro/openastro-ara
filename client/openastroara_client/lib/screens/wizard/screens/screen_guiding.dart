@@ -82,6 +82,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   // same fallbacks applyDraftToPhd2 applies when the base is unavailable.
   String? _baseSetupType;
   double? _baseReducerFactor;
+  // The base profile's guide-camera choice string: [_cameraEndpoint] falls
+  // back to it when the picker is untouched this session (null draft), so the
+  // mount/rotator server restriction holds without re-picking the camera
+  // (review r4 — a cross-server pick would silently no-op on Save).
+  String? _baseGuiderCamera;
 
   bool _testing = false;
   String? _testStatus;
@@ -183,9 +188,15 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
 
   /// The selected guide camera's Alpaca server ("host:port"), or null — the
   /// guider has ONE Alpaca server per profile, derived from the camera, so
-  /// mount/rotator pickers only offer devices on that server.
+  /// mount/rotator pickers only offer devices on that server. Falls back to
+  /// the BASE profile's camera when the picker is untouched this session
+  /// (review r4): the restriction must hold for a user who only came to add
+  /// a mount/rotator.
   String? get _cameraEndpoint {
-    final e = parseAlpacaChoiceEndpoint(_g.guiderCamera ?? '');
+    final choice = (_g.guiderCamera?.isNotEmpty ?? false)
+        ? _g.guiderCamera!
+        : (_baseGuiderCamera ?? '');
+    final e = parseAlpacaChoiceEndpoint(choice);
     return e == null ? null : '${e.host}:${e.port}';
   }
 
@@ -237,6 +248,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
       setState(() {
         _baseSetupType = phd2.guiderSetupType;
         _baseReducerFactor = optics.reducerFactor;
+        _baseGuiderCamera =
+            phd2.guiderCamera.isEmpty ? null : phd2.guiderCamera;
       });
     } catch (_) {
       // Offline / no daemon — keep the guide_scope / 1.0 fallbacks.
