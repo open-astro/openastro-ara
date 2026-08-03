@@ -1,57 +1,90 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../state/profile_management_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/profile/profile_import_flow.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../profile_management_screen.dart';
 
-/// §37 + §42 Active profile panel. 12h.2 read-only.
-class ProfileActivePanel extends StatelessWidget {
+/// §37 + §42 Active profile panel: the live active-profile identity plus the
+/// door into the full multi-profile management screen (select / rename /
+/// delete / add via the wizard / import / export).
+class ProfileActivePanel extends ConsumerWidget {
   const ProfileActivePanel({super.key});
 
+  static String _stamp(DateTime? utc) {
+    if (utc == null) {
+      return '—';
+    }
+    final local = utc.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(profileManagementProvider);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Profile'),
-        const SettingsRow(label: 'Name', value: 'Default'),
-        const SettingsRow(label: 'Created', value: '2026-05-26 22:10 PDT'),
-        const SettingsRow(label: 'Last modified', value: '2026-05-26 22:10 PDT'),
-        const SettingsRow(label: 'Profile ID', value: 'profile-default'),
-        const SettingsSectionHeader('Profiles on this server'),
-        const SettingsRow(
-          label: 'Available',
-          value: 'Default (active)',
-          hint: '§42 multi-profile UI lands in Phase 12h.2c',
+        ...async.when(
+          loading: () => const [
+            SettingsRow(label: 'Name', value: 'Loading…'),
+          ],
+          error: (e, _) => [
+            SettingsRow(
+              label: 'Profiles',
+              value: 'Unavailable',
+              hint: friendlyDaemonError(e),
+            ),
+          ],
+          data: (list) {
+            final active = list.active;
+            return [
+              SettingsRow(label: 'Name', value: active?.name ?? '—'),
+              SettingsRow(label: 'Created', value: _stamp(active?.createdUtc)),
+              SettingsRow(
+                  label: 'Last modified', value: _stamp(active?.updatedUtc)),
+              SettingsRow(label: 'Profile ID', value: active?.id ?? '—'),
+              const SettingsSectionHeader('Profiles on this server'),
+              SettingsRow(
+                label: 'Available',
+                value: list.profiles.isEmpty
+                    ? 'None'
+                    : list.profiles
+                        .map((p) => p.id == list.activeId
+                            ? '${p.name} (active)'
+                            : p.name)
+                        .join(', '),
+              ),
+            ];
+          },
         ),
         const SizedBox(height: 16),
-        Wrap(spacing: 8, children: [
-          OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('New profile'),
-          ),
-          OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.content_copy, size: 16),
-            label: const Text('Duplicate'),
-          ),
-          OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.download, size: 16),
-            label: const Text('Export JSON'),
-          ),
-          OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.upload, size: 16),
-            label: const Text('Import JSON'),
-          ),
-          OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.delete_outline,
-                size: 16, color: AraColors.accentBusy),
-            label: const Text('Delete'),
-          ),
-        ]),
+        Row(
+          children: [
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                    builder: (_) => const ProfileManagementScreen()),
+              ),
+              icon: const Icon(Icons.manage_accounts, size: 18),
+              label: const Text('Manage profiles…'),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Add, select, rename, delete, import and export profiles.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AraColors.textSecondary,
+                    ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

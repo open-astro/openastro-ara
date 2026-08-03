@@ -259,18 +259,6 @@ const Map<String, List<String>> _panelKeywords = {
     'updates',
     'what changed',
   ],
-  'app.monitoring': [
-    'health check',
-    'healthz',
-    'readyz',
-    'uptime',
-    'prometheus',
-    'performance',
-    'latency',
-    'slow',
-    'websocket catalog',
-    'ws protocol',
-  ],
 };
 
 /// §61.10 — the main tabs as palette navigation targets. Indices come from

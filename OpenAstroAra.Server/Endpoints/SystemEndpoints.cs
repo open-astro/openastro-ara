@@ -257,6 +257,19 @@ public static class SystemEndpoints {
 
         // ─── Storage browse (§37.4/§29) — the save-directory picker's walk ───
         var storage = app.MapGroup("/api/v1/storage").WithTags("Storage");
+        storage.MapGet("/space", (IProfileStore profiles) => {
+                var configured = profiles.GetStorageSettings().SaveDirectory;
+                var isFallback = string.IsNullOrWhiteSpace(configured);
+                var dir = isFallback
+                    ? Path.Combine(AppContext.BaseDirectory, "frames")
+                    : configured!;
+                var space = Directory.Exists(dir) ? DiskSpaceMonitor.TryGetSpace(dir) : null;
+                return Results.Ok(new StorageSpaceDto(dir, isFallback, space?.Free, space?.Total));
+            })
+            .Produces<StorageSpaceDto>()
+            .WithName("GetStorageSpace")
+            .WithSummary("Free/total bytes of the volume behind the save directory (nulls when unreachable).");
+
         storage.MapGet("/browse", (string? path, IStorageBrowseService svc) => {
                 try {
                     return Results.Ok(svc.Browse(path));

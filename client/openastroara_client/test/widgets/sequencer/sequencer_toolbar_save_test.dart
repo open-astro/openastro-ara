@@ -97,7 +97,7 @@ class _SaveClient implements SequenceClient {
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;
   @override
-  Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<String> start(String id) async => 'op';
   @override

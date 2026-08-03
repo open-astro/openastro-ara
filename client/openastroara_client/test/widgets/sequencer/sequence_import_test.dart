@@ -51,7 +51,7 @@ class _ImportClient implements SequenceClient {
   String? lastKey;
 
   @override
-  Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: const {});
