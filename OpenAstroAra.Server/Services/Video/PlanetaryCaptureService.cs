@@ -116,9 +116,12 @@ namespace OpenAstroAra.Server.Services.Video {
                 try {
                     usbfsMb = await tuner.AutoTuneAsync(request.UsbfsOverrideMb, ct).ConfigureAwait(false)
                               ?? UsbfsTuner.ReadCurrentMb();
-                } catch (OperationCanceledException) {
-                    // Don't strand a silently-detached camera (r2 minor): restore the
-                    // Alpaca connection best-effort before propagating the cancel.
+                } catch {
+                    // Don't strand a silently-detached camera (r2/r4): whatever
+                    // escapes here — cancellation or anything AutoTuneAsync's internal
+                    // catch list misses — restore the Alpaca connection best-effort
+                    // before propagating. inPlanetaryMode is still false, so the
+                    // invariant "detached implies planetary mode or reconnected" holds.
                     await TryReconnectAsync().ConfigureAwait(false);
                     throw;
                 }
@@ -200,6 +203,9 @@ namespace OpenAstroAra.Server.Services.Video {
                 if (request.ExposureMs <= 0 || request.ExposureMs > 60_000) {
                     throw new ArgumentException("exposure_ms must be in [1, 60000]", nameof(request));
                 }
+                if (request.Bin <= 0) {
+                    throw new ArgumentException("bin must be >= 1", nameof(request));
+                }
                 if (request.Gain < 0) {
                     throw new ArgumentException("gain must be >= 0", nameof(request));
                 }
@@ -211,7 +217,7 @@ namespace OpenAstroAra.Server.Services.Video {
                     StartY = request.StartY,
                     Width = request.Width,
                     Height = request.Height,
-                    Bin = request.Bin <= 0 ? 1 : request.Bin,
+                    Bin = request.Bin,
                     Format = format,
                     Gain = request.Gain,
                     ExposureMs = request.ExposureMs,

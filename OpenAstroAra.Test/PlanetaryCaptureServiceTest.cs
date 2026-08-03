@@ -313,6 +313,9 @@ namespace OpenAstroAra.Test {
             var negativeGain = () => service.StartRecordingAsync(
                 new PlanetaryRecordRequestDto(0, 0, 32, 16, 1, "mono8", -1, 5, null), null, CancellationToken.None);
             await negativeGain.Should().ThrowAsync<ArgumentException>().WithMessage("*gain*");
+            var zeroBin = () => service.StartRecordingAsync(
+                new PlanetaryRecordRequestDto(0, 0, 32, 16, 0, "mono8", 100, 5, null), null, CancellationToken.None);
+            await zeroBin.Should().ThrowAsync<ArgumentException>().WithMessage("*bin*");
         }
 
         [Test]
