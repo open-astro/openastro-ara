@@ -118,11 +118,17 @@ class _WeatherBody extends ConsumerWidget {
     // sky conditions the observer plans around, so it rides in the same list.
     final nowUtc = DateTime.now().toUtc();
     final site = ref.watch(siteSettingsProvider);
-    final alt = sunMoonAltitudeDeg(nowUtc, site.latitudeDeg, site.longitudeDeg);
-    rows.addAll([
-      _computed('Sun altitude', '${alt.sunAltDeg.toStringAsFixed(1)}°'),
-      _computed('Moon altitude', '${alt.moonAltDeg.toStringAsFixed(1)}°'),
-    ]);
+    // Same unset-site guard as tonight_sky_state._rankAt: the (0,0) default
+    // would confidently report Null Island altitudes — skip the rows instead.
+    final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;
+    if (siteSet) {
+      final alt =
+          sunMoonAltitudeDeg(nowUtc, site.latitudeDeg, site.longitudeDeg);
+      rows.addAll([
+        _computed('Sun altitude', '${alt.sunAltDeg.toStringAsFixed(1)}°'),
+        _computed('Moon altitude', '${alt.moonAltDeg.toStringAsFixed(1)}°'),
+      ]);
+    }
     final moon = moonPhase(nowUtc);
     rows.add(Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -139,7 +145,10 @@ class _WeatherBody extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (noSensors)
-          const Text('This weather station reports no sensors.'),
+          // Computed sky rows still follow, so say what IS shown rather than
+          // a bare "no sensors" that contradicts the list under it.
+          const Text('This weather station reports no sensors — showing '
+              'computed sky data only.'),
         ...rows,
         if (status.capturedAt != null)
           Padding(
