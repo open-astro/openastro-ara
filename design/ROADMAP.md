@@ -500,9 +500,11 @@ Deliberately on no path (guard against scope-creep pull):
 - **Mount homing mechanical-knob automation** — requires hardware; ARA guides the human.
 - **Astrometric measurement tools** (MPC astrometry submission, supernova-search workflows) —
   research-grade, out of scope for the imaging tool.
-- **Planetary / lunar lucky-imaging** — architecturally blocked: Alpaca has no video API (§52
-  Alpaca-only commitment), so the workflow primitive doesn't exist. Per §18.J this is permanent,
-  not deferred. FireCapture / SharpCap / AstroDMx are the right tools.
+- ~~**Planetary / lunar lucky-imaging** — architecturally blocked: Alpaca has no video API~~
+  **UNBLOCKED 2026-08-02 (§77):** in scope via the daemon's native-SDK capture engine
+  (P/Invoke of the AlpacaBridge-deb-installed vendor `.so`, the one documented §52 exception;
+  §18.J amended accordingly). The Alpaca path itself still has no video API — capture bypasses
+  it behind the §77.2 disconnected-window. Slices P1–P6 in playbook §77.5.
 
 ### What's NOT on this list (and why)
 

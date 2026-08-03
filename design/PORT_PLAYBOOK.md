@@ -1729,8 +1729,8 @@ Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Ha
 ### 18.H — Branding assets
 Placeholders during port. Every icon/splash/logo reference carries `TODO(branding): replace with ARA asset before public release`. User supplies real assets.
 
-### 18.J — Imaging scope: **DSO + COMETS ONLY**
-ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) capture workflow where Alpaca's image-grab API is the right primitive. **Planetary and lunar lucky-imaging are out of scope, permanently, not deferred.** The architectural reason: ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca), so high-frame-rate (5–30 fps) capture isn't possible through the protocol ARA has committed to (§52). NINA has the same limitation; this isn't an ARA-specific gap. Users who want planetary capture use FireCapture, SharpCap, or AstroDMx with vendor-native drivers — different tool category. ARA's sky atlas (§36) still browses planets and moon for educational purposes, but capture is DSO + comets. This decision propagates: no `lunar.json` / `planetary.json` sequence templates (§38.7), no SER file format support, no ROI capture, no high-frame-rate workflows. Anything reading "future planetary support" in older revisions of this doc is wrong — corrected by this section.
+### 18.J — Imaging scope: DSO + comets via Alpaca; planetary via §77 native capture
+**SUPERSEDED IN PART (2026-08-02, §77):** this section originally declared planetary/lunar lucky-imaging "out of scope, permanently" because ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca) and §52 commits ARA's *Alpaca* path to still imaging. The Alpaca-side reasoning stands unchanged — high-frame-rate capture will never go through Alpaca, and the still-imaging pipeline stays DSO + comets (30 s – 900 s exposures, where the image-grab API is the right primitive; NINA has the same protocol limitation). What changed: §77 adds planetary/SER capture as a first-class mode **outside** the Alpaca path — the daemon P/Invokes the vendor SDK `.so` directly (the one documented §52 exception), so SER output, ROI capture, and 100–500 fps workflows are now IN scope via §77's engine, mode-gated behind the §77.2 Alpaca disconnected-window. Statements elsewhere in this doc that cite §18.J for "planetary permanently out of scope" are corrected to "out of scope *for the Alpaca imaging path*; handled by §77."
 
 ### 18.I — Plate solving
 - **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
@@ -5284,7 +5284,7 @@ Ship 3 templates with the `openastroara-server` .deb at `/opt/openastroara/templ
 | `narrowband-shoo.json` | SHO narrowband — Hα, OIII, SII filters with longer exposures |
 | `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion yet (deferred — see design/ROADMAP.md). User points at a comet from the §36.9 catalog. |
 
-No lunar / planetary templates — per §18.J, ARA's scope is DSO + comets only because Alpaca lacks a video API. Lunar/planetary lucky-imaging is permanently out of scope, not deferred. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
+No lunar / planetary templates here — the still-imaging template set is DSO + comets (§18.J); planetary capture is a different engine entirely (§77), and its sequencer clip plans arrive with §77 P5, not as templates in this set. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
 
 ### 38.8 Schema evolution policy
 
@@ -7773,6 +7773,8 @@ ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not bec
 | INDIGO | Limited (some validation but no equivalent ConformU-style certification) | Better than INDI but still inconsistent |
 
 Supporting INDI/INDIGO natively means accumulating brand-quirk workarounds forever — exactly the maintenance burden ARA exists to avoid. NINA learned this the hard way; we don't repeat it.
+
+**One documented exception (2026-08-02):** §77 planetary capture P/Invokes the vendor camera SDK's video subset directly (Alpaca has no video API), and only while the camera is detached from the Alpaca surface via the §77.2 disconnected-window. Device *control* remains Alpaca-only; this exception never extends to mounts, INDI/INDIGO, or any second feature without its own decision-log entry.
 
 ### 52.2 Bridge path for INDI / INDIGO users
 
@@ -10505,7 +10507,7 @@ ARA is Alpaca-only forever (§52). Standard Alpaca `ICamera` has no streaming mo
 
 So ARA implements Live View as a server-side loop of short normal captures with previews routed straight to WebSocket and no FITS save. This works with every Alpaca camera — AlpacaBridge-driven (ZWO, QHY, SVBONY, ToupTek, PlayerOne), third-party ASCOM-Alpaca drivers, simulators for CI/dev. Cadence is bounded but adequate for the framing/focus-check use case.
 
-Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (planetary / lucky-imaging) are permanently out of scope, not deferred. The loop-of-captures approach is therefore not a temporary workaround; it's the right primitive for the workloads ARA targets.
+Per §18.J, the Alpaca imaging path serves DSO + comets — high-frame-rate workflows never go through it (planetary is §77's native-capture engine, a separate path). The loop-of-captures approach is therefore not a temporary workaround; it's the right primitive for the still-imaging workloads this section covers.
 
 ### 64.3 Scope — framing + focus-check, not stacking
 
@@ -10521,10 +10523,10 @@ Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (plan
 - Running-average / live stacking (covered by the live-stacking commitment in design/ROADMAP.md)
 - Multi-frame averaging for visible noise reduction during display
 
-**Permanently out of scope (per §18.J):**
-- Native SDK video mode / high-frame-rate capture — Alpaca has no video API; not coming
-- ROI (region-of-interest) live capture for lucky-imaging — same architectural reason
-- SER file format support (planetary stack input format) — no workflow needs it
+**Out of scope for THIS surface (Live View is the Alpaca still-imaging preview):**
+- Native SDK video mode / high-frame-rate capture, ROI live capture, SER output — these are
+  §77's planetary engine (native SDK path, separate Live-tab planetary mode per §77.4), not
+  Live View features. Alpaca itself still has no video API (§18.J).
 
 ### 64.4 The loop — how it actually works
 
@@ -10771,7 +10773,7 @@ All searchable from the §61 omnibar.
 - **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
 - **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
 
-**Permanently out of scope** (per §18.J): native SDK video mode, ROI capture, SER file format output — all are lucky-imaging features that require a video API Alpaca doesn't provide.
+**Not this surface** (per §18.J as amended): native SDK video mode, ROI capture, and SER output live in §77's planetary engine (native SDK path with its own Live-tab mode, §77.4) — Alpaca itself provides no video API, so they never join this Alpaca-side surface.
 
 ---
 
@@ -11071,7 +11073,7 @@ Both are future paths (ROADMAP). Rationale: under DSO workloads the backpressure
 - Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in the initial release
 - Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
 - Hot-reload of executor config without server restart
-- High-frame-rate / planetary concurrency model — permanently out of scope per §18.J (no video API in Alpaca)
+- High-frame-rate / planetary concurrency model — not part of this executor design; §77's capture engine owns its own two-thread ring/drain model (Alpaca still has no video API, §18.J)
 
 ### 66.9 §61 search registry entries
 
@@ -12929,7 +12931,7 @@ the workflow ASIAIR makes users do by hand.
 
 ### 77.6 Cross-references
 
-- §45 (capture-fetch + centering loop) · §52 (Alpaca-only equipment rule — §77 is its one
+- §45 (capture-fetch + centering loop) · §52 (the Alpaca-only commitment — §77 is its one
   documented exception, video-subset P/Invoke only) · §59 (focus offsets, temp refocus) ·
   §63.5 (disconnected-window precedent) · §64/§65 (Live surface + preview pipeline) · §68
   (AlpacaBridge version contract — unchanged; the bridge gains no video API) · §34 (Ara deb
