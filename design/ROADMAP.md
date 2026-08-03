@@ -391,6 +391,12 @@ Explicitly user-gated calls — blocked on a decision, not on engineering:
 - **REST calibration-frame capture** — manual capture is LIGHT-only by design (`ExposureRequestDto`
   has no `ImageType`); add an optional `ImageType` (default LIGHT) only if a REST calibration
   affordance is wanted.
+- **Daytime polar alignment (§45 extension)** — lunar limb-fit centroid + ephemeris in place of
+  plate solving (Moon is naked-eye findable in daylight, no filter, guide-scope-sized target;
+  phase handled by fitting the illuminated limb), with solar centroid as the new-moon fallback
+  (requires a solar-filter interlock). Same §45 two-point geometry + live adjust loop. Concept
+  discussed 2026-08-02; Joey is thinking it over — do NOT build until he decides. Planetary
+  (§77) comes first regardless.
 
 ## 10. Appendix — accepted watch-items & small follow-ups
 

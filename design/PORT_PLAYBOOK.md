@@ -12818,3 +12818,91 @@ checklist that is already green, with re-run entry points for hardware changes.
   (later guider panels/wizard shipped in PRs #883–#885/#897 without new § numbers) · §68
   AlpacaBridge contract
 - §45 polar align (consumes the profile this wizard produces)
+
+## 77. Planetary / SER capture — high-speed video through AlpacaBridge
+
+**Intent** (Joey, 2026-08-02): planetary (lucky) imaging as a first-class mode. The Alpaca HTTP
+imaging path tops out at a few fps; planetary wants 100–500 fps ROI video. So the capture loop
+lives **inside AlpacaBridge** — the process that already links every vendor's SDK `.so` — writing
+SER files straight to local USB storage at full camera speed, while Ara acts as remote control
+and throttled preview. Precedent: the ASIAIR (Pi CM4-class) ships exactly this architecture —
+native SDK on the box, local recording, throttled app preview — proving the hardware tier works,
+with a known fps ceiling versus a USB3-connected PC that we accept and surface honestly.
+
+### 77.1 AlpacaBridge video mode
+
+- **`IVideoCapture` seam** (ours, ~30 lines): `StartVideo(roi, bin, gain, exposureMs)`,
+  frames-available callback, `Stop()`, dropped-frame counter. One implementation per vendor SDK
+  behind it; the SER writer / ring buffer / preview tap sit on top, vendor-agnostic.
+- **Vendor sequencing**: ZWO first (`ASIStartVideoCapture`/`ASIGetVideoData`, best documented),
+  then QHY (`BeginQHYCCDLive`), ToupTek/Player One (callback-push models), **Svbony once its
+  `.so` lands in AlpacaBridge** (Joey is arranging it; SVB API is ASI-like). Every bundled
+  vendor is in scope — the seam exists so each is a glue module, not an architecture change.
+  NOT used: Spinnaker (closed, FLIR-only, no source, can't drive our cameras); Aravis (LGPL
+  GenICam) noted as a possible future backend if industrial cameras ever matter.
+- **RAM ring buffer, adaptively sized**: `clamp(25% of MemAvailable at capture start, 64 MB,
+  512 MB)` — 512 MB on a Pi 5, ~128–256 MB on a 2 GB iOptron iMate; pre-allocated, no
+  allocation in the hot path. At 90 MB/s that is ~1.5–5 s of stall absorption.
+- **SER writer**: dedicated drain thread, large sequential writes with `O_DIRECT`/`io_uring` —
+  mandatory, not optional: page-cache writeback would eat all free RAM on a 2 GB box
+  mid-capture. SER = 178-byte header + raw frames + optional timestamp trailer; written by us
+  (no external video framework — ffmpeg/GStreamer are encoded-video tools, wrong layer, and
+  stacking needs raw frames).
+- **Honest accounting**: measured sustained disk rate at capture start, live achieved-vs-
+  requested fps, dropped-frame counter, disk-space remaining. No silent loss, ever.
+- **usbfs tuning**: Linux defaults `usbcore.usbfs_memory_mb` to 16 MB — far too small for
+  100+ MB/s bulk transfers. The bridge auto-tunes it by box RAM (≈256 MB on 2 GB, up to
+  1000 MB on 8 GB; it is PINNED kernel memory, so it scales down with the ring), applied live
+  via `/sys/module/usbcore/parameters/usbfs_memory_mb` and persisted for boot by the deb. The
+  privilege is a deb-installed rule scoped to exactly that path — no general root in the API.
+  Ara Options surfaces "Capture tuning — usbfs N MB (auto) · ring M MB (auto)" with override.
+- **Bandwidth reality**: Pi 4/CM4 shares one PCIe Gen2 x1 for both USB3 ports (~350–400 MB/s
+  combined) — planetary ROIs (~90 MB/s in + out) fit comfortably; full-sensor 16-bit high-fps
+  runs are where drops appear (same tier as ASIAIR). Pi 5 raises the ceiling. USB3 SSD
+  required; SD card storage is refused with a clear message.
+
+### 77.2 Mode arbitration
+
+A camera cannot be in Alpaca still-imaging and SDK video mode at once. The bridge gets an
+explicit enter/leave-planetary-mode gate per camera (same spirit as the §63.5 guider
+disconnected-window): entering detaches the camera from the Alpaca surface (Alpaca calls 409
+while held), leaving restores it. Ara refuses to enter while a sequence holds the camera.
+
+### 77.3 Pointing — solve where you can, capture where you can't
+
+Planets won't plate-solve on the planetary chip (arcminute FOV, no stars). The guide scope
+will. Flow: ephemeris goto (planning engine already computes ephemerides) → §45 capture-fetch
+machinery grabs a guide-camera frame → ASTAP solve → offset-correct → iterate until the planet
+is centered within the planetary chip's FOV → track at sidereal/lunar/solar rate → hand off to
+video mode. This is the §45 polar-align centering loop pointed at a different target, and it is
+the workflow ASIAIR makes users do by hand.
+
+### 77.4 Ara integration
+
+- **Live-tab planetary mode** (§64 surface, different engine): preview from the bridge's ring
+  tap at 5–10 fps JPEG (full-rate frames never leave the box), ROI drawn on the preview,
+  gain/exposure controls, big Record SER button, achieved-fps/drops/disk readouts, capture
+  file list on the USB store (SER grows ~5 GB/min — surface it).
+- **Sequencer planetary steps**: clip plans ("record N s, repeat ×M" — 60–120 s clips per
+  planet-rotation discipline), mono RGB filter cycling (filter change + §59 focus offset +
+  clip, loop), automatic §77.3 re-centering between clips (drift at planetary scales), and
+  temperature-triggered refocus via the existing §59 machinery.
+- **Out of scope permanently**: stacking/derotation — AutoStakkert/WinJUPOS stay desktop
+  tools; Ara's job ends at clean SERs + honest metadata on the USB drive.
+
+### 77.5 Slice plan (each a gated PR)
+
+- **P1** — AlpacaBridge: `IVideoCapture` seam + ZWO glue + ring buffer + SER writer + drop
+  accounting (bench-tested with a synthetic frame source)
+- **P2** — mode arbitration + usbfs auto-tune + capture-tuning endpoint
+- **P3** — Ara Live-tab planetary mode (preview tap, record control, readouts)
+- **P4** — pointing: ephemeris goto + guide-cam solve-and-center loop
+- **P5** — sequencer clip plans + RGB cycling + inter-clip re-centering
+- **P6+** — QHY / ToupTek / Player One / Svbony vendor glue as their turn comes
+
+### 77.6 Cross-references
+
+- §45 (capture-fetch + centering loop) · §59 (focus offsets, temp refocus) · §63.5
+  (disconnected-window precedent) · §64/§65 (Live surface + preview pipeline) · §68
+  (AlpacaBridge contract; this section extends it with the video-mode API) · §34 (deb owns
+  the usbfs persistence + sudoers scope)
