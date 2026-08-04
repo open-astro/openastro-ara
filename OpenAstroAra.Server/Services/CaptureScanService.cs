@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System.Security.Cryptography;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -25,14 +26,13 @@ namespace OpenAstroAra.Server.Services;
 /// 1. <b>Mount + writability</b>: probe the configured save path; if not
 ///    writable, log critical + skip (server still starts so that profile
 ///    edits + non-storage endpoints work; user fixes storage and restarts).
-/// 2. <b>Stale .tmp sweep</b>: any <c>*.tmp</c> file older than 5 minutes
-///    in the captures tree is presumed crashed-mid-write and deleted
-///    (§28.7's atomic-rename pattern guarantees only crashed writes leave
-///    .tmp files behind; healthy writes finish in seconds).
+/// 2. <b>Interrupted lifecycle reconciliation</b>: stale tracked attempts are
+///    marked Partial/Failed. Tracked temp bytes remain for review; only stale
+///    untracked <c>*.fits.tmp</c> files are deleted.
 /// 3. <b>Orphan FITS recovery</b>: for each <c>.fits</c> not in the catalog,
-///    parse the header via <see cref="OpenAstroAra.Fits.FitsImage"/> and
-///    INSERT a row. Synthetic session id used if the orphan's session
-///    can't be determined from parent directory.
+///    parse, hash, and transactionally INSERT a row. A matching lifecycle
+///    preserves the original frame/session identity; unrelated files use a
+///    synthetic recovered session.
 ///
 /// On a fresh install with no captures yet (typical v0.0.1 state), all
 /// three steps are no-ops and the scan returns in < 1ms. Real captures
@@ -73,7 +73,9 @@ public sealed partial class CaptureScanService {
             return;
         }
 
-        var tmpSwept = SweepStaleTempFiles(savePath);
+        await ReconcileInterruptedStorageAsync(ct).ConfigureAwait(false);
+        var reviewableTemps = await LoadReviewableTempPathsAsync(ct).ConfigureAwait(false);
+        var tmpSwept = SweepStaleTempFiles(savePath, reviewableTemps);
         var orphansRecovered = await RecoverOrphanFitsAsync(savePath, ct);
 
         if (tmpSwept > 0 || orphansRecovered > 0) {
@@ -92,11 +94,14 @@ public sealed partial class CaptureScanService {
         }
     }
 
-    private int SweepStaleTempFiles(string root) {
+    private int SweepStaleTempFiles(string root, HashSet<string> reviewableTemps) {
         var threshold = DateTime.UtcNow.AddMinutes(-5);
         var swept = 0;
-        foreach (var tmp in EnumerateFilesSafe(root, "*.tmp")) {
+        foreach (var tmp in EnumerateFilesSafe(root, "*.fits.tmp")) {
             try {
+                if (reviewableTemps.Contains(Path.GetFullPath(tmp))) {
+                    continue; // lifecycle evidence remains until explicit operator cleanup lands
+                }
                 var info = new FileInfo(tmp);
                 if (info.LastWriteTimeUtc < threshold) {
                     info.Delete();
@@ -108,6 +113,108 @@ public sealed partial class CaptureScanService {
             }
         }
         return swept;
+    }
+
+    private async Task<HashSet<string>> LoadReviewableTempPathsAsync(CancellationToken ct) {
+        var paths = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT temporary_path
+            FROM frame_storage_lifecycle
+            WHERE state = 'partial' AND temporary_path IS NOT NULL;
+            """;
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+            paths.Add(Path.GetFullPath(reader.GetString(0)));
+        }
+        return paths;
+    }
+
+    /// <summary>
+    /// Close crash-stranded lifecycle rows before file reconciliation. Rows with
+    /// remaining bytes become Partial; rows with no bytes become Failed. A frame
+    /// row and lifecycle row can only diverge on legacy/manual inserts, so heal
+    /// that case to Complete first.
+    /// </summary>
+    private async Task ReconcileInterruptedStorageAsync(CancellationToken ct) {
+        var threshold = DateTimeOffset.UtcNow.AddMinutes(-5);
+        await using var conn = _db.OpenConnection();
+
+        await using (var completed = conn.CreateCommand()) {
+            completed.CommandText = """
+                UPDATE frame_storage_lifecycle
+                SET state = 'complete',
+                    completed_utc = COALESCE(completed_utc,
+                        (SELECT captured_utc FROM frames WHERE frames.id = frame_storage_lifecycle.frame_id)),
+                    byte_count = COALESCE(byte_count,
+                        (SELECT file_size_bytes FROM frames WHERE frames.id = frame_storage_lifecycle.frame_id)),
+                    checksum_sha256 = COALESCE(checksum_sha256,
+                        (SELECT sha256 FROM frames WHERE frames.id = frame_storage_lifecycle.frame_id)),
+                    temporary_path = NULL,
+                    failure_code = NULL,
+                    failure_message = NULL,
+                    updated_utc = $now
+                WHERE state IN ('accepted', 'exposing', 'downloading', 'persisting')
+                  AND EXISTS (SELECT 1 FROM frames WHERE frames.id = frame_storage_lifecycle.frame_id);
+                """;
+            completed.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            await completed.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
+        var interrupted = new List<(Guid FrameId, string? TemporaryPath, string FinalPath, string State)>();
+        await using (var select = conn.CreateCommand()) {
+            select.CommandText = """
+                SELECT frame_id, temporary_path, final_path, state
+                FROM frame_storage_lifecycle
+                WHERE state IN ('accepted', 'exposing', 'downloading', 'persisting', 'failed')
+                  AND updated_utc < $threshold;
+                """;
+            select.Parameters.AddWithValue("$threshold", threshold.ToString("O"));
+            await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+                interrupted.Add((
+                    Guid.Parse(reader.GetString(0)),
+                    await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3)));
+            }
+        }
+
+        foreach (var item in interrupted) {
+            ct.ThrowIfCancellationRequested();
+            var finalExists = File.Exists(item.FinalPath);
+            var tempExists = item.TemporaryPath is not null && File.Exists(item.TemporaryPath);
+            if (item.State == "failed" && !finalExists && !tempExists) {
+                continue; // keep the original durable failure reason when no bytes survived
+            }
+            var state = finalExists || tempExists ? "partial" : "failed";
+            var code = finalExists ? "catalog_registration_interrupted"
+                : tempExists ? "write_interrupted"
+                : "capture_interrupted";
+            var message = finalExists
+                ? "A committed source file survived a daemon interruption and is awaiting catalog recovery."
+                : tempExists
+                    ? "A temporary source file survived a daemon interruption and requires review."
+                    : "Capture was interrupted before durable source bytes were committed.";
+            await using var update = conn.CreateCommand();
+            update.CommandText = """
+                UPDATE frame_storage_lifecycle
+                SET state = $state,
+                    failure_code = $failure_code,
+                    failure_message = $failure_message,
+                    updated_utc = $now
+                WHERE frame_id = $frame_id
+                  AND state IN ('accepted', 'exposing', 'downloading', 'persisting', 'failed');
+                """;
+            update.Parameters.AddWithValue("$state", state);
+            update.Parameters.AddWithValue("$failure_code", code);
+            update.Parameters.AddWithValue("$failure_message", message);
+            update.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            update.Parameters.AddWithValue("$frame_id", item.FrameId.ToString("D"));
+            await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
     }
 
     private async Task<int> RecoverOrphanFitsAsync(string root, CancellationToken ct) {
@@ -181,27 +288,39 @@ public sealed partial class CaptureScanService {
         var focuserPos = ParseInt(LookupHeader(headers, "FOCUSPOS"))
             ?? ParseInt(LookupHeader(headers, "FOCPOS"));
 
-        // Synthetic recovered session — one bucket for all orphans recovered
-        // in this scan. Real session tracking lands when §38 orchestrator
-        // writes the session_id into the FITS header on capture.
-        var sessionId = await EnsureRecoverySessionAsync(ct);
-        var frameId = Guid.NewGuid();
+        // A lifecycle row survives a crash before catalog registration. Preserve
+        // its original frame/session identity; unrelated orphan files use the
+        // synthetic recovered-session bucket.
+        var pending = await FindPendingStorageAsync(fitsPath, ct).ConfigureAwait(false);
+        var sessionId = pending?.SessionId ?? await EnsureRecoverySessionAsync(ct).ConfigureAwait(false);
+        var frameId = pending?.FrameId ?? Guid.NewGuid();
+        string checksum;
+        await using (var stream = new FileStream(fitsPath, FileMode.Open, FileAccess.Read,
+            FileShare.Read, bufferSize: 128 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan)) {
+            checksum = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        }
+        var cfaPattern = LookupHeader(headers, "BAYERPAT")?.Trim().ToUpperInvariant();
+        var completedUtc = DateTimeOffset.UtcNow;
 
         await using var conn = _db.OpenConnection();
+        await using var transaction = (Microsoft.Data.Sqlite.SqliteTransaction)
+            await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         await using var insert = conn.CreateCommand();
+        insert.Transaction = transaction;
         insert.CommandText = """
             INSERT INTO frames
                 (id, session_id, target_name, frame_type, filter_name,
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json, focuser_position)
+                 quality_score_json, rating, tags_json, focuser_position, sha256)
             VALUES
                 ($id, $session_id, $target, $frame_type, $filter,
                  $exposure, $gain, $offset, $temp, $captured_utc,
                  $file_path, $file_size, $width, $height, $bit_depth,
                  $hfr, $stars, NULL, NULL, NULL,
-                 NULL, 0, '[]', $focuser_position);
+                 NULL, 0, '[]', $focuser_position, $sha256);
             """;
         insert.Parameters.AddWithValue("$id", frameId.ToString());
         insert.Parameters.AddWithValue("$session_id", sessionId.ToString());
@@ -221,10 +340,69 @@ public sealed partial class CaptureScanService {
         insert.Parameters.AddWithValue("$hfr", DbValue(hfr));
         insert.Parameters.AddWithValue("$stars", DbValue(stars));
         insert.Parameters.AddWithValue("$focuser_position", DbValue(focuserPos));
-        await insert.ExecuteNonQueryAsync(ct);
+        insert.Parameters.AddWithValue("$sha256", checksum);
+        await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+        await using var lifecycle = conn.CreateCommand();
+        lifecycle.Transaction = transaction;
+        lifecycle.CommandText = """
+            INSERT INTO frame_storage_lifecycle
+                (frame_id, session_id, accepted_utc, completed_utc,
+                 temporary_path, final_path, byte_count, checksum_sha256,
+                 image_format, cfa_pattern, state, failure_code,
+                 failure_message, updated_utc)
+            VALUES
+                ($frame_id, $session_id, $accepted_utc, $completed_utc,
+                 NULL, $final_path, $byte_count, $checksum_sha256,
+                 'fits', $cfa_pattern, 'complete', NULL, NULL, $completed_utc)
+            ON CONFLICT(frame_id) DO UPDATE SET
+                completed_utc = excluded.completed_utc,
+                temporary_path = NULL,
+                final_path = excluded.final_path,
+                byte_count = excluded.byte_count,
+                checksum_sha256 = excluded.checksum_sha256,
+                image_format = excluded.image_format,
+                cfa_pattern = excluded.cfa_pattern,
+                state = 'complete',
+                failure_code = NULL,
+                failure_message = NULL,
+                updated_utc = excluded.updated_utc;
+            """;
+        lifecycle.Parameters.AddWithValue("$frame_id", frameId.ToString("D"));
+        lifecycle.Parameters.AddWithValue("$session_id", sessionId.ToString("D"));
+        lifecycle.Parameters.AddWithValue("$accepted_utc", (pending?.AcceptedUtc ?? capturedUtc).ToString("O"));
+        lifecycle.Parameters.AddWithValue("$completed_utc", completedUtc.ToString("O"));
+        lifecycle.Parameters.AddWithValue("$final_path", fitsPath);
+        lifecycle.Parameters.AddWithValue("$byte_count", fileSize);
+        lifecycle.Parameters.AddWithValue("$checksum_sha256", checksum);
+        lifecycle.Parameters.AddWithValue("$cfa_pattern", (object?)cfaPattern ?? DBNull.Value);
+        await lifecycle.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
 
         LogRecoveredOrphan(fitsPath, target, frameType, exposureSec);
         return true;
+    }
+
+    private sealed record PendingStorage(Guid FrameId, Guid SessionId, DateTimeOffset AcceptedUtc);
+
+    private async Task<PendingStorage?> FindPendingStorageAsync(string finalPath, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT frame_id, session_id, accepted_utc
+            FROM frame_storage_lifecycle
+            WHERE final_path = $final_path
+              AND state <> 'complete'
+            LIMIT 1;
+            """;
+        cmd.Parameters.AddWithValue("$final_path", Path.GetFullPath(finalPath));
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
+        return new PendingStorage(
+            Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)),
+            DateTimeOffset.Parse(reader.GetString(2), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind));
     }
 
     private Guid? _recoverySessionId;

@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
             await using var ver = check.CreateCommand();
             ver.CommandText = "SELECT version FROM schema_version;";
             Assert.That(Convert.ToInt64(await ver.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture),
-                Is.EqualTo(4), "schema_version reflects the newest pass (§44 backup-stream columns bumped it to 4)");
+                Is.EqualTo(7), "schema_version reflects the Rank 1 frame operations migration");
 
             Assert.DoesNotThrowAsync(() => new SqliteAraDatabase(_dir, logger: null).InitializeAsync(CancellationToken.None));
         }
@@ -259,7 +259,7 @@ namespace OpenAstroAra.Test {
             await using var idx = check.CreateCommand();
             idx.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND tbl_name='frames' AND name LIKE 'idx_frames_%';";
             Assert.That(Convert.ToInt64(await idx.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture),
-                Is.EqualTo(3), "session_id + captured_utc + light partial indexes all recreated");
+                Is.EqualTo(4), "session_id + captured_utc + light + quarantine partial indexes all recreated");
 
             // Idempotence: a second initialize is a no-op (the DDL no longer matches).
             var again = new SqliteAraDatabase(_dir, logger: null);

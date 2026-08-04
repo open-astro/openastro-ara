@@ -79,6 +79,13 @@ NUGET_OVERRIDES: dict[str, dict[str, str]] = {
     "Accord": _ACCORD,
     "Accord.Math": _ACCORD,
     "Accord.Statistics": _ACCORD,
+    "BitMiracle.LibTiff.NET": {
+        "license": "BSD-3-Clause AND IJG AND libtiff",
+        "source": "https://bitmiracle.github.io/libtiff.net/help/articles/license.html "
+        "(Bit Miracle BSD-3-Clause terms plus bundled IJG and libtiff notices; "
+        "verified 2026-08-04)",
+        "version": "2.4.660",
+    },
     "Common.Logging": _COMMON_LOGGING,
     "Common.Logging.Core": _COMMON_LOGGING,
     "IPNetwork2": {
@@ -273,6 +280,9 @@ BUNDLED PLATFORMS (not reported by either package graph):
   * CFITSIO — P/Invoked by OpenAstroAra.Fits but NOT bundled: the .deb
     depends on the distro's libcfitsio10 package, which supplies the shared
     library. ISC-style HEASARC license — see NOTICE.md.
+  * LibRaw — P/Invoked by OpenAstroAra.Image but NOT bundled: the .deb depends
+    on the distro's libraw23t64 package. LGPL-2.1-or-later OR CDDL-1.0 — see
+    NOTICE.md and the package's machine-readable copyright file.
 
 VENDORED NATIVE / IN-REPO SOURCE (not reported by either package graph — these
 components live as source in the tree rather than as resolved packages; the

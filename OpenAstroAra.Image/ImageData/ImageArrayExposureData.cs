@@ -13,9 +13,11 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Image.FileFormat.Raster;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 namespace OpenAstroAra.Image.ImageData {
@@ -66,13 +68,32 @@ namespace OpenAstroAra.Image.ImageData {
                     metaData: this.MetaData));
         }
 
-        // FromBitmapSource / ArrayFromSource / ArrayFrom8BitSource /
-        // ArrayFrom16BitSource removed — the WPF BitmapSource pixel-format
-        // matrix is replaced by OpenCvSharp4 Mat conversions per playbook
-        // §line-2105. The headless daemon's capture path uses raw ushort[]
-        // arrays directly (via the §72 CFITSIO P/Invoke + the §65 stretch
-        // pipeline), so this no-longer-used WPF entry point is stubbed.
-        public static Task<ImageArrayExposureData> FromBitmapSource(byte[] source, IImageDataFactory imageDataFactory) =>
-            throw new NotImplementedException("FromBitmapSource pending OpenCvSharp4 wiring.");
+        public static async Task<ImageArrayExposureData> FromBitmapSource(byte[] source,
+                IImageDataFactory imageDataFactory, CancellationToken cancellationToken = default) {
+            ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(imageDataFactory);
+            var decoded = await new RasterImageDecoder().DecodeBufferAsync(source,
+                expectedFormat: null, ImageLoadLimits.Default, cancellationToken).ConfigureAwait(false);
+            var metadata = new ImageMetaData();
+            if (decoded.Format == RasterImageFormat.Tiff
+                && decoded.Metadata.TryGetValue("TIFFIMAGEDESCRIPTION", out var description)) {
+                TiffMetadataCodec.TryDecode(description, decoded.Width, decoded.Height, out metadata);
+            }
+            var headers = new List<IGenericMetaDataHeader>(metadata.GenericHeaders);
+            foreach (var pair in decoded.Metadata) {
+                if (string.Equals(pair.Key, "TIFFIMAGEDESCRIPTION", StringComparison.Ordinal)) continue;
+                headers.Add(new StringMetaDataHeader(pair.Key, pair.Value));
+            }
+            headers.Add(new IntMetaDataHeader("RASTERSOURCEBITDEPTH", decoded.SourceBitDepth));
+            if (decoded.IsPreviewOnly) {
+                headers.Add(new StringMetaDataHeader("RASTERPREVIEWONLY", "true"));
+            }
+            metadata.GenericHeaders = headers;
+            var cfaPattern = RasterMetadata.ApplyColorModel(metadata,
+                hasColorPlanes: decoded.ColorData is not null);
+            return new ImageArrayExposureData(decoded.BorrowLuminancePlane(), decoded.Width,
+                decoded.Height, bitDepth: 16, isBayered: cfaPattern is not null,
+                metadata, imageDataFactory);
+        }
     }
 }

@@ -19,13 +19,14 @@
 - §37 profile round-trip — 12 sections persisted as `profile.json`; the live NINA profile hydrates from it so executing instructions read user-edited settings (§14e profile source-of-truth).
 - §46.5 SQLite notifications log + preferences; §50 stats (8 chart views); §51 diagnostics state/history/mode; §40.7 hfr-analysis; §40.8 frame bulk ops; §13 systemd-driven `/server/restart` with §34.7 imminent-restart WS event.
 - **Real Live View** (§64): short-exposure loop on the connected camera rendered to JPEG via the §65 stretch path (ephemeral — never catalogued), with OSC debayering to real colour; the client's Imaging-tab Live View toggle drives it.
+- **Camera RAW decoding**: LibRaw-backed import with bounded input, cancellable processing, linear
+  16-bit color planes, source-preserving downloads, and professional preview channels.
 - **§36 sky-data Data Manager**: downloads the real HYG star + OpenNGC deep-sky catalogs (commit-pinned, SHA-256-verified, atomic install), serving Tonight's Sky ranking + planetarium catalog overlays.
 - **§43 configuration backup**: ZIP snapshots with retention pruning + restore (local or from another daemon's snapshot URL, SHA-256-gated).
 
 **Still placeholders (real impl ahead):**
 - Polar alignment (§45) — will drive the `openastro-guider` daemon's polar-align API.
 - §44 backup stream.
-- DSLR RAW decoding (libraw).
 
 ### Client (`OpenAstroAra.Client` Flutter)
 
@@ -48,7 +49,6 @@
 
 ### Known limitations
 
-- DSLR RAW decoding (libraw) not yet integrated.
 - Polar alignment (§45) not yet implemented.
 - Dependency licenses audited release-safe (MPL-2.0-compatible; no GPL/AGPL/commercial in the daemon); `3rd-party-licenses.txt` at the repo root is generated from the full NuGet graph and kept fresh by CI.
 

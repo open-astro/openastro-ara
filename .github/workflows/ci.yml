@@ -198,10 +198,10 @@ jobs:
 
       # §14e capture path: CameraConnectIntegrationTest writes a real FITS file through
       # CFITSIO (P/Invoke), so the runtime lib must be present in this job too.
-      - name: Install CFITSIO (Linux)
+      - name: Install native image libraries (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcfitsio-dev
+          sudo apt-get install -y libcfitsio-dev libraw-dev
 
       - name: dotnet restore (test project)
         run: dotnet restore OpenAstroAra.Test/OpenAstroAra.Test.csproj
@@ -260,10 +260,10 @@ jobs:
 
       # The Image/Fits tests resolve CFITSIO at runtime; the build itself does not
       # need it, but the test step below does.
-      - name: Install CFITSIO (Linux)
+      - name: Install native image libraries (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcfitsio-dev
+          sudo apt-get install -y libcfitsio-dev libraw-dev
 
       # Cache the global NuGet package folder so a clean runner doesn't re-download
       # every package each run. No packages.lock.json in this repo, so key on the
@@ -330,10 +330,10 @@ jobs:
       # native library at runtime (build doesn't need it, but a future
       # FitsImageTests step will). Debian's libcfitsio10 (runtime) +
       # libcfitsio-dev (headers, for ldconfig + symlinks) cover both.
-      - name: Install CFITSIO (Linux)
+      - name: Install native image libraries (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcfitsio-dev
+          sudo apt-get install -y libcfitsio-dev libraw-dev
 
       # Share the NuGet package cache with analyzer-gate (same key) so neither job
       # re-downloads every package on a clean runner.

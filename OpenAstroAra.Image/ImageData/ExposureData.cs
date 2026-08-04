@@ -17,6 +17,7 @@ using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.FileFormat.RAW;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
@@ -294,12 +295,14 @@ namespace OpenAstroAra.Image.ImageData {
         private protected readonly IProfileService profileService;
         private protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
         private protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
+        private protected readonly IRawImageDecoder rawImageDecoder;
 
-        public ExposureDataFactory(IImageDataFactory imageDataFactory, IProfileService profileService, IPluggableBehaviorSelector<IStarDetection> starDetectionSelector, IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector) {
+        public ExposureDataFactory(IImageDataFactory imageDataFactory, IProfileService profileService, IPluggableBehaviorSelector<IStarDetection> starDetectionSelector, IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector, IRawImageDecoder? rawImageDecoder = null) {
             this.imageDataFactory = imageDataFactory;
             this.profileService = profileService;
             this.starDetectionSelector = starDetectionSelector;
             this.starAnnotatorSelector = starAnnotatorSelector;
+            this.rawImageDecoder = rawImageDecoder ?? new LibRawDecoder();
         }
 
         public CachedExposureData CreateCachedExposureData(IImageData imageData) {
@@ -310,10 +313,11 @@ namespace OpenAstroAra.Image.ImageData {
             return new Flipped2DExposureData(flipped2DArray, bitDepth, isBayered, metaData, imageDataFactory, profileService.ActiveProfile.CameraSettings.ASCOMCreate32BitData);
         }
 
-        public RAWExposureData CreateRAWExposureData(RawConverter converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
-            // RawConverterFactory deleted (DCRaw + FreeImage WPF dependencies);
-            // RAW decoding lands with libraw integration per playbook §line-2105.
-            throw new NotImplementedException("CreateRAWExposureData pending libraw integration.");
+        public RAWExposureData CreateRAWExposureData(RawConverter converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) {
+            ArgumentNullException.ThrowIfNull(rawBytes);
+            return new RAWExposureData(new LibRawConverter(imageDataFactory, rawImageDecoder),
+                rawBytes, rawType, bitDepth, metaData, imageDataFactory);
+        }
 
         public ImageArrayExposureData CreateImageArrayExposureData(ushort[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData) {
             return new ImageArrayExposureData(input, width, height, bitDepth, isBayered, metaData, imageDataFactory);
