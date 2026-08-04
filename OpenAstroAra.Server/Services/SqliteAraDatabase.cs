@@ -103,6 +103,17 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 guiding_rms_arcsec REAL,
                 snr_estimate       REAL,
                 analysis_version   TEXT,
+                analysis_state     TEXT,
+                analysis_failure_code TEXT,
+                analysis_failure_message TEXT,
+                preview_state      TEXT,
+                preview_failure_code TEXT,
+                preview_failure_message TEXT,
+                preview_checksum   TEXT,
+                debayer_method     TEXT,
+                preview_version    TEXT,
+                quarantined_utc    TEXT,
+                quarantine_reason  TEXT,
                 quality_score_json TEXT,
                 rating             INTEGER NOT NULL DEFAULT 0,
                 tags_json          TEXT NOT NULL DEFAULT '[]',
@@ -174,12 +185,41 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await AddColumnIfMissingAsync(conn, "frames", "synced_at", "TEXT", ct);
         await AddColumnIfMissingAsync(conn, "frames", "sha256", "TEXT", ct);
         await AddColumnIfMissingAsync(conn, "frames", "analysis_version", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_state", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_failure_code", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "analysis_failure_message", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_state", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_failure_code", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_failure_message", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_checksum", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "debayer_method", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "preview_version", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "quarantined_utc", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "quarantine_reason", "TEXT", ct);
 
         await ExecAsync(conn, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);", ct);
         await ExecAsync(conn, """
             INSERT INTO schema_version (version)
-            SELECT 6 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
-            UPDATE schema_version SET version = 6 WHERE version < 6;
+            SELECT 7 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+            UPDATE schema_version SET version = 7 WHERE version < 7;
+            """, ct);
+
+        // Derived work is process-owned. A daemon restart cannot truthfully leave
+        // an in-flight state running, and it must not silently retry expensive
+        // work the operator may have cancelled. The explicit rebuild/reanalyse
+        // endpoints are the restart mechanism.
+        await ExecAsync(conn, """
+            UPDATE frames
+            SET preview_state = 'interrupted',
+                preview_failure_code = 'daemon_restarted',
+                preview_failure_message = 'Preview rendering was interrupted by daemon restart.'
+            WHERE preview_state IN ('queued', 'rendering');
+
+            UPDATE frames
+            SET analysis_state = 'interrupted',
+                analysis_failure_code = 'daemon_restarted',
+                analysis_failure_message = 'Frame analysis was interrupted by daemon restart.'
+            WHERE analysis_state IN ('queued', 'analyzing');
             """, ct);
 
         // Existing completed frames predate the lifecycle ledger. Backfill once,
@@ -198,6 +238,7 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_quarantined_utc ON frames(quarantined_utc) WHERE quarantined_utc IS NOT NULL;", ct);
         // §50 stats-perf: most stats queries restrict to light frames and
         // order/group by captured_utc (targets, calendar, frame-quality,
         // best-frames, focus-temp). A partial covering index keeps the

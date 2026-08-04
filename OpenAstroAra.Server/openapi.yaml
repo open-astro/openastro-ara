@@ -232,93 +232,248 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OperationAccepted' }
 
-# ─── Endpoint group: Image (Phase 8) ──────────────────────────────────────────
+# ─── Endpoint group: Frames (Phase 8 + Rank 1 operations) ─────────────────────
 
-  /image:
+  /frames:
     get:
-      summary: List captured frames in the library
-      description: |
-        Paginated; default 50 per page. Filter by `target=...`, `date_from=...`,
-        `date_to=...`. Items return metadata only; use `/image/{id}` to download.
-      tags: [Image]
+      summary: List captured frames
+      tags: [Frames]
       parameters:
-        - name: target
-          in: query
-          schema: { type: string }
-        - name: date_from
-          in: query
-          schema: { type: string, format: date-time }
-        - name: date_to
-          in: query
-          schema: { type: string, format: date-time }
-        - name: page
-          in: query
-          schema: { type: integer, default: 1, minimum: 1 }
-        - name: per_page
-          in: query
-          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+        - { name: limit, in: query, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: sessionId, in: query, schema: { type: string, format: uuid } }
+        - { name: targetName, in: query, schema: { type: string } }
       responses:
         '200':
-          description: Page of frames
+          description: Cursor page
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FramePage' }
 
-  /image/{id}:
+  /frames/{id}:
     get:
-      summary: Get frame metadata
-      tags: [Image]
+      summary: Get one frame
+      tags: [Frames]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/FrameId'
       responses:
         '200':
-          description: Frame metadata
+          description: Frame
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Frame' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
-  /image/{id}/fits:
+  /frames/{id}/metadata:
     get:
-      summary: Download the FITS file
-      tags: [Image]
+      summary: Get source, storage, preview, analysis, and quarantine metadata
+      tags: [Frames]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/FrameId'
       responses:
         '200':
-          description: FITS bytes
+          description: Frame operation metadata
           content:
-            application/fits:
-              schema: { type: string, format: binary }
+            application/json:
+              schema: { $ref: '#/components/schemas/FrameMetadata' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
-  /image/{id}/preview:
+  /frames/{id}/preview:
     get:
-      summary: Get the server-rendered JPEG preview
-      description: |
-        Stretched JPEG per §65. Stretch parameters configurable via query string.
-      tags: [Image]
+      summary: Render the default JPEG preview
+      tags: [Frames]
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-        - name: stretch
-          in: query
-          schema: { type: string, enum: [auto, linear, asinh, log] }
-        - name: max_dim
-          in: query
-          schema: { type: integer, default: 1920, minimum: 256, maximum: 4096 }
+        - $ref: '#/components/parameters/FrameId'
       responses:
         '200':
-          description: JPEG bytes
+          description: JPEG preview
           content:
             image/jpeg:
               schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableFrame' }
+    post:
+      summary: Render a request-specific JPEG preview
+      tags: [Frames]
+      parameters:
+        - $ref: '#/components/parameters/FrameId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FramePreviewRequest' }
+      responses:
+        '200':
+          description: JPEG preview
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableFrame' }
+
+  /frames/{id}/rebuild-preview:
+    post:
+      summary: Queue a forced preview-cache rebuild
+      tags: [Frames]
+      parameters:
+        - $ref: '#/components/parameters/FrameId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FramePreviewRequest' }
+      responses:
+        '202':
+          description: Rebuild queued; Location points to the job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
+
+  /frames/{id}/reanalyze:
+    post:
+      summary: Queue source-image star reanalysis
+      tags: [Frames]
+      parameters:
+        - $ref: '#/components/parameters/FrameId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FrameReanalysisRequest' }
+      responses:
+        '202':
+          description: Reanalysis queued; Location points to the job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
+
+  /frames/{id}/preview/variants:
+    delete:
+      summary: Remove cached preview variants
+      tags: [Frames]
+      parameters:
+        - $ref: '#/components/parameters/FrameId'
+      responses:
+        '204': { description: Variants removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /frames/{id}/thumbnail:
+    get:
+      summary: Get JPEG thumbnail
+      tags: [Frames]
+      parameters:
+        - $ref: '#/components/parameters/FrameId'
+      responses:
+        '200':
+          description: JPEG thumbnail
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /frames/{id}/download:
+    get:
+      summary: Stream original source image
+      tags: [Frames]
+      parameters:
+        - $ref: '#/components/parameters/FrameId'
+      responses:
+        '200':
+          description: Original FITS source
+          content:
+            application/fits:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /frames/bulk/rate:
+    post:
+      summary: Rate frames
+      tags: [Frames]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BulkRateRequest' } } }
+      responses:
+        '202': { $ref: '#/components/responses/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
+
+  /frames/bulk/tag:
+    post:
+      summary: Add or remove frame tags
+      tags: [Frames]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BulkTagRequest' } } }
+      responses:
+        '202': { $ref: '#/components/responses/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
+
+  /frames/bulk/move:
+    post:
+      summary: Move frames to another session
+      tags: [Frames]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BulkMoveRequest' } } }
+      responses:
+        '202': { $ref: '#/components/responses/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
+
+  /frames/bulk/quarantine:
+    post:
+      summary: Quarantine or restore frames without changing source bytes
+      tags: [Frames]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BulkQuarantineRequest' } } }
+      responses:
+        '202': { $ref: '#/components/responses/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
+
+  /frames/bulk/export:
+    post:
+      summary: Stream selected source files as a tar archive
+      tags: [Frames]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BulkFrameIdsRequest' } } }
+      responses:
+        '200':
+          description: Tar archive
+          content:
+            application/x-tar:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /frames/bulk/delete:
+    post:
+      summary: Explicitly remove frames from the catalog and optionally disk
+      description: No individual hard-delete route exists; callers must explicitly set delete_from_disk.
+      tags: [Frames]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BulkDeleteRequest' } } }
+      responses:
+        '202': { $ref: '#/components/responses/OperationAccepted' }
+        '400': { $ref: '#/components/responses/InvalidFrameRequest' }
+        '409': { $ref: '#/components/responses/FrameOperationConflict' }
 
 # ─── Endpoint group: Log (Phase 9) ────────────────────────────────────────────
 
@@ -795,7 +950,7 @@ paths:
 # Event envelope (every server-sent message):
 #   { "type": "frame.complete",
 #     "ts":   "2026-05-23T19:14:33.123Z",
-#     "id":   "evt-7f3a9b",                # monotonic per server boot
+#     "seq":  734,                           # monotonic per server boot
 #     "payload": { ...event-specific... } }
 #
 # Close codes:
@@ -819,8 +974,16 @@ paths:
 #   sequence.run_items_changed — §38.9 live mid-run edit applied (add/remove/move of a
 #                             pending item); instructions_total may change mid-run —
 #                             consumers must re-read totals from each progress snapshot
-#   frame.complete          — new frame written to library; payload includes preview URL
-#   frame.analyzed          — §59.5 post-capture star analysis landed: {frame_id, hfr, star_count}
+#   frame.persist_started   — storage accepted; WsFrameLifecyclePayload
+#   frame.persist_progress  — storage stage/progress; WsFrameLifecyclePayload
+#   frame.complete          — source and catalog committed; WsFrameLifecyclePayload
+#   frame.analysis_started  — analysis entered running state; WsFrameLifecyclePayload
+#   frame.analyzed          — versioned metrics or explicit skipped state; WsFrameAnalyzedPayload
+#   frame.preview_started   — preview entered rendering state; WsFrameLifecyclePayload
+#   frame.preview_ready     — preview checksum/cache/dimensions ready; WsFrameLifecyclePayload
+#   frame.preview.ready     — compatibility alias for frame.preview_ready
+#   frame.failed            — safe code/message plus stage; WsFrameFailurePayload
+#   frame.quarantined       — reversible catalog-only quarantine state; WsFrameLifecyclePayload
 #   log.line                — server log emission (filterable per channel subscribe)
 #   notification            — §46 in-app feed entry (info / warning / critical / urgent)
 #   diagnostic.alert        — §51 real-time acquisition diagnostic flag
@@ -867,14 +1030,46 @@ components:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      schema: { type: string, format: uuid }
-      description: Client-generated UUID. Same key + same body within 24h returns the cached response; same key + different body returns 409 Conflict. Omit to opt out of dedup.
+      schema: { type: string, minLength: 1, maxLength: 256 }
+      description: Client-generated opaque key. Same key + same body within 24h returns the cached response; same key + different body returns 409 Conflict. Omit to opt out of dedup.
     IdempotencyKeyRequired:
       name: Idempotency-Key
       in: header
       required: true
-      schema: { type: string, format: uuid }
+      schema: { type: string, minLength: 1, maxLength: 256 }
       description: Required for this endpoint per §60.5. Same semantics as the optional `IdempotencyKey` parameter.
+    FrameId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    OperationAccepted:
+      description: Operation accepted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OperationAccepted' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidFrameRequest:
+      description: Invalid frame request
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    FrameOperationConflict:
+      description: Idempotency, source availability, or active-operation conflict
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    UnprocessableFrame:
+      description: Unsupported or malformed source image
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
 
@@ -992,38 +1187,240 @@ components:
 
     Frame:
       type: object
-      required: [id, target, captured_at, exposure_sec, filter, file_size]
+      required: [id, session_id, target_name, frame_type, exposure_seconds,
+                 captured_utc, file_path, file_size_bytes, width, height,
+                 bit_depth, rating, tags]
       properties:
-        id: { type: string }
-        target: { type: string }
-        captured_at: { type: string, format: date-time }
-        exposure_sec: { type: number }
-        filter: { type: string }
-        file_size: { type: integer, minimum: 0 }
+        id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        target_name: { type: string }
+        frame_type: { type: string, enum: [light, dark, flat, bias, darkflat] }
+        filter_name: { type: string, nullable: true }
+        exposure_seconds: { type: number, format: double, minimum: 0 }
+        gain: { type: integer, nullable: true }
+        offset: { type: integer, nullable: true }
+        temperature_c: { type: number, format: double, nullable: true }
+        captured_utc: { type: string, format: date-time }
+        file_path: { type: string }
+        file_size_bytes: { type: integer, format: int64, minimum: 0 }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        bit_depth: { type: integer, minimum: 1 }
         hfr: { type: number, nullable: true }
-        stars: { type: integer, nullable: true }
-        quality_score: { type: number, nullable: true, description: "§50.10 composite score" }
+        star_count: { type: integer, nullable: true, minimum: 0 }
+        eccentricity: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        guiding_rms_arcsec: { type: number, nullable: true }
+        snr_estimate: { type: number, nullable: true }
+        quality_score: { type: object, nullable: true, additionalProperties: true }
+        rating: { type: integer, minimum: 0, maximum: 5 }
+        tags: { type: array, items: { type: string } }
+        focuser_position: { type: integer, nullable: true }
+        analysis_version: { type: string, nullable: true }
+        quarantined_utc: { type: string, format: date-time, nullable: true }
+        quarantine_reason: { type: string, nullable: true, maxLength: 512 }
+
+    FrameListItem:
+      type: object
+      required: [id, session_id, target_name, frame_type, exposure_seconds,
+                 captured_utc, rating]
+      properties:
+        id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        target_name: { type: string }
+        frame_type: { type: string, enum: [light, dark, flat, bias, darkflat] }
+        filter_name: { type: string, nullable: true }
+        exposure_seconds: { type: number, format: double }
+        captured_utc: { type: string, format: date-time }
+        hfr: { type: number, nullable: true }
+        star_count: { type: integer, nullable: true }
+        composite_quality_score: { type: number, nullable: true }
+        rating: { type: integer, minimum: 0, maximum: 5 }
+        synced_at: { type: string, format: date-time, nullable: true }
+        sync_target: { type: string, nullable: true }
+        quarantined_utc: { type: string, format: date-time, nullable: true }
 
     FramePage:
       type: object
-      description: |
-        Cursor-paginated frame list per §60.2. `next_cursor: null` + `has_more: false`
-        means end of results. `total` only present on the first page (request without
-        `cursor` param); computing total over a moving window is expensive and
-        rarely needed once scrolling.
       required: [items, has_more]
       properties:
         items:
           type: array
-          items: { $ref: '#/components/schemas/Frame' }
-        next_cursor:
-          type: string
-          nullable: true
-        has_more:
-          type: boolean
-        total:
-          type: integer
-          description: Only included on the first page; subsequent pages omit it.
+          items: { $ref: '#/components/schemas/FrameListItem' }
+        next_cursor: { type: string, nullable: true }
+        has_more: { type: boolean }
+
+    FrameStorage:
+      type: object
+      required: [frame_id, session_id, accepted_utc, final_path, image_format,
+                 state, updated_utc]
+      properties:
+        frame_id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        accepted_utc: { type: string, format: date-time }
+        completed_utc: { type: string, format: date-time, nullable: true }
+        temporary_path: { type: string, nullable: true }
+        final_path: { type: string }
+        byte_count: { type: integer, format: int64, nullable: true }
+        checksum_sha256: { type: string, nullable: true, pattern: '^[0-9a-f]{64}$' }
+        image_format: { type: string }
+        cfa_pattern: { type: string, nullable: true }
+        state: { type: string, enum: [accepted, exposing, downloading, persisting, complete, failed, partial] }
+        failure_code: { type: string, nullable: true }
+        failure_message: { type: string, nullable: true }
+        updated_utc: { type: string, format: date-time }
+
+    FrameMetadata:
+      type: object
+      required: [frame, source_exists]
+      properties:
+        frame: { $ref: '#/components/schemas/Frame' }
+        storage: { $ref: '#/components/schemas/FrameStorage', nullable: true }
+        source_exists: { type: boolean }
+        source_checksum_sha256: { type: string, nullable: true, pattern: '^[0-9a-f]{64}$' }
+        image_format: { type: string, nullable: true }
+        cfa_pattern: { type: string, nullable: true }
+        analysis_state: { type: string, nullable: true, enum: [analyzing, ready, skipped, failed, interrupted, null] }
+        analysis_failure_code: { type: string, nullable: true }
+        analysis_failure_message: { type: string, nullable: true }
+        preview_state: { type: string, nullable: true, enum: [rendering, ready, missing, failed, interrupted, null] }
+        preview_failure_code: { type: string, nullable: true }
+        preview_failure_message: { type: string, nullable: true }
+        preview_checksum: { type: string, nullable: true, pattern: '^[0-9a-f]{64}$' }
+        debayer_method: { type: string, nullable: true }
+        preview_version: { type: string, nullable: true }
+
+    FramePreviewRequest:
+      type: object
+      required: [stretch_palette, apply_debayer]
+      properties:
+        stretch_palette: { type: string, enum: ['', auto_stf, linear, log, asinh, sqrt, equalized, manual] }
+        black_point: { type: number, nullable: true }
+        midtone_point: { type: number, nullable: true }
+        white_point: { type: number, nullable: true }
+        max_dimension_px: { type: integer, nullable: true, minimum: 1, maximum: 4096 }
+        apply_debayer: { type: boolean }
+        channel_mode: { type: string, nullable: true, enum: [rgb, luminance, red, green, blue, null] }
+        invert: { type: boolean, default: false }
+        saturation: { type: number, nullable: true, minimum: 0, maximum: 2 }
+        asinh_beta: { type: number, nullable: true }
+        linear_clip_low: { type: number, nullable: true }
+        linear_clip_high: { type: number, nullable: true }
+        crop_x: { type: integer, nullable: true, minimum: 0 }
+        crop_y: { type: integer, nullable: true, minimum: 0 }
+        crop_width: { type: integer, nullable: true, minimum: 1 }
+        crop_height: { type: integer, nullable: true, minimum: 1 }
+        annotate_stars: { type: boolean, default: false }
+        annotation_color: { type: string, nullable: true, maxLength: 32 }
+        annotation_stroke_width: { type: number, nullable: true, exclusiveMinimum: 0, maximum: 32 }
+        annotation_font_size: { type: number, nullable: true, exclusiveMinimum: 0, maximum: 128 }
+        annotation_font_family: { type: string, nullable: true, maxLength: 128 }
+        show_annotation_labels: { type: boolean, default: false }
+        max_annotated_stars: { type: integer, nullable: true, minimum: 1, maximum: 10000 }
+        star_sensitivity: { type: number, nullable: true, minimum: 0.5, maximum: 50 }
+        star_noise_reduction: { type: integer, nullable: true, minimum: 0, maximum: 3 }
+
+    FrameReanalysisRequest:
+      type: object
+      properties:
+        star_sensitivity: { type: number, nullable: true, minimum: 0.5, maximum: 50 }
+        star_noise_reduction: { type: integer, nullable: true, minimum: 0, maximum: 3 }
+
+    BulkFrameIdsRequest:
+      type: object
+      required: [frame_ids]
+      properties:
+        frame_ids:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: { type: string, format: uuid }
+
+    BulkRateRequest:
+      allOf:
+        - $ref: '#/components/schemas/BulkFrameIdsRequest'
+        - type: object
+          required: [rating]
+          properties:
+            rating: { type: integer, minimum: 0, maximum: 5 }
+
+    BulkTagRequest:
+      allOf:
+        - $ref: '#/components/schemas/BulkFrameIdsRequest'
+        - type: object
+          required: [add_tags, remove_tags]
+          properties:
+            add_tags: { type: array, maxItems: 100, items: { type: string, minLength: 1, maxLength: 64 } }
+            remove_tags: { type: array, maxItems: 100, items: { type: string, minLength: 1, maxLength: 64 } }
+
+    BulkMoveRequest:
+      allOf:
+        - $ref: '#/components/schemas/BulkFrameIdsRequest'
+        - type: object
+          required: [target_session_id]
+          properties:
+            target_session_id: { type: string, format: uuid }
+
+    BulkQuarantineRequest:
+      allOf:
+        - $ref: '#/components/schemas/BulkFrameIdsRequest'
+        - type: object
+          properties:
+            quarantined: { type: boolean, default: true }
+            reason: { type: string, nullable: true, maxLength: 512 }
+
+    BulkDeleteRequest:
+      allOf:
+        - $ref: '#/components/schemas/BulkFrameIdsRequest'
+        - type: object
+          required: [delete_from_disk]
+          properties:
+            delete_from_disk: { type: boolean }
+
+    WsFrameLifecyclePayload:
+      type: object
+      required: [frame_id, session_id]
+      description: Additive payload shared by frame storage, preview, and quarantine lifecycle events.
+      properties:
+        frame_id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        state: { type: string }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        byte_count: { type: integer, format: int64, nullable: true }
+        preview_checksum: { type: string, pattern: '^[0-9a-f]{64}$' }
+        cache_key: { type: string }
+        cache_hit: { type: boolean }
+        width: { type: integer }
+        height: { type: integer }
+        debayer_method: { type: string }
+        preview_version: { type: string }
+        quarantined: { type: boolean }
+        reason: { type: string, nullable: true }
+
+    WsFrameAnalyzedPayload:
+      type: object
+      required: [frame_id, session_id, state, persisted, star_count]
+      properties:
+        frame_id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        state: { type: string, enum: [ready, skipped] }
+        persisted: { type: boolean }
+        hfr: { type: number, nullable: true }
+        star_count: { type: integer, minimum: 0 }
+        eccentricity: { type: number, nullable: true }
+        snr_estimate: { type: number, nullable: true }
+        analysis_version: { type: string, nullable: true }
+        code: { type: string, nullable: true }
+        message: { type: string, nullable: true }
+
+    WsFrameFailurePayload:
+      type: object
+      required: [frame_id, session_id, stage, code, message]
+      properties:
+        frame_id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        stage: { type: string, enum: [storage, analysis, preview] }
+        code: { type: string, maxLength: 64 }
+        message: { type: string, maxLength: 512, description: Safe display message; never an exception dump. }
 
     LogLine:
       type: object
@@ -1341,12 +1738,12 @@ components:
 
     OperationAccepted:
       type: object
-      required: [operation_id]
+      required: [operation_id, operation_type, accepted_utc]
       properties:
-        operation_id:
-          type: string
-          format: uuid
-          description: Track operation state via WS `operation.*` events.
+        operation_id: { type: string, format: uuid }
+        operation_type: { type: string }
+        accepted_utc: { type: string, format: date-time }
+        idempotency_key: { type: string, nullable: true, maxLength: 256 }
 
     Problem:
       type: object

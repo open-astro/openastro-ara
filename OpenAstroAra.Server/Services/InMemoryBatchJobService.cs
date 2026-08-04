@@ -39,7 +39,8 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
     // How long a terminal job (complete/failed/cancelled) stays queryable
     // before it's evicted from the registry. Without a retention window the
     // registry grows unbounded for the lifetime of the daemon.
-    private static readonly TimeSpan TerminalRetention = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan TerminalRetention =
+        IdempotencyCache<OperationAcceptedDto>.Window;
     private readonly ILogger<InMemoryBatchJobService> _logger;
 
     public InMemoryBatchJobService(ILogger<InMemoryBatchJobService>? logger) {

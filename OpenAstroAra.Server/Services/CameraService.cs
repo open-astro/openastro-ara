@@ -611,12 +611,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     internal async Task AnalyzeFrameAsync(Guid frameId, ushort[] pixels, int width, int height,
             string? filterName, string? cfaPattern = null) {
         try {
+            if (_frames is not null) {
+                await _frames.BeginAnalysisAsync(frameId, CancellationToken.None).ConfigureAwait(false);
+            }
             var analysisPlane = PrepareAnalysisPlane(pixels, width, height, cfaPattern);
             var measurement = AnalysisMetricOverride is { } metric
                 ? OverrideMeasurement(metric(analysisPlane.Pixels, analysisPlane.Width, analysisPlane.Height))
                 : DefaultAnalysisMetric(analysisPlane.Pixels, analysisPlane.Width, analysisPlane.Height);
             if (measurement.StarCount < MinStarsForAnalysis
                 || !double.IsFinite(measurement.Hfr) || measurement.Hfr <= 0) {
+                if (_frames is not null) {
+                    await _frames.RecordAnalysisSkippedAsync(frameId, measurement.StarCount,
+                        "insufficient_stars", "Too few usable stars were detected.",
+                        CancellationToken.None).ConfigureAwait(false);
+                }
                 LogFrameAnalysisSkipped(frameId, measurement.StarCount);
                 return;
             }
@@ -629,6 +637,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             _imageHistory?.RecordImage("LIGHT", measurement.Hfr, filterName);
             LogFrameAnalyzed(frameId, measurement.Hfr, measurement.StarCount);
         } catch (Exception ex) {
+            if (_frames is not null) {
+                try {
+                    await _frames.FailAnalysisAsync(frameId, "analysis_failed",
+                        "Frame analysis failed.", CancellationToken.None).ConfigureAwait(false);
+                } catch (Exception stateEx) {
+                    LogFrameAnalysisFailed(stateEx, frameId);
+                }
+            }
             LogFrameAnalysisFailed(ex, frameId);
         }
     }
@@ -651,7 +667,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return BuildAnalysisMeasurement(result);
     }
 
-    private static (ushort[] Pixels, int Width, int Height) PrepareAnalysisPlane(
+    internal static (ushort[] Pixels, int Width, int Height) PrepareAnalysisPlane(
             ushort[] pixels, int width, int height, string? cfaPattern) {
         if (!OpenAstroAra.Stretch.Debayer.TryParse(cfaPattern, out var pattern)) {
             return (pixels, width, height);
@@ -663,6 +679,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             luminance[index] = (ushort)((red[index] + 2 * green[index] + blue[index] + 2) / 4);
         }
         return (luminance, outputWidth, outputHeight);
+    }
+
+    internal static FrameAnalysisMeasurement AnalyzePixels(ushort[] pixels, int width,
+            int height, string? cfaPattern, double sensitivity, int noiseReduction,
+            CancellationToken ct) {
+        var plane = PrepareAnalysisPlane(pixels, width, height, cfaPattern);
+        var result = StarDetector.Detect(plane.Pixels, plane.Width, plane.Height,
+            new StarDetectionParams {
+                Sensitivity = sensitivity,
+                NoiseReduction = noiseReduction,
+                IsAutoFocus = false,
+                MaxNumberOfStars = 0,
+            }, ct);
+        return BuildAnalysisMeasurement(result);
     }
 
     internal static FrameAnalysisMeasurement BuildAnalysisMeasurement(StarDetectionResult result) {

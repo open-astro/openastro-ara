@@ -210,8 +210,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 star_count = $star_count,
                 eccentricity = $eccentricity,
                 snr_estimate = $snr_estimate,
-                analysis_version = $analysis_version
+                analysis_version = $analysis_version,
+                analysis_state = 'ready',
+                analysis_failure_code = NULL,
+                analysis_failure_message = NULL
             WHERE id = $id
+            RETURNING session_id;
             """;
         cmd.Parameters.AddWithValue("$hfr", measurement.Hfr);
         cmd.Parameters.AddWithValue("$star_count", measurement.StarCount);
@@ -219,12 +223,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$snr_estimate", DbValue(measurement.SnrEstimate));
         cmd.Parameters.AddWithValue("$analysis_version", measurement.AnalysisVersion);
         cmd.Parameters.AddWithValue("$id", frameId.ToString("D"));
-        var updated = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        if (updated == 0) {
+        var sessionValue = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (sessionValue is not string sessionText) {
             // The frame vanished between capture and analysis (user delete) — nothing to report.
             return;
         }
-        await PublishFrameAnalyzedAsync(frameId, measurement, ct).ConfigureAwait(false);
+        await PublishFrameAnalyzedAsync(frameId, Guid.Parse(sessionText), measurement,
+            persisted: true, ct).ConfigureAwait(false);
     }
 
     private static void ValidateAnalysis(FrameAnalysisMeasurement measurement) {
@@ -254,8 +259,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // §59.5 frame.analyzed — the post-capture star analysis landed; live listeners (library
     // strips showing the HFR badge) refresh the row without polling. Same raw-JSON posture
     // as frame.complete: numbers + a Guid are literal-safe.
-    private async Task PublishFrameAnalyzedAsync(Guid frameId,
-            FrameAnalysisMeasurement measurement, CancellationToken ct) {
+    private async Task PublishFrameAnalyzedAsync(Guid frameId, Guid sessionId,
+            FrameAnalysisMeasurement measurement, bool persisted, CancellationToken ct) {
         if (_ws is null) return;
         try {
             var eccentricity = measurement.Eccentricity?.ToString("0.####",
@@ -265,7 +270,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             var version = JsonSerializer.Serialize(measurement.AnalysisVersion,
                 AraJsonSerializerContext.Default.String);
             var json = $$"""
-                {"frame_id":"{{frameId:D}}","hfr":{{measurement.Hfr.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}},"star_count":{{measurement.StarCount}},"eccentricity":{{eccentricity}},"snr_estimate":{{snr}},"analysis_version":{{version}}}
+                {"frame_id":"{{frameId:D}}","session_id":"{{sessionId:D}}","state":"ready","persisted":{{(persisted ? "true" : "false")}},"hfr":{{measurement.Hfr.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}},"star_count":{{measurement.StarCount}},"eccentricity":{{eccentricity}},"snr_estimate":{{snr}},"analysis_version":{{version}}}
                 """;
             using var doc = JsonDocument.Parse(json);
             await _ws.PublishAsync(WsEventCatalog.FrameAnalyzed, doc.RootElement.Clone(), ct).ConfigureAwait(false);
@@ -440,7 +445,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var sql = """
             SELECT id, session_id, target_name, frame_type, filter_name,
                    exposure_seconds, captured_utc, hfr, star_count,
-                   quality_score_json, rating, synced_at, sync_target
+                   quality_score_json, rating, synced_at, sync_target,
+                   quarantined_utc
             FROM frames
             WHERE 1=1
             """;
@@ -488,7 +494,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 SyncedAt: await reader.IsDBNullAsync(11, ct)
                     ? null
                     : DateTimeOffset.Parse(reader.GetString(11)),
-                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12)));
+                SyncTarget: await reader.IsDBNullAsync(12, ct) ? null : reader.GetString(12),
+                QuarantinedUtc: await reader.IsDBNullAsync(13, ct)
+                    ? null
+                    : DateTimeOffset.Parse(reader.GetString(13))));
         }
         var hasMore = await reader.ReadAsync(ct);  // the pageSize+1 row
         var nextCursor = hasMore ? (offset + pageSize).ToString() : null;
@@ -504,7 +513,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    file_path, file_size_bytes, width, height, bit_depth,
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                    quality_score_json, rating, tags_json, focuser_position,
-                   analysis_version
+                   analysis_version, quarantined_utc, quarantine_reason
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -550,29 +559,31 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             Rating: reader.GetInt32(21),
             Tags: tags,
             FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23),
-            AnalysisVersion: await reader.IsDBNullAsync(24, ct) ? null : reader.GetString(24));
+            AnalysisVersion: await reader.IsDBNullAsync(24, ct) ? null : reader.GetString(24),
+            QuarantinedUtc: await reader.IsDBNullAsync(25, ct)
+                ? null
+                : DateTimeOffset.Parse(reader.GetString(25)),
+            QuarantineReason: await reader.IsDBNullAsync(26, ct) ? null : reader.GetString(26));
     }
 
-    public async Task<FramePreviewResult?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
+    public Task<FramePreviewResult?> GetPreviewAsync(Guid id, FramePreviewRequestDto request,
+            CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
+        FrameOperationService.ValidatePreviewRequest(request);
+        return RunFrameOperationLockedAsync("preview", id,
+            () => RenderPreviewCoreAsync(id, request, announceStart: false, ct), ct);
+    }
+
+    private async Task<FramePreviewResult?> RenderPreviewCoreAsync(Guid id,
+            FramePreviewRequestDto request, bool announceStart, CancellationToken ct) {
         var previewSource = await GetPreviewSourceAsync(id, ct).ConfigureAwait(false);
         if (previewSource is null) return null;
 
         var stretchDefaults = _profile.GetStretchDefaults();
         var algorithm = ResolveAlgorithm(request.StretchPalette, previewSource.FrameType, stretchDefaults.LightDefault);
         var stretchParams = BuildParams(request, algorithm, stretchDefaults);
-        if (!File.Exists(previewSource.FilePath)) {
-            var placeholder = new FramePreviewResult(PlaceholderJpegBytes, "image/jpeg",
-                new PreviewCacheMetadata(2, id, new string('0', 64), "missing-source", 1, 1,
-                    AlgorithmToWire(algorithm), stretchParams, "none", "luminance",
-                    request.Invert, request.Saturation ?? 1, DateTimeOffset.UtcNow,
-                    Annotated: request.AnnotateStars,
-                    AnnotationColor: request.AnnotateStars
-                        ? NormalizeAnnotationColor(request.AnnotationColor).Wire
-                        : null,
-                    AnnotationLabels: request.AnnotateStars && request.ShowAnnotationLabels), CacheHit: false);
-            return placeholder;
-        }
+        ValidateStretchParameters(stretchParams);
+        _ = ParseChannelMode(request.ChannelMode);
 
         StarAnnotationOptions? annotationOptions = null;
         if (request.AnnotateStars) {
@@ -588,25 +599,85 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 MaxAnnotations: request.MaxAnnotatedStars ?? 250);
         }
 
-        return await _previewImages.RenderAsync(new PreviewRenderRequest(
-            FrameId: id,
-            SourcePath: previewSource.FilePath,
-            SourceChecksumSha256: previewSource.ChecksumSha256,
-            Algorithm: algorithm,
-            Parameters: stretchParams,
-            MaxDimension: request.MaxDimensionPx ?? PreviewMaxDim,
-            ApplyDebayer: request.ApplyDebayer,
-            ChannelMode: ParseChannelMode(request.ChannelMode),
-            Invert: request.Invert,
-            Saturation: request.Saturation ?? 1,
-            CropX: request.CropX,
-            CropY: request.CropY,
-            CropWidth: request.CropWidth,
-            CropHeight: request.CropHeight,
-            AnnotateStars: request.AnnotateStars,
-            AnnotationOptions: annotationOptions,
-            StarSensitivity: request.StarSensitivity ?? 8.0,
-            StarNoiseReduction: request.StarNoiseReduction ?? 0), ct).ConfigureAwait(false);
+        if (announceStart) {
+            await SetPreviewStateAsync(id, "rendering", failureCode: null,
+                failureMessage: null, checksum: null, debayerMethod: null,
+                previewVersion: null, ct).ConfigureAwait(false);
+            await PublishFrameStateEventAsync(WsEventCatalog.FramePreviewStarted, id,
+                previewSource.SessionId, "rendering", ct).ConfigureAwait(false);
+        }
+        if (!File.Exists(previewSource.FilePath)) {
+            await SetPreviewStateAsync(id, "missing", "source_unavailable",
+                "Source image is unavailable.", checksum: null, debayerMethod: null,
+                previewVersion: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishFrameFailureAsync(id, previewSource.SessionId, "preview",
+                "source_unavailable", "Source image is unavailable.",
+                CancellationToken.None).ConfigureAwait(false);
+            var placeholder = new FramePreviewResult(PlaceholderJpegBytes, "image/jpeg",
+                new PreviewCacheMetadata(2, id, new string('0', 64), "missing-source", 1, 1,
+                    AlgorithmToWire(algorithm), stretchParams, "none", "luminance",
+                    request.Invert, request.Saturation ?? 1, DateTimeOffset.UtcNow,
+                    Annotated: request.AnnotateStars,
+                    AnnotationColor: request.AnnotateStars
+                        ? NormalizeAnnotationColor(request.AnnotationColor).Wire
+                        : null,
+                    AnnotationLabels: request.AnnotateStars && request.ShowAnnotationLabels), CacheHit: false);
+            return placeholder;
+        }
+
+        try {
+            var result = await _previewImages.RenderAsync(new PreviewRenderRequest(
+                FrameId: id,
+                SourcePath: previewSource.FilePath,
+                SourceChecksumSha256: previewSource.ChecksumSha256,
+                Algorithm: algorithm,
+                Parameters: stretchParams,
+                MaxDimension: request.MaxDimensionPx ?? PreviewMaxDim,
+                ApplyDebayer: request.ApplyDebayer,
+                ChannelMode: ParseChannelMode(request.ChannelMode),
+                Invert: request.Invert,
+                Saturation: request.Saturation ?? 1,
+                CropX: request.CropX,
+                CropY: request.CropY,
+                CropWidth: request.CropWidth,
+                CropHeight: request.CropHeight,
+                AnnotateStars: request.AnnotateStars,
+                AnnotationOptions: annotationOptions,
+                StarSensitivity: request.StarSensitivity ?? 8.0,
+                StarNoiseReduction: request.StarNoiseReduction ?? 0), ct).ConfigureAwait(false);
+            var checksum = Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(result.Bytes)).ToLowerInvariant();
+            var previewVersion = $"schema-{result.Metadata.SchemaVersion}";
+            if (!announceStart && !result.CacheHit) {
+                await PublishFrameStateEventAsync(WsEventCatalog.FramePreviewStarted, id,
+                    previewSource.SessionId, "rendering", CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            await SetPreviewStateAsync(id, "ready", failureCode: null,
+                failureMessage: null, checksum, result.Metadata.DebayerMode,
+                previewVersion, CancellationToken.None).ConfigureAwait(false);
+            if (announceStart || !result.CacheHit) {
+                await PublishPreviewReadyAsync(id, previewSource.SessionId, result,
+                    checksum, CancellationToken.None).ConfigureAwait(false);
+            }
+            return result;
+        } catch (OperationCanceledException) {
+            await SetPreviewStateAsync(id, "interrupted", "preview_cancelled",
+                "Preview rendering was cancelled.", checksum: null, debayerMethod: null,
+                previewVersion: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishFrameFailureAsync(id, previewSource.SessionId, "preview",
+                "preview_cancelled", "Preview rendering was cancelled.",
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        } catch {
+            await SetPreviewStateAsync(id, "failed", "preview_failed",
+                "Preview rendering failed.", checksum: null, debayerMethod: null,
+                previewVersion: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishFrameFailureAsync(id, previewSource.SessionId, "preview",
+                "preview_failed", "Preview rendering failed.",
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) {
@@ -707,12 +778,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     private async Task<PreviewSource?> GetPreviewSourceAsync(Guid id, CancellationToken ct) {
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT file_path, frame_type, sha256 FROM frames WHERE id = $id LIMIT 1;";
+        cmd.CommandText = "SELECT file_path, frame_type, sha256, session_id FROM frames WHERE id = $id LIMIT 1;";
         cmd.Parameters.AddWithValue("$id", id.ToString());
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
         return new PreviewSource(reader.GetString(0), ParseFrameType(reader.GetString(1)),
-            await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? null : reader.GetString(2));
+            await reader.IsDBNullAsync(2, ct).ConfigureAwait(false) ? null : reader.GetString(2),
+            Guid.Parse(reader.GetString(3)));
     }
 
     // §65 OSC color — the mosaic→RGB preview recipe lives in Debayer.SuperPixelStretched, shared
@@ -767,6 +839,30 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             Beta: request.AsinhBeta ?? profileDefaults.AsinhDefaultBeta,
             LinearClipLow: request.LinearClipLow ?? profileDefaults.LinearClipPercentilesLow,
             LinearClipHigh: request.LinearClipHigh ?? profileDefaults.LinearClipPercentilesHigh);
+    }
+
+    private static void ValidateStretchParameters(OpenAstroAra.Stretch.StretchParams parameters) {
+        if (!double.IsFinite(parameters.Blackpoint)
+            || !double.IsFinite(parameters.Midpoint)
+            || !double.IsFinite(parameters.Whitepoint)
+            || parameters.Blackpoint is < 0 or > 1
+            || parameters.Midpoint is < 0 or > 1
+            || parameters.Whitepoint is < 0 or > 1
+            || parameters.Whitepoint <= parameters.Blackpoint) {
+            throw new ArgumentException(
+                "Stretch points must be finite, inside 0..1, and white point must exceed black point.");
+        }
+        if (!double.IsFinite(parameters.Beta) || parameters.Beta <= 0) {
+            throw new ArgumentException("Asinh beta must be finite and positive.");
+        }
+        if (!double.IsFinite(parameters.LinearClipLow)
+            || !double.IsFinite(parameters.LinearClipHigh)
+            || parameters.LinearClipLow < 0
+            || parameters.LinearClipHigh > 1
+            || parameters.LinearClipLow >= parameters.LinearClipHigh) {
+            throw new ArgumentException(
+                "Linear clip percentiles must satisfy 0 <= low < high <= 1.");
+        }
     }
 
     private static PreviewChannelMode ParseChannelMode(string? value) => value?.Trim().ToLowerInvariant() switch {
@@ -855,7 +951,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // Idempotency-Key dedup at the persistence layer is a separate concern
     // (lands when the §60.5 in-memory dedup cache PR lands).
 
-    public async Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Rating is < 0 or > 5) {
+            throw new ArgumentOutOfRangeException(nameof(request), "Rating must be between 0 and 5.");
+        }
+        var normalized = request with { FrameIds = ValidateFrameIds(request.FrameIds) };
+        var fingerprint = FingerprintBulk("rate", normalized.FrameIds,
+            normalized.Rating.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return _bulkRateOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkRateCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkRateCoreAsync(BulkRateRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             await using var conn = _db.OpenConnection();
             await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
@@ -874,7 +984,29 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-rate", idempotencyKey);
     }
 
-    public async Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        var ids = ValidateFrameIds(request.FrameIds);
+        var addTags = NormalizeTags(request.AddTags, nameof(request.AddTags));
+        var removeTags = NormalizeTags(request.RemoveTags, nameof(request.RemoveTags));
+        if (addTags.Count == 0 && removeTags.Count == 0) {
+            throw new ArgumentException("At least one tag must be added or removed.", nameof(request));
+        }
+        var normalized = request with {
+            FrameIds = ids,
+            AddTags = addTags,
+            RemoveTags = removeTags,
+        };
+        var fingerprint = FingerprintBulk("tag", ids,
+            string.Join("\u001f", addTags.Order(StringComparer.OrdinalIgnoreCase)),
+            string.Join("\u001f", removeTags.Order(StringComparer.OrdinalIgnoreCase)));
+        return _bulkTagOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkTagCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkTagCoreAsync(BulkTagRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0 && (request.AddTags.Count > 0 || request.RemoveTags.Count > 0)) {
             await using var conn = _db.OpenConnection();
             await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
@@ -901,7 +1033,21 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return PlaceholderEquipmentHelpers.Accepted("frames.bulk-tag", idempotencyKey);
     }
 
-    public async Task<OperationAcceptedDto> BulkMoveAsync(BulkMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkMoveAsync(BulkMoveRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.TargetSessionId == Guid.Empty) {
+            throw new ArgumentException("Target session id must not be empty.", nameof(request));
+        }
+        var normalized = request with { FrameIds = ValidateFrameIds(request.FrameIds) };
+        var fingerprint = FingerprintBulk("move", normalized.FrameIds,
+            normalized.TargetSessionId.ToString("D"));
+        return _bulkMoveOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkMoveCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkMoveCoreAsync(BulkMoveRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             await using var conn = _db.OpenConnection();
             await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
@@ -983,7 +1129,18 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return new FrameExportPrep(entries, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.tar");
     }
 
-    public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        var normalized = request with { FrameIds = ValidateFrameIds(request.FrameIds) };
+        var fingerprint = FingerprintBulk("delete", normalized.FrameIds,
+            normalized.DeleteFromDisk ? "true" : "false");
+        return _bulkDeleteOperations.GetOrRunAsync(idempotencyKey, fingerprint,
+            () => BulkDeleteCoreAsync(normalized, idempotencyKey, ct));
+    }
+
+    private async Task<OperationAcceptedDto> BulkDeleteCoreAsync(BulkDeleteRequestDto request,
+            string? idempotencyKey, CancellationToken ct) {
         if (request.FrameIds.Count > 0) {
             // Collect file paths BEFORE the rows go — after the delete there's
             // nothing left to resolve them from. Only needed for disk deletion.
@@ -1073,7 +1230,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) {
+    public Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) =>
+        RunFrameOperationLockedAsync("preview", id,
+            () => DeletePreviewVariantsCoreAsync(id, ct), ct);
+
+    private async Task<bool> DeletePreviewVariantsCoreAsync(Guid id, CancellationToken ct) {
         var (filePath, _) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath)) return false;
         await _previewImages.DeleteFrameEntriesAsync(id, ct).ConfigureAwait(false);
@@ -1121,7 +1282,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     };
 
     private sealed record PreviewSource(string FilePath, FrameType FrameType,
-        string? ChecksumSha256);
+        string? ChecksumSha256, Guid SessionId);
 
     private static readonly string[] SampleTags = { "good-seeing" };
 

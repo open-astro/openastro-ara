@@ -58,11 +58,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Fresh_schema_is_v6_and_has_lifecycle_indexes() {
+        public async Task Fresh_schema_is_v7_and_has_lifecycle_indexes() {
             await using var conn = _db.OpenConnection();
             await using var version = conn.CreateCommand();
             version.CommandText = "SELECT version FROM schema_version;";
-            Assert.That(Convert.ToInt64(await version.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture), Is.EqualTo(6));
+            Assert.That(Convert.ToInt64(await version.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture), Is.EqualTo(7));
 
             await using var columns = conn.CreateCommand();
             columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('frame_storage_lifecycle');";
@@ -302,7 +302,7 @@ namespace OpenAstroAra.Test {
             await using var check = _db.OpenConnection();
             await using var version = check.CreateCommand();
             version.CommandText = "SELECT version FROM schema_version;";
-            Assert.That(Convert.ToInt64(await version.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture), Is.EqualTo(6));
+            Assert.That(Convert.ToInt64(await version.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture), Is.EqualTo(7));
         }
 
         [Test]

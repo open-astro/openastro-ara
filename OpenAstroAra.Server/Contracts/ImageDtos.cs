@@ -70,7 +70,9 @@ public sealed record FrameDto(
     // §38: focuser step position at capture (for the §50.4 focus-vs-temperature
     // view). Optional + last so existing constructions stay source-compatible.
     int? FocuserPosition = null,
-    string? AnalysisVersion = null);
+    string? AnalysisVersion = null,
+    DateTimeOffset? QuarantinedUtc = null,
+    string? QuarantineReason = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(
@@ -92,7 +94,8 @@ public sealed record FrameListItemDto(
     // as protected. Optional + last so existing constructions stay
     // source-compatible.
     DateTimeOffset? SyncedAt = null,
-    string? SyncTarget = null);
+    string? SyncTarget = null,
+    DateTimeOffset? QuarantinedUtc = null);
 
 /// <summary>POST /api/v1/frames/{id}/preview body. Stretch knobs per §65.</summary>
 public sealed record FramePreviewRequestDto(
@@ -187,6 +190,18 @@ public sealed record BulkExportRequestDto(
 public sealed record BulkDeleteRequestDto(
     IReadOnlyList<Guid> FrameIds,
     bool DeleteFromDisk);
+
+/// <summary>POST /api/v1/frames/bulk/quarantine. Quarantine is reversible and
+/// changes catalog state only; source bytes remain untouched.</summary>
+public sealed record BulkQuarantineRequestDto(
+    IReadOnlyList<Guid> FrameIds,
+    bool Quarantined = true,
+    string? Reason = null);
+
+/// <summary>POST /api/v1/frames/{id}/reanalyze detector controls.</summary>
+public sealed record FrameReanalysisRequestDto(
+    double? StarSensitivity = null,
+    int? StarNoiseReduction = null);
 
 /// <summary>HFR drift analysis result per §40.7 / §51.</summary>
 public sealed record HfrAnalysisDto(

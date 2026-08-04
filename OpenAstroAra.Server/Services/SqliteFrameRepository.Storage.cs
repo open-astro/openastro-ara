@@ -14,6 +14,7 @@
 
 using Microsoft.Data.Sqlite;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Globalization;
 
 namespace OpenAstroAra.Server.Services;
@@ -53,6 +54,7 @@ public sealed partial class SqliteFrameRepository {
         cmd.Parameters.AddWithValue("$image_format", imageFormat);
         cmd.Parameters.AddWithValue("$updated_utc", acceptedUtc.ToString("O", CultureInfo.InvariantCulture));
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await PublishFramePersistStartedAsync(attempt, ct).ConfigureAwait(false);
     }
 
     public async Task AdvanceStorageAsync(Guid frameId, FrameStorageState state, CancellationToken ct) {
@@ -95,6 +97,10 @@ public sealed partial class SqliteFrameRepository {
             throw new InvalidOperationException($"Frame {frameId:D} storage changed concurrently; retry the operation.");
         }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        var storage = await GetStorageAsync(frameId, ct).ConfigureAwait(false);
+        if (storage is not null) {
+            await PublishFramePersistProgressAsync(storage, ct).ConfigureAwait(false);
+        }
     }
 
     public async Task CompleteStorageAsync(FrameDto frame, FrameStorageCompletion completion, CancellationToken ct) {
@@ -164,6 +170,10 @@ public sealed partial class SqliteFrameRepository {
         }
 
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        var storage = await GetStorageAsync(frame.Id, ct).ConfigureAwait(false);
+        if (storage is not null) {
+            await PublishFramePersistProgressAsync(storage, ct).ConfigureAwait(false);
+        }
         await PublishFrameCompleteAsync(frame, ct).ConfigureAwait(false);
     }
 
@@ -206,6 +216,11 @@ public sealed partial class SqliteFrameRepository {
             throw new InvalidOperationException($"Frame {frameId:D} storage changed concurrently; failure was not recorded.");
         }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        var storage = await GetStorageAsync(frameId, ct).ConfigureAwait(false);
+        if (storage is not null) {
+            await PublishFrameFailureAsync(frameId, storage.SessionId, "storage", code,
+                "Frame storage failed.", ct).ConfigureAwait(false);
+        }
     }
 
     public async Task<FrameStorageRecord?> GetStorageAsync(Guid frameId, CancellationToken ct) {

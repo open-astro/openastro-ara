@@ -123,10 +123,41 @@ public sealed record FrameAnalysisMeasurement(
     double? SnrEstimate,
     string AnalysisVersion);
 
+public sealed record FrameReanalysisResult(
+    Guid FrameId,
+    FrameAnalysisMeasurement Measurement,
+    bool Persisted,
+    string? Warning);
+
+public sealed record FrameMetadataResult(
+    FrameDto Frame,
+    FrameStorageRecord? Storage,
+    bool SourceExists,
+    string? SourceChecksumSha256,
+    string? ImageFormat,
+    string? CfaPattern,
+    string? AnalysisState,
+    string? AnalysisFailureCode,
+    string? AnalysisFailureMessage,
+    string? PreviewState,
+    string? PreviewFailureCode,
+    string? PreviewFailureMessage,
+    string? PreviewChecksum,
+    string? DebayerMethod,
+    string? PreviewVersion);
+
 public interface IPreviewImageService {
     Task<FramePreviewResult> RenderAsync(PreviewRenderRequest request, CancellationToken ct);
 
     Task DeleteFrameEntriesAsync(Guid frameId, CancellationToken ct);
+}
+
+public interface IFrameOperationService {
+    Task<OperationAcceptedDto?> RebuildPreviewAsync(Guid frameId,
+        FramePreviewRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    Task<OperationAcceptedDto?> ReanalyzeAsync(Guid frameId,
+        FrameReanalysisRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 /// <summary>
@@ -212,6 +243,14 @@ public interface IFrameRepository {
     /// <summary>Read lifecycle state even when no completed frame row exists.</summary>
     Task<FrameStorageRecord?> GetStorageAsync(Guid frameId, CancellationToken ct);
 
+    Task BeginAnalysisAsync(Guid frameId, CancellationToken ct);
+
+    Task RecordAnalysisSkippedAsync(Guid frameId, int starCount,
+        string code, string message, CancellationToken ct);
+
+    Task FailAnalysisAsync(Guid frameId, string code, string message,
+        CancellationToken ct);
+
     /// <summary>
     /// §59.5 post-capture star-analysis write-back: stamps versioned HFR, star count,
     /// eccentricity, and SNR measurements (computed off the capture path) and broadcasts
@@ -242,7 +281,12 @@ public interface IFrameRepository {
 
     Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct);
     Task<FrameDto?> GetAsync(Guid id, CancellationToken ct);
+    Task<FrameMetadataResult?> GetMetadataAsync(Guid id, CancellationToken ct);
     Task<FramePreviewResult?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct);
+    Task<FramePreviewResult?> RebuildPreviewAsync(Guid id,
+        FramePreviewRequestDto request, CancellationToken ct);
+    Task<FrameReanalysisResult?> ReanalyzeAsync(Guid id,
+        FrameReanalysisRequestDto request, CancellationToken ct);
     Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct);
     Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct);
 
@@ -265,6 +309,8 @@ public interface IFrameRepository {
     Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkMoveAsync(BulkMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> BulkQuarantineAsync(BulkQuarantineRequestDto request,
+        string? idempotencyKey, CancellationToken ct);
     /// <summary>§39.10 export: a tar stream of the selected frames' FITS files.
     /// Frames whose files are missing on disk are skipped; null when NOTHING
     /// was exportable (unknown ids or all files gone) — the endpoint 404s.</summary>

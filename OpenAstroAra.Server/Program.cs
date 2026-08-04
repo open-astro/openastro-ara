@@ -82,6 +82,7 @@ public partial class Program {
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<EquipmentConnectionState>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<SequenceRunState>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FrameType>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FrameStorageState>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<NotificationSeverity>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<NotificationCategory>(policy));
             opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticHealth>(policy));
@@ -103,6 +104,7 @@ public partial class Program {
         // original sources, and renders FITS previews/thumbnails. Rank 1
         // lifecycle state guards capture registration.
         builder.Services.AddSingleton<IFrameRepository, SqliteFrameRepository>();
+        builder.Services.AddSingleton<IFrameOperationService, FrameOperationService>();
         // §28 SqliteSessionService — sessions from the catalog with derived
         // fields (target name, frame counts, filters) aggregated from the
         // frames table at read time per §28.1's schema. Composes on
