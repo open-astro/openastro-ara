@@ -279,12 +279,20 @@ class _ReferenceDialog extends ConsumerWidget {
                                         style: theme.textTheme.bodySmall),
                                   ),
                                   const SizedBox(width: 12),
-                                  Text(live[e.keyword] ?? e.example,
+                                  // An off group shows the generic example,
+                                  // not the user's value — "off — not
+                                  // written" and real data side by side
+                                  // would contradict each other.
+                                  Text(
+                                      _groupEnabled(fs, group)
+                                          ? (live[e.keyword] ?? e.example)
+                                          : e.example,
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                               fontFamily: 'monospace',
-                                              color: live
-                                                      .containsKey(e.keyword)
+                                              color: _groupEnabled(fs, group) &&
+                                                      live.containsKey(
+                                                          e.keyword)
                                                   ? null
                                                   : AraColors.textSecondary)),
                                 ],

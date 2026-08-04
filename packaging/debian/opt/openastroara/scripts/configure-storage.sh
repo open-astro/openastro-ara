@@ -13,7 +13,7 @@
 #
 # Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 · 4 label_mismatch
 #             5 device_busy · 6 refused (root/boot disk) · 7 mkfs_failed
-#             8 mount_failed · 9 usage
+#             8 mount_failed · 9 usage · 10 chown_failed
 set -eu
 
 MOUNT_POINT=/media/openastroara
@@ -36,6 +36,9 @@ value_for() { # $1=device $2=tag (TYPE|LABEL|UUID)
 
 # Refuse anything that carries the running system: the disk holding / or
 # /boot/firmware, and any of its partitions. Formatting those bricks the box.
+# Assumes a plainly partitioned root (the Pi image default) — one PKNAME hop.
+# Root on LVM/dm-crypt would need the whole parent chain walked; keep this in
+# lock-step with StorageDeviceService.SystemDisksAsync if that ever changes.
 refuse_if_system_disk() {
     dev=$1
     base=$(lsblk -no PKNAME "$dev" 2>/dev/null || true)
@@ -56,13 +59,16 @@ ensure_fstab_entry() { # $1=uuid
     uuid=$1
     # Drop any stale line for this mount point (a previous drive) so the mount
     # point never has two owners, then add ours.
-    if grep -qs "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB"; then
-        grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "${FSTAB}.ara-tmp"
-        cat "${FSTAB}.ara-tmp" > "$FSTAB"
-        rm -f "${FSTAB}.ara-tmp"
-    fi
+    # Build the whole new fstab in a temp file, then atomically rename it
+    # into place: this runs as root on a box without a guaranteed clean
+    # shutdown, and a truncate-then-write torn by power loss could leave
+    # /etc/fstab half-written — including the root and boot entries.
+    grep -v "[[:space:]]${MOUNT_POINT}[[:space:]]" "$FSTAB" > "${FSTAB}.ara-tmp" || true
     printf 'UUID=%s  %s  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2\n' \
-        "$uuid" "$MOUNT_POINT" >> "$FSTAB"
+        "$uuid" "$MOUNT_POINT" >> "${FSTAB}.ara-tmp"
+    chmod 644 "${FSTAB}.ara-tmp"
+    sync
+    mv "${FSTAB}.ara-tmp" "$FSTAB"
     systemctl daemon-reload 2>/dev/null || true
 }
 
@@ -80,10 +86,13 @@ mount_and_own() { # $1=uuid $2=deep-chown (1 after mkfs, else top-level only)
     # Recursive chown only right after a format (empty tree). Re-walking a
     # drive already full of frames on every reconnect is pure wasted I/O —
     # everything under the root was created by the daemon and is owned right.
+    # A chown failure (e.g. the daemon user missing due to install ordering)
+    # must fail loudly HERE, not later as mysterious permission-denied frame
+    # writes with no trail back to provisioning.
     if [ "$deep" -eq 1 ]; then
-        chown -R "$OWNER:$OWNER" "$MOUNT_POINT" 2>/dev/null || true
+        chown -R "$OWNER:$OWNER" "$MOUNT_POINT" || { echo "ERROR: chown_failed $OWNER"; exit 10; }
     else
-        chown "$OWNER:$OWNER" "$MOUNT_POINT" 2>/dev/null || true
+        chown "$OWNER:$OWNER" "$MOUNT_POINT" || { echo "ERROR: chown_failed $OWNER"; exit 10; }
     fi
 }
 

@@ -136,7 +136,14 @@ namespace OpenAstroAra.Server.Services {
                 IsAraStore: string.Equals(Text(node, "mountpoint"), MountPoint, StringComparison.Ordinal)));
         }
 
-        /// <summary>Devices carrying / or /boot* — never offered as candidates.</summary>
+        /// <summary>
+        /// Devices carrying / or /boot* — never offered as candidates.
+        /// Assumes a plainly partitioned root (the Pi image default): one
+        /// PKNAME hop from findmnt's source. Root on LVM/dm-crypt would need
+        /// the full parent chain walked — if the image ever grows such a
+        /// layout, this and the helper's refuse_if_system_disk must both
+        /// learn it, because a miss here offers the system disk for format.
+        /// </summary>
         private static async Task<IReadOnlySet<string>> SystemDisksAsync(CancellationToken ct) {
             var set = new HashSet<string>(StringComparer.Ordinal);
             foreach (var target in new[] { "/", "/boot", "/boot/firmware" }) {

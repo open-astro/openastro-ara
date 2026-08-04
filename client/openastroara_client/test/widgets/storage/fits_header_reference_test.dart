@@ -113,6 +113,11 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     container.read(filenamesSettingsProvider.notifier).setHeaderSite(false);
+    // Real coordinates exist, but the group is off — the sheet must show the
+    // generic example, not data it just said won't be written.
+    container.read(siteSettingsProvider.notifier)
+      ..setLatitudeDeg(51.477811)
+      ..setLongitudeDeg(-0.001475);
     await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
@@ -135,6 +140,9 @@ void main() {
     expect(find.text('off — not written'), findsOneWidget);
     final lat = tester.widget<Text>(find.text('SITELAT'));
     expect(lat.style?.decoration, TextDecoration.lineThrough);
+    // ...and its value column falls back to the generic example.
+    expect(find.text('32.780278'), findsOneWidget);
+    expect(find.text('51.477811'), findsNothing);
     // ...while an on group keeps its normal caption and no strike.
     expect(find.text('switch: Who took it'), findsOneWidget);
     final obs = tester.widget<Text>(find.text('OBSERVER'));

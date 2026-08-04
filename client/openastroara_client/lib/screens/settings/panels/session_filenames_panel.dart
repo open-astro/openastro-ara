@@ -46,9 +46,11 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     if (api == null) return;
     try {
       await ref.read(filenamesSettingsProvider.notifier).hydrateFromServer(api);
-      // Observer + telescope live in the site/optics sections of the profile;
-      // hydrate them here too so this panel's Save can never push defaults
-      // over values it hasn't seen (the transient-draft lesson).
+      // This panel's Save persists every provider it touches, so every one
+      // of them must be hydrated first — Save must never push defaults over
+      // values it hasn't seen (the transient-draft lesson). Storage rides
+      // along because the filename template lives there.
+      await ref.read(storageSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
       await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {

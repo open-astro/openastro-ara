@@ -71,7 +71,22 @@ public sealed partial class CaptureScanService {
     /// listening, and the work is bounded (typical captures dir has
     /// 0–10k files; §28.8 ceiling is 2s on a Pi 4 with 10k frames).
     /// </summary>
+    // The service is a DI singleton shared by startup and POST /storage/rescan.
+    // Two overlapping scans would each snapshot known paths before either
+    // inserts, and both would then catalog the same orphan (frames.file_path
+    // has no unique constraint) — so scans serialize here.
+    private readonly SemaphoreSlim _scanLock = new(1, 1);
+
     public async Task<CaptureScanResult> RunAsync(CancellationToken ct) {
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            return await RunLockedAsync(ct).ConfigureAwait(false);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
+    private async Task<CaptureScanResult> RunLockedAsync(CancellationToken ct) {
         var savePath = _profile.GetStorageSettings().SaveDirectory;
         if (string.IsNullOrEmpty(savePath)) {
             LogScanSkippedEmptyPath();

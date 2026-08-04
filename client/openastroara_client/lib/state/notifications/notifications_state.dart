@@ -76,8 +76,15 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     return (_visible(acc), truncated);
   }
 
-  static List<AraNotification> _visible(List<AraNotification> all) =>
-      all.where((n) => !n.dismissed).toList(growable: false);
+  /// Hides dismissed entries and dedupes by id — an insert landing between
+  /// page fetches can shift the server's cursor window so a notification
+  /// appears on two consecutive pages; first sighting wins.
+  static List<AraNotification> _visible(List<AraNotification> all) {
+    final seen = <String>{};
+    return all
+        .where((n) => !n.dismissed && seen.add(n.id))
+        .toList(growable: false);
+  }
 
   Future<void> refresh() async {
     final api = ref.read(notificationsApiProvider);
