@@ -39,6 +39,22 @@ namespace OpenAstroAra.Server.Services;
 /// from the §38 sequence orchestrator + §72 FITS writes start populating
 /// the directory; from that point this scan auto-heals across crashes.
 /// </summary>
+/// <summary>
+/// What one scan actually did. [Ran] is false when the save directory was
+/// missing or unwritable — [SkipReason] then says which, so the caller can
+/// tell the user something specific instead of "0 frames found".
+/// </summary>
+public sealed record CaptureScanResult(
+    bool Ran,
+    string? SkipReason,
+    string SavePath,
+    int TempFilesSwept,
+    int FramesRecovered) {
+
+    public static CaptureScanResult Skipped(string savePath, string reason) =>
+        new(false, reason, savePath, 0, 0);
+}
+
 public sealed partial class CaptureScanService {
     private readonly IProfileStore _profile;
     private readonly IAraDatabase _db;
@@ -55,22 +71,22 @@ public sealed partial class CaptureScanService {
     /// listening, and the work is bounded (typical captures dir has
     /// 0–10k files; §28.8 ceiling is 2s on a Pi 4 with 10k frames).
     /// </summary>
-    public async Task RunAsync(CancellationToken ct) {
+    public async Task<CaptureScanResult> RunAsync(CancellationToken ct) {
         var savePath = _profile.GetStorageSettings().SaveDirectory;
         if (string.IsNullOrEmpty(savePath)) {
             LogScanSkippedEmptyPath();
-            return;
+            return CaptureScanResult.Skipped(savePath ?? string.Empty, "no_save_directory");
         }
         if (!Directory.Exists(savePath)) {
             // Captures dir doesn't exist yet on fresh installs — that's
             // fine, we'll find it when the first capture writes. Don't
             // queue a critical notification for this case.
             LogScanSkippedMissingPath(savePath);
-            return;
+            return CaptureScanResult.Skipped(savePath, "path_missing");
         }
         if (!IsWritable(savePath)) {
             LogScanPathNotWritable(savePath);
-            return;
+            return CaptureScanResult.Skipped(savePath, "path_not_writable");
         }
 
         var tmpSwept = SweepStaleTempFiles(savePath);
@@ -79,6 +95,7 @@ public sealed partial class CaptureScanService {
         if (tmpSwept > 0 || orphansRecovered > 0) {
             LogScanComplete(tmpSwept, orphansRecovered);
         }
+        return new CaptureScanResult(true, null, savePath, tmpSwept, orphansRecovered);
     }
 
     private static bool IsWritable(string dir) {
@@ -248,11 +265,25 @@ public sealed partial class CaptureScanService {
         return sid;
     }
 
+    // IgnoreInaccessible matters more than it looks: a try/catch around the
+    // CALL only guards creating the lazy iterator — EnumerateFiles throws
+    // mid-iteration when the walk descends into a directory it can't open.
+    // Every ext4 volume has a root-owned lost+found at its root, so pointing
+    // the save directory at a mount root (which the §29 storage flow does for
+    // every user) crash-looped the daemon on startup until this scan learned
+    // to walk past what it can't read. Found on rc91, first boot after the T7
+    // became the store.
+    private static readonly EnumerationOptions SkipInaccessible = new() {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        // Skip nothing else: hidden dirs are fair game (dotfile trees a user
+        // rsyncs over shouldn't hide their FITS from recovery).
+        AttributesToSkip = 0,
+    };
+
     private static IEnumerable<string> EnumerateFilesSafe(string root, string pattern) {
         try {
-            return Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories);
-        } catch (UnauthorizedAccessException) {
-            return Array.Empty<string>();
+            return Directory.EnumerateFiles(root, pattern, SkipInaccessible);
         } catch (DirectoryNotFoundException) {
             return Array.Empty<string>();
         }

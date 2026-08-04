@@ -213,6 +213,10 @@ public partial class Program {
         // activation injects both optional deps.
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
         builder.Services.AddSingleton<IStorageDeviceService, StorageDeviceService>();
+        // Registered (not just constructed at startup) so POST /storage/rescan
+        // can run the same scan on demand — see the endpoint for why that
+        // matters once a user can change disks without restarting.
+        builder.Services.AddSingleton<CaptureScanService>();
         builder.Services.AddSingleton<IFaultLogService, SqliteFaultLogService>();
         builder.Services.AddSingleton<EquipmentFaultHub>();
         builder.Services.AddSingleton<IEquipmentFaultSink>(sp => sp.GetRequiredService<EquipmentFaultHub>());
@@ -989,11 +993,18 @@ public partial class Program {
         // orphan FITS into the catalog. On fresh installs (no captures
         // dir) this is a sub-ms no-op; once real captures from the §38
         // sequence orchestrator land, it auto-heals across daemon crashes.
-        var captureScan = new CaptureScanService(
-            app.Services.GetRequiredService<IProfileStore>(),
-            app.Services.GetRequiredService<IAraDatabase>(),
-            app.Services.GetService<ILogger<CaptureScanService>>());
-        captureScan.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
+        // The scan heals the catalog; it must never be the reason the rig is
+        // down. On rc91 an unreadable lost+found at the store root turned this
+        // line into a boot crash-loop — the walk is fixed, but the guard stays:
+        // whatever a user's disk throws at us, the daemon comes up.
+        try {
+            app.Services.GetRequiredService<CaptureScanService>()
+                .RunAsync(CancellationToken.None).GetAwaiter().GetResult();
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or System.Security.SecurityException or Microsoft.Data.Sqlite.SqliteException) {
+            var scanLogger = app.Services.GetRequiredService<ILogger<Program>>();
+            LogCaptureScanFailed(scanLogger, ex);
+        }
 
         // §43-2 startup polish: reclaim crash-only orphan archives under backups/ — a .tmp-*.zip from a create
         // hard-killed before its File.Move reveal, or a backup-*.zip whose .meta.json never got written (SIGKILL
@@ -1036,6 +1047,9 @@ public partial class Program {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to emit §51 checkpoint-corrupt diagnostic")]
     private static partial void LogDiagnosticEmitFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Critical, Message = "Startup capture scan failed — catalog not reconciled with disk; frames on the store may be missing from the library until a rescan succeeds")]
+    private static partial void LogCaptureScanFailed(ILogger logger, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "OpenAstroAra.Server listening on :{Port}")]
     private static partial void LogListening(ILogger logger, int port);
