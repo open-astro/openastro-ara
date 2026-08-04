@@ -395,6 +395,10 @@ class _DestinationCard extends ConsumerWidget {
                   ],
                 ),
               ),
+              // "Look again at what's on this disk" — for the user who
+              // plugs in a drive that already holds a season of frames.
+              _RescanButton(),
+              const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => showStorageDriveDialog(context, ref),
                 child: const Text('Change…'),
@@ -434,6 +438,55 @@ class _DestinationCard extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+
+/// Runs the server-side §28.8 scan on demand and reports what it found in a
+/// snackbar. Spins in place while the walk runs — a big library takes a
+/// couple of seconds on a Pi.
+class _RescanButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_RescanButton> createState() => _RescanButtonState();
+}
+
+class _RescanButtonState extends ConsumerState<_RescanButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final server = ref.read(activeServerProvider);
+    if (server == null) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final api = StorageDevicesApi(server);
+    try {
+      final outcome = await api.rescan();
+      if (outcome.ran && outcome.framesRecovered > 0) {
+        // The library just changed — anything watching space/devices should
+        // reflect the recovered frames.
+        ref.invalidate(storageSpaceProvider);
+      }
+      messenger.showSnackBar(SnackBar(content: Text(outcome.message)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(friendlyError(e, action: 'check the disk for frames'))));
+    } finally {
+      api.close();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: _busy ? null : _run,
+      child: _busy
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          : const Text('Find frames on disk'),
     );
   }
 }

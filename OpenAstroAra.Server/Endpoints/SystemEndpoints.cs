@@ -303,6 +303,37 @@ public static class SystemEndpoints {
             .WithName("ConfigureStorageDevice")
             .WithSummary("Mount a drive as the ARA store (optionally reformatting it as ext4 first) and point saving at it.");
 
+        // §28.8 on demand. The startup scan already recovers FITS sitting on
+        // disk but absent from the catalog — which was enough while the save
+        // directory could only change by editing config and restarting. Now
+        // that a user can pick a different drive from the Storage panel, a
+        // disk arriving with a season of frames on it would stay invisible
+        // until the next restart. This is the "look at what is actually
+        // there" button.
+        storage.MapPost("/rescan", async (
+                CaptureScanService scan,
+                ActiveRunSessionRegistry runs,
+                CancellationToken ct) => {
+                // Scanning walks the whole captures tree; not while a run is
+                // writing into it.
+                if (runs.HasAny) {
+                    return Results.Problem(
+                        "a sequence run is active — wait for it to finish before scanning the drive",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var result = await scan.RunAsync(ct).ConfigureAwait(false);
+                return Results.Ok(new StorageRescanResultDto(
+                    result.Ran,
+                    result.SkipReason,
+                    result.SavePath,
+                    result.TempFilesSwept,
+                    result.FramesRecovered));
+            })
+            .Produces<StorageRescanResultDto>()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("RescanStorage")
+            .WithSummary("Scan the save directory for frames already on disk but missing from the catalog, and add them.");
+
         storage.MapGet("/space", (IProfileStore profiles) => {
                 var configured = profiles.GetStorageSettings().SaveDirectory;
                 var isFallback = string.IsNullOrWhiteSpace(configured);

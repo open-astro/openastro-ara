@@ -90,3 +90,14 @@ public sealed record StorageConfigureResultDto(
     string? Detail,
     string? MountPoint,
     string? SaveDirectory);
+
+/// <summary>Result of POST /api/v1/storage/rescan (§28.8 on demand).
+/// <c>ran</c> is false when the save directory was missing or unwritable —
+/// <c>skip_reason</c> then says which, so the client can explain rather than
+/// report "0 frames found".</summary>
+public sealed record StorageRescanResultDto(
+    bool Ran,
+    string? SkipReason,
+    string SavePath,
+    int TempFilesSwept,
+    int FramesRecovered);

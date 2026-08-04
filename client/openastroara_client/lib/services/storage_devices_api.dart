@@ -103,6 +103,50 @@ class StorageConfigureOutcome {
   final String? saveDirectory;
 }
 
+/// What a rescan found. [ran] is false when the save directory was missing or
+/// unwritable — [skipReason] then says which, so the UI can explain instead of
+/// claiming it found nothing.
+class StorageRescanOutcome {
+  const StorageRescanOutcome({
+    required this.ran,
+    required this.framesRecovered,
+    this.skipReason,
+    this.savePath,
+  });
+
+  final bool ran;
+  final int framesRecovered;
+  final String? skipReason;
+  final String? savePath;
+
+  factory StorageRescanOutcome.fromJson(Map<String, dynamic> json) =>
+      StorageRescanOutcome(
+        ran: json['ran'] == true,
+        framesRecovered: (json['frames_recovered'] as num?)?.toInt() ?? 0,
+        skipReason: json['skip_reason'] as String?,
+        savePath: json['save_path'] as String?,
+      );
+
+  /// What to tell the user, in their terms.
+  String get message {
+    if (!ran) {
+      return switch (skipReason) {
+        'path_missing' =>
+          "That folder isn't there any more. Choose a disk to save to.",
+        'path_not_writable' =>
+          "Ara can't write to that folder, so it can't check it either.",
+        'no_save_directory' => 'Choose a disk to save to first.',
+        _ => "Ara couldn't look at your disk.",
+      };
+    }
+    return switch (framesRecovered) {
+      0 => 'No frames on this disk that Ara was missing.',
+      1 => 'Added 1 frame that was already on this disk.',
+      _ => 'Added $framesRecovered frames that were already on this disk.',
+    };
+  }
+}
+
 class StorageDevicesApi {
   StorageDevicesApi(AraServer server, {Dio? dio})
       : _dio = dio ??
@@ -164,6 +208,14 @@ class StorageDevicesApi {
         detail: e.message,
       );
     }
+  }
+
+  /// Ask the server to look at the save directory and catalog any frames
+  /// sitting there that it doesn't know about — the case where a user brings
+  /// a disk that already has a season of imaging on it.
+  Future<StorageRescanOutcome> rescan() async {
+    final res = await _dio.post<Map<String, dynamic>>('/api/v1/storage/rescan');
+    return StorageRescanOutcome.fromJson(res.data ?? const {});
   }
 
   void close() => _dio.close(force: true);
