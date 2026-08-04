@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/settings/filenames_settings_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
@@ -161,10 +162,25 @@ class _ReferenceDialog extends ConsumerWidget {
     return live;
   }
 
+  /// Group title → whether its switch is currently on. The essentials
+  /// (controlledBy == null) are always on.
+  bool _groupEnabled(FilenamesSettings fs, FitsHeaderGroup group) =>
+      switch (group.controlledBy) {
+        null => true,
+        'Who took it' => fs.headerIdentity,
+        'Your site' => fs.headerSite,
+        'Optics' => fs.headerOptics,
+        'Sensor temperature' => fs.headerTemperature,
+        'Sky & weather' => fs.headerWeather,
+        'Sun & moon' => fs.headerEphemeris,
+        _ => true,
+      };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final live = _liveValues(ref);
+    final fs = ref.watch(filenamesSettingsProvider);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),
@@ -220,40 +236,63 @@ class _ReferenceDialog extends ConsumerWidget {
                                     fontWeight: FontWeight.w600)),
                           ),
                           if (group.controlledBy != null)
-                            Text('switch: ${group.controlledBy}',
+                            Text(
+                                _groupEnabled(fs, group)
+                                    ? 'switch: ${group.controlledBy}'
+                                    : 'off — not written',
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                    color: AraColors.textDisabled,
+                                    color: _groupEnabled(fs, group)
+                                        ? AraColors.textDisabled
+                                        : AraColors.accentBusy,
                                     fontSize: 10)),
                         ],
                       ),
                     ),
-                    for (final e in group.entries)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 92,
-                              child: Text(e.keyword,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                      fontFamily: 'monospace',
-                                      fontWeight: FontWeight.w600)),
+                    // A group whose switch is off renders dimmed and struck
+                    // through — those keywords will not land in the file.
+                    Opacity(
+                      opacity: _groupEnabled(fs, group) ? 1.0 : 0.35,
+                      child: Column(
+                        children: [
+                          for (final e in group.entries)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 92,
+                                    child: Text(e.keyword,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                                fontFamily: 'monospace',
+                                                fontWeight: FontWeight.w600,
+                                                decoration:
+                                                    _groupEnabled(fs, group)
+                                                        ? null
+                                                        : TextDecoration
+                                                            .lineThrough)),
+                                  ),
+                                  Expanded(
+                                    child: Text(e.longName,
+                                        style: theme.textTheme.bodySmall),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(live[e.keyword] ?? e.example,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                              fontFamily: 'monospace',
+                                              color: live
+                                                      .containsKey(e.keyword)
+                                                  ? null
+                                                  : AraColors.textSecondary)),
+                                ],
+                              ),
                             ),
-                            Expanded(
-                              child: Text(e.longName,
-                                  style: theme.textTheme.bodySmall),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(live[e.keyword] ?? e.example,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                    fontFamily: 'monospace',
-                                    color: live.containsKey(e.keyword)
-                                        ? null
-                                        : AraColors.textSecondary)),
-                          ],
-                        ),
+                        ],
                       ),
+                    ),
                   ],
                 ],
               ),

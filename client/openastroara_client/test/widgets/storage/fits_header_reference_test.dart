@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/filenames_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/widgets/storage/fits_header_reference.dart';
 
@@ -105,5 +106,38 @@ void main() {
     await tester.scrollUntilVisible(find.text('FOCALLEN'), 100,
         scrollable: find.byType(Scrollable).last);
     expect(find.text('448.0'), findsOneWidget);
+  });
+
+  testWidgets('a group whose switch is off reads as not written',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(filenamesSettingsProvider.notifier).setHeaderSite(false);
+    await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => showFitsHeaderReference(context),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        )));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('SITELAT'), 100,
+        scrollable: find.byType(Scrollable).last);
+    // The off group is marked and struck through...
+    expect(find.text('off — not written'), findsOneWidget);
+    final lat = tester.widget<Text>(find.text('SITELAT'));
+    expect(lat.style?.decoration, TextDecoration.lineThrough);
+    // ...while an on group keeps its normal caption and no strike.
+    expect(find.text('switch: Who took it'), findsOneWidget);
+    final obs = tester.widget<Text>(find.text('OBSERVER'));
+    expect(obs.style?.decoration, isNot(TextDecoration.lineThrough));
   });
 }
