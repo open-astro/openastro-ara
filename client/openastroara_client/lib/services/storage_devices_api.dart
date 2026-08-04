@@ -40,12 +40,24 @@ class StorageDevice {
 
   bool get selectable => !isSystemDisk && (uuid != null || isBlank);
 
-  String get displayName {
-    final parts = <String>[
-      if ((label ?? '').isNotEmpty) label!,
-      if ((model ?? '').isNotEmpty) model!,
+  /// What the user calls this disk: its label, else the hardware model, else
+  /// the device node as a last resort. Never a path when a name exists.
+  String get friendlyName {
+    if ((label ?? '').isNotEmpty) return label!;
+    if ((model ?? '').isNotEmpty) return model!;
+    return path;
+  }
+
+  /// Secondary line: capacity first (what people compare), then the technical
+  /// detail that only matters when something is wrong.
+  String get detailLine {
+    final bits = <String>[
+      if (sizeText.isNotEmpty) sizeText,
+      if ((model ?? '').isNotEmpty && (label ?? '').isNotEmpty) model!,
+      if (isBlank) 'not formatted' else if (!isExt4) 'needs erasing ($fileSystem)',
+      if (mountPoint != null && !isAraStore) 'in use at $mountPoint',
     ];
-    return parts.isEmpty ? path : '${parts.join(' · ')}  ($path)';
+    return bits.join(' · ');
   }
 
   String get sizeText {
