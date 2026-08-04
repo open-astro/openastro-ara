@@ -285,7 +285,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Last-resort sync: the entered time is applied at low'
+              'Last-resort sync: the entered time is applied at low '
               'trust — schedule-based instructions will warn before running.',
               style: theme.textTheme.bodySmall,
             ),

@@ -758,7 +758,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
-        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions);
+        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions, capturedAt);
         fits.Complete(); // §28.7 atomic finish
         return path;
     }
@@ -807,7 +807,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions) {
+    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions, DateTimeOffset capturedAt) {
         try {
             // §29.2 — the user chooses which optional groups their frames
             // carry (Files & headers panel). All-on is the default; the off
@@ -905,7 +905,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // must exist; guarded by its own switch because celestial
             // geometry at a timestamp narrows down where a frame was taken.
             if (prefs.HeaderEphemeris && (site.LatitudeDeg != 0 || site.LongitudeDeg != 0)) {
-                WriteEphemerisHeaders(fits, site);
+                WriteEphemerisHeaders(fits, site, capturedAt);
             }
         } catch (Exception ex) {
             LogHeaderEnrichmentFailed(ex);
@@ -923,9 +923,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort ephemeris for optional headers: any math fault must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteEphemerisHeaders(FitsImage fits, SiteSettingsDto site) {
+    private void WriteEphemerisHeaders(FitsImage fits, SiteSettingsDto site, DateTimeOffset capturedAt) {
         try {
-            var now = DateTimeOffset.UtcNow;
+            // The frame's own capture instant — wall-clock at header-write
+            // time would drift by the exposure length plus readout.
+            var now = capturedAt;
             var lst = SiteAstrometry.LocalSiderealTimeDeg(now, site.LongitudeDeg);
             var (sunRa, sunDec) = SiteAstrometry.SunEquatorialDeg(now);
             var sunAlt = SiteAstrometry.AltitudeFromHourAngleDeg(sunDec, site.LatitudeDeg, lst - sunRa);

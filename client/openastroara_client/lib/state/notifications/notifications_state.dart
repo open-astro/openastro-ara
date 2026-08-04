@@ -47,8 +47,9 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     final timer = Timer.periodic(kNotificationPollInterval, (_) => refresh());
     ref.onDispose(timer.cancel);
     final gen = ++_gen;
-    final all = await _fetchAll(api);
+    final (all, truncated) = await _fetchAll(api);
     if (gen != _gen) return state.value;
+    _truncated = truncated;
     return all;
   }
 
@@ -57,7 +58,11 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
   bool get truncated => _truncated;
   bool _truncated = false;
 
-  Future<List<AraNotification>> _fetchAll(NotificationsClient api) async {
+  /// Returns the visible list plus whether the server had more pages.
+  /// Deliberately touches no notifier state — the caller decides, under its
+  /// own generation guard, whether this fetch still gets to win.
+  Future<(List<AraNotification>, bool)> _fetchAll(
+      NotificationsClient api) async {
     final acc = <AraNotification>[];
     String? cursor;
     var truncated = false;
@@ -68,8 +73,7 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
       if (!res.hasMore || cursor == null) break;
       if (page == _maxPages - 1) truncated = true;
     }
-    _truncated = truncated;
-    return _visible(acc);
+    return (_visible(acc), truncated);
   }
 
   static List<AraNotification> _visible(List<AraNotification> all) =>
@@ -80,7 +84,14 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     if (api == null) return;
     final gen = ++_gen;
     final next = await AsyncValue.guard(() => _fetchAll(api));
-    if (ref.mounted && gen == _gen) state = next;
+    if (ref.mounted && gen == _gen) {
+      if (next case AsyncData(value: (final all, final truncated))) {
+        _truncated = truncated;
+        state = AsyncData(all);
+      } else {
+        state = AsyncError(next.error!, next.stackTrace!);
+      }
+    }
   }
 
   /// Mark one read. Applied locally first so the badge answers the tap
@@ -138,9 +149,18 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     try {
       await call(api);
     } catch (_) {
-      // Put it back exactly as it was — a failed dismiss that silently
-      // vanished from the list would lose the entry until the next poll.
-      if (ref.mounted) state = AsyncData(before);
+      if (!ref.mounted) return;
+      if (identical(state.value, after)) {
+        // Nothing else has touched the list — put it back exactly as it
+        // was: a failed dismiss that silently vanished from the list would
+        // lose the entry until the next poll.
+        state = AsyncData(before);
+      } else {
+        // Another mutation or a poll won in the meantime; restoring our
+        // stale snapshot would resurrect items they removed. The server
+        // knows what actually landed — ask it.
+        await refresh();
+      }
     }
   }
 }

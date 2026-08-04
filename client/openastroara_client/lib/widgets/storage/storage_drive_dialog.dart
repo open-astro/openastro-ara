@@ -70,7 +70,10 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
       final outcome = await api.configure(
         uuid: device.uuid ?? '',
         format: _needsErase,
-        confirmLabel: _needsErase ? (device.label ?? '') : null,
+        // What the user actually typed — the server re-checks it against the
+        // drive's real label, so a stale client record can't erase the wrong
+        // disk.
+        confirmLabel: _needsErase ? _confirm.text : null,
       );
       if (!mounted) {
         return;
@@ -130,6 +133,19 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
           ),
           data: (all) {
             final disks = all.where((d) => !d.isSystemDisk).toList();
+            // A rescan hands out fresh device objects — re-point the
+            // selection at its current record so the erase/label logic never
+            // reads pre-rescan state. A disk that vanished deselects.
+            final selectedPath = _selected?.path;
+            if (selectedPath != null) {
+              _selected = null;
+              for (final d in disks) {
+                if (d.path == selectedPath) {
+                  _selected = d;
+                  break;
+                }
+              }
+            }
             if (disks.isEmpty) {
               return const SizedBox(
                 height: 140,

@@ -265,9 +265,9 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             Expanded(
               child: Text(
                 s.firstFlipConfirmed
-                    ? 'First-flip announce: already ran — later flips'
+                    ? 'First-flip announce: already ran — later flips '
                         'are silent. Re-arm after re-balancing or a rig change.'
-                    : 'First-flip announce: armed — the next meridian'
+                    : 'First-flip announce: armed — the next meridian '
                         'flip alerts and waits 60 s before proceeding.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),

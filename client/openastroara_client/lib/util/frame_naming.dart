@@ -177,7 +177,20 @@ List<String> previewSegments(String template, NamingPreviewContext ctx) {
         while (v.contains('__')) {
           v = v.replaceAll('__', '_');
         }
-        return v.replaceAll(RegExp(r'^[_\-. ]+|[_\-. ]+$'), '');
+        // Mirror the server's FrameNaming.SanitizeSegment edge-trim: a
+        // leading '-' that starts a number is a minus sign ("-10C"), not a
+        // separator scar, and must survive so the preview matches the file.
+        v = v.replaceAll(RegExp(r'[_\-. ]+$'), '');
+        while (v.isNotEmpty &&
+            (v.startsWith('_') ||
+                v.startsWith('.') ||
+                v.startsWith(' ') ||
+                (v.startsWith('-') &&
+                    (v.length == 1 ||
+                        !RegExp(r'[0-9]').hasMatch(v[1]))))) {
+          v = v.substring(1);
+        }
+        return v;
       })
       .where((s) => s.isNotEmpty)
       .toList();

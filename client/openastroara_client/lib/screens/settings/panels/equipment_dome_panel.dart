@@ -51,7 +51,7 @@ class EquipmentDomePanel extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
-            'Dome slaving and shutter-on-park/unsafe follow the safety'
+            'Dome slaving and shutter-on-park/unsafe follow the safety '
             'policies and the mount park routine; there is no separate dome '
             'setting.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(

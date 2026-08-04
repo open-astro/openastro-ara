@@ -90,7 +90,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
           mode: DiagnosticsMode.abortOnCritical,
           label: 'Abort on critical',
           description:
-              'Critical-severity events trigger Abort + Park instead'
+              'Critical-severity events trigger Abort + Park instead '
               'of pause. Use for unattended observatory automation where '
               'you trust the safety policies to recover.',
           selected: selected == DiagnosticsMode.abortOnCritical,
