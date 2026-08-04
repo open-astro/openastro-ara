@@ -27,6 +27,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -142,7 +143,36 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             StarDetectionParams parameters, IProgress<ApplicationStatus> progress, CancellationToken token);
     }
 
+    /// <summary>Source-safe preview annotation settings. All sizes are measured in pixels.</summary>
+    public sealed record StarAnnotationOptions(
+        byte Red = 0,
+        byte Green = 255,
+        byte Blue = 0,
+        float StrokeWidth = 2f,
+        float MinimumOutputRadius = 6f,
+        float FontSize = 12f,
+        string? FontFamily = null,
+        bool ShowLabels = false,
+        int MaxAnnotations = 250,
+        double RadiusScale = 3.0,
+        double MinimumSourceRadius = 5.0);
+
+    /// <summary>One stretched display plane plus detector output. The source is read-only and is
+    /// never replaced or modified by an annotator.</summary>
+    public sealed record StarAnnotationRequest(
+        ReadOnlyMemory<byte> SourcePixels,
+        int Width,
+        int Height,
+        bool IsColor,
+        int MaxDimension,
+        StarDetectionResult Detection,
+        StarAnnotationOptions Options);
+
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays",
+        Justification = "The encoded preview buffer transfers directly to the caller without another full-image copy.")]
+    public sealed record StarAnnotationResult(byte[] Image, int AnnotationCount, int RejectedCount);
+
     public interface IStarAnnotator {
-        Task<byte[]> GetAnnotatedImage(StarDetectionParams parameters, StarDetectionResult result, byte[] source);
+        Task<StarAnnotationResult> AnnotateAsync(StarAnnotationRequest request, CancellationToken token);
     }
 }

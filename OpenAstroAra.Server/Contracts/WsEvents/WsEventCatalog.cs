@@ -149,11 +149,18 @@ public static class WsEventCatalog {
     public const string MosaicComplete = "mosaic.complete";
 
     // Phase 8 — frames, sessions, backup, diagnostics
+    public const string FramePersistStarted = "frame.persist_started";
+    public const string FramePersistProgress = "frame.persist_progress";
     public const string FrameComplete = "frame.complete";
+    public const string FrameAnalysisStarted = "frame.analysis_started";
     /// <summary>§59.5 — post-capture star analysis landed (HFR + star count written back).</summary>
     public const string FrameAnalyzed = "frame.analyzed";
     public const string FrameRecoveredOrphan = "frame.recovered_orphan";
-    public const string FramePreviewReady = "frame.preview.ready";
+    public const string FramePreviewStarted = "frame.preview_started";
+    public const string FramePreviewReady = "frame.preview_ready";
+    public const string FramePreviewReadyLegacy = "frame.preview.ready";
+    public const string FrameFailed = "frame.failed";
+    public const string FrameQuarantined = "frame.quarantined";
     public const string FramePreviewVariantReady = "frame.preview.variant.ready";
     public const string FramePreviewVariantEvicted = "frame.preview.variant.evicted";
     public const string FrameQualityScored = "frame.quality_scored";
@@ -254,8 +261,11 @@ public static class WsEventCatalog {
 
         MosaicCreated, MosaicPanelComplete, MosaicComplete,
 
-        FrameComplete, FrameAnalyzed, FrameRecoveredOrphan,
-        FramePreviewReady, FramePreviewVariantReady, FramePreviewVariantEvicted,
+        FramePersistStarted, FramePersistProgress, FrameComplete,
+        FrameAnalysisStarted, FrameAnalyzed, FrameRecoveredOrphan,
+        FramePreviewStarted, FramePreviewReady, FramePreviewReadyLegacy,
+        FrameFailed, FrameQuarantined,
+        FramePreviewVariantReady, FramePreviewVariantEvicted,
         FrameQualityScored, FramesBulkOperationComplete,
 
         SessionStarted, SessionEnded,

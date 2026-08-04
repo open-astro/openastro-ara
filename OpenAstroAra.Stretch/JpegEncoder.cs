@@ -20,7 +20,18 @@ namespace OpenAstroAra.Stretch;
 /// <summary>A star marker to overlay on a preview: a circle centred at (<see cref="X"/>, <see cref="Y"/>)
 /// with the given <see cref="Radius"/>, all in the pixel-buffer's coordinate space (the same space as the
 /// pixels handed to the encoder — the caller is responsible for scaling detection coordinates into it).</summary>
-public readonly record struct StarMarker(float X, float Y, float Radius);
+public readonly record struct StarMarker(float X, float Y, float Radius, string? Label = null);
+
+/// <summary>Visible marker style. Values are output-space pixels, so overlays remain readable
+/// after a large source image is reduced to preview size.</summary>
+public sealed record StarMarkerStyle(
+    byte Red = 0,
+    byte Green = 255,
+    byte Blue = 0,
+    float StrokeWidth = 2f,
+    float MinimumOutputRadius = 6f,
+    float FontSize = 12f,
+    string? FontFamily = null);
 
 /// <summary>
 /// JPEG encoder for stretched grayscale pixels (§65). Takes the
@@ -73,13 +84,7 @@ public static class JpegEncoder {
 
     // §64/§59 star-marker overlay colour + stroke. Green reads clearly over the near-monochrome sky of a
     // stretched preview; a hollow (stroke-only) circle leaves the star itself visible inside the ring.
-    private static readonly SKColor MarkerColor = new(0, 255, 0);
-    private const float MarkerStrokeWidth = 2f;
-
-    // Floor for the drawn ring radius, in OUTPUT (post-downscale) pixels. The markers arrive sized in source
-    // pixels, and a real sensor is downscaled ~6× to the preview cap — a tight star's few-pixel ring would
-    // collapse to a sub-pixel dot and vanish. This keeps every marker at least this visible in the preview.
-    private const float MarkerMinOutputRadius = 6f;
+    private static readonly StarMarkerStyle DefaultMarkerStyle = new();
 
     /// <summary>
     /// Encode 8-bit grayscale pixels as a JPEG with star-marker circles drawn over them (§64 Live View /
@@ -92,7 +97,8 @@ public static class JpegEncoder {
     /// <param name="markers">Star markers in the same pixel space as <paramref name="pixels"/>; a zero/negative radius is skipped.</param>
     /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the annotated output is downscaled to fit (aspect-preserving).</param>
     public static byte[] EncodeGrayAnnotated(ReadOnlySpan<byte> pixels, int width, int height,
-            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0) {
+            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0,
+            StarMarkerStyle? style = null) {
         if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
         if (pixels.Length != width * height) {
             throw new ArgumentException(
@@ -118,7 +124,8 @@ public static class JpegEncoder {
         }
         using var srcImage = SKImage.FromBitmap(srcGray);
 
-        return DrawAnnotatedAndEncode(srcImage, width, height, outW, outH, scale, markers, quality);
+        return DrawAnnotatedAndEncode(srcImage, width, height, outW, outH, scale, markers,
+            ValidateStyle(style), quality);
     }
 
     /// <summary>
@@ -131,7 +138,8 @@ public static class JpegEncoder {
     /// <param name="markers">Star markers in the same pixel space as <paramref name="rgb"/>; a zero/negative radius is skipped.</param>
     /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the annotated output is downscaled to fit (aspect-preserving).</param>
     public static byte[] EncodeColorAnnotated(ReadOnlySpan<byte> rgb, int width, int height,
-            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0) {
+            IReadOnlyList<StarMarker> markers, int quality = 85, int maxDim = 0,
+            StarMarkerStyle? style = null) {
         if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
         if (rgb.Length != width * height * 3) {
             throw new ArgumentException(
@@ -145,35 +153,67 @@ public static class JpegEncoder {
 
         using var srcBitmap = RgbToBitmap(rgb, width, height);
         using var srcImage = SKImage.FromBitmap(srcBitmap);
-        return DrawAnnotatedAndEncode(srcImage, width, height, outW, outH, scale, markers, quality);
+        return DrawAnnotatedAndEncode(srcImage, width, height, outW, outH, scale, markers,
+            ValidateStyle(style), quality);
     }
 
     // The shared annotate-and-encode tail: resample the source into a ≤maxDim RGBA canvas
     // (Mitchell), draw the marker rings in OUTPUT space (radius floored so they stay visible
     // after a large downscale), and JPEG-encode the result.
     private static byte[] DrawAnnotatedAndEncode(SKImage srcImage, int srcW, int srcH,
-            int outW, int outH, double scale, IReadOnlyList<StarMarker> markers, int quality) {
+            int outW, int outH, double scale, IReadOnlyList<StarMarker> markers,
+            StarMarkerStyle style, int quality) {
         var outInfo = new SKImageInfo(outW, outH, SKColorType.Rgba8888, SKAlphaType.Opaque);
         using var canvasBitmap = new SKBitmap(outInfo);
         using (var canvas = new SKCanvas(canvasBitmap)) {
             canvas.DrawImage(srcImage, new SKRect(0, 0, srcW, srcH), new SKRect(0, 0, outW, outH),
                 new SKSamplingOptions(SKCubicResampler.Mitchell), paint: null);
             using var paint = new SKPaint {
-                Color = MarkerColor,
+                Color = new SKColor(style.Red, style.Green, style.Blue),
                 Style = SKPaintStyle.Stroke,
-                StrokeWidth = MarkerStrokeWidth,
+                StrokeWidth = style.StrokeWidth,
+                IsAntialias = true,
+            };
+            using var customTypeface = string.IsNullOrWhiteSpace(style.FontFamily)
+                ? null
+                : SKTypeface.FromFamilyName(style.FontFamily);
+            using var font = new SKFont(customTypeface ?? SKTypeface.Default, style.FontSize);
+            using var textPaint = new SKPaint {
+                Color = new SKColor(style.Red, style.Green, style.Blue),
+                Style = SKPaintStyle.Fill,
                 IsAntialias = true,
             };
             foreach (var m in markers) {
                 if (m.Radius <= 0) continue;
-                float r = (float)Math.Max(MarkerMinOutputRadius, m.Radius * scale);
-                canvas.DrawCircle((float)(m.X * scale), (float)(m.Y * scale), r, paint);
+                float r = (float)Math.Max(style.MinimumOutputRadius, m.Radius * scale);
+                float x = (float)(m.X * scale);
+                float y = (float)(m.Y * scale);
+                canvas.DrawCircle(x, y, r, paint);
+                if (!string.IsNullOrWhiteSpace(m.Label)) {
+                    canvas.DrawText(m.Label, x + r + style.StrokeWidth, y - r,
+                        SKTextAlign.Left, font, textPaint);
+                }
             }
         }
 
         using var image = SKImage.FromBitmap(canvasBitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
         return data.ToArray();
+    }
+
+    private static StarMarkerStyle ValidateStyle(StarMarkerStyle? style) {
+        style ??= DefaultMarkerStyle;
+        if (!float.IsFinite(style.StrokeWidth) || style.StrokeWidth <= 0 || style.StrokeWidth > 32) {
+            throw new ArgumentOutOfRangeException(nameof(style), "Marker stroke width must be in (0, 32].");
+        }
+        if (!float.IsFinite(style.MinimumOutputRadius)
+            || style.MinimumOutputRadius <= 0 || style.MinimumOutputRadius > 128) {
+            throw new ArgumentOutOfRangeException(nameof(style), "Marker minimum radius must be in (0, 128].");
+        }
+        if (!float.IsFinite(style.FontSize) || style.FontSize <= 0 || style.FontSize > 128) {
+            throw new ArgumentOutOfRangeException(nameof(style), "Marker font size must be in (0, 128].");
+        }
+        return style;
     }
 
     /// <summary>

@@ -112,7 +112,7 @@ public sealed partial class CameraService : IAnalysisFrameSource {
                 throw new InvalidOperationException("camera disconnected while the analysis capture was queued");
             }
             var frameId = Guid.NewGuid(); // log correlation only — nothing is persisted under it
-            var exposed = await ExposeAndDownloadAsync(client, frameId, request, ct).ConfigureAwait(false);
+            var exposed = await ExposeAndDownloadAsync(client, frameId, request, onDownloadStarting: null, ct).ConfigureAwait(false);
             if (exposed is null) {
                 throw new InvalidOperationException(
                     "analysis capture failed — see the daemon log for the cause (device timeout or disconnect)");
