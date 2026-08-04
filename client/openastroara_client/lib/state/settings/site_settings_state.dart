@@ -42,6 +42,9 @@ class SiteSettings {
   // horizon floor: Tonight's Sky tags targets that never clear this mark.
   final double softWarningAltitudeDeg;
 
+  // §29.2 — goes in every frame's OBSERVER header. Empty = header omitted.
+  final String observerName;
+
   const SiteSettings({
     this.siteName = 'Backyard',
     this.latitudeDeg = 0,
@@ -56,6 +59,7 @@ class SiteSettings {
     this.twilightDefinition = TwilightDefinition.astronomical,
     this.maxSequenceRuntimeMin = 0,
     this.softWarningAltitudeDeg = 30,
+    this.observerName = '',
   });
 
   SiteSettings copyWith({
@@ -72,6 +76,7 @@ class SiteSettings {
     TwilightDefinition? twilightDefinition,
     int? maxSequenceRuntimeMin,
     double? softWarningAltitudeDeg,
+    String? observerName,
   }) =>
       SiteSettings(
         siteName: siteName ?? this.siteName,
@@ -91,6 +96,7 @@ class SiteSettings {
             maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
         softWarningAltitudeDeg:
             softWarningAltitudeDeg ?? this.softWarningAltitudeDeg,
+        observerName: observerName ?? this.observerName,
       );
 }
 
@@ -103,6 +109,11 @@ class SiteSettingsNotifier extends Notifier<SiteSettings>
     final v = s.trim();
     if (v.isEmpty) return;
     state = state.copyWith(siteName: v);
+  }
+
+  /// Empty is allowed — it means "omit the OBSERVER header".
+  void setObserverName(String s) {
+    state = state.copyWith(observerName: s.trim());
   }
 
   void setLatitudeDeg(double v) {

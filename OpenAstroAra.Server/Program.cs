@@ -530,7 +530,10 @@ public partial class Program {
                 // §42.2/§42.3 — explicit for the same reason as events above: this factory
                 // lambda bypasses constructor activation, and forgetting it would silence
                 // camera disconnect faults.
-                faults: sp.GetRequiredService<IEquipmentFaultSink>()));
+                faults: sp.GetRequiredService<IEquipmentFaultSink>(),
+                // §29.2 — SQM/ambient into every frame's header when a
+                // weather source is connected.
+                weather: sp.GetService<IObservingConditionsService>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).

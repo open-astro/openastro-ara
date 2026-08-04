@@ -91,7 +91,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         IFocuserMediator? focuser = null,
         EquipmentEventPublisher? events = null,
         ImageHistoryService? imageHistory = null,
-        IEquipmentFaultSink? faults = null) {
+        IEquipmentFaultSink? faults = null,
+        IObservingConditionsService? weather = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _events = events;
         _faults = faults;
@@ -100,10 +101,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         _fallbackFramesDir = fallbackFramesDir;
         _focuser = focuser;
         _imageHistory = imageHistory;
+        _weather = weather;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
     private readonly ImageHistoryService? _imageHistory;
+
+    // §29.2 header enrichment — the sky the frame was taken under (SQM,
+    // ambient). Optional: no weather station, no headers, no complaints.
+    private readonly IObservingConditionsService? _weather;
 
     private readonly IFocuserMediator? _focuser;
 
@@ -449,8 +455,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         double? sensorTemp = null, tempSetPoint = null;
         try { sensorTemp = client.CCDTemperature; } catch (Exception) { }
         try { tempSetPoint = client.SetCCDTemperature; } catch (Exception) { }
+        var conditions = await ReadConditionsBestEffortAsync(ct).ConfigureAwait(false);
         var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos,
-            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint);
+            targetName: targetName, sensorTemp: sensorTemp, tempSetPoint: tempSetPoint, conditions: conditions);
         try {
             await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -709,7 +716,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null, string? targetName = null, double? sensorTemp = null, double? tempSetPoint = null, ObservingConditionsDto? conditions = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         // §29.2 — name the file the way the profile's template says, so what
@@ -751,9 +758,28 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
         }
-        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint);
+        WriteStandardHeaders(fits, request, targetName, sensorTemp, tempSetPoint, conditions);
         fits.Complete(); // §28.7 atomic finish
         return path;
+    }
+
+    /// <summary>
+    /// Latest observing conditions, bounded to two seconds and swallowing
+    /// every failure — a slow or absent weather station must never delay or
+    /// fail a capture. Null simply means those headers are skipped.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort weather read for optional headers: any driver/transport fault must degrade to 'no weather headers', never a failed capture. CA1031's log-and-recover boundary applies.")]
+    private async Task<ObservingConditionsDto?> ReadConditionsBestEffortAsync(CancellationToken ct) {
+        if (_weather is null) return null;
+        try {
+            using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            bounded.CancelAfter(TimeSpan.FromSeconds(2));
+            var dto = await _weather.GetAsync(bounded.Token).ConfigureAwait(false);
+            return dto?.State == EquipmentConnectionState.Connected ? dto : null;
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /// <summary>
@@ -768,7 +794,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Header enrichment is best-effort by design: profile reads can throw arbitrary IO exceptions and a missing optional header must never fail the frame write. CA1031's log-and-recover boundary applies.")]
-    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint) {
+    private void WriteStandardHeaders(FitsImage fits, ExposureRequestDto request, string? targetName, double? sensorTemp, double? tempSetPoint, ObservingConditionsDto? conditions) {
         try {
             fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
@@ -788,6 +814,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             if (profile is null) return;
 
             var optics = profile.GetOpticsSettings();
+            if (!string.IsNullOrWhiteSpace(optics.TelescopeName)) {
+                fits.SetHeader("TELESCOP", optics.TelescopeName, "telescope");
+            }
             var focal = optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1);
             if (focal > 0) {
                 fits.SetHeader("FOCALLEN", focal, "effective focal length mm");
@@ -802,10 +831,31 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             }
 
             var site = profile.GetSiteSettings();
+            if (!string.IsNullOrWhiteSpace(site.ObserverName)) {
+                fits.SetHeader("OBSERVER", site.ObserverName, "observer");
+            }
             if (site.LatitudeDeg != 0 || site.LongitudeDeg != 0) {
                 fits.SetHeader("SITELAT", site.LatitudeDeg, "observatory latitude deg");
                 fits.SetHeader("SITELONG", site.LongitudeDeg, "observatory longitude deg (E+)");
                 fits.SetHeader("SITEELEV", site.ElevationM, "observatory elevation m");
+            }
+
+            // The sky this frame was taken under, when a weather source is
+            // connected. SQM feeds gradient/quality tooling; ambient explains
+            // a warm sensor.
+            if (conditions is not null) {
+                if (conditions.SkyQualityMagArcsec2 is double sqm) {
+                    fits.SetHeader("SQM", sqm, "sky quality mag/arcsec^2");
+                }
+                if (conditions.TemperatureC is double amb) {
+                    fits.SetHeader("AMBTEMP", amb, "ambient temperature C");
+                }
+                if (conditions.HumidityPct is double hum) {
+                    fits.SetHeader("HUMIDITY", hum, "relative humidity pct");
+                }
+                if (conditions.DewPointC is double dew) {
+                    fits.SetHeader("DEWPOINT", dew, "dew point C");
+                }
             }
         } catch (Exception ex) {
             LogHeaderEnrichmentFailed(ex);

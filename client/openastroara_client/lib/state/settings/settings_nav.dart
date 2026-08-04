@@ -162,7 +162,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       ),
       SettingsPanelInfo(
         id: 'session.filenames',
-        label: 'File naming',
+        label: 'Files & headers',
         groupId: 'session',
       ),
       SettingsPanelInfo(

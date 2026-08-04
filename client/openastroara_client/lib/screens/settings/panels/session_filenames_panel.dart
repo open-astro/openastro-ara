@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/filenames_settings_state.dart';
+import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
+import '../../../state/settings/site_settings_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/frame_naming.dart';
@@ -42,9 +44,12 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final api = _api();
     if (api == null) return;
     try {
-      await ref
-          .read(filenamesSettingsProvider.notifier)
-          .hydrateFromServer(api);
+      await ref.read(filenamesSettingsProvider.notifier).hydrateFromServer(api);
+      // Observer + telescope live in the site/optics sections of the profile;
+      // hydrate them here too so this panel's Save can never push defaults
+      // over values it hasn't seen (the transient-draft lesson).
+      await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
+      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
         setState(() =>
@@ -71,6 +76,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
       // toggles ride with filenames. Both panels' saves stay independent.
       await ref.read(storageSettingsProvider.notifier).persistToServer(api);
       await ref.read(filenamesSettingsProvider.notifier).persistToServer(api);
+      await ref.read(siteSettingsProvider.notifier).persistToServer(api);
+      await ref.read(opticsSettingsProvider.notifier).persistToServer(api);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
@@ -91,6 +98,8 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
     final fn = ref.read(filenamesSettingsProvider.notifier);
     final ss = ref.watch(storageSettingsProvider);
     final sn = ref.read(storageSettingsProvider.notifier);
+    final site = ref.watch(siteSettingsProvider);
+    final optics = ref.watch(opticsSettingsProvider);
     final model = FrameNamingModel.tryParse(ss.filenameTemplate);
 
     return ListView(
@@ -168,6 +177,55 @@ class _SessionFilenamesPanelState extends ConsumerState<SessionFilenamesPanel>
             ),
           ),
         ],
+        const SettingsSectionHeader('Written into every frame'),
+        // §29.2 — the FITS header carries the whole story of the frame:
+        // who, through what, from where, under what sky. Most of it is
+        // automatic; the two identity lines are set here because they have
+        // no hardware to live with.
+        EditableTextRow(
+          label: 'Observer',
+          helpKey: 'session.filenames.observer',
+          currentValue: site.observerName,
+          getCanonical: () => ref.read(siteSettingsProvider).observerName,
+          parse: (v) =>
+              ref.read(siteSettingsProvider.notifier).setObserverName(v),
+        ),
+        EditableTextRow(
+          label: 'Telescope',
+          helpKey: 'session.filenames.telescope',
+          currentValue: optics.telescopeName,
+          getCanonical: () => ref.read(opticsSettingsProvider).telescopeName,
+          parse: (v) =>
+              ref.read(opticsSettingsProvider.notifier).setTelescopeName(v),
+        ),
+        SettingsRow(
+          label: 'Your site',
+          value: site.latitudeDeg == 0 && site.longitudeDeg == 0
+              ? 'Not set'
+              : '${site.latitudeDeg.toStringAsFixed(4)}°, '
+                  '${site.longitudeDeg.toStringAsFixed(4)}°, '
+                  '${site.elevationM.round()} m',
+          hint: 'Edit in Location & sky → Where you observe',
+        ),
+        SettingsRow(
+          label: 'Optics',
+          value: optics.focalLengthMm <= 0
+              ? 'Not set'
+              : '${(optics.focalLengthMm * (optics.reducerFactor > 0 ? optics.reducerFactor : 1)).round()} mm'
+                  '${optics.apertureMm > 0 ? ' · ${optics.apertureMm.round()} mm aperture' : ''}'
+                  '${optics.pixelSizeUm > 0 ? ' · ${optics.pixelSizeUm} µm pixels' : ''}',
+          hint: 'Edit in Imaging → Optics (FOV)',
+        ),
+        const SettingsRow(
+          label: 'Camera & exposure',
+          value: 'Automatic',
+          hint: 'Camera name, sensor temperature, gain, filter, binning',
+        ),
+        const SettingsRow(
+          label: 'Sky & weather',
+          value: 'Automatic with a weather station',
+          hint: 'Sky quality (SQM), ambient temperature, humidity, dew point',
+        ),
         const SettingsSectionHeader('Format'),
         SettingsRow(
           label: 'File format',

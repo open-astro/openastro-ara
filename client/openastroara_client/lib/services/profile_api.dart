@@ -545,6 +545,7 @@ class ProfileApi {
       sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
       pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
       apertureMm: (j['aperture_mm'] as num?)?.toDouble() ?? 0,
+      telescopeName: (j['telescope_name'] as String?) ?? '',
     );
   }
 
@@ -555,6 +556,7 @@ class ProfileApi {
     'sensor_height_px': v.sensorHeightPx,
     'pixel_size_um': v.pixelSizeUm,
     'aperture_mm': v.apertureMm,
+    'telescope_name': v.telescopeName,
   };
 
   // ── Camera electronics + filter set JSON mapping (NEXTGEN §4) ──────────
@@ -1186,6 +1188,7 @@ class ProfileApi {
             (j['max_sequence_runtime_min'] as num?)?.toInt() ?? 0,
         softWarningAltitudeDeg:
             (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
+        observerName: (j['observer_name'] as String?) ?? '',
       );
 
   static Map<String, dynamic> siteSettingsToJson(SiteSettings v) => {
@@ -1202,6 +1205,7 @@ class ProfileApi {
     'twilight_definition': v.twilightDefinition.name,
     'max_sequence_runtime_min': v.maxSequenceRuntimeMin,
     'soft_warning_altitude_deg': v.softWarningAltitudeDeg,
+    'observer_name': v.observerName,
   };
 
   static TwilightDefinition _twilightFromString(String? s) {

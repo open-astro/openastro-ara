@@ -113,6 +113,9 @@ public sealed record SiteSettingsDto(
     // listed but Tonight's Sky tags them so soft, low-elevation detail is an
     // informed choice, not a surprise. Advisory-only — never a score input.
     double SoftWarningAltitudeDeg = 30,
+    // §29.2 — what goes in the FITS OBSERVER header. Optional ctor default
+    // keeps older profile.json deserializing.
+    string ObserverName = "",
     // Measured sky brightness in mag/arcsec² (an SQM meter reading or a
     // lightpollutionmap value). 0 = not measured — planning derives the sky
     // from BortleClass instead. When set (~16–22.2 for real skies) it
@@ -427,7 +430,10 @@ public sealed record OpticsSettingsDto(
     int SensorWidthPx,
     int SensorHeightPx,
     double PixelSizeUm,
-    double ApertureMm = 0);
+    double ApertureMm = 0,
+    // §29.2 — what goes in the FITS TELESCOP header ("RedCat 51"). Optional
+    // ctor default keeps older profile.json deserializing.
+    string TelescopeName = "");
 
 /// <summary>
 /// NEXTGEN §3/§4 — camera electronics for exposure planning. Per-camera, per-mode

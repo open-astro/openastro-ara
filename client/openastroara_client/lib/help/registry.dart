@@ -651,6 +651,36 @@ const Map<String, Help> helpRegistry = {
         '* **`-` dash**: same as underscore, but uses `-` between date components. Maximally Windows-safe (no characters reserved by NTFS).',
     relatedSettings: ['session.storage.filename_template'],
   ),
+  'session.filenames.observer': Help(
+    key: 'session.filenames.observer',
+    title: 'Observer',
+    body: 'Your name, written into every frame as the OBSERVER header. '
+        'Archives, stacking reports and shared data keep the credit with the '
+        'image. Leave it empty and the header is simply omitted.',
+    relatedSettings: ['session.filenames.telescope'],
+  ),
+  'session.filenames.telescope': Help(
+    key: 'session.filenames.telescope',
+    title: 'Telescope',
+    body: 'What you shoot through — "RedCat 51", "EdgeHD 8" — written into '
+        'every frame as the TELESCOP header. The focal length and aperture '
+        'numbers come from Optics; this is the human name. Leave it empty '
+        'and the header is simply omitted.',
+    relatedSettings: ['imaging.optics.focal_length_mm'],
+  ),
+  'session.filenames.folders': Help(
+    key: 'session.filenames.folders',
+    title: 'Folders',
+    body: 'How frames are organized on the disk.\n\n'
+        '* **By night, then frame type** — one folder per night, lights and '
+        'calibration separated. The default.\n'
+        '* **By night, then target** — nights first, then what you shot.\n'
+        '* **By target, then night** — a folder per project, nights inside.\n'
+        '* **No folders** — everything flat in the save folder.\n\n'
+        'A frame taken after midnight files under the evening its night '
+        'started, so one session never splits across two folders.',
+    relatedSettings: ['session.storage.filename_template'],
+  ),
   'session.filenames.compress_darks_and_bias': Help(
     key: 'session.filenames.compress_darks_and_bias',
     title: 'Compress bias + dark frames',
