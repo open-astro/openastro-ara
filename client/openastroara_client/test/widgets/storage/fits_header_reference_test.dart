@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/widgets/storage/fits_header_reference.dart';
 
 void main() {
@@ -37,7 +39,8 @@ void main() {
   });
 
   testWidgets('the sheet reads as words, not just keywords', (tester) async {
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(ProviderScope(
+        child: MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(
           body: Center(
@@ -48,7 +51,7 @@ void main() {
           ),
         ),
       ),
-    ));
+    )));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('Everything a frame can carry'), findsOneWidget);
@@ -63,5 +66,44 @@ void main() {
     await tester.scrollUntilVisible(find.text('MOONPHSE'), 300,
         scrollable: find.byType(Scrollable).last);
     expect(find.text('Moon phase by name'), findsOneWidget);
+  });
+
+  testWidgets('settings-backed headers show the user\'s own values',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(siteSettingsProvider.notifier)
+      ..setObserverName('Test Observer')
+      ..setLatitudeDeg(51.477811)
+      ..setLongitudeDeg(-0.001475)
+      ..setElevationM(46);
+    await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => showFitsHeaderReference(context),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        )));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // Live values replace the catalog examples...
+    await tester.scrollUntilVisible(find.text('OBSERVER'), 100,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text('Test Observer'), findsOneWidget);
+    expect(find.text('Jane Doe'), findsNothing);
+    await tester.scrollUntilVisible(find.text('SITELAT'), 100,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text('51.477811'), findsOneWidget);
+    // ...while unset ones keep their generic example.
+    await tester.scrollUntilVisible(find.text('FOCALLEN'), 100,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text('448.0'), findsOneWidget);
   });
 }

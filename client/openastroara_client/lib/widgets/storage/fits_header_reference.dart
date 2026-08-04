@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/settings/optics_settings_state.dart';
+import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 
 /// §29.2 — the full FITS header, spelled out. The panel's switches say what
@@ -125,12 +128,43 @@ Future<void> showFitsHeaderReference(BuildContext context) => showDialog<void>(
       builder: (_) => const _ReferenceDialog(),
     );
 
-class _ReferenceDialog extends StatelessWidget {
+class _ReferenceDialog extends ConsumerWidget {
   const _ReferenceDialog();
 
+  /// Keyword → the user's own value, for the headers that come straight from
+  /// settings (already hydrated by the panel that opens this sheet). Anything
+  /// unset stays on the catalog's generic example.
+  Map<String, String> _liveValues(WidgetRef ref) {
+    final site = ref.watch(siteSettingsProvider);
+    final optics = ref.watch(opticsSettingsProvider);
+    final live = <String, String>{};
+    if (site.observerName.isNotEmpty) live['OBSERVER'] = site.observerName;
+    if (optics.telescopeName.isNotEmpty) {
+      live['TELESCOP'] = optics.telescopeName;
+    }
+    if (site.latitudeDeg != 0 || site.longitudeDeg != 0) {
+      live['SITELAT'] = site.latitudeDeg.toStringAsFixed(6);
+      live['SITELONG'] = site.longitudeDeg.toStringAsFixed(6);
+      live['SITEELEV'] = site.elevationM.toStringAsFixed(1);
+    }
+    if (optics.focalLengthMm > 0) {
+      final reducer = optics.reducerFactor > 0 ? optics.reducerFactor : 1.0;
+      live['FOCALLEN'] = (optics.focalLengthMm * reducer).toStringAsFixed(1);
+    }
+    if (optics.apertureMm > 0) {
+      live['APTDIA'] = optics.apertureMm.toStringAsFixed(1);
+    }
+    if (optics.pixelSizeUm > 0) {
+      live['XPIXSZ'] = optics.pixelSizeUm.toString();
+      live['YPIXSZ'] = optics.pixelSizeUm.toString();
+    }
+    return live;
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final live = _liveValues(ref);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),
@@ -150,7 +184,9 @@ class _ReferenceDialog extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           'The FITS header travels inside the file — stackers, '
-                          'plate solvers and archives read it decades later.',
+                          'plate solvers and archives read it decades later. '
+                          'Values in white are yours, from your settings; the '
+                          'rest are examples measured at capture time.',
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: AraColors.textSecondary),
                         ),
@@ -209,10 +245,12 @@ class _ReferenceDialog extends StatelessWidget {
                                   style: theme.textTheme.bodySmall),
                             ),
                             const SizedBox(width: 12),
-                            Text(e.example,
+                            Text(live[e.keyword] ?? e.example,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                     fontFamily: 'monospace',
-                                    color: AraColors.textSecondary)),
+                                    color: live.containsKey(e.keyword)
+                                        ? null
+                                        : AraColors.textSecondary)),
                           ],
                         ),
                       ),
